@@ -45,17 +45,29 @@ export interface TaskQuery {
 }
 ```
 
-### Enum 的 type-only import（已知权衡）
+### Enum 的运行时 import（vite alias 方案）
 
-`@taskora/shared` 导出 CJS 编译产物。Vite/Rollup 无法通过 barrel file 静态解析运行时 enum 重导出。当前用 `import type` + 字面量断言：
+`@taskora/shared` 只产 CommonJS 编译产物（`dist/`），Vite/Rollup 无法从 barrel file 的 `__createBinding` getter 静态分析运行时 enum 导出。`import type` 会被擦除不触发问题，但一旦代码在运行时使用 enum 值（如 `ScheduledType.DATE`），rollup 会报 `is not exported by ../shared/dist/index.js`。
+
+解决方案：在 `vite.config.ts` 中加 alias 让 vite 直接编译 shared 源码：
 
 ```typescript
-import type { TaskBucket } from '@taskora/shared';
-// 运行时用字面量
-const bucket = 'INBOX' as TaskBucket;
+// vite.config.ts
+resolve: {
+  alias: {
+    '@taskora/shared': path.resolve(__dirname, '../shared/src'),
+  },
+}
 ```
 
-未来修复：将 `@taskora/shared` 切换为 ESM 输出。
+`tsconfig.json` 仍走 `dist/*.d.ts`，类型检查与运行时互不影响。前端可正常运行时使用 enum：
+
+```typescript
+import { ScheduledType } from '@taskora/shared';
+const type = ScheduledType.DATE;  // ✅ 运行时可用
+```
+
+> ⚠️ 改动 shared 源码后需 `pnpm --filter @taskora/shared build` 刷新 `.d.ts`，否则前端类型检查会滞后。
 
 ---
 
@@ -63,4 +75,4 @@ const bucket = 'INBOX' as TaskBucket;
 
 - ❌ `any` — 用 `unknown` 或具体类型
 - ❌ 前端重复定义 shared 包已有的 DTO
-- ❌ `as` 断言滥用（除 enum 字面量的已知权衡外）
+- ❌ `as` 断言滥用（enum 值应直接用 `ScheduledType.DATE` 形式，不再需要 `as TaskBucket` 字面量断言）
