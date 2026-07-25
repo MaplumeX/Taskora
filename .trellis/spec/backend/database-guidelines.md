@@ -86,22 +86,29 @@ pnpm prisma db seed                              # 填充种子数据
 
 ---
 
-## Bucket 转换逻辑
+## Bucket 与 scheduledType 转换逻辑
 
-Task 有两个日期字段：`scheduledDate`（计划日期，驱动 bucket 与视图查询）和 `dueDate`（截止/通知日期，仅存储，不参与 bucket 或任何视图查询）。`bucket` 字段是显式字段，需在 service 层维护转换：
+Task 有三个相关字段：
+- `scheduledType: ScheduledType`（计划日期类型，`NONE | DATE | SOMEDAY`，驱动 bucket 推导与视图查询）
+- `scheduledDate: DateTime?`（具体计划日期；仅 `scheduledType=DATE` 时有值，`SOMEDAY`/`NONE` 时为 null）
+- `dueDate: DateTime?`（截止/通知日期，仅存储，不参与 bucket 或任何视图查询）
+- `bucket: TaskBucket`（`INBOX | ANYTIME | SCHEDULED`，始终由 service 层 `resolveBucket` 从 scheduledType 推导，**不再含 SOMEDAY 值**）
 
-| 操作 | bucket 变化 |
-|---|---|
-| 设 scheduledDate | → `SCHEDULED` |
-| 清除 scheduledDate（原 INBOX） | → `INBOX` |
-| 清除 scheduledDate（原 ANYTIME） | → `ANYTIME` |
-| 分配 project/area（无 scheduledDate） | → `ANYTIME` |
-| 修改 dueDate | 不变（dueDate 不参与 bucket） |
-| 移到 Someday | → `SOMEDAY` |
+核心不变量：`bucket=SCHEDULED` ⟺ `scheduledType ∈ {DATE, SOMEDAY}`。
 
-> `dueDate` 仅在 create/update 中被写入，`resolveBucket` 与 `findAll` 视图查询都只用 `scheduledDate`。
+`scheduledType` 驱动 bucket 推导（`resolveBucket`）：
 
-参见 `.trellis/tasks/07-25-gtd-app/design.md` §2.3。
+| scheduledType | scheduledDate 联动 | bucket |
+|---|---|---|
+| `DATE` | 保留或设置具体日期 | `SCHEDULED` |
+| `SOMEDAY` | 置 null | `SCHEDULED` |
+| `NONE` | 置 null | 降级为 `INBOX`（无 project/area）或 `ANYTIME`（有 project/area）；若旧 bucket 为 SCHEDULED 则必降级 |
+
+update 级联规则：当 `dto.scheduledType` 变化时，service 层必须同步维护 `scheduledDate`（SOMEDAY/NONE 清空，DATE 保留或设置）并重新 `resolveBucket`。前端只传意图，后端保证一致性。
+
+> `dueDate` 仅在 create/update 中被写入，`resolveBucket` 与 `findAll` 视图查询都用 `scheduledType`（而非 scheduledDate）。
+
+> Someday 是 view（`scheduledType=SOMEDAY`），不是 bucket 值。参见 `.trellis/tasks/07-25-scheduled-type-refactor/design.md`。
 
 ---
 
@@ -143,7 +150,12 @@ if (dto.tagIds !== undefined) {
 switch (query.view) {
   case 'today':
     where.status = TaskStatus.ACTIVE;
+    where.scheduledType = ScheduledType.DATE;
     where.scheduledDate = { lte: new Date() };
+    break;
+  case 'someday':
+    where.scheduledType = ScheduledType.SOMEDAY;
+    where.status = TaskStatus.ACTIVE;
     break;
   case 'logbook':
     where.status = TaskStatus.COMPLETED;
