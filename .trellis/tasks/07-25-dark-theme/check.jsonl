@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Quality gate (pnpm lint + typecheck + test) and code review checklist the dark theme implementation must pass"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Accessibility rules (aria-label, keyboard focusable) the Sidebar toggle button must satisfy"}

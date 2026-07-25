@@ -60,6 +60,18 @@ export const useAuthStore = create<AuthState>()(
 - 需要跨页面共享的客户端状态 → Zustand
 - 仅组件内部的状态 → useState
 - 服务端数据 → TanStack Query（不要放 Zustand）
+- UI 偏好类持久状态（主题等）→ 自定义 hook + localStorage（见下）
+
+### UI 偏好类持久状态：用 hook，不进 Zustand
+
+**What**：主题（light/dark/system）等 UI 偏好虽需持久化，但不放入 Zustand，而是用自定义 hook 管理。
+
+**Why**：这类状态的核心副作用是操作 DOM class + localStorage + matchMedia listener，用 `useEffect` 在 hook 内管理最直接；引入 store 多一层间接。且该状态消费点极少（如主题切换器单点），不需要跨组件广播。Zustand 仅留给 auth/token 这类跨页面业务持久状态。
+
+**Example**：`useTheme` hook（`src/lib/hooks/useTheme.ts`）：
+- `useState` 存 `mode`，`useEffect` 同步 DOM class、写 localStorage、注册 matchMedia listener
+- 导出独立的 `applyThemeFromStorage()` 供入口同步调用避免 FOUC
+- localStorage key 用项目前缀：`taskora-theme`
 
 ---
 

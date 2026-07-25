@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Styling patterns (cn(), shadcn/ui className override) and accessibility (aria-label) conventions for the Sidebar toggle button"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Confirms theme state belongs in a hook (not Zustand) per the 'When to Use Global State' rule; Zustand is only for auth/token"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Naming conventions for custom hooks (useXxx) and where hooks live (src/lib/hooks/)"}
