@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Prisma migration patterns + schema changes"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend code standards for service/DTO changes"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend code standards for component/props changes"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component prop naming conventions for TaskDateBadge/TaskItem"}

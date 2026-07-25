@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Verify backend service conformance after refactor"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify frontend component conformance after refactor"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify migration correctness (RENAME not DROP)"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Cross-layer consistency check: ensure dueDate refactored everywhere"}
