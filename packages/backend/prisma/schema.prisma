@@ -16,6 +16,8 @@ model User {
   tasks        Task[]
   projects     Project[]
   areas        Area[]
+  tags         Tag[]
+  tagGroups    TagGroup[]
 }
 
 model Area {
@@ -56,6 +58,49 @@ enum TaskBucket {
   SCHEDULED
 }
 
+model TagGroup {
+  id        String   @id @default(uuid())
+  title     String
+  sortOrder Int      @default(0)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tags      Tag[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model Tag {
+  id         String    @id @default(uuid())
+  title      String
+  color      String    @default("#3B82F6")
+  sortOrder  Int       @default(0)
+  tagGroupId String?
+  tagGroup   TagGroup? @relation(fields: [tagGroupId], references: [id], onDelete: SetNull)
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks      TaskTag[]
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([tagGroupId])
+}
+
+model TaskTag {
+  id        String   @id @default(uuid())
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([taskId, tagId])
+  @@index([taskId])
+  @@index([tagId])
+}
+
 model Task {
   id          String      @id @default(uuid())
   title       String
@@ -81,6 +126,8 @@ model Task {
 
   areaId String?
   area   Area? @relation(fields: [areaId], references: [id])
+
+  tags TaskTag[]
 
   @@index([userId])
   @@index([parentId])

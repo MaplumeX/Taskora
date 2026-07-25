@@ -148,3 +148,40 @@ Implemented and archived 04-frontend-views (final child task). All Things3 core 
 ### Next Steps
 
 - 归档 test-infra，继续 tags 或 logbook 子任务
+
+## Session 5: tags + logbook 并行实施与合并
+
+**Date**: 2026-07-25
+**Task**: tags (`07-25-tags`) + logbook (`07-25-logbook`)
+**Branch**: `main`
+
+### Summary
+
+两个子任务在独立 git worktree 中并行实施，然后手动合并到主工作树。6 个重叠文件（tasks.service.ts, tasks.dto.ts, Sidebar.tsx, router.tsx, tasks.api.ts, database-guidelines.md）手动合并成功。
+
+Tags: 新增 Tag/TagGroup/TaskTag Prisma model + migration `add_tags`；Tags Module + TagGroups Module（CRUD，TagGroup 删除走 SetNull）；TasksService.update 加 tagIds 全量 set 语义（$transaction）；findAll/findOne include+map tags；前端 Tags 管理页 + TagDetail 筛选视图 + Sidebar Tags 区 + TaskDetail 多选标签 + TaskItem 徽章。7+5 测试用例。
+
+Logbook: TasksService.findAll 加 logbook view（status=COMPLETED）+ 动态 orderBy（completedAt desc）；前端 Logbook 页面按今天/昨天/更早分组；Sidebar 加 Logbook 入口。3 测试用例。
+
+合并后修复：test/db.ts 改为 lazy PrismaClient 避免模块加载失败；logbook 测试 mock 加 tags 字段；tasks.service.tags.spec mock 返回值加 tags 字段；TasksService.update 返回 include tags 保持一致性；TagDetail 过滤子任务；Tags.tsx 移除未使用 import；pnpm-workspace.yaml 用 approve-builds --all 修复 ERR_PNPM_IGNORED_BUILDS。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| (pending) | feat: add tags + logbook features |
+
+### Testing
+
+- `pnpm test`: 后端 21 passed + 3 skipped，前端 7 passed，退出码 0
+- `pnpm typecheck`: 三包全通过
+- `pnpm lint`: 0 errors
+- `pnpm --filter @taskora/frontend build`: 成功
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 归档 tags 和 logbook，父任务 07-25-gtd-enhance 整合 review 后归档

@@ -15,6 +15,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Separator } from '@/components/ui/separator';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
+import { useTagsQuery } from '@/lib/hooks/useTags';
 import {
   useCompleteTask,
   useCreateTask,
@@ -56,6 +57,7 @@ function TaskDetailBody({ task, onClose }: { task: TaskResponseDto; onClose: () 
   const createSubtask = useCreateTask();
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
+  const { data: tags = [] } = useTagsQuery();
 
   const [title, setTitle] = React.useState(current.title);
   const [notes, setNotes] = React.useState(current.notes ?? '');
@@ -71,7 +73,10 @@ function TaskDetailBody({ task, onClose }: { task: TaskResponseDto; onClose: () 
     updateTask.mutate(
       { id: task.id, data },
       {
-        onSuccess: invalidateParent,
+        onSuccess: () => {
+          invalidateParent();
+          void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+        },
         onError: () => toast.error('保存失败'),
       },
     );
@@ -179,6 +184,43 @@ function TaskDetailBody({ task, onClose }: { task: TaskResponseDto; onClose: () 
             </option>
           ))}
         </select>
+        <span className="text-muted-foreground">标签</span>
+        <div className="flex flex-wrap gap-1">
+          {tags.length === 0 ? (
+            <span className="py-1 text-xs text-muted-foreground/60">暂无标签，请先在 Tags 页创建</span>
+          ) : (
+            tags.map((tag) => {
+              const selected = (current.tags ?? []).some((t) => t.id === tag.id);
+              return (
+                <button
+                  key={tag.id}
+                  type="button"
+                  onClick={() => {
+                    const currentIds = (current.tags ?? []).map((t) => t.id);
+                    const next = selected
+                      ? currentIds.filter((id) => id !== tag.id)
+                      : [...currentIds, tag.id];
+                    patch({ tagIds: next });
+                  }}
+                  className={`flex items-center gap-1 rounded-full px-2 py-0.5 text-xs transition-opacity ${
+                    selected ? 'opacity-100' : 'opacity-40'
+                  }`}
+                  style={
+                    selected
+                      ? { backgroundColor: tag.color, color: '#fff' }
+                      : { color: tag.color }
+                  }
+                >
+                  <span
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: tag.color }}
+                  />
+                  {tag.title}
+                </button>
+              );
+            })
+          )}
+        </div>
       </div>
 
       <Separator />
