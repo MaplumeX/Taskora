@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { TaskList } from './TaskList';
-import { useCompleteTask, useDeleteTask, useUncompleteTask } from '@/lib/hooks/useTasks';
+import { useCompleteTask, useDeleteTask, useReorderTasks, useUncompleteTask } from '@/lib/hooks/useTasks';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
 import { useTaskRowSelection } from '@/lib/hooks/useTaskRowSelection';
@@ -12,14 +12,16 @@ import { toast } from 'sonner';
 interface Props {
   tasks: TaskResponseDto[];
   emptyHint?: string;
+  sortable?: boolean;
 }
 
-export function TaskListView({ tasks, emptyHint }: Props) {
+export function TaskListView({ tasks, emptyHint, sortable }: Props) {
   const { handleRowClick, handleBlankClick, selectedId, expandedId } =
     useTaskRowSelection();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const deleteTask = useDeleteTask();
+  const reorderTasks = useReorderTasks();
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
 
@@ -59,6 +61,8 @@ export function TaskListView({ tasks, emptyHint }: Props) {
         onRowClick={handleRowClick}
         onToggleComplete={handleToggle}
         onTrash={handleTrash}
+        onReorder={(ids) => reorderTasks.mutate(ids)}
+        sortable={sortable}
         emptyHint={emptyHint}
       />
     </div>

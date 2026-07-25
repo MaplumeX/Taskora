@@ -95,6 +95,7 @@ export function SearchModal({ open, onOpenChange }: Props) {
                   {tasks.length > 0 ? (
                     <TaskListView
                       tasks={tasks}
+                      sortable={false}
                       emptyHint="未找到匹配的任务"
                     />
                   ) : (

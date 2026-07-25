@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsArray, IsOptional, IsString } from 'class-validator';
 
 export class CreateProjectDto {
   @IsString()
@@ -25,4 +25,10 @@ export class UpdateProjectDto {
   @IsOptional()
   @IsString()
   areaId?: string | null;
+}
+
+export class ReorderDto {
+  @IsArray()
+  @IsString({ each: true })
+  orderedIds!: string[];
 }
