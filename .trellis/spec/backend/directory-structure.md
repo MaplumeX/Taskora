@@ -48,8 +48,7 @@ packages/backend/
     │   ├── areas.service.ts
     │   └── dto/
     └── common/            # 跨模块共享
-        ├── filters/       # 全局异常过滤器
-        └── interceptors/  # 日志等
+        └── filters/       # 全局异常过滤器
 ```
 
 ---
