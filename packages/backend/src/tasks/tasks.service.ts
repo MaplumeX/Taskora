@@ -1,0 +1,243 @@
+import {
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { TaskBucket, TaskStatus } from '@taskora/shared';
+import { PrismaService } from '../prisma/prisma.service';
+import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
+import { Prisma } from '@prisma/client';
+
+@Injectable()
+export class TasksService {
+  constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Resolve bucket based on inputs, following design.md §2.3.
+   */
+  private resolveBucket(
+    bucket: TaskBucket | undefined,
+    dueDate: string | null | undefined,
+    projectId: string | null | undefined,
+    areaId: string | null | undefined,
+  ): TaskBucket {
+    if (dueDate) return TaskBucket.SCHEDULED;
+    if (bucket) return bucket;
+    if (projectId || areaId) return TaskBucket.ANYTIME;
+    return TaskBucket.INBOX;
+  }
+
+  async create(userId: string, dto: CreateTaskDto) {
+    const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+    const bucket = this.resolveBucket(
+      dto.bucket,
+      dto.dueDate,
+      dto.projectId,
+      dto.areaId,
+    );
+
+    return this.prisma.task.create({
+      data: {
+        title: dto.title,
+        notes: dto.notes,
+        dueDate,
+        bucket,
+        userId,
+        parentId: dto.parentId,
+        projectId: dto.projectId,
+        areaId: dto.areaId,
+      },
+    });
+  }
+
+  async findAll(userId: string, query: TaskQueryDto) {
+    const where: Prisma.TaskWhereInput = { userId };
+
+    if (query.view) {
+      switch (query.view) {
+        case 'inbox':
+          where.bucket = TaskBucket.INBOX;
+          where.status = TaskStatus.ACTIVE;
+          where.dueDate = null;
+          break;
+        case 'today': {
+          where.status = TaskStatus.ACTIVE;
+          where.dueDate = { lte: new Date() };
+          break;
+        }
+        case 'upcoming': {
+          where.status = TaskStatus.ACTIVE;
+          where.dueDate = { gt: new Date() };
+          break;
+        }
+        case 'anytime':
+          where.bucket = TaskBucket.ANYTIME;
+          where.status = TaskStatus.ACTIVE;
+          where.dueDate = null;
+          break;
+        case 'someday':
+          where.bucket = TaskBucket.SOMEDAY;
+          where.status = TaskStatus.ACTIVE;
+          where.dueDate = null;
+          break;
+        case 'trash':
+          where.status = TaskStatus.TRASHED;
+          break;
+      }
+    } else {
+      if (query.projectId) where.projectId = query.projectId;
+      if (query.areaId) where.areaId = query.areaId;
+      if (query.parentId !== undefined) {
+        where.parentId = query.parentId === '' ? null : query.parentId;
+      }
+      if (!query.completed) {
+        where.status = TaskStatus.ACTIVE;
+      }
+      if (query.completed) {
+        // include both active and completed when explicitly requested
+      }
+    }
+
+    return this.prisma.task.findMany({
+      where,
+      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+    });
+  }
+
+  async findOne(userId: string, id: string) {
+    const task = await this.prisma.task.findFirst({
+      where: { id, userId },
+      include: { children: true },
+    });
+    if (!task) {
+      throw new NotFoundException('Task not found');
+    }
+    return task;
+  }
+
+  async update(userId: string, id: string, dto: UpdateTaskDto) {
+    const existing = await this.prisma.task.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Task not found');
+    }
+
+    // Resolve bucket if dueDate or project/area changed
+    let bucket = existing.bucket;
+    const newDueDate =
+      dto.dueDate !== undefined
+        ? dto.dueDate
+          ? new Date(dto.dueDate).toISOString()
+          : null
+        : existing.dueDate?.toISOString() ?? null;
+    const newProjectId =
+      dto.projectId !== undefined ? dto.projectId : existing.projectId;
+    const newAreaId =
+      dto.areaId !== undefined ? dto.areaId : existing.areaId;
+
+    if (dto.dueDate !== undefined || dto.projectId !== undefined || dto.areaId !== undefined || dto.bucket !== undefined) {
+      bucket = this.resolveBucket(
+        dto.bucket ?? (newDueDate ? TaskBucket.SCHEDULED : undefined),
+        newDueDate,
+        newProjectId,
+        newAreaId,
+      );
+    }
+
+    const data: Prisma.TaskUpdateInput = {};
+    if (dto.title !== undefined) data.title = dto.title;
+    if (dto.notes !== undefined) data.notes = dto.notes;
+    if (dto.dueDate !== undefined) {
+      data.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+    }
+    data.bucket = bucket;
+    if (dto.parentId !== undefined) {
+      data.parent = dto.parentId
+        ? { connect: { id: dto.parentId } }
+        : { disconnect: true };
+    }
+    if (dto.projectId !== undefined) {
+      data.project = dto.projectId
+        ? { connect: { id: dto.projectId } }
+        : { disconnect: true };
+    }
+    if (dto.areaId !== undefined) {
+      data.area = dto.areaId
+        ? { connect: { id: dto.areaId } }
+        : { disconnect: true };
+    }
+
+    return this.prisma.task.update({
+      where: { id },
+      data,
+    });
+  }
+
+  async remove(userId: string, id: string) {
+    const existing = await this.prisma.task.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Task not found');
+    }
+
+    return this.prisma.task.update({
+      where: { id },
+      data: {
+        status: TaskStatus.TRASHED,
+        trashedAt: new Date(),
+      },
+    });
+  }
+
+  async restore(userId: string, id: string) {
+    const existing = await this.prisma.task.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Task not found');
+    }
+
+    return this.prisma.task.update({
+      where: { id },
+      data: {
+        status: TaskStatus.ACTIVE,
+        trashedAt: null,
+      },
+    });
+  }
+
+  async complete(userId: string, id: string) {
+    const existing = await this.prisma.task.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Task not found');
+    }
+
+    return this.prisma.task.update({
+      where: { id },
+      data: {
+        status: TaskStatus.COMPLETED,
+        completedAt: new Date(),
+      },
+    });
+  }
+
+  async uncomplete(userId: string, id: string) {
+    const existing = await this.prisma.task.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Task not found');
+    }
+
+    return this.prisma.task.update({
+      where: { id },
+      data: {
+        status: TaskStatus.ACTIVE,
+        completedAt: null,
+      },
+    });
+  }
+}
