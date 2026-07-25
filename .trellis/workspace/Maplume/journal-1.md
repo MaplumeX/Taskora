@@ -287,3 +287,36 @@ Add ScheduledType enum (NONE/DATE/SOMEDAY) to shared, prisma schema, backend DTO
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: 重新设计任务编辑组件布局
+
+**Date**: 2026-07-25
+**Task**: 重新设计任务编辑组件布局
+**Branch**: `feat/task-edit-expanded-layout`
+
+### Summary
+
+重新设计 TaskRowExpanded 展开编辑态布局：从上到下改为标题→备注→子任务区→图标按钮行（5个图标）。移除展开态内的标记完成文字按钮和删除按钮（均由折叠态行提供）。标题/备注采用无边框扁平样式。更新 frontend spec 记录展开态纵向布局约定。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6c3710e` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
