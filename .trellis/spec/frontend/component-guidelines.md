@@ -153,3 +153,101 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 - 表单 Input 配 `<Label>`
 - 按钮 有 `aria-label`（图标按钮）
 - 图标小菜单用 shadcn/ui 的 Popover 组件（基于 Radix Popover）
+---
+
+## 拖拽排序（DnD）模式
+
+### 库选型：dnd-kit
+
+- **用** `@dnd-kit/core` + `@dnd-kit/sortable` + `@dnd-kit/utilities`
+- **不用** `react-beautiful-dnd`：2023 年起停止维护，React 18 严格模式下有副作用警告，不支持键盘拖拽
+
+### SortableItem 包装组件模式
+
+不修改原有展示组件（如 `TaskItem`、`ProjectItem`），在其之上包一层 `useSortable` 包装组件，保持展示组件可复用：
+
+```tsx
+function SortableTaskItem({ task, ...props }: SortableTaskItemProps) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: task.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Translate.toString(transform),  // 用 Translate 而非 Transform
+        transition,
+        zIndex: isDragging ? 10 : undefined,
+      }}
+      {...attributes}
+      {...listeners}
+    >
+      <TaskItem task={task} {...props} />
+    </div>
+  );
+}
+```
+
+**关键**：`transform` 用 `CSS.Translate.toString(transform)` 而非 `CSS.Transform.toString()`——Translate 只产生 `translate3d`，不会与子元素的 CSS 动画（如 `.task-complete-anim`）冲突。
+
+### DndContext + SortableContext 结构
+
+```tsx
+<DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+  <SortableContext items={items.map((i) => i.id)} strategy={verticalListSortingStrategy}>
+    <div className="flex flex-col">{renderItems()}</div>
+  </SortableContext>
+</DndContext>
+```
+
+- `closestCenter` 适合垂直列表
+- `verticalListSortingStrategy` 性能好
+- `items` 传 id 数组给 `SortableContext`
+
+### 点击与拖拽隔离：PointerSensor activationConstraint
+
+```tsx
+const sensors = useSensors(
+  useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+);
+```
+
+- `distance: 5`：拖动 5px 才认为是拖拽，否则视为点击
+- 避免 `onRowClick` 状态机（selected → expanded）在拖拽时误触发
+- 若仍误触发，可调到 8px
+
+### sortable prop 退化
+
+列表组件（如 `TaskList`）通过 `sortable?: boolean = true` prop 控制：
+
+```tsx
+if (!sortable || !onReorder) {
+  return <div className="flex flex-col">{renderItems()}</div>;  // 纯展示，无 DnD
+}
+```
+
+- `SearchModal`、`Trash`、`Logbook` 等不应拖拽的页面传 `sortable={false}`
+- `Upcoming` 不走 `TaskListView`，自己渲染 `TaskItem`，天然无 DnD
+
+### Common Mistake: useSensors 在 early return 之后调用
+
+**Symptom**：React 报 "Rendered fewer hooks than expected" 错误
+
+**Cause**：`useSensors` / `useSensor` 在 `if (!sortable)` 的 early return **之后**调用。当 `sortable` 变化时 hook 调用顺序改变，违反 React Rules of Hooks
+
+**Fix**：将所有 hooks（`useSensors`、`useSensor`）移到组件顶部、所有 early return 之前，无条件调用：
+
+```tsx
+// Correct — hooks 在最顶部，无条件调用
+export function TaskList({ ..., sortable = true, ... }: Props) {
+  const topTasks = tasks.filter((t) => !t.parentId);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  if (topTasks.length === 0) {
+    return <EmptyState />;  // early return 在 hooks 之后
+  }
+  // ...
+}
+```
