@@ -218,3 +218,37 @@ Renamed Task.dueDate to scheduledDate (计划日期) across schema/shared DTO/ba
 ### Next Steps
 
 - None - task complete
+
+
+## Session 5: scheduledType field and Someday as view refactor
+
+**Date**: 2026-07-25
+**Task**: scheduledType field and Someday as view refactor
+**Branch**: `main`
+
+### Summary
+
+Add ScheduledType enum (NONE/DATE/SOMEDAY) to shared, prisma schema, backend DTO/service, and frontend. Remove SOMEDAY from TaskBucket; Someday is now a view filtered by scheduledType=SOMEDAY. Rewrite resolveBucket to be scheduledType-driven, add update cascade logic for scheduledType->scheduledDate, and update all view branches in findAll. Frontend: QuickAddTask uses scheduledType prop, TaskDetail gets None/Date/Someday segmented toggle, vite alias added for @taskora/shared runtime enum imports. Spec updated: database-guidelines bucket table and type-safety enum import guidance.
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `01d949e` | (see git log) |
+| `afa18a6` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
