@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~324 | Active |
+| `journal-1.md` | ~340 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -30,6 +30,7 @@
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
 | 7 | 2026-07-25 | 支持拖拽排序（任务/项目/区域） | `baf67e8`, `1432490`, `3a2ccd2` | `feat/drag-sort-reorder` |
+| 7b | 2026-07-25 | 重新设计任务编辑组件布局 | `6c3710e` | `feat/task-edit-expanded-layout` |
 | 6 | 2026-07-25 | Content bottom bar with search modal and add-to-edit flow | `e07dc71`, `241166c`, `620f9c7` | `feat/content-bottom-bar-task-actions` |
 | 5 | 2026-07-25 | scheduledType field and Someday as view refactor | `01d949e`, `afa18a6` | `main` |
 | 4 | 2026-07-25 | Rename dueDate to scheduledDate + add new dueDate for notifications | `fccf4cb` | `main` |
