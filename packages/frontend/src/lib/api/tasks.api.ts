@@ -9,6 +9,7 @@ import { apiClient } from './client';
 export type TaskView = 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
 
 export interface TaskQuery {
+  q?: string;
   view?: TaskView;
   projectId?: string;
   areaId?: string;
