@@ -76,14 +76,38 @@ export const router = createBrowserRouter([
 
 ## Testing Requirements
 
-**当前状态**：项目尚未建立测试套件。
-- `packages/frontend/package.json` 无 `test` 脚本
-- 无 `*.spec.tsx` / `*.test.tsx` 文件，无 Vitest/Jest/Testing Library 依赖
-- 质量门目前依赖：`pnpm lint` + `pnpm typecheck`（根 `package.json`）
+### 测试运行器：Vitest + Testing Library
 
-> 未来引入测试时再更新本节。在此之前的约定：
-- 组件保持纯展示与数据获取分离（如 `TaskListView` 取数据、`TaskList` 渲染），便于后续单测
-- 不为追求覆盖率而临时补测试
+- 前端用 vitest（`packages/frontend/vitest.config.ts`），环境为 jsdom
+- 组件测试用 `@testing-library/react` + `@testing-library/jest-dom`（自定义 matcher 如 `toHaveAttribute`、`toBeDisabled`）
+- 全局 setup：`src/test/setup.ts` → `import '@testing-library/jest-dom/vitest'`
+- tsconfig.json `types` 需包含 `"vitest/globals"` 和 `"@testing-library/jest-dom"`，否则 jest-dom matcher 类型不可用
+
+### 测试文件命名约定
+
+| 类型 | 命名 | 位置 |
+|------|------|------|
+| Hook 测试 | `*.test.ts` | `src/lib/hooks/` |
+| 组件测试 | `*.test.tsx` | 紧邻组件文件 |
+
+### Hook 测试约定
+
+- `vi.mock('@/lib/api/xxx.api')` mock API 模块
+- 用 `@tanstack/react-query` 的 `QueryClient` + `QueryClientProvider` wrapper 包裹（`renderHook` 需 QueryClient 上下文）
+- wrapper 工厂：创建 `QueryClient`（`retry: false`），返回 `QueryClientProvider` 包裹函数
+- 由于 hook 测试文件为 `.ts`（非 `.tsx`），wrapper 中使用 `React.createElement` 而非 JSX
+
+### 组件测试约定
+
+- 用 `render()` + `screen.getByRole()` / `screen.getByText()` 查询
+- 事件用 `@testing-library/user-event` 或 `fireEvent`（简单点击可用 `fireEvent`）
+- 测试组件纯展示逻辑（props 驱动），不直接测试 TanStack Query mutation（在 hook 测试中覆盖）
+
+### 质量门
+
+- `pnpm lint` + `pnpm typecheck` + `pnpm test` 必须全部通过
+- 添加新 hook 时建议同步编写 `*.test.ts`
+- 添加新复用组件时建议同步编写 `*.test.tsx`
 
 ---
 

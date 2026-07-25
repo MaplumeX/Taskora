@@ -62,14 +62,47 @@ export class TasksController {
 
 ## Testing Requirements
 
-**当前状态**：项目尚未建立测试套件。
-- `packages/backend/package.json` 无 `test` 脚本
-- 无 `*.spec.ts` 文件，无 Jest/Vitest 依赖
-- 质量门目前依赖：`pnpm lint` + `pnpm typecheck`（根 `package.json`）
+### 测试运行器：Vitest
 
-> 未来引入测试时再更新本节。在此之前的约定：
-- 新增 service 逻辑保持纯函数倾向（如 `resolveBucket` 这类私有方法便于后续单测）
-- 不为追求覆盖率而临时补测试，测试随功能引入
+- 前后端统一用 vitest（`packages/backend/vitest.config.ts`、`packages/frontend/vitest.config.ts`）
+- 后端 Service 单测用 `new XxxService(mockPrisma)` 直接构造，**不依赖 NestJS DI 的 `Test.createTestingModule`**（vitest 的 esbuild 转译不支持 `emitDecoratorMetadata`，NestJS DI 无法解析构造函数类型令牌）
+- 后端 Controller e2e 测试用 `@nestjs/testing` 的 `Test.createTestingModule` + `supertest`，走完整 HTTP 管道
+
+### 测试文件命名约定
+
+| 类型 | 命名 | 位置 |
+|------|------|------|
+| Service 单测 | `*.spec.ts` | `packages/backend/test/` |
+| Controller e2e | `*.e2e-spec.ts` | `packages/backend/test/` |
+
+### 测试数据库隔离
+
+- e2e 测试通过 `TEST_DATABASE_URL` 环境变量连接独立的测试 Postgres 实例
+- `test/db.ts` 导出 `resetDb()`（TRUNCATE 所有业务表）和 `testPrisma`（独立 PrismaClient 实例）
+- 若 `TEST_DATABASE_URL` 未设置，e2e 测试通过 `describe.skip` 跳过，不阻塞 `pnpm test`
+- 运行 e2e 测试：
+  ```bash
+  TEST_DATABASE_URL="postgresql://user:pass@localhost:5432/taskora_test" \
+    pnpm --filter @taskora/backend test
+  ```
+- 可用 docker 快速起测试数据库：
+  ```bash
+  docker run -d --name taskora-test-db -e POSTGRES_DB=taskora_test -e POSTGRES_USER=user -e POSTGRES_PASSWORD=pass -p 5432:5432 postgres:16
+  ```
+  然后执行 `npx prisma migrate dev`（在 packages/backend 下，`DATABASE_URL` 指向测试库）同步 schema
+
+### 测试脚本
+
+- 根 `package.json`：`"test": "pnpm -r --parallel run test"`
+- 后端 `package.json`：`"pretest": "pnpm --filter @taskora/shared build && prisma generate"`（自动构建 shared + 生成 Prisma Client）
+- 后端 `package.json`：`"test": "vitest run"`
+
+### 质量门
+
+- `pnpm lint` + `pnpm typecheck` + `pnpm test` 必须全部通过
+- 后端 `tsconfig.json` 仅 include `src/`，测试文件不在 `tsc --noEmit` 检查范围（test 文件在 `src` 之外，vitest 自行转译）
+- 添加新 Service 时建议同步编写 `*.spec.ts` 单测（mock PrismaService）
+- 添加新 Controller endpoint 时建议编写 `*.e2e-spec.ts`（真实 DB + supertest）
 
 ---
 

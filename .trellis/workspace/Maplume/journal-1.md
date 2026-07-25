@@ -112,3 +112,39 @@ Implemented and archived 04-frontend-views (final child task). All Things3 core 
 ### Next Steps
 
 - None - task complete
+
+## Session 4: test-infra 实施与检查
+
+**Date**: 2026-07-25
+**Task**: 测试基建搭建 (`07-25-test-infra`)
+**Branch**: `main`
+
+### Summary
+
+为 Taskora monorepo 建立可运行的测试基建。前后端统一用 vitest 2.1.x（Vite 5 兼容约束）。后端： vitest.config.ts + test/db.ts (resetDb via TRUNCATE + env guard) + AreasService 单测 6 例 (mock PrismaService 直接构造，vitest esbuild 不支持 emitDecoratorMetadata 故不用 Test.createTestingModule) + AreasController e2e 3 例 (NestJS Testing + supertest，无 TEST_DATABASE_URL 时 describe.skip 优雅跳过)。前端：vitest.config.ts + test/setup.ts (jest-dom) + useAreas hook 测试 3 例 + TaskCheckbox 组件测试 4 例。根 package.json 加 test 串联，backend 加 pretest (shared build + prisma generate)。spec 文档同步更新。无生产代码变更。
+
+### Main Changes
+
+- 新增 vitest 配置 + 测试文件（后端 9 例 / 前端 7 例）
+- 更新 package.json 脚本 + devDependencies
+- 更新 backend/frontend quality-guidelines.md 测试约定
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| (pending) | chore(test): add vitest test infrastructure |
+
+### Testing
+
+- `pnpm test`: 前端 7 passed，后端 6 passed + 3 skipped，退出码 0
+- `pnpm typecheck`: 三包全通过
+- `pnpm lint`: 0 errors 0 warnings
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- 归档 test-infra，继续 tags 或 logbook 子任务
