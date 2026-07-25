@@ -29,3 +29,7 @@ export function updateProject(id: string, data: UpdateProjectDto): Promise<Proje
 export function deleteProject(id: string): Promise<void> {
   return apiClient.delete(`/projects/${id}`).then(() => undefined);
 }
+
+export function reorderProjects(orderedIds: string[]): Promise<void> {
+  return apiClient.post('/projects/reorder', { orderedIds }).then(() => undefined);
+}

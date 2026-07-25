@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { CreateTaskDto, UpdateTaskDto } from '@taskora/shared';
+import type { CreateTaskDto, TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
 
 import {
   completeTask,
@@ -8,6 +8,7 @@ import {
   deleteTask,
   getTask,
   getTasks,
+  reorderTasks,
   restoreTask,
   type TaskQuery,
   uncompleteTask,
@@ -87,6 +88,35 @@ export function useUncompleteTask() {
     mutationFn: (id: string) => uncompleteTask(id),
     onSuccess: (task) => {
       void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+    },
+  });
+}
+
+export function useReorderTasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (orderedIds: string[]) => reorderTasks(orderedIds),
+    onMutate: async (orderedIds) => {
+      await queryClient.cancelQueries({ queryKey: taskKeys.all });
+      queryClient.setQueriesData<TaskResponseDto[]>(
+        { queryKey: taskKeys.all },
+        (old) => {
+          if (!old) return old;
+          const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
+          return [...old].sort((a, b) => {
+            const ai = orderMap.get(a.id);
+            const bi = orderMap.get(b.id);
+            if (ai !== undefined && bi !== undefined) return ai - bi;
+            return 0;
+          });
+        },
+      );
+    },
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
     },
   });

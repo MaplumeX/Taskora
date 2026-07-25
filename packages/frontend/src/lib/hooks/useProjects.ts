@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { CreateProjectDto, UpdateProjectDto } from '@taskora/shared';
+import type { CreateProjectDto, ProjectResponseDto, UpdateProjectDto } from '@taskora/shared';
 
 import {
   createProject,
   deleteProject,
   getProjects,
+  reorderProjects,
   updateProject,
 } from '@/lib/api/projects.api';
 
@@ -38,6 +39,35 @@ export function useUpdateProject() {
       updateProject(id, data),
     onSuccess: (project) => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(project.id) });
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+    },
+  });
+}
+
+export function useReorderProjects() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (orderedIds: string[]) => reorderProjects(orderedIds),
+    onMutate: async (orderedIds) => {
+      await queryClient.cancelQueries({ queryKey: projectKeys.all });
+      queryClient.setQueriesData<ProjectResponseDto[]>(
+        { queryKey: projectKeys.all },
+        (old) => {
+          if (!old) return old;
+          const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
+          return [...old].sort((a, b) => {
+            const ai = orderMap.get(a.id);
+            const bi = orderMap.get(b.id);
+            if (ai !== undefined && bi !== undefined) return ai - bi;
+            return 0;
+          });
+        },
+      );
+    },
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.all });
     },
   });

@@ -199,3 +199,87 @@ if (query.q && !query.view) {
 ```
 
 约定：不引入 Postgres FTS，使用 Prisma `contains` + `mode: 'insensitive'`；数据量增长后可升级。
+
+---
+
+## 批量重排（Reorder）API 模式
+
+当资源支持拖拽排序时，用 `POST /xxx/reorder` 端点批量更新 `sortOrder`。已有 Task / Project / Area 三类资源遵循此模式。
+
+### Service.reorder 通用模式
+
+```typescript
+async reorder(userId: string, orderedIds: string[]) {
+  // 1. 批量校验归属：findMany + userId 隔离（不用逐个 findFirst）
+  const owned = await this.prisma.task.findMany({
+    where: { id: { in: orderedIds }, userId },
+    select: { id: true },
+  });
+  const ownedSet = new Set(owned.map((t) => t.id));
+  if (ownedSet.size !== orderedIds.length) {
+    throw new NotFoundException('Task not found');
+  }
+
+  // 2. 事务内逐条 updateMany（where 含 userId 保证隔离）
+  await this.prisma.$transaction(
+    orderedIds.map((id, index) =>
+      this.prisma.task.updateMany({
+        where: { id, userId },
+        data: { sortOrder: index },
+      }),
+    ),
+  );
+}
+```
+
+**为什么用 `updateMany` 而非 `update`**：`updateMany` 的 where 可以加 `userId`，符合
+「所有业务查询必须包含 userId」规范。`update` 仅按 `@id` 更新，无法加 userId 约束。
+
+**为什么不用单条 updateMany 批量**：Prisma 的 `updateMany` 不支持不同的 data per row，只能逐个 id 写。N 条 update 在一个 `$transaction` 里保证原子性。N 通常 < 100，PostgreSQL 本地事务开销可忽略。
+
+### Controller 路由顺序
+
+`@Post('reorder')` 必须声明在 `@Get(':id')` / `@Patch(':id')` 等参数路由之前，否则 `reorder` 会被当作 `:id` 匹配。NestJS 路由按声明顺序匹配：
+
+```typescript
+@UseGuards(JwtAuthGuard)
+@Controller('tasks')
+export class TasksController {
+  @Post('reorder')          // ← 必须在 :id 路由之前
+  reorder(...) { ... }
+
+  @Post()                    // create
+  create(...) { ... }
+
+  @Get(':id')
+  findOne(...) { ... }
+
+  @Patch(':id')
+  update(...) { ... }
+}
+```
+
+### create 时的初始 sortOrder
+
+新建 Project / Area 时设 `sortOrder = (max _max.sortOrder ?? -1) + 1`，使新记录出现在列表末尾：
+
+```typescript
+async create(userId: string, dto: CreateProjectDto) {
+  const max = await this.prisma.project.aggregate({
+    where: { userId },
+    _max: { sortOrder: true },
+  });
+  return this.prisma.project.create({
+    data: { ..., sortOrder: (max._max.sortOrder ?? -1) + 1 },
+  });
+}
+```
+
+### sortOrder 字段约定
+
+- `Task` / `Project` / `Area` 均有 `sortOrder Int @default(0)` 字段
+- 默认 orderBy 为 `[{ sortOrder: 'asc' }, { createdAt: 'desc' }]`：同 sortOrder 下按 createdAt 降序
+- 旧数据 backfill：迁移加列 `DEFAULT 0`，旧记录均为 0，行为等同于按 createdAt desc 排序
+- 拖拽后 `reorder` 将传入的 ids 按顺序设为 0,1,2,...，未传入的记录不变
+
+> 局限：Task 的 `sortOrder` 是全局的，不同视图（inbox / today）返回的任务子集不同；拖拽重排会在全局层面改变这批任务的相对顺序。这是与 Things3 一致的有意行为。

@@ -1,8 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { CreateAreaDto, UpdateAreaDto } from '@taskora/shared';
+import type { AreaResponseDto, CreateAreaDto, UpdateAreaDto } from '@taskora/shared';
 
-import { createArea, deleteArea, getAreas, updateArea } from '@/lib/api/areas.api';
+import {
+  createArea,
+  deleteArea,
+  getAreas,
+  reorderAreas,
+  updateArea,
+} from '@/lib/api/areas.api';
 
 export const areaKeys = {
   all: ['areas'] as const,
@@ -32,6 +38,35 @@ export function useUpdateArea() {
     mutationFn: ({ id, data }: { id: string; data: UpdateAreaDto }) => updateArea(id, data),
     onSuccess: (area) => {
       void queryClient.invalidateQueries({ queryKey: areaKeys.detail(area.id) });
+      void queryClient.invalidateQueries({ queryKey: areaKeys.all });
+    },
+  });
+}
+
+export function useReorderAreas() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (orderedIds: string[]) => reorderAreas(orderedIds),
+    onMutate: async (orderedIds) => {
+      await queryClient.cancelQueries({ queryKey: areaKeys.all });
+      queryClient.setQueriesData<AreaResponseDto[]>(
+        { queryKey: areaKeys.all },
+        (old) => {
+          if (!old) return old;
+          const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
+          return [...old].sort((a, b) => {
+            const ai = orderMap.get(a.id);
+            const bi = orderMap.get(b.id);
+            if (ai !== undefined && bi !== undefined) return ai - bi;
+            return 0;
+          });
+        },
+      );
+    },
+    onError: () => {
+      void queryClient.invalidateQueries({ queryKey: areaKeys.all });
+    },
+    onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: areaKeys.all });
     },
   });

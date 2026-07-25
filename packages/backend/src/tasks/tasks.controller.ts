@@ -11,13 +11,21 @@ import {
   Request,
 } from '@nestjs/common';
 import { TasksService } from './tasks.service';
-import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
+import { CreateTaskDto, UpdateTaskDto, TaskQueryDto, ReorderDto } from './dto/tasks.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
 @Controller('tasks')
 export class TasksController {
   constructor(private readonly tasksService: TasksService) {}
+
+  @Post('reorder')
+  reorder(
+    @Request() req: { user: { id: string } },
+    @Body() dto: ReorderDto,
+  ) {
+    return this.tasksService.reorder(req.user.id, dto.orderedIds);
+  }
 
   @Post()
   create(@Request() req: { user: { id: string } }, @Body() dto: CreateTaskDto) {

@@ -30,6 +30,10 @@ model Area {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   projects  Project[]
   tasks     Task[]
+
+  sortOrder Int @default(0)
+
+  @@index([userId])
 }
 
 model Project {
@@ -43,6 +47,10 @@ model Project {
   areaId    String?
   area      Area?    @relation(fields: [areaId], references: [id])
   tasks     Task[]
+
+  sortOrder Int @default(0)
+
+  @@index([userId])
 }
 
 enum TaskStatus {

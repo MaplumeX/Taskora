@@ -10,13 +10,21 @@ import {
   Request,
 } from '@nestjs/common';
 import { AreasService } from './areas.service';
-import { CreateAreaDto, UpdateAreaDto } from './dto/areas.dto';
+import { CreateAreaDto, UpdateAreaDto, ReorderDto } from './dto/areas.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
 @Controller('areas')
 export class AreasController {
   constructor(private readonly areasService: AreasService) {}
+
+  @Post('reorder')
+  reorder(
+    @Request() req: { user: { id: string } },
+    @Body() dto: ReorderDto,
+  ) {
+    return this.areasService.reorder(req.user.id, dto.orderedIds);
+  }
 
   @Post()
   create(@Request() req: { user: { id: string } }, @Body() dto: CreateAreaDto) {

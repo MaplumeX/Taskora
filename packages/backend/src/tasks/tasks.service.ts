@@ -319,4 +319,24 @@ export class TasksService {
       },
     });
   }
+
+  async reorder(userId: string, orderedIds: string[]) {
+    const owned = await this.prisma.task.findMany({
+      where: { id: { in: orderedIds }, userId },
+      select: { id: true },
+    });
+    const ownedSet = new Set(owned.map((t) => t.id));
+    if (ownedSet.size !== orderedIds.length) {
+      throw new NotFoundException('Task not found');
+    }
+
+    await this.prisma.$transaction(
+      orderedIds.map((id, index) =>
+        this.prisma.task.updateMany({
+          where: { id, userId },
+          data: { sortOrder: index },
+        }),
+      ),
+    );
+  }
 }

@@ -15,6 +15,7 @@ export interface ProjectResponseDto {
   title: string;
   notes: string | null;
   areaId: string | null;
+  sortOrder: number;
   createdAt: string;
   updatedAt: string;
 }

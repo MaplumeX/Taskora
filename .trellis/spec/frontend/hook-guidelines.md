@@ -103,3 +103,55 @@ export const taskKeys = {
 **Symptom**：创建/更新/删除任务后列表不刷新
 
 **Fix**：所有 mutation 的 `onSuccess` 必须 invalidate 对应 query。
+---
+
+## Reorder Mutation（乐观更新模式）
+
+拖拽排序的 `useReorderXxx` mutation 使用半乐观更新：`onMutate` 即时重排缓存，`onError`/`onSettled` invalidate 拉取最新。
+
+```typescript
+export function useReorderTasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (orderedIds: string[]) => reorderTasks(orderedIds),
+    onMutate: async (orderedIds) => {
+      // 1. 取消进行中的查询，避免回写冲突
+      await queryClient.cancelQueries({ queryKey: taskKeys.all });
+
+      // 2. setQueriesData 批量更新所有匹配前缀的缓存
+      queryClient.setQueriesData<TaskResponseDto[]>(
+        { queryKey: taskKeys.all },  // 匹配 ['tasks', ...] 所有 list 缓存
+        (old) => {
+          if (!old) return old;
+          const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
+          return [...old].sort((a, b) => {
+            const ai = orderMap.get(a.id);
+            const bi = orderMap.get(b.id);
+            if (ai !== undefined && bi !== undefined) return ai - bi;
+            return 0;  // 不在拖拽集合的任务保持原顺序
+          });
+        },
+      );
+    },
+    onError: () => {
+      // 失败：invalidate 触发 refetch 恢复
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+    },
+    onSettled: () => {
+      // 完成：invalidate 拉取最新数据纠正可能的偏差
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+    },
+  });
+}
+```
+
+**关键设计**：
+- `setQueriesData`（注意是复数 `Queries`）匹配所有以 `taskKeys.all` 为前缀的缓存（如 `['tasks', {view:'inbox'}]`、`['tasks', {view:'today'}]`），一次更新所有视图的缓存
+- 只重排 `orderedIds` 中存在的任务，其他任务保持原顺序——与后端 `reorder` 只更新传入 ids 的行为一致
+- `onError` 直接 invalidate 触发 refetch 而非手工保存 snapshot 回滚——list 数据不大、refetch 快，复杂度匹配收益
+- **不**做严谨 snapshot 回滚（`onMutate` 返回 previous → `onError` 用 `setQueryData` 写回），因为 list query 多个缓存要逐个保存快照
+
+### `setQueriesData` vs `setQueryData`
+
+- `setQueryData({ queryKey: ['tasks'] })`：只命中**精确匹配**该 key 的缓存
+- `setQueriesData({ queryKey: ['tasks'] })`：匹配**所有以该 key 为前缀**的缓存（`['tasks', {...}]`），适合 list query 有多组 params 的场景

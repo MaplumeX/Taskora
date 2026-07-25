@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "sortOrder 字段、迁移、用户数据隔离 (updateMany where id+userId)、事务模式、View 模式与 orderBy 规范"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "service/controller/dto 文件位置与命名约定"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "测试规范与质量门"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "NotFoundException 越权返回 404 语义"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "TanStack Query 乐观更新、query key 工厂、invalidation 策略"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useReorderXxx mutation hook 模式与命名"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "TaskList/TaskItem 组件结构、props 约定、行内展开交互"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量门"}
