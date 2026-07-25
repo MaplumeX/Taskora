@@ -1,1 +1,10 @@
 {"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "前端目录结构规范"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件模式"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Hook 模式"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "状态管理分层"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "TypeScript 类型约定"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "跨层边界，shared 包使用"}
+{"file": ".trellis/tasks/07-25-gtd-app/design.md", "reason": "技术设计：前端架构、路由、状态管理"}
+{"file": ".trellis/tasks/07-25-03-frontend-core/design.md", "reason": "本任务技术设计"}
+{"file": ".trellis/tasks/07-25-03-frontend-core/implement.md", "reason": "本任务执行清单"}
