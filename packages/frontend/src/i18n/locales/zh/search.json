@@ -1,0 +1,14 @@
+{
+  "title": "搜索任务",
+  "placeholder": "搜索任务…",
+  "inputPlaceholder": "输入关键词搜索…",
+  "clearSearch": "清空搜索",
+  "includeCompleted": "包含已完成",
+  "searching": "搜索中…",
+  "searchFailed": "搜索失败，请重试。",
+  "noResults": "未找到匹配的任务",
+  "groupTasks": "任务",
+  "groupProjects": "项目",
+  "groupAreas": "区域",
+  "groupTags": "标签"
+}

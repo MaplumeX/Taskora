@@ -5,6 +5,7 @@ import type { LoginDto, RegisterDto } from '@taskora/shared';
 
 import { getMe, login, register } from '@/lib/api/auth.api';
 import { useAuthStore } from '@/lib/stores/auth.store';
+import { i18n } from '@/i18n/config';
 import { toast } from 'sonner';
 
 export const authKeys = {
@@ -21,8 +22,8 @@ export function useLogin() {
       navigate('/today');
     },
     onError: (error: unknown) => {
-      toast.error('登录失败', {
-        description: (error as { message?: string })?.message ?? '请检查邮箱和密码',
+      toast.error(i18n.t('auth:loginFailed'), {
+        description: (error as { message?: string })?.message ?? i18n.t('auth:loginFailedHint'),
       });
     },
   });
@@ -33,12 +34,12 @@ export function useRegister() {
   return useMutation({
     mutationFn: (data: RegisterDto) => register(data),
     onSuccess: () => {
-      toast.success('注册成功', { description: '请登录' });
+      toast.success(i18n.t('auth:registerSuccess'), { description: i18n.t('auth:pleaseLogin') });
       navigate('/login');
     },
     onError: (error: unknown) => {
-      toast.error('注册失败', {
-        description: (error as { message?: string })?.message ?? '该邮箱可能已注册',
+      toast.error(i18n.t('auth:registerFailed'), {
+        description: (error as { message?: string })?.message ?? i18n.t('auth:registerFailedHint'),
       });
     },
   });

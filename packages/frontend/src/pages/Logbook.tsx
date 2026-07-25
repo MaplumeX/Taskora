@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { TaskResponseDto } from '@taskora/shared';
 
@@ -16,6 +17,7 @@ import { dayDiff } from '@/lib/utils/date';
 import { toast } from 'sonner';
 
 export default function Logbook() {
+  const { t } = useTranslation();
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ view: 'logbook' });
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
@@ -55,13 +57,13 @@ export default function Logbook() {
 
   const toggleComplete = (task: TaskResponseDto) => {
     if (task.status === 'COMPLETED') uncompleteTask.mutate(task.id);
-    else completeTask.mutate(task.id, { onError: () => toast.error('操作失败') });
+    else completeTask.mutate(task.id, { onError: () => toast.error(t('common:operationFailed')) });
   };
 
   const handleTrash = (task: TaskResponseDto) => {
     deleteTask.mutate(task.id, {
-      onSuccess: () => toast.success('已移到废纸篓'),
-      onError: () => toast.error('删除失败'),
+      onSuccess: () => toast.success(t('task:movedToTrash')),
+      onError: () => toast.error(t('common:deleteFailed')),
     });
   };
 
@@ -97,18 +99,18 @@ export default function Logbook() {
 
   return (
     <div className="flex flex-col gap-4" onClick={handleBlankClick}>
-      <h1 className="text-2xl font-semibold tracking-tight">Logbook</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t('nav:logbook')}</h1>
       {isLoading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>
       ) : isError ? (
-        <p className="py-8 text-center text-sm text-[#CC4444]">加载失败</p>
+        <p className="py-8 text-center text-sm text-[#CC4444]">{t('common:loadFailed')}</p>
       ) : !hasAny ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">还没有已完成的任务</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t('task:logbookEmpty')}</p>
       ) : (
         <>
-          {renderGroup('今天', grouped.today)}
-          {renderGroup('昨天', grouped.yesterday)}
-          {renderGroup('更早', grouped.earlier)}
+          {renderGroup(t('common:today'), grouped.today)}
+          {renderGroup(t('task:yesterday'), grouped.yesterday)}
+          {renderGroup(t('task:earlier'), grouped.earlier)}
         </>
       )}
     </div>

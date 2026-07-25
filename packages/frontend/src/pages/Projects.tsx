@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   DndContext,
   PointerSensor,
@@ -47,6 +48,7 @@ function SortableProjectItem({ project }: SortableProjectItemProps) {
 }
 
 export default function Projects() {
+  const { t } = useTranslation();
   const { data: projects = [], isLoading } = useProjectsQuery();
   const reorderProjects = useReorderProjects();
   const [open, setOpen] = React.useState(false);
@@ -66,13 +68,13 @@ export default function Projects() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Projects</h1>
-        <Button onClick={() => setOpen(true)}>新建项目</Button>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('nav:projects')}</h1>
+        <Button onClick={() => setOpen(true)}>{t('project:create')}</Button>
       </div>
       {isLoading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>
       ) : projects.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">暂无项目</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t('project:empty')}</p>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={projects.map((p) => p.id)} strategy={verticalListSortingStrategy}>

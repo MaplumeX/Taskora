@@ -1,0 +1,20 @@
+{
+  "empty": "No tags",
+  "create": "New Tag",
+  "edit": "Edit Tag",
+  "new": "New Tag",
+  "titlePlaceholder": "Tag name",
+  "deleteConfirm": "Delete tag \"{{name}}\"?",
+  "defaultTitle": "Tag",
+  "deleted": "Tag deleted",
+  "created": "Tag created",
+  "newGroup": "New Group",
+  "newGroupTitle": "New Group",
+  "groupCreated": "Group created",
+  "groupDeleted": "Group deleted",
+  "deleteGroup": "Delete group",
+  "deleteGroupConfirm": "Delete group \"{{name}}\"? Tags will not be deleted (moved to ungrouped).",
+  "groupTitlePlaceholder": "Group name",
+  "selectColor": "Select color {{color}}",
+  "noTasks": "No tasks with this tag"
+}

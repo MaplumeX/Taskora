@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import { useProjectsQuery, useDeleteProject } from '@/lib/hooks/useProjects';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
@@ -9,6 +10,7 @@ import { ProjectForm } from '@/components/project/ProjectForm';
 import { toast } from 'sonner';
 
 export default function ProjectDetail() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: projects = [] } = useProjectsQuery();
@@ -19,13 +21,13 @@ export default function ProjectDetail() {
 
   const handleDelete = () => {
     if (!project) return;
-    if (!window.confirm(`确认删除项目「${project.title}」？`)) return;
+    if (!window.confirm(t('project:deleteConfirm', { name: project.title }))) return;
     deleteProject.mutate(project.id, {
       onSuccess: () => {
-        toast.success('项目已删除');
+        toast.success(t('project:deleted'));
         navigate('/projects');
       },
-      onError: () => toast.error('删除失败'),
+      onError: () => toast.error(t('common:deleteFailed')),
     });
   };
 
@@ -37,23 +39,23 @@ export default function ProjectDetail() {
             onClick={() => navigate('/projects')}
             className="mb-1 text-xs text-muted-foreground hover:text-foreground"
           >
-            ‹ 返回 Projects
+            {t('common:backTo', { label: t('nav:projects') })}
           </button>
-          <h1 className="text-2xl font-semibold tracking-tight">{project?.title ?? '项目'}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{project?.title ?? t('project:defaultTitle')}</h1>
         </div>
         <Button variant="ghost" onClick={() => setEditOpen(true)}>
-          编辑
+          {t('common:edit')}
         </Button>
         <Button variant="ghost" className="text-[#CC4444]" onClick={handleDelete}>
-          删除
+          {t('common:delete')}
         </Button>
       </div>
       {isLoading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>
       ) : isError ? (
-        <p className="py-8 text-center text-sm text-[#CC4444]">加载失败</p>
+        <p className="py-8 text-center text-sm text-[#CC4444]">{t('common:loadFailed')}</p>
       ) : (
-        <TaskListView tasks={tasks} emptyHint="项目中没有任务" />
+        <TaskListView tasks={tasks} emptyHint={t('project:noTasks')} />
       )}
       {project && <ProjectForm open={editOpen} onOpenChange={setEditOpen} project={project} />}
     </div>

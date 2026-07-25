@@ -1,0 +1,16 @@
+{
+  "empty": "暂无区域",
+  "create": "新建区域",
+  "edit": "编辑区域",
+  "new": "新区域",
+  "titlePlaceholder": "区域名称",
+  "deleteConfirm": "确认删除区域「{{name}}」？区域内的项目不会被删除。",
+  "defaultTitle": "区域",
+  "deleted": "区域已删除",
+  "created": "区域已创建",
+  "deleteFailedHint": "删除失败（请先移除区域内的项目）",
+  "noProjects": "该区域下没有项目",
+  "noTasks": "该区域下没有任务",
+  "projectsLabel": "项目",
+  "tasksLabel": "任务"
+}

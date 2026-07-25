@@ -1,0 +1,16 @@
+{
+  "empty": "No areas",
+  "create": "New Area",
+  "edit": "Edit Area",
+  "new": "New Area",
+  "titlePlaceholder": "Area name",
+  "deleteConfirm": "Delete area \"{{name}}\"? Projects inside will not be deleted.",
+  "defaultTitle": "Area",
+  "deleted": "Area deleted",
+  "created": "Area created",
+  "deleteFailedHint": "Failed to delete (remove projects from this area first)",
+  "noProjects": "No projects in this area",
+  "noTasks": "No tasks in this area",
+  "projectsLabel": "Projects",
+  "tasksLabel": "Tasks"
+}

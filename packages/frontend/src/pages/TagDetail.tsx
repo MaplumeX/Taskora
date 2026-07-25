@@ -1,10 +1,12 @@
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import { useTagsQuery } from '@/lib/hooks/useTags';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { TaskListView } from '@/components/task/TaskListView';
 
 export default function TagDetail() {
+  const { t } = useTranslation();
   const { tagId } = useParams<{ tagId: string }>();
   const navigate = useNavigate();
   const { data: tags = [] } = useTagsQuery();
@@ -21,7 +23,7 @@ export default function TagDetail() {
           onClick={() => navigate('/tags')}
           className="mb-1 text-xs text-muted-foreground hover:text-foreground"
         >
-          ‹ 返回 Tags
+          {t('common:backTo', { label: t('nav:tags') })}
         </button>
         <div className="flex items-center gap-2">
           {tag && (
@@ -31,17 +33,17 @@ export default function TagDetail() {
             />
           )}
           <h1 className="text-2xl font-semibold tracking-tight">
-            {tag?.title ?? '标签'}
+            {tag?.title ?? t('tag:defaultTitle')}
           </h1>
         </div>
       </div>
 
       {isLoading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>
       ) : isError ? (
-        <p className="py-8 text-center text-sm text-[#CC4444]">加载失败</p>
+        <p className="py-8 text-center text-sm text-[#CC4444]">{t('common:loadFailed')}</p>
       ) : (
-        <TaskListView tasks={topLevel} emptyHint="该标签下没有任务" />
+        <TaskListView tasks={topLevel} emptyHint={t('tag:noTasks')} />
       )}
     </div>
   );

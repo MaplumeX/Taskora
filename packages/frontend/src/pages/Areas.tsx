@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   DndContext,
   PointerSensor,
@@ -49,6 +50,7 @@ function SortableAreaItem({ area, projectCount }: SortableAreaItemProps) {
 }
 
 export default function Areas() {
+  const { t } = useTranslation();
   const { data: areas = [], isLoading } = useAreasQuery();
   const { data: projects = [] } = useProjectsQuery();
   const reorderAreas = useReorderAreas();
@@ -72,13 +74,13 @@ export default function Areas() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Areas</h1>
-        <Button onClick={() => setOpen(true)}>新建区域</Button>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('nav:areas')}</h1>
+        <Button onClick={() => setOpen(true)}>{t('area:create')}</Button>
       </div>
       {isLoading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>
       ) : areas.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">暂无区域</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t('area:empty')}</p>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
           <SortableContext items={areas.map((a) => a.id)} strategy={verticalListSortingStrategy}>

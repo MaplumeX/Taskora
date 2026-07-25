@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { ChevronRight, Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import type { CreateTagDto, TagResponseDto, UpdateTagDto } from '@taskora/shared';
 
@@ -38,6 +39,7 @@ const PRESET_COLORS = [
 ];
 
 export default function Tags() {
+  const { t } = useTranslation();
   const { data: tags = [], isLoading } = useTagsQuery();
   const { data: groups = [] } = useTagGroupsQuery();
 
@@ -53,10 +55,10 @@ export default function Tags() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">Tags</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">{t('nav:tags')}</h1>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setGroupFormOpen(true)}>
-            新建分组
+            {t('tag:newGroup')}
           </Button>
           <Button
             onClick={() => {
@@ -64,13 +66,13 @@ export default function Tags() {
               setTagFormOpen(true);
             }}
           >
-            新建标签
+            {t('tag:create')}
           </Button>
         </div>
       </div>
 
       {isLoading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>
       ) : (
         <>
           {groups.map((group) => (
@@ -87,7 +89,7 @@ export default function Tags() {
           ))}
 
           <TagGroupSection
-            title="未分组"
+            title={t('common:ungrouped')}
             tags={ungrouped}
             onEditTag={(t) => {
               setEditingTag(t);
@@ -119,6 +121,7 @@ function TagGroupSection({
   groupId?: string;
   onEditTag: (tag: TagResponseDto) => void;
 }) {
+  const { t } = useTranslation();
   const deleteGroup = useDeleteTagGroup();
   const deleteTag = useDeleteTag();
 
@@ -130,19 +133,19 @@ function TagGroupSection({
           <button
             className="text-xs text-muted-foreground/60 hover:text-[#CC4444]"
             onClick={() => {
-              if (!window.confirm(`确认删除分组「${title}」？标签不会被删除（变为未分组）。`)) return;
+              if (!window.confirm(t('tag:deleteGroupConfirm', { name: title }))) return;
               deleteGroup.mutate(groupId, {
-                onSuccess: () => toast.success('分组已删除'),
-                onError: () => toast.error('删除失败'),
+                onSuccess: () => toast.success(t('tag:groupDeleted')),
+                onError: () => toast.error(t('common:deleteFailed')),
               });
             }}
           >
-            删除分组
+            {t('tag:deleteGroup')}
           </button>
         )}
       </div>
       {tags.length === 0 ? (
-        <p className="py-1 text-xs text-muted-foreground/60">暂无标签</p>
+        <p className="py-1 text-xs text-muted-foreground/60">{t('tag:empty')}</p>
       ) : (
         <div className="flex flex-col">
           {tags.map((tag) => (
@@ -162,10 +165,10 @@ function TagGroupSection({
                 className="text-muted-foreground hover:text-[#CC4444]"
                 onClick={(e) => {
                   e.stopPropagation();
-                  if (!window.confirm(`确认删除标签「${tag.title}」？`)) return;
+                  if (!window.confirm(t('tag:deleteConfirm', { name: tag.title }))) return;
                   deleteTag.mutate(tag.id, {
-                    onSuccess: () => toast.success('标签已删除'),
-                    onError: () => toast.error('删除失败'),
+                    onSuccess: () => toast.success(t('tag:deleted')),
+                    onError: () => toast.error(t('common:deleteFailed')),
                   });
                 }}
               >
@@ -190,6 +193,7 @@ function TagForm({
   tag: TagResponseDto | null;
   groups: { id: string; title: string }[];
 }) {
+  const { t } = useTranslation();
   const isEdit = !!tag;
   const [title, setTitle] = React.useState('');
   const [color, setColor] = React.useState('#3B82F6');
@@ -209,7 +213,7 @@ function TagForm({
   const submit = () => {
     const trimmed = title.trim();
     if (!trimmed) {
-      toast.error('请填写标题');
+      toast.error(t('common:titleRequired'));
       return;
     }
     if (isEdit && tag) {
@@ -222,10 +226,10 @@ function TagForm({
         { id: tag.id, data },
         {
           onSuccess: () => {
-            toast.success('已保存');
+            toast.success(t('common:saved'));
             onOpenChange(false);
           },
-          onError: () => toast.error('保存失败'),
+          onError: () => toast.error(t('common:saveFailed')),
         },
       );
     } else {
@@ -236,10 +240,10 @@ function TagForm({
       };
       createTag.mutate(data, {
         onSuccess: () => {
-          toast.success('标签已创建');
+          toast.success(t('tag:created'));
           onOpenChange(false);
         },
-        onError: () => toast.error('创建失败'),
+        onError: () => toast.error(t('common:createFailed')),
       });
     }
   };
@@ -248,21 +252,21 @@ function TagForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>{isEdit ? '编辑标签' : '新标签'}</DialogTitle>
+          <DialogTitle>{isEdit ? t('tag:edit') : t('tag:new')}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-3 py-2">
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="tag-title">标题</Label>
+            <Label htmlFor="tag-title">{t('common:title')}</Label>
             <Input
               id="tag-title"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               onKeyDown={(e) => e.key === 'Enter' && submit()}
-              placeholder="标签名称"
+              placeholder={t('tag:titlePlaceholder')}
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label>颜色</Label>
+            <Label>{t('common:color')}</Label>
             <div className="flex flex-wrap items-center gap-2">
               {PRESET_COLORS.map((c) => (
                 <button
@@ -273,7 +277,7 @@ function TagForm({
                     color === c ? 'ring-2 ring-ring ring-offset-2' : ''
                   }`}
                   style={{ backgroundColor: c }}
-                  aria-label={`选择颜色 ${c}`}
+                  aria-label={t('tag:selectColor', { color: c })}
                 />
               ))}
               <input
@@ -286,14 +290,14 @@ function TagForm({
             </div>
           </div>
           <div className="flex flex-col gap-1.5">
-            <Label htmlFor="tag-group">分组</Label>
+            <Label htmlFor="tag-group">{t('common:group')}</Label>
             <select
               id="tag-group"
               value={tagGroupId}
               onChange={(e) => setTagGroupId(e.target.value)}
               className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm"
             >
-              <option value="">未分组</option>
+              <option value="">{t('common:ungrouped')}</option>
               {groups.map((g) => (
                 <option key={g.id} value={g.id}>
                   {g.title}
@@ -304,10 +308,10 @@ function TagForm({
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            取消
+            {t('common:cancel')}
           </Button>
           <Button onClick={submit} disabled={createTag.isPending || updateTag.isPending}>
-            {isEdit ? '保存' : '创建'}
+            {isEdit ? t('common:save') : t('common:createAction')}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -322,6 +326,7 @@ function TagGroupForm({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
+  const { t } = useTranslation();
   const [title, setTitle] = React.useState('');
   React.useEffect(() => {
     if (open) setTitle('');
@@ -332,17 +337,17 @@ function TagGroupForm({
   const submit = () => {
     const trimmed = title.trim();
     if (!trimmed) {
-      toast.error('请填写标题');
+      toast.error(t('common:titleRequired'));
       return;
     }
     createGroup.mutate(
       { title: trimmed },
       {
         onSuccess: () => {
-          toast.success('分组已创建');
+          toast.success(t('tag:groupCreated'));
           onOpenChange(false);
         },
-        onError: () => toast.error('创建失败'),
+        onError: () => toast.error(t('common:createFailed')),
       },
     );
   };
@@ -351,24 +356,24 @@ function TagGroupForm({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>新分组</DialogTitle>
+          <DialogTitle>{t('tag:newGroupTitle')}</DialogTitle>
         </DialogHeader>
         <div className="flex flex-col gap-1.5 py-2">
-          <Label htmlFor="group-title">标题</Label>
+          <Label htmlFor="group-title">{t('common:title')}</Label>
           <Input
             id="group-title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && submit()}
-            placeholder="分组名称"
+            placeholder={t('tag:groupTitlePlaceholder')}
           />
         </div>
         <DialogFooter>
           <Button variant="ghost" onClick={() => onOpenChange(false)}>
-            取消
+            {t('common:cancel')}
           </Button>
           <Button onClick={submit} disabled={createGroup.isPending}>
-            创建
+            {t('common:createAction')}
           </Button>
         </DialogFooter>
       </DialogContent>

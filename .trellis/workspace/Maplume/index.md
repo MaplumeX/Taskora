@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 7
+- **Total Sessions**: 8
 - **Last Active**: 2026-07-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~340 | Active |
+| `journal-1.md` | ~357 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 8 | 2026-07-25 | Add i18n support (zh/en) with locale-aware formatting | `57615ed`, `571d10f`, `4f3df22` | `feat/i18n-support` |
 | 7 | 2026-07-25 | 支持拖拽排序（任务/项目/区域） | `baf67e8`, `1432490`, `3a2ccd2` | `feat/drag-sort-reorder` |
 | 7b | 2026-07-25 | 重新设计任务编辑组件布局 | `6c3710e` | `feat/task-edit-expanded-layout` |
 | 6 | 2026-07-25 | Content bottom bar with search modal and add-to-edit flow | `e07dc71`, `241166c`, `620f9c7` | `feat/content-bottom-bar-task-actions` |

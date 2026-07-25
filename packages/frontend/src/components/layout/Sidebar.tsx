@@ -17,6 +17,7 @@ import {
   SunMedium,
   type LucideIcon,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -25,6 +26,7 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { useLogout } from '@/lib/hooks/useAuth';
 import { useTheme, type ThemeMode } from '@/lib/hooks/useTheme';
+import { LanguageToggle } from '@/i18n/LanguageToggle';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
 import { useTagsQuery } from '@/lib/hooks/useTags';
@@ -39,20 +41,21 @@ import {
 
 interface NavItem {
   to: string;
-  label: string;
+  labelKey: string;
   icon: LucideIcon;
 }
 
 const mainNav: NavItem[] = [
-  { to: '/inbox', label: 'Inbox', icon: Inbox },
-  { to: '/today', label: 'Today', icon: Sun },
-  { to: '/upcoming', label: 'Upcoming', icon: CalendarDays },
-  { to: '/anytime', label: 'Anytime', icon: Circle },
-  { to: '/someday', label: 'Someday', icon: CloudSun },
-  { to: '/logbook', label: 'Logbook', icon: Notebook },
+  { to: '/inbox', labelKey: 'nav:inbox', icon: Inbox },
+  { to: '/today', labelKey: 'nav:today', icon: Sun },
+  { to: '/upcoming', labelKey: 'nav:upcoming', icon: CalendarDays },
+  { to: '/anytime', labelKey: 'nav:anytime', icon: Circle },
+  { to: '/someday', labelKey: 'nav:someday', icon: CloudSun },
+  { to: '/logbook', labelKey: 'nav:logbook', icon: Notebook },
 ];
 
 const NavRow = ({ item }: { item: NavItem }) => {
+  const { t } = useTranslation();
   const Icon = item.icon;
   return (
     <NavLink
@@ -65,25 +68,27 @@ const NavRow = ({ item }: { item: NavItem }) => {
       }
     >
       <Icon className="h-4 w-4" />
-      {item.label}
+      {t(item.labelKey)}
     </NavLink>
   );
 };
 
 function CollapsibleSection({
-  label,
+  labelKey,
+  emptyHintKey,
   icon: Icon,
   to,
   items,
-  emptyHint,
 }: {
-  label: string;
+  labelKey: string;
+  emptyHintKey: string;
   icon: LucideIcon;
   to: string;
   items: { id: string; title: string; href: string }[];
-  emptyHint: string;
 }) {
+  const { t } = useTranslation();
   const [open, setOpen] = React.useState(true);
+  const label = t(labelKey);
   return (
     <div className="flex flex-col gap-0.5">
       <div className="relative flex items-center">
@@ -102,7 +107,7 @@ function CollapsibleSection({
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
-          aria-label={open ? `收起${label}` : `展开${label}`}
+          aria-label={open ? t('nav:collapse', { label }) : t('nav:expand', { label })}
           className="absolute right-1 flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent"
         >
           <ChevronDown
@@ -113,7 +118,7 @@ function CollapsibleSection({
       {open && (
         <div className="ml-4 flex flex-col gap-0.5 border-l pl-2">
           {items.length === 0 ? (
-            <span className="px-3 py-1 text-xs text-muted-foreground/70">{emptyHint}</span>
+            <span className="px-3 py-1 text-xs text-muted-foreground/70">{t(emptyHintKey)}</span>
           ) : (
             items.map((item) => (
               <NavLink
@@ -137,6 +142,7 @@ function CollapsibleSection({
 }
 
 export function Sidebar() {
+  const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const logout = useLogout();
   const { data: projects = [] } = useProjectsQuery();
@@ -155,13 +161,13 @@ export function Sidebar() {
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
                 {user?.email?.[0]?.toUpperCase() ?? '?'}
               </span>
-              <span className="truncate">{user?.email ?? '未登录'}</span>
+              <span className="truncate">{user?.email ?? t('common:notLoggedIn')}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
             <DropdownMenuLabel className="truncate">{user?.email}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={logout}>登出</DropdownMenuItem>
+            <DropdownMenuItem onClick={logout}>{t('common:logout')}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
@@ -179,10 +185,10 @@ export function Sidebar() {
 
         <div className="flex flex-col gap-1">
           <CollapsibleSection
-            label="Projects"
+            labelKey="nav:projects"
             icon={Folder}
             to="/projects"
-            emptyHint="暂无项目"
+            emptyHintKey="nav:emptyProjects"
             items={projects.map((p) => ({ id: p.id, title: p.title, href: `/projects/${p.id}` }))}
           />
         </div>
@@ -191,10 +197,10 @@ export function Sidebar() {
 
         <div className="flex flex-col gap-1">
           <CollapsibleSection
-            label="Areas"
+            labelKey="nav:areas"
             icon={Layers}
             to="/areas"
-            emptyHint="暂无区域"
+            emptyHintKey="nav:emptyAreas"
             items={areas.map((a) => ({ id: a.id, title: a.title, href: `/areas/${a.id}` }))}
           />
         </div>
@@ -203,10 +209,10 @@ export function Sidebar() {
 
         <div className="flex flex-col gap-1">
           <CollapsibleSection
-            label="Tags"
+            labelKey="nav:tags"
             icon={TagsIcon}
             to="/tags"
-            emptyHint="暂无标签"
+            emptyHintKey="nav:emptyTags"
             items={tags.map((t) => ({ id: t.id, title: t.title, href: `/tags/${t.id}` }))}
           />
         </div>
@@ -214,12 +220,13 @@ export function Sidebar() {
         <Separator className="my-3" />
 
         <div className="flex flex-col gap-0.5">
-          <NavRow item={{ to: '/trash', label: 'Trash', icon: Trash2 }} />
+          <NavRow item={{ to: '/trash', labelKey: 'nav:trash', icon: Trash2 }} />
         </div>
       </ScrollArea>
 
-      <div className="px-2 pb-3 pt-2">
+      <div className="flex items-center gap-1 px-2 pb-3 pt-2">
         <ThemeToggle />
+        <LanguageToggle />
       </div>
     </aside>
   );
@@ -231,26 +238,22 @@ const themeIcons: Record<ThemeMode, LucideIcon> = {
   system: Monitor,
 };
 
-const themeLabels: Record<ThemeMode, string> = {
-  light: '浅色',
-  dark: '暗色',
-  system: '跟随系统',
-};
-
 function ThemeToggle() {
   const { mode, cycle } = useTheme();
+  const { t } = useTranslation('theme');
   const Icon = themeIcons[mode];
+  const label = t(mode);
 
   return (
     <button
       type="button"
       onClick={cycle}
-      aria-label={`切换主题，当前：${themeLabels[mode]}`}
-      title={`切换主题，当前：${themeLabels[mode]}`}
+      aria-label={t('toggleLabel', { mode: label })}
+      title={t('toggleLabel', { mode: label })}
       className="flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
     >
       <Icon className="h-4 w-4" />
-      {themeLabels[mode]}
+      {label}
     </button>
   );
 }

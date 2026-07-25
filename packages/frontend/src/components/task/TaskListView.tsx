@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { TaskResponseDto } from '@taskora/shared';
 
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function TaskListView({ tasks, emptyHint, sortable }: Props) {
+  const { t } = useTranslation();
   const { handleRowClick, handleBlankClick, selectedId, expandedId } =
     useTaskRowSelection();
   const completeTask = useCompleteTask();
@@ -38,15 +40,15 @@ export function TaskListView({ tasks, emptyHint, sortable }: Props) {
     if (task.status === 'COMPLETED') uncompleteTask.mutate(task.id);
     else {
       completeTask.mutate(task.id, {
-        onError: () => toast.error('操作失败'),
+        onError: () => toast.error(t('common:operationFailed')),
       });
     }
   };
 
   const handleTrash = (task: TaskResponseDto) => {
     deleteTask.mutate(task.id, {
-      onSuccess: () => toast.success('已移到废纸篓'),
-      onError: () => toast.error('删除失败'),
+      onSuccess: () => toast.success(t('task:movedToTrash')),
+      onError: () => toast.error(t('common:deleteFailed')),
     });
   };
 
