@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Bucket 转换逻辑表与 view 查询模式——本任务重写 resolveBucket 和 findAll view 分支，必须遵循这里的 Prisma userId 隔离、Bucket 维护约定"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "DTO 用 @taskora/shared、class-validator 装饰器；Service 层 userId 隔离与 HttpException 抛错；vitest 单测用 new XxxService(mockPrisma)"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "QuickAddTask / TaskDetail 改造需遵循 props interface 约定、类型从 @taskora/shared 引用、TaskDetail 用 useTaskQuery(id) 取 liveTask 模式"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "前端修改走 TanStack Query，patch 后 invalidate tasks 与 task.detail 两个 queryKey"}
+{"file": ".trellis/tasks/07-25-scheduled-type-refactor/design.md", "reason": "本任务技术设计：scheduledType 枚举、resolveBucket 新逻辑、update 级联、view 过滤改写、前端契约"}

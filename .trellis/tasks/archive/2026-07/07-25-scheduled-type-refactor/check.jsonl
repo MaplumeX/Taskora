@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "检查 resolveBucket / findAll 是否仍满足 Bucket 转换逻辑、view 模式、userId 隔离约束"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "检查 DTO 来自 @taskora/shared、class-validator 装饰器齐全、vitest 单测通过"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "检查 QuickAddTask / TaskDetail props 类型、TaskDetail 使用 useTaskQuery 取 liveTask 的模式未被破坏"}
+{"file": ".trellis/tasks/07-25-scheduled-type-refactor/prd.md", "reason": "验收标准清单（TaskBucket 删除 SOMEDAY、scheduledType 字段、view 过滤、create/update 流转、前端切换）"}
