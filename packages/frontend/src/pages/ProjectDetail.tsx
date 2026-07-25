@@ -4,7 +4,6 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useProjectsQuery, useDeleteProject } from '@/lib/hooks/useProjects';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { Button } from '@/components/ui/button';
-import { QuickAddTask } from '@/components/task/QuickAddTask';
 import { TaskListView } from '@/components/task/TaskListView';
 import { ProjectForm } from '@/components/project/ProjectForm';
 import { toast } from 'sonner';
@@ -49,7 +48,6 @@ export default function ProjectDetail() {
           删除
         </Button>
       </div>
-      <QuickAddTask projectId={id} placeholder="添加到该项目…" />
       {isLoading ? (
         <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
       ) : isError ? (

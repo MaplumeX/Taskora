@@ -1,6 +1,5 @@
 import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { TaskListView } from '@/components/task/TaskListView';
-import { QuickAddTask } from '@/components/task/QuickAddTask';
 
 export default function Anytime() {
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ view: 'anytime' });
@@ -8,7 +7,6 @@ export default function Anytime() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold tracking-tight">Anytime</h1>
-      <QuickAddTask placeholder="添加任务（默认进入收件箱，可在详情中分配）…" />
       {isLoading ? (
         <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
       ) : isError ? (
