@@ -185,3 +185,36 @@ Logbook: TasksService.findAll 加 logbook view（status=COMPLETED）+ 动态 ord
 ### Next Steps
 
 - 归档 tags 和 logbook，父任务 07-25-gtd-enhance 整合 review 后归档
+
+
+## Session 4: Rename dueDate to scheduledDate + add new dueDate for notifications
+
+**Date**: 2026-07-25
+**Task**: Rename dueDate to scheduledDate + add new dueDate for notifications
+**Branch**: `main`
+
+### Summary
+
+Renamed Task.dueDate to scheduledDate (计划日期) across schema/shared DTO/backend service+DTO/frontend/test fixture with a data-preserving RENAME COLUMN migration. Added a new nullable Task.dueDate (通知日期) field written by create/update but never passed to resolveBucket or any view query — isolated for future notification feature. Updated database-guidelines spec with dual date-field semantics.
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `fccf4cb` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
