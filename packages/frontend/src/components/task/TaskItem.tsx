@@ -86,7 +86,7 @@ export function TaskItem({
         {tag && (
           <span className="hidden text-xs text-muted-foreground sm:inline">{tag}</span>
         )}
-        <TaskDateBadge dueDate={task.dueDate} />
+        <TaskDateBadge scheduledDate={task.scheduledDate} />
 
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

@@ -64,7 +64,7 @@ function TaskDetailBody({ task, onClose }: { task: TaskResponseDto; onClose: () 
   const [subtaskTitle, setSubtaskTitle] = React.useState('');
   const completed = current.status === 'COMPLETED';
 
-  const dateValue = current.dueDate ? toInputDateValue(new Date(current.dueDate)) : '';
+  const dateValue = current.scheduledDate ? toInputDateValue(new Date(current.scheduledDate)) : '';
 
   const invalidateParent = () =>
     queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
@@ -88,8 +88,8 @@ function TaskDetailBody({ task, onClose }: { task: TaskResponseDto; onClose: () 
     if (notes !== (current.notes ?? '')) patch({ notes });
   };
   const onDateChange = (value: string) => {
-    if (value) patch({ dueDate: fromInputDateValue(value).toISOString() });
-    else patch({ dueDate: null });
+    if (value) patch({ scheduledDate: fromInputDateValue(value).toISOString() });
+    else patch({ scheduledDate: null });
   };
 
   const addSubtask = () => {

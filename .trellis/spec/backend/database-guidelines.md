@@ -68,7 +68,7 @@ pnpm prisma db seed                              # 填充种子数据
 ## Naming Conventions
 
 - 模型名：`PascalCase`（User, Task, Project, Area）
-- 字段名：`camelCase`（createdAt, dueDate, passwordHash）
+- 字段名：`camelCase`（createdAt, scheduledDate, passwordHash）
 - 枚举名：`PascalCase`，枚举值：`UPPER_SNAKE_CASE`（TaskBucket.INBOX, TaskStatus.ACTIVE）
 - 数据库表名：Prisma 默认使用模型名（不改）
 
@@ -88,15 +88,18 @@ pnpm prisma db seed                              # 填充种子数据
 
 ## Bucket 转换逻辑
 
-Task 的 `bucket` 字段是显式字段，需在 service 层维护转换：
+Task 有两个日期字段：`scheduledDate`（计划日期，驱动 bucket 与视图查询）和 `dueDate`（截止/通知日期，仅存储，不参与 bucket 或任何视图查询）。`bucket` 字段是显式字段，需在 service 层维护转换：
 
 | 操作 | bucket 变化 |
 |---|---|
-| 设 dueDate | → `SCHEDULED` |
-| 清除 dueDate（原 INBOX） | → `INBOX` |
-| 清除 dueDate（原 ANYTIME） | → `ANYTIME` |
-| 分配 project/area（无 dueDate） | → `ANYTIME` |
+| 设 scheduledDate | → `SCHEDULED` |
+| 清除 scheduledDate（原 INBOX） | → `INBOX` |
+| 清除 scheduledDate（原 ANYTIME） | → `ANYTIME` |
+| 分配 project/area（无 scheduledDate） | → `ANYTIME` |
+| 修改 dueDate | 不变（dueDate 不参与 bucket） |
 | 移到 Someday | → `SOMEDAY` |
+
+> `dueDate` 仅在 create/update 中被写入，`resolveBucket` 与 `findAll` 视图查询都只用 `scheduledDate`。
 
 参见 `.trellis/tasks/07-25-gtd-app/design.md` §2.3。
 
@@ -140,7 +143,7 @@ if (dto.tagIds !== undefined) {
 switch (query.view) {
   case 'today':
     where.status = TaskStatus.ACTIVE;
-    where.dueDate = { lte: new Date() };
+    where.scheduledDate = { lte: new Date() };
     break;
   case 'logbook':
     where.status = TaskStatus.COMPLETED;

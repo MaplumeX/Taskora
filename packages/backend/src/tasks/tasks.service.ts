@@ -13,24 +13,26 @@ export class TasksService {
 
   /**
    * Resolve bucket based on inputs, following design.md §2.3.
+   * Note: only scheduledDate drives SCHEDULED bucket, never dueDate.
    */
   private resolveBucket(
     bucket: TaskBucket | undefined,
-    dueDate: string | null | undefined,
+    scheduledDate: string | null | undefined,
     projectId: string | null | undefined,
     areaId: string | null | undefined,
   ): TaskBucket {
-    if (dueDate) return TaskBucket.SCHEDULED;
+    if (scheduledDate) return TaskBucket.SCHEDULED;
     if (bucket) return bucket;
     if (projectId || areaId) return TaskBucket.ANYTIME;
     return TaskBucket.INBOX;
   }
 
   async create(userId: string, dto: CreateTaskDto) {
+    const scheduledDate = dto.scheduledDate ? new Date(dto.scheduledDate) : null;
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
     const bucket = this.resolveBucket(
       dto.bucket,
-      dto.dueDate,
+      dto.scheduledDate,
       dto.projectId,
       dto.areaId,
     );
@@ -39,6 +41,7 @@ export class TasksService {
       data: {
         title: dto.title,
         notes: dto.notes,
+        scheduledDate,
         dueDate,
         bucket,
         userId,
@@ -57,27 +60,27 @@ export class TasksService {
         case 'inbox':
           where.bucket = TaskBucket.INBOX;
           where.status = TaskStatus.ACTIVE;
-          where.dueDate = null;
+          where.scheduledDate = null;
           break;
         case 'today': {
           where.status = TaskStatus.ACTIVE;
-          where.dueDate = { lte: new Date() };
+          where.scheduledDate = { lte: new Date() };
           break;
         }
         case 'upcoming': {
           where.status = TaskStatus.ACTIVE;
-          where.dueDate = { gt: new Date() };
+          where.scheduledDate = { gt: new Date() };
           break;
         }
         case 'anytime':
           where.bucket = TaskBucket.ANYTIME;
           where.status = TaskStatus.ACTIVE;
-          where.dueDate = null;
+          where.scheduledDate = null;
           break;
         case 'someday':
           where.bucket = TaskBucket.SOMEDAY;
           where.status = TaskStatus.ACTIVE;
-          where.dueDate = null;
+          where.scheduledDate = null;
           break;
         case 'trash':
           where.status = TaskStatus.TRASHED;
@@ -136,23 +139,23 @@ export class TasksService {
       throw new NotFoundException('Task not found');
     }
 
-    // Resolve bucket if dueDate or project/area changed
+    // Resolve bucket if scheduledDate or project/area changed
     let bucket = existing.bucket;
-    const newDueDate =
-      dto.dueDate !== undefined
-        ? dto.dueDate
-          ? new Date(dto.dueDate).toISOString()
+    const newScheduledDate =
+      dto.scheduledDate !== undefined
+        ? dto.scheduledDate
+          ? new Date(dto.scheduledDate).toISOString()
           : null
-        : existing.dueDate?.toISOString() ?? null;
+        : existing.scheduledDate?.toISOString() ?? null;
     const newProjectId =
       dto.projectId !== undefined ? dto.projectId : existing.projectId;
     const newAreaId =
       dto.areaId !== undefined ? dto.areaId : existing.areaId;
 
-    if (dto.dueDate !== undefined || dto.projectId !== undefined || dto.areaId !== undefined || dto.bucket !== undefined) {
+    if (dto.scheduledDate !== undefined || dto.projectId !== undefined || dto.areaId !== undefined || dto.bucket !== undefined) {
       bucket = this.resolveBucket(
-        dto.bucket ?? (newDueDate ? TaskBucket.SCHEDULED : undefined),
-        newDueDate,
+        dto.bucket ?? (newScheduledDate ? TaskBucket.SCHEDULED : undefined),
+        newScheduledDate,
         newProjectId,
         newAreaId,
       );
@@ -161,6 +164,9 @@ export class TasksService {
     const data: Prisma.TaskUpdateInput = {};
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.notes !== undefined) data.notes = dto.notes;
+    if (dto.scheduledDate !== undefined) {
+      data.scheduledDate = dto.scheduledDate ? new Date(dto.scheduledDate) : null;
+    }
     if (dto.dueDate !== undefined) {
       data.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
     }
