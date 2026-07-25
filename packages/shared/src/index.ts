@@ -1,0 +1,5 @@
+export * from './enums/task.enum';
+export * from './dtos/task.dto';
+export * from './dtos/project.dto';
+export * from './dtos/area.dto';
+export * from './dtos/auth.dto';
