@@ -60,3 +60,16 @@ export function toDateKey(source: string | Date): string {
   const date = typeof source === 'string' ? new Date(source) : source;
   return toInputDateValue(date);
 }
+
+/**
+ * Whole-day difference between two dates (b - a), based on calendar days
+ * rather than millisecond delta to avoid timezone edge cases.
+ * Returns 0 when both fall on the same calendar day.
+ */
+export function dayDiff(a: string | Date, b: string | Date): number {
+  const da = typeof a === 'string' ? new Date(a) : a;
+  const db = typeof b === 'string' ? new Date(b) : b;
+  const startA = new Date(da.getFullYear(), da.getMonth(), da.getDate());
+  const startB = new Date(db.getFullYear(), db.getMonth(), db.getDate());
+  return Math.round((startB.getTime() - startA.getTime()) / 86_400_000);
+}

@@ -17,8 +17,21 @@ if (TEST_DATABASE_URL) {
   process.env.DATABASE_URL = TEST_DATABASE_URL;
 }
 
-export const testPrisma = new PrismaClient({
-  datasources: { db: { url: TEST_DATABASE_URL ?? process.env.DATABASE_URL } },
+/**
+ * Lazy PrismaClient — only instantiated when actually accessed,
+ * so importing this module doesn't fail when TEST_DATABASE_URL is unset.
+ */
+let _testPrisma: PrismaClient | null = null;
+
+export const testPrisma = new Proxy({} as PrismaClient, {
+  get(_target, prop) {
+    if (!_testPrisma) {
+      _testPrisma = new PrismaClient({
+        datasources: { db: { url: TEST_DATABASE_URL ?? process.env.DATABASE_URL } },
+      });
+    }
+    return Reflect.get(_testPrisma, prop);
+  },
 });
 
 /**

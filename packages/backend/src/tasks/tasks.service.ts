@@ -82,12 +82,18 @@ export class TasksService {
         case 'trash':
           where.status = TaskStatus.TRASHED;
           break;
+        case 'logbook':
+          where.status = TaskStatus.COMPLETED;
+          break;
       }
     } else {
       if (query.projectId) where.projectId = query.projectId;
       if (query.areaId) where.areaId = query.areaId;
       if (query.parentId !== undefined) {
         where.parentId = query.parentId === '' ? null : query.parentId;
+      }
+      if (query.tagId) {
+        where.tags = { some: { tagId: query.tagId } };
       }
       if (!query.completed) {
         where.status = TaskStatus.ACTIVE;
@@ -97,21 +103,29 @@ export class TasksService {
       }
     }
 
-    return this.prisma.task.findMany({
+    const orderBy =
+      query.view === 'logbook'
+        ? [{ completedAt: 'desc' as const }]
+        : [{ sortOrder: 'asc' as const }, { createdAt: 'desc' as const }];
+
+    const tasks = await this.prisma.task.findMany({
       where,
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+      orderBy,
+      include: { tags: { include: { tag: true } } },
     });
+    return tasks.map((t) => ({ ...t, tags: t.tags.map((tt) => tt.tag) }));
   }
 
   async findOne(userId: string, id: string) {
     const task = await this.prisma.task.findFirst({
       where: { id, userId },
-      include: { children: true },
+      include: { children: true, tags: { include: { tag: true } } },
     });
     if (!task) {
       throw new NotFoundException('Task not found');
     }
-    return task;
+    const { tags: taskTags, ...rest } = task;
+    return { ...rest, tags: taskTags.map((tt) => tt.tag) };
   }
 
   async update(userId: string, id: string, dto: UpdateTaskDto) {
@@ -167,10 +181,27 @@ export class TasksService {
         : { disconnect: true };
     }
 
-    return this.prisma.task.update({
+    // 全量 set 语义：tagIds 传 undefined 不动；传数组则先删旧关联再建新关联
+    if (dto.tagIds !== undefined) {
+      await this.prisma.$transaction([
+        this.prisma.taskTag.deleteMany({ where: { taskId: id } }),
+        ...(dto.tagIds.length > 0
+          ? [
+              this.prisma.taskTag.createMany({
+                data: dto.tagIds.map((tagId) => ({ taskId: id, tagId })),
+                skipDuplicates: true,
+              }),
+            ]
+          : []),
+      ]);
+    }
+
+    const updated = await this.prisma.task.update({
       where: { id },
       data,
+      include: { tags: { include: { tag: true } } },
     });
+    return { ...updated, tags: updated.tags.map((tt) => tt.tag) };
   }
 
   async remove(userId: string, id: string) {

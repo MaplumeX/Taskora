@@ -4,6 +4,7 @@ import {
   IsOptional,
   IsString,
   IsDateString,
+  IsArray,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { TaskBucket } from '@taskora/shared';
@@ -65,12 +66,17 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsString()
   areaId?: string | null;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tagIds?: string[];
 }
 
 export class TaskQueryDto {
   @IsOptional()
-  @IsEnum(['inbox', 'today', 'upcoming', 'anytime', 'someday', 'trash'])
-  view?: 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash';
+  @IsEnum(['inbox', 'today', 'upcoming', 'anytime', 'someday', 'trash', 'logbook'])
+  view?: 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
 
   @IsOptional()
   @IsString()
@@ -83,6 +89,10 @@ export class TaskQueryDto {
   @IsOptional()
   @IsString()
   parentId?: string;
+
+  @IsOptional()
+  @IsString()
+  tagId?: string;
 
   @IsOptional()
   @IsBoolean()

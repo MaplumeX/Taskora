@@ -1,8 +1,14 @@
 packages:
   - 'packages/*'
-onlyBuiltDependencies:
-  - '@prisma/client'
-  - '@prisma/engines'
-  - bcryptjs
-  - esbuild
-  - prisma
+allowBuilds:
+  '@prisma/client': true
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true
+pnpm:
+  onlyBuiltDependencies:
+    - '@prisma/client'
+    - '@prisma/engines'
+    - bcryptjs
+    - esbuild
+    - prisma

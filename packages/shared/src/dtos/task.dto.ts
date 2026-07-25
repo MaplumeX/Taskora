@@ -1,3 +1,4 @@
+import type { TagResponseDto } from './tag.dto';
 import { TaskBucket, TaskStatus } from '../enums/task.enum';
 
 export interface CreateTaskDto {
@@ -18,6 +19,7 @@ export interface UpdateTaskDto {
   parentId?: string | null;
   projectId?: string | null;
   areaId?: string | null;
+  tagIds?: string[];
 }
 
 export interface TaskResponseDto {
@@ -33,6 +35,7 @@ export interface TaskResponseDto {
   parentId: string | null;
   projectId: string | null;
   areaId: string | null;
+  tags?: TagResponseDto[];
   children?: TaskResponseDto[];
   createdAt: string;
   updatedAt: string;

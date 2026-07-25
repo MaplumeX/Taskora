@@ -78,6 +78,22 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 
 ---
 
+## 标签徽章与多选
+
+### 标签徽章（TaskItem）
+
+- `TaskItem` 在标题右侧渲染小色块（`h-2.5 w-2.5 rounded-full`）表示标签，取自 `task.tags` 数组的 `color` 字段，最多展示 5 个，用 `title` attribute 提供标签名 tooltip。
+- 徽章用 `style={{ backgroundColor: tag.color }}` 渲染内联色，不依赖 Tailwind 绐定。
+
+### 标签多选行（TaskDetail）
+
+- `TaskDetail` 新增"标签"行，采用可点击的标签 chip（pill）实现多选：当前选中为高亮（背景=标签色、字白），未选为淡化（opacity-40）。
+- 点击 chip 调用 `useUpdateTask` 传 `tagIds` 全量数组（去重或移除该标签），符合后端 set 语义。
+- 标签数据由 `useTagsQuery()` 获取（用户级），当前任务的标签由 `useTaskQuery(id).tags` 预选。
+- 更新后 invalidate `tasks` 与 `task.detail` 两个 queryKey，确保列表徽章即时刷新。
+
+---
+
 ## Accessibility
 
 - 表单 Input 配 `<Label>`

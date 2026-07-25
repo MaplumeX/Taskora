@@ -71,6 +71,18 @@ export function TaskItem({
       </button>
 
       <div className="flex items-center gap-2">
+        {task.tags && task.tags.length > 0 && (
+          <div className="hidden items-center gap-1 sm:flex">
+            {task.tags.slice(0, 5).map((tag) => (
+              <span
+                key={tag.id}
+                className="h-2.5 w-2.5 rounded-full"
+                style={{ backgroundColor: tag.color }}
+                title={tag.title}
+              />
+            ))}
+          </div>
+        )}
         {tag && (
           <span className="hidden text-xs text-muted-foreground sm:inline">{tag}</span>
         )}

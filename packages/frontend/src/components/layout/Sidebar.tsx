@@ -7,7 +7,9 @@ import {
   Folder,
   Inbox,
   Layers,
+  Notebook,
   Sun,
+  Tags as TagsIcon,
   Trash2,
   CloudSun,
   type LucideIcon,
@@ -21,6 +23,7 @@ import { useAuthStore } from '@/lib/stores/auth.store';
 import { useLogout } from '@/lib/hooks/useAuth';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
+import { useTagsQuery } from '@/lib/hooks/useTags';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -42,6 +45,7 @@ const mainNav: NavItem[] = [
   { to: '/upcoming', label: 'Upcoming', icon: CalendarDays },
   { to: '/anytime', label: 'Anytime', icon: Circle },
   { to: '/someday', label: 'Someday', icon: CloudSun },
+  { to: '/logbook', label: 'Logbook', icon: Notebook },
 ];
 
 const NavRow = ({ item }: { item: NavItem }) => {
@@ -133,6 +137,7 @@ export function Sidebar() {
   const logout = useLogout();
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
+  const { data: tags = [] } = useTagsQuery();
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r bg-secondary/40">
@@ -187,6 +192,18 @@ export function Sidebar() {
             to="/areas"
             emptyHint="暂无区域"
             items={areas.map((a) => ({ id: a.id, title: a.title, href: `/areas/${a.id}` }))}
+          />
+        </div>
+
+        <Separator className="my-3" />
+
+        <div className="flex flex-col gap-1">
+          <CollapsibleSection
+            label="Tags"
+            icon={TagsIcon}
+            to="/tags"
+            emptyHint="暂无标签"
+            items={tags.map((t) => ({ id: t.id, title: t.title, href: `/tags/${t.id}` }))}
           />
         </div>
 

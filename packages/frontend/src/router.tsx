@@ -6,11 +6,14 @@ import Anytime from '@/pages/Anytime';
 import AreaDetail from '@/pages/AreaDetail';
 import Areas from '@/pages/Areas';
 import Inbox from '@/pages/Inbox';
+import Logbook from '@/pages/Logbook';
 import Login from '@/pages/Login';
 import ProjectDetail from '@/pages/ProjectDetail';
 import Projects from '@/pages/Projects';
 import Register from '@/pages/Register';
 import Someday from '@/pages/Someday';
+import Tags from '@/pages/Tags';
+import TagDetail from '@/pages/TagDetail';
 import Today from '@/pages/Today';
 import Trash from '@/pages/Trash';
 import Upcoming from '@/pages/Upcoming';
@@ -30,10 +33,13 @@ export const router = createBrowserRouter([
           { path: '/upcoming', element: <Upcoming /> },
           { path: '/anytime', element: <Anytime /> },
           { path: '/someday', element: <Someday /> },
+          { path: '/logbook', element: <Logbook /> },
           { path: '/projects', element: <Projects /> },
           { path: '/projects/:id', element: <ProjectDetail /> },
           { path: '/areas', element: <Areas /> },
           { path: '/areas/:id', element: <AreaDetail /> },
+          { path: '/tags', element: <Tags /> },
+          { path: '/tags/:tagId', element: <TagDetail /> },
           { path: '/trash', element: <Trash /> },
         ],
       },

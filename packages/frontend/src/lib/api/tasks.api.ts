@@ -6,13 +6,14 @@ import type {
 
 import { apiClient } from './client';
 
-export type TaskView = 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash';
+export type TaskView = 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
 
 export interface TaskQuery {
   view?: TaskView;
   projectId?: string;
   areaId?: string;
   parentId?: string | null;
+  tagId?: string;
   completed?: boolean;
 }
 
