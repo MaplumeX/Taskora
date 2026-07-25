@@ -3,11 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateTaskDto, UpdateTaskDto } from '@taskora/shared';
 
 import {
+  completeTask,
   createTask,
   deleteTask,
   getTask,
   getTasks,
+  restoreTask,
   type TaskQuery,
+  uncompleteTask,
   updateTask,
 } from '@/lib/api/tasks.api';
 
@@ -58,6 +61,39 @@ export function useDeleteTask() {
   return useMutation({
     mutationFn: (id: string) => deleteTask(id),
     onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+    },
+  });
+}
+
+export function useCompleteTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => completeTask(id),
+    onSuccess: (task) => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+    },
+  });
+}
+
+export function useUncompleteTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => uncompleteTask(id),
+    onSuccess: (task) => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+    },
+  });
+}
+
+export function useRestoreTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => restoreTask(id),
+    onSuccess: (task) => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
     },
   });

@@ -1,20 +1,23 @@
-interface PlaceholderProps {
-  title: string;
-  hint?: string;
-}
+import type { TaskBucket } from '@taskora/shared';
 
-function Placeholder({ title, hint }: PlaceholderProps) {
-  return (
-    <div className="flex flex-col gap-1">
-      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-      {hint && <p className="text-sm text-muted-foreground">{hint}</p>}
-      <div className="mt-6 flex h-40 items-center justify-center rounded-lg border border-dashed text-sm text-muted-foreground">
-        视图实现中
-      </div>
-    </div>
-  );
-}
+import { useTasksQuery } from '@/lib/hooks/useTasks';
+import { QuickAddTask } from '@/components/task/QuickAddTask';
+import { TaskListView } from '@/components/task/TaskListView';
 
 export default function Inbox() {
-  return <Placeholder title="Inbox" hint="快速收集你的想法" />;
+  const { data: tasks = [], isLoading, isError } = useTasksQuery({ view: 'inbox' });
+
+  return (
+    <div className="flex flex-col gap-4">
+      <h1 className="text-2xl font-semibold tracking-tight">Inbox</h1>
+      <QuickAddTask defaultBucket={'INBOX' as TaskBucket} placeholder="收集到收件箱…" />
+      {isLoading ? (
+        <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
+      ) : isError ? (
+        <p className="py-8 text-center text-sm text-[#CC4444]">加载失败</p>
+      ) : (
+        <TaskListView tasks={tasks} emptyHint="收件箱是空的" />
+      )}
+    </div>
+  );
 }
