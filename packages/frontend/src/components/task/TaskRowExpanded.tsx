@@ -9,6 +9,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 
 import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
 import { ScheduledType } from '@taskora/shared';
@@ -46,6 +47,9 @@ export function TaskRowExpanded({ task }: Props) {
   const queryClient = useQueryClient();
   const { data: liveTask } = useTaskQuery(task.id);
   const current = liveTask ?? task;
+  const [searchParams] = useSearchParams();
+
+  const titleInputRef = React.useRef<HTMLInputElement>(null);
 
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
@@ -83,6 +87,15 @@ export function TaskRowExpanded({ task }: Props) {
         onError: () => toast.error('保存失败'),
       },
     );
+
+  // Auto-focus + select title when this row was expanded via "add task" flow
+  React.useEffect(() => {
+    const expandId = searchParams.get('expand');
+    if (expandId === task.id && current.title === '新任务') {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    }
+  }, [searchParams, task.id, current.title]);
 
   const commitTitle = () => {
     if (title.trim() && title !== current.title) patch({ title: title.trim() });
@@ -333,6 +346,7 @@ export function TaskRowExpanded({ task }: Props) {
       </div>
 
       <Input
+        ref={titleInputRef}
         value={title}
         onChange={(e) => setTitle(e.target.value)}
         onBlur={commitTitle}

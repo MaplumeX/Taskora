@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "行内展开交互状态机、事件隔离 stopPropagation、展开区 TaskRowExpanded 的 useTaskQuery 实时数据约定"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Zustand 仅 auth/token；expandedId 需走 URL 状态层而非 store，避免违反分层"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "新组件归入 components/layout、components/search；hook 命名 use 前缀；DTO 从 @taskora/shared 引用"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useCreateTask/useTasksQuery 的 query key 与 invalidate 约定"}

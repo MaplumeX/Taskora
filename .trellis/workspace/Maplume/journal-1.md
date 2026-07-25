@@ -252,3 +252,38 @@ Add ScheduledType enum (NONE/DATE/SOMEDAY) to shared, prisma schema, backend DTO
 ### Next Steps
 
 - None - task complete
+
+
+## Session 6: Content bottom bar with search modal and add-to-edit flow
+
+**Date**: 2026-07-25
+**Task**: Content bottom bar with search modal and add-to-edit flow
+**Branch**: `feat/content-bottom-bar-task-actions`
+
+### Summary
+
+将顶部常驻搜索栏改为内容区底部共享栏（搜索 + 添加任务按钮）。搜索按钮弹出 Dialog 模态框（迁移原 SearchBar 防抖/勾选/结果列表逻辑），Cmd/Ctrl+K 打开搜索。添加任务按钮按 1B 方案：调用后端创建占位'新任务'任务（携带页面上下文：Today→dueToday、Someday→SOMEDAY、ProjectDetail→projectId），成功后通过 URL ?expand=<id> 触发该行展开，TaskRowExpanded 自动聚焦+全选标题。useTaskRowSelection 的 expandedId 从 useState 改为 useSearchParams 派生（spec 禁 Zustand 管 expandedId，改用 URL 状态层），selectedId 保持 useState。删除 SearchBar.tsx 与 QuickAddTask.tsx，移除 5 个页面的 QuickAddTask 渲染。spec component-guidelines.md 同步更新 expandedId 归属说明。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e07dc71` | (see git log) |
+| `241166c` | (see git log) |
+| `620f9c7` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
