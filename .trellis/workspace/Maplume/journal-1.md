@@ -287,3 +287,38 @@ Add ScheduledType enum (NONE/DATE/SOMEDAY) to shared, prisma schema, backend DTO
 ### Next Steps
 
 - None - task complete
+
+
+## Session 7: 支持拖拽排序（任务/项目/区域）
+
+**Date**: 2026-07-25
+**Task**: 支持拖拽排序（任务/项目/区域）
+**Branch**: `feat/drag-sort-reorder`
+
+### Summary
+
+为 Task/Project/Area 三类列表加入 dnd-kit 拖拽排序，持久化到后端。后端新增 sortOrder 字段（Project/Area）+ POST /{tasks,projects,areas}/reorder 接口（updateMany + $transaction 保证 userId 隔离）；前端 useReorderXxx 半乐观更新（setQueriesData + invalidate）；TaskList/Projects/Areas/AreaDetail 接入 DnD，SearchModal 传 sortable={false} 隔离。spec 更新 reorder API 模式与 DnD 约定。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `baf67e8` | (see git log) |
+| `1432490` | (see git log) |
+| `3a2ccd2` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
