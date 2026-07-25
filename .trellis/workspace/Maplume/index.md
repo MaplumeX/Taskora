@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 5
+- **Total Sessions**: 6
 - **Last Active**: 2026-07-25
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~254 | Active |
+| `journal-1.md` | ~289 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 6 | 2026-07-25 | Content bottom bar with search modal and add-to-edit flow | `e07dc71`, `241166c`, `620f9c7` | `feat/content-bottom-bar-task-actions` |
 | 5 | 2026-07-25 | scheduledType field and Someday as view refactor | `01d949e`, `afa18a6` | `main` |
 | 4 | 2026-07-25 | Rename dueDate to scheduledDate + add new dueDate for notifications | `fccf4cb` | `main` |
 | 3 | 2026-07-25 | Frontend views implementation — MVP complete | `f9181c8`, `5d7b948`, `fc2241a` | `main` |
