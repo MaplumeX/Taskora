@@ -1,0 +1,14 @@
+{
+  "title": "Search Tasks",
+  "placeholder": "Search tasks…",
+  "inputPlaceholder": "Enter keywords to search…",
+  "clearSearch": "Clear search",
+  "includeCompleted": "Include completed",
+  "searching": "Searching…",
+  "searchFailed": "Search failed, please try again.",
+  "noResults": "No matching tasks found",
+  "groupTasks": "Tasks",
+  "groupProjects": "Projects",
+  "groupAreas": "Areas",
+  "groupTags": "Tags"
+}

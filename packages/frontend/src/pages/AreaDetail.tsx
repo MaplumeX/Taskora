@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import { useAreasQuery, useDeleteArea } from '@/lib/hooks/useAreas';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
@@ -12,6 +13,7 @@ import { TaskListView } from '@/components/task/TaskListView';
 import { toast } from 'sonner';
 
 export default function AreaDetail() {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { data: areas = [] } = useAreasQuery();
@@ -24,13 +26,13 @@ export default function AreaDetail() {
 
   const handleDelete = () => {
     if (!area) return;
-    if (!window.confirm(`确认删除区域「${area.title}」？区域内的项目不会被删除。`)) return;
+    if (!window.confirm(t('area:deleteConfirm', { name: area.title }))) return;
     deleteArea.mutate(area.id, {
       onSuccess: () => {
-        toast.success('区域已删除');
+        toast.success(t('area:deleted'));
         navigate('/areas');
       },
-      onError: () => toast.error('删除失败（请先移除区域内的项目）'),
+      onError: () => toast.error(t('area:deleteFailedHint')),
     });
   };
 
@@ -42,21 +44,21 @@ export default function AreaDetail() {
             onClick={() => navigate('/areas')}
             className="mb-1 text-xs text-muted-foreground hover:text-foreground"
           >
-            ‹ 返回 Areas
+            {t('common:backTo', { label: t('nav:areas') })}
           </button>
-          <h1 className="text-2xl font-semibold tracking-tight">{area?.title ?? '区域'}</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">{area?.title ?? t('area:defaultTitle')}</h1>
         </div>
         <Button variant="ghost" onClick={() => setEditOpen(true)}>
-          编辑
+          {t('common:edit')}
         </Button>
         <Button variant="ghost" className="text-[#CC4444]" onClick={handleDelete}>
-          删除
+          {t('common:delete')}
         </Button>
       </div>
 
-      <h2 className="text-sm font-medium text-muted-foreground">项目</h2>
+      <h2 className="text-sm font-medium text-muted-foreground">{t('area:projectsLabel')}</h2>
       {projects.length === 0 ? (
-        <p className="text-sm text-muted-foreground">该区域下没有项目</p>
+        <p className="text-sm text-muted-foreground">{t('area:noProjects')}</p>
       ) : (
         <div className="flex flex-col">
           {projects.map((p) => (
@@ -67,13 +69,13 @@ export default function AreaDetail() {
 
       <Separator />
 
-      <h2 className="text-sm font-medium text-muted-foreground">任务</h2>
+      <h2 className="text-sm font-medium text-muted-foreground">{t('area:tasksLabel')}</h2>
       {isLoading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>
       ) : isError ? (
-        <p className="py-8 text-center text-sm text-[#CC4444]">加载失败</p>
+        <p className="py-8 text-center text-sm text-[#CC4444]">{t('common:loadFailed')}</p>
       ) : (
-        <TaskListView tasks={tasks} emptyHint="该区域下没有任务" />
+        <TaskListView tasks={tasks} emptyHint={t('area:noTasks')} />
       )}
 
       {area && <AreaForm open={editOpen} onOpenChange={setEditOpen} area={area} />}

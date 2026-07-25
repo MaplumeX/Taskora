@@ -1,0 +1,12 @@
+{
+  "empty": "暂无项目",
+  "create": "新建项目",
+  "edit": "编辑项目",
+  "new": "新项目",
+  "titlePlaceholder": "项目名称",
+  "deleteConfirm": "确认删除项目「{{name}}」？",
+  "defaultTitle": "项目",
+  "noTasks": "项目中没有任务",
+  "deleted": "项目已删除",
+  "created": "项目已创建"
+}

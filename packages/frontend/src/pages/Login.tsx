@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useLogin } from '@/lib/hooks/useAuth';
 
 export default function Login() {
+  const { t } = useTranslation();
   const login = useLogin();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -22,10 +24,10 @@ export default function Login() {
         <h1 className="mb-1 text-center text-2xl font-semibold tracking-tight">
           Taskora
         </h1>
-        <p className="mb-6 text-center text-sm text-muted-foreground">登录你的账号</p>
+        <p className="mb-6 text-center text-sm text-muted-foreground">{t('auth:loginSubtitle')}</p>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
-            <Label htmlFor="email">邮箱</Label>
+            <Label htmlFor="email">{t('auth:email')}</Label>
             <Input
               id="email"
               type="email"
@@ -38,7 +40,7 @@ export default function Login() {
             />
           </div>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="password">密码</Label>
+            <Label htmlFor="password">{t('auth:password')}</Label>
             <Input
               id="password"
               type="password"
@@ -50,13 +52,13 @@ export default function Login() {
             />
           </div>
           <Button type="submit" disabled={login.isPending}>
-            {login.isPending ? '登录中…' : '登录'}
+            {login.isPending ? t('auth:loggingIn') : t('auth:login')}
           </Button>
         </form>
         <p className="mt-6 text-center text-sm text-muted-foreground">
-          还没有账号？{' '}
+          {t('auth:noAccountPrefix')}{' '}
           <Link to="/register" className="font-medium text-primary hover:underline">
-            注册
+            {t('auth:register')}
           </Link>
         </p>
       </div>

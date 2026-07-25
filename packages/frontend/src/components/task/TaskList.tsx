@@ -1,3 +1,5 @@
+import { useTranslation } from 'react-i18next';
+
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { TaskItem } from './TaskItem';
@@ -31,14 +33,15 @@ export function TaskList({
   onRowClick,
   onToggleComplete,
   onTrash,
-  emptyHint = '没有任务',
+  emptyHint,
 }: Props) {
+  const { t } = useTranslation();
   const topTasks = tasks.filter((t) => !t.parentId);
   if (topTasks.length === 0) {
     return (
       <div className="mt-8 flex flex-col items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
         <span className="text-3xl">🎉</span>
-        {emptyHint}
+        {emptyHint ?? t('task:empty')}
       </div>
     );
   }

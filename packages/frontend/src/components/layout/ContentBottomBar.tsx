@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import type { CreateTaskDto } from '@taskora/shared';
 
@@ -11,6 +12,7 @@ import { usePageTaskContext } from '@/lib/hooks/usePageTaskContext';
 import { toast } from 'sonner';
 
 export function ContentBottomBar() {
+  const { t } = useTranslation();
   const [searchOpen, setSearchOpen] = useState(false);
   const createTask = useCreateTask();
   const ctx = usePageTaskContext();
@@ -29,12 +31,12 @@ export function ContentBottomBar() {
   }, []);
 
   const handleAddTask = () => {
-    const payload: CreateTaskDto = { title: '新任务', ...ctx };
+    const payload: CreateTaskDto = { title: t('task:newTask'), ...ctx };
     createTask.mutate(payload, {
       onSuccess: (created) => {
         setParams({ expand: created.id }, { replace: true });
       },
-      onError: () => toast.error('创建失败'),
+      onError: () => toast.error(t('common:createFailed')),
     });
   };
 
@@ -44,7 +46,7 @@ export function ContentBottomBar() {
         <Button
           variant="ghost"
           size="icon"
-          aria-label="搜索任务"
+          aria-label={t('task:searchTasks')}
           onClick={() => setSearchOpen(true)}
         >
           <Search className="h-5 w-5" />
@@ -52,7 +54,7 @@ export function ContentBottomBar() {
         <Button
           variant="ghost"
           size="icon"
-          aria-label="添加任务"
+          aria-label={t('task:addTask')}
           onClick={handleAddTask}
           disabled={createTask.isPending}
         >

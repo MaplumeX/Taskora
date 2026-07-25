@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Search, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -20,6 +21,7 @@ interface Props {
 }
 
 export function SearchModal({ open, onOpenChange }: Props) {
+  const { t } = useTranslation('search');
   const inputRef = useRef<HTMLInputElement>(null);
   const [query, setQuery] = useState('');
   const [includeCompleted, setIncludeCompleted] = useState(false);
@@ -51,14 +53,14 @@ export function SearchModal({ open, onOpenChange }: Props) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-xl">
         <DialogHeader>
-          <DialogTitle>搜索任务</DialogTitle>
+          <DialogTitle>{t('title')}</DialogTitle>
         </DialogHeader>
         <div className="relative">
           <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             ref={inputRef}
             type="text"
-            placeholder="输入关键词搜索…"
+            placeholder={t('inputPlaceholder')}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="pl-9 pr-9"
@@ -66,7 +68,7 @@ export function SearchModal({ open, onOpenChange }: Props) {
           {query && (
             <button
               type="button"
-              aria-label="清空搜索"
+              aria-label={t('clearSearch')}
               onClick={() => setQuery('')}
               className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
             >
@@ -80,26 +82,26 @@ export function SearchModal({ open, onOpenChange }: Props) {
               checked={includeCompleted}
               onCheckedChange={(v) => setIncludeCompleted(v === true)}
             />
-            包含已完成
+            {t('includeCompleted')}
           </label>
           {hasQuery && (
             <>
               {isPending && (
-                <p className="py-4 text-sm text-muted-foreground">搜索中…</p>
+                <p className="py-4 text-sm text-muted-foreground">{t('searching')}</p>
               )}
               {isError && (
-                <p className="py-4 text-sm text-destructive">搜索失败，请重试。</p>
+                <p className="py-4 text-sm text-destructive">{t('searchFailed')}</p>
               )}
               {!isPending && !isError && (
                 <ScrollArea className="max-h-[60vh]">
                   {tasks.length > 0 ? (
                     <TaskListView
                       tasks={tasks}
-                      emptyHint="未找到匹配的任务"
+                      emptyHint={t('noResults')}
                     />
                   ) : (
                     <p className="py-4 text-sm text-muted-foreground">
-                      未找到匹配的任务
+                      {t('noResults')}
                     </p>
                   )}
                 </ScrollArea>

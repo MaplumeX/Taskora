@@ -1,0 +1,20 @@
+{
+  "empty": "暂无标签",
+  "create": "新建标签",
+  "edit": "编辑标签",
+  "new": "新标签",
+  "titlePlaceholder": "标签名称",
+  "deleteConfirm": "确认删除标签「{{name}}」？",
+  "defaultTitle": "标签",
+  "deleted": "标签已删除",
+  "created": "标签已创建",
+  "newGroup": "新建分组",
+  "newGroupTitle": "新分组",
+  "groupCreated": "分组已创建",
+  "groupDeleted": "分组已删除",
+  "deleteGroup": "删除分组",
+  "deleteGroupConfirm": "确认删除分组「{{name}}」？标签不会被删除（变为未分组）。",
+  "groupTitlePlaceholder": "分组名称",
+  "selectColor": "选择颜色 {{color}}",
+  "noTasks": "该标签下没有任务"
+}
