@@ -1,0 +1,30 @@
+{
+  "id": "gtd-enhance",
+  "name": "gtd-enhance",
+  "title": "GTD MVP 增强：Tags + Logbook + 测试基建",
+  "description": "",
+  "status": "planning",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "Maplume",
+  "assignee": "Maplume",
+  "createdAt": "2026-07-25",
+  "completedAt": null,
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [
+    "07-25-tags",
+    "07-25-logbook",
+    "07-25-test-infra"
+  ],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {}
+}

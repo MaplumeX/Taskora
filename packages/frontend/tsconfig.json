@@ -12,10 +12,11 @@
     "esModuleInterop": true,
     "useDefineForClassFields": true,
     "isolatedModules": true,
+    "types": ["vitest/globals", "@testing-library/jest-dom"],
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
   },
-  "include": ["src", "vite.config.ts", "tailwind.config.js", "postcss.config.js"]
+  "include": ["src", "vite.config.ts", "vitest.config.ts", "tailwind.config.js", "postcss.config.js"]
 }
