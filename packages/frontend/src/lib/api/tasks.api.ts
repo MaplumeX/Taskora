@@ -57,3 +57,7 @@ export function uncompleteTask(id: string): Promise<TaskResponseDto> {
     .post<TaskResponseDto>(`/tasks/${id}/uncomplete`)
     .then((res) => res.data);
 }
+
+export function reorderTasks(orderedIds: string[]): Promise<void> {
+  return apiClient.post('/tasks/reorder', { orderedIds }).then(() => undefined);
+}

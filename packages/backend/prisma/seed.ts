@@ -19,6 +19,7 @@ async function main() {
     data: {
       title: 'Work',
       notes: 'Work-related tasks',
+      sortOrder: 0,
       userId: user.id,
     },
   });
@@ -28,6 +29,7 @@ async function main() {
       title: 'Taskora',
       notes: 'Build the Taskora app',
       areaId: area.id,
+      sortOrder: 0,
       userId: user.id,
     },
   });

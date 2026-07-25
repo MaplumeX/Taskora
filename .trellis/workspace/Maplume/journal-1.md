@@ -289,15 +289,17 @@ Add ScheduledType enum (NONE/DATE/SOMEDAY) to shared, prisma schema, backend DTO
 - None - task complete
 
 
-## Session 7: 重新设计任务编辑组件布局
+## Session 7: 拖拽排序（任务/项目/区域） + 任务编辑组件布局重排
 
 **Date**: 2026-07-25
-**Task**: 重新设计任务编辑组件布局
-**Branch**: `feat/task-edit-expanded-layout`
+**Task**: 拖拽排序 + 重新设计任务编辑组件布局
+**Branch**: `feat/drag-sort-reorder` (merge of `feat/task-edit-expanded-layout`)
 
 ### Summary
 
-重新设计 TaskRowExpanded 展开编辑态布局：从上到下改为标题→备注→子任务区→图标按钮行（5个图标）。移除展开态内的标记完成文字按钮和删除按钮（均由折叠态行提供）。标题/备注采用无边框扁平样式。更新 frontend spec 记录展开态纵向布局约定。
+拖拽排序：为 Task/Project/Area 三类列表加入 dnd-kit 拖拽排序，持久化到后端。后端新增 sortOrder 字段（Project/Area）+ POST /{tasks,projects,areas}/reorder 接口（updateMany + $transaction 保证 userId 隔离）；前端 useReorderXxx 半乐观更新（setQueriesData + invalidate）；TaskList/Projects/Areas/AreaDetail 接入 DnD，SearchModal 传 sortable={false} 隔离。spec 更新 reorder API 模式与 DnD 约定。
+
+任务编辑布局重排：重新设计 TaskRowExpanded 展开编辑态布局，从上到下改为标题→备注→子任务区→图标按钮行（5个图标）。移除展开态内的标记完成文字按钮和删除按钮（均由折叠态行提供）。标题/备注采用无边框扁平样式。
 
 ### Main Changes
 
@@ -307,7 +309,10 @@ Add ScheduledType enum (NONE/DATE/SOMEDAY) to shared, prisma schema, backend DTO
 
 | Hash | Message |
 |------|---------|
-| `6c3710e` | (see git log) |
+| `baf67e8` | feat: Add drag-and-drop reorder for tasks, projects, and areas |
+| `1432490` | docs: Update specs with reorder API pattern and DnD conventions |
+| `3a2ccd2` | chore: Add Trellis task artifacts for drag-sort-reorder |
+| `6c3710e` | (task-edit-expanded-layout, merged from main) |
 
 ### Testing
 

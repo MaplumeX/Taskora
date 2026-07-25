@@ -10,13 +10,21 @@ import {
   Request,
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
-import { CreateProjectDto, UpdateProjectDto } from './dto/projects.dto';
+import { CreateProjectDto, UpdateProjectDto, ReorderDto } from './dto/projects.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
 @Controller('projects')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
+
+  @Post('reorder')
+  reorder(
+    @Request() req: { user: { id: string } },
+    @Body() dto: ReorderDto,
+  ) {
+    return this.projectsService.reorder(req.user.id, dto.orderedIds);
+  }
 
   @Post()
   create(
