@@ -41,3 +41,39 @@ Created parent task 07-25-gtd-app with 4 child tasks (01-monorepo-setup, 02-back
 ### Next Steps
 
 - None - task complete
+
+
+## Session 2: Backend core + frontend core implementation
+
+**Date**: 2026-07-25
+**Task**: Backend core + frontend core implementation
+**Branch**: `main`
+
+### Summary
+
+Implemented and archived 02-backend-core and 03-frontend-core in parallel. Backend: NestJS with Prisma schema (User/Area/Project/Task + TaskBucket/TaskStatus enums), bcryptjs+JWT auth, task CRUD with bucket transition logic, view filtering (inbox/today/upcoming/anytime/someday/trash), soft delete, userId isolation on all queries. Fixed TaskQueryDto validation pipe issue (cross-type metadata loss). Frontend: React+Vite+TS, Tailwind CSS v3 with Things3 color scheme, shadcn/ui components, React Router with ProtectedRoute, axios with JWT interceptors and 401 redirect, Zustand auth store with localStorage persistence, TanStack Query v5 with proper query key conventions and invalidation. Updated backend spec: database-guidelines (Prisma patterns, soft delete, bucket transitions), error-handling (Prisma error mapping, ValidationPipe gotcha).
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `ab6d018` | (see git log) |
+| `d274fc0` | (see git log) |
+| `0d4f6f5` | (see git log) |
+| `0aeaa9b` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
