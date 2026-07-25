@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "检查组件是否遵循 Props 约定、样式模式、IconPopover 复用、事件隔离 stopPropagation、aria-label 无障碍等规范"}
+{"file": ".trellis/tasks/07-25-edit-task-due-date/prd.md", "reason": "验收标准 AC1-AC6 对照检查清单"}
