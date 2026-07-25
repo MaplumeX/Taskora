@@ -1,9 +1,8 @@
-import * as React from 'react';
+import { useMemo } from 'react';
 
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { TaskItem } from '@/components/task/TaskItem';
-import { TaskDetail } from '@/components/task/TaskDetail';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
 import {
   useCompleteTask,
@@ -12,6 +11,7 @@ import {
 } from '@/lib/hooks/useTasks';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
+import { useTaskRowSelection } from '@/lib/hooks/useTaskRowSelection';
 import { dayDiff } from '@/lib/utils/date';
 import { toast } from 'sonner';
 
@@ -22,25 +22,29 @@ export default function Logbook() {
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const deleteTask = useDeleteTask();
-  const [selected, setSelected] = React.useState<TaskResponseDto | null>(null);
-  const [open, setOpen] = React.useState(false);
+  const {
+    selectedId,
+    expandedId,
+    handleRowClick,
+    handleBlankClick,
+  } = useTaskRowSelection();
 
-  const projectMap = React.useMemo(
+  const projectMap = useMemo(
     () => Object.fromEntries(projects.map((p) => [p.id, p.title])),
     [projects],
   );
-  const areaMap = React.useMemo(
+  const areaMap = useMemo(
     () => Object.fromEntries(areas.map((a) => [a.id, a.title])),
     [areas],
   );
 
-  const grouped = React.useMemo(() => {
+  const grouped = useMemo(() => {
     const today: TaskResponseDto[] = [];
     const yesterday: TaskResponseDto[] = [];
     const earlier: TaskResponseDto[] = [];
     for (const t of tasks) {
       if (t.parentId) continue;
-      if (!t.completedAt) continue; // defensive: logbook tasks should be completed
+      if (!t.completedAt) continue;
       const diff = dayDiff(t.completedAt, new Date());
       if (diff === 0) today.push(t);
       else if (diff === 1) yesterday.push(t);
@@ -68,20 +72,22 @@ export default function Logbook() {
         <h2 className="px-2 pb-1 pt-4 text-sm font-medium text-muted-foreground">
           {label}
         </h2>
-        {group.map((task) => (
-          <TaskItem
-            key={task.id}
-            task={task}
-            projectTitle={task.projectId ? projectMap[task.projectId] : undefined}
-            areaTitle={task.areaId ? areaMap[task.areaId] : undefined}
-            onToggleComplete={() => toggleComplete(task)}
-            onOpenDetail={() => {
-              setSelected(task);
-              setOpen(true);
-            }}
-            onTrash={() => handleTrash(task)}
-          />
-        ))}
+        {group.map((task) => {
+          const selectionState =
+            expandedId === task.id ? 'expanded' : selectedId === task.id ? 'selected' : 'idle';
+          return (
+            <TaskItem
+              key={task.id}
+              task={task}
+              projectTitle={task.projectId ? projectMap[task.projectId] : undefined}
+              areaTitle={task.areaId ? areaMap[task.areaId] : undefined}
+              selectionState={selectionState}
+              onToggleComplete={() => toggleComplete(task)}
+              onRowClick={() => handleRowClick(task.id)}
+              onTrash={() => handleTrash(task)}
+            />
+          );
+        })}
       </div>
     );
   };
@@ -90,7 +96,7 @@ export default function Logbook() {
     grouped.today.length + grouped.yesterday.length + grouped.earlier.length > 0;
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" onClick={handleBlankClick}>
       <h1 className="text-2xl font-semibold tracking-tight">Logbook</h1>
       {isLoading ? (
         <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
@@ -105,7 +111,6 @@ export default function Logbook() {
           {renderGroup('更早', grouped.earlier)}
         </>
       )}
-      <TaskDetail task={selected} open={open} onOpenChange={setOpen} />
     </div>
   );
 }

@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "确认组件目录划分（task/ ui/）、状态管理分层（Zustand 仅 auth，列表级瞬态用 useState）"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "明确选中态/展开态属于「组件内部 useState」而非 Zustand，避免误用全局 store"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "TaskItem/TaskRowExpanded 的 props 与样式规范、标签徽章与多选 chip 约定、a11y 要求"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useTaskRowSelection 自定义 hook 的命名与结构约定；展开区复用 useTaskQuery/useUpdateTask 的 invalidation 策略"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "ScheduledType enum 运行时使用依赖 vite alias 配置，新增 Popover/TaskRowExpanded 中会用到 enum 值，需遵循此 alias 方案"}
+{"file": ".trellis/tasks/07-25-inline-task-row/design.md", "reason": "状态机定义、组件形态变化、Popover 选型、文件改动清单"}
+{"file": ".trellis/tasks/07-25-inline-task-row/implement.md", "reason": "9 步执行顺序、验证命令、风险点"}
