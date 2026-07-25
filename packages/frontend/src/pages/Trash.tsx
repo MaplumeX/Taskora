@@ -38,7 +38,7 @@ export default function Trash() {
             >
               <TaskCheckbox checked={false} onToggle={() => {}} disabled />
               <span className="flex-1 truncate line-through">{task.title}</span>
-              <TaskDateBadge dueDate={task.dueDate} />
+              <TaskDateBadge scheduledDate={task.scheduledDate} />
               <Button
                 variant="ghost"
                 size="sm"

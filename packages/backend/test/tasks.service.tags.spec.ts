@@ -15,6 +15,7 @@ describe('TasksService tagIds set semantics', () => {
     id: taskId,
     title: 'Task',
     notes: null,
+    scheduledDate: null,
     dueDate: null,
     bucket: TaskBucket.INBOX,
     status: TaskStatus.ACTIVE,

@@ -105,7 +105,8 @@ model Task {
   id          String      @id @default(uuid())
   title       String
   notes       String?
-  dueDate     DateTime?
+  scheduledDate DateTime?
+  dueDate       DateTime?
   bucket      TaskBucket  @default(INBOX)
   status      TaskStatus  @default(ACTIVE)
   completedAt DateTime?

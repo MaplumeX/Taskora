@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 interface Props {
   /** Default bucket for created tasks */
   defaultBucket?: TaskBucket;
-  /** Set dueDate to today on creation (Today view) */
+  /** Set scheduledDate to today on creation (Today view) */
   dueToday?: boolean;
   /** Parent task id for subtasks */
   parentId?: string;
@@ -41,7 +41,7 @@ export function QuickAddTask({
     if (projectId) payload.projectId = projectId;
     if (areaId) payload.areaId = areaId;
     if (dueToday) {
-      payload.dueDate = new Date().toISOString();
+      payload.scheduledDate = new Date().toISOString();
     }
     createTask.mutate(payload, {
       onSuccess: () => setTitle(''),

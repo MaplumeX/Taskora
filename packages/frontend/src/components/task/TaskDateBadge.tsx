@@ -4,13 +4,13 @@ import { cn } from '@/lib/utils';
 import { formatDateLabel, isOverdue, isToday } from '@/lib/utils/date';
 
 interface Props {
-  dueDate: string | null;
+  scheduledDate: string | null;
   className?: string;
 }
 
-export function TaskDateBadge({ dueDate, className }: Props) {
-  if (!dueDate) return null;
-  const date = new Date(dueDate);
+export function TaskDateBadge({ scheduledDate, className }: Props) {
+  if (!scheduledDate) return null;
+  const date = new Date(scheduledDate);
   const overdue = isOverdue(date);
   const today = isToday(date);
   return (

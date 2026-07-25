@@ -38,8 +38,8 @@ export default function Upcoming() {
     const map = new Map<string, TaskResponseDto[]>();
     for (const t of tasks) {
       if (t.parentId) continue;
-      if (!t.dueDate) continue;
-      const key = toDateKey(t.dueDate);
+      if (!t.scheduledDate) continue;
+      const key = toDateKey(t.scheduledDate);
       const arr = map.get(key) ?? [];
       arr.push(t);
       map.set(key, arr);

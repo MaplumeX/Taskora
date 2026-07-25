@@ -4,7 +4,8 @@ import { TaskBucket, TaskStatus } from '../enums/task.enum';
 export interface CreateTaskDto {
   title: string;
   notes?: string;
-  dueDate?: string; // ISO 8601
+  scheduledDate?: string; // ISO 8601（计划日期）
+  dueDate?: string; // ISO 8601（通知日期，默认 null）
   bucket?: TaskBucket;
   parentId?: string;
   projectId?: string;
@@ -14,6 +15,7 @@ export interface CreateTaskDto {
 export interface UpdateTaskDto {
   title?: string;
   notes?: string;
+  scheduledDate?: string | null;
   dueDate?: string | null;
   bucket?: TaskBucket;
   parentId?: string | null;
@@ -26,7 +28,8 @@ export interface TaskResponseDto {
   id: string;
   title: string;
   notes: string | null;
-  dueDate: string | null;
+  scheduledDate: string | null; // 计划日期（原 dueDate）
+  dueDate: string | null; // 通知日期（新增）
   bucket: TaskBucket;
   status: TaskStatus;
   completedAt: string | null;
