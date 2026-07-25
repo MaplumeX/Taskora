@@ -1,4 +1,4 @@
-import { PrismaClient, TaskBucket, TaskStatus } from '@prisma/client';
+import { PrismaClient, TaskBucket, TaskStatus, ScheduledType } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -54,7 +54,8 @@ async function main() {
   await prisma.task.create({
     data: {
       title: 'Design database schema',
-      bucket: TaskBucket.SOMEDAY,
+      bucket: TaskBucket.SCHEDULED,
+      scheduledType: ScheduledType.SOMEDAY,
       status: TaskStatus.ACTIVE,
       userId: user.id,
     },

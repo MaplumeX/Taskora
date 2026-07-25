@@ -2,7 +2,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { TaskBucket, TaskStatus } from '@taskora/shared';
+import { TaskBucket, TaskStatus, ScheduledType } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
 import { Prisma } from '@prisma/client';
@@ -12,27 +12,35 @@ export class TasksService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * Resolve bucket based on inputs, following design.md §2.3.
-   * Note: only scheduledDate drives SCHEDULED bucket, never dueDate.
+   * Resolve bucket based on scheduledType, following design.md.
+   * - DATE/SOMEDAY → SCHEDULED
+   * - NONE → keep non-SCHEDULED bucket, or derive from project/area, or INBOX
    */
   private resolveBucket(
     bucket: TaskBucket | undefined,
-    scheduledDate: string | null | undefined,
+    scheduledType: ScheduledType | undefined,
     projectId: string | null | undefined,
     areaId: string | null | undefined,
   ): TaskBucket {
-    if (scheduledDate) return TaskBucket.SCHEDULED;
-    if (bucket) return bucket;
+    if (scheduledType === ScheduledType.DATE) return TaskBucket.SCHEDULED;
+    if (scheduledType === ScheduledType.SOMEDAY) return TaskBucket.SCHEDULED;
+    // scheduledType === NONE (or undefined → defaults to NONE)
+    if (bucket && bucket !== TaskBucket.SCHEDULED) return bucket;
     if (projectId || areaId) return TaskBucket.ANYTIME;
     return TaskBucket.INBOX;
   }
 
   async create(userId: string, dto: CreateTaskDto) {
-    const scheduledDate = dto.scheduledDate ? new Date(dto.scheduledDate) : null;
+    const scheduledType = dto.scheduledType ?? ScheduledType.NONE;
+    // Determine scheduledDate based on scheduledType
+    let scheduledDate: Date | null = null;
+    if (scheduledType === ScheduledType.DATE && dto.scheduledDate) {
+      scheduledDate = new Date(dto.scheduledDate);
+    }
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
     const bucket = this.resolveBucket(
       dto.bucket,
-      dto.scheduledDate,
+      scheduledType,
       dto.projectId,
       dto.areaId,
     );
@@ -42,6 +50,7 @@ export class TasksService {
         title: dto.title,
         notes: dto.notes,
         scheduledDate,
+        scheduledType,
         dueDate,
         bucket,
         userId,
@@ -60,27 +69,28 @@ export class TasksService {
         case 'inbox':
           where.bucket = TaskBucket.INBOX;
           where.status = TaskStatus.ACTIVE;
-          where.scheduledDate = null;
+          where.scheduledType = ScheduledType.NONE;
           break;
         case 'today': {
           where.status = TaskStatus.ACTIVE;
+          where.scheduledType = ScheduledType.DATE;
           where.scheduledDate = { lte: new Date() };
           break;
         }
         case 'upcoming': {
           where.status = TaskStatus.ACTIVE;
+          where.scheduledType = ScheduledType.DATE;
           where.scheduledDate = { gt: new Date() };
           break;
         }
         case 'anytime':
           where.bucket = TaskBucket.ANYTIME;
           where.status = TaskStatus.ACTIVE;
-          where.scheduledDate = null;
+          where.scheduledType = ScheduledType.NONE;
           break;
         case 'someday':
-          where.bucket = TaskBucket.SOMEDAY;
+          where.scheduledType = ScheduledType.SOMEDAY;
           where.status = TaskStatus.ACTIVE;
-          where.scheduledDate = null;
           break;
         case 'trash':
           where.status = TaskStatus.TRASHED;
@@ -139,23 +149,41 @@ export class TasksService {
       throw new NotFoundException('Task not found');
     }
 
-    // Resolve bucket if scheduledDate or project/area changed
+    // Determine effective scheduledType and scheduledDate
+    const newScheduledType =
+      dto.scheduledType !== undefined ? dto.scheduledType : existing.scheduledType;
+
+    let effectiveScheduledDate: Date | null;
+    if (newScheduledType === ScheduledType.SOMEDAY) {
+      effectiveScheduledDate = null;
+    } else if (newScheduledType === ScheduledType.NONE) {
+      effectiveScheduledDate = null;
+    } else {
+      // DATE
+      if (dto.scheduledDate !== undefined) {
+        effectiveScheduledDate = dto.scheduledDate ? new Date(dto.scheduledDate) : null;
+      } else {
+        effectiveScheduledDate = existing.scheduledDate;
+      }
+    }
+
+    // Resolve bucket if scheduledType, scheduledDate, project/area, or bucket changed
     let bucket = existing.bucket;
-    const newScheduledDate =
-      dto.scheduledDate !== undefined
-        ? dto.scheduledDate
-          ? new Date(dto.scheduledDate).toISOString()
-          : null
-        : existing.scheduledDate?.toISOString() ?? null;
     const newProjectId =
       dto.projectId !== undefined ? dto.projectId : existing.projectId;
     const newAreaId =
       dto.areaId !== undefined ? dto.areaId : existing.areaId;
 
-    if (dto.scheduledDate !== undefined || dto.projectId !== undefined || dto.areaId !== undefined || dto.bucket !== undefined) {
+    if (
+      dto.scheduledType !== undefined ||
+      dto.scheduledDate !== undefined ||
+      dto.projectId !== undefined ||
+      dto.areaId !== undefined ||
+      dto.bucket !== undefined
+    ) {
       bucket = this.resolveBucket(
-        dto.bucket ?? (newScheduledDate ? TaskBucket.SCHEDULED : undefined),
-        newScheduledDate,
+        (dto.bucket ?? existing.bucket) as TaskBucket,
+        newScheduledType as ScheduledType,
         newProjectId,
         newAreaId,
       );
@@ -164,8 +192,11 @@ export class TasksService {
     const data: Prisma.TaskUpdateInput = {};
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.notes !== undefined) data.notes = dto.notes;
-    if (dto.scheduledDate !== undefined) {
-      data.scheduledDate = dto.scheduledDate ? new Date(dto.scheduledDate) : null;
+    if (dto.scheduledType !== undefined || dto.scheduledDate !== undefined) {
+      data.scheduledDate = effectiveScheduledDate;
+    }
+    if (dto.scheduledType !== undefined) {
+      data.scheduledType = newScheduledType;
     }
     if (dto.dueDate !== undefined) {
       data.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;

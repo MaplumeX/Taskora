@@ -1,15 +1,16 @@
 import * as React from 'react';
 import { Plus } from 'lucide-react';
 
-import type { CreateTaskDto, TaskBucket } from '@taskora/shared';
+import type { CreateTaskDto } from '@taskora/shared';
+import { ScheduledType } from '@taskora/shared';
 
 import { Input } from '@/components/ui/input';
 import { useCreateTask } from '@/lib/hooks/useTasks';
 import { toast } from 'sonner';
 
 interface Props {
-  /** Default bucket for created tasks */
-  defaultBucket?: TaskBucket;
+  /** Scheduled type for created tasks */
+  scheduledType?: ScheduledType;
   /** Set scheduledDate to today on creation (Today view) */
   dueToday?: boolean;
   /** Parent task id for subtasks */
@@ -22,7 +23,7 @@ interface Props {
 }
 
 export function QuickAddTask({
-  defaultBucket,
+  scheduledType,
   dueToday,
   parentId,
   projectId,
@@ -36,12 +37,14 @@ export function QuickAddTask({
     const trimmed = title.trim();
     if (!trimmed) return;
     const payload: CreateTaskDto = { title: trimmed };
-    if (defaultBucket) payload.bucket = defaultBucket;
     if (parentId) payload.parentId = parentId;
     if (projectId) payload.projectId = projectId;
     if (areaId) payload.areaId = areaId;
     if (dueToday) {
+      payload.scheduledType = ScheduledType.DATE;
       payload.scheduledDate = new Date().toISOString();
+    } else if (scheduledType) {
+      payload.scheduledType = scheduledType;
     }
     createTask.mutate(payload, {
       onSuccess: () => setTitle(''),
