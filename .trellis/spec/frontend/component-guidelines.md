@@ -103,6 +103,23 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 - `TaskItem` 在标题右侧渲染小色块（`h-2.5 w-2.5 rounded-full`）表示标签，取自 `task.tags` 数组的 `color` 字段，最多展示 5 个，用 `title` attribute 提供标签名 tooltip。
 - 徽章用 `style={{ backgroundColor: tag.color }}` 渲染内联色，不依赖 Tailwind 绐定。
 
+### 日期徽章（TaskItem）
+
+- `TaskItem` 在标题右侧渲染两个日期徽章（顺序：计划日期 → 到期日期）：
+  1. `TaskDateBadge` — 计划日期（`task.scheduledDate`），使用 `Calendar` 图标
+  2. `TaskDueDateBadge` — 到期日期（`task.dueDate`），使用 `Clock` 图标
+- 两者复用 `formatDateLabel` / `isOverdue` / `isToday`（`@/lib/utils/date`），今天/逾期渲染为 `text-[#CC4444]`，其余 `text-muted-foreground`
+- 日期为 `null` 时徽章组件返回 `null`（不渲染）
+- `Calendar` 与 `Clock` 两个图标区分两个日期语义，勿混用
+
+### 日期编辑 Popover（TaskRowExpanded 内的 Popover 菜单）
+
+- 任务展开区有两个并列的日期编辑 Popover：
+  1.「计划日期」— `Calendar` 图标，编辑 `scheduledDate` + `scheduledType`（NONE/DATE/SOMEDAY 三态）
+  2.「到期」— `Clock` 图标，编辑 `dueDate`（仅 `<input type="date">`，无 scheduledType）
+- 两者都复用 `IconPopover` 组件，清空输入框时分别置为 `ScheduledType.NONE` / `null`
+- 更新走 `useUpdateTask`，成功后 invalidate `task.detail` 与 `['tasks']` 两个 queryKey
+
 ### 标签多选（TaskRowExpanded 内的 Popover 菜单）
 
 - 任务展开区（`TaskRowExpanded`）的标签图标点击后弹出 Popover 菜单，内含可多选的标签列表：当前选中为高亮（背景=标签色、字白），未选为淡化（opacity-40）。
