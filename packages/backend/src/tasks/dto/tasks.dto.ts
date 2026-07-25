@@ -91,6 +91,10 @@ export class UpdateTaskDto {
 
 export class TaskQueryDto {
   @IsOptional()
+  @IsString()
+  q?: string;
+
+  @IsOptional()
   @IsEnum(['inbox', 'today', 'upcoming', 'anytime', 'someday', 'trash', 'logbook'])
   view?: 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
 

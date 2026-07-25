@@ -178,3 +178,24 @@ const orderBy =
 ```
 
 > 约定：orderBy 的动态化仅按 `view` 分支，默认分支保持所有其他视图的原始排序不变。
+
+### 关键词搜索（q 参数）
+
+`findAll` 支持 `q?: string` 查询参数，对 `title` 和 `notes` 做 case-insensitive `contains` 模糊匹配。`q` 与 `view` 正交：`q` 构造 `where.OR` 条件，`view` 构建各自的 `where` 字段，两者可叠加。
+
+```typescript
+if (query.q) {
+  where.OR = [
+    { title: { contains: query.q, mode: 'insensitive' } },
+    { notes: { contains: query.q, mode: 'insensitive' } },
+  ];
+}
+// q 模式无 view 时设置 status：默认 ACTIVE，completed=true 时 [ACTIVE, COMPLETED]，始终排除 TRASHED
+if (query.q && !query.view) {
+  where.status = query.completed
+    ? { in: [TaskStatus.ACTIVE, TaskStatus.COMPLETED] }
+    : TaskStatus.ACTIVE;
+}
+```
+
+约定：不引入 Postgres FTS，使用 Prisma `contains` + `mode: 'insensitive'`；数据量增长后可升级。

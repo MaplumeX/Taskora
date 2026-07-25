@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "findAll 查询模式、userId 隔离规则、view 与 status 处理约定——搜索接口需遵循"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "NestJS 模块/DTO 组织方式，确认 TaskQueryDto 改动位置"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "后端异常处理约定，搜索接口需一致"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "SearchBar 新组件需遵循前端组件规范"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "搜索状态用 react-query 管理，需遵循状态管理规范"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useDebouncedValue 通用 hook 需遵循 hook 规范"}
+{"file": ".trellis/tasks/07-25-search-support/design.md", "reason": "搜索功能技术设计：DTO 契约、service q 分支、SearchBar 交互"}

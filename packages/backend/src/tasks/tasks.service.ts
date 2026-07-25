@@ -64,6 +64,13 @@ export class TasksService {
   async findAll(userId: string, query: TaskQueryDto) {
     const where: Prisma.TaskWhereInput = { userId };
 
+    if (query.q) {
+      where.OR = [
+        { title: { contains: query.q, mode: 'insensitive' } },
+        { notes: { contains: query.q, mode: 'insensitive' } },
+      ];
+    }
+
     if (query.view) {
       switch (query.view) {
         case 'inbox':
@@ -108,10 +115,14 @@ export class TasksService {
       if (query.tagId) {
         where.tags = { some: { tagId: query.tagId } };
       }
-      if (!query.completed) {
+      if (query.q) {
+        // q mode: default ACTIVE, completed=true → [ACTIVE, COMPLETED], always exclude TRASHED
+        where.status = query.completed
+          ? { in: [TaskStatus.ACTIVE, TaskStatus.COMPLETED] }
+          : TaskStatus.ACTIVE;
+      } else if (!query.completed) {
         where.status = TaskStatus.ACTIVE;
-      }
-      if (query.completed) {
+      } else {
         // include both active and completed when explicitly requested
       }
     }
