@@ -1,9 +1,26 @@
 import * as React from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import {
+  DndContext,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  verticalListSortingStrategy,
+  arrayMove,
+  useSortable,
+} from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
+
+import type { ProjectResponseDto } from '@taskora/shared';
 
 import { useAreasQuery, useDeleteArea } from '@/lib/hooks/useAreas';
-import { useProjectsQuery } from '@/lib/hooks/useProjects';
+import { useProjectsQuery, useReorderProjects } from '@/lib/hooks/useProjects';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -11,6 +28,26 @@ import { AreaForm } from '@/components/area/AreaForm';
 import { ProjectItem } from '@/components/project/ProjectItem';
 import { TaskListView } from '@/components/task/TaskListView';
 import { toast } from 'sonner';
+
+function SortableProjectItem({ project }: { project: ProjectResponseDto }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: project.id });
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={{
+        transform: CSS.Translate.toString(transform),
+        transition,
+        zIndex: isDragging ? 10 : undefined,
+      }}
+      {...attributes}
+      {...listeners}
+    >
+      <ProjectItem project={project} />
+    </div>
+  );
+}
 
 export default function AreaDetail() {
   const { t } = useTranslation();
@@ -20,9 +57,22 @@ export default function AreaDetail() {
   const area = areas.find((a) => a.id === id);
   const { data: allProjects = [] } = useProjectsQuery();
   const projects = allProjects.filter((p) => p.areaId === id);
+  const reorderProjects = useReorderProjects();
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ areaId: id });
   const [editOpen, setEditOpen] = React.useState(false);
   const deleteArea = useDeleteArea();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+  );
+
+  const handleProjectDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    if (!over || active.id === over.id) return;
+    const ids = projects.map((p) => p.id);
+    const reordered = arrayMove(ids, ids.indexOf(active.id as string), ids.indexOf(over.id as string));
+    reorderProjects.mutate(reordered);
+  };
 
   const handleDelete = () => {
     if (!area) return;
@@ -60,11 +110,15 @@ export default function AreaDetail() {
       {projects.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('area:noProjects')}</p>
       ) : (
-        <div className="flex flex-col">
-          {projects.map((p) => (
-            <ProjectItem key={p.id} project={p} />
-          ))}
-        </div>
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
+          <SortableContext items={projects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+            <div className="flex flex-col">
+              {projects.map((p) => (
+                <SortableProjectItem key={p.id} project={p} />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
 
       <Separator />

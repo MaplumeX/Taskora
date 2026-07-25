@@ -97,6 +97,7 @@ export function SearchModal({ open, onOpenChange }: Props) {
                   {tasks.length > 0 ? (
                     <TaskListView
                       tasks={tasks}
+                      sortable={false}
                       emptyHint={t('noResults')}
                     />
                   ) : (

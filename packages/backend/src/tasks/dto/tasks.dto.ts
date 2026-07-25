@@ -124,3 +124,9 @@ export class TaskQueryDto {
   })
   completed?: boolean;
 }
+
+export class ReorderDto {
+  @IsArray()
+  @IsString({ each: true })
+  orderedIds!: string[];
+}
