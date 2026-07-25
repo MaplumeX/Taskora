@@ -1,3 +1,4 @@
+import { useTranslation } from 'react-i18next';
 import {
   DndContext,
   PointerSensor,
@@ -95,10 +96,11 @@ export function TaskList({
   onRowClick,
   onToggleComplete,
   onTrash,
-  onReorder,
+onReorder,
   sortable = true,
-  emptyHint = '没有任务',
+  emptyHint,
 }: Props) {
+  const { t } = useTranslation();
   const topTasks = tasks.filter((t) => !t.parentId);
 
   const sensors = useSensors(
@@ -109,7 +111,7 @@ export function TaskList({
     return (
       <div className="mt-8 flex flex-col items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
         <span className="text-3xl">🎉</span>
-        {emptyHint}
+        {emptyHint ?? t('task:empty')}
       </div>
     );
   }

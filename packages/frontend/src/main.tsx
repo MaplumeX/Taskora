@@ -6,6 +6,7 @@ import { RouterProvider } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import { router } from '@/router';
 import { applyThemeFromStorage } from '@/lib/hooks/useTheme';
+import '@/i18n/config';
 import '@/index.css';
 
 // Apply theme synchronously before React renders to prevent FOUC

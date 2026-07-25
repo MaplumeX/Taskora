@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
 import { ScheduledType } from '@taskora/shared';
@@ -44,6 +45,7 @@ interface Props {
 }
 
 export function TaskRowExpanded({ task }: Props) {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data: liveTask } = useTaskQuery(task.id);
   const current = liveTask ?? task;
@@ -80,18 +82,18 @@ export function TaskRowExpanded({ task }: Props) {
           invalidateParent();
           void queryClient.invalidateQueries({ queryKey: ['tasks'] });
         },
-        onError: () => toast.error('保存失败'),
+        onError: () => toast.error(t('common:saveFailed')),
       },
     );
 
   // Auto-focus + select title when this row was expanded via "add task" flow
   React.useEffect(() => {
     const expandId = searchParams.get('expand');
-    if (expandId === task.id && current.title === '新任务') {
+    if (expandId === task.id && current.title === t('task:newTask')) {
       titleInputRef.current?.focus();
       titleInputRef.current?.select();
     }
-  }, [searchParams, task.id, current.title]);
+  }, [searchParams, task.id, current.title, t]);
 
   const commitTitle = () => {
     if (title.trim() && title !== current.title) patch({ title: title.trim() });
@@ -113,11 +115,11 @@ export function TaskRowExpanded({ task }: Props) {
   };
 
   const addSubtask = () => {
-    const t = subtaskTitle.trim();
-    if (!t) return;
+    const trimmed = subtaskTitle.trim();
+    if (!trimmed) return;
     createSubtask.mutate(
       {
-        title: t,
+        title: trimmed,
         parentId: task.id,
         projectId: current.projectId ?? undefined,
         areaId: current.areaId ?? undefined,
@@ -127,7 +129,7 @@ export function TaskRowExpanded({ task }: Props) {
           setSubtaskTitle('');
           invalidateParent();
         },
-        onError: () => toast.error('子任务创建失败'),
+        onError: () => toast.error(t('task:subtaskCreateFailed')),
       },
     );
   };
@@ -155,14 +157,14 @@ export function TaskRowExpanded({ task }: Props) {
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         onBlur={commitNotes}
-        placeholder="备注…"
+        placeholder={t('task:notePlaceholder')}
         className="min-h-[60px] resize-none border-0 px-0 shadow-none focus-visible:ring-0"
       />
 
       <Separator />
 
       <div className="flex flex-col gap-2">
-        <h3 className="text-xs font-medium text-muted-foreground">子任务</h3>
+        <h3 className="text-xs font-medium text-muted-foreground">{t('task:subtasks')}</h3>
         {children.length > 0 ? (
           <ul className="flex flex-col gap-0.5">
             {children.map((c) => (
@@ -170,21 +172,21 @@ export function TaskRowExpanded({ task }: Props) {
             ))}
           </ul>
         ) : (
-          <p className="text-xs text-muted-foreground">暂无子任务</p>
+          <p className="text-xs text-muted-foreground">{t('task:noSubtasks')}</p>
         )}
         <Input
           value={subtaskTitle}
           onChange={(e) => setSubtaskTitle(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && addSubtask()}
           onClick={(e) => e.stopPropagation()}
-          placeholder="添加子任务…"
+          placeholder={t('task:addSubtask')}
           className="mt-1 h-8 text-sm"
         />
       </div>
 
       <div className="flex items-center gap-1">
         <IconPopover
-          label="日期"
+          label={t('task:scheduledDate')}
           icon={<Calendar className="h-4 w-4" />}
           active={scheduledType !== ScheduledType.NONE}
         >
@@ -204,10 +206,10 @@ export function TaskRowExpanded({ task }: Props) {
                     )}
                   >
                     {type === ScheduledType.NONE
-                      ? '无'
+                      ? t('common:none')
                       : type === ScheduledType.DATE
-                      ? '日期'
-                      : 'Someday'}
+                      ? t('task:scheduledDate')
+                      : t('task:somedayLabel')}
                   </button>
                 ),
               )}
@@ -224,7 +226,7 @@ export function TaskRowExpanded({ task }: Props) {
         </IconPopover>
 
         <IconPopover
-          label="到期"
+          label={t('task:dueDate')}
           icon={<Clock className="h-4 w-4" />}
           active={!!current.dueDate}
         >
@@ -242,7 +244,7 @@ export function TaskRowExpanded({ task }: Props) {
         </IconPopover>
 
         <IconPopover
-          label="项目"
+          label={t('task:project')}
           icon={<Folder className="h-4 w-4" />}
           active={!!current.projectId}
         >
@@ -255,7 +257,7 @@ export function TaskRowExpanded({ task }: Props) {
                 !current.projectId && 'font-medium text-primary',
               )}
             >
-              无
+              {t('common:none')}
             </button>
             {projects.map((p) => (
               <button
@@ -280,7 +282,7 @@ export function TaskRowExpanded({ task }: Props) {
         </IconPopover>
 
         <IconPopover
-          label="区域"
+          label={t('task:area')}
           icon={<Target className="h-4 w-4" />}
           active={!!current.areaId}
         >
@@ -293,7 +295,7 @@ export function TaskRowExpanded({ task }: Props) {
                 !current.areaId && 'font-medium text-primary',
               )}
             >
-              无
+              {t('common:none')}
             </button>
             {areas.map((a) => (
               <button
@@ -318,14 +320,14 @@ export function TaskRowExpanded({ task }: Props) {
         </IconPopover>
 
         <IconPopover
-          label="标签"
+          label={t('task:tags')}
           icon={<Tag className="h-4 w-4" />}
           active={(current.tags ?? []).length > 0}
         >
           <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
             {tags.length === 0 ? (
               <span className="px-2 py-1.5 text-xs text-muted-foreground/60">
-                暂无标签，请先在 Tags 页创建
+                {t('task:noTagsHint')}
               </span>
             ) : (
               tags.map((tag) => {
@@ -399,6 +401,7 @@ function SubtaskRow({
   task: TaskResponseDto;
   onMutated: () => void;
 }) {
+  const { t } = useTranslation();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const deleteTask = useDeleteTask();
@@ -408,11 +411,11 @@ function SubtaskRow({
   const [draft, setDraft] = React.useState(task.title);
 
   const commit = () => {
-    const t = draft.trim();
-    if (t && t !== task.title) {
+    const trimmed = draft.trim();
+    if (trimmed && trimmed !== task.title) {
       updateTask.mutate(
-        { id: task.id, data: { title: t } },
-        { onSuccess: onMutated, onError: () => toast.error('保存失败') },
+        { id: task.id, data: { title: trimmed } },
+        { onSuccess: onMutated, onError: () => toast.error(t('common:saveFailed')) },
       );
     } else {
       setDraft(task.title);

@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Check } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/lib/utils';
 
@@ -10,11 +11,13 @@ interface Props {
 }
 
 export function TaskCheckbox({ checked, onToggle, disabled }: Props) {
+  const { t } = useTranslation();
   return (
     <button
       type="button"
       role="checkbox"
       aria-checked={checked}
+      aria-label={t('task:markComplete')}
       disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();

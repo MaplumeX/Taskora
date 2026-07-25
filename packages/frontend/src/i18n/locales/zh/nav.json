@@ -1,0 +1,17 @@
+{
+  "inbox": "收件箱",
+  "today": "今天",
+  "upcoming": "近期",
+  "anytime": "随时",
+  "someday": "将来",
+  "logbook": "日志",
+  "trash": "废纸篓",
+  "projects": "项目",
+  "areas": "区域",
+  "tags": "标签",
+  "collapse": "收起{{label}}",
+  "expand": "展开{{label}}",
+  "emptyProjects": "暂无项目",
+  "emptyAreas": "暂无区域",
+  "emptyTags": "暂无标签"
+}

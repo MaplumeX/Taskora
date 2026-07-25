@@ -1,4 +1,5 @@
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import type { TaskResponseDto } from '@taskora/shared';
 
@@ -13,9 +14,11 @@ import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
 import { useTaskRowSelection } from '@/lib/hooks/useTaskRowSelection';
 import { toDateKey } from '@/lib/utils/date';
+import { i18n } from '@/i18n/config';
 import { toast } from 'sonner';
 
 export default function Upcoming() {
+  const { t } = useTranslation();
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ view: 'upcoming' });
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
@@ -53,34 +56,34 @@ export default function Upcoming() {
 
   const toggleComplete = (task: TaskResponseDto) => {
     if (task.status === 'COMPLETED') uncompleteTask.mutate(task.id);
-    else completeTask.mutate(task.id, { onError: () => toast.error('操作失败') });
+    else completeTask.mutate(task.id, { onError: () => toast.error(t('common:operationFailed')) });
   };
 
   const handleTrash = (task: TaskResponseDto) => {
     deleteTask.mutate(task.id, {
-      onSuccess: () => toast.success('已移到废纸篓'),
-      onError: () => toast.error('删除失败'),
+      onSuccess: () => toast.success(t('task:movedToTrash')),
+      onError: () => toast.error(t('common:deleteFailed')),
     });
   };
 
   return (
     <div className="flex flex-col gap-4" onClick={handleBlankClick}>
-      <h1 className="text-2xl font-semibold tracking-tight">Upcoming</h1>
+      <h1 className="text-2xl font-semibold tracking-tight">{t('nav:upcoming')}</h1>
       {isLoading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>
       ) : isError ? (
-        <p className="py-8 text-center text-sm text-[#CC4444]">加载失败</p>
+        <p className="py-8 text-center text-sm text-[#CC4444]">{t('common:loadFailed')}</p>
       ) : grouped.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">没有即将到来的任务</p>
+        <p className="py-8 text-center text-sm text-muted-foreground">{t('task:upcomingEmpty')}</p>
       ) : (
         grouped.map(([dateKey, group]) => (
           <div key={dateKey} className="flex flex-col gap-1">
             <h2 className="px-2 pb-1 pt-4 text-sm font-medium text-muted-foreground">
-              {new Date(dateKey).toLocaleDateString('zh-CN', {
+              {new Intl.DateTimeFormat(i18n.language, {
                 month: 'long',
                 day: 'numeric',
                 weekday: 'long',
-              })}
+              }).format(new Date(dateKey))}
             </h2>
             {group.map((task) => {
               const selectionState =

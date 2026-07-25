@@ -36,6 +36,10 @@ packages/frontend/
     │   ├── stores/        # Zustand stores
     │   │   └── auth.store.ts
     │   └── utils/
+    ├── i18n/              # 国际化（react-i18next）
+    │   ├── config.ts      # i18next 实例配置（导出 i18n）
+    │   ├── LanguageToggle.tsx
+    │   └── locales/{zh,en}/*.json  # 按 namespace 切分的资源
     ├── components/
     │   ├── ui/            # shadcn/ui 组件
     │   ├── layout/        # 布局（AppShell, Sidebar, MainContent）

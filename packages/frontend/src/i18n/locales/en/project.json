@@ -1,0 +1,12 @@
+{
+  "empty": "No projects",
+  "create": "New Project",
+  "edit": "Edit Project",
+  "new": "New Project",
+  "titlePlaceholder": "Project name",
+  "deleteConfirm": "Delete project \"{{name}}\"?",
+  "defaultTitle": "Project",
+  "noTasks": "No tasks in this project",
+  "deleted": "Project deleted",
+  "created": "Project created"
+}

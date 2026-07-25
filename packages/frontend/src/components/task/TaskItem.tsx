@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Trash2 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 import type { TaskResponseDto } from '@taskora/shared';
 
@@ -30,6 +31,7 @@ export function TaskItem({
   onRowClick,
   onTrash,
 }: Props) {
+  const { t } = useTranslation();
   const completed = task.status === 'COMPLETED';
   const [exiting, setExiting] = React.useState(false);
   const expanded = selectionState === 'expanded';
@@ -105,7 +107,7 @@ export function TaskItem({
                 e.stopPropagation();
                 onTrash();
               }}
-              aria-label="移到废纸篓"
+              aria-label={t('task:moveToTrash')}
             >
               <Trash2 className="h-4 w-4" />
             </Button>

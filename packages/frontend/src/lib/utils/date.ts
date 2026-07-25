@@ -1,3 +1,5 @@
+import { i18n } from '@/i18n/config';
+
 export function startOfToday(): Date {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
@@ -38,12 +40,10 @@ export function fromInputDateValue(value: string): Date {
   return new Date(y, m - 1, d);
 }
 
-const WEEKDAYS = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
-
-/** Human-readable date label like "今天", "明天", "周一", "3月5日" */
+/** Human-readable date label like "Today", "Tomorrow", "Mon", "Mar 5" */
 export function formatDateLabel(date: Date): string {
-  if (isToday(date)) return '今天';
-  if (isTomorrow(date)) return '明天';
+  if (isToday(date)) return i18n.t('common:today');
+  if (isTomorrow(date)) return i18n.t('common:tomorrow');
   // Within the next 7 days → weekday name
   const today = startOfToday();
   const diff = Math.round(
@@ -51,8 +51,11 @@ export function formatDateLabel(date: Date): string {
       today.getTime()) /
       86_400_000,
   );
-  if (diff > 0 && diff <= 6) return WEEKDAYS[date.getDay()];
-  return `${date.getMonth() + 1}月${date.getDate()}日`;
+  const locale = i18n.language;
+  if (diff > 0 && diff <= 6) {
+    return new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date);
+  }
+  return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(date);
 }
 
 /** yyyy-mm-dd key for grouping (from ISO or Date) */

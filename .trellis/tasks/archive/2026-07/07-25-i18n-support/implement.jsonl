@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件结构、Props 约定、主题系统与 FOUC 防护模式（i18n 初始化同样需在 main.tsx render 前同步执行）；LanguageToggle/Sidebar 改造参考"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "新增 src/i18n/ 目录与 locales/ 子目录需遵循既有目录结构约定"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useTranslation hook 使用与既有 hook 模式对齐；date.ts 改造涉及 hook 友好的 locale 读取"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "语言持久化参考既有 useTheme(localStorage)/auth.store(zustand persist) 模式"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "i18n 资源 key 与 TypeScript 集成需符合类型安全约定"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "代码质量与 lint/prettier 约束"}
+{"file": ".trellis/tasks/07-25-i18n-support/design.md", "reason": "技术设计：react-i18next 选型、namespace 划分、检测持久化、LanguageToggle、日期 locale 化方案"}
+{"file": ".trellis/tasks/07-25-i18n-support/implement.md", "reason": "执行清单：Phase A-E 分阶段迁移路径与验证命令"}
