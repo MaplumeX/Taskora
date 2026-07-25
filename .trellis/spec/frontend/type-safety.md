@@ -6,46 +6,61 @@
 
 ## Overview
 
-<!--
-Document your project's type safety conventions here.
-
-Questions to answer:
-- What type system do you use?
-- How are types organized?
-- What validation library do you use?
-- How do you handle type inference?
--->
-
-(To be filled by the team)
+- TypeScript strict 模式（继承根 `tsconfig.base.json`）
+- 共享类型在 `@taskora/shared` 包
+- 前端专用类型在 `src/types/`
 
 ---
 
 ## Type Organization
 
-<!-- Where types are defined, shared types vs local types -->
+### 从 shared 引用（CRITICAL）
 
-(To be filled by the team)
+所有 DTO 和枚举必须从 `@taskora/shared` 引用：
 
----
+```typescript
+import type { CreateTaskDto, TaskResponseDto, TaskBucket } from '@taskora/shared';
+```
 
-## Validation
+禁止在前端重复定义与 shared 包相同的类型。
 
-<!-- Runtime validation patterns (Zod, Yup, io-ts, etc.) -->
+### 前端专用类型
 
-(To be filled by the team)
+非共享的类型定义在 `src/types/`，如查询参数、UI 状态类型。
 
 ---
 
 ## Common Patterns
 
-<!-- Type utilities, generics, type guards -->
+### Query 参数类型
 
-(To be filled by the team)
+查询参数 DTO（如 `TaskQuery`）可以本地定义，因为它是前端查询封装，不是传输 DTO：
+
+```typescript
+// 本地定义（合理）
+export interface TaskQuery {
+  view?: 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash';
+  projectId?: string;
+  parentId?: string;
+}
+```
+
+### Enum 的 type-only import（已知权衡）
+
+`@taskora/shared` 导出 CJS 编译产物。Vite/Rollup 无法通过 barrel file 静态解析运行时 enum 重导出。当前用 `import type` + 字面量断言：
+
+```typescript
+import type { TaskBucket } from '@taskora/shared';
+// 运行时用字面量
+const bucket = 'INBOX' as TaskBucket;
+```
+
+未来修复：将 `@taskora/shared` 切换为 ESM 输出。
 
 ---
 
 ## Forbidden Patterns
 
-<!-- any, type assertions, etc. -->
-
-(To be filled by the team)
+- ❌ `any` — 用 `unknown` 或具体类型
+- ❌ 前端重复定义 shared 包已有的 DTO
+- ❌ `as` 断言滥用（除 enum 字面量的已知权衡外）
