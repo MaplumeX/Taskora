@@ -320,3 +320,38 @@ Add ScheduledType enum (NONE/DATE/SOMEDAY) to shared, prisma schema, backend DTO
 ### Next Steps
 
 - None - task complete
+
+
+## Session 8: Add i18n support (zh/en) with locale-aware formatting
+
+**Date**: 2026-07-25
+**Task**: Add i18n support (zh/en) with locale-aware formatting
+**Branch**: `feat/i18n-support`
+
+### Summary
+
+Introduced react-i18next with 9 namespaces (common/nav/task/project/area/tag/auth/search/theme) for zh/en. Added LanguageToggle in Sidebar with localStorage persistence (taskora-lang). Migrated ~200 hardcoded Chinese strings and English nav labels to translation keys across 15 pages and 10+ components. Refactored formatDateLabel to use Intl.DateTimeFormat(i18n.language) and i18n.t for today/tomorrow; deleted hardcoded WEEKDAYS array. Updated tests setup to init i18n. Added frontend spec: i18n-guidelines.md.
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `57615ed` | (see git log) |
+| `571d10f` | (see git log) |
+| `4f3df22` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
