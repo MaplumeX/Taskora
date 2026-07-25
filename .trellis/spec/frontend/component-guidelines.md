@@ -139,7 +139,7 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 - 单击他行 → 当前行折叠并取消，他行变 `selected`
 - 点击列表空白 → 全部回到 `idle`
 
-**状态归属**：列表级瞬态用 `useState`（在 `TaskListView` / `Logbook` 中），抽成 `useTaskRowSelection()` hook 复用。**不放入 Zustand**（遵循 state-management 规范：Zustand 仅放 auth/token 等跨页面持久状态）。
+**状态归属**：`selectedId` 为列表级瞬态用 `useState`（在 `TaskListView` / `Logbook` 中）；`expandedId` 派生自 URL `?expand=<id>`（`useSearchParams`，写时 `replace: true` 避免污染历史栈），以便跨组件（如底部共享栏创建任务后）能驱动某行展开。均抽成 `useTaskRowSelection()` hook 复用。**不放入 Zustand**（遵循 state-management 规范：Zustand 仅放 auth/token 等跨页面持久状态）。
 
 **事件隔离（关键）**：展开区内的交互不能冒泡到外层空白点击 handler，否则会误折叠：
 
