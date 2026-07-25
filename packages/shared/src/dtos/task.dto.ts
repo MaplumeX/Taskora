@@ -1,10 +1,11 @@
 import type { TagResponseDto } from './tag.dto';
-import { TaskBucket, TaskStatus } from '../enums/task.enum';
+import { TaskBucket, TaskStatus, ScheduledType } from '../enums/task.enum';
 
 export interface CreateTaskDto {
   title: string;
   notes?: string;
   scheduledDate?: string; // ISO 8601（计划日期）
+  scheduledType?: ScheduledType;
   dueDate?: string; // ISO 8601（通知日期，默认 null）
   bucket?: TaskBucket;
   parentId?: string;
@@ -16,6 +17,7 @@ export interface UpdateTaskDto {
   title?: string;
   notes?: string;
   scheduledDate?: string | null;
+  scheduledType?: ScheduledType;
   dueDate?: string | null;
   bucket?: TaskBucket;
   parentId?: string | null;
@@ -29,6 +31,7 @@ export interface TaskResponseDto {
   title: string;
   notes: string | null;
   scheduledDate: string | null; // 计划日期（原 dueDate）
+  scheduledType: ScheduledType;
   dueDate: string | null; // 通知日期（新增）
   bucket: TaskBucket;
   status: TaskStatus;

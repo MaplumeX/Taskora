@@ -1,8 +1,7 @@
-import type { TaskBucket } from '@taskora/shared';
-
 import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { QuickAddTask } from '@/components/task/QuickAddTask';
 import { TaskListView } from '@/components/task/TaskListView';
+import { ScheduledType } from '@taskora/shared';
 
 export default function Someday() {
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ view: 'someday' });
@@ -10,7 +9,7 @@ export default function Someday() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-2xl font-semibold tracking-tight">Someday</h1>
-      <QuickAddTask defaultBucket={'SOMEDAY' as TaskBucket} placeholder="留到某天再做…" />
+      <QuickAddTask scheduledType={ScheduledType.SOMEDAY} placeholder="留到某天再做…" />
       {isLoading ? (
         <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
       ) : isError ? (

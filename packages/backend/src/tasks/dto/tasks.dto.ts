@@ -7,7 +7,7 @@ import {
   IsArray,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
-import { TaskBucket } from '@taskora/shared';
+import { TaskBucket, ScheduledType } from '@taskora/shared';
 
 export class CreateTaskDto {
   @IsString()
@@ -20,6 +20,10 @@ export class CreateTaskDto {
   @IsOptional()
   @IsDateString()
   scheduledDate?: string;
+
+  @IsOptional()
+  @IsEnum(ScheduledType)
+  scheduledType?: ScheduledType;
 
   @IsOptional()
   @IsDateString()
@@ -54,6 +58,10 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsDateString()
   scheduledDate?: string | null;
+
+  @IsOptional()
+  @IsEnum(ScheduledType)
+  scheduledType?: ScheduledType;
 
   @IsOptional()
   @IsDateString()

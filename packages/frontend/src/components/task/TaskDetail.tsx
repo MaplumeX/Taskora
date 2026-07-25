@@ -3,6 +3,7 @@ import { Trash2, X } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
+import { ScheduledType } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -64,6 +65,7 @@ function TaskDetailBody({ task, onClose }: { task: TaskResponseDto; onClose: () 
   const [subtaskTitle, setSubtaskTitle] = React.useState('');
   const completed = current.status === 'COMPLETED';
 
+  const scheduledType = current.scheduledType ?? ScheduledType.NONE;
   const dateValue = current.scheduledDate ? toInputDateValue(new Date(current.scheduledDate)) : '';
 
   const invalidateParent = () =>
@@ -87,9 +89,17 @@ function TaskDetailBody({ task, onClose }: { task: TaskResponseDto; onClose: () 
   const commitNotes = () => {
     if (notes !== (current.notes ?? '')) patch({ notes });
   };
+  const onScheduledTypeChange = (type: ScheduledType) => {
+    if (type === ScheduledType.DATE) {
+      patch({ scheduledType: ScheduledType.DATE });
+    } else {
+      // NONE or SOMEDAY: scheduledDate cleared server-side
+      patch({ scheduledType: type });
+    }
+  };
   const onDateChange = (value: string) => {
-    if (value) patch({ scheduledDate: fromInputDateValue(value).toISOString() });
-    else patch({ scheduledDate: null });
+    if (value) patch({ scheduledType: ScheduledType.DATE, scheduledDate: fromInputDateValue(value).toISOString() });
+    else patch({ scheduledType: ScheduledType.NONE });
   };
 
   const addSubtask = () => {
@@ -152,12 +162,32 @@ function TaskDetailBody({ task, onClose }: { task: TaskResponseDto; onClose: () 
 
       <div className="grid grid-cols-[80px_1fr] items-center gap-3 text-sm">
         <span className="text-muted-foreground">日期</span>
-        <input
-          type="date"
-          value={dateValue}
-          onChange={(e) => onDateChange(e.target.value)}
-          className="w-fit rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
+        <div className="flex flex-col gap-1.5">
+          <div className="flex gap-1">
+            {[ScheduledType.NONE, ScheduledType.DATE, ScheduledType.SOMEDAY].map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => onScheduledTypeChange(type)}
+                className={`rounded-md px-3 py-1 text-xs transition-colors ${
+                  scheduledType === type
+                    ? 'bg-primary text-primary-foreground'
+                    : 'border border-input text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                {type === ScheduledType.NONE ? '无' : type === ScheduledType.DATE ? '日期' : 'Someday'}
+              </button>
+            ))}
+          </div>
+          {scheduledType === ScheduledType.DATE && (
+            <input
+              type="date"
+              value={dateValue}
+              onChange={(e) => onDateChange(e.target.value)}
+              className="w-fit rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
+          )}
+        </div>
         <span className="text-muted-foreground">项目</span>
         <select
           value={current.projectId ?? ''}

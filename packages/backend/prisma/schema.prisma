@@ -54,8 +54,13 @@ enum TaskStatus {
 enum TaskBucket {
   INBOX
   ANYTIME
-  SOMEDAY
   SCHEDULED
+}
+
+enum ScheduledType {
+  NONE
+  DATE
+  SOMEDAY
 }
 
 model TagGroup {
@@ -107,8 +112,9 @@ model Task {
   notes       String?
   scheduledDate DateTime?
   dueDate       DateTime?
-  bucket      TaskBucket  @default(INBOX)
-  status      TaskStatus  @default(ACTIVE)
+  bucket       TaskBucket   @default(INBOX)
+  scheduledType ScheduledType @default(NONE)
+  status       TaskStatus   @default(ACTIVE)
   completedAt DateTime?
   trashedAt   DateTime?
   sortOrder   Int         @default(0)

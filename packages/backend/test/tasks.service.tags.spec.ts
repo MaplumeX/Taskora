@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TasksService } from '../src/tasks/tasks.service';
-import { TaskBucket, TaskStatus } from '@taskora/shared';
+import { TaskBucket, TaskStatus, ScheduledType } from '@taskora/shared';
 
 describe('TasksService tagIds set semantics', () => {
   let service: TasksService;
@@ -16,6 +16,7 @@ describe('TasksService tagIds set semantics', () => {
     title: 'Task',
     notes: null,
     scheduledDate: null,
+    scheduledType: ScheduledType.NONE,
     dueDate: null,
     bucket: TaskBucket.INBOX,
     status: TaskStatus.ACTIVE,
