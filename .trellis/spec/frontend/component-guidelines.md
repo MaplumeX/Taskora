@@ -50,11 +50,29 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 - Tailwind utility classes，不用 CSS modules
 - shadcn/ui 组件作为基础，用 `className` prop 覆盖样式
 - `cn()` 工具函数（`src/lib/utils.ts`）合并条件类名
-- Things3 配色：主色蓝 `primary`（HSL 218 45% 54% ≈ #4477CE），背景白/浅灰
+- Things3 配色：主色蓝 `primary`（浅色 HSL `218 45% 54%` ≈ #4477CE；暗色 `218 65% 62%` 提亮避免暗底发闷）
+- 主题色全部走 CSS 变量（HSL，定义在 `src/index.css` 的 `:root` 和 `.dark`），不硬编码 `bg-white`/`text-black` 类
+- 暗色模式：`tailwind.config.js` 已开 `darkMode: ['class']`，`<html>` 上切换 `.dark` class
+
+### 主题系统约定
+
+**三态模式**：`'light' | 'dark' | 'system'`（system 跟随 `prefers-color-scheme`）
+
+**FOUC 防护（关键）**：在 `main.tsx` 的 `ReactDOM.createRoot().render()` **之前**同步调用 `applyThemeFromStorage()`。不能等 React 渲染后再加 `.dark` class，否则首帧会浅后暗闪屏。
+
+**切换器**：Sidebar 底部单点，三态循环 light → dark → system → light。图标用 `SunMedium`/`Moon`/`Monitor`，避开 Sidebar 已用于 Today 的 `Sun`。
 
 ---
 
 ## Common Mistakes
+
+### 主题在 React 渲染后才应用导致 FOUC
+
+**Symptom**：刷新页面时暗色用户先看到一帧浅色再变暗
+
+**Cause**：在组件内 `useEffect` 才加 `.dark` class，此时首帧已绘制
+
+**Fix**：在 `main.tsx` render 前同步调用 `applyThemeFromStorage()`（直接操作 `document.documentElement`），hook 只负责后续切换与监听。
 
 ### 子任务在列表中重复显示
 

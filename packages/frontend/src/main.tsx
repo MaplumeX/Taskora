@@ -5,7 +5,11 @@ import { RouterProvider } from 'react-router-dom';
 
 import { Toaster } from '@/components/ui/sonner';
 import { router } from '@/router';
+import { applyThemeFromStorage } from '@/lib/hooks/useTheme';
 import '@/index.css';
+
+// Apply theme synchronously before React renders to prevent FOUC
+applyThemeFromStorage();
 
 const queryClient = new QueryClient({
   defaultOptions: {

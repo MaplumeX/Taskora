@@ -12,6 +12,9 @@ import {
   Tags as TagsIcon,
   Trash2,
   CloudSun,
+  Monitor,
+  Moon,
+  SunMedium,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -21,6 +24,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { useLogout } from '@/lib/hooks/useAuth';
+import { useTheme, type ThemeMode } from '@/lib/hooks/useTheme';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
 import { useTagsQuery } from '@/lib/hooks/useTags';
@@ -213,6 +217,40 @@ export function Sidebar() {
           <NavRow item={{ to: '/trash', label: 'Trash', icon: Trash2 }} />
         </div>
       </ScrollArea>
+
+      <div className="px-2 pb-3 pt-2">
+        <ThemeToggle />
+      </div>
     </aside>
+  );
+}
+
+const themeIcons: Record<ThemeMode, LucideIcon> = {
+  light: SunMedium,
+  dark: Moon,
+  system: Monitor,
+};
+
+const themeLabels: Record<ThemeMode, string> = {
+  light: '浅色',
+  dark: '暗色',
+  system: '跟随系统',
+};
+
+function ThemeToggle() {
+  const { mode, cycle } = useTheme();
+  const Icon = themeIcons[mode];
+
+  return (
+    <button
+      type="button"
+      onClick={cycle}
+      aria-label={`切换主题，当前：${themeLabels[mode]}`}
+      title={`切换主题，当前：${themeLabels[mode]}`}
+      className="flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
+    >
+      <Icon className="h-4 w-4" />
+      {themeLabels[mode]}
+    </button>
   );
 }
