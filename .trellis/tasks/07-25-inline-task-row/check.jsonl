@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "核对 TaskItem 重构后 props 接口、标签徽章渲染、a11y 是否符合规范"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "核对 useTaskRowSelection 命名与 mutation invalidation 策略"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "核对未误用 Zustand、列表瞬态用 useState"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "核对 DTO 全部从 @taskora/shared 引用、无重复定义"}
+{"file": ".trellis/tasks/07-25-inline-task-row/prd.md", "reason": "核对 R1-R6 与 AC1-AC9 全部满足"}

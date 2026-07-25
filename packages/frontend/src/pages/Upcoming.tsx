@@ -1,9 +1,8 @@
-import * as React from 'react';
+import { useMemo } from 'react';
 
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { TaskItem } from '@/components/task/TaskItem';
-import { TaskDetail } from '@/components/task/TaskDetail';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
 import {
   useCompleteTask,
@@ -12,6 +11,7 @@ import {
 } from '@/lib/hooks/useTasks';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
+import { useTaskRowSelection } from '@/lib/hooks/useTaskRowSelection';
 import { toDateKey } from '@/lib/utils/date';
 import { toast } from 'sonner';
 
@@ -22,19 +22,23 @@ export default function Upcoming() {
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const deleteTask = useDeleteTask();
-  const [selected, setSelected] = React.useState<TaskResponseDto | null>(null);
-  const [open, setOpen] = React.useState(false);
+  const {
+    selectedId,
+    expandedId,
+    handleRowClick,
+    handleBlankClick,
+  } = useTaskRowSelection();
 
-  const projectMap = React.useMemo(
+  const projectMap = useMemo(
     () => Object.fromEntries(projects.map((p) => [p.id, p.title])),
     [projects],
   );
-  const areaMap = React.useMemo(
+  const areaMap = useMemo(
     () => Object.fromEntries(areas.map((a) => [a.id, a.title])),
     [areas],
   );
 
-  const grouped = React.useMemo(() => {
+  const grouped = useMemo(() => {
     const map = new Map<string, TaskResponseDto[]>();
     for (const t of tasks) {
       if (t.parentId) continue;
@@ -60,7 +64,7 @@ export default function Upcoming() {
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" onClick={handleBlankClick}>
       <h1 className="text-2xl font-semibold tracking-tight">Upcoming</h1>
       {isLoading ? (
         <p className="py-8 text-center text-sm text-muted-foreground">加载中…</p>
@@ -78,24 +82,25 @@ export default function Upcoming() {
                 weekday: 'long',
               })}
             </h2>
-            {group.map((task) => (
-              <TaskItem
-                key={task.id}
-                task={task}
-                projectTitle={task.projectId ? projectMap[task.projectId] : undefined}
-                areaTitle={task.areaId ? areaMap[task.areaId] : undefined}
-                onToggleComplete={() => toggleComplete(task)}
-                onOpenDetail={() => {
-                  setSelected(task);
-                  setOpen(true);
-                }}
-                onTrash={() => handleTrash(task)}
-              />
-            ))}
+            {group.map((task) => {
+              const selectionState =
+                expandedId === task.id ? 'expanded' : selectedId === task.id ? 'selected' : 'idle';
+              return (
+                <TaskItem
+                  key={task.id}
+                  task={task}
+                  projectTitle={task.projectId ? projectMap[task.projectId] : undefined}
+                  areaTitle={task.areaId ? areaMap[task.areaId] : undefined}
+                  selectionState={selectionState}
+                  onToggleComplete={() => toggleComplete(task)}
+                  onRowClick={() => handleRowClick(task.id)}
+                  onTrash={() => handleTrash(task)}
+                />
+              );
+            })}
           </div>
         ))
       )}
-      <TaskDetail task={selected} open={open} onOpenChange={setOpen} />
     </div>
   );
 }

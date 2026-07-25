@@ -68,13 +68,13 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 const topLevelTasks = tasks.filter((t) => !t.parentId);
 ```
 
-### TaskDetail 直接用列表数据导致子任务不刷新
+### 展开行直接用列表数据导致子任务不刷新
 
-**Symptom**：任务详情中"暂无子任务"常驻，新增子任务后不更新
+**Symptom**：展开区中"暂无子任务"常驻，新增子任务后不更新
 
-**Cause**：`TaskDetail` 直接使用列表传入的 task 对象，该对象不含 children（`GET /tasks` 不 include children）
+**Cause**：`TaskRowExpanded` 直接使用列表传入的 task 对象，该对象不含 children（`GET /tasks` 不 include children）
 
-**Fix**：`TaskDetail` 内部用 `useTaskQuery(task.id)` 获取含 children 的实时数据，子任务操作后 invalidate 父任务 detail query。
+**Fix**：`TaskRowExpanded` 内部用 `useTaskQuery(task.id)` 获取含 children 的实时数据，子任务操作后 invalidate 父任务 detail query。
 
 ---
 
@@ -85,17 +85,36 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 - `TaskItem` 在标题右侧渲染小色块（`h-2.5 w-2.5 rounded-full`）表示标签，取自 `task.tags` 数组的 `color` 字段，最多展示 5 个，用 `title` attribute 提供标签名 tooltip。
 - 徽章用 `style={{ backgroundColor: tag.color }}` 渲染内联色，不依赖 Tailwind 绐定。
 
-### 标签多选行（TaskDetail）
+### 标签多选（TaskRowExpanded 内的 Popover 菜单）
 
-- `TaskDetail` 新增"标签"行，采用可点击的标签 chip（pill）实现多选：当前选中为高亮（背景=标签色、字白），未选为淡化（opacity-40）。
-- 点击 chip 调用 `useUpdateTask` 传 `tagIds` 全量数组（去重或移除该标签），符合后端 set 语义。
+- 任务展开区（`TaskRowExpanded`）的标签图标点击后弹出 Popover 菜单，内含可多选的标签列表：当前选中为高亮（背景=标签色、字白），未选为淡化（opacity-40）。
+- 点击标签项调用 `useUpdateTask` 传 `tagIds` 全量数组（去重或移除该标签），符合后端 set 语义。
 - 标签数据由 `useTagsQuery()` 获取（用户级），当前任务的标签由 `useTaskQuery(id).tags` 预选。
 - 更新后 invalidate `tasks` 与 `task.detail` 两个 queryKey，确保列表徽章即时刷新。
 
 ---
 
+## 行内展开交互模式（Things 3 风格）
+
+任务编辑采用列表行内展开，不使用弹窗 Dialog。交互状态机：
+
+- `idle`（未选中）→ 单击行 → `selected`（高亮）
+- `selected` → 单击同一行 → `expanded`（原位展开编辑区 `TaskRowExpanded`）
+- `expanded` → 单击同一行 → 回到 `selected`（折叠）
+- 单击他行 → 当前行折叠并取消，他行变 `selected`
+- 点击列表空白 → 全部回到 `idle`
+
+**状态归属**：列表级瞬态用 `useState`（在 `TaskListView` / `Logbook` 中），抽成 `useTaskRowSelection()` hook 复用。**不放入 Zustand**（遵循 state-management 规范：Zustand 仅放 auth/token 等跨页面持久状态）。
+
+**事件隔离（关键）**：展开区内的交互不能冒泡到外层空白点击 handler，否则会误折叠：
+
+- 展开区根 div：`onClick={e => e.stopPropagation()}`
+- `PopoverContent`：`onClick` 需 `stopPropagation`（Radix Popover 通过 Portal 渲染，事件仍会冒泡到 document）
+- 子任务编辑 input：`onClick` 需 `stopPropagation`
+- checkbox：已有 `stopPropagation`，不参与状态机
+
 ## Accessibility
 
 - 表单 Input 配 `<Label>`
 - 按钮 有 `aria-label`（图标按钮）
-- Dialog 用 shadcn/ui 的 Dialog 组件（内置 a11y）
+- 图标小菜单用 shadcn/ui 的 Popover 组件（基于 Radix Popover）
