@@ -127,6 +127,17 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 - 标签数据由 `useTagsQuery()` 获取（用户级），当前任务的标签由 `useTaskQuery(id).tags` 预选。
 - 更新后 invalidate `tasks` 与 `task.detail` 两个 queryKey，确保列表徽章即时刷新。
 
+### 展开编辑态纵向布局（TaskRowExpanded）
+
+展开区从上到下依次为：
+
+1. **标题** — 无边框 Input（`border-0 px-0 py-0 shadow-none focus-visible:ring-0`），onBlur commit。标题/备注采用扁平无边框样式以体现"一体"的编辑体验，不画 Input 边界。
+2. **备注** — 无边框 Textarea（同上 className 约定），onBlur commit。
+3. **子任务区** — `Separator` + 子任务标题 + 列表 + 添加子任务 Input。
+4. **图标按钮行** — 5 个 `IconPopover`（日期 / 到期 / 项目 / 区域 / 标签），左对齐。
+
+**不放在展开区内**：标记完成按钮（折叠态行勾选框已提供）、删除按钮（折叠态行 hover 显示）。展开态仅做编辑，完成/删除交给折叠态行。
+
 ---
 
 ## 行内展开交互模式（Things 3 风格）

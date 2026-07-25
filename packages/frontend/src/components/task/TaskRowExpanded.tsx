@@ -52,9 +52,6 @@ export function TaskRowExpanded({ task }: Props) {
   const titleInputRef = React.useRef<HTMLInputElement>(null);
 
   const updateTask = useUpdateTask();
-  const deleteTask = useDeleteTask();
-  const completeTask = useCompleteTask();
-  const uncompleteTask = useUncompleteTask();
   const createSubtask = useCreateTask();
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
@@ -63,7 +60,6 @@ export function TaskRowExpanded({ task }: Props) {
   const [title, setTitle] = React.useState(current.title);
   const [notes, setNotes] = React.useState(current.notes ?? '');
   const [subtaskTitle, setSubtaskTitle] = React.useState('');
-  const completed = current.status === 'COMPLETED';
 
   const scheduledType = current.scheduledType ?? ScheduledType.NONE;
   const dateValue = current.scheduledDate
@@ -143,208 +139,6 @@ export function TaskRowExpanded({ task }: Props) {
       className="flex flex-col gap-3 px-2 pb-3 pt-1"
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() =>
-            (completed ? uncompleteTask : completeTask).mutate(task.id, {
-              onSuccess: invalidateParent,
-            })
-          }
-        >
-          {completed ? '取消完成' : '标记完成'}
-        </Button>
-        <div className="ml-auto flex items-center gap-1">
-          <IconPopover
-            label="日期"
-            icon={<Calendar className="h-4 w-4" />}
-            active={scheduledType !== ScheduledType.NONE}
-          >
-            <div className="flex flex-col gap-2">
-              <div className="flex gap-1">
-                {[ScheduledType.NONE, ScheduledType.DATE, ScheduledType.SOMEDAY].map(
-                  (type) => (
-                    <button
-                      key={type}
-                      type="button"
-                      onClick={() => onScheduledTypeChange(type)}
-                      className={cn(
-                        'rounded-md px-2.5 py-1 text-xs transition-colors',
-                        scheduledType === type
-                          ? 'bg-primary text-primary-foreground'
-                          : 'border border-input text-muted-foreground hover:bg-muted',
-                      )}
-                    >
-                      {type === ScheduledType.NONE
-                        ? '无'
-                        : type === ScheduledType.DATE
-                        ? '日期'
-                        : 'Someday'}
-                    </button>
-                  ),
-                )}
-              </div>
-              {scheduledType === ScheduledType.DATE && (
-                <input
-                  type="date"
-                  value={dateValue}
-                  onChange={(e) => onDateChange(e.target.value)}
-                  className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                />
-              )}
-            </div>
-          </IconPopover>
-
-          <IconPopover
-            label="到期"
-            icon={<Clock className="h-4 w-4" />}
-            active={!!current.dueDate}
-          >
-            <input
-              type="date"
-              value={dueDateValue}
-              onChange={(e) => {
-                const value = e.target.value;
-                if (value)
-                  patch({ dueDate: fromInputDateValue(value).toISOString() });
-                else patch({ dueDate: null });
-              }}
-              className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            />
-          </IconPopover>
-
-          <IconPopover
-            label="项目"
-            icon={<Folder className="h-4 w-4" />}
-            active={!!current.projectId}
-          >
-            <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
-              <button
-                type="button"
-                onClick={() => patch({ projectId: null })}
-                className={cn(
-                  'rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
-                  !current.projectId && 'font-medium text-primary',
-                )}
-              >
-                无
-              </button>
-              {projects.map((p) => (
-                <button
-                  key={p.id}
-                  type="button"
-                  onClick={() => p.id !== current.projectId && patch({ projectId: p.id })}
-                  className={cn(
-                    'flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
-                    p.id === current.projectId && 'font-medium text-primary',
-                  )}
-                >
-                  <Check
-                    className={cn(
-                      'h-3.5 w-3.5',
-                      p.id === current.projectId ? 'opacity-100' : 'opacity-0',
-                    )}
-                  />
-                  {p.title}
-                </button>
-              ))}
-            </div>
-          </IconPopover>
-
-          <IconPopover
-            label="区域"
-            icon={<Target className="h-4 w-4" />}
-            active={!!current.areaId}
-          >
-            <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
-              <button
-                type="button"
-                onClick={() => patch({ areaId: null })}
-                className={cn(
-                  'rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
-                  !current.areaId && 'font-medium text-primary',
-                )}
-              >
-                无
-              </button>
-              {areas.map((a) => (
-                <button
-                  key={a.id}
-                  type="button"
-                  onClick={() => a.id !== current.areaId && patch({ areaId: a.id })}
-                  className={cn(
-                    'flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
-                    a.id === current.areaId && 'font-medium text-primary',
-                  )}
-                >
-                  <Check
-                    className={cn(
-                      'h-3.5 w-3.5',
-                      a.id === current.areaId ? 'opacity-100' : 'opacity-0',
-                    )}
-                  />
-                  {a.title}
-                </button>
-              ))}
-            </div>
-          </IconPopover>
-
-          <IconPopover
-            label="标签"
-            icon={<Tag className="h-4 w-4" />}
-            active={(current.tags ?? []).length > 0}
-          >
-            <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
-              {tags.length === 0 ? (
-                <span className="px-2 py-1.5 text-xs text-muted-foreground/60">
-                  暂无标签，请先在 Tags 页创建
-                </span>
-              ) : (
-                tags.map((tag) => {
-                  const selected = (current.tags ?? []).some((t) => t.id === tag.id);
-                  return (
-                    <button
-                      key={tag.id}
-                      type="button"
-                      onClick={() => {
-                        const currentIds = (current.tags ?? []).map((t) => t.id);
-                        const next = selected
-                          ? currentIds.filter((id) => id !== tag.id)
-                          : [...currentIds, tag.id];
-                        patch({ tagIds: next });
-                      }}
-                      className={cn(
-                        'flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
-                        selected ? 'opacity-100' : 'opacity-50',
-                      )}
-                      style={{ color: tag.color }}
-                    >
-                      <span
-                        className="h-2.5 w-2.5 rounded-full"
-                        style={{ backgroundColor: tag.color }}
-                      />
-                      {tag.title}
-                      {selected && <Check className="ml-auto h-3.5 w-3.5" />}
-                    </button>
-                  );
-                })
-              )}
-            </div>
-          </IconPopover>
-
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-[#CC4444]"
-            aria-label="移到废纸篓"
-            onClick={() => deleteTask.mutate(task.id)}
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
       <Input
         ref={titleInputRef}
         value={title}
@@ -386,6 +180,185 @@ export function TaskRowExpanded({ task }: Props) {
           placeholder="添加子任务…"
           className="mt-1 h-8 text-sm"
         />
+      </div>
+
+      <div className="flex items-center gap-1">
+        <IconPopover
+          label="日期"
+          icon={<Calendar className="h-4 w-4" />}
+          active={scheduledType !== ScheduledType.NONE}
+        >
+          <div className="flex flex-col gap-2">
+            <div className="flex gap-1">
+              {[ScheduledType.NONE, ScheduledType.DATE, ScheduledType.SOMEDAY].map(
+                (type) => (
+                  <button
+                    key={type}
+                    type="button"
+                    onClick={() => onScheduledTypeChange(type)}
+                    className={cn(
+                      'rounded-md px-2.5 py-1 text-xs transition-colors',
+                      scheduledType === type
+                        ? 'bg-primary text-primary-foreground'
+                        : 'border border-input text-muted-foreground hover:bg-muted',
+                    )}
+                  >
+                    {type === ScheduledType.NONE
+                      ? '无'
+                      : type === ScheduledType.DATE
+                      ? '日期'
+                      : 'Someday'}
+                  </button>
+                ),
+              )}
+            </div>
+            {scheduledType === ScheduledType.DATE && (
+              <input
+                type="date"
+                value={dateValue}
+                onChange={(e) => onDateChange(e.target.value)}
+                className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              />
+            )}
+          </div>
+        </IconPopover>
+
+        <IconPopover
+          label="到期"
+          icon={<Clock className="h-4 w-4" />}
+          active={!!current.dueDate}
+        >
+          <input
+            type="date"
+            value={dueDateValue}
+            onChange={(e) => {
+              const value = e.target.value;
+              if (value)
+                patch({ dueDate: fromInputDateValue(value).toISOString() });
+              else patch({ dueDate: null });
+            }}
+            className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          />
+        </IconPopover>
+
+        <IconPopover
+          label="项目"
+          icon={<Folder className="h-4 w-4" />}
+          active={!!current.projectId}
+        >
+          <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => patch({ projectId: null })}
+              className={cn(
+                'rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
+                !current.projectId && 'font-medium text-primary',
+              )}
+            >
+              无
+            </button>
+            {projects.map((p) => (
+              <button
+                key={p.id}
+                type="button"
+                onClick={() => p.id !== current.projectId && patch({ projectId: p.id })}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
+                  p.id === current.projectId && 'font-medium text-primary',
+                )}
+              >
+                <Check
+                  className={cn(
+                    'h-3.5 w-3.5',
+                    p.id === current.projectId ? 'opacity-100' : 'opacity-0',
+                  )}
+                />
+                {p.title}
+              </button>
+            ))}
+          </div>
+        </IconPopover>
+
+        <IconPopover
+          label="区域"
+          icon={<Target className="h-4 w-4" />}
+          active={!!current.areaId}
+        >
+          <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => patch({ areaId: null })}
+              className={cn(
+                'rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
+                !current.areaId && 'font-medium text-primary',
+              )}
+            >
+              无
+            </button>
+            {areas.map((a) => (
+              <button
+                key={a.id}
+                type="button"
+                onClick={() => a.id !== current.areaId && patch({ areaId: a.id })}
+                className={cn(
+                  'flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
+                  a.id === current.areaId && 'font-medium text-primary',
+                )}
+              >
+                <Check
+                  className={cn(
+                    'h-3.5 w-3.5',
+                    a.id === current.areaId ? 'opacity-100' : 'opacity-0',
+                  )}
+                />
+                {a.title}
+              </button>
+            ))}
+          </div>
+        </IconPopover>
+
+        <IconPopover
+          label="标签"
+          icon={<Tag className="h-4 w-4" />}
+          active={(current.tags ?? []).length > 0}
+        >
+          <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
+            {tags.length === 0 ? (
+              <span className="px-2 py-1.5 text-xs text-muted-foreground/60">
+                暂无标签，请先在 Tags 页创建
+              </span>
+            ) : (
+              tags.map((tag) => {
+                const selected = (current.tags ?? []).some((t) => t.id === tag.id);
+                return (
+                  <button
+                    key={tag.id}
+                    type="button"
+                    onClick={() => {
+                      const currentIds = (current.tags ?? []).map((t) => t.id);
+                      const next = selected
+                        ? currentIds.filter((id) => id !== tag.id)
+                        : [...currentIds, tag.id];
+                      patch({ tagIds: next });
+                    }}
+                    className={cn(
+                      'flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
+                      selected ? 'opacity-100' : 'opacity-50',
+                    )}
+                    style={{ color: tag.color }}
+                  >
+                    <span
+                      className="h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: tag.color }}
+                    />
+                    {tag.title}
+                    {selected && <Check className="ml-auto h-3.5 w-3.5" />}
+                  </button>
+                );
+              })
+            )}
+          </div>
+        </IconPopover>
       </div>
     </div>
   );
