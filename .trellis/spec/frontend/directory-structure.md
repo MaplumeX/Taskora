@@ -19,9 +19,8 @@ packages/frontend/
 ├── vite.config.ts        # Vite 配置
 ├── tailwind.config.js    # Tailwind 配置
 └── src/
-    ├── main.tsx           # 入口
-    ├── App.tsx            # 根路由
-    ├── router.tsx        # 路由配置
+    ├── main.tsx           # 入口（挂载 RouterProvider）
+    ├── router.tsx        # 路由配置（createBrowserRouter）
     ├── lib/
     │   ├── api/           # API 封装（axios 实例 + 各资源 API）
     │   │   ├── client.ts

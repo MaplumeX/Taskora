@@ -40,9 +40,21 @@ export function useTaskQuery(id: string) {
 export function useCreateTask() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: tasksApi.createTask,
+    mutationFn: (data: CreateTaskDto) => createTask(data),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+    },
+  });
+}
+
+// 多参数用对象解构
+export function useUpdateTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateTaskDto }) => updateTask(id, data),
+    onSuccess: (task) => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
     },
   });
 }
@@ -53,19 +65,20 @@ export function useCreateTask() {
 ## Data Fetching
 
 - 服务端数据全部通过 TanStack Query
-- `staleTime: 30_000`（30s 内不重新请求）
-- `refetchOnWindowFocus: true`（回到应用刷新）
-- `retry: 1`
+- 当前未显式配置 `staleTime` / `retry` / `refetchOnWindowFocus`，使用 TanStack Query 默认值（staleTime=0、retry=3、refetchOnWindowFocus=true）
+- 若调用方需要懒加载，用 `enabled` 选项（如 `useTaskQuery` 的 `enabled: !!id`）
 
 ### Query Key 约定
 
 ```typescript
-const taskKeys = {
-  all: ['tasks'],
-  list: (params) => ['tasks', params],
-  detail: (id) => ['task', id],
+export const taskKeys = {
+  all: ['tasks'] as const,
+  list: (params?: TaskQuery) => ['tasks', params ?? {}] as const,
+  detail: (id: string) => ['task', id] as const,
 };
 ```
+
+- `taskKeys` 工厂对象与 hook 定义在同一文件（`src/lib/hooks/useTasks.ts`），跨文件复用 key 时从此处 import，不硬编码字符串
 
 ### Invalidation 策略
 

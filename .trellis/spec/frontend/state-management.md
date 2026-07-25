@@ -26,7 +26,7 @@
 
 ### 客户端 UI 状态（Zustand）
 
-- `auth.store.ts`：token、user、login()、logout()
+- `auth.store.ts`：token、user、`setAuth(token, user)`、`clear()`
 - token 持久化到 localStorage（`persist` 中间件）
 - `partialize` 只持久化必要字段
 
@@ -40,7 +40,7 @@ export const useAuthStore = create<AuthState>()(
       clear: () => set({ token: null, user: null }),
     }),
     {
-      name: 'auth-storage',
+      name: 'taskora-auth',
       partialize: (state) => ({ token: state.token, user: state.user }),
     },
   ),
