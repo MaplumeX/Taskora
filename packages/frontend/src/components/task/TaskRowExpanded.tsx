@@ -2,6 +2,7 @@ import * as React from 'react';
 import {
   Calendar,
   Check,
+  Clock,
   Folder,
   Tag,
   Target,
@@ -63,6 +64,9 @@ export function TaskRowExpanded({ task }: Props) {
   const scheduledType = current.scheduledType ?? ScheduledType.NONE;
   const dateValue = current.scheduledDate
     ? toInputDateValue(new Date(current.scheduledDate))
+    : '';
+  const dueDateValue = current.dueDate
+    ? toInputDateValue(new Date(current.dueDate))
     : '';
 
   const invalidateParent = () =>
@@ -177,6 +181,24 @@ export function TaskRowExpanded({ task }: Props) {
                 />
               )}
             </div>
+          </IconPopover>
+
+          <IconPopover
+            label="到期"
+            icon={<Clock className="h-4 w-4" />}
+            active={!!current.dueDate}
+          >
+            <input
+              type="date"
+              value={dueDateValue}
+              onChange={(e) => {
+                const value = e.target.value;
+                if (value)
+                  patch({ dueDate: fromInputDateValue(value).toISOString() });
+                else patch({ dueDate: null });
+              }}
+              className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            />
           </IconPopover>
 
           <IconPopover

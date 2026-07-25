@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { TaskCheckbox } from './TaskCheckbox';
 import { TaskDateBadge } from './TaskDateBadge';
+import { TaskDueDateBadge } from './TaskDueDateBadge';
 import { TaskRowExpanded } from './TaskRowExpanded';
 import type { SelectionState } from '@/lib/hooks/useTaskRowSelection';
 
@@ -93,6 +94,7 @@ export function TaskItem({
             <span className="hidden text-xs text-muted-foreground sm:inline">{tag}</span>
           )}
           <TaskDateBadge scheduledDate={task.scheduledDate} />
+          <TaskDueDateBadge dueDate={task.dueDate} />
 
           {!expanded && (
             <Button
