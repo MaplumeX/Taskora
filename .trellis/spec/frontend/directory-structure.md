@@ -33,7 +33,7 @@ packages/frontend/
     │   │   ├── useAuth.ts
     │   │   ├── useProjects.ts
     │   │   └── useAreas.ts
-    │   ├── stores/        # Zustand stores
+    │   ├── stores/        # Zustand stores（auth, uiInteraction, theme）
     │   │   └── auth.store.ts
     │   └── utils/
     ├── i18n/              # 国际化（react-i18next）
@@ -67,14 +67,14 @@ packages/frontend/
 - **components/**：可复用 UI 组件，按业务域分组（task/project/area），跨域组件放 layout/
 - **lib/api/**：API 调用封装，每个资源一个文件，类型从 `@taskora/shared` 引用
 - **lib/hooks/**：TanStack Query hooks，封装数据获取与变更逻辑
-- **lib/stores/**：Zustand stores，仅放客户端 UI 状态（如 auth token）
+- **lib/stores/**：Zustand stores，放 auth、跨组件 UI 态（expandedId/pendingAutoEditId）、主题等需持久 UI 偏好
 
 ### 状态管理分层
 
 | 层 | 工具 | 存什么 |
 |---|---|---|
 | 服务端状态 | TanStack Query | tasks、projects、areas（缓存、失效、重请求） |
-| 客户端 UI 状态 | Zustand | auth（token）、UI 开关 |
+| 客户端 UI 状态 | Zustand | auth、跨组件 UI 态（展开/选中/一次性指令）、主题 |
 | URL 状态 | React Router | 当前视图、选中资源 id |
 
 ---

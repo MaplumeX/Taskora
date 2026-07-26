@@ -15,6 +15,7 @@ import { cn } from '@/lib/utils';
 import { useTheme, type ThemeMode } from '@/lib/hooks/useTheme';
 import { useCreateProject } from '@/lib/hooks/useProjects';
 import { useCreateArea } from '@/lib/hooks/useAreas';
+import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 import { i18n } from '@/i18n/config';
 
 const themeIcons: Record<ThemeMode, LucideIcon> = {
@@ -34,11 +35,13 @@ export function SidebarBottomBar() {
   const { mode, cycle } = useTheme();
   const createProject = useCreateProject();
   const createArea = useCreateArea();
+  const setPendingAutoEditId = useUiInteractionStore((s) => s.setPendingAutoEditId);
 
   const handleNewProject = () => {
     createProject.mutate({ title: '' }, {
       onSuccess: (p) => {
-        navigate(`/projects/${p.id}`, { state: { editTitle: true } });
+        setPendingAutoEditId(p.id);
+        navigate(`/projects/${p.id}`);
       },
       onError: () => toast.error(t('common:createFailed')),
     });
@@ -47,7 +50,8 @@ export function SidebarBottomBar() {
   const handleNewArea = () => {
     createArea.mutate({ title: '' }, {
       onSuccess: (a) => {
-        navigate(`/areas/${a.id}`, { state: { editTitle: true } });
+        setPendingAutoEditId(a.id);
+        navigate(`/areas/${a.id}`);
       },
       onError: () => toast.error(t('common:createFailed')),
     });

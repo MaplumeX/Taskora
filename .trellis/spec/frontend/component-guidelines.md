@@ -152,7 +152,7 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 - 单击他行 → 当前行折叠并取消，他行变 `selected`
 - 点击列表空白 → 全部回到 `idle`
 
-**状态归属**：`selectedId` 为列表级瞬态用 `useState`（在 `TaskListView` / `Logbook` 中）；`expandedId` 派生自 URL `?expand=<id>`（`useSearchParams`，写时 `replace: true` 避免污染历史栈），以便跨组件（如底部共享栏创建任务后）能驱动某行展开。均抽成 `useTaskRowSelection()` hook 复用。**不放入 Zustand**（遵循 state-management 规范：Zustand 仅放 auth/token 等跨页面持久状态）。
+**状态归属**：`selectedId` 为列表级瞬态用 `useState`（在 `TaskListView` / `Logbook` 中）；`expandedId` 存于 `uiInteractionStore`（Zustand，非持久），以便跨组件（如底部共享栏创建任务后）能驱动某行展开。均抽成 `useTaskRowSelection()` hook 复用，hook 内部委托 store，消费方零改动。刷新后展开态丢失（可接受，属瞬态）。
 
 **事件隔离（关键）**：展开区内的交互不能冒泡到外层空白点击 handler，否则会误折叠：
 
@@ -182,7 +182,7 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 
 ### 新建后自动进入编辑态
 
-从侧边栏底栏「新增」菜单创建空标题条目 → `navigate(..., { state: { editTitle: true } })` → 详情页读 `location.state.editTitle` → 传 `autoFocusAndSelect` 给 `InlineTitleEdit`。路由 state 是一次性的（不持久化到 URL，刷新即退化），符合「刚创建时编辑」语义。
+从侧边栏底栏「新增」菜单创建空标题条目 → 调 `uiInteractionStore.setPendingAutoEditId(created.id)` 后 `navigate` 到详情页 → 详情页读 `pendingAutoEditId === routeId` → 传 `autoFocusAndSelect` 给 `InlineTitleEdit`，并在 mount 后 `clearPendingAutoEditId()` 消费即清。store 内存态非持久，刷新后 `pendingAutoEditId` 为 null，不会重复触发编辑。
 
 `autoFocusAndSelect` 仅在 `value` 非空时调 `select()`（空标题场景无意义）。
 
@@ -196,7 +196,7 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 
 `src/components/layout/SidebarBottomBar.tsx` 抽离自 `Sidebar.tsx`，布局左右两端：
 
-- **左：新增按钮**（`Plus` + `common:add`）→ `DropdownMenu` 含 `common:newProject` / `common:newArea`。点击直接 `createProject.mutate({ title: '' })` / `createArea.mutate({ title: '' })`（后端 `@IsString()` 允许空串），成功后 `navigate` 带 `state.editTitle: true` 跳转详情页。`isPending` 时禁用菜单项防重复提交。
+- **左：新增按钮**（`Plus` + `common:add`）→ `DropdownMenu` 含 `common:newProject` / `common:newArea`。点击直接 `createProject.mutate({ title: '' })` / `createArea.mutate({ title: '' })`（后端 `@IsString()` 允许空串），成功后 `uiInteractionStore.setPendingAutoEditId(created.id)` 再 `navigate` 跳转详情页。`isPending` 时禁用菜单项防重复提交。
 - **右：设置按钮**（齿轮 `Settings`，icon-only + `aria-label`）→ `DropdownMenu` 收纳主题切换（`useTheme` 的 `cycle()`，当前模式图标 + `theme:<mode>` 文案）与语言切换（`i18n.changeLanguage`）。两组用 `DropdownMenuSeparator` 分隔。
 
 ---
@@ -206,7 +206,7 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 `src/components/layout/ContentBottomBar.tsx` 是页面底部共享栏，跨任务视图复用：
 
 - **左：搜索按钮**（`Search` 图标，`aria-label`）→ 打开 `SearchModal`（`Cmd/Ctrl+K` 快捷键全局监听）。
-- **右：添加任务按钮**（`Plus` 图标，`aria-label`）→ `createTask.mutate({ title: '', ...ctx })`（空标题创建，与项目/区域一致的空标题模式），`ctx` 来自 `usePageTaskContext()`（提供当前页面的 `projectId` / `areaId` / `parentId` 上下文）。成功后 `setParams({ expand: created.id })` 驱动该行展开。
+- **右：添加任务按钮**（`Plus` 图标，`aria-label`）→ `createTask.mutate({ title: '', ...ctx })`（空标题创建，与项目/区域一致的空标题模式），`ctx` 来自 `usePageTaskContext()`（提供当前页面的 `projectId` / `areaId` / `parentId` 上下文）。成功后 `uiInteractionStore.setExpandedId(created.id)` 驱动该行展开。
 
 ---
 

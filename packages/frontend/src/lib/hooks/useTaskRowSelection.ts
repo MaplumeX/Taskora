@@ -1,19 +1,12 @@
 import { useCallback, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 
 export type SelectionState = 'idle' | 'selected' | 'expanded';
 
 export function useTaskRowSelection() {
-  const [params, setParams] = useSearchParams();
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const expandedId = params.get('expand');
-
-  const setExpandedId = useCallback(
-    (id: string | null) => {
-      setParams(id ? { expand: id } : {}, { replace: true });
-    },
-    [setParams],
-  );
+  const expandedId = useUiInteractionStore((s) => s.expandedId);
+  const setExpandedId = useUiInteractionStore((s) => s.setExpandedId);
 
   const handleRowClick = useCallback(
     (id: string) => {
