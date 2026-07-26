@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 9
+- **Total Sessions**: 10
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~395 | Active |
+| `journal-1.md` | ~437 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 10 | 2026-07-26 | 新建任务/项目/区域空标题占位符展示 | `3d0d52f` | `feat/new-item-empty-title-placeholder` |
 | 9 | 2026-07-26 | 侧边栏底栏新增/设置按钮与标题内联编辑 | `c9781bc` | `feat/sidebar-bottom-create-settings` |
 | 9 | 2026-07-26 | Inline title editing in expanded task row | `193cc83` | `feat/task-edit-component-redesign` |
 | 8 | 2026-07-25 | Add i18n support (zh/en) with locale-aware formatting | `57615ed`, `571d10f`, `4f3df22` | `feat/i18n-support` |
