@@ -402,3 +402,36 @@ Eliminated duplicated title in expanded task rows: moved the editable title inpu
 ### Next Steps
 
 - None - task complete
+
+
+## Session 10: 新建任务/项目/区域空标题占位符展示
+
+**Date**: 2026-07-26
+**Task**: 新建任务/项目/区域空标题占位符展示
+**Branch**: `feat/new-item-empty-title-placeholder`
+
+### Summary
+
+新建任务/项目/区域时标题存储为空字符串，UI 在空标题时显示占位符（新建任务/项目/区域）。改动：ContentBottomBar 新建任务 title:''；TaskItem 自动聚焦判定改为空值检测（取代 i18n 字符串匹配）；TaskItem/ProjectItem/AreaItem 空标题显示灰色占位符；ProjectDetail/AreaDetail 的 InlineTitleEdit placeholder 改为 newItemPlaceholder；i18n 新增 newTaskPlaceholder/newItemPlaceholder（中英），删除无引用的 task:newTask；spec 新增 ContentBottomBar 与空标题占位符约定文档。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3d0d52f` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
