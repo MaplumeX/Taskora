@@ -468,3 +468,37 @@ Eliminated duplicated title in expanded task rows: moved the editable title inpu
 ### Next Steps
 
 - None - task complete
+
+
+## Session 12: Paper container for task editor
+
+**Date**: 2026-07-26
+**Task**: Paper container for task editor
+**Branch**: `main`
+
+### Summary
+
+Referenced Milesto's TaskEditorPaper design to give the expanded task editor a 'paper' container visual. First pass applied paper styles to TaskRowExpanded root only, which left checkbox/title outside the card with a gray bg-muted backdrop. Fix moved paper styles up to TaskItem outer div so the entire expanded state (checkbox + title + notes + subtasks + icon buttons) sits inside one floating rounded card, and dropped the bg-muted/60 backdrop for expanded state.
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a457d46` | (see git log) |
+| `b8ecae3` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
