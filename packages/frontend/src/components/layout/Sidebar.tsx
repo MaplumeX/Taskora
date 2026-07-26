@@ -12,9 +12,6 @@ import {
   Tags as TagsIcon,
   Trash2,
   CloudSun,
-  Monitor,
-  Moon,
-  SunMedium,
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -25,8 +22,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { useLogout } from '@/lib/hooks/useAuth';
-import { useTheme, type ThemeMode } from '@/lib/hooks/useTheme';
-import { LanguageToggle } from '@/i18n/LanguageToggle';
+import { SidebarBottomBar } from '@/components/layout/SidebarBottomBar';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
 import { useTagsQuery } from '@/lib/hooks/useTags';
@@ -224,36 +220,7 @@ export function Sidebar() {
         </div>
       </ScrollArea>
 
-      <div className="flex items-center gap-1 px-2 pb-3 pt-2">
-        <ThemeToggle />
-        <LanguageToggle />
-      </div>
+      <SidebarBottomBar />
     </aside>
-  );
-}
-
-const themeIcons: Record<ThemeMode, LucideIcon> = {
-  light: SunMedium,
-  dark: Moon,
-  system: Monitor,
-};
-
-function ThemeToggle() {
-  const { mode, cycle } = useTheme();
-  const { t } = useTranslation('theme');
-  const Icon = themeIcons[mode];
-  const label = t(mode);
-
-  return (
-    <button
-      type="button"
-      onClick={cycle}
-      aria-label={t('toggleLabel', { mode: label })}
-      title={t('toggleLabel', { mode: label })}
-      className="flex items-center gap-2.5 rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground"
-    >
-      <Icon className="h-4 w-4" />
-      {label}
-    </button>
   );
 }

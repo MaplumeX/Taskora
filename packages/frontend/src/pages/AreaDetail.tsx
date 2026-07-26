@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   DndContext,
@@ -19,7 +19,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 import type { ProjectResponseDto } from '@taskora/shared';
 
-import { useAreasQuery, useDeleteArea } from '@/lib/hooks/useAreas';
+import { useAreasQuery, useDeleteArea, useUpdateArea } from '@/lib/hooks/useAreas';
 import { useProjectsQuery, useReorderProjects } from '@/lib/hooks/useProjects';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,7 @@ import { Separator } from '@/components/ui/separator';
 import { AreaForm } from '@/components/area/AreaForm';
 import { ProjectItem } from '@/components/project/ProjectItem';
 import { TaskListView } from '@/components/task/TaskListView';
+import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { toast } from 'sonner';
 
 function SortableProjectItem({ project }: { project: ProjectResponseDto }) {
@@ -53,6 +54,8 @@ export default function AreaDetail() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const autoEdit = (location.state as { editTitle?: boolean } | null)?.editTitle === true;
   const { data: areas = [] } = useAreasQuery();
   const area = areas.find((a) => a.id === id);
   const { data: allProjects = [] } = useProjectsQuery();
@@ -61,6 +64,7 @@ export default function AreaDetail() {
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ areaId: id });
   const [editOpen, setEditOpen] = React.useState(false);
   const deleteArea = useDeleteArea();
+  const updateArea = useUpdateArea();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -96,7 +100,25 @@ export default function AreaDetail() {
           >
             {t('common:backTo', { label: t('nav:areas') })}
           </button>
-          <h1 className="text-2xl font-semibold tracking-tight">{area?.title ?? t('area:defaultTitle')}</h1>
+          {area ? (
+            <InlineTitleEdit
+              value={area.title}
+              placeholder={t('area:titlePlaceholder')}
+              autoFocusAndSelect={autoEdit}
+              onSubmit={(next) => {
+                if (!area) return;
+                updateArea.mutate(
+                  { id: area.id, data: { title: next } },
+                  {
+                    onSuccess: () => toast.success(t('common:saved')),
+                    onError: () => toast.error(t('common:saveFailed')),
+                  },
+                );
+              }}
+            />
+          ) : (
+            <h1 className="text-2xl font-semibold tracking-tight">{t('area:defaultTitle')}</h1>
+          )}
         </div>
         <Button variant="ghost" onClick={() => setEditOpen(true)}>
           {t('common:edit')}
