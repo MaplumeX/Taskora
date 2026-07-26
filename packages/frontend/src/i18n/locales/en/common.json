@@ -11,7 +11,6 @@
   "back": "Back",
   "backTo": "‹ Back to {{label}}",
   "save": "Save",
-  "saved": "Saved",
   "saveFailed": "Failed to save",
   "createFailed": "Failed to create",
   "titleRequired": "Title is required",

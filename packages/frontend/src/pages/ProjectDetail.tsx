@@ -55,7 +55,6 @@ export default function ProjectDetail() {
                 updateProject.mutate(
                   { id: project.id, data: { title: next } },
                   {
-                    onSuccess: () => toast.success(t('common:saved')),
                     onError: () => toast.error(t('common:saveFailed')),
                   },
                 );

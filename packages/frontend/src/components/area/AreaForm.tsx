@@ -50,7 +50,6 @@ export function AreaForm({ open, onOpenChange, area }: Props) {
         { id: area.id, data },
         {
           onSuccess: () => {
-            toast.success(t('common:saved'));
             onOpenChange(false);
           },
           onError: () => toast.error(t('common:saveFailed')),

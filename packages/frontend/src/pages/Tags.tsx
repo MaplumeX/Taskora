@@ -226,7 +226,6 @@ function TagForm({
         { id: tag.id, data },
         {
           onSuccess: () => {
-            toast.success(t('common:saved'));
             onOpenChange(false);
           },
           onError: () => toast.error(t('common:saveFailed')),
