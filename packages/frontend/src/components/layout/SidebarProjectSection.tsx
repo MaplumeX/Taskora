@@ -23,9 +23,9 @@ export function SidebarProjectSection({ projects, areas }: Props) {
       <div className="px-3 py-1.5 text-sm font-medium text-muted-foreground">
         {t('nav:projects')}
       </div>
-      <div className="ml-4 flex flex-col gap-0.5 border-l pl-2">
+      <div className="ml-2 flex flex-col gap-0.5">
         {standaloneProjects.map((p) => (
-          <ProjectItem key={p.id} project={p} />
+          <ProjectItem key={p.id} project={p} showChevron={false} />
         ))}
         {areas.map((area) => (
           <SidebarAreaRow
