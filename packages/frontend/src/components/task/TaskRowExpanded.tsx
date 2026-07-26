@@ -9,7 +9,6 @@ import {
   Trash2,
 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
@@ -33,7 +32,6 @@ import {
   useCompleteTask,
   useCreateTask,
   useDeleteTask,
-  useTaskQuery,
   useUncompleteTask,
   useUpdateTask,
 } from '@/lib/hooks/useTasks';
@@ -42,16 +40,12 @@ import { toast } from 'sonner';
 
 interface Props {
   task: TaskResponseDto;
+  current: TaskResponseDto;
 }
 
-export function TaskRowExpanded({ task }: Props) {
+export function TaskRowExpanded({ task, current }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const { data: liveTask } = useTaskQuery(task.id);
-  const current = liveTask ?? task;
-  const [searchParams] = useSearchParams();
-
-  const titleInputRef = React.useRef<HTMLInputElement>(null);
 
   const updateTask = useUpdateTask();
   const createSubtask = useCreateTask();
@@ -59,7 +53,6 @@ export function TaskRowExpanded({ task }: Props) {
   const { data: areas = [] } = useAreasQuery();
   const { data: tags = [] } = useTagsQuery();
 
-  const [title, setTitle] = React.useState(current.title);
   const [notes, setNotes] = React.useState(current.notes ?? '');
   const [subtaskTitle, setSubtaskTitle] = React.useState('');
 
@@ -86,18 +79,6 @@ export function TaskRowExpanded({ task }: Props) {
       },
     );
 
-  // Auto-focus + select title when this row was expanded via "add task" flow
-  React.useEffect(() => {
-    const expandId = searchParams.get('expand');
-    if (expandId === task.id && current.title === t('task:newTask')) {
-      titleInputRef.current?.focus();
-      titleInputRef.current?.select();
-    }
-  }, [searchParams, task.id, current.title, t]);
-
-  const commitTitle = () => {
-    if (title.trim() && title !== current.title) patch({ title: title.trim() });
-  };
   const commitNotes = () => {
     if (notes !== (current.notes ?? '')) patch({ notes });
   };
@@ -141,18 +122,6 @@ export function TaskRowExpanded({ task }: Props) {
       className="flex flex-col gap-3 px-2 pb-3 pt-1"
       onClick={(e) => e.stopPropagation()}
     >
-      <Input
-        ref={titleInputRef}
-        value={title}
-        onChange={(e) => setTitle(e.target.value)}
-        onBlur={commitTitle}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter') e.currentTarget.blur();
-        }}
-        onClick={(e) => e.stopPropagation()}
-        className="border-0 px-0 py-0 text-base font-medium shadow-none focus-visible:ring-0"
-      />
-
       <Textarea
         value={notes}
         onChange={(e) => setNotes(e.target.value)}

@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component props conventions, shadcn/ui + Tailwind patterns, common mistakes to avoid when refactoring TaskItem/TaskRowExpanded"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "TanStack Query server state + local useState rules; indicates how to lift title-input state and liveTask query from TaskRowExpanded up to TaskItem"}
