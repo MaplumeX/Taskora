@@ -13,7 +13,6 @@
   "save": "保存",
   "saveFailed": "保存失败",
   "createFailed": "创建失败",
-  "titleRequired": "请填写标题",
   "deleteFailed": "删除失败",
   "operationFailed": "操作失败",
   "notLoggedIn": "未登录",

@@ -72,12 +72,14 @@ const NavRow = ({ item }: { item: NavItem }) => {
 function CollapsibleSection({
   labelKey,
   emptyHintKey,
+  emptyTitlePlaceholderKey,
   icon: Icon,
   to,
   items,
 }: {
   labelKey: string;
   emptyHintKey: string;
+  emptyTitlePlaceholderKey: string;
   icon: LucideIcon;
   to: string;
   items: { id: string; title: string; href: string }[];
@@ -127,7 +129,7 @@ function CollapsibleSection({
                   )
                 }
               >
-                {item.title}
+                {item.title || t(emptyTitlePlaceholderKey)}
               </NavLink>
             ))
           )}
@@ -185,6 +187,7 @@ export function Sidebar() {
             icon={Folder}
             to="/projects"
             emptyHintKey="nav:emptyProjects"
+            emptyTitlePlaceholderKey="project:newItemPlaceholder"
             items={projects.map((p) => ({ id: p.id, title: p.title, href: `/projects/${p.id}` }))}
           />
         </div>
@@ -197,6 +200,7 @@ export function Sidebar() {
             icon={Layers}
             to="/areas"
             emptyHintKey="nav:emptyAreas"
+            emptyTitlePlaceholderKey="area:newItemPlaceholder"
             items={areas.map((a) => ({ id: a.id, title: a.title, href: `/areas/${a.id}` }))}
           />
         </div>
@@ -209,6 +213,7 @@ export function Sidebar() {
             icon={TagsIcon}
             to="/tags"
             emptyHintKey="nav:emptyTags"
+            emptyTitlePlaceholderKey="tag:new"
             items={tags.map((t) => ({ id: t.id, title: t.title, href: `/tags/${t.id}` }))}
           />
         </div>

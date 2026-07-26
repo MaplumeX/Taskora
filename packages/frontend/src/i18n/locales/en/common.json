@@ -13,7 +13,6 @@
   "save": "Save",
   "saveFailed": "Failed to save",
   "createFailed": "Failed to create",
-  "titleRequired": "Title is required",
   "deleteFailed": "Failed to delete",
   "operationFailed": "Operation failed",
   "notLoggedIn": "Not logged in",

@@ -176,7 +176,7 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 - `display` 态：`<h1>` 级文本（保留 `text-2xl font-semibold tracking-tight`），点击进入 `edit` 态。
 - `edit` 态：扁平无边框 `<input>`（`border-0 px-0 py-0 shadow-none focus-visible:ring-0 bg-transparent`），与 `TaskRowExpanded` 标题输入框风格一致。
 - `Enter` / 失焦 → 提交；`Escape` → 取消。
-- 提交规则：`trim()` 后为空 → toast `common:titleRequired` + 回滚原标题 + **保持编辑态**供重试；与原值相同 → 仅退出编辑态不调 `onSubmit`；否则调 `onSubmit(next)` 并乐观退出编辑态（不等 mutation）。
+- 提交规则：与原值相同（`trim()` 后比较）→ 仅退出编辑态不调 `onSubmit`；否则调 `onSubmit(next)` 并乐观退出编辑态（不等 mutation）。空标题允许提交，`onSubmit('')` 后 display 态回退到 `placeholder`。
 
 ### 新建后自动进入编辑态
 
@@ -214,7 +214,7 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 
 ### 展示规则
 
-- **列表项**（`TaskItem` 折叠态 / `ProjectItem` / `AreaItem`）：`{item.title || t('xxx:newItemPlaceholder')}`，空标题时 className 用 `text-muted-foreground`，有标题时 `text-foreground`。
+- **列表项**（`TaskItem` 折叠态 / `ProjectItem` / `AreaItem` / 侧边栏 `CollapsibleSection` 子项）：`{item.title || t('xxx:newItemPlaceholder')}`，空标题时 className 用 `text-muted-foreground`，有标题时 `text-foreground`。侧边栏 tag 子项用 `tag:new`（「新标签」/「New Tag」）。
 - **详情页标题**（`InlineTitleEdit`）：已有 `{value || placeholder}` 展示逻辑，placeholder 传 `t('xxx:newItemPlaceholder')`。
 - **展开态 Input**（`TaskItem` 展开态）：`value` 始终为实际存储值，`placeholder={t('task:newTaskPlaceholder')}`。
 
