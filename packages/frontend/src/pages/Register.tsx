@@ -23,8 +23,8 @@ export default function Register() {
   const mismatch = confirm.length > 0 && password !== confirm;
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-secondary/30 px-4">
-      <div className="w-full max-w-sm">
+    <div className="flex min-h-dvh items-center justify-center bg-secondary/40 px-4 noise-overlay">
+      <div className="relative w-full max-w-sm rounded-2xl border border-border/50 bg-card p-8 shadow-soft">
         <h1 className="mb-1 text-center text-2xl font-semibold tracking-tight">
           {t('auth:createAccount')}
         </h1>

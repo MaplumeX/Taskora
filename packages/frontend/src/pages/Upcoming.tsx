@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { TaskItem } from '@/components/task/TaskItem';
+import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
+import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import {
   useCompleteTask,
   useDeleteTask,
@@ -20,6 +22,7 @@ import { toast } from 'sonner';
 export default function Upcoming() {
   const { t } = useTranslation();
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ view: 'upcoming' });
+  const showSkeleton = useDelayedLoading(isLoading);
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const completeTask = useCompleteTask();
@@ -69,10 +72,10 @@ export default function Upcoming() {
   return (
     <div className="flex flex-col gap-4" onClick={handleBlankClick}>
       <h1 className="text-xl font-semibold tracking-tight">{t('nav:upcoming')}</h1>
-      {isLoading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>
+      {showSkeleton ? (
+        <TaskListSkeleton />
       ) : isError ? (
-        <p className="py-8 text-center text-sm text-[#CC4444]">{t('common:loadFailed')}</p>
+        <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : grouped.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">{t('task:upcomingEmpty')}</p>
       ) : (

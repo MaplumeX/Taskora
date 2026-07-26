@@ -22,9 +22,11 @@ import type { ProjectResponseDto } from '@taskora/shared';
 import { useAreasQuery, useUpdateArea } from '@/lib/hooks/useAreas';
 import { useProjectsQuery, useReorderProjects } from '@/lib/hooks/useProjects';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
+import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import { Separator } from '@/components/ui/separator';
 import { ProjectItem } from '@/components/project/ProjectItem';
 import { TaskListView } from '@/components/task/TaskListView';
+import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { toast } from 'sonner';
 
@@ -59,6 +61,7 @@ export default function AreaDetail() {
   const projects = allProjects.filter((p) => p.areaId === id);
   const reorderProjects = useReorderProjects();
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ areaId: id });
+  const showSkeleton = useDelayedLoading(isLoading);
   const updateArea = useUpdateArea();
 
   const sensors = useSensors(
@@ -116,10 +119,10 @@ export default function AreaDetail() {
       <Separator />
 
       <h2 className="text-sm font-medium text-muted-foreground">{t('area:tasksLabel')}</h2>
-      {isLoading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>
+      {showSkeleton ? (
+        <TaskListSkeleton />
       ) : isError ? (
-        <p className="py-8 text-center text-sm text-[#CC4444]">{t('common:loadFailed')}</p>
+        <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
         <TaskListView tasks={tasks} emptyHint={t('area:noTasks')} />
       )}

@@ -434,7 +434,7 @@ function SubtaskRow({
         </button>
       )}
       <button
-        className="ml-auto text-muted-foreground hover:text-[#CC4444]"
+        className="ml-auto text-muted-foreground hover:text-destructive"
         onClick={(e) => {
           e.stopPropagation();
           deleteTask.mutate(task.id, { onSuccess: onMutated });

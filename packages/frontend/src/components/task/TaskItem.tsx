@@ -100,7 +100,7 @@ export function TaskItem({
         'group flex flex-col transition-colors',
         selectionState === 'selected' && 'bg-muted/60',
         selectionState === 'expanded' &&
-          'rounded-xl border border-border/50 bg-card shadow-sm',
+          'rounded-xl border border-border/60 bg-card shadow-soft'
       )}
       onKeyDown={(e) => {
         if (!expanded || e.key !== 'Escape' || !onRowClick) return;
