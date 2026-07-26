@@ -40,10 +40,6 @@ export function AreaForm({ open, onOpenChange, area }: Props) {
 
   const submit = () => {
     const trimmed = title.trim();
-    if (!trimmed) {
-      toast.error(t('common:titleRequired'));
-      return;
-    }
     if (isEdit && area) {
       const data: UpdateAreaDto = { title: trimmed, notes: notes || undefined };
       updateArea.mutate(

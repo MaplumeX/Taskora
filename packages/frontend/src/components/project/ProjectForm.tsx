@@ -42,10 +42,6 @@ export function ProjectForm({ open, onOpenChange, project, defaultAreaId }: Prop
 
   const submit = () => {
     const trimmed = title.trim();
-    if (!trimmed) {
-      toast.error(t('common:titleRequired'));
-      return;
-    }
     if (isEdit && project) {
       const data: UpdateProjectDto = { title: trimmed, notes: notes || undefined };
       updateProject.mutate(

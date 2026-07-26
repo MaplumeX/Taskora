@@ -212,10 +212,6 @@ function TagForm({
 
   const submit = () => {
     const trimmed = title.trim();
-    if (!trimmed) {
-      toast.error(t('common:titleRequired'));
-      return;
-    }
     if (isEdit && tag) {
       const data: UpdateTagDto = {
         title: trimmed,
@@ -335,10 +331,6 @@ function TagGroupForm({
 
   const submit = () => {
     const trimmed = title.trim();
-    if (!trimmed) {
-      toast.error(t('common:titleRequired'));
-      return;
-    }
     createGroup.mutate(
       { title: trimmed },
       {
