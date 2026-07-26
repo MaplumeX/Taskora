@@ -102,6 +102,15 @@ export function TaskItem({
         selectionState === 'expanded' &&
           'rounded-xl border border-border/50 bg-card shadow-sm',
       )}
+      onKeyDown={(e) => {
+        if (!expanded || e.key !== 'Escape' || !onRowClick) return;
+        const target = e.target as HTMLElement;
+        const tag = target.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA') {
+          e.preventDefault();
+          onRowClick();
+        }
+      }}
     >
       <div
         className={cn(
