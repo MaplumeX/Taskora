@@ -184,9 +184,9 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 
 `autoFocusAndSelect` 仅在 `value` 非空时调 `select()`（空标题场景无意义）。
 
-### 不替换对话框编辑流程
+### 标题内联编辑为唯一入口
 
-内联编辑仅覆盖标题字段。详情页的「编辑」按钮仍打开 `ProjectForm` / `AreaForm` 对话框（以编辑 notes 等附加字段），两者互不冲突。
+内联编辑仅覆盖标题字段。详情页不再提供「编辑」/「删除」文案按钮——标题由 `InlineTitleEdit` 直接编辑，删除通过侧边栏底栏入口或在 `Projects.tsx` / `Areas.tsx` 列表页操作。`ProjectForm` / `AreaForm` 对话框仅用于列表页的新建场景。
 
 ---
 
