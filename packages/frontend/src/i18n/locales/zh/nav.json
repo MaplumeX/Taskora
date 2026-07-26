@@ -7,11 +7,8 @@
   "logbook": "日志",
   "trash": "废纸篓",
   "projects": "项目",
-  "areas": "区域",
   "tags": "标签",
   "collapse": "收起{{label}}",
   "expand": "展开{{label}}",
-  "emptyProjects": "暂无项目",
-  "emptyAreas": "暂无区域",
   "emptyTags": "暂无标签"
 }

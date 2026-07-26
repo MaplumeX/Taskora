@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "侧边栏组件布局规范、项目/区域详情页与 InlineTitleEdit 约定，重构 section 需遵循"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "pages/components 目录布局，删除 Projects/Areas 页面后需同步更新"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "清理 nav/area/project 无引用 key 需遵循 i18n 规范"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "React Query useProjectsQuery/useAreasQuery 数据获取与失效约定"}

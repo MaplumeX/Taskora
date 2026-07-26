@@ -186,7 +186,7 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 
 ### 标题内联编辑为唯一入口
 
-内联编辑仅覆盖标题字段。详情页不再提供「编辑」/「删除」文案按钮——标题由 `InlineTitleEdit` 直接编辑，删除通过侧边栏底栏入口或在 `Projects.tsx` / `Areas.tsx` 列表页操作。`ProjectForm` / `AreaForm` 对话框仅用于列表页的新建场景。
+内联编辑仅覆盖标题字段。详情页不再提供「编辑」/「删除」文案按钮——标题由 `InlineTitleEdit` 直接编辑，删除通过侧边栏底栏入口操作（项目/区域的 list 管理页已移除，`ProjectForm` / `AreaForm` 对话框已删除）。
 
 ---
 
@@ -214,7 +214,7 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 
 ### 展示规则
 
-- **列表项**（`TaskItem` 折叠态 / `ProjectItem` / `AreaItem` / 侧边栏 `CollapsibleSection` 子项）：`{item.title || t('xxx:newItemPlaceholder')}`，空标题时 className 用 `text-muted-foreground`，有标题时 `text-foreground`。侧边栏 tag 子项用 `tag:new`（「新标签」/「New Tag」）。
+- **列表项**（`TaskItem` 折叠态 / `ProjectItem` / 侧边栏 `SidebarAreaRow` 与 `SidebarProjectSection` 子项）：`{item.title || t('xxx:newItemPlaceholder')}`，空标题时 className 用 `text-muted-foreground`，有标题时 `text-foreground`。侧边栏 tag 子项用 `tag:new`（「新标签」/「New Tag`）。
 - **详情页标题**（`InlineTitleEdit`）：已有 `{value || placeholder}` 展示逻辑，placeholder 传 `t('xxx:newItemPlaceholder')`。
 - **展开态 Input**（`TaskItem` 展开态）：`value` 始终为实际存储值，`placeholder={t('task:newTaskPlaceholder')}`。
 

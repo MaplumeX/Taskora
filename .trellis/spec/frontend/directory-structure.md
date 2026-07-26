@@ -54,9 +54,7 @@ packages/frontend/
         ├── Upcoming.tsx
         ├── Anytime.tsx
         ├── Someday.tsx
-        ├── Projects.tsx
         ├── ProjectDetail.tsx
-        ├── Areas.tsx
         ├── AreaDetail.tsx
         └── Trash.tsx
 ```

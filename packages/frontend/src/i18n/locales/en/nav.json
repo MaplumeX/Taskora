@@ -7,11 +7,8 @@
   "logbook": "Logbook",
   "trash": "Trash",
   "projects": "Projects",
-  "areas": "Areas",
   "tags": "Tags",
   "collapse": "Collapse {{label}}",
   "expand": "Expand {{label}}",
-  "emptyProjects": "No projects",
-  "emptyAreas": "No areas",
   "emptyTags": "No tags"
 }
