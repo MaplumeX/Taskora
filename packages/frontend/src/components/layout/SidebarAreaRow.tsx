@@ -54,15 +54,9 @@ export function SidebarAreaRow({ area, projects }: Props) {
           />
         </button>
       </div>
-      {open && (
+      {open && projects.length > 0 && (
         <div className="ml-4 flex flex-col gap-0.5 border-l pl-2">
-          {projects.length === 0 ? (
-            <span className="px-3 py-1 text-xs text-muted-foreground/70">
-              {t('area:noProjects')}
-            </span>
-          ) : (
-            projects.map((p) => <ProjectItem key={p.id} project={p} />)
-          )}
+          {projects.map((p) => <ProjectItem key={p.id} project={p} showChevron={false} />)}
         </div>
       )}
     </div>

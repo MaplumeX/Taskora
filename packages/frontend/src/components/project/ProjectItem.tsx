@@ -9,9 +9,10 @@ import { cn } from '@/lib/utils';
 interface Props {
   project: ProjectResponseDto;
   taskCount?: number;
+  showChevron?: boolean;
 }
 
-export function ProjectItem({ project, taskCount }: Props) {
+export function ProjectItem({ project, taskCount, showChevron = true }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   return (
@@ -30,7 +31,7 @@ export function ProjectItem({ project, taskCount }: Props) {
       {typeof taskCount === 'number' && (
         <span className="text-xs text-muted-foreground">{taskCount}</span>
       )}
-      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+      {showChevron && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
     </button>
   );
 }
