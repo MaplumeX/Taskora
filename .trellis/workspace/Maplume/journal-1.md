@@ -435,3 +435,36 @@ Eliminated duplicated title in expanded task rows: moved the editable title inpu
 ### Next Steps
 
 - None - task complete
+
+
+## Session 11: 合并侧边栏项目与区域，删除 index 页面与路由
+
+**Date**: 2026-07-26
+**Task**: 合并侧边栏项目与区域，删除 index 页面与路由
+**Branch**: `main`
+
+### Summary
+
+将侧边栏独立的「项目」「区域」两个 section 合并为一个以「项目」为标题的统一区域：顶部列出无区域归属的项目，下方每个区域作为带折叠按钮的条目（NavLink 进区域详情 + chevron 切换展开），展开后用 ProjectItem 渲染该区域下的项目，空态显示 area:noProjects。新建 SidebarProjectSection、SidebarAreaRow 组件，重构 Sidebar.tsx 移除旧两个 CollapsibleSection。删除 /projects、/areas index 路由及 Projects.tsx、Areas.tsx 页面，删除无引用的 AreaItem/AreaForm/ProjectForm 组件。清理 zh/en 无引用 i18n 键（nav:areas、nav:emptyProjects、nav:emptyAreas、area:empty、project:empty）。更新 frontend spec（directory-structure、component-guidelines）。tsc/eslint/i18n parity 全通过。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `cab82ff` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
