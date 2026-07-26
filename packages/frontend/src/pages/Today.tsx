@@ -11,7 +11,7 @@ export default function Today() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight">{t('nav:today')}</h1>
+      <h1 className="text-xl font-semibold tracking-tight">{t('nav:today')}</h1>
       <p className="text-sm text-muted-foreground">{todayISO()}</p>
       {isLoading ? (
         <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>

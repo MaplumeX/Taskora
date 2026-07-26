@@ -38,7 +38,7 @@ export default function ProjectDetail() {
               }}
             />
           ) : (
-            <h1 className="text-2xl font-semibold tracking-tight">{t('project:defaultTitle')}</h1>
+            <h1 className="text-xl font-semibold tracking-tight">{t('project:defaultTitle')}</h1>
           )}
         </div>
       </div>

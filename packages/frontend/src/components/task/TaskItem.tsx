@@ -103,7 +103,7 @@ export function TaskItem({
     >
       <div
         className={cn(
-          'flex h-12 items-center gap-3 px-2 transition-opacity',
+          'flex h-10 items-center gap-3 px-2 transition-opacity',
           exiting && 'task-complete-anim',
         )}
         onClick={(e) => {
@@ -158,7 +158,7 @@ export function TaskItem({
               {current.tags.slice(0, 5).map((tag) => (
                 <span
                   key={tag.id}
-                  className="h-2.5 w-2.5 rounded-full"
+                  className="h-2 w-2 rounded-full"
                   style={{ backgroundColor: tag.color }}
                   title={tag.title}
                 />
@@ -175,7 +175,7 @@ export function TaskItem({
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7 text-[#CC4444] opacity-0 transition-opacity group-hover:opacity-100"
+              className="h-7 w-7 text-destructive opacity-0 transition-opacity group-hover:opacity-100"
               onClick={(e) => {
                 e.stopPropagation();
                 onTrash();

@@ -9,7 +9,7 @@ export default function Someday() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-2xl font-semibold tracking-tight">{t('nav:someday')}</h1>
+      <h1 className="text-xl font-semibold tracking-tight">{t('nav:someday')}</h1>
       {isLoading ? (
         <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>
       ) : isError ? (
