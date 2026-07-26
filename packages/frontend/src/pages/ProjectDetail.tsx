@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useProjectsQuery, useUpdateProject } from '@/lib/hooks/useProjects';
@@ -11,7 +11,6 @@ import { toast } from 'sonner';
 export default function ProjectDetail() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const location = useLocation();
   const autoEdit = (location.state as { editTitle?: boolean } | null)?.editTitle === true;
   const { data: projects = [] } = useProjectsQuery();
@@ -23,12 +22,6 @@ export default function ProjectDetail() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <button
-            onClick={() => navigate('/projects')}
-            className="mb-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            {t('common:backTo', { label: t('nav:projects') })}
-          </button>
           {project ? (
             <InlineTitleEdit
               value={project.title}
