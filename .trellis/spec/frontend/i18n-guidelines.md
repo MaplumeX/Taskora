@@ -18,10 +18,11 @@
 ```
 src/i18n/
 ├── config.ts           # i18next 实例配置（资源静态 import、检测、fallback）
-├── LanguageToggle.tsx  # Sidebar 底部语言切换组件
 └── locales/
     ├── zh/             # 中文资源（9 个 namespace JSON）
     └── en/             # 英文资源（同结构，key 集合必须与 zh 一致）
+
+> 语言 / 主题切换入口位于 `components/layout/SidebarBottomBar.tsx`（侧边栏底栏右侧“设置”按钮的下拉菜单内）。
 ```
 
 ### Namespace 划分

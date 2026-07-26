@@ -60,7 +60,7 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 
 **FOUC 防护（关键）**：在 `main.tsx` 的 `ReactDOM.createRoot().render()` **之前**同步调用 `applyThemeFromStorage()`。不能等 React 渲染后再加 `.dark` class，否则首帧会浅后暗闪屏。
 
-**切换器**：Sidebar 底部单点，三态循环 light → dark → system → light。图标用 `SunMedium`/`Moon`/`Monitor`，避开 Sidebar 已用于 Today 的 `Sun`。
+**切换器**：Sidebar 底栏 `SidebarBottomBar` 右侧“设置”按钮下拉菜单内单点，三态循环 light → dark → system → light。图标用 `SunMedium`/`Moon`/`Monitor`，避开 Sidebar 已用于 Today 的 `Sun`。
 
 ---
 
@@ -164,6 +164,39 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 - 表单 Input 配 `<Label>`
 - 按钮 有 `aria-label`（图标按钮）
 - 图标小菜单用 shadcn/ui 的 Popover 组件（基于 Radix Popover）
+
+---
+
+## 详情页标题内联编辑（InlineTitleEdit 模式）
+
+项目 / 区域详情页的标题采用点击即编辑的内联模式（不弹 Dialog），组件位于 `src/components/common/InlineTitleEdit.tsx`。
+
+### 交互状态机
+
+- `display` 态：`<h1>` 级文本（保留 `text-2xl font-semibold tracking-tight`），点击进入 `edit` 态。
+- `edit` 态：扁平无边框 `<input>`（`border-0 px-0 py-0 shadow-none focus-visible:ring-0 bg-transparent`），与 `TaskRowExpanded` 标题输入框风格一致。
+- `Enter` / 失焦 → 提交；`Escape` → 取消。
+- 提交规则：`trim()` 后为空 → toast `common:titleRequired` + 回滚原标题 + **保持编辑态**供重试；与原值相同 → 仅退出编辑态不调 `onSubmit`；否则调 `onSubmit(next)` 并乐观退出编辑态（不等 mutation）。
+
+### 新建后自动进入编辑态
+
+从侧边栏底栏「新增」菜单创建空标题条目 → `navigate(..., { state: { editTitle: true } })` → 详情页读 `location.state.editTitle` → 传 `autoFocusAndSelect` 给 `InlineTitleEdit`。路由 state 是一次性的（不持久化到 URL，刷新即退化），符合「刚创建时编辑」语义。
+
+`autoFocusAndSelect` 仅在 `value` 非空时调 `select()`（空标题场景无意义）。
+
+### 不替换对话框编辑流程
+
+内联编辑仅覆盖标题字段。详情页的「编辑」按钮仍打开 `ProjectForm` / `AreaForm` 对话框（以编辑 notes 等附加字段），两者互不冲突。
+
+---
+
+## 侧边栏底栏（SidebarBottomBar）
+
+`src/components/layout/SidebarBottomBar.tsx` 抽离自 `Sidebar.tsx`，布局左右两端：
+
+- **左：新增按钮**（`Plus` + `common:add`）→ `DropdownMenu` 含 `common:newProject` / `common:newArea`。点击直接 `createProject.mutate({ title: '' })` / `createArea.mutate({ title: '' })`（后端 `@IsString()` 允许空串），成功后 `navigate` 带 `state.editTitle: true` 跳转详情页。`isPending` 时禁用菜单项防重复提交。
+- **右：设置按钮**（齿轮 `Settings`，icon-only + `aria-label`）→ `DropdownMenu` 收纳主题切换（`useTheme` 的 `cycle()`，当前模式图标 + `theme:<mode>` 文案）与语言切换（`i18n.changeLanguage`）。两组用 `DropdownMenuSeparator` 分隔。
+
 ---
 
 ## 拖拽排序（DnD）模式
