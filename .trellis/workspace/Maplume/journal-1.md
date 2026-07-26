@@ -502,3 +502,36 @@ Referenced Milesto's TaskEditorPaper design to give the expanded task editor a '
 ### Next Steps
 
 - None - task complete
+
+
+## Session 13: Refactor UI state: move expand/selected out of URL into Zustand stores
+
+**Date**: 2026-07-26
+**Task**: Refactor UI state: move expand/selected out of URL into Zustand stores
+**Branch**: `main`
+
+### Summary
+
+Investigated why URL shows ?expand=<id> on task expand; identified root cause as state-management spec restricting Zustand to auth/token only, forcing UI state (expandedId via URL query, editTitle via router location.state with as-cast, theme via hand-rolled hook) into suboptimal carriers. Created task, planned full scope (prd/design/implement). Implemented: added uiInteraction.store.ts (non-persist: expandedId, pendingAutoEditId) and theme.store.ts (persist + applyTheme side-effect); useTaskRowSelection/useTheme delegate to stores keeping stable hook APIs (zero consumer changes); ContentBottomBar/SidebarBottomBar/ProjectDetail/AreaDetail migrated to store; removed as-cast editTitle pattern. Relaxed 5 spec files to 'Zustand for cross-component UI state, no server data caching'. typecheck/lint/build all green. URL now free of ?expand=; refresh loses expand/auto-edit (accepted).
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `29dfe01` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
