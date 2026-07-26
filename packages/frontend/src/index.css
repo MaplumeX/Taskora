@@ -5,66 +5,66 @@
 @layer base {
   :root {
     --background: 0 0% 100%;
-    --foreground: 0 0% 20%;
+    --foreground: 220 14% 18%;
 
     --card: 0 0% 100%;
-    --card-foreground: 0 0% 20%;
+    --card-foreground: 220 14% 18%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 0 0% 20%;
+    --popover-foreground: 220 14% 18%;
 
-    /* Things3 blue #4477CE ≈ hsl(218 45% 54%) */
-    --primary: 218 45% 54%;
+    /* Things3 blue */
+    --primary: 218 52% 50%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 0 0% 97%;
-    --secondary-foreground: 0 0% 20%;
+    --secondary: 220 14% 97%;
+    --secondary-foreground: 220 14% 18%;
 
-    --muted: 0 0% 97%;
-    --muted-foreground: 0 0% 60%;
+    --muted: 220 14% 97%;
+    --muted-foreground: 220 8% 46%;
 
-    --accent: 0 0% 97%;
-    --accent-foreground: 0 0% 20%;
+    --accent: 220 14% 93%;
+    --accent-foreground: 220 14% 18%;
 
     --destructive: 0 58% 53%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 0 0% 90%;
-    --input: 0 0% 90%;
-    --ring: 218 45% 54%;
+    --border: 220 14% 90%;
+    --input: 220 14% 90%;
+    --ring: 218 52% 50%;
 
-    --radius: 0.5rem;
+    --radius: 0.375rem;
   }
 
   .dark {
-    --background: 222 23% 10%;
-    --foreground: 210 20% 92%;
+    --background: 220 14% 11%;
+    --foreground: 220 14% 88%;
 
-    --card: 222 23% 12%;
-    --card-foreground: 210 20% 92%;
+    --card: 220 14% 13%;
+    --card-foreground: 220 14% 88%;
 
-    --popover: 222 23% 12%;
-    --popover-foreground: 210 20% 92%;
+    --popover: 220 14% 13%;
+    --popover-foreground: 220 14% 88%;
 
-    /* Things3 blue, brightened for dark background to avoid muddiness */
-    --primary: 218 65% 62%;
+    /* Things3 blue, brightened for dark background */
+    --primary: 218 60% 58%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 222 20% 16%;
-    --secondary-foreground: 210 20% 92%;
+    --secondary: 220 14% 16%;
+    --secondary-foreground: 220 14% 88%;
 
-    --muted: 222 20% 16%;
-    --muted-foreground: 215 16% 65%;
+    --muted: 220 14% 16%;
+    --muted-foreground: 220 8% 58%;
 
-    --accent: 222 20% 18%;
-    --accent-foreground: 210 20% 92%;
+    --accent: 220 14% 18%;
+    --accent-foreground: 220 14% 88%;
 
     --destructive: 0 63% 50%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 222 18% 22%;
-    --input: 222 18% 22%;
-    --ring: 218 65% 62%;
+    --border: 220 14% 22%;
+    --input: 220 14% 22%;
+    --ring: 218 60% 58%;
   }
 }
 
@@ -74,13 +74,18 @@
   }
   body {
     @apply bg-background text-foreground;
+    font-family:
+      -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', system-ui,
+      sans-serif;
     font-feature-settings: 'rlig' 1, 'calt' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
   }
 }
 
 @layer utilities {
   .task-complete-anim {
-    animation: task-complete 400ms ease forwards;
+    animation: task-complete 280ms ease forwards;
   }
   @keyframes task-complete {
     0% {
@@ -99,7 +104,7 @@
       transform: scale(1);
     }
     50% {
-      transform: scale(1.25);
+      transform: scale(1.12);
     }
     100% {
       transform: scale(1);

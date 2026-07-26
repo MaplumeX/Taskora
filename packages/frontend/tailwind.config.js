@@ -5,6 +5,16 @@ module.exports = {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
     extend: {
+      fontFamily: {
+        sans: [
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'SF Pro Text',
+          'Segoe UI',
+          'system-ui',
+          'sans-serif',
+        ],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',

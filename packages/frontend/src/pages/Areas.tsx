@@ -74,7 +74,7 @@ export default function Areas() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">{t('nav:areas')}</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{t('nav:areas')}</h1>
         <Button onClick={() => setOpen(true)}>{t('area:create')}</Button>
       </div>
       {isLoading ? (

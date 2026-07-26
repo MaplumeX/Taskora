@@ -68,7 +68,7 @@ export default function Projects() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold tracking-tight">{t('nav:projects')}</h1>
+        <h1 className="text-xl font-semibold tracking-tight">{t('nav:projects')}</h1>
         <Button onClick={() => setOpen(true)}>{t('project:create')}</Button>
       </div>
       {isLoading ? (

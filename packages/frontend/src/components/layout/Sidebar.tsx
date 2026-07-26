@@ -148,7 +148,7 @@ export function Sidebar() {
   const { data: tags = [] } = useTagsQuery();
 
   return (
-    <aside className="flex h-screen w-60 flex-col border-r bg-secondary/40">
+    <aside className="flex h-screen w-60 flex-col border-r bg-secondary/60 backdrop-blur-sm">
       <div className="px-4 pb-2 pt-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>

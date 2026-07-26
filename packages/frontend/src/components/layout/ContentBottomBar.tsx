@@ -42,7 +42,7 @@ export function ContentBottomBar() {
 
   return (
     <>
-      <footer className="flex h-12 shrink-0 items-center justify-center gap-2 border-t bg-background px-4">
+      <footer className="flex h-11 shrink-0 items-center justify-center gap-2 border-t bg-background px-4">
         <Button
           variant="ghost"
           size="icon"
