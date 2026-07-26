@@ -1,6 +1,6 @@
 {
   "empty": "没有任务",
-  "newTask": "新任务",
+  "newTaskPlaceholder": "新建任务",
   "createFailed": "创建失败",
   "subtaskCreateFailed": "子任务创建失败",
   "deleteFailed": "删除失败",

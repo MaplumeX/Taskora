@@ -103,7 +103,7 @@ export default function AreaDetail() {
           {area ? (
             <InlineTitleEdit
               value={area.title}
-              placeholder={t('area:titlePlaceholder')}
+              placeholder={t('area:newItemPlaceholder')}
               autoFocusAndSelect={autoEdit}
               onSubmit={(next) => {
                 if (!area) return;
