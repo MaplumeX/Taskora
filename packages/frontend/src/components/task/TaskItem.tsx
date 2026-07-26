@@ -1,7 +1,6 @@
 import * as React from 'react';
 import { Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -45,7 +44,6 @@ export function TaskItem({
   const expanded = selectionState === 'expanded';
 
   const updateTask = useUpdateTask();
-  const [searchParams] = useSearchParams();
   const [title, setTitle] = React.useState(current.title);
   const titleInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -54,15 +52,18 @@ export function TaskItem({
     setTitle(current.title);
   }, [current.title]);
 
-  // Auto-focus + select title when this row was expanded via the "add task" flow.
+  // Auto-focus title on expand (caret at end, no full selection).
   React.useEffect(() => {
     if (!expanded) return;
-    const expandId = searchParams.get('expand');
-    if (expandId === task.id && current.title === '') {
-      titleInputRef.current?.focus();
-      titleInputRef.current?.select();
-    }
-  }, [expanded, searchParams, task.id, current.title]);
+    const el = titleInputRef.current;
+    if (!el) return;
+    const id = requestAnimationFrame(() => {
+      el.focus();
+      const len = el.value.length;
+      el.setSelectionRange(len, len);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [expanded]);
 
   const commitTitle = () => {
     const trimmed = title.trim();
@@ -134,7 +135,7 @@ export function TaskItem({
             }}
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              'flex-1 border-0 px-0 text-sm font-medium shadow-none focus-visible:ring-0',
+              'flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0',
               completed && 'text-muted-foreground line-through',
             )}
           />

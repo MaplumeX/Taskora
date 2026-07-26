@@ -21,8 +21,8 @@ export interface InlineTitleEditProps {
  * and the display mode falls back to `placeholder`.
  *
  * When `autoFocusAndSelect` is true (e.g. after creation with empty title),
- * the component starts in edit mode on mount and focuses the input. `select()`
- * is only called when `value` is non-empty.
+ * the component starts in edit mode on mount and focuses the input. The caret
+ * is placed at the end without selecting the existing text.
  */
 export function InlineTitleEdit({
   value,
@@ -62,7 +62,7 @@ export function InlineTitleEdit({
     setEditing(false);
   }, [draft, value, onSubmit]);
 
-  // Focus + select on entering edit mode
+  // Focus on entering edit mode (caret at end, no full selection)
   React.useEffect(() => {
     if (!editing) return;
     const el = inputRef.current;
@@ -70,10 +70,11 @@ export function InlineTitleEdit({
     // Focus on next paint so the input is mounted
     const id = requestAnimationFrame(() => {
       el.focus();
-      if (value) el.select();
+      const len = el.value.length;
+      el.setSelectionRange(len, len);
     });
     return () => cancelAnimationFrame(id);
-  }, [editing, value]);
+  }, [editing]);
 
   if (!editing) {
     return (
