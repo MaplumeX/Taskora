@@ -1,7 +1,4 @@
 import * as React from 'react';
-import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
-
 import { cn } from '@/lib/utils';
 
 export interface InlineTitleEditProps {
@@ -17,9 +14,11 @@ export interface InlineTitleEditProps {
  * Inline-editable title: shows an <h1> in display mode and a flat borderless
  * <input> in edit mode. Press Enter / blur to submit, Escape to cancel.
  *
- * - Empty (after trim) → toast error + stay in edit mode (rollback to value).
  * - Same as original → exit edit mode, no submit.
  * - Otherwise → call onSubmit + exit edit mode immediately (optimistic close).
+ *
+ * Empty title is allowed: submitting an empty value will call `onSubmit('')`
+ * and the display mode falls back to `placeholder`.
  *
  * When `autoFocusAndSelect` is true (e.g. after creation with empty title),
  * the component starts in edit mode on mount and focuses the input. `select()`
@@ -33,7 +32,6 @@ export function InlineTitleEdit({
   className,
   inputClassName,
 }: InlineTitleEditProps) {
-  const { t } = useTranslation('common');
   const [editing, setEditing] = React.useState(autoFocusAndSelect);
   const [draft, setDraft] = React.useState(value);
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -56,20 +54,13 @@ export function InlineTitleEdit({
 
   const commit = React.useCallback(() => {
     const trimmed = draft.trim();
-    if (trimmed === '') {
-      toast.error(t('titleRequired'));
-      setDraft(value);
-      inputRef.current?.focus();
-      // keep editing so the user can retry
-      return;
-    }
     if (trimmed === value.trim()) {
       setEditing(false);
       return;
     }
     onSubmit(trimmed);
     setEditing(false);
-  }, [draft, value, onSubmit, t]);
+  }, [draft, value, onSubmit]);
 
   // Focus + select on entering edit mode
   React.useEffect(() => {
@@ -90,6 +81,7 @@ export function InlineTitleEdit({
         onClick={enterEdit}
         className={cn(
           'cursor-text text-2xl font-semibold tracking-tight',
+          !value && 'text-muted-foreground',
           className,
         )}
       >
@@ -115,7 +107,7 @@ export function InlineTitleEdit({
         }
       }}
       className={cn(
-        'border-0 bg-transparent px-0 py-0 text-2xl font-semibold tracking-tight shadow-none focus-visible:ring-0 w-full outline-none',
+        'border-0 bg-transparent px-0 py-0 text-2xl font-semibold tracking-tight shadow-none focus-visible:ring-0 w-full outline-none placeholder:text-muted-foreground',
         inputClassName,
         className,
       )}
