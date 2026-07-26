@@ -8,5 +8,6 @@
   "defaultTitle": "项目",
   "noTasks": "项目中没有任务",
   "deleted": "项目已删除",
-  "created": "项目已创建"
+  "created": "项目已创建",
+  "newItemPlaceholder": "新建项目"
 }
