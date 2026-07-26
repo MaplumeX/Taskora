@@ -1,0 +1,7 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "frontend spec index — layer overview"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "core spec being relaxed; Zustand usage rules"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "stores/ folder description update"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "useTaskRowSelection + expandedId section"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "client-state guidance consistency"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "avoid as-casts (editTitle refactor)"}

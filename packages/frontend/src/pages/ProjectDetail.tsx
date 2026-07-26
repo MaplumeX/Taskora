@@ -1,8 +1,10 @@
 import * as React from 'react';
-import { useParams, useLocation } from 'react-router-dom';
+import { useEffect } from 'react';
+import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useProjectsQuery, useUpdateProject } from '@/lib/hooks/useProjects';
+import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import { TaskListView } from '@/components/task/TaskListView';
@@ -13,8 +15,12 @@ import { toast } from 'sonner';
 export default function ProjectDetail() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
-  const location = useLocation();
-  const autoEdit = (location.state as { editTitle?: boolean } | null)?.editTitle === true;
+  const pendingAutoEditId = useUiInteractionStore((s) => s.pendingAutoEditId);
+  const clearPendingAutoEditId = useUiInteractionStore((s) => s.clearPendingAutoEditId);
+  const autoEdit = pendingAutoEditId === id;
+  useEffect(() => {
+    if (autoEdit) clearPendingAutoEditId();
+  }, [autoEdit, clearPendingAutoEditId]);
   const { data: projects = [] } = useProjectsQuery();
   const project = projects.find((p) => p.id === id);
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ projectId: id });

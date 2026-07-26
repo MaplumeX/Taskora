@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
 import { Plus, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -9,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { SearchModal } from '@/components/search/SearchModal';
 import { useCreateTask } from '@/lib/hooks/useTasks';
 import { usePageTaskContext } from '@/lib/hooks/usePageTaskContext';
+import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 import { toast } from 'sonner';
 
 export function ContentBottomBar() {
@@ -16,7 +16,7 @@ export function ContentBottomBar() {
   const [searchOpen, setSearchOpen] = useState(false);
   const createTask = useCreateTask();
   const ctx = usePageTaskContext();
-  const [, setParams] = useSearchParams();
+  const setExpandedId = useUiInteractionStore((s) => s.setExpandedId);
 
   // Cmd/Ctrl+K → open search modal
   useEffect(() => {
@@ -34,7 +34,7 @@ export function ContentBottomBar() {
     const payload: CreateTaskDto = { title: '', ...ctx };
     createTask.mutate(payload, {
       onSuccess: (created) => {
-        setParams({ expand: created.id }, { replace: true });
+        setExpandedId(created.id);
       },
       onError: () => toast.error(t('common:createFailed')),
     });

@@ -7,8 +7,8 @@
 ## Overview
 
 - 数据获取：TanStack Query v5
-- 客户端状态：Zustand
-- 自定义 hooks 在 `src/lib/hooks/`
+- 客户端状态：Zustand（auth、跨组件 UI 态、主题等）
+- 自定义 hooks 在 `src/lib/hooks/`（可委托 store 透传，作为稳定 API 供消费方使用）
 
 ---
 
