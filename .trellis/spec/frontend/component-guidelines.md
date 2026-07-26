@@ -129,6 +129,8 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 
 ### 展开编辑态纵向布局（TaskRowExpanded）
 
+展开区根 `<div>` 使用 paper 容器样式：`rounded-xl border border-border/50 bg-card px-3 py-2.5 shadow-sm`，视觉上从列表行中浮起为独立卡片。外层 `TaskItem` 展开态保留 `bg-muted/60` 作为画布衬托。
+
 展开区从上到下依次为：
 
 1. **标题** — 无边框 Input（`border-0 px-0 py-0 shadow-none focus-visible:ring-0`），onBlur commit。标题/备注采用扁平无边框样式以体现"一体"的编辑体验，不画 Input 边界。
