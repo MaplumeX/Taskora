@@ -19,12 +19,10 @@ import { CSS } from '@dnd-kit/utilities';
 
 import type { ProjectResponseDto } from '@taskora/shared';
 
-import { useAreasQuery, useDeleteArea, useUpdateArea } from '@/lib/hooks/useAreas';
+import { useAreasQuery, useUpdateArea } from '@/lib/hooks/useAreas';
 import { useProjectsQuery, useReorderProjects } from '@/lib/hooks/useProjects';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
-import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
-import { AreaForm } from '@/components/area/AreaForm';
 import { ProjectItem } from '@/components/project/ProjectItem';
 import { TaskListView } from '@/components/task/TaskListView';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
@@ -62,8 +60,6 @@ export default function AreaDetail() {
   const projects = allProjects.filter((p) => p.areaId === id);
   const reorderProjects = useReorderProjects();
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ areaId: id });
-  const [editOpen, setEditOpen] = React.useState(false);
-  const deleteArea = useDeleteArea();
   const updateArea = useUpdateArea();
 
   const sensors = useSensors(
@@ -76,18 +72,6 @@ export default function AreaDetail() {
     const ids = projects.map((p) => p.id);
     const reordered = arrayMove(ids, ids.indexOf(active.id as string), ids.indexOf(over.id as string));
     reorderProjects.mutate(reordered);
-  };
-
-  const handleDelete = () => {
-    if (!area) return;
-    if (!window.confirm(t('area:deleteConfirm', { name: area.title }))) return;
-    deleteArea.mutate(area.id, {
-      onSuccess: () => {
-        toast.success(t('area:deleted'));
-        navigate('/areas');
-      },
-      onError: () => toast.error(t('area:deleteFailedHint')),
-    });
   };
 
   return (
@@ -119,13 +103,7 @@ export default function AreaDetail() {
             <h1 className="text-2xl font-semibold tracking-tight">{t('area:defaultTitle')}</h1>
           )}
         </div>
-        <Button variant="ghost" onClick={() => setEditOpen(true)}>
-          {t('common:edit')}
-        </Button>
-        <Button variant="ghost" className="text-[#CC4444]" onClick={handleDelete}>
-          {t('common:delete')}
-        </Button>
-      </div>
+        </div>
 
       <h2 className="text-sm font-medium text-muted-foreground">{t('area:projectsLabel')}</h2>
       {projects.length === 0 ? (
@@ -153,7 +131,6 @@ export default function AreaDetail() {
         <TaskListView tasks={tasks} emptyHint={t('area:noTasks')} />
       )}
 
-      {area && <AreaForm open={editOpen} onOpenChange={setEditOpen} area={area} />}
-    </div>
+      </div>
   );
 }
