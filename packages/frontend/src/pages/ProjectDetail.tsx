@@ -4,7 +4,9 @@ import { useTranslation } from 'react-i18next';
 
 import { useProjectsQuery, useUpdateProject } from '@/lib/hooks/useProjects';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
+import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import { TaskListView } from '@/components/task/TaskListView';
+import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { toast } from 'sonner';
 
@@ -16,6 +18,7 @@ export default function ProjectDetail() {
   const { data: projects = [] } = useProjectsQuery();
   const project = projects.find((p) => p.id === id);
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ projectId: id });
+  const showSkeleton = useDelayedLoading(isLoading);
   const updateProject = useUpdateProject();
 
   return (
@@ -42,10 +45,10 @@ export default function ProjectDetail() {
           )}
         </div>
       </div>
-      {isLoading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>
+      {showSkeleton ? (
+        <TaskListSkeleton />
       ) : isError ? (
-        <p className="py-8 text-center text-sm text-[#CC4444]">{t('common:loadFailed')}</p>
+        <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
         <TaskListView tasks={tasks} emptyHint={t('project:noTasks')} />
       )}

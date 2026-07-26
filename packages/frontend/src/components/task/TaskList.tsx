@@ -109,9 +109,24 @@ onReorder,
 
   if (topTasks.length === 0) {
     return (
-      <div className="mt-8 flex flex-col items-center justify-center gap-2 py-12 text-sm text-muted-foreground">
-        <span className="text-3xl">🎉</span>
-        {emptyHint ?? t('task:empty')}
+      <div className="mt-12 flex flex-col items-center justify-center gap-3 py-16 text-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+          <svg
+            className="h-5 w-5 text-muted-foreground"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M9 11l3 3L22 4" />
+            <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
+          </svg>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {emptyHint ?? t('task:empty')}
+        </p>
       </div>
     );
   }

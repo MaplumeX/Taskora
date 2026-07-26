@@ -6,13 +6,16 @@ import type { TaskResponseDto } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
 import { TaskCheckbox } from '@/components/task/TaskCheckbox';
+import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
 import { TaskDateBadge } from '@/components/task/TaskDateBadge';
 import { useTasksQuery, useRestoreTask } from '@/lib/hooks/useTasks';
+import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import { toast } from 'sonner';
 
 export default function Trash() {
   const { t } = useTranslation();
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ view: 'trash' });
+  const showSkeleton = useDelayedLoading(isLoading);
   const restoreTask = useRestoreTask();
 
   const handleRestore = (task: TaskResponseDto) => {
@@ -25,10 +28,10 @@ export default function Trash() {
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-semibold tracking-tight">{t('nav:trash')}</h1>
-      {isLoading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>
+      {showSkeleton ? (
+        <TaskListSkeleton />
       ) : isError ? (
-        <p className="py-8 text-center text-sm text-[#CC4444]">{t('common:loadFailed')}</p>
+        <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : tasks.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">{t('task:trashEmpty')}</p>
       ) : (

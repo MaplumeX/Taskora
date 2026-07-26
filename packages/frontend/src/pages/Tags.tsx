@@ -72,7 +72,14 @@ export default function Tags() {
       </div>
 
       {isLoading ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">{t('common:loading')}</p>
+        <div className="flex flex-col gap-1">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="flex h-10 items-center gap-2 px-2">
+              <div className="skeleton h-2.5 w-2.5 shrink-0 rounded-full" />
+              <div className="skeleton h-3.5 w-32" />
+            </div>
+          ))}
+        </div>
       ) : (
         <>
           {groups.map((group) => (
@@ -131,7 +138,7 @@ function TagGroupSection({
         <h2 className="text-sm font-medium text-muted-foreground">{title}</h2>
         {groupId && tags.length === 0 && (
           <button
-            className="text-xs text-muted-foreground/60 hover:text-[#CC4444]"
+            className="text-xs text-muted-foreground/60 hover:text-destructive"
             onClick={() => {
               if (!window.confirm(t('tag:deleteGroupConfirm', { name: title }))) return;
               deleteGroup.mutate(groupId, {
@@ -162,7 +169,7 @@ function TagGroupSection({
               <span className="flex-1 truncate">{tag.title}</span>
               <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
               <button
-                className="text-muted-foreground hover:text-[#CC4444]"
+                className="text-muted-foreground hover:text-destructive"
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!window.confirm(t('tag:deleteConfirm', { name: tag.title }))) return;
