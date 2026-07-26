@@ -12,5 +12,6 @@
   "noProjects": "No projects in this area",
   "noTasks": "No tasks in this area",
   "projectsLabel": "Projects",
-  "tasksLabel": "Tasks"
+  "tasksLabel": "Tasks",
+  "newItemPlaceholder": "New Area"
 }

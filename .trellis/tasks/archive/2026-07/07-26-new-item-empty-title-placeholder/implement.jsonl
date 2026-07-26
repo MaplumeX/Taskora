@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "TaskItem 折叠/展开态布局、ProjectItem/AreaItem 列表项、InlineTitleEdit 内联编辑交互模式与样式约定"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "跨 namespace t() 调用约定、zh/en key 集合一致性校验、避免模块顶层调 t()"}

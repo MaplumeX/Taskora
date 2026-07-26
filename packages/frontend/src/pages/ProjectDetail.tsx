@@ -48,7 +48,7 @@ export default function ProjectDetail() {
           {project ? (
             <InlineTitleEdit
               value={project.title}
-              placeholder={t('project:titlePlaceholder')}
+              placeholder={t('project:newItemPlaceholder')}
               autoFocusAndSelect={autoEdit}
               onSubmit={(next) => {
                 if (!project) return;

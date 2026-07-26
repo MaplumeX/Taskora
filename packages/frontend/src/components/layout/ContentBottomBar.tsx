@@ -31,7 +31,7 @@ export function ContentBottomBar() {
   }, []);
 
   const handleAddTask = () => {
-    const payload: CreateTaskDto = { title: t('task:newTask'), ...ctx };
+    const payload: CreateTaskDto = { title: '', ...ctx };
     createTask.mutate(payload, {
       onSuccess: (created) => {
         setParams({ expand: created.id }, { replace: true });

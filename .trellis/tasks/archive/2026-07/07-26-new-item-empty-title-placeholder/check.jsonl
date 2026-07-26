@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "校验 zh/en key 集合一致性、确认新增/删除 key 后 parity 通过"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "校验 TaskItem/ProjectItem/AreaItem 展示与内联编辑交互符合既有约定"}

@@ -8,5 +8,6 @@
   "defaultTitle": "Project",
   "noTasks": "No tasks in this project",
   "deleted": "Project deleted",
-  "created": "Project created"
+  "created": "Project created",
+  "newItemPlaceholder": "New Project"
 }
