@@ -199,6 +199,36 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 
 ---
 
+## 内容底栏（ContentBottomBar）
+
+`src/components/layout/ContentBottomBar.tsx` 是页面底部共享栏，跨任务视图复用：
+
+- **左：搜索按钮**（`Search` 图标，`aria-label`）→ 打开 `SearchModal`（`Cmd/Ctrl+K` 快捷键全局监听）。
+- **右：添加任务按钮**（`Plus` 图标，`aria-label`）→ `createTask.mutate({ title: '', ...ctx })`（空标题创建，与项目/区域一致的空标题模式），`ctx` 来自 `usePageTaskContext()`（提供当前页面的 `projectId` / `areaId` / `parentId` 上下文）。成功后 `setParams({ expand: created.id })` 驱动该行展开。
+
+---
+
+## 空标题占位符约定
+
+新建任务/项目/区域统一用 `title: ''` 创建，不持久化占位词作为实际标题。标题为空时 UI 显示占位符（`text-muted-foreground` 淡化），进入编辑态时输入框 value 仍为空串。
+
+### 展示规则
+
+- **列表项**（`TaskItem` 折叠态 / `ProjectItem` / `AreaItem`）：`{item.title || t('xxx:newItemPlaceholder')}`，空标题时 className 用 `text-muted-foreground`，有标题时 `text-foreground`。
+- **详情页标题**（`InlineTitleEdit`）：已有 `{value || placeholder}` 展示逻辑，placeholder 传 `t('xxx:newItemPlaceholder')`。
+- **展开态 Input**（`TaskItem` 展开态）：`value` 始终为实际存储值，`placeholder={t('task:newTaskPlaceholder')}`。
+
+### i18n key 约定
+
+- 列表/详情页占位符用「新建XX」语义：`task:newTaskPlaceholder`（新建任务）、`project:newItemPlaceholder`（新建项目）、`area:newItemPlaceholder`（新建区域）。
+- 对话框表单 Input 的 placeholder 用「XX名称」语义（`titlePlaceholder`），两者不混用。
+
+### 刚创建自动聚焦判定
+
+检测「刚创建需自动聚焦标题输入框」用 `title === ''`（空值判定），**不要**用 `title === t('xxx:占位词')`（字符串匹配）——后者依赖 i18n 文案，语言切换或文案改动会破坏判定。
+
+---
+
 ## 拖拽排序（DnD）模式
 
 ### 库选型：dnd-kit

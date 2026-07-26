@@ -1,6 +1,6 @@
 {
   "empty": "No tasks",
-  "newTask": "New Task",
+  "newTaskPlaceholder": "New Task",
   "createFailed": "Failed to create",
   "subtaskCreateFailed": "Failed to create subtask",
   "deleteFailed": "Failed to delete",

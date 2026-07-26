@@ -58,11 +58,11 @@ export function TaskItem({
   React.useEffect(() => {
     if (!expanded) return;
     const expandId = searchParams.get('expand');
-    if (expandId === task.id && current.title === t('task:newTask')) {
+    if (expandId === task.id && current.title === '') {
       titleInputRef.current?.focus();
       titleInputRef.current?.select();
     }
-  }, [expanded, searchParams, task.id, current.title, t]);
+  }, [expanded, searchParams, task.id, current.title]);
 
   const commitTitle = () => {
     const trimmed = title.trim();
@@ -122,6 +122,7 @@ export function TaskItem({
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             onBlur={commitTitle}
+            placeholder={t('task:newTaskPlaceholder')}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.currentTarget.blur();
@@ -140,10 +141,14 @@ export function TaskItem({
           <span
             className={cn(
               'flex-1 truncate text-left text-sm transition-colors',
-              completed ? 'text-muted-foreground line-through' : 'text-foreground',
+              completed
+                ? 'text-muted-foreground line-through'
+                : current.title
+                  ? 'text-foreground'
+                  : 'text-muted-foreground',
             )}
           >
-            {current.title}
+            {current.title || t('task:newTaskPlaceholder')}
           </span>
         )}
 
