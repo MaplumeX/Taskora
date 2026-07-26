@@ -98,7 +98,8 @@ export function TaskItem({
       className={cn(
         'group flex flex-col transition-colors',
         selectionState === 'selected' && 'bg-muted/60',
-        selectionState === 'expanded' && 'bg-muted/60',
+        selectionState === 'expanded' &&
+          'rounded-xl border border-border/50 bg-card shadow-sm',
       )}
     >
       <div
