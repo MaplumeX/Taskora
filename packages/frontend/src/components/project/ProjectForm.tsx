@@ -52,7 +52,6 @@ export function ProjectForm({ open, onOpenChange, project, defaultAreaId }: Prop
         { id: project.id, data },
         {
           onSuccess: () => {
-            toast.success(t('common:saved'));
             onOpenChange(false);
           },
           onError: () => toast.error(t('common:saveFailed')),
