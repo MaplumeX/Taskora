@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 12
+- **Total Sessions**: 13
 - **Last Active**: 2026-07-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~504 | Active |
+| `journal-1.md` | ~537 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 13 | 2026-07-26 | Refactor UI state: move expand/selected out of URL into Zustand stores | `29dfe01` | `main` |
 | 12 | 2026-07-26 | Paper container for task editor | `a457d46`, `b8ecae3` | `main` |
 | 11 | 2026-07-26 | 合并侧边栏项目与区域，删除 index 页面与路由 | `cab82ff` | `main` |
 | 10 | 2026-07-26 | 新建任务/项目/区域空标题占位符展示 | `3d0d52f` | `feat/new-item-empty-title-placeholder` |
