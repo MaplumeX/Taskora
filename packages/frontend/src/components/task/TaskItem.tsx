@@ -1,11 +1,16 @@
 import * as React from 'react';
 import { Trash2 } from 'lucide-react';
+import { useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { taskKeys, useTaskQuery, useUpdateTask } from '@/lib/hooks/useTasks';
 import { TaskCheckbox } from './TaskCheckbox';
 import { TaskDateBadge } from './TaskDateBadge';
 import { TaskDueDateBadge } from './TaskDueDateBadge';
@@ -32,9 +37,50 @@ export function TaskItem({
   onTrash,
 }: Props) {
   const { t } = useTranslation();
-  const completed = task.status === 'COMPLETED';
+  const queryClient = useQueryClient();
+  const { data: liveTask } = useTaskQuery(task.id);
+  const current = liveTask ?? task;
+  const completed = current.status === 'COMPLETED';
   const [exiting, setExiting] = React.useState(false);
   const expanded = selectionState === 'expanded';
+
+  const updateTask = useUpdateTask();
+  const [searchParams] = useSearchParams();
+  const [title, setTitle] = React.useState(current.title);
+  const titleInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Keep local title in sync with the server value when it changes externally.
+  React.useEffect(() => {
+    setTitle(current.title);
+  }, [current.title]);
+
+  // Auto-focus + select title when this row was expanded via the "add task" flow.
+  React.useEffect(() => {
+    if (!expanded) return;
+    const expandId = searchParams.get('expand');
+    if (expandId === task.id && current.title === t('task:newTask')) {
+      titleInputRef.current?.focus();
+      titleInputRef.current?.select();
+    }
+  }, [expanded, searchParams, task.id, current.title, t]);
+
+  const commitTitle = () => {
+    const trimmed = title.trim();
+    if (trimmed && trimmed !== current.title) {
+      updateTask.mutate(
+        { id: task.id, data: { title: trimmed } },
+        {
+          onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
+            void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+          },
+          onError: () => toast.error(t('common:saveFailed')),
+        },
+      );
+    } else {
+      setTitle(current.title);
+    }
+  };
 
   const handleToggle = () => {
     if (!completed) {
@@ -70,19 +116,41 @@ export function TaskItem({
       >
         <TaskCheckbox checked={completed} onToggle={handleToggle} />
 
-        <span
-          className={cn(
-            'flex-1 truncate text-left text-sm transition-colors',
-            completed ? 'text-muted-foreground line-through' : 'text-foreground',
-          )}
-        >
-          {task.title}
-        </span>
+        {expanded ? (
+          <Input
+            ref={titleInputRef}
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={commitTitle}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur();
+              } else if (e.key === 'Escape') {
+                setTitle(current.title);
+                e.currentTarget.blur();
+              }
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className={cn(
+              'flex-1 border-0 px-0 text-sm font-medium shadow-none focus-visible:ring-0',
+              completed && 'text-muted-foreground line-through',
+            )}
+          />
+        ) : (
+          <span
+            className={cn(
+              'flex-1 truncate text-left text-sm transition-colors',
+              completed ? 'text-muted-foreground line-through' : 'text-foreground',
+            )}
+          >
+            {current.title}
+          </span>
+        )}
 
         <div className="flex items-center gap-2">
-          {task.tags && task.tags.length > 0 && (
+          {current.tags && current.tags.length > 0 && (
             <div className="hidden items-center gap-1 sm:flex">
-              {task.tags.slice(0, 5).map((tag) => (
+              {current.tags.slice(0, 5).map((tag) => (
                 <span
                   key={tag.id}
                   className="h-2.5 w-2.5 rounded-full"
@@ -95,8 +163,8 @@ export function TaskItem({
           {tag && (
             <span className="hidden text-xs text-muted-foreground sm:inline">{tag}</span>
           )}
-          <TaskDateBadge scheduledDate={task.scheduledDate} />
-          <TaskDueDateBadge dueDate={task.dueDate} />
+          <TaskDateBadge scheduledDate={current.scheduledDate} />
+          <TaskDueDateBadge dueDate={current.dueDate} />
 
           {!expanded && (
             <Button
@@ -115,7 +183,7 @@ export function TaskItem({
         </div>
       </div>
 
-      {expanded && <TaskRowExpanded task={task} />}
+      {expanded && <TaskRowExpanded task={task} current={current} />}
     </div>
   );
 }

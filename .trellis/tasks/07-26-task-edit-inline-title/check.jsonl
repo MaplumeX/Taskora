@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Code standards and forbidden patterns to verify the inline-title refactor does not violate conventions"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component props/styling conventions to check in the final diff"}
