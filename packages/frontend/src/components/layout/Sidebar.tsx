@@ -4,9 +4,7 @@ import {
   CalendarDays,
   ChevronDown,
   Circle,
-  Folder,
   Inbox,
-  Layers,
   Notebook,
   Sun,
   Tags as TagsIcon,
@@ -23,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { useLogout } from '@/lib/hooks/useAuth';
 import { SidebarBottomBar } from '@/components/layout/SidebarBottomBar';
+import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
 import { useTagsQuery } from '@/lib/hooks/useTags';
@@ -182,27 +181,7 @@ export function Sidebar() {
         <Separator className="my-3" />
 
         <div className="flex flex-col gap-1">
-          <CollapsibleSection
-            labelKey="nav:projects"
-            icon={Folder}
-            to="/projects"
-            emptyHintKey="nav:emptyProjects"
-            emptyTitlePlaceholderKey="project:newItemPlaceholder"
-            items={projects.map((p) => ({ id: p.id, title: p.title, href: `/projects/${p.id}` }))}
-          />
-        </div>
-
-        <Separator className="my-3" />
-
-        <div className="flex flex-col gap-1">
-          <CollapsibleSection
-            labelKey="nav:areas"
-            icon={Layers}
-            to="/areas"
-            emptyHintKey="nav:emptyAreas"
-            emptyTitlePlaceholderKey="area:newItemPlaceholder"
-            items={areas.map((a) => ({ id: a.id, title: a.title, href: `/areas/${a.id}` }))}
-          />
+          <SidebarProjectSection projects={projects} areas={areas} />
         </div>
 
         <Separator className="my-3" />
