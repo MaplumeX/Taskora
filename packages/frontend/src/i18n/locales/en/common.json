@@ -31,5 +31,9 @@
   "ungrouped": "Ungrouped",
   "restore": "Restore",
   "restored": "Restored",
-  "restoreFailed": "Failed to restore"
+  "restoreFailed": "Failed to restore",
+  "add": "New",
+  "settings": "Settings",
+  "newProject": "New Project",
+  "newArea": "New Area"
 }

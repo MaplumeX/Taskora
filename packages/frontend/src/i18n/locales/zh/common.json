@@ -31,5 +31,9 @@
   "ungrouped": "未分组",
   "restore": "恢复",
   "restored": "已恢复",
-  "restoreFailed": "恢复失败"
+  "restoreFailed": "恢复失败",
+  "add": "新增",
+  "settings": "设置",
+  "newProject": "新增项目",
+  "newArea": "新增区域"
 }

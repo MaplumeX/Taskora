@@ -1,0 +1,7 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端 spec 入口：组件/i18n/状态管理/类型安全的一般约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件结构、目录划分约定（新组件位置、复用要求）"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "新增 key 必须在 zh/en 同步、命名空间使用规则"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "React Query mutation 与 query 失效约定（新增/更新项目/区域）"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "自定义 hook 与 useUpdate* 使用约束"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "shared DTO 类型使用与受控组件类型约束"}

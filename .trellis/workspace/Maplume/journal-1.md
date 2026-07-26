@@ -360,3 +360,36 @@ Introduced react-i18next with 9 namespaces (common/nav/task/project/area/tag/aut
 ### Next Steps
 
 - None - task complete
+
+
+## Session 9: 侧边栏底栏新增/设置按钮与标题内联编辑
+
+**Date**: 2026-07-26
+**Task**: 侧边栏底栏新增/设置按钮与标题内联编辑
+**Branch**: `feat/sidebar-bottom-create-settings`
+
+### Summary
+
+重构侧边栏底栏：左新增按钮（下拉新增项目/区域，直接创建空标题条目并跳转详情页触发内联编辑），右设置按钮（收纳主题与语言切换）。新增通用 InlineTitleEdit 组件用于项目/区域详情页标题点击即编辑。补齐 zh/en i18n，更新 frontend spec。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c9781bc` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

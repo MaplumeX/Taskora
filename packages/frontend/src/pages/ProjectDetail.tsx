@@ -1,23 +1,27 @@
 import * as React from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { useProjectsQuery, useDeleteProject } from '@/lib/hooks/useProjects';
+import { useProjectsQuery, useDeleteProject, useUpdateProject } from '@/lib/hooks/useProjects';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { Button } from '@/components/ui/button';
 import { TaskListView } from '@/components/task/TaskListView';
 import { ProjectForm } from '@/components/project/ProjectForm';
+import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { toast } from 'sonner';
 
 export default function ProjectDetail() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const autoEdit = (location.state as { editTitle?: boolean } | null)?.editTitle === true;
   const { data: projects = [] } = useProjectsQuery();
   const project = projects.find((p) => p.id === id);
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ projectId: id });
   const [editOpen, setEditOpen] = React.useState(false);
   const deleteProject = useDeleteProject();
+  const updateProject = useUpdateProject();
 
   const handleDelete = () => {
     if (!project) return;
@@ -41,7 +45,25 @@ export default function ProjectDetail() {
           >
             {t('common:backTo', { label: t('nav:projects') })}
           </button>
-          <h1 className="text-2xl font-semibold tracking-tight">{project?.title ?? t('project:defaultTitle')}</h1>
+          {project ? (
+            <InlineTitleEdit
+              value={project.title}
+              placeholder={t('project:titlePlaceholder')}
+              autoFocusAndSelect={autoEdit}
+              onSubmit={(next) => {
+                if (!project) return;
+                updateProject.mutate(
+                  { id: project.id, data: { title: next } },
+                  {
+                    onSuccess: () => toast.success(t('common:saved')),
+                    onError: () => toast.error(t('common:saveFailed')),
+                  },
+                );
+              }}
+            />
+          ) : (
+            <h1 className="text-2xl font-semibold tracking-tight">{t('project:defaultTitle')}</h1>
+          )}
         </div>
         <Button variant="ghost" onClick={() => setEditOpen(true)}>
           {t('common:edit')}
