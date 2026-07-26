@@ -371,6 +371,15 @@ Introduced react-i18next with 9 namespaces (common/nav/task/project/area/tag/aut
 ### Summary
 
 重构侧边栏底栏：左新增按钮（下拉新增项目/区域，直接创建空标题条目并跳转详情页触发内联编辑），右设置按钮（收纳主题与语言切换）。新增通用 InlineTitleEdit 组件用于项目/区域详情页标题点击即编辑。补齐 zh/en i18n，更新 frontend spec。
+## Session 9: Inline title editing in expanded task row
+
+**Date**: 2026-07-26
+**Task**: Inline title editing in expanded task row
+**Branch**: `feat/task-edit-component-redesign`
+
+### Summary
+
+Eliminated duplicated title in expanded task rows: moved the editable title input from TaskRowExpanded up to the TaskItem top row so the title becomes editable in place when expanded, and read-only otherwise. TaskRowExpanded now receives live task data as a prop (single query subscription per row). Preserved new-task auto-focus/select, Enter-to-commit, Escape-to-revert behavior. Lint/typecheck/tests pass.
 
 ### Main Changes
 
@@ -380,7 +389,7 @@ Introduced react-i18next with 9 namespaces (common/nav/task/project/area/tag/aut
 
 | Hash | Message |
 |------|---------|
-| `c9781bc` | (see git log) |
+| `193cc83` | (see git log) |
 
 ### Testing
 
