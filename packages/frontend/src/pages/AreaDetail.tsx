@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useParams, useNavigate, useLocation } from 'react-router-dom';
+import { useParams, useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
   DndContext,
@@ -51,7 +51,6 @@ function SortableProjectItem({ project }: { project: ProjectResponseDto }) {
 export default function AreaDetail() {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const location = useLocation();
   const autoEdit = (location.state as { editTitle?: boolean } | null)?.editTitle === true;
   const { data: areas = [] } = useAreasQuery();
@@ -78,12 +77,6 @@ export default function AreaDetail() {
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
         <div>
-          <button
-            onClick={() => navigate('/areas')}
-            className="mb-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            {t('common:backTo', { label: t('nav:areas') })}
-          </button>
           {area ? (
             <InlineTitleEdit
               value={area.title}
