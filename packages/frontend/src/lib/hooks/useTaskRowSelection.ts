@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 
 export type SelectionState = 'idle' | 'selected' | 'expanded';
@@ -7,6 +7,26 @@ export function useTaskRowSelection() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const expandedId = useUiInteractionStore((s) => s.expandedId);
   const setExpandedId = useUiInteractionStore((s) => s.setExpandedId);
+
+  // 点击任务行以外区域（含列表外空白、标题区等）关闭展开态。
+  // 若当前有 Radix 浮层（Popover/Dialog）打开，则让 Radix 自行处理这次
+  // 点击（只关浮层、不关展开态），避免抢行为。
+  useEffect(() => {
+    if (expandedId === null) return;
+    const onPointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (target.closest('[data-task-item]')) return;
+      const openOverlay = document.querySelector(
+        '[data-radix-popper-content-wrapper] [data-state="open"], [role="dialog"][data-state="open"], [data-state="open"][role="listbox"]',
+      );
+      if (openOverlay) return;
+      setExpandedId(null);
+      setSelectedId(null);
+    };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    return () => document.removeEventListener('pointerdown', onPointerDown, true);
+  }, [expandedId, setExpandedId]);
 
   const handleRowClick = useCallback(
     (id: string) => {
