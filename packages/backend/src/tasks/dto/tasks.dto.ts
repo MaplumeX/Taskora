@@ -44,6 +44,11 @@ export class CreateTaskDto {
   @IsOptional()
   @IsString()
   areaId?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tagIds?: string[];
 }
 
 export class UpdateTaskDto {

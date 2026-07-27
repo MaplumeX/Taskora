@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Plus, Search } from 'lucide-react';
+import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import type { CreateTaskDto } from '@taskora/shared';
@@ -11,12 +12,16 @@ import { usePageTaskContext } from '@/lib/hooks/usePageTaskContext';
 import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 import { toast } from 'sonner';
 
+const HIDE_ADD_TASK_ROUTES = ['/upcoming', '/logbook', '/trash'];
+
 export function ContentBottomBar() {
   const { t } = useTranslation();
   const [searchOpen, setSearchOpen] = useState(false);
   const createTask = useCreateTask();
   const ctx = usePageTaskContext();
   const setExpandedId = useUiInteractionStore((s) => s.setExpandedId);
+  const { pathname } = useLocation();
+  const showAddTask = !HIDE_ADD_TASK_ROUTES.includes(pathname);
 
   // Cmd/Ctrl+K → open search modal
   useEffect(() => {
@@ -51,15 +56,17 @@ export function ContentBottomBar() {
         >
           <Search className="h-5 w-5" />
         </Button>
-        <Button
-          variant="ghost"
-          size="icon"
-          aria-label={t('task:addTask')}
-          onClick={handleAddTask}
-          disabled={createTask.isPending}
-        >
-          <Plus className="h-5 w-5" />
-        </Button>
+        {showAddTask && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('task:addTask')}
+            onClick={handleAddTask}
+            disabled={createTask.isPending}
+          >
+            <Plus className="h-5 w-5" />
+          </Button>
+        )}
       </footer>
       <SearchModal open={searchOpen} onOpenChange={setSearchOpen} />
     </>

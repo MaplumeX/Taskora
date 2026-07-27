@@ -206,7 +206,33 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 `src/components/layout/ContentBottomBar.tsx` 是页面底部共享栏，跨任务视图复用：
 
 - **左：搜索按钮**（`Search` 图标，`aria-label`）→ 打开 `SearchModal`（`Cmd/Ctrl+K` 快捷键全局监听）。
-- **右：添加任务按钮**（`Plus` 图标，`aria-label`）→ `createTask.mutate({ title: '', ...ctx })`（空标题创建，与项目/区域一致的空标题模式），`ctx` 来自 `usePageTaskContext()`（提供当前页面的 `projectId` / `areaId` / `parentId` 上下文）。成功后 `uiInteractionStore.setExpandedId(created.id)` 驱动该行展开。
+- **右：添加任务按钮**（`Plus` 图标，`aria-label`）→ `createTask.mutate({ title: '', ...ctx })`（空标题创建，与项目/区域一致的空标题模式），`ctx` 来自 `usePageTaskContext()`（根据当前路由推断 `CreateTaskDto` 上下文字段：`scheduledType` / `scheduledDate` / `bucket` / `projectId` / `areaId` / `tagIds`）。成功后 `uiInteractionStore.setExpandedId(created.id)` 驱动该行展开。
+
+### 按钮显隐控制
+
+添加任务按钮并非所有页面都显示。`ContentBottomBar` 内部用 `useLocation()` 做精确路由匹配，在语义上不应添加任务的页面隐藏按钮（搜索按钮始终保留）：
+
+- `/upcoming`：未来日期列表，添加任务需要额外的默认日期决策，暂不支持直接添加
+- `/logbook`：已完成任务归档
+- `/trash`：已删除任务
+
+用 `HIDE_ADD_TASK_ROUTES` 常量数组 + `pathname` 精确匹配 `includes` 判断（非 `startsWith`，避免误隐藏子路由）。
+
+### `usePageTaskContext` 路由→上下文映射
+
+`src/lib/hooks/usePageTaskContext.ts` 返回 `Omit<Partial<CreateTaskDto>, 'title'>`（`title` 始终由 `ContentBottomBar` 设为 `''`，页面上下文不应覆盖）。路由与上下文的映射关系：
+
+| 路由 | 返回上下文 | 落入 bucket（后端 `resolveBucket`） |
+|---|---|---|
+| `/today` | `{ scheduledType: DATE, scheduledDate: today }` | SCHEDULED |
+| `/someday` | `{ scheduledType: SOMEDAY }` | SCHEDULED |
+| `/anytime` | `{ bucket: ANYTIME }` | ANYTIME（前端显式传） |
+| `/projects/:id` | `{ projectId }` | ANYTIME（resolveBucket 推导） |
+| `/areas/:id` | `{ areaId }` | ANYTIME（resolveBucket 推导） |
+| `/tags/:tagId` | `{ tagIds: [tagId] }` | INBOX（默认兜底） |
+| 其他（`/inbox` 等） | `{}` | INBOX（默认兜底） |
+
+**关键**：`/anytime` 必须前端显式传 `bucket: TaskBucket.ANYTIME`，因为 `resolveBucket` 在 `scheduledType=NONE` 且无显式 bucket / projectId / areaId 时默认落 INBOX。
 
 ---
 

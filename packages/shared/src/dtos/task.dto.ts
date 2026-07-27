@@ -11,6 +11,7 @@ export interface CreateTaskDto {
   parentId?: string;
   projectId?: string;
   areaId?: string;
+  tagIds?: string[];
 }
 
 export interface UpdateTaskDto {
