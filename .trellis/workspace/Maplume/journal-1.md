@@ -535,3 +535,36 @@ Investigated why URL shows ?expand=<id> on task expand; identified root cause as
 ### Next Steps
 
 - None - task complete
+
+
+## Session 14: 修复各界面添加任务按钮的上下文归属
+
+**Date**: 2026-07-27
+**Task**: 修复各界面添加任务按钮的上下文归属
+**Branch**: `main`
+
+### Summary
+
+修复全局添加任务按钮在 /upcoming、/anytime、/areas/:id、/tags/:tagId 等页面创建任务时上下文归属错误的问题。扩展 usePageTaskContext 路由映射覆盖 anytime/areas/tags，shared+后端 CreateTaskDto 新增 tagIds 字段及 create() nested create 支持，/upcoming、/logbook、/trash 隐藏添加任务按钮。补充 create() tagIds 单测，更新前后端 spec。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `68158a0` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

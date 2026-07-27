@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 13
-- **Last Active**: 2026-07-26
+- **Total Sessions**: 14
+- **Last Active**: 2026-07-27
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~537 | Active |
+| `journal-1.md` | ~570 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 14 | 2026-07-27 | 修复各界面添加任务按钮的上下文归属 | `68158a0` | `main` |
 | 13 | 2026-07-26 | Refactor UI state: move expand/selected out of URL into Zustand stores | `29dfe01` | `main` |
 | 12 | 2026-07-26 | Paper container for task editor | `a457d46`, `b8ecae3` | `main` |
 | 11 | 2026-07-26 | 合并侧边栏项目与区域，删除 index 页面与路由 | `cab82ff` | `main` |
