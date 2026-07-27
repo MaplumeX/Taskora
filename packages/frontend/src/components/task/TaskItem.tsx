@@ -96,6 +96,7 @@ export function TaskItem({
 
   return (
     <div
+      data-task-item
       className={cn(
         'group flex flex-col transition-colors',
         selectionState === 'selected' && 'bg-muted/60',
