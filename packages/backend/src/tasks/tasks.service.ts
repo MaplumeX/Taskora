@@ -45,7 +45,7 @@ export class TasksService {
       dto.areaId,
     );
 
-    return this.prisma.task.create({
+    const created = await this.prisma.task.create({
       data: {
         title: dto.title,
         notes: dto.notes,
@@ -57,8 +57,13 @@ export class TasksService {
         parentId: dto.parentId,
         projectId: dto.projectId,
         areaId: dto.areaId,
+        ...(dto.tagIds?.length
+          ? { tags: { create: dto.tagIds.map((tagId) => ({ tagId })) } }
+          : {}),
       },
+      include: { tags: { include: { tag: true } } },
     });
+    return { ...created, tags: created.tags.map((tt) => tt.tag) };
   }
 
   async findAll(userId: string, query: TaskQueryDto) {

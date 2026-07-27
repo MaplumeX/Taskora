@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "后端 DTO/service 改动需遵循目录结构规范"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端代码质量标准"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "前端 hook 改动需遵循 hook 规范"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "DTO 类型扩展需遵循类型安全规范"}
+{"file": ".trellis/spec/guides/cross-layer-thinking-guide.md", "reason": "shared DTO 跨前后端层联动"}

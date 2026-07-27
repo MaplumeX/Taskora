@@ -141,6 +141,28 @@ if (dto.tagIds !== undefined) {
 
 查询 Task 时 include `tags: { include: { tag: true } }` 返回 `TaskTag[]`；service 层把 `TaskTag[]` map 成 `Tag[]`，保持 DTO 契约仅暴露 `TagResponseDto`，不漏出中间表字段。
 
+### create() 的 tagIds 处理（nested create 模式）
+
+`create()` 与 `update()` 的 tagIds 处理方式不同：
+
+- **update()**：任务已存在，有既存关联 → 用 `deleteMany` + `createMany` 事务包裹（见上节）。
+- **create()**：新任务无既存关联 → 在 `prisma.task.create` 的 data 块内用 Prisma nested create 直接建关联，无需显式事务（单个 `task.create` 带 nested create 已是原子的）：
+
+```typescript
+const created = await this.prisma.task.create({
+  data: {
+    // ...其他字段...
+    ...(dto.tagIds?.length
+      ? { tags: { create: dto.tagIds.map((tagId) => ({ tagId })) } }
+      : {}),
+  },
+  include: { tags: { include: { tag: true } } },
+});
+return { ...created, tags: created.tags.map((tt) => tt.tag) };
+```
+
+注意 nested create 的 `tags: { create: [...] }` 里不需传 `taskId`（Prisma 自动从父 create 关联）；而 `createMany` 模式需显式传 `taskId`。
+
 按标签筛选：`where.tags = { some: { tagId } }`。
 ### View 模式（列表查询）
 
