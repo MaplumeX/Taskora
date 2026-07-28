@@ -783,3 +783,36 @@ Fixed a layout/pointer discrepancy on trash rows introduced by the previous tras
 ### Next Steps
 
 - None - task complete
+
+
+## Session 20: Fix trash row hover cursor
+
+**Date**: 2026-07-29
+**Task**: Fix trash row hover cursor
+**Branch**: `main`
+
+### Summary
+
+Fixed the real root cause of the trash-row vs normal-row pointer discrepancy: normal rows get cursor:pointer via role=button (when onRowClick is set), but trash rows had no click behavior so they showed the default arrow. Added cursor-pointer to the trash row content container to match the visual without introducing any click behavior. Previous task (770d019) had misdiagnosed this as a DOM nesting issue and added a data-task-item outer wrapper, which is harmless and kept as a structural alignment with TaskItem.
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `426eae9` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
