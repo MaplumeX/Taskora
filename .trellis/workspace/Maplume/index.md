@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 14
-- **Last Active**: 2026-07-27
+- **Total Sessions**: 15
+- **Last Active**: 2026-07-28
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~570 | Active |
+| `journal-1.md` | ~653 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 15 | 2026-07-28 | 用户系统完善：账户自管理 + Refresh Token | `3306c4b`, `049517c` | `main` |
 | 14 | 2026-07-27 | 修复各界面添加任务按钮的上下文归属 | `68158a0` | `main` |
 | 13 | 2026-07-26 | Refactor UI state: move expand/selected out of URL into Zustand stores | `29dfe01` | `main` |
 | 12 | 2026-07-26 | Paper container for task editor | `a457d46`, `b8ecae3` | `main` |

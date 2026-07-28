@@ -617,3 +617,37 @@ Investigated why URL shows ?expand=<id> on task expand; identified root cause as
 ### Next
 - 父任务归档；本次用户系统完善（账户自管理 + Refresh Token）全部完成。
 - 后续可选：安全加固（限流/CORS 白名单/JWT 密钥回退）、注销账号、邮箱验证。
+
+
+## Session 15: 用户系统完善：账户自管理 + Refresh Token
+
+**Date**: 2026-07-28
+**Task**: 用户系统完善：账户自管理 + Refresh Token
+**Branch**: `main`
+
+### Summary
+
+实现用户系统两项增强。(1) 账户自管理：扩展 User 模型（displayName/avatarUrl/timezone/locale），新增 UsersModule（PUT /users/me, PUT /users/me/password）含 DTO 校验（timezone 白单/locale 枚举/avatarUrl https），前端 SettingsAccount 页 + Sidebar 显示名/头像优先级 + i18n。(2) Refresh Token：HttpOnly Cookie + 轮换 + reuse detection，access token 15m，RefreshToken 表（tokenHash unique/familyId），/auth/refresh 公开路由 + Sec-Fetch-Site CSRF，/auth/logout 吊销；前端 token 内存化 + 启动恢复 + 401 单飞锁队列重放。Check 阶段修复 login/register 返回体契约缺口。全流程测试通过（backend 68 passed, frontend lint/typecheck green）。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3306c4b` | (see git log) |
+| `049517c` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
