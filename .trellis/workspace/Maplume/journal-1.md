@@ -717,3 +717,36 @@ Implemented drag-and-drop in the sidebar project section: reorder standalone pro
 ### Next Steps
 
 - None - task complete
+
+
+## Session 18: Trash task context menu with restore
+
+**Date**: 2026-07-29
+**Task**: Trash task context menu with restore
+**Branch**: `main`
+
+### Summary
+
+Added a right-click context menu to trash task rows by extending TaskContextMenu with a variant prop ('default' | 'trash', default 'default'). The trash variant reuses all menu items (toggle complete, scheduled date, due date, tags) and swaps the destructive末项 from delete (useDeleteTask) to restore (useRestoreTask). Removed the inline restore button at Trash.tsx row tail so restore is only reachable via right-click, matching how normal rows expose delete only via the context menu. Default-variant behavior unchanged as a regression guard. Updated component-guidelines spec to document the variant and trash reuse.
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `04fab6e` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
