@@ -65,7 +65,7 @@ export function useUpdateTask() {
 ## Data Fetching
 
 - 服务端数据全部通过 TanStack Query
-- 当前未显式配置 `staleTime` / `retry` / `refetchOnWindowFocus`，使用 TanStack Query 默认值（staleTime=0、retry=3、refetchOnWindowFocus=true）
+- 在 `main.tsx` 的 `QueryClient` 中配置了 `defaultOptions.queries`：`staleTime: 30_000`（30s）、`retry: 1`、`refetchOnWindowFocus: true`。与 TanStack Query 默认值（staleTime=0、retry=3）不同，避免过多 refetch。
 - 若调用方需要懒加载，用 `enabled` 选项（如 `useTaskQuery` 的 `enabled: !!id`）
 
 ### Query Key 约定

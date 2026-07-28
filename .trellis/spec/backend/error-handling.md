@@ -31,6 +31,9 @@
 | 邮箱或密码错误 | 401 |
 | 邮箱已注册 | 409 |
 | 越权访问他人资源 | 404 |
+| refresh token 缺失/过期/无效 | 401 |
+| refresh token 复用（已被吊销的 RT 再次提交） | 401，同时吊销整个 family |
+| `/auth/refresh` 跨站请求（`Sec-Fetch-Site: cross-site`） | 401（CSRF 防护） |
 
 ---
 
@@ -62,6 +65,40 @@ export class RegisterDto {
   password: string;
 }
 ```
+
+### Refresh token 轮换与复用检测
+
+`POST /auth/refresh` 的错误处理由 `AuthService.rotateRefreshToken` 负责：
+
+- RT 查不到 / 已过期 → 吊销该行 + 抛 `UnauthorizedException`
+- RT 已被吊销（`revokedAt !== null`）→ 判定为复用攻击，`updateMany` 吊销同 `familyId` 的所有未吊销 token，抛 `UnauthorizedException`
+- 正常轮换 → 事务内：吊销旧 RT + 签发新 RT，返回新 accessToken + 新 RT
+
+Controller 层捕获 `rotateRefreshToken` 的异常，统一清 cookie 并返回 401，不区分具体原因（避免泄露 RT 状态）：
+
+```typescript
+try {
+  const { accessToken, user, newRt } = await this.authService.rotateRefreshToken(rt);
+  res.cookie(RT_COOKIE_NAME, newRt, COOKIE_OPTS);
+  return { accessToken, user };
+} catch {
+  res.clearCookie(RT_COOKIE_NAME, { path: '/auth' });
+  throw new UnauthorizedException('Invalid refresh token');
+}
+```
+
+### CSRF 防护（refresh 端点）
+
+`POST /auth/refresh` 检查 `Sec-Fetch-Site` 头，`cross-site` 直接拒绝：
+
+```typescript
+const secFetchSite = req.headers['sec-fetch-site'];
+if (secFetchSite === 'cross-site') {
+  throw new UnauthorizedException('Cross-site request not allowed');
+}
+```
+
+配合 cookie 的 `sameSite: 'lax'`，阻止单纯跨站发起的 refresh。
 
 ---
 

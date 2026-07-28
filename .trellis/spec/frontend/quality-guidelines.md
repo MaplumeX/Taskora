@@ -56,14 +56,26 @@
 // src/router.tsx
 export const router = createBrowserRouter([
   { path: '/login', element: <Login /> },
+  { path: '/register', element: <Register /> },
   {
     element: <ProtectedRoute />,
     children: [
       {
         element: <AppShell />,
         children: [
+          { index: true, path: '/', element: <Navigate to="/today" replace /> },
           { path: '/inbox', element: <Inbox /> },
-          // ...
+          { path: '/today', element: <Today /> },
+          { path: '/upcoming', element: <Upcoming /> },
+          { path: '/anytime', element: <Anytime /> },
+          { path: '/someday', element: <Someday /> },
+          { path: '/logbook', element: <Logbook /> },
+          { path: '/projects/:id', element: <ProjectDetail /> },
+          { path: '/areas/:id', element: <AreaDetail /> },
+          { path: '/tags', element: <Tags /> },
+          { path: '/tags/:tagId', element: <TagDetail /> },
+          { path: '/settings/account', element: <SettingsAccount /> },
+          { path: '/trash', element: <Trash /> },
         ],
       },
     ],
@@ -71,6 +83,8 @@ export const router = createBrowserRouter([
   { path: '*', element: <Navigate to="/" replace /> },
 ]);
 ```
+
+`ProtectedRoute` 读 `useAuthStore` 的 `token` / `refreshing`：有 token 放行；无 token 但 `refreshing` 为 true 时返回 null（等启动恢复）；否则重定向 `/login`。
 
 ---
 
