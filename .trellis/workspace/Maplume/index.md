@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 18
+- **Total Sessions**: 19
 - **Last Active**: 2026-07-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~752 | Active |
+| `journal-1.md` | ~785 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 19 | 2026-07-29 | Fix trash row structure to match TaskItem | `770d019` | `main` |
 | 18 | 2026-07-29 | Trash task context menu with restore | `04fab6e` | `main` |
 | 17 | 2026-07-29 | Task item context menu (right-click) | `6f51d73` | `main` |
 | 16 | 2026-07-28 | Sidebar project/area drag-and-drop reordering | `daa6a39` | `main` |

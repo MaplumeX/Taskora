@@ -750,3 +750,36 @@ Added a right-click context menu to trash task rows by extending TaskContextMenu
 ### Next Steps
 
 - None - task complete
+
+
+## Session 19: Fix trash row structure to match TaskItem
+
+**Date**: 2026-07-29
+**Task**: Fix trash row structure to match TaskItem
+**Branch**: `main`
+
+### Summary
+
+Fixed a layout/pointer discrepancy on trash rows introduced by the previous trash-context-menu task. Wrapped each trash row in an outer data-task-item div (group flex flex-col transition-colors) mirroring TaskItem's idle-state root, so TaskContextMenu's flex-col wrapper no longer acts as the row container. Also moved the React key onto the new outer element. TaskContextMenu.tsx unchanged.
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `770d019` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
