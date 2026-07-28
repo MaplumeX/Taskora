@@ -47,11 +47,34 @@ export class TasksController {
 }
 ```
 
+### 认证端点（cookie 模式）
+
+`AuthController` 处理两类端点：
+
+- **登录/注册/refresh**：返回 accessToken + 通过 `@Res({ passthrough: true }) res: Response` 设置 refresh token cookie（`res.cookie(RT_COOKIE_NAME, rt, COOKIE_OPTS)`），不手动返回 RT。
+- **logout/refresh 失败**：`res.clearCookie(RT_COOKIE_NAME, { path: '/auth' })` 清理 cookie。
+
+```typescript
+@Post('login')
+async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
+  const { accessToken, rt, user } = await this.authService.login(dto);
+  res.cookie(RT_COOKIE_NAME, rt, COOKIE_OPTS);  // HttpOnly，前端读不到
+  return { accessToken, user };                  // 只返回 accessToken
+}
+```
+
+RT cookie 选项统一在 `refresh-token.helpers.ts`：`httpOnly: true, sameSite: 'lax', path: '/auth'`，`secure` 仅生产环境。不散落各处。
+
+### 用户自管端点
+
+`UsersController` 提供 `PUT /users/me`（profile 字段部分更新）和 `PUT /users/me/password`（改密码）。与 auth 注册/登录分离，避免 auth 模块职责过重。改密码需验证 `currentPassword`（bcrypt.compare），改 profile 字段用部分更新（仅传入字段才更新）。
+
 ### Service 层
 - `@Injectable()` 装饰，构造函数注入 `PrismaService`（及 `JwtService` 等）
 - 业务方法第一个参数恒为 `userId: string`，所有 Prisma where 必须含 `userId`
 - 业务错误用 NestJS HttpException 子类（`NotFoundException`/`ConflictException`/`UnauthorizedException`）抛出，不返回 `null` 表示错误
-- 软删除优先：Task 用 `status: TRASHED` + `trashedAt`，不用 `prisma.task.delete`
+- 软删除优先：Task 用 `status: TRASHED` + `trashedAt`，`RefreshToken` 用 `revokedAt`，均不用 `prisma.*.delete`
+- 用户 profile 公开字段统一用 `USER_PUBLIC_SELECT` 常量（`users.service.ts`），各处查询复用，避免泄露 `passwordHash`
 
 ### DTO
 - DTO 定义在 `@taskora/shared`，模块内 `dto/` 文件重导出（`export { CreateTaskDto } from '@taskora/shared'`），避免后端内重复定义

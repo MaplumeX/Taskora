@@ -29,7 +29,7 @@
 Zustand 用于跨组件、非服务端的客户端 UI 状态。按是否需要持久化分两类：
 
 - **持久类**（`persist` 中间件 + localStorage）：
-  - `auth.store.ts`：token、user；`partialize` 只持久化必要字段
+  - `auth.store.ts`：`token`（内存态，不持久化）、`user`（持久化）、`refreshing`（内存态）。`partialize` 只持久化 `{ user }`——token 不持久化，刷新后靠启动恢复 silent refresh 获取新 token
   - `theme.store.ts`：主题 `mode`（light/dark/system）；action 内部触发 `applyTheme` 同步 DOM class，模块顶层注册 `matchMedia` listener
 - **非持久类**（内存态，刷新即失）：
   - `uiInteraction.store.ts`：`expandedId`（任务行展开）、`pendingAutoEditId`（创建后自动进入标题编辑的一次性指令）
@@ -42,15 +42,53 @@ export const useAuthStore = create<AuthState>()(
     (set) => ({
       token: null,
       user: null,
+      refreshing: false,
       setAuth: (token, user) => set({ token, user }),
-      clear: () => set({ token: null, user: null }),
+      setToken: (token) => set({ token }),
+      setUser: (user) => set({ user }),
+      setRefreshing: (refreshing) => set({ refreshing }),
+      clear: () => set({ token: null, user: null, refreshing: false }),
     }),
     {
       name: 'taskora-auth',
-      partialize: (state) => ({ token: state.token, user: state.user }),
+      partialize: (state) => ({ user: state.user }),  // 只持久化 user，不持久化 token
     },
   ),
 );
+```
+
+### Token 不持久化 + 启动恢复
+
+**Why**：access token 短期有效，持久化后刷新页面会拿到过期 token，不如从内存态 + silent refresh 重新获取。
+
+**Recovery 流程**（`main.tsx`）：
+
+```typescript
+async function tryRecoverSession() {
+  const { user, token, setAuth, clear, setRefreshing } = useAuthStore.getState();
+  if (token || !user) return;  // 有 token 或无 user 快照都不恢复
+  setRefreshing(true);
+  try {
+    const data = await refresh();  // 调 POST /auth/refresh，靠 HttpOnly cookie
+    setAuth(data.accessToken, data.user);
+  } catch {
+    clear();
+  } finally {
+    setRefreshing(false);
+  }
+}
+```
+
+`ProtectedRoute` 读 `refreshing` 标志：token 为空但 `refreshing` 为 true 时返回 `null`（等待恢复完成），避免恢复期间闪烁登录页。
+
+### Axios 401 自动刷新拦截器
+
+`lib/api/client.ts` 的 response 拦截器处理 access token 过期：
+
+- 401 且非 `/auth/refresh` 请求 → `isRefreshing` 标志进入刷新流程，调 `/auth/refresh`，成功后重放原请求 + 排队中的请求
+- 刷新失败 → `useAuthStore.clear()` + 重定向 `/login`
+- `/auth/refresh` 本身返回 401 → 直接 clear，不重试（避免无限循环）
+- 并发 401 请求进入 `waitingQueue`，刷新成功后依次重放
 ```
 
 ### URL 状态（React Router）

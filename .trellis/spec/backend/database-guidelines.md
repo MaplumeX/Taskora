@@ -10,6 +10,7 @@
 - 数据库：PostgreSQL 16
 - 迁移：`prisma migrate dev`（开发）、`prisma migrate deploy`（生产）
 - Schema 位置：`packages/backend/prisma/schema.prisma`
+- 核心模型：`User`、`RefreshToken`、`Task`、`Project`、`Area`、`Tag`、`TagGroup`、`TaskTag`
 
 ---
 
@@ -33,12 +34,35 @@ const task = await this.prisma.task.findUnique({
 
 **注意**：Prisma 的 `findUnique` 在 `@id` 上是唯一的，不支持额外的 `userId` 条件。必须用 `findFirst` 来实现 `id + userId` 的复合查询。越权访问返回 404（不暴露资源存在性）。
 
+### RefreshToken 模型（唯一例外）
+
+`RefreshToken` 按 `tokenHash`（`@unique`）查找，不经过 `userId` 隔离——RT 本身即凭证，持有 RT 即代表登录会话。这是数据隔离规范的唯一例外：
+
+```typescript
+const row = await this.prisma.refreshToken.findUnique({
+  where: { tokenHash },
+});
+```
+
+RT 设计要点：
+- `tokenHash` 存 SHA-256 哈希，不存明文；明文 RT 通过 HttpOnly cookie 传递，数据库不可逆推。
+- `familyId` 用于复用检测：同一登录会话的 RT 共享一个 family，复用检测时吊销整个 family。
+- `revokedAt` 为软吊销标记（非物理删除），轮换时设为旧 RT 的时间戳，复用检测查 `revokedAt !== null` 即为攻击。
+- `expiresAt` 独立于 `revokedAt`：过期是时间判定，吊销是状态判定。
+
 ### 软删除
 
 Task 使用软删除（`status = TRASHED`），不使用 Prisma `DELETE`：
 - 删除：`update({ where: { id, userId }, data: { status: 'TRASHED', trashedAt: new Date() } })`
 - 恢复：`update({ where: { id, userId }, data: { status: 'ACTIVE', trashedAt: null } })`
 - 查询默认排除已删除：`where: { status: { not: 'TRASHED' } }`
+
+### RefreshToken 吊销（软吊销）
+
+`RefreshToken` 同样采用软吊销（`revokedAt`），不物理删除，以便复用检测能查到历史记录：
+- 轮换：`update({ where: { id: row.id }, data: { revokedAt: new Date() } })`
+- 复用攻击批量吊销：`updateMany({ where: { familyId, revokedAt: null }, data: { revokedAt: new Date() } })`
+- logout：`updateMany({ where: { tokenHash, revokedAt: null }, data: { revokedAt: new Date() } })`
 
 ### 自关联查询（子任务）
 
@@ -67,10 +91,32 @@ pnpm prisma db seed                              # 填充种子数据
 
 ## Naming Conventions
 
-- 模型名：`PascalCase`（User, Task, Project, Area）
-- 字段名：`camelCase`（createdAt, scheduledDate, passwordHash）
+- 模型名：`PascalCase`（User, Task, Project, Area, RefreshToken, TagGroup）
+- 字段名：`camelCase`（createdAt, scheduledDate, passwordHash, tokenHash, familyId）
 - 枚举名：`PascalCase`，枚举值：`UPPER_SNAKE_CASE`（TaskBucket.INBOX, TaskStatus.ACTIVE）
 - 数据库表名：Prisma 默认使用模型名（不改）
+
+## 模型字段约定
+
+### User
+
+- `email`：`@unique`，登录凭证
+- `passwordHash`：bcrypt 哈希（`bcrypt.hash(pw, 10)`），不存明文
+- `displayName` / `avatarUrl` / `timezone` / `locale`：可选 profile 字段（`String?`），由 `PUT /users/me` 更新
+- `refreshTokens`：关联 `RefreshToken[]`（`onDelete: Cascade`，删除用户时自动清理 RT）
+
+### RefreshToken
+
+- `tokenHash`：`@unique`，SHA-256 哈希（`createHash('sha256')`），不存明文
+- `familyId`：同登录会话的 RT 共享，用于复用检测时批量吊销
+- `expiresAt`：绝对过期时间（`RT_TTL_MS = 30 天`）
+- `revokedAt`：软吊销标记，`null` 表示有效
+- `@@index([userId])` + `@@index([familyId])`：按用户/家族查询优化
+
+### Task / Project / Area
+
+- 均有 `sortOrder Int @default(0)` 字段，默认 orderBy `[{ sortOrder: 'asc' }, { createdAt: 'desc' }]`
+- 详见后续「批量重排」章节
 
 ---
 

@@ -19,33 +19,48 @@ packages/frontend/
 ├── vite.config.ts        # Vite 配置
 ├── tailwind.config.js    # Tailwind 配置
 └── src/
-    ├── main.tsx           # 入口（挂载 RouterProvider）
+    ├── main.tsx           # 入口（i18n init + 主题 FOUC 防护 + 启动会话恢复 + QueryClient + RouterProvider）
     ├── router.tsx        # 路由配置（createBrowserRouter）
     ├── lib/
-    │   ├── api/           # API 封装（axios 实例 + 各资源 API）
-    │   │   ├── client.ts
-    │   │   ├── auth.api.ts
+    │   ├── api/           # API 封装（axios 实例 + 401 自动 refresh 拦截器 + 各资源 API）
+    │   │   ├── client.ts          # axios 实例 + request/response 拦截器（token 注入、401 刷新队列）
+    │   │   ├── auth.api.ts        # register/login/refresh/logout/getMe
+    │   │   ├── users.api.ts      # updateProfile/updatePassword
     │   │   ├── tasks.api.ts
     │   │   ├── projects.api.ts
-    │   │   └── areas.api.ts
+    │   │   ├── areas.api.ts
+    │   │   ├── tags.api.ts
+    │   │   └── tag-groups.api.ts
     │   ├── hooks/         # TanStack Query hooks
     │   │   ├── useTasks.ts
     │   │   ├── useAuth.ts
+    │   │   ├── useUsers.ts        # updateProfile/updatePassword mutations
     │   │   ├── useProjects.ts
-    │   │   └── useAreas.ts
-    │   ├── stores/        # Zustand stores（auth, uiInteraction, theme）
-    │   │   └── auth.store.ts
-    │   └── utils/
+    │   │   ├── useAreas.ts
+    │   │   ├── useTags.ts
+    │   │   ├── useTagGroups.ts
+    │   │   ├── useTaskRowSelection.ts  # 列表级选中/展开状态委托 uiInteractionStore
+    │   │   ├── usePageTaskContext.ts   # 路由→CreateTaskDto 上下文映射
+    │   │   ├── useTheme.ts
+    │   │   ├── useDebouncedValue.ts
+    │   │   └── useDelayedLoading.ts
+    │   ├── stores/        # Zustand stores（auth / theme / uiInteraction）
+    │   │   ├── auth.store.ts           # token(内存) + user(持久) + refreshing
+    │   │   ├── theme.store.ts          # 主题 mode + resolved + applyTheme 副作用
+    │   │   └── uiInteraction.store.ts  # expandedId / pendingAutoEditId
+    │   └── utils/         # 工具函数（utils.ts cn()、utils/date.ts 格式化、等）
     ├── i18n/              # 国际化（react-i18next）
     │   ├── config.ts      # i18next 实例配置（导出 i18n）
-    │   └── locales/{zh,en}/*.json  # 按 namespace 切分的资源
+    │   └── locales/{zh,en}/*.json  # 按 namespace 切分的资源（9 个 namespace）
     ├── components/
     │   ├── ui/            # shadcn/ui 组件
-    │   ├── common/        # 跨域通用组件（如 InlineTitleEdit）
-    │   ├── layout/        # 布局（AppShell, Sidebar, SidebarBottomBar, MainContent）
+    │   ├── common/        # 跨域通用组件（InlineTitleEdit）
+    │   ├── layout/        # 布局（AppShell, Sidebar, SidebarBottomBar, MainContent, ContentBottomBar, SidebarProjectSection, SidebarAreaRow, SortableProjectItem, SortableAreaRow）
+    │   ├── search/        # 搜索（SearchModal）
     │   ├── task/          # 任务相关组件
     │   ├── project/       # 项目相关组件
-    │   └── area/          # 区域相关组件
+    │   ├── area/          # 区域相关组件
+    │   └── ProtectedRoute.tsx  # 鉴权路由守卫（读 token/refreshing）
     └── pages/
         ├── Login.tsx
         ├── Register.tsx
@@ -54,8 +69,12 @@ packages/frontend/
         ├── Upcoming.tsx
         ├── Anytime.tsx
         ├── Someday.tsx
+        ├── Logbook.tsx
         ├── ProjectDetail.tsx
         ├── AreaDetail.tsx
+        ├── Tags.tsx
+        ├── TagDetail.tsx
+        ├── SettingsAccount.tsx
         └── Trash.tsx
 ```
 
@@ -64,10 +83,11 @@ packages/frontend/
 ## Module Organization
 
 - **pages/**：路由页面组件，每个路由一个文件
-- **components/**：可复用 UI 组件，按业务域分组（task/project/area），跨域组件放 layout/
-- **lib/api/**：API 调用封装，每个资源一个文件，类型从 `@taskora/shared` 引用
+- **components/**：可复用 UI 组件，按业务域分组（task/project/area/search），跨域组件放 common/，布局放 layout/
+- **lib/api/**：API 调用封装，每个资源一个文件，类型从 `@taskora/shared` 引用；axios 拦截器集中放 `client.ts`
 - **lib/hooks/**：TanStack Query hooks，封装数据获取与变更逻辑
-- **lib/stores/**：Zustand stores，放 auth、跨组件 UI 态（expandedId/pendingAutoEditId）、主题等需持久 UI 偏好
+- **lib/stores/**：Zustand stores，`auth.store`（token 内存态 + user 持久化 + refreshing 标志）、`theme.store`（主题）、`uiInteraction.store`（跨组件 UI 态）
+- **components/ProtectedRoute.tsx**：鉴权路由守卫位于 components 根目录（非 layout/），读 `useAuthStore` 的 token/refreshing 决定渲染 Outlet / 等待 / 重定向 login
 
 ### 状态管理分层
 

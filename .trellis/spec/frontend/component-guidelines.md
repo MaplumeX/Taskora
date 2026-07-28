@@ -138,7 +138,9 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 3. **子任务区** — `Separator` + 子任务标题 + 列表 + 添加子任务 Input。
 4. **图标按钮行** — 5 个 `IconPopover`（日期 / 到期 / 项目 / 区域 / 标签），左对齐。
 
-**不放在展开区内**：标记完成按钮（折叠态行勾选框已提供）、删除按钮（折叠态行 hover 显示）。展开态仅做编辑，完成/删除交给折叠态行。
+**不放在展开区内**：标记完成按钮（折叠态行勾选框已提供）。展开态仅做编辑，完成交给折叠态行。
+
+> 删除按钮位于展开态行内（`TaskRowExpanded` 图标行的 `Trash2` 按钮），不在折叠态行。此前折叠态行曾有 hover 删除按钮，已于 2025-07 移除（commit `c69f243`），避免与拖拽手柄冲突。
 
 ---
 
@@ -348,8 +350,47 @@ export function TaskList({ ..., sortable = true, ... }: Props) {
   );
 
   if (topTasks.length === 0) {
-    return <EmptyState />;  // early return 在 hooks 之后
+    return <EmptyState />;
   }
   // ...
 }
 ```
+
+---
+
+## 侧边栏拖拽（SidebarProjectSection）
+
+侧边栏的项目/区域拖拽与任务列表拖拽不同：一个 `DndContext` 管理三种拖拽语义（区域间排序、同区域项目排序、跨区域移动项目）。组件位于 `src/components/layout/SidebarProjectSection.tsx`。
+
+### 合并 Section 结构
+
+侧边栏不再分「独立项目」与「区域」两个独立列表，而是合并为一个 section：顶部列出无区域归属的项目，下方每个区域作为可折叠条目（含该区域项目列表）。外层 `DndContext` 统一处理所有拖拽。
+
+### ID 前缀区分类型
+
+同一 `DndContext` 内区域和项目混排，用前缀区分 sortable id：
+
+```typescript
+const PROJ_PREFIX = 'proj:';
+const AREA_PREFIX = 'area:';
+// useSortable({ id: `${PROJ_PREFIX}${project.id}` })
+// useSortable({ id: `${AREA_PREFIX}${area.id}` })
+```
+
+`handleDragEnd` 根据 `active.id` / `over.id` 的前缀分支：
+
+1. **区域间排序**（active & over 都是 area）：`arrayMove` 区域顺序 → `reorderAreas.mutate`。
+2. **跨区域移动项目**（项目 active，目标 areaId 与当前不同）：先 `updateProject.mutate({ id, data: { areaId: targetAreaId } })`，`onSettled` 后再 `reorderProjects.mutate(newOrderedIds)` 持久化新顺序。
+3. **同列表排序**（项目 active，目标 areaId 与当前相同）：`computeReorderedGlobalIds` 计算全量 orderedIds → `reorderProjects.mutate`。
+
+### 跨区域移动的两步提交
+
+跨区域移动必须先改 `areaId` 再重排，不能用单个 reorder 端点。因为后端 `reorder` 只写 `sortOrder`，不改 `areaId`。两步用 `onSettled` 串联，失败时 `toast.error`。
+
+### 落到区域标题的插入策略
+
+当 `over.id` 是区域前缀但不是项目（即拖到区域标题）时，项目插入到目标区域分组的末尾，而非区域第一个项目之前。`computeReorderedGlobalIds` 用 `overProjectId === null` 分支处理。
+
+### Sortable 包装层
+
+与 `TaskItem` 一样，不修改展示组件（`SidebarAreaRow` / `ProjectItem`），在其上包一层 `SortableAreaRow` / `SortableProjectItem`。`listeners` 挂在外层 div 上，保留内层 `NavLink` 导航与 chevron 折叠行为。
