@@ -3,10 +3,12 @@ import { NavLink } from 'react-router-dom';
 import { ChevronDown, Layers } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 
 import { cn } from '@/lib/utils';
-import { ProjectItem } from '@/components/project/ProjectItem';
+import { SortableProjectItem } from '@/components/layout/SortableProjectItem';
 
 interface Props {
   area: AreaResponseDto;
@@ -55,9 +57,16 @@ export function SidebarAreaRow({ area, projects }: Props) {
         </button>
       </div>
       {open && projects.length > 0 && (
-        <div className="ml-4 flex flex-col gap-0.5 border-l pl-2">
-          {projects.map((p) => <ProjectItem key={p.id} project={p} showChevron={false} />)}
-        </div>
+        <SortableContext
+          items={projects.map((p) => `proj:${p.id}`)}
+          strategy={verticalListSortingStrategy}
+        >
+          <div className="ml-4 flex flex-col gap-0.5 border-l pl-2">
+            {projects.map((p) => (
+              <SortableProjectItem key={p.id} project={p} />
+            ))}
+          </div>
+        </SortableContext>
       )}
     </div>
   );
