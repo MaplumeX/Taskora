@@ -3,7 +3,7 @@
   "name": "refresh-token-mechanism",
   "title": "Refresh Token 机制：HttpOnly Cookie + 轮换",
   "description": "",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

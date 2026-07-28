@@ -1,1 +1,10 @@
 {"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Module/file layout for auth extensions"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Prisma schema/migration for RefreshToken table"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Nest exception handling for refresh/reuse-detection errors"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend code standards"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Frontend layout for auth api/store changes"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useLogin/useLogout mutation conventions"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "auth store changes (token no longer persisted, setToken, refreshing)"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Shared DTO typing for refresh/logout responses"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "Translation keys for session-expired messages"}

@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 
 import type { LoginDto, RegisterDto } from '@taskora/shared';
 
-import { getMe, login, register } from '@/lib/api/auth.api';
+import { getMe, login, register, logout as logoutApi } from '@/lib/api/auth.api';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { i18n } from '@/i18n/config';
 import { toast } from 'sonner';
@@ -58,7 +58,12 @@ export function useLogout() {
   const clear = useAuthStore((s) => s.clear);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
-  return () => {
+  return async () => {
+    try {
+      await logoutApi();
+    } catch {
+      // tolerate failure — proceed to clear local state
+    }
     clear();
     queryClient.clear();
     navigate('/login');

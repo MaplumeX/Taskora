@@ -15,3 +15,11 @@ export function login(data: LoginDto): Promise<AuthResponseDto> {
 export function getMe(): Promise<UserResponseDto> {
   return apiClient.get<UserResponseDto>('/auth/me').then((res) => res.data);
 }
+
+export function refresh(): Promise<AuthResponseDto> {
+  return apiClient.post<AuthResponseDto>('/auth/refresh').then((res) => res.data);
+}
+
+export function logout(): Promise<void> {
+  return apiClient.post('/auth/logout').then(() => undefined);
+}
