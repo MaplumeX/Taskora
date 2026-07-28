@@ -55,6 +55,18 @@ model Area {
   @@index([userId])
 }
 
+enum ProjectStatus {
+  ACTIVE
+  COMPLETED
+  TRASHED
+}
+
+enum ProjectBucket {
+  INBOX
+  ANYTIME
+  SCHEDULED
+}
+
 model Project {
   id        String   @id @default(uuid())
   title     String
@@ -69,7 +81,31 @@ model Project {
 
   sortOrder Int @default(0)
 
+  status        ProjectStatus  @default(ACTIVE)
+  bucket        ProjectBucket  @default(INBOX)
+  scheduledType ScheduledType  @default(NONE)
+  scheduledDate DateTime?
+  dueDate       DateTime?
+  completedAt   DateTime?
+  trashedAt     DateTime?
+
+  tags ProjectTag[]
+
   @@index([userId])
+  @@index([areaId])
+}
+
+model ProjectTag {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([projectId, tagId])
+  @@index([projectId])
+  @@index([tagId])
 }
 
 enum TaskStatus {
@@ -113,6 +149,7 @@ model Tag {
   userId     String
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks      TaskTag[]
+  projects   ProjectTag[]
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 

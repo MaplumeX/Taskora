@@ -46,6 +46,7 @@ export function useCreateTask() {
     mutationFn: (data: CreateTaskDto) => createTask(data),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }
@@ -57,6 +58,7 @@ export function useUpdateTask() {
     onSuccess: (task) => {
       void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }
@@ -67,6 +69,7 @@ export function useDeleteTask() {
     mutationFn: (id: string) => deleteTask(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }
@@ -78,6 +81,7 @@ export function useCompleteTask() {
     onSuccess: (task) => {
       void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }
@@ -89,6 +93,7 @@ export function useUncompleteTask() {
     onSuccess: (task) => {
       void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }
@@ -118,6 +123,7 @@ export function useReorderTasks() {
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }
@@ -129,6 +135,7 @@ export function useRestoreTask() {
     onSuccess: (task) => {
       void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }

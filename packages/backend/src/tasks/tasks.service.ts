@@ -6,6 +6,7 @@ import { TaskBucket, TaskStatus, ScheduledType } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
 import { Prisma } from '@prisma/client';
+import { buildTaskViewWhere } from './views';
 
 @Injectable()
 export class TasksService {
@@ -77,40 +78,8 @@ export class TasksService {
     }
 
     if (query.view) {
-      switch (query.view) {
-        case 'inbox':
-          where.bucket = TaskBucket.INBOX;
-          where.status = TaskStatus.ACTIVE;
-          where.scheduledType = ScheduledType.NONE;
-          break;
-        case 'today': {
-          where.status = TaskStatus.ACTIVE;
-          where.scheduledType = ScheduledType.DATE;
-          where.scheduledDate = { lte: new Date() };
-          break;
-        }
-        case 'upcoming': {
-          where.status = TaskStatus.ACTIVE;
-          where.scheduledType = ScheduledType.DATE;
-          where.scheduledDate = { gt: new Date() };
-          break;
-        }
-        case 'anytime':
-          where.bucket = TaskBucket.ANYTIME;
-          where.status = TaskStatus.ACTIVE;
-          where.scheduledType = ScheduledType.NONE;
-          break;
-        case 'someday':
-          where.scheduledType = ScheduledType.SOMEDAY;
-          where.status = TaskStatus.ACTIVE;
-          break;
-        case 'trash':
-          where.status = TaskStatus.TRASHED;
-          break;
-        case 'logbook':
-          where.status = TaskStatus.COMPLETED;
-          break;
-      }
+      const viewWhere = buildTaskViewWhere(query.view);
+      Object.assign(where, viewWhere);
     } else {
       if (query.projectId) where.projectId = query.projectId;
       if (query.areaId) where.areaId = query.areaId;

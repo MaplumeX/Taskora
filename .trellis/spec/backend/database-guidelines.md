@@ -118,6 +118,35 @@ pnpm prisma db seed                              # 填充种子数据
 - 均有 `sortOrder Int @default(0)` 字段，默认 orderBy `[{ sortOrder: 'asc' }, { createdAt: 'desc' }]`
 - 详见后续「批量重排」章节
 
+### Project（与 Task 同级的待办实体）
+
+Project 既是 Task 的容器（`Task.projectId`），本身也是一个可出现在聚合视图的待办实体，字段与 Task 对齐：
+
+- `status: ProjectStatus`（`ACTIVE | COMPLETED | TRASHED`，独立枚举，值与 `TaskStatus` 一致）
+- `bucket: ProjectBucket`（`INBOX | ANYTIME | SCHEDULED`，独立枚举，值与 `TaskBucket` 一致）
+- `scheduledType: ScheduledType`（复用 Task 的枚举）
+- `scheduledDate: DateTime?`（仅 `scheduledType=DATE` 有值）
+- `dueDate: DateTime?`（仅存储，不参与 bucket/视图查询）
+- `completedAt: DateTime?` / `trashedAt: DateTime?`：软删除与完成标记
+
+> Project 与 Task 使用**独立的** Prisma enum type（`ProjectStatus`/`ProjectBucket` vs `TaskStatus`/`TaskBucket`），值相同但类型隔离，避免跨模型耦合。
+
+Project 的 bucket 推导（`ProjectsService.resolveBucket`）与 Task 规则一致，但 Project 无 `parentId`/`projectId`：
+- `DATE`/`SOMEDAY` → `SCHEDULED`
+- `NONE` → 有 `areaId` 则 `ANYTIME`，否则 `INBOX`
+
+Project 软删除/恢复/完成/撤销完成与 Task 行为一致（`remove` 为软删除，非物理删除）。
+
+### 标签关联策略 (Tag / TaskTag / ProjectTag)
+
+Task ↔ Tag 与 Project ↔ Tag 均为多对多，分别通过 `TaskTag` / `ProjectTag` 中间表实现。两张中间表结构一致：
+
+- `id`（`@default(uuid())`）+ `createdAt`，因此不用 Prisma 隐式 `{ set: [...] }` 语法，在 service 层用 `deleteMany` + `createMany` 全量替换（`$transaction` 包裹）。
+- `@@unique([taskId, tagId])` / `@@unique([projectId, tagId])` 防重复，配合 `skipDuplicates`。
+- 删除 Tag 时两张中间表均 `onDelete: Cascade` 自动清理。
+- `include` + map 模式：`include: { tags: { include: { tag: true } } }` 返回中间表数组，service 层 map 成 `Tag[]`，不漏出中间表字段。
+- create 用 nested create（`tags: { create: [...] }`），update 用 `deleteMany` + `createMany` 事务。
+
 ---
 
 ## Common Mistakes
@@ -158,12 +187,11 @@ update 级联规则：当 `dto.scheduledType` 变化时，service 层必须同�
 
 ---
 
-## 标签关联策略 (Tag / TaskTag)
+## 标签关联策略 (Tag / TaskTag / ProjectTag) — 补充说明
 
-Task ↔ Tag 为多对多关系，通过 `TaskTag` 中间表实现：
+> 总体约定见上方「Project」节的「标签关联策略」小节。以下为 Task 侧的历史示例代码（Project 侧 `ProjectTag` 用法相同，把 `taskId`/`TaskTag` 换成 `projectId`/`ProjectTag`）：
 
-- `TaskTag` 有自己的 `id`（`@default(uuid())`) + `createdAt`，因此 **不用** Prisma 的隐式 `{ set: [...ids] }` 语法（无法携带中间表额外字段），而是在 service 层显式用 `deleteMany` + `createMany` 替换关联。
-- 全量 set 语义：`UpdateTaskDto.tagIds?: string[]`，传 `undefined` 不动关联；传数组（含空数组）则先删旧关联再建新关联。两步须用 `$transaction` 包裹保证原子性：
+全量 set 语义：`UpdateTaskDto.tagIds?: string[]`，传 `undefined` 不动关联；传数组（含空数组）则先删旧关联再建新关联。两步须用 `$transaction` 包裹保证原子性：
 
 ```typescript
 if (dto.tagIds !== undefined) {
@@ -180,7 +208,7 @@ if (dto.tagIds !== undefined) {
 ```
 
 - `@@unique([taskId, tagId])` 防重复贴标签，配合 `skipDuplicates` 避免竞态抛错。
-- **删除 Tag** 时 `TaskTag` 走 `onDelete: Cascade` 自动清理关联（无需手动删中间表）。
+- **删除 Tag** 时 `TaskTag`/`ProjectTag` 走 `onDelete: Cascade` 自动清理关联（无需手动删中间表）。
 - **删除 TagGroup** 时 `Tag.tagGroupId` 走 `onDelete: SetNull`，标签变“未分组”而非删除。
 
 ### include + map 模式
@@ -247,28 +275,26 @@ const orderBy =
 
 > 约定：orderBy 的动态化仅按 `view` 分支，默认分支保持所有其他视图的原始排序不变。
 
-### 关键词搜索（q 参数）
+### view→where 抽取与 Feed 聚合接口
 
-`findAll` 支持 `q?: string` 查询参数，对 `title` 和 `notes` 做 case-insensitive `contains` 模糊匹配。`q` 与 `view` 正交：`q` 构造 `where.OR` 条件，`view` 构建各自的 `where` 字段，两者可叠加。
+`TasksService.findAll` / `ProjectsService` 的 view 分支已抽为纯函数，供聚合接口复用：
 
-```typescript
-if (query.q) {
-  where.OR = [
-    { title: { contains: query.q, mode: 'insensitive' } },
-    { notes: { contains: query.q, mode: 'insensitive' } },
-  ];
-}
-// q 模式无 view 时设置 status：默认 ACTIVE，completed=true 时 [ACTIVE, COMPLETED]，始终排除 TRASHED
-if (query.q && !query.view) {
-  where.status = query.completed
-    ? { in: [TaskStatus.ACTIVE, TaskStatus.COMPLETED] }
-    : TaskStatus.ACTIVE;
-}
-```
+- `packages/backend/src/tasks/views.ts`：`buildTaskViewWhere(view): Prisma.TaskWhereInput`
+- `packages/backend/src/projects/views.ts`：`buildProjectViewWhere(view): Prisma.ProjectWhereInput`
 
-约定：不引入 Postgres FTS，使用 Prisma `contains` + `mode: 'insensitive'`；数据量增长后可升级。
+两个函数对同一 `view` 值产出语义一致的 where（inbox/today/upcoming/anytime/someday/trash/logbook），Task 与 Project 各自映射到本模型的字段。新增 view 时两处都要加 case。
+
+聚合接口 `FeedModule`（`GET /feed?view=...`）返回 Task + Project 混合的 `FeedItem[]`：
+
+- `FeedService.findAll(userId, view)` 用 `Promise.all` 并行 `task.findMany` + `project.findMany`（各自 where 由 `buildTaskViewWhere`/`buildProjectViewWhere` 构建）。
+- 各自 map 成带 `type: 'task' | 'project'` 的 `FeedItem`，合并后统一排序。
+- 排序规则与单模型一致：默认 `sortOrder asc, createdAt desc`；`logbook` 按 `completedAt desc`。
+- `FeedItem` 是联合类型，前端按 `type` 区分渲染（task 行复用 `TaskItem`，project 行点击跳转 `/projects/:id`）。
+
+> 单模型接口（`GET /tasks?view=...`、`GET /projects`）保留不变，供 ProjectDetail/TagDetail/AreaDetail 等按 `projectId`/`tagId`/`areaId` 拉纯列表使用。
 
 ---
+
 
 ## 批量重排（Reorder）API 模式
 

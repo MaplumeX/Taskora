@@ -7,8 +7,9 @@ import { ProjectsModule } from './projects/projects.module';
 import { AreasModule } from './areas/areas.module';
 import { TagsModule } from './tags/tags.module';
 import { TagGroupsModule } from './tag-groups/tag-groups.module';
+import { FeedModule } from './feed/feed.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule, TasksModule, ProjectsModule, AreasModule, TagsModule, TagGroupsModule],
+  imports: [PrismaModule, AuthModule, UsersModule, TasksModule, ProjectsModule, AreasModule, TagsModule, TagGroupsModule, FeedModule],
 })
 export class AppModule {}

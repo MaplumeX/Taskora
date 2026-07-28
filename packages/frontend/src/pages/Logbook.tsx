@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { TaskResponseDto } from '@taskora/shared';
+import type { FeedItem } from '@taskora/shared';
 
-import { TaskItem } from '@/components/task/TaskItem';
+import { FeedItemRow } from '@/components/feed/FeedItemRow';
 import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
-import { useTasksQuery } from '@/lib/hooks/useTasks';
+import { useFeedQuery } from '@/lib/hooks/useFeed';
 import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import {
   useCompleteTask,
@@ -19,7 +19,7 @@ import { toast } from 'sonner';
 
 export default function Logbook() {
   const { t } = useTranslation();
-  const { data: tasks = [], isLoading, isError } = useTasksQuery({ view: 'logbook' });
+  const { data: items = [], isLoading, isError } = useFeedQuery('logbook');
   const showSkeleton = useDelayedLoading(isLoading);
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
@@ -42,44 +42,49 @@ export default function Logbook() {
   );
 
   const grouped = useMemo(() => {
-    const today: TaskResponseDto[] = [];
-    const yesterday: TaskResponseDto[] = [];
-    const earlier: TaskResponseDto[] = [];
-    for (const t of tasks) {
-      if (t.parentId) continue;
-      if (!t.completedAt) continue;
-      const diff = dayDiff(t.completedAt, new Date());
-      if (diff === 0) today.push(t);
-      else if (diff === 1) yesterday.push(t);
-      else earlier.push(t);
+    const today: FeedItem[] = [];
+    const yesterday: FeedItem[] = [];
+    const earlier: FeedItem[] = [];
+    for (const item of items) {
+      if (item.type === 'task' && item.parentId) continue;
+      if (!item.completedAt) continue;
+      const diff = dayDiff(item.completedAt, new Date());
+      if (diff === 0) today.push(item);
+      else if (diff === 1) yesterday.push(item);
+      else earlier.push(item);
     }
     return { today, yesterday, earlier };
-  }, [tasks]);
+  }, [items]);
 
-  const toggleComplete = (task: TaskResponseDto) => {
-    if (task.status === 'COMPLETED') uncompleteTask.mutate(task.id);
-    else completeTask.mutate(task.id, { onError: () => toast.error(t('common:operationFailed')) });
+  const toggleComplete = (item: FeedItem) => {
+    if (item.type !== 'task') return;
+    if (item.status === 'COMPLETED') uncompleteTask.mutate(item.id);
+    else completeTask.mutate(item.id, { onError: () => toast.error(t('common:operationFailed')) });
   };
 
-  const renderGroup = (label: string, group: TaskResponseDto[]) => {
+  const renderGroup = (label: string, group: FeedItem[]) => {
     if (group.length === 0) return null;
     return (
       <div key={label} className="flex flex-col gap-1">
         <h2 className="px-2 pb-1 pt-4 text-sm font-medium text-muted-foreground">
           {label}
         </h2>
-        {group.map((task) => {
+        {group.map((item) => {
+          const isTask = item.type === 'task';
+          const taskItem = item as { projectId: string | null; areaId: string | null };
           const selectionState =
-            expandedId === task.id ? 'expanded' : selectedId === task.id ? 'selected' : 'idle';
+            isTask
+              ? expandedId === item.id ? 'expanded' : selectedId === item.id ? 'selected' : 'idle'
+              : 'idle';
           return (
-            <TaskItem
-              key={task.id}
-              task={task}
-              projectTitle={task.projectId ? projectMap[task.projectId] : undefined}
-              areaTitle={task.areaId ? areaMap[task.areaId] : undefined}
+            <FeedItemRow
+              key={item.id}
+              item={item}
+              projectTitle={isTask && taskItem.projectId ? projectMap[taskItem.projectId] : undefined}
+              areaTitle={isTask && taskItem.areaId ? areaMap[taskItem.areaId] : undefined}
               selectionState={selectionState}
-              onToggleComplete={() => toggleComplete(task)}
-              onRowClick={() => handleRowClick(task.id)}
+              onToggleComplete={() => toggleComplete(item)}
+              onRowClick={isTask ? () => handleRowClick(item.id) : undefined}
             />
           );
         })}
