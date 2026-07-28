@@ -6,6 +6,8 @@ import { RouterProvider } from 'react-router-dom';
 import { Toaster } from '@/components/ui/sonner';
 import { router } from '@/router';
 import { applyThemeFromStorage } from '@/lib/hooks/useTheme';
+import { refresh } from '@/lib/api/auth.api';
+import { useAuthStore } from '@/lib/stores/auth.store';
 import '@/i18n/config';
 import '@/index.css';
 
@@ -22,6 +24,26 @@ const queryClient = new QueryClient({
   },
 });
 
+// Startup recovery: if we have a persisted user snapshot but no in-memory token,
+// try to silently refresh via the HttpOnly cookie.
+async function tryRecoverSession() {
+  const { user, token, setAuth, clear, setRefreshing } = useAuthStore.getState();
+  if (token || !user) return;
+
+  setRefreshing(true);
+  try {
+    const data = await refresh();
+    setAuth(data.accessToken, data.user);
+  } catch {
+    clear();
+  } finally {
+    setRefreshing(false);
+  }
+}
+
+// Kick off recovery before rendering so ProtectedRoute can wait on `refreshing`.
+const recoveryPromise = tryRecoverSession();
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <QueryClientProvider client={queryClient}>
@@ -30,3 +52,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </React.StrictMode>,
 );
+
+// Surface unhandled recovery errors to the console (rejection already handled internally).
+void recoveryPromise;
