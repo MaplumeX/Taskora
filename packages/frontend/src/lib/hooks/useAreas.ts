@@ -26,7 +26,12 @@ export function useCreateArea() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateAreaDto) => createArea(data),
-    onSuccess: () => {
+    onSuccess: (area) => {
+      // 乐观写入新条目，使详情页首次 render 即可拿到 area，
+      // 让 pendingAutoEditId 驱动的自动编辑态能正常触发。
+      queryClient.setQueryData<AreaResponseDto[]>(areaKeys.all, (old) =>
+        old ? [...old, area] : old,
+      );
       void queryClient.invalidateQueries({ queryKey: areaKeys.all });
     },
   });

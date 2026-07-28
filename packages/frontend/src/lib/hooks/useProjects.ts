@@ -26,7 +26,12 @@ export function useCreateProject() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: CreateProjectDto) => createProject(data),
-    onSuccess: () => {
+    onSuccess: (project) => {
+      // 乐观写入新条目，使详情页首次 render 即可拿到 project，
+      // 让 pendingAutoEditId 驱动的自动编辑态能正常触发。
+      queryClient.setQueryData<ProjectResponseDto[]>(projectKeys.all, (old) =>
+        old ? [...old, project] : old,
+      );
       void queryClient.invalidateQueries({ queryKey: projectKeys.all });
     },
   });
