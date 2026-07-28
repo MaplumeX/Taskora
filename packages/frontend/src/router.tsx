@@ -9,6 +9,7 @@ import Logbook from '@/pages/Logbook';
 import Login from '@/pages/Login';
 import ProjectDetail from '@/pages/ProjectDetail';
 import Register from '@/pages/Register';
+import SettingsAccount from '@/pages/SettingsAccount';
 import Someday from '@/pages/Someday';
 import Tags from '@/pages/Tags';
 import TagDetail from '@/pages/TagDetail';
@@ -37,6 +38,7 @@ export const router = createBrowserRouter([
           { path: '/tags', element: <Tags /> },
           { path: '/tags/:tagId', element: <TagDetail /> },
           { path: '/trash', element: <Trash /> },
+          { path: '/settings/account', element: <SettingsAccount /> },
         ],
       },
     ],
