@@ -9,7 +9,6 @@ import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import {
   useCompleteTask,
-  useDeleteTask,
   useUncompleteTask,
 } from '@/lib/hooks/useTasks';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
@@ -26,7 +25,6 @@ export default function Logbook() {
   const { data: areas = [] } = useAreasQuery();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
-  const deleteTask = useDeleteTask();
   const {
     selectedId,
     expandedId,
@@ -63,13 +61,6 @@ export default function Logbook() {
     else completeTask.mutate(task.id, { onError: () => toast.error(t('common:operationFailed')) });
   };
 
-  const handleTrash = (task: TaskResponseDto) => {
-    deleteTask.mutate(task.id, {
-      onSuccess: () => toast.success(t('task:movedToTrash')),
-      onError: () => toast.error(t('common:deleteFailed')),
-    });
-  };
-
   const renderGroup = (label: string, group: TaskResponseDto[]) => {
     if (group.length === 0) return null;
     return (
@@ -89,7 +80,6 @@ export default function Logbook() {
               selectionState={selectionState}
               onToggleComplete={() => toggleComplete(task)}
               onRowClick={() => handleRowClick(task.id)}
-              onTrash={() => handleTrash(task)}
             />
           );
         })}

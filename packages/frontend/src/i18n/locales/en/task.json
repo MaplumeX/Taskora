@@ -4,8 +4,6 @@
   "createFailed": "Failed to create",
   "subtaskCreateFailed": "Failed to create subtask",
   "deleteFailed": "Failed to delete",
-  "movedToTrash": "Moved to trash",
-  "moveToTrash": "Move to trash",
   "searchTasks": "Search tasks",
   "addTask": "Add task",
   "notePlaceholder": "Note…",

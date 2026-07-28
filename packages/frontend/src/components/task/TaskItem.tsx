@@ -1,12 +1,10 @@
 import * as React from 'react';
-import { Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import type { TaskResponseDto } from '@taskora/shared';
 
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { taskKeys, useTaskQuery, useUpdateTask } from '@/lib/hooks/useTasks';
@@ -23,7 +21,6 @@ interface Props {
   selectionState?: SelectionState;
   onToggleComplete: () => void;
   onRowClick?: () => void;
-  onTrash: () => void;
 }
 
 export function TaskItem({
@@ -33,7 +30,6 @@ export function TaskItem({
   selectionState = 'idle',
   onToggleComplete,
   onRowClick,
-  onTrash,
 }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -183,20 +179,6 @@ export function TaskItem({
           <TaskDateBadge scheduledDate={current.scheduledDate} />
           <TaskDueDateBadge dueDate={current.dueDate} />
 
-          {!expanded && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 text-destructive opacity-0 transition-opacity group-hover:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation();
-                onTrash();
-              }}
-              aria-label={t('task:moveToTrash')}
-            >
-              <Trash2 className="h-4 w-4" />
-            </Button>
-          )}
         </div>
       </div>
 

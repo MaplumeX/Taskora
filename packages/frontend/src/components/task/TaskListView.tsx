@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { TaskList } from './TaskList';
-import { useCompleteTask, useDeleteTask, useReorderTasks, useUncompleteTask } from '@/lib/hooks/useTasks';
+import { useCompleteTask, useReorderTasks, useUncompleteTask } from '@/lib/hooks/useTasks';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
 import { useTaskRowSelection } from '@/lib/hooks/useTaskRowSelection';
@@ -22,7 +22,6 @@ export function TaskListView({ tasks, emptyHint, sortable }: Props) {
     useTaskRowSelection();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
-  const deleteTask = useDeleteTask();
   const reorderTasks = useReorderTasks();
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
@@ -45,13 +44,6 @@ export function TaskListView({ tasks, emptyHint, sortable }: Props) {
     }
   };
 
-  const handleTrash = (task: TaskResponseDto) => {
-    deleteTask.mutate(task.id, {
-      onSuccess: () => toast.success(t('task:movedToTrash')),
-      onError: () => toast.error(t('common:deleteFailed')),
-    });
-  };
-
   return (
     <div className="flex flex-col" onClick={handleBlankClick}>
       <TaskList
@@ -62,7 +54,6 @@ export function TaskListView({ tasks, emptyHint, sortable }: Props) {
         expandedId={expandedId}
         onRowClick={handleRowClick}
         onToggleComplete={handleToggle}
-        onTrash={handleTrash}
         onReorder={(ids) => reorderTasks.mutate(ids)}
         sortable={sortable}
         emptyHint={emptyHint}
