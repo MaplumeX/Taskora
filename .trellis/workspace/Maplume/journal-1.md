@@ -816,3 +816,17 @@ Fixed the real root cause of the trash-row vs normal-row pointer discrepancy: no
 ### Next Steps
 
 - None - task complete
+
+## 2026-07-29 — Project 升级为与 Task 同级的待办实体
+
+### Task
+.trellis/tasks/archive/2026-07/07-29-project-as-todo-entity
+
+### Changes
+- Project 升级为与 Task 同级的待办实体：新增 status/bucket/scheduledType/scheduledDate/dueDate/completedAt/trashedAt 字段 + ProjectTag 关联表。
+- 后端：ProjectsService 升级（resolveBucket / tagIds 全量 set / 软删除 / complete / restore）；抽取 buildTaskViewWhere / buildProjectViewWhere；新增 FeedModule（GET /feed?view=... 返回 Task+Project 混合 FeedItem[]）。
+- 前端：Today/Upcoming/Anytime/Someday/Logbook/Trash/Inbox 改用 useFeedQuery；新增 FeedListView / FeedItemRow / ProjectFeedRow（点击跳转详情页）；ProjectDetail 增加字段编辑；task/project mutation 失效 ['feed']。
+- Spec：database-guidelines 补充 Project 模型、ProjectTag、view→where 抽取、Feed 聚合接口约定。
+
+### Status
+[OK] **Completed** — build/lint/typecheck/test 全绿，独立 check 通过。
