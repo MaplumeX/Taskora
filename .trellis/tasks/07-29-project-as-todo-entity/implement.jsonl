@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Prisma schema/migration/enum/tag-association/soft-delete/view-query 约定，Project 升级需遵循"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "新增 FeedModule/FeedService 在 backend 的目录与命名规范"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "NotFoundException 等错误处理约定"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "react-query hooks/query keys/失效策略，聚合 feed 的 hooks 设计依据"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "新增 FeedListView/FeedItemRow/ProjectFeedRow 组件的规范"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "FeedItem 联合类型与 TaskResponseDto 断言的类型安全规范"}

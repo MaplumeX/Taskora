@@ -53,8 +53,33 @@ export class ProjectsController {
     return this.projectsService.update(req.user.id, id, dto);
   }
 
+  // Soft delete: sets status=TRASHED + trashedAt
   @Delete(':id')
   remove(@Request() req: { user: { id: string } }, @Param('id') id: string) {
     return this.projectsService.remove(req.user.id, id);
+  }
+
+  @Post(':id/restore')
+  restore(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.projectsService.restore(req.user.id, id);
+  }
+
+  @Post(':id/complete')
+  complete(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.projectsService.complete(req.user.id, id);
+  }
+
+  @Post(':id/uncomplete')
+  uncomplete(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.projectsService.uncomplete(req.user.id, id);
   }
 }

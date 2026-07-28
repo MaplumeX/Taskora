@@ -30,6 +30,24 @@ export function deleteProject(id: string): Promise<void> {
   return apiClient.delete(`/projects/${id}`).then(() => undefined);
 }
 
+export function restoreProject(id: string): Promise<ProjectResponseDto> {
+  return apiClient
+    .post<ProjectResponseDto>(`/projects/${id}/restore`)
+    .then((res) => res.data);
+}
+
+export function completeProject(id: string): Promise<ProjectResponseDto> {
+  return apiClient
+    .post<ProjectResponseDto>(`/projects/${id}/complete`)
+    .then((res) => res.data);
+}
+
+export function uncompleteProject(id: string): Promise<ProjectResponseDto> {
+  return apiClient
+    .post<ProjectResponseDto>(`/projects/${id}/uncomplete`)
+    .then((res) => res.data);
+}
+
 export function reorderProjects(orderedIds: string[]): Promise<void> {
   return apiClient.post('/projects/reorder', { orderedIds }).then(() => undefined);
 }

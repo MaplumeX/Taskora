@@ -1,11 +1,11 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { TaskResponseDto } from '@taskora/shared';
+import type { FeedItem } from '@taskora/shared';
 
-import { TaskItem } from '@/components/task/TaskItem';
+import { FeedItemRow } from '@/components/feed/FeedItemRow';
 import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
-import { useTasksQuery } from '@/lib/hooks/useTasks';
+import { useFeedQuery } from '@/lib/hooks/useFeed';
 import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import {
   useCompleteTask,
@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 
 export default function Upcoming() {
   const { t } = useTranslation();
-  const { data: tasks = [], isLoading, isError } = useTasksQuery({ view: 'upcoming' });
+  const { data: items = [], isLoading, isError } = useFeedQuery('upcoming');
   const showSkeleton = useDelayedLoading(isLoading);
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
@@ -43,21 +43,22 @@ export default function Upcoming() {
   );
 
   const grouped = useMemo(() => {
-    const map = new Map<string, TaskResponseDto[]>();
-    for (const t of tasks) {
-      if (t.parentId) continue;
-      if (!t.scheduledDate) continue;
-      const key = toDateKey(t.scheduledDate);
+    const map = new Map<string, FeedItem[]>();
+    for (const item of items) {
+      if (item.type === 'task' && item.parentId) continue;
+      if (!item.scheduledDate) continue;
+      const key = toDateKey(item.scheduledDate);
       const arr = map.get(key) ?? [];
-      arr.push(t);
+      arr.push(item);
       map.set(key, arr);
     }
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [tasks]);
+  }, [items]);
 
-  const toggleComplete = (task: TaskResponseDto) => {
-    if (task.status === 'COMPLETED') uncompleteTask.mutate(task.id);
-    else completeTask.mutate(task.id, { onError: () => toast.error(t('common:operationFailed')) });
+  const toggleComplete = (item: FeedItem) => {
+    if (item.type !== 'task') return;
+    if (item.status === 'COMPLETED') uncompleteTask.mutate(item.id);
+    else completeTask.mutate(item.id, { onError: () => toast.error(t('common:operationFailed')) });
   };
 
   return (
@@ -79,18 +80,22 @@ export default function Upcoming() {
                 weekday: 'long',
               }).format(new Date(dateKey))}
             </h2>
-            {group.map((task) => {
+            {group.map((item) => {
+              const isTask = item.type === 'task';
+              const taskItem = item as { projectId: string | null; areaId: string | null };
               const selectionState =
-                expandedId === task.id ? 'expanded' : selectedId === task.id ? 'selected' : 'idle';
+                isTask
+                  ? expandedId === item.id ? 'expanded' : selectedId === item.id ? 'selected' : 'idle'
+                  : 'idle';
               return (
-                <TaskItem
-                  key={task.id}
-                  task={task}
-                  projectTitle={task.projectId ? projectMap[task.projectId] : undefined}
-                  areaTitle={task.areaId ? areaMap[task.areaId] : undefined}
+                <FeedItemRow
+                  key={item.id}
+                  item={item}
+                  projectTitle={isTask && taskItem.projectId ? projectMap[taskItem.projectId] : undefined}
+                  areaTitle={isTask && taskItem.areaId ? areaMap[taskItem.areaId] : undefined}
                   selectionState={selectionState}
-                  onToggleComplete={() => toggleComplete(task)}
-                  onRowClick={() => handleRowClick(task.id)}
+                  onToggleComplete={() => toggleComplete(item)}
+                  onRowClick={isTask ? () => handleRowClick(item.id) : undefined}
                 />
               );
             })}

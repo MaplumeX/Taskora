@@ -3,10 +3,13 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateProjectDto, ProjectResponseDto, UpdateProjectDto } from '@taskora/shared';
 
 import {
+  completeProject,
   createProject,
   deleteProject,
   getProjects,
   reorderProjects,
+  restoreProject,
+  uncompleteProject,
   updateProject,
 } from '@/lib/api/projects.api';
 
@@ -33,6 +36,7 @@ export function useCreateProject() {
         old ? [...old, project] : old,
       );
       void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }
@@ -45,6 +49,43 @@ export function useUpdateProject() {
     onSuccess: (project) => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.detail(project.id) });
       void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+export function useRestoreProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => restoreProject(id),
+    onSuccess: (project) => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(project.id) });
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+export function useCompleteProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => completeProject(id),
+    onSuccess: (project) => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(project.id) });
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+export function useUncompleteProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => uncompleteProject(id),
+    onSuccess: (project) => {
+      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(project.id) });
+      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }
@@ -74,6 +115,7 @@ export function useReorderProjects() {
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }
@@ -84,6 +126,7 @@ export function useDeleteProject() {
     mutationFn: (id: string) => deleteProject(id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }

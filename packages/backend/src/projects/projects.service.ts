@@ -1,59 +1,239 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto, UpdateProjectDto } from './dto/projects.dto';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class ProjectsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Resolve bucket based on scheduledType (Project version — no parentId/projectId).
+   * - DATE/SOMEDAY → SCHEDULED
+   * - NONE → keep non-SCHEDULED bucket, or derive from area, or INBOX
+   */
+  private resolveBucket(
+    bucket: ProjectBucket | undefined,
+    scheduledType: ScheduledType | undefined,
+    areaId: string | null | undefined,
+  ): ProjectBucket {
+    if (scheduledType === ScheduledType.DATE) return ProjectBucket.SCHEDULED;
+    if (scheduledType === ScheduledType.SOMEDAY) return ProjectBucket.SCHEDULED;
+    // scheduledType === NONE (or undefined → defaults to NONE)
+    if (bucket && bucket !== ProjectBucket.SCHEDULED) return bucket;
+    if (areaId) return ProjectBucket.ANYTIME;
+    return ProjectBucket.INBOX;
+  }
 
   async create(userId: string, dto: CreateProjectDto) {
     const max = await this.prisma.project.aggregate({
       where: { userId },
       _max: { sortOrder: true },
     });
-    return this.prisma.project.create({
+    const scheduledType = dto.scheduledType ?? ScheduledType.NONE;
+    let scheduledDate: Date | null = null;
+    if (scheduledType === ScheduledType.DATE && dto.scheduledDate) {
+      scheduledDate = new Date(dto.scheduledDate);
+    }
+    const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+    const bucket = this.resolveBucket(dto.bucket, scheduledType, dto.areaId);
+
+    const created = await this.prisma.project.create({
       data: {
         title: dto.title,
         notes: dto.notes,
         areaId: dto.areaId,
         sortOrder: (max._max.sortOrder ?? -1) + 1,
         userId,
+        scheduledType,
+        scheduledDate,
+        dueDate,
+        bucket,
+        ...(dto.tagIds?.length
+          ? { tags: { create: dto.tagIds.map((tagId) => ({ tagId })) } }
+          : {}),
       },
+      include: { tags: { include: { tag: true } } },
     });
+    return { ...created, tags: created.tags.map((pt) => pt.tag) };
   }
 
   async findAll(userId: string) {
-    return this.prisma.project.findMany({
+    const projects = await this.prisma.project.findMany({
       where: { userId },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+      include: { tags: { include: { tag: true } } },
     });
+    return projects.map((p) => ({ ...p, tags: p.tags.map((pt) => pt.tag) }));
   }
 
   async findOne(userId: string, id: string) {
     const project = await this.prisma.project.findFirst({
       where: { id, userId },
+      include: { tags: { include: { tag: true } } },
     });
     if (!project) {
       throw new NotFoundException('Project not found');
     }
-    return project;
+    return { ...project, tags: project.tags.map((pt) => pt.tag) };
   }
 
   async update(userId: string, id: string, dto: UpdateProjectDto) {
-    await this.findOne(userId, id);
+    const existing = await this.prisma.project.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Project not found');
+    }
+
+    // Determine effective scheduledType and scheduledDate
+    const newScheduledType =
+      dto.scheduledType !== undefined ? dto.scheduledType : existing.scheduledType;
+
+    let effectiveScheduledDate: Date | null;
+    if (newScheduledType === ScheduledType.SOMEDAY) {
+      effectiveScheduledDate = null;
+    } else if (newScheduledType === ScheduledType.NONE) {
+      effectiveScheduledDate = null;
+    } else {
+      // DATE
+      if (dto.scheduledDate !== undefined) {
+        effectiveScheduledDate = dto.scheduledDate ? new Date(dto.scheduledDate) : null;
+      } else {
+        effectiveScheduledDate = existing.scheduledDate;
+      }
+    }
+
+    // Resolve bucket if scheduledType, scheduledDate, area, or bucket changed
+    let bucket = existing.bucket;
+    const newAreaId =
+      dto.areaId !== undefined ? dto.areaId : existing.areaId;
+
+    if (
+      dto.scheduledType !== undefined ||
+      dto.scheduledDate !== undefined ||
+      dto.areaId !== undefined ||
+      dto.bucket !== undefined
+    ) {
+      bucket = this.resolveBucket(
+        (dto.bucket ?? existing.bucket) as ProjectBucket,
+        newScheduledType as ScheduledType,
+        newAreaId,
+      );
+    }
+
+    const data: Prisma.ProjectUpdateInput = {};
+    if (dto.title !== undefined) data.title = dto.title;
+    if (dto.notes !== undefined) data.notes = dto.notes;
+    if (dto.scheduledType !== undefined || dto.scheduledDate !== undefined) {
+      data.scheduledDate = effectiveScheduledDate;
+    }
+    if (dto.scheduledType !== undefined) {
+      data.scheduledType = newScheduledType;
+    }
+    if (dto.dueDate !== undefined) {
+      data.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+    }
+    data.bucket = bucket;
+    if (dto.areaId !== undefined) {
+      data.area = dto.areaId
+        ? { connect: { id: dto.areaId } }
+        : { disconnect: true };
+    }
+
+    // 全量 set 语义：tagIds 传 undefined 不动；传数组则先删旧关联再建新关联
+    if (dto.tagIds !== undefined) {
+      await this.prisma.$transaction([
+        this.prisma.projectTag.deleteMany({ where: { projectId: id } }),
+        ...(dto.tagIds.length > 0
+          ? [
+              this.prisma.projectTag.createMany({
+                data: dto.tagIds.map((tagId) => ({ projectId: id, tagId })),
+                skipDuplicates: true,
+              }),
+            ]
+          : []),
+      ]);
+    }
+
+    const updated = await this.prisma.project.update({
+      where: { id },
+      data,
+      include: { tags: { include: { tag: true } } },
+    });
+    return { ...updated, tags: updated.tags.map((pt) => pt.tag) };
+  }
+
+  async remove(userId: string, id: string) {
+    const existing = await this.prisma.project.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Project not found');
+    }
+
     return this.prisma.project.update({
       where: { id },
       data: {
-        title: dto.title,
-        notes: dto.notes,
-        areaId: dto.areaId,
+        status: ProjectStatus.TRASHED,
+        trashedAt: new Date(),
       },
     });
   }
 
-  async remove(userId: string, id: string) {
-    await this.findOne(userId, id);
-    return this.prisma.project.delete({ where: { id } });
+  async restore(userId: string, id: string) {
+    const existing = await this.prisma.project.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Project not found');
+    }
+
+    return this.prisma.project.update({
+      where: { id },
+      data: {
+        status: ProjectStatus.ACTIVE,
+        trashedAt: null,
+      },
+    });
+  }
+
+  async complete(userId: string, id: string) {
+    const existing = await this.prisma.project.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Project not found');
+    }
+
+    return this.prisma.project.update({
+      where: { id },
+      data: {
+        status: ProjectStatus.COMPLETED,
+        completedAt: new Date(),
+      },
+    });
+  }
+
+  async uncomplete(userId: string, id: string) {
+    const existing = await this.prisma.project.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Project not found');
+    }
+
+    return this.prisma.project.update({
+      where: { id },
+      data: {
+        status: ProjectStatus.ACTIVE,
+        completedAt: null,
+      },
+    });
   }
 
   async reorder(userId: string, orderedIds: string[]) {

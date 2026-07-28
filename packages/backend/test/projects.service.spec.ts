@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProjectsService } from '../src/projects/projects.service';
+import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
 
 describe('ProjectsService', () => {
   let service: ProjectsService;
@@ -18,6 +19,10 @@ describe('ProjectsService', () => {
         delete: vi.fn(),
         updateMany: vi.fn(),
         aggregate: vi.fn(),
+      },
+      projectTag: {
+        deleteMany: vi.fn(),
+        createMany: vi.fn(),
       },
       $transaction: vi.fn((promises: unknown[]) => Promise.all(promises)),
     } as unknown as InstanceType<typeof PrismaService>;
@@ -36,11 +41,19 @@ describe('ProjectsService', () => {
         areaId: 'area-1',
         sortOrder: 3,
         userId,
+        status: ProjectStatus.ACTIVE,
+        bucket: ProjectBucket.ANYTIME,
+        scheduledType: ScheduledType.NONE,
+        scheduledDate: null,
+        dueDate: null,
+        completedAt: null,
+        trashedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
+        tags: [],
       };
       mockPrisma.project.aggregate.mockResolvedValue({ _max: { sortOrder: 2 } });
-      mockPrisma.project.create.mockResolvedValue(expected);
+      mockPrisma.project.create.mockResolvedValue({ ...expected, tags: [] });
 
       const result = await service.create(userId, dto);
 
@@ -49,7 +62,18 @@ describe('ProjectsService', () => {
         _max: { sortOrder: true },
       });
       expect(mockPrisma.project.create).toHaveBeenCalledWith({
-        data: { title: 'Taskora', notes: 'Build app', areaId: 'area-1', sortOrder: 3, userId },
+        data: {
+          title: 'Taskora',
+          notes: 'Build app',
+          areaId: 'area-1',
+          sortOrder: 3,
+          userId,
+          scheduledType: ScheduledType.NONE,
+          scheduledDate: null,
+          dueDate: null,
+          bucket: ProjectBucket.ANYTIME,
+        },
+        include: { tags: { include: { tag: true } } },
       });
       expect(result).toEqual(expected);
     });
@@ -64,16 +88,31 @@ describe('ProjectsService', () => {
         areaId: null,
         sortOrder: 0,
         userId,
+        status: ProjectStatus.ACTIVE,
+        bucket: ProjectBucket.INBOX,
+        scheduledType: ScheduledType.NONE,
         createdAt: new Date(),
         updatedAt: new Date(),
+        tags: [],
       };
       mockPrisma.project.aggregate.mockResolvedValue({ _max: { sortOrder: null } });
-      mockPrisma.project.create.mockResolvedValue(expected);
+      mockPrisma.project.create.mockResolvedValue({ ...expected, tags: [] });
 
       const result = await service.create(userId, dto);
 
       expect(mockPrisma.project.create).toHaveBeenCalledWith({
-        data: { title: 'First Project', notes: undefined, areaId: undefined, sortOrder: 0, userId },
+        data: {
+          title: 'First Project',
+          notes: undefined,
+          areaId: undefined,
+          sortOrder: 0,
+          userId,
+          scheduledType: ScheduledType.NONE,
+          scheduledDate: null,
+          dueDate: null,
+          bucket: ProjectBucket.INBOX,
+        },
+        include: { tags: { include: { tag: true } } },
       });
       expect(result).toEqual(expected);
     });
@@ -83,8 +122,8 @@ describe('ProjectsService', () => {
     it('should return all projects ordered by sortOrder asc, createdAt desc', async () => {
       const userId = 'user-1';
       const expected = [
-        { id: 'project-1', title: 'A', notes: null, userId, sortOrder: 0 },
-        { id: 'project-2', title: 'B', notes: null, userId, sortOrder: 1 },
+        { id: 'project-1', title: 'A', notes: null, userId, sortOrder: 0, tags: [] },
+        { id: 'project-2', title: 'B', notes: null, userId, sortOrder: 1, tags: [] },
       ];
       mockPrisma.project.findMany.mockResolvedValue(expected);
 
@@ -93,6 +132,7 @@ describe('ProjectsService', () => {
       expect(mockPrisma.project.findMany).toHaveBeenCalledWith({
         where: { userId },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
+        include: { tags: { include: { tag: true } } },
       });
       expect(result).toEqual(expected);
     });
@@ -102,13 +142,14 @@ describe('ProjectsService', () => {
     it('should return a project by id', async () => {
       const userId = 'user-1';
       const projectId = 'project-1';
-      const expected = { id: projectId, title: 'Taskora', notes: null, userId };
-      mockPrisma.project.findFirst.mockResolvedValue(expected);
+      const expected = { id: projectId, title: 'Taskora', notes: null, userId, tags: [] };
+      mockPrisma.project.findFirst.mockResolvedValue({ ...expected, tags: [] });
 
       const result = await service.findOne(userId, projectId);
 
       expect(mockPrisma.project.findFirst).toHaveBeenCalledWith({
         where: { id: projectId, userId },
+        include: { tags: { include: { tag: true } } },
       });
       expect(result).toEqual(expected);
     });
