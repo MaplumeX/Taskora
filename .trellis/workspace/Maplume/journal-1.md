@@ -830,3 +830,36 @@ Fixed the real root cause of the trash-row vs normal-row pointer discrepancy: no
 
 ### Status
 [OK] **Completed** — build/lint/typecheck/test 全绿，独立 check 通过。
+
+
+## Session 21: 项目条目右键菜单与详情页更多按钮
+
+**Date**: 2026-07-29
+**Task**: 项目条目右键菜单与详情页更多按钮
+**Branch**: `main`
+
+### Summary
+
+新增 ProjectContextMenu（右键虚拟锚点版）与 ProjectMoreMenu（MoreHorizontal trigger 版），共享内部 ProjectMenuPanel，菜单项含完成切换/日期/到期/标签/删除（trash variant 显示恢复）。接入 ProjectItem 与 ProjectFeedRow 右键菜单；ProjectDetail 移除三按钮 IconPopover 行，标题后改用 ProjectMoreMenu。复用 task/fields/ 字段组件（cast 兼容），新增 common:more i18n key。更新 frontend 组件规范。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5398d91` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete

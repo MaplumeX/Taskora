@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 20
+- **Total Sessions**: 21
 - **Last Active**: 2026-07-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~818 | Active |
+| `journal-1.md` | ~865 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 21 | 2026-07-29 | 项目条目右键菜单与详情页更多按钮 | `5398d91` | `main` |
 | 20 | 2026-07-29 | Fix trash row hover cursor | `426eae9` | `main` |
 | 19 | 2026-07-29 | Fix trash row structure to match TaskItem | `770d019` | `main` |
 | 18 | 2026-07-29 | Trash task context menu with restore | `04fab6e` | `main` |
