@@ -10,6 +10,7 @@ import {
   Tags as TagsIcon,
   Trash2,
   CloudSun,
+  Settings,
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -33,6 +34,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useNavigate } from 'react-router-dom';
 
 interface NavItem {
   to: string;
@@ -142,6 +144,7 @@ export function Sidebar() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const logout = useLogout();
+  const navigate = useNavigate();
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const { data: tags = [] } = useTagsQuery();
@@ -156,14 +159,26 @@ export function Sidebar() {
               className="w-full justify-start gap-2 px-2 font-medium"
             >
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
-                {user?.email?.[0]?.toUpperCase() ?? '?'}
+                {user?.avatarUrl ? (
+                  <img
+                    src={user.avatarUrl}
+                    alt=""
+                    className="h-7 w-7 rounded-full object-cover"
+                  />
+                ) : (
+                  (user?.displayName?.[0] ?? user?.email?.[0] ?? '?').toUpperCase()
+                )}
               </span>
-              <span className="truncate">{user?.email ?? t('common:notLoggedIn')}</span>
+              <span className="truncate">{user?.displayName ?? user?.email ?? t('common:notLoggedIn')}</span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuLabel className="truncate">{user?.email}</DropdownMenuLabel>
+            <DropdownMenuLabel className="truncate">{user?.displayName ?? user?.email}</DropdownMenuLabel>
             <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={() => navigate('/settings/account')}>
+              <Settings className="mr-2 h-4 w-4" />
+              {t('auth:accountSettings')}
+            </DropdownMenuItem>
             <DropdownMenuItem onClick={logout}>{t('common:logout')}</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

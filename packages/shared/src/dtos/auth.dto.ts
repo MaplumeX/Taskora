@@ -8,10 +8,9 @@ export interface LoginDto {
   password: string;
 }
 
+import type { UserResponseDto } from './user.dto';
+
 export interface AuthResponseDto {
   accessToken: string;
-  user: {
-    id: string;
-    email: string;
-  };
+  user: Pick<UserResponseDto, 'id' | 'email' | 'displayName' | 'avatarUrl'>;
 }

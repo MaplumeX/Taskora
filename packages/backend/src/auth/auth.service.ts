@@ -8,6 +8,7 @@ import { JwtService } from '@nestjs/jwt';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { RegisterDto, LoginDto } from './dto/auth.dto';
+import { USER_PUBLIC_SELECT } from '../users/users.service';
 
 @Injectable()
 export class AuthService {
@@ -27,7 +28,7 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
       data: { email: dto.email, passwordHash },
-      select: { id: true, email: true },
+      select: { id: true, email: true, displayName: true, avatarUrl: true },
     });
 
     return user;
@@ -50,14 +51,19 @@ export class AuthService {
 
     return {
       accessToken,
-      user: { id: user.id, email: user.email },
+      user: {
+        id: user.id,
+        email: user.email,
+        displayName: user.displayName,
+        avatarUrl: user.avatarUrl,
+      },
     };
   }
 
   async getMe(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, email: true, createdAt: true, updatedAt: true },
+      select: USER_PUBLIC_SELECT,
     });
     if (!user) {
       throw new NotFoundException('User not found');

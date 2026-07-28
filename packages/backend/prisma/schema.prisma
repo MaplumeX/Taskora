@@ -11,6 +11,10 @@ model User {
   id           String   @id @default(uuid())
   email        String   @unique
   passwordHash String
+  displayName  String?
+  avatarUrl    String?
+  timezone     String?
+  locale       String?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   tasks        Task[]

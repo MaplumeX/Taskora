@@ -1,0 +1,11 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Module/file layout conventions for backend (new UsersModule)"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Prisma schema/migration patterns and query conventions"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "Nest exception & Prisma error handling for new endpoints"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend code standards and forbidden patterns"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Frontend file/folder layout for new SettingsAccount page and users api"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component patterns for forms and settings UI"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useMutation/query conventions for profile/password hooks"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "auth store update conventions (user snapshot)"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Shared DTO typing between frontend/backend"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "Translation key conventions for new settings page"}

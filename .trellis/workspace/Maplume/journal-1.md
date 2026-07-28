@@ -568,3 +568,28 @@ Investigated why URL shows ?expand=<id> on task expand; identified root cause as
 ### Next Steps
 
 - None - task complete
+
+---
+
+## 2026-07-28 — 子任务 A：账户自管理
+
+### Summary
+扩展 User 模型（displayName/avatarUrl/timezone/locale），新增 UsersModule（PUT /users/me, PUT /users/me/password），前端 SettingsAccount 页 + Sidebar 显示名/头像优先级 + i18n。
+
+- Shared: `user.dto.ts` 新建；`AuthResponseDto.user` Pick 扩展字段。
+- Prisma: 迁移 `20260728053300_add_user_profile_fields`（4× ADD COLUMN NULL，可逆）。
+- Backend: `src/users/` 模块；`AuthService.getMe` 复用 `USER_PUBLIC_SELECT`；`login`/`register` 返回体补 displayName/avatarUrl（Check 阶段修复的契约缺口）；DTO 校验用自定义 `IsValidTimezone` + `IsIn(['zh','en'])` + `IsUrl(https)`。
+- Frontend: `users.api.ts` + `useUsers.ts`（updateProfile 更新 store + invalidate auth.me）；`SettingsAccount.tsx`；路由 `/settings/account`；Sidebar dropdown 加「账户设置」。
+
+### Testing
+- backend: lint ✓ typecheck ✓ test ✓ (61 passed / 3 skipped e2e)
+- frontend: lint ✓ typecheck ✓
+- 新增 `test/users.dto.spec.ts`（7 测试，覆盖非法 timezone/locale/avatarUrl/whitelist/displayName 长度）+ `test/users.service.spec.ts`（6 测试）。
+
+### Check Agent 发现并修复
+- Issue 1（中）：login/register 返回缺 displayName/avatarUrl → 已修复。
+- Issue 2（次）：缺非法输入测试 → 已补 `users.dto.spec.ts`。
+- Issue 3（轻）：AuthUser 类型两处重复定义 → 仅提示，未处理。
+
+### Next
+- 子任务 B（Refresh Token）待启动。
