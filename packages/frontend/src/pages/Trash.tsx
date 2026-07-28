@@ -24,13 +24,15 @@ export default function Trash() {
       ) : (
         <div className="flex flex-col">
           {tasks.map((task) => (
-            <TaskContextMenu key={task.id} task={task} current={task} variant="trash">
-              <div className="flex h-12 items-center gap-3 px-2 text-sm text-muted-foreground">
-                <TaskCheckbox checked={false} onToggle={() => {}} disabled />
-                <span className="flex-1 truncate line-through">{task.title}</span>
-                <TaskDateBadge scheduledDate={task.scheduledDate} />
-              </div>
-            </TaskContextMenu>
+            <div key={task.id} data-task-item className="group flex flex-col transition-colors">
+              <TaskContextMenu task={task} current={task} variant="trash">
+                <div className="flex h-12 items-center gap-3 px-2 text-sm text-muted-foreground">
+                  <TaskCheckbox checked={false} onToggle={() => {}} disabled />
+                  <span className="flex-1 truncate line-through">{task.title}</span>
+                  <TaskDateBadge scheduledDate={task.scheduledDate} />
+                </div>
+              </TaskContextMenu>
+            </div>
           ))}
         </div>
       )}
