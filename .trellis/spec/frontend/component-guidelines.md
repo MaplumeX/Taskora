@@ -139,6 +139,17 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 - **日期/标签子交互**：点击对应菜单项 → 关闭主菜单 + `setActivePicker(kind)` → 用第二个受控 `Popover`（锚定到行容器 ref）渲染对应 Field picker。
 - **键盘**：主菜单打开 autoFocus 首项、Esc 关闭、Tab + Enter 触发（方向键 roving 导航未实现，列为 Deferred）。
 
+### 右键菜单（ProjectContextMenu / ProjectMoreMenu）
+
+项目条目（`ProjectItem` / `ProjectFeedRow`）支持与 `TaskContextMenu` 对齐的右键上下文菜单，组件位于 `src/components/project/ProjectContextMenu.tsx`。
+
+- **结构镜像 TaskContextMenu**：右键虚拟锚点 + 主菜单 `Popover` + picker 二级 `Popover`（锚定行容器 ref）。菜单项（按序）：标记完成/未完成（`useCompleteProject`/`useUncompleteProject`）、日期、到期、标签、末项（删除/恢复，随 `variant` 切换）。
+- **变体（`variant`）**：`'default' | 'trash'`，默认 `default`。`default` 末项「删除」→ `useDeleteProject`（`text-destructive`）；`trash` 末项「恢复」→ `useRestoreProject`。`ProjectFeedRow` 按 `item.status === 'TRASHED'` 切换 variant。
+- **共享菜单面板**：内部 `ProjectMenuPanel` 同时渲染菜单项 + picker，被右键版 `ProjectContextMenu` 与 trigger 版 `ProjectMoreMenu` 共用，避免重复实现。`ProjectMoreMenu` 内置 `MoreHorizontal` ghost 按钮作为 `PopoverTrigger`，用于详情页标题旁的「更多」入口。
+- **dnd-kit 兼容**：`SortableProjectItem`（侧边栏 + AreaDetail）的 `useSortable` listeners 在外层 div，`ProjectContextMenu` 的 `onContextMenu` 在内层容器，互不干扰（拖拽靠 PointerSensor distance:5，右键不参与 pointer 判定）。
+- **字段组件复用**：picker 复用 `task/fields/` 下的 `ScheduledDateField`/`DueDateField`/`TagsField`，props 期望 `TaskResponseDto`/`UpdateTaskDto`，项目字段名对齐，沿用 cast 兼容（`current as unknown as ...`、`patch as any`，与 `ProjectDetail` 原有模式一致）。
+- **i18n**：菜单文案复用 `task:` 命名空间（`markComplete`/`markIncomplete`/`scheduledDate`/`dueDate`/`tags`）与 `common:`（`delete`/`restore`/`saveFailed`/`more`）。「更多」按钮 aria-label 用 `common:more`。
+
 ### 共享 Field 组件（task/fields/）
 
 `TaskRowExpanded` 与右键菜单共用的编辑字段已抽取为 `src/components/task/fields/` 下独立组件：`ScheduledDateField` / `DueDateField` / `TagsField`。统一 props：`{ current: TaskResponseDto; onPatch: (data: UpdateTaskDto) => void }`。父组件负责定义 `patch`（调 `useUpdateTask` + invalidate `task.detail` + `['tasks']` + toast），Field 仅负责 UI 与调用 `onPatch`，不重复 mutation/invalidation 逻辑。`IconPopover`（`TaskRowExpanded` 内）作为 trigger 容器保留，仅 children 替换为对应 Field。
@@ -208,7 +219,7 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 
 ### 标题内联编辑为唯一入口
 
-内联编辑仅覆盖标题字段。详情页不再提供「编辑」/「删除」文案按钮——标题由 `InlineTitleEdit` 直接编辑，删除通过侧边栏底栏入口操作（项目/区域的 list 管理页已移除，`ProjectForm` / `AreaForm` 对话框已删除）。
+内联编辑仅覆盖标题字段。详情页不再提供「编辑」/「删除」**文案按钮**——标题由 `InlineTitleEdit` 直接编辑。项目详情页（`ProjectDetail`）在标题行右侧提供「更多」按钮（`ProjectMoreMenu`，`MoreHorizontal` 图标），弹出内容与项目右键菜单一致（完成切换 / 日期 / 到期 / 标签 / 删除）；区域详情页暂无此按钮。项目/区域的 list 管理页已移除，`ProjectForm` / `AreaForm` 对话框已删除。
 
 ---
 
