@@ -21,6 +21,12 @@ export function useTaskRowSelection() {
         '[data-radix-popper-content-wrapper] [data-state="open"], [role="dialog"][data-state="open"], [data-state="open"][role="listbox"]',
       );
       if (openOverlay) return;
+      // 关闭展开态前先让当前聚焦的可编辑元素失焦，触发其 onBlur 提交（标题/备注），
+      // 否则组件卸载会令 onBlur 丢失、编辑内容未保存。
+      const active = document.activeElement as HTMLElement | null;
+      if (active && active.closest('[data-task-item]')) {
+        active.blur();
+      }
       setExpandedId(null);
       setSelectedId(null);
     };
