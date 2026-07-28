@@ -25,5 +25,7 @@
   "logbookEmpty": "No completed tasks yet",
   "trashEmpty": "Trash is empty",
   "yesterday": "Yesterday",
-  "earlier": "Earlier"
+  "earlier": "Earlier",
+  "markComplete": "Mark Complete",
+  "markIncomplete": "Mark Incomplete"
 }

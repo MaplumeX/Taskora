@@ -26,7 +26,6 @@ import {
 import { cn } from '@/lib/utils';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
-import { useTagsQuery } from '@/lib/hooks/useTags';
 import {
   taskKeys,
   useCompleteTask,
@@ -35,8 +34,10 @@ import {
   useUncompleteTask,
   useUpdateTask,
 } from '@/lib/hooks/useTasks';
-import { toInputDateValue, fromInputDateValue } from '@/lib/utils/date';
 import { toast } from 'sonner';
+import { ScheduledDateField } from './fields/ScheduledDateField';
+import { DueDateField } from './fields/DueDateField';
+import { TagsField } from './fields/TagsField';
 
 interface Props {
   task: TaskResponseDto;
@@ -51,18 +52,11 @@ export function TaskRowExpanded({ task, current }: Props) {
   const createSubtask = useCreateTask();
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
-  const { data: tags = [] } = useTagsQuery();
 
   const [notes, setNotes] = React.useState(current.notes ?? '');
   const [subtaskTitle, setSubtaskTitle] = React.useState('');
 
   const scheduledType = current.scheduledType ?? ScheduledType.NONE;
-  const dateValue = current.scheduledDate
-    ? toInputDateValue(new Date(current.scheduledDate))
-    : '';
-  const dueDateValue = current.dueDate
-    ? toInputDateValue(new Date(current.dueDate))
-    : '';
 
   const invalidateParent = () =>
     queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
@@ -81,18 +75,6 @@ export function TaskRowExpanded({ task, current }: Props) {
 
   const commitNotes = () => {
     if (notes !== (current.notes ?? '')) patch({ notes });
-  };
-
-  const onScheduledTypeChange = (type: ScheduledType) =>
-    patch({ scheduledType: type });
-
-  const onDateChange = (value: string) => {
-    if (value)
-      patch({
-        scheduledType: ScheduledType.DATE,
-        scheduledDate: fromInputDateValue(value).toISOString(),
-      });
-    else patch({ scheduledType: ScheduledType.NONE });
   };
 
   const addSubtask = () => {
@@ -159,39 +141,7 @@ export function TaskRowExpanded({ task, current }: Props) {
           icon={<Calendar className="h-4 w-4" />}
           active={scheduledType !== ScheduledType.NONE}
         >
-          <div className="flex flex-col gap-2">
-            <div className="flex gap-1">
-              {[ScheduledType.NONE, ScheduledType.DATE, ScheduledType.SOMEDAY].map(
-                (type) => (
-                  <button
-                    key={type}
-                    type="button"
-                    onClick={() => onScheduledTypeChange(type)}
-                    className={cn(
-                      'rounded-md px-2.5 py-1 text-xs transition-colors',
-                      scheduledType === type
-                        ? 'bg-primary text-primary-foreground'
-                        : 'border border-input text-muted-foreground hover:bg-muted',
-                    )}
-                  >
-                    {type === ScheduledType.NONE
-                      ? t('common:none')
-                      : type === ScheduledType.DATE
-                      ? t('task:scheduledDate')
-                      : t('task:somedayLabel')}
-                  </button>
-                ),
-              )}
-            </div>
-            {scheduledType === ScheduledType.DATE && (
-              <input
-                type="date"
-                value={dateValue}
-                onChange={(e) => onDateChange(e.target.value)}
-                className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              />
-            )}
-          </div>
+          <ScheduledDateField current={current} onPatch={patch} />
         </IconPopover>
 
         <IconPopover
@@ -199,17 +149,7 @@ export function TaskRowExpanded({ task, current }: Props) {
           icon={<Clock className="h-4 w-4" />}
           active={!!current.dueDate}
         >
-          <input
-            type="date"
-            value={dueDateValue}
-            onChange={(e) => {
-              const value = e.target.value;
-              if (value)
-                patch({ dueDate: fromInputDateValue(value).toISOString() });
-              else patch({ dueDate: null });
-            }}
-            className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          />
+          <DueDateField current={current} onPatch={patch} />
         </IconPopover>
 
         <IconPopover
@@ -293,42 +233,7 @@ export function TaskRowExpanded({ task, current }: Props) {
           icon={<Tag className="h-4 w-4" />}
           active={(current.tags ?? []).length > 0}
         >
-          <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
-            {tags.length === 0 ? (
-              <span className="px-2 py-1.5 text-xs text-muted-foreground/60">
-                {t('task:noTagsHint')}
-              </span>
-            ) : (
-              tags.map((tag) => {
-                const selected = (current.tags ?? []).some((t) => t.id === tag.id);
-                return (
-                  <button
-                    key={tag.id}
-                    type="button"
-                    onClick={() => {
-                      const currentIds = (current.tags ?? []).map((t) => t.id);
-                      const next = selected
-                        ? currentIds.filter((id) => id !== tag.id)
-                        : [...currentIds, tag.id];
-                      patch({ tagIds: next });
-                    }}
-                    className={cn(
-                      'flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
-                      selected ? 'opacity-100' : 'opacity-50',
-                    )}
-                    style={{ color: tag.color }}
-                  >
-                    <span
-                      className="h-2.5 w-2.5 rounded-full"
-                      style={{ backgroundColor: tag.color }}
-                    />
-                    {tag.title}
-                    {selected && <Check className="ml-auto h-3.5 w-3.5" />}
-                  </button>
-                );
-              })
-            )}
-          </div>
+          <TagsField current={current} onPatch={patch} />
         </IconPopover>
       </div>
     </div>

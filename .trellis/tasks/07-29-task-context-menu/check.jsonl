@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "检查前端实现质量、可访问性与回归点"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "检查 TaskContextMenu 及抽取的 Field 组件是否符合组件规范"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "检查新增中英文文案齐全且符合 i18n 规范"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "检查 props 类型与无 any 残留"}
