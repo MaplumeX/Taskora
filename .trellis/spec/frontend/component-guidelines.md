@@ -133,7 +133,9 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 
 - **触发与定位**：在包裹行头的容器 div 上挂 `onContextMenu`，`e.preventDefault()` 阻止浏览器默认菜单，记录鼠标坐标并通过 `@radix-ui/react-popover` 的 `PopoverAnchor` + 虚拟 ref（`React.RefObject<Measurable|null>`，在 `onContextMenu` 时赋值 `.current`）定位到鼠标坐标。**不新增可见触发按钮**。使用已安装的 `react-popover` 虚拟锚点即可，不引入 `@radix-ui/react-context-menu`（交互复杂度未到需要原生 submenu 的程度）。
 - **作用范围**：仅包裹 `TaskItem` 的主任务行（checkbox + 标题 + badges），**不**包裹展开区 `TaskRowExpanded`。否则展开态下右键输入框会丢失浏览器原生右键（粘贴/拼写检查等）。展开区位于 `</TaskContextMenu>` 之外，作为 `data-task-item` 根 div 的直接子节点。
-- **菜单项**（按序）：标记完成/未完成（文案随 `current.status` 切换，调 `useCompleteTask`/`useUncompleteTask`）、设置计划时间、设置到期时间、设置标签、删除（直接软删除无二次确认，失败 toast 用 `task:deleteFailed`）。
+- **菜单项**（按序）：标记完成/未完成（文案随 `current.status` 切换，调 `useCompleteTask`/`useUncompleteTask`）、设置计划时间、设置到期时间、设置标签、末项（删除/恢复，随 `variant` 切换，见下）。
+- **变体（`variant`）**：prop `variant?: 'default' | 'trash'`，默认 `default`。两者菜单结构与 picker 逻辑完全相同，仅末项语义不同：`default` 末项为「删除」（`handleDelete` → `useDeleteTask`，文案 `common:delete`，失败 toast 用 `task:deleteFailed`）；`trash` 末项为「恢复」（`handleRestore` → `useRestoreTask`，文案 `common:restore`，失败 toast 用 `common:restoreFailed`）。`default` 行为是回归保护基线，改动时不得影响。
+- **废纸篓复用**：`Trash.tsx` 的行用 `<TaskContextMenu task={task} current={task} variant="trash">` 包裹以获得右键菜单；恢复入口仅走右键菜单，行尾不再有内联恢复按钮（与普通任务行「删除仅走右键」一致）。废纸篓行保持简单行（无展开/无 `onRowClick`）。
 - **日期/标签子交互**：点击对应菜单项 → 关闭主菜单 + `setActivePicker(kind)` → 用第二个受控 `Popover`（锚定到行容器 ref）渲染对应 Field picker。
 - **键盘**：主菜单打开 autoFocus 首项、Esc 关闭、Tab + Enter 触发（方向键 roving 导航未实现，列为 Deferred）。
 

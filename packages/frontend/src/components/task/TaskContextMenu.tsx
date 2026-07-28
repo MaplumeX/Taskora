@@ -15,6 +15,7 @@ import {
   taskKeys,
   useCompleteTask,
   useDeleteTask,
+  useRestoreTask,
   useUncompleteTask,
   useUpdateTask,
 } from '@/lib/hooks/useTasks';
@@ -26,6 +27,7 @@ interface Props {
   task: TaskResponseDto;
   current: TaskResponseDto;
   children: React.ReactNode;
+  variant?: 'default' | 'trash';
 }
 
 type PickerKind = 'scheduled' | 'due' | 'tags' | null;
@@ -33,7 +35,7 @@ type PickerKind = 'scheduled' | 'due' | 'tags' | null;
 const MENU_ITEM_CLASS =
   'relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent';
 
-export function TaskContextMenu({ task, current, children }: Props) {
+export function TaskContextMenu({ task, current, children, variant = 'default' }: Props) {
   const { t } = useTranslation('task');
   const { t: tc } = useTranslation('common');
   const queryClient = useQueryClient();
@@ -42,6 +44,7 @@ export function TaskContextMenu({ task, current, children }: Props) {
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const deleteTask = useDeleteTask();
+  const restoreTask = useRestoreTask();
 
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
@@ -86,6 +89,16 @@ export function TaskContextMenu({ task, current, children }: Props) {
         void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       },
       onError: () => toast.error(t('deleteFailed')),
+    });
+  };
+
+  const handleRestore = () => {
+    closeMenu();
+    restoreTask.mutate(task.id, {
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      },
+      onError: () => toast.error(tc('restoreFailed')),
     });
   };
 
@@ -166,10 +179,10 @@ export function TaskContextMenu({ task, current, children }: Props) {
           </button>
           <button
             type="button"
-            onClick={handleDelete}
+            onClick={variant === 'trash' ? handleRestore : handleDelete}
             className={cn(MENU_ITEM_CLASS, 'text-destructive')}
           >
-            {tc('delete')}
+            {variant === 'trash' ? tc('restore') : tc('delete')}
           </button>
         </PopoverContent>
       </Popover>
