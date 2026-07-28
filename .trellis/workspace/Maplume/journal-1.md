@@ -684,3 +684,36 @@ Implemented drag-and-drop in the sidebar project section: reorder standalone pro
 ### Next Steps
 
 - None - task complete
+
+
+## Session 17: Task item context menu (right-click)
+
+**Date**: 2026-07-29
+**Task**: Task item context menu (right-click)
+**Branch**: `main`
+
+### Summary
+
+为任务主任务行添加原生右键菜单：标记完成/未完成、设置计划时间、设置到期时间、设置标签、删除（软删除）。菜单用 @radix-ui/react-popover 虚拟锚点定位到鼠标坐标，不引入新依赖。将 TaskRowExpanded 的三个日期/标签 picker 抽取为共享 Field 组件（ScheduledDateField/DueDateField/TagsField），右键菜单与展开行复用同一 patch 语义。check 阶段修复了展开态右键误拦截输入框原生菜单的阻断问题：TaskContextMenu 仅包裹主任务行，TaskRowExpanded 移到包裹外。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6f51d73` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
