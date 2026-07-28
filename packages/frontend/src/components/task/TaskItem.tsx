@@ -9,6 +9,7 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { taskKeys, useTaskQuery, useUpdateTask } from '@/lib/hooks/useTasks';
 import { TaskCheckbox } from './TaskCheckbox';
+import { TaskContextMenu } from './TaskContextMenu';
 import { TaskDateBadge } from './TaskDateBadge';
 import { TaskDueDateBadge } from './TaskDueDateBadge';
 import { TaskRowExpanded } from './TaskRowExpanded';
@@ -109,19 +110,20 @@ export function TaskItem({
         }
       }}
     >
-      <div
-        className={cn(
-          'flex h-10 items-center gap-3 px-2 transition-opacity',
-          exiting && 'task-complete-anim',
-        )}
-        onClick={(e) => {
-          if (!onRowClick) return;
-          e.stopPropagation();
-          onRowClick();
-        }}
-        role={onRowClick ? 'button' : undefined}
-        tabIndex={onRowClick ? 0 : undefined}
-      >
+      <TaskContextMenu task={task} current={current}>
+        <div
+          className={cn(
+            'flex h-10 items-center gap-3 px-2 transition-opacity',
+            exiting && 'task-complete-anim',
+          )}
+          onClick={(e) => {
+            if (!onRowClick) return;
+            e.stopPropagation();
+            onRowClick();
+          }}
+          role={onRowClick ? 'button' : undefined}
+          tabIndex={onRowClick ? 0 : undefined}
+        >
         <TaskCheckbox checked={completed} onToggle={handleToggle} />
 
         {expanded ? (
@@ -180,7 +182,8 @@ export function TaskItem({
           <TaskDueDateBadge dueDate={current.dueDate} />
 
         </div>
-      </div>
+        </div>
+      </TaskContextMenu>
 
       {expanded && <TaskRowExpanded task={task} current={current} />}
     </div>

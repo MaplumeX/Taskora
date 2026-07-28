@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "新增 TaskContextMenu 组件并抽取共享 Field 子组件，需遵循组件写法与复用规范"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "复用 useUpdateTask/useCompleteTask 等任务 mutation hooks，遵循 hooks 规范"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "新增 markComplete/markIncomplete 等多语言文案需遵循 i18n 规范"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "mutation + query invalidation 策略需与现有 TaskRowExpanded 一致"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Field 组件 props / PickerKind 等类型定义需遵循类型安全规范"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "从 TaskRowExpanded 抽取 picker 逻辑为共享 Field，避免重复实现"}

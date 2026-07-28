@@ -127,6 +127,22 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 - 标签数据由 `useTagsQuery()` 获取（用户级），当前任务的标签由 `useTaskQuery(id).tags` 预选。
 - 更新后 invalidate `tasks` 与 `task.detail` 两个 queryKey，确保列表徽章即时刷新。
 
+### 右键菜单（TaskContextMenu）
+
+任务主任务行（`TaskItem`）支持原生右键菜单，无需展开行即可完成常见操作。组件位于 `src/components/task/TaskContextMenu.tsx`。
+
+- **触发与定位**：在包裹行头的容器 div 上挂 `onContextMenu`，`e.preventDefault()` 阻止浏览器默认菜单，记录鼠标坐标并通过 `@radix-ui/react-popover` 的 `PopoverAnchor` + 虚拟 ref（`React.RefObject<Measurable|null>`，在 `onContextMenu` 时赋值 `.current`）定位到鼠标坐标。**不新增可见触发按钮**。使用已安装的 `react-popover` 虚拟锚点即可，不引入 `@radix-ui/react-context-menu`（交互复杂度未到需要原生 submenu 的程度）。
+- **作用范围**：仅包裹 `TaskItem` 的主任务行（checkbox + 标题 + badges），**不**包裹展开区 `TaskRowExpanded`。否则展开态下右键输入框会丢失浏览器原生右键（粘贴/拼写检查等）。展开区位于 `</TaskContextMenu>` 之外，作为 `data-task-item` 根 div 的直接子节点。
+- **菜单项**（按序）：标记完成/未完成（文案随 `current.status` 切换，调 `useCompleteTask`/`useUncompleteTask`）、设置计划时间、设置到期时间、设置标签、删除（直接软删除无二次确认，失败 toast 用 `task:deleteFailed`）。
+- **日期/标签子交互**：点击对应菜单项 → 关闭主菜单 + `setActivePicker(kind)` → 用第二个受控 `Popover`（锚定到行容器 ref）渲染对应 Field picker。
+- **键盘**：主菜单打开 autoFocus 首项、Esc 关闭、Tab + Enter 触发（方向键 roving 导航未实现，列为 Deferred）。
+
+### 共享 Field 组件（task/fields/）
+
+`TaskRowExpanded` 与右键菜单共用的编辑字段已抽取为 `src/components/task/fields/` 下独立组件：`ScheduledDateField` / `DueDateField` / `TagsField`。统一 props：`{ current: TaskResponseDto; onPatch: (data: UpdateTaskDto) => void }`。父组件负责定义 `patch`（调 `useUpdateTask` + invalidate `task.detail` + `['tasks']` + toast），Field 仅负责 UI 与调用 `onPatch`，不重复 mutation/invalidation 逻辑。`IconPopover`（`TaskRowExpanded` 内）作为 trigger 容器保留，仅 children 替换为对应 Field。
+
+---
+
 ### 展开编辑态纵向布局（TaskRowExpanded）
 
 展开区根 `<div>` 使用 paper 容器样式：`rounded-xl border border-border/50 bg-card px-3 py-2.5 shadow-sm`，视觉上从列表行中浮起为独立卡片。外层 `TaskItem` 展开态保留 `bg-muted/60` 作为画布衬托。
