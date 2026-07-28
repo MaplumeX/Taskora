@@ -593,3 +593,27 @@ Investigated why URL shows ?expand=<id> on task expand; identified root cause as
 
 ### Next
 - 子任务 B（Refresh Token）待启动。
+
+## 2026-07-28 — 子任务 B：Refresh Token + 父任务集成
+
+### Summary
+引入 HttpOnly Cookie + 轮换 + reuse detection 的 Refresh Token 机制；access token 缩短到 15m，前端 token 内存化 + 启动恢复 + 401 自动刷新。
+
+- Prisma: 迁移 `20260728054138_add_refresh_tokens`（RefreshToken 表：tokenHash unique / familyId / expiresAt / revokedAt；User 反向关系；cascade）。
+- Backend: `refresh-token.helpers.ts`（generateRt/hashRt/COOKIE_OPTS）；AuthService 新增 issueRefreshToken/rotateRefreshToken(reuse detection + $transaction)/revokeRefreshToken；access expiresIn 15m。
+- Controllers: /auth/login 写 cookie；/auth/refresh 公开路由 + Sec-Fetch-Site CSRF 校验 + 轮换；/auth/logout 吊销 + 清 cookie；@Res passthrough；main.ts 注册 cookieParser。
+- Tests: `auth.service.spec.ts`（7 测试，含 reuse detection 全 family 吊销）。
+- Frontend: token 不再 persist（仅 user 快照）；setToken/refreshing；client.ts 401 单飞锁 + 队列重放 + refresh 自身 401 不死循环；main.tsx 启动恢复；ProtectedRoute 挂起；useLogout 改 async。
+- Cookie: rt, HttpOnly, Secure(prod), SameSite=Lax, Path=/auth, MaxAge=30d；rt 不泄露进 JSON body。
+
+### Check Agent
+全绿，无需修复。安全项确认：rt 不入 body、hash 比对、cookie 限定 Path=/auth、reuse detection 事务正确。
+
+### 集成验收（父任务 cross-child）
+- 后端 lint/typecheck/test ✓（68 passed / 3 skipped e2e）；前端 lint/typecheck ✓。
+- /auth/refresh 返回的 user 含 child A 的 displayName/avatarUrl（auth.service.ts:165），契约一致。
+- child A 的 users/account 模块零回归。
+
+### Next
+- 父任务归档；本次用户系统完善（账户自管理 + Refresh Token）全部完成。
+- 后续可选：安全加固（限流/CORS 白名单/JWT 密钥回退）、注销账号、邮箱验证。
