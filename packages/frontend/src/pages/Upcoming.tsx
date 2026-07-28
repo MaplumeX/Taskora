@@ -9,7 +9,6 @@ import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import {
   useCompleteTask,
-  useDeleteTask,
   useUncompleteTask,
 } from '@/lib/hooks/useTasks';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
@@ -27,7 +26,6 @@ export default function Upcoming() {
   const { data: areas = [] } = useAreasQuery();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
-  const deleteTask = useDeleteTask();
   const {
     selectedId,
     expandedId,
@@ -62,13 +60,6 @@ export default function Upcoming() {
     else completeTask.mutate(task.id, { onError: () => toast.error(t('common:operationFailed')) });
   };
 
-  const handleTrash = (task: TaskResponseDto) => {
-    deleteTask.mutate(task.id, {
-      onSuccess: () => toast.success(t('task:movedToTrash')),
-      onError: () => toast.error(t('common:deleteFailed')),
-    });
-  };
-
   return (
     <div className="flex flex-col gap-4" onClick={handleBlankClick}>
       <h1 className="text-xl font-semibold tracking-tight">{t('nav:upcoming')}</h1>
@@ -100,7 +91,6 @@ export default function Upcoming() {
                   selectionState={selectionState}
                   onToggleComplete={() => toggleComplete(task)}
                   onRowClick={() => handleRowClick(task.id)}
-                  onTrash={() => handleTrash(task)}
                 />
               );
             })}

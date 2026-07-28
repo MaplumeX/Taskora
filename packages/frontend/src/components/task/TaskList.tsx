@@ -35,7 +35,6 @@ interface Props {
   expandedId?: string | null;
   onRowClick?: (id: string) => void;
   onToggleComplete: (task: TaskResponseDto) => void;
-  onTrash: (task: TaskResponseDto) => void;
   onReorder?: (orderedIds: string[]) => void;
   sortable?: boolean;
   emptyHint?: string;
@@ -48,7 +47,6 @@ interface SortableTaskItemProps {
   selectionState: SelectionState;
   onToggleComplete: () => void;
   onRowClick?: () => void;
-  onTrash: () => void;
 }
 
 function SortableTaskItem({
@@ -58,7 +56,6 @@ function SortableTaskItem({
   selectionState,
   onToggleComplete,
   onRowClick,
-  onTrash,
 }: SortableTaskItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: task.id });
@@ -81,7 +78,6 @@ function SortableTaskItem({
         selectionState={selectionState}
         onToggleComplete={onToggleComplete}
         onRowClick={onRowClick}
-        onTrash={onTrash}
       />
     </div>
   );
@@ -95,7 +91,6 @@ export function TaskList({
   expandedId,
   onRowClick,
   onToggleComplete,
-  onTrash,
 onReorder,
   sortable = true,
   emptyHint,
@@ -142,7 +137,6 @@ onReorder,
         selectionState,
         onToggleComplete: () => onToggleComplete(task),
         onRowClick: onRowClick ? () => onRowClick(task.id) : undefined,
-        onTrash: () => onTrash(task),
       };
 
       if (sortable && onReorder) {

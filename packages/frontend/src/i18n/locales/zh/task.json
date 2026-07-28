@@ -4,8 +4,6 @@
   "createFailed": "创建失败",
   "subtaskCreateFailed": "子任务创建失败",
   "deleteFailed": "删除失败",
-  "movedToTrash": "已移到废纸篓",
-  "moveToTrash": "移到废纸篓",
   "searchTasks": "搜索任务",
   "addTask": "添加任务",
   "notePlaceholder": "备注…",
