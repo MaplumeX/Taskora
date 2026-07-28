@@ -651,3 +651,36 @@ Investigated why URL shows ?expand=<id> on task expand; identified root cause as
 ### Next Steps
 
 - None - task complete
+
+
+## Session 16: Sidebar project/area drag-and-drop reordering
+
+**Date**: 2026-07-28
+**Task**: Sidebar project/area drag-and-drop reordering
+**Branch**: `main`
+
+### Summary
+
+Implemented drag-and-drop in the sidebar project section: reorder standalone projects, reorder projects within an area, move projects across areas (including to standalone/null area), and reorder areas. Single outer DndContext with multiple SortableContexts using proj:/area: id prefixes; PointerSensor distance:5 preserves click navigation, NavLink, and chevron collapse. No backend changes (reused existing reorder/update APIs).
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `daa6a39` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
