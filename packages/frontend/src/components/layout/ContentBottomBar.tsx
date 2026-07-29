@@ -1,16 +1,18 @@
 import { useEffect, useState } from 'react';
-import { Plus, Search } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
+import { FolderPlus, Plus, Search } from 'lucide-react';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import type { CreateTaskDto } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
 import { SearchModal } from '@/components/search/SearchModal';
+import { useCreateProject } from '@/lib/hooks/useProjects';
 import { useCreateTask } from '@/lib/hooks/useTasks';
 import { usePageTaskContext } from '@/lib/hooks/usePageTaskContext';
 import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
-import { toast } from 'sonner';
+import { useAreasQuery } from '@/lib/hooks/useAreas';
 
 const HIDE_ADD_TASK_ROUTES = ['/upcoming', '/logbook', '/trash'];
 
@@ -18,10 +20,34 @@ export function ContentBottomBar() {
   const { t } = useTranslation();
   const [searchOpen, setSearchOpen] = useState(false);
   const createTask = useCreateTask();
+  const createProject = useCreateProject();
   const ctx = usePageTaskContext();
   const setExpandedId = useUiInteractionStore((s) => s.setExpandedId);
+  const setPendingAutoEditId = useUiInteractionStore((s) => s.setPendingAutoEditId);
+  const navigate = useNavigate();
   const { pathname } = useLocation();
+  const { id: areaId } = useParams<{ id: string }>();
+  const { data: areas } = useAreasQuery();
   const showAddTask = !HIDE_ADD_TASK_ROUTES.includes(pathname);
+
+  // 仅在当前 area 存在时才显示添加项目按钮
+  const isAreaDetail = pathname.startsWith('/areas/') && !!areaId;
+  const areaExists = areas?.some((a) => a.id === areaId) ?? false;
+  const showAddProject = isAreaDetail && areaExists;
+
+  const handleAddProject = () => {
+    if (!areaId) return;
+    createProject.mutate(
+      { title: '', areaId },
+      {
+        onSuccess: (p) => {
+          setPendingAutoEditId(p.id);
+          navigate(`/projects/${p.id}`);
+        },
+        onError: () => toast.error(t('common:createFailed')),
+      },
+    );
+  };
 
   // Cmd/Ctrl+K → open search modal
   useEffect(() => {
@@ -56,6 +82,17 @@ export function ContentBottomBar() {
         >
           <Search className="h-5 w-5" />
         </Button>
+        {showAddProject && (
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('project:addProject')}
+            onClick={handleAddProject}
+            disabled={createProject.isPending}
+          >
+            <FolderPlus className="h-5 w-5" />
+          </Button>
+        )}
         {showAddTask && (
           <Button
             variant="ghost"
