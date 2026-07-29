@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "改动涉及 ContentBottomBar 组件，需遵循前端组件规范"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "需新增按钮 aria-label 的 i18n 文案"}
