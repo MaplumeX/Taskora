@@ -929,3 +929,36 @@ Fixed the real root cause of the trash-row vs normal-row pointer discrepancy: no
 ### Next Steps
 
 - None - task complete
+
+
+## Session 24: Empty trash feature
+
+**Date**: 2026-07-29
+**Task**: Empty trash feature
+**Branch**: `main`
+
+### Summary
+
+Added 'Empty Trash' feature: permanently delete all trashed tasks and projects for the current user via POST /feed/trash/empty. Backend FeedService.emptyTrash uses interactive $transaction with in-memory cascade set computation (trashed tasks ∪ recursive descendants per decision B ∪ tasks under trashed projects per decision B') to satisfy NO ACTION FK on Task.parentId and Task.projectId. Frontend Trash.tsx adds ghost 'Empty Trash' button (disabled when empty) + confirmation Dialog reusing existing Dialog component (no new radix-alert-dialog dep). useEmptyTrash hook invalidates feed/tasks/projects. 6 i18n keys in zh/en common.json. database-guidelines.md updated with 'physical delete exception' (only emptyTrash may deleteMany) and 'interactive transaction' notes. 7 backend unit tests (empty/single/cascade-B/multi-level/project-B'/status-isolation/userId-isolation) all green; typecheck/lint/i18n parity pass.
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c519edd` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
