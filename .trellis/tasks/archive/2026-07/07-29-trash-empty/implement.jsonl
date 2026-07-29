@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "物理删除例外 + 交互式事务 + 软删除/级联约定"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "NestJS 异常处理与 userId 隔离 404 语义"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端代码质量约定"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "TanStack mutation + invalidation 约定"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "zh/en key parity + namespace 划分"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "现有 Dialog/Trash.tsx 约定"}
