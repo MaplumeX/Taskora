@@ -1,12 +1,22 @@
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
-import { Folder } from 'lucide-react';
+import { Folder, Trash2 } from 'lucide-react';
 
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { TaskCheckbox } from '@/components/task/TaskCheckbox';
 import { TaskContextMenu } from '@/components/task/TaskContextMenu';
 import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
 import { TaskDateBadge } from '@/components/task/TaskDateBadge';
-import { useFeedQuery } from '@/lib/hooks/useFeed';
+import { useEmptyTrash, useFeedQuery } from '@/lib/hooks/useFeed';
 import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import { useRestoreProject } from '@/lib/hooks/useProjects';
 import { toast } from 'sonner';
@@ -19,10 +29,24 @@ export default function Trash() {
   const { data: items = [], isLoading, isError } = useFeedQuery('trash');
   const showSkeleton = useDelayedLoading(isLoading);
   const restoreProject = useRestoreProject();
+  const emptyTrashMutation = useEmptyTrash();
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold tracking-tight">{t('nav:trash')}</h1>
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-semibold tracking-tight">{t('nav:trash')}</h1>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-muted-foreground"
+          disabled={items.length === 0 || emptyTrashMutation.isPending}
+          onClick={() => setConfirmOpen(true)}
+        >
+          <Trash2 className="h-4 w-4" />
+          {t('common:emptyTrash')}
+        </Button>
+      </div>
       {showSkeleton ? (
         <TaskListSkeleton />
       ) : isError ? (
@@ -49,6 +73,38 @@ export default function Trash() {
           )}
         </div>
       )}
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('common:emptyTrashConfirmTitle')}</DialogTitle>
+            <DialogDescription>{t('common:emptyTrashConfirmDescription')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setConfirmOpen(false)}
+              disabled={emptyTrashMutation.isPending}
+            >
+              {t('common:cancel')}
+            </Button>
+            <Button
+              variant="destructive"
+              disabled={emptyTrashMutation.isPending}
+              onClick={() => {
+                emptyTrashMutation.mutate(undefined, {
+                  onSuccess: () => {
+                    setConfirmOpen(false);
+                    toast.success(t('common:emptyTrashSuccess'));
+                  },
+                  onError: () => toast.error(t('common:emptyTrashFailed')),
+                });
+              }}
+            >
+              {t('common:emptyTrashConfirmAction')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

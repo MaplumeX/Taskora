@@ -64,6 +64,28 @@ Task 使用软删除（`status = TRASHED`），不使用 Prisma `DELETE`：
 - 复用攻击批量吊销：`updateMany({ where: { familyId, revokedAt: null }, data: { revokedAt: new Date() } })`
 - logout：`updateMany({ where: { tokenHash, revokedAt: null }, data: { revokedAt: new Date() } })`
 
+### 物理删除例外（仅限 FeedService.emptyTrash）
+
+Task 默认使用软删除（见上节），但「倾倒废纸篓」需要永久删除已软删除的项。这是唯一受控例外：
+
+- **只允许在 `FeedService.emptyTrash` 内**使用 Prisma `deleteMany` 物理删除 task / project。
+- 物理删除的 `where` 必须同时含 `userId` + `id IN`（集合来自已确认 `status=TRASHED` 的数据）。
+- 任何其他路径（service / controller）仍保持软删除，**禁止** `prisma.task.delete` / `prisma.project.delete`。
+- 中间表 `TaskTag` / `ProjectTag` 通过 `onDelete: Cascade` 自动清理，无需手工删。
+
+### 交互式事务（读-算-写序列）
+
+`$transaction` 有两种用法，按场景选择：
+
+| 模式 | 语法 | 适用场景 |
+|------|------|---------|
+| **数组式** | `$transaction([op1, op2, ...])` | 多个已知写操作并行执行（如 tag 全量替换 `deleteMany` + `createMany`） |
+| **交互式** | `$transaction(async (tx) => { ... })` | 读-算-写序列（先查询、内存计算、再写入，三步须同事务快照一致） |
+
+`FeedService.emptyTrash` 用交互式事务：先读 trashed task / project 集合，内存算级联删除集（后代 + project 下属 task），再 `deleteMany`。保证读到的快照与删除在同一事务内，不会因并发插入新 trashed task 而漏删或 FK 冲突。
+
+> 测试 mock 交互式事务：`$transaction: vi.fn(async (cb) => cb(mockPrisma))`，将 tx 句柄回传为 mock 本身。
+
 ### 自关联查询（子任务）
 
 Task 有自关联 `parentId`。查询子任务用 `TaskChildren` 关系：
