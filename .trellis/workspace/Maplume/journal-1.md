@@ -896,3 +896,36 @@ Fixed the real root cause of the trash-row vs normal-row pointer discrepancy: no
 ### Next Steps
 
 - None - task complete
+
+
+## Session 23: 区域界面底栏添加项目按钮
+
+**Date**: 2026-07-29
+**Task**: 区域界面底栏添加项目按钮
+**Branch**: `main`
+
+### Summary
+
+在区域详情页 (/areas/:id) 的内容区底栏 ContentBottomBar 新增「添加项目」按钮（FolderPlus 图标）。点击创建带 areaId 的空标题项目，成功后 setPendingAutoEditId 并跳转项目详情页进入标题自动编辑态，与侧边栏「新建项目」行为一致。i18n 新增 project:addProject (zh/en)，spec 更新 ContentBottomBar 章节。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `066e978` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
