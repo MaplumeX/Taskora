@@ -6,5 +6,6 @@
   "defaultTitle": "项目",
   "noTasks": "项目中没有任务",
   "created": "项目已创建",
-  "newItemPlaceholder": "新建项目"
+  "newItemPlaceholder": "新建项目",
+  "addProject": "添加项目"
 }

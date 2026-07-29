@@ -236,8 +236,9 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 
 `src/components/layout/ContentBottomBar.tsx` 是页面底部共享栏，跨任务视图复用：
 
-- **左：搜索按钮**（`Search` 图标，`aria-label`）→ 打开 `SearchModal`（`Cmd/Ctrl+K` 快捷键全局监听）。
-- **右：添加任务按钮**（`Plus` 图标，`aria-label`）→ `createTask.mutate({ title: '', ...ctx })`（空标题创建，与项目/区域一致的空标题模式），`ctx` 来自 `usePageTaskContext()`（根据当前路由推断 `CreateTaskDto` 上下文字段：`scheduledType` / `scheduledDate` / `bucket` / `projectId` / `areaId` / `tagIds`）。成功后 `uiInteractionStore.setExpandedId(created.id)` 驱动该行展开。
+- **搜索按钮**（`Search` 图标，`aria-label`）→ 打开 `SearchModal`（`Cmd/Ctrl+K` 快捷键全局监听），始终显示。
+- **添加项目按钮**（`FolderPlus` 图标，`aria-label` `project:addProject`）→ 仅在 `/areas/:id`（且该 area 存在）时显示。`createProject.mutate({ title: '', areaId })`（`areaId` 取当前路由 id，与 `SidebarBottomBar.handleNewProject` 的差异仅在于携带 `areaId`）。成功后 `uiInteractionStore.setPendingAutoEditId(p.id)` + `navigate('/projects/{id}')`，失败 toast `common:createFailed`，`isPending` 时 disabled。
+- **添加任务按钮**（`Plus` 图标，`aria-label`）→ `createTask.mutate({ title: '', ...ctx })`（空标题创建，与项目/区域一致的空标题模式），`ctx` 来自 `usePageTaskContext()`（根据当前路由推断 `CreateTaskDto` 上下文字段：`scheduledType` / `scheduledDate` / `bucket` / `projectId` / `areaId` / `tagIds`）。成功后 `uiInteractionStore.setExpandedId(created.id)` 驱动该行展开。
 
 ### 按钮显隐控制
 
@@ -248,6 +249,8 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 - `/trash`：已删除任务
 
 用 `HIDE_ADD_TASK_ROUTES` 常量数组 + `pathname` 精确匹配 `includes` 判断（非 `startsWith`，避免误隐藏子路由）。
+
+添加项目按钮的显隐用 `pathname.startsWith('/areas/')` + `useParams().id` + `useAreasQuery()` 校验 area 存在性三重判断（仅区域详情页显示，`startsWith` 在此场景合理因为 `/areas/` 前缀路由只有 `/areas/:id`）。
 
 ### `usePageTaskContext` 路由→上下文映射
 

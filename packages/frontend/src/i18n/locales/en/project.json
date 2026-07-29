@@ -6,5 +6,6 @@
   "defaultTitle": "Project",
   "noTasks": "No tasks in this project",
   "created": "Project created",
-  "newItemPlaceholder": "New Project"
+  "newItemPlaceholder": "New Project",
+  "addProject": "Add project"
 }
