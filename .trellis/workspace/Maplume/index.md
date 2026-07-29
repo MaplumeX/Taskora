@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 23
+- **Total Sessions**: 24
 - **Last Active**: 2026-07-29
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~931 | Active |
+| `journal-1.md` | ~964 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 24 | 2026-07-29 | Empty trash feature | `c519edd` | `main` |
 | 23 | 2026-07-29 | 区域界面底栏添加项目按钮 | `066e978` | `main` |
 | 22 | 2026-07-29 | 项目详情标题前增加状态复选框 | `8745d4e` | `main` |
 | 21 | 2026-07-29 | 项目条目右键菜单与详情页更多按钮 | `5398d91` | `main` |
