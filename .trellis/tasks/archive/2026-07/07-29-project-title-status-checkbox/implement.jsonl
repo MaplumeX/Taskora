@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件结构、Props 约定、样式模式（Tailwind + shadcn/ui + cn）"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量与测试规范"}

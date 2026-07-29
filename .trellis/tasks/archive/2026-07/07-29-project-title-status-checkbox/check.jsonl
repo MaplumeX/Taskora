@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量与测试规范"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件结构与样式约定，用于核对实现是否符合规范"}
