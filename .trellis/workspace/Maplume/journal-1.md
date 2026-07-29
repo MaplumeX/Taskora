@@ -863,3 +863,36 @@ Fixed the real root cause of the trash-row vs normal-row pointer discrepancy: no
 ### Next Steps
 
 - None - task complete
+
+
+## Session 22: 项目详情标题前增加状态复选框
+
+**Date**: 2026-07-29
+**Task**: 项目详情标题前增加状态复选框
+**Branch**: `main`
+
+### Summary
+
+在 ProjectDetail.tsx 标题前复用 TaskCheckbox，点击切换项目完成状态 (ACTIVE ⇄ COMPLETED)，复用 useCompleteProject/useUncompleteProject；未改后端与其他项目标题位置。typecheck/lint 通过。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8745d4e` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
