@@ -63,8 +63,9 @@ export class ProjectsService {
   }
 
   async findAll(userId: string) {
+    // 软删除（status=TRASHED）的项目不进入常规列表，仅在废纸篓 feed 中展示
     const projects = await this.prisma.project.findMany({
-      where: { userId },
+      where: { userId, status: { not: ProjectStatus.TRASHED } },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
       include: { tags: { include: { tag: true } } },
     });
