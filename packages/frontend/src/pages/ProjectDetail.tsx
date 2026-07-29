@@ -2,13 +2,14 @@ import { useEffect } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { useProjectsQuery, useUpdateProject } from '@/lib/hooks/useProjects';
+import { useCompleteProject, useProjectsQuery, useUncompleteProject, useUpdateProject } from '@/lib/hooks/useProjects';
 import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import { TaskListView } from '@/components/task/TaskListView';
 import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
+import { TaskCheckbox } from '@/components/task/TaskCheckbox';
 import { ProjectMoreMenu } from '@/components/project/ProjectContextMenu';
 import { toast } from 'sonner';
 
@@ -26,11 +27,25 @@ export default function ProjectDetail() {
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ projectId: id });
   const showSkeleton = useDelayedLoading(isLoading);
   const updateProject = useUpdateProject();
+  const completeProject = useCompleteProject();
+  const uncompleteProject = useUncompleteProject();
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <div>
+        <div className="flex items-center gap-2.5">
+          {project ? (
+            <TaskCheckbox
+              checked={project.status === 'COMPLETED'}
+              onToggle={() => {
+                if (!project) return;
+                const completed = project.status === 'COMPLETED';
+                (completed ? uncompleteProject : completeProject).mutate(project.id, {
+                  onError: () => toast.error(t('common:saveFailed')),
+                });
+              }}
+            />
+          ) : null}
           {project ? (
             <InlineTitleEdit
               value={project.title}
