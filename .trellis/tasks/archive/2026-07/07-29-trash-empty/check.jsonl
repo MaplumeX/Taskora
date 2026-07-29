@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "验证物理删除是否符合例外规范 + 事务原子性"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端代码质量与测试覆盖"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "mutation invalidation 完整性"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "zh/en key parity 检查"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Trash.tsx 与 Dialog 复用约定"}
