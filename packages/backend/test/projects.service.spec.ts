@@ -119,7 +119,7 @@ describe('ProjectsService', () => {
   });
 
   describe('findAll', () => {
-    it('should return all projects ordered by sortOrder asc, createdAt desc', async () => {
+    it('should return all non-trashed projects ordered by sortOrder asc, createdAt desc', async () => {
       const userId = 'user-1';
       const expected = [
         { id: 'project-1', title: 'A', notes: null, userId, sortOrder: 0, tags: [] },
@@ -130,7 +130,7 @@ describe('ProjectsService', () => {
       const result = await service.findAll(userId);
 
       expect(mockPrisma.project.findMany).toHaveBeenCalledWith({
-        where: { userId },
+        where: { userId, status: { not: ProjectStatus.TRASHED } },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
         include: { tags: { include: { tag: true } } },
       });
