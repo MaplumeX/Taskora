@@ -1,0 +1,1 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "schema 关联策略与 onDelete 约定 — 本任务改动 schema 需遵循"}

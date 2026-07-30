@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "代码质量与测试约定，check 子代理依据"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "删除策略规范，验证实现是否符合 spec"}

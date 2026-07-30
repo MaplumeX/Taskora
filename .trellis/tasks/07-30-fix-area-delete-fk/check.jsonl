@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "代码质量与测试约定"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "验证 onDelete: SetNull 符合 spec 删除策略"}
