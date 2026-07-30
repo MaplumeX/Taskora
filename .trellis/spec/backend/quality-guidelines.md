@@ -73,7 +73,7 @@ RT cookie 选项统一在 `refresh-token.helpers.ts`：`httpOnly: true, sameSite
 - `@Injectable()` 装饰，构造函数注入 `PrismaService`（及 `JwtService` 等）
 - 业务方法第一个参数恒为 `userId: string`，所有 Prisma where 必须含 `userId`
 - 业务错误用 NestJS HttpException 子类（`NotFoundException`/`ConflictException`/`UnauthorizedException`）抛出，不返回 `null` 表示错误
-- 软删除优先：Task 用 `status: TRASHED` + `trashedAt`，`RefreshToken` 用 `revokedAt`，均不用 `prisma.*.delete`
+- 软删除优先：Task / Project 用 `trashedAt` 表达删除状态（`status` 只保留 `ACTIVE | COMPLETED`，详见 database-guidelines.md 的 status enum 拆分决策），`RefreshToken` 用 `revokedAt`，均不用 `prisma.*.delete`（`FeedService.emptyTrash` 是唯一物理删除例外）
 - 用户 profile 公开字段统一用 `USER_PUBLIC_SELECT` 常量（`users.service.ts`），各处查询复用，避免泄露 `passwordHash`
 
 ### DTO

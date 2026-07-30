@@ -144,7 +144,7 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 项目条目（`ProjectItem` / `ProjectFeedRow`）支持与 `TaskContextMenu` 对齐的右键上下文菜单，组件位于 `src/components/project/ProjectContextMenu.tsx`。
 
 - **结构镜像 TaskContextMenu**：右键虚拟锚点 + 主菜单 `Popover` + picker 二级 `Popover`（锚定行容器 ref）。菜单项（按序）：标记完成/未完成（`useCompleteProject`/`useUncompleteProject`）、日期、到期、标签、末项（删除/恢复，随 `variant` 切换）。
-- **变体（`variant`）**：`'default' | 'trash'`，默认 `default`。`default` 末项「删除」→ `useDeleteProject`（`text-destructive`）；`trash` 末项「恢复」→ `useRestoreProject`。`ProjectFeedRow` 按 `item.status === 'TRASHED'` 切换 variant。
+- **变体（`variant`）**：`'default' | 'trash'`，默认 `default`。`default` 末项「删除」→ `useDeleteProject`（`text-destructive`）；`trash` 末项「恢复」→ `useRestoreProject`。`ProjectFeedRow` 按 `item.trashedAt !== null` 切换 variant。
 - **共享菜单面板**：内部 `ProjectMenuPanel` 同时渲染菜单项 + picker，被右键版 `ProjectContextMenu` 与 trigger 版 `ProjectMoreMenu` 共用，避免重复实现。`ProjectMoreMenu` 内置 `MoreHorizontal` ghost 按钮作为 `PopoverTrigger`，用于详情页标题旁的「更多」入口。
 - **dnd-kit 兼容**：`SortableProjectItem`（侧边栏 + AreaDetail）的 `useSortable` listeners 在外层 div，`ProjectContextMenu` 的 `onContextMenu` 在内层容器，互不干扰（拖拽靠 PointerSensor distance:5，右键不参与 pointer 判定）。
 - **字段组件复用**：picker 复用 `task/fields/` 下的 `ScheduledDateField`/`DueDateField`/`TagsField`，props 期望 `TaskResponseDto`/`UpdateTaskDto`，项目字段名对齐，沿用 cast 兼容（`current as unknown as ...`、`patch as any`，与 `ProjectDetail` 原有模式一致）。
