@@ -40,7 +40,7 @@ describe('TasksService — logbook view', () => {
     const result = await service.findAll(userId, { view: 'logbook' });
 
     expect(mockPrisma.task.findMany).toHaveBeenCalledWith({
-      where: { userId, status: TaskStatus.COMPLETED },
+      where: { userId, status: TaskStatus.COMPLETED, trashedAt: null },
       orderBy: [{ completedAt: 'desc' }],
       include: { tags: { include: { tag: true } } },
     });
@@ -61,7 +61,7 @@ describe('TasksService — logbook view', () => {
     );
   });
 
-  it('excludes ACTIVE and TRASHED tasks (no such status leaks via where clause)', async () => {
+  it('excludes ACTIVE tasks (no such status leaks via where clause)', async () => {
     const userId = 'user-1';
     mockPrisma.task.findMany.mockResolvedValue([]);
 
@@ -70,7 +70,7 @@ describe('TasksService — logbook view', () => {
     const call = mockPrisma.task.findMany.mock.calls[0][0];
     // The where clause must constrain status to COMPLETED only.
     expect(call.where.status).toBe(TaskStatus.COMPLETED);
-    // No OR clause that would broaden to ACTIVE/TRASHED.
+    // No OR clause that would broaden to ACTIVE.
     expect(call.where.OR).toBeUndefined();
   });
 });

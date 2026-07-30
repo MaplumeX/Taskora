@@ -3,7 +3,7 @@
   "name": "trash-cascade",
   "title": "软删除级联到子任务/下属任务",
   "description": "Task.remove/Project.remove 时级联 trash 子任务/下属任务；restore 级联回 ACTIVE。与 emptyTrash 物理删除级联语义对齐。",
-  "status": "planning",
+  "status": "in_progress",
   "dev_type": null,
   "scope": null,
   "package": null,

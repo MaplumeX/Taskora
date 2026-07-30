@@ -17,7 +17,7 @@ export function ProjectFeedRow({ item }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const completed = item.status === 'COMPLETED';
-  const trashed = item.status === 'TRASHED';
+  const trashed = item.trashedAt !== null;
 
   const projectCast = item as unknown as ProjectResponseDto;
 

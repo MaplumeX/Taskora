@@ -90,14 +90,17 @@ export class TasksService {
         where.tags = { some: { tagId: query.tagId } };
       }
       if (query.q) {
-        // q mode: default ACTIVE, completed=true → [ACTIVE, COMPLETED], always exclude TRASHED
+        // q mode: default ACTIVE, completed=true → [ACTIVE, COMPLETED]
         where.status = query.completed
           ? { in: [TaskStatus.ACTIVE, TaskStatus.COMPLETED] }
           : TaskStatus.ACTIVE;
+        where.trashedAt = null;
       } else if (!query.completed) {
         where.status = TaskStatus.ACTIVE;
+        where.trashedAt = null;
       } else {
         // include both active and completed when explicitly requested
+        where.trashedAt = null;
       }
     }
 
@@ -227,36 +230,99 @@ export class TasksService {
   }
 
   async remove(userId: string, id: string) {
-    const existing = await this.prisma.task.findFirst({
-      where: { id, userId },
-    });
-    if (!existing) {
-      throw new NotFoundException('Task not found');
-    }
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.task.findFirst({
+        where: { id, userId },
+      });
+      if (!existing) {
+        throw new NotFoundException('Task not found');
+      }
 
-    return this.prisma.task.update({
-      where: { id },
-      data: {
-        status: TaskStatus.TRASHED,
-        trashedAt: new Date(),
-      },
+      // Collect all descendant ids via BFS on parentId
+      const allTasks = await tx.task.findMany({
+        where: { userId },
+        select: { id: true, parentId: true },
+      });
+      const childrenOf = new Map<string, string[]>();
+      for (const t of allTasks) {
+        if (t.parentId) {
+          const arr = childrenOf.get(t.parentId) ?? [];
+          arr.push(t.id);
+          childrenOf.set(t.parentId, arr);
+        }
+      }
+      const descendantIds = new Set<string>();
+      const queue = [id];
+      while (queue.length) {
+        const layer = queue.splice(0);
+        for (const parentId of layer) {
+          const kids = childrenOf.get(parentId);
+          if (!kids) continue;
+          for (const kid of kids) {
+            if (!descendantIds.has(kid)) {
+              descendantIds.add(kid);
+              queue.push(kid);
+            }
+          }
+        }
+      }
+
+      const allIds = [id, ...descendantIds];
+      const now = new Date();
+      await tx.task.updateMany({
+        where: { id: { in: allIds }, userId },
+        data: { trashedAt: now },
+      });
+
+      return { id, trashedAt: now };
     });
   }
 
   async restore(userId: string, id: string) {
-    const existing = await this.prisma.task.findFirst({
-      where: { id, userId },
-    });
-    if (!existing) {
-      throw new NotFoundException('Task not found');
-    }
+    return this.prisma.$transaction(async (tx) => {
+      const existing = await tx.task.findFirst({
+        where: { id, userId },
+      });
+      if (!existing) {
+        throw new NotFoundException('Task not found');
+      }
 
-    return this.prisma.task.update({
-      where: { id },
-      data: {
-        status: TaskStatus.ACTIVE,
-        trashedAt: null,
-      },
+      // Collect all descendant ids via BFS on parentId
+      const allTasks = await tx.task.findMany({
+        where: { userId },
+        select: { id: true, parentId: true },
+      });
+      const childrenOf = new Map<string, string[]>();
+      for (const t of allTasks) {
+        if (t.parentId) {
+          const arr = childrenOf.get(t.parentId) ?? [];
+          arr.push(t.id);
+          childrenOf.set(t.parentId, arr);
+        }
+      }
+      const descendantIds = new Set<string>();
+      const queue = [id];
+      while (queue.length) {
+        const layer = queue.splice(0);
+        for (const parentId of layer) {
+          const kids = childrenOf.get(parentId);
+          if (!kids) continue;
+          for (const kid of kids) {
+            if (!descendantIds.has(kid)) {
+              descendantIds.add(kid);
+              queue.push(kid);
+            }
+          }
+        }
+      }
+
+      const allIds = [id, ...descendantIds];
+      await tx.task.updateMany({
+        where: { id: { in: allIds }, userId },
+        data: { trashedAt: null },
+      });
+
+      return { id, trashedAt: null };
     });
   }
 

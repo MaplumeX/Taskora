@@ -25,31 +25,37 @@ export function buildProjectViewWhere(
       where.bucket = ProjectBucket.INBOX;
       where.status = ProjectStatus.ACTIVE;
       where.scheduledType = ScheduledType.NONE;
+      where.trashedAt = null;
       break;
     case 'today':
       where.status = ProjectStatus.ACTIVE;
       where.scheduledType = ScheduledType.DATE;
       where.scheduledDate = { lte: new Date() };
+      where.trashedAt = null;
       break;
     case 'upcoming':
       where.status = ProjectStatus.ACTIVE;
       where.scheduledType = ScheduledType.DATE;
       where.scheduledDate = { gt: new Date() };
+      where.trashedAt = null;
       break;
     case 'anytime':
       where.bucket = ProjectBucket.ANYTIME;
       where.status = ProjectStatus.ACTIVE;
       where.scheduledType = ScheduledType.NONE;
+      where.trashedAt = null;
       break;
     case 'someday':
       where.scheduledType = ScheduledType.SOMEDAY;
       where.status = ProjectStatus.ACTIVE;
+      where.trashedAt = null;
       break;
     case 'trash':
-      where.status = ProjectStatus.TRASHED;
+      where.trashedAt = { not: null };
       break;
     case 'logbook':
       where.status = ProjectStatus.COMPLETED;
+      where.trashedAt = null;
       break;
   }
   return where;
