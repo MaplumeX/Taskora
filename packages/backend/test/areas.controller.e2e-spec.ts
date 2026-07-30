@@ -68,6 +68,22 @@ e2eDescribe('AreasController (e2e)', () => {
     expect(res.body.title).toBe('Work');
     expect(res.body.notes).toBe('Work area');
     expect(res.body.userId).toBe(userId);
+    expect(res.body.tags).toEqual([]);
+  });
+
+  it('POST /areas with tagIds → 201 and returns tags', async () => {
+    const tag = await prisma.tag.create({
+      data: { title: 'Urgent', color: '#FF0000', userId },
+    });
+
+    const res = await request(app.getHttpServer())
+      .post('/areas')
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ title: 'Work', tagIds: [tag.id] })
+      .expect(201);
+
+    expect(res.body.tags).toHaveLength(1);
+    expect(res.body.tags[0].id).toBe(tag.id);
   });
 
   it('GET /areas → 200 return all areas for the user', async () => {
@@ -82,6 +98,38 @@ e2eDescribe('AreasController (e2e)', () => {
 
     expect(res.body).toHaveLength(1);
     expect(res.body[0].title).toBe('Work');
+    expect(res.body[0].tags).toEqual([]);
+  });
+
+  it('PATCH /areas/:id with tagIds → updates tags (full-set)', async () => {
+    const area = await prisma.area.create({ data: { title: 'Work', userId } });
+    const tag1 = await prisma.tag.create({ data: { title: 'T1', userId } });
+    const tag2 = await prisma.tag.create({ data: { title: 'T2', userId } });
+
+    // set tags
+    const res1 = await request(app.getHttpServer())
+      .patch(`/areas/${area.id}`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ tagIds: [tag1.id, tag2.id] })
+      .expect(200);
+    expect(res1.body.tags).toHaveLength(2);
+
+    // replace with a subset
+    const res2 = await request(app.getHttpServer())
+      .patch(`/areas/${area.id}`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ tagIds: [tag1.id] })
+      .expect(200);
+    expect(res2.body.tags).toHaveLength(1);
+    expect(res2.body.tags[0].id).toBe(tag1.id);
+
+    // clear tags
+    const res3 = await request(app.getHttpServer())
+      .patch(`/areas/${area.id}`)
+      .set('Authorization', `Bearer ${authToken}`)
+      .send({ tagIds: [] })
+      .expect(200);
+    expect(res3.body.tags).toEqual([]);
   });
 
   it('GET /areas/:id → 404 for a non-existent area', async () => {

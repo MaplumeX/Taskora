@@ -49,6 +49,7 @@ model Area {
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   projects  Project[]
   tasks     Task[]
+  tags      AreaTag[]
 
   sortOrder Int @default(0)
 
@@ -92,6 +93,19 @@ model Project {
 
   @@index([userId])
   @@index([areaId])
+}
+
+model AreaTag {
+  id        String   @id @default(uuid())
+  areaId    String
+  area      Area     @relation(fields: [areaId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([areaId, tagId])
+  @@index([areaId])
+  @@index([tagId])
 }
 
 model ProjectTag {
@@ -148,6 +162,7 @@ model Tag {
   user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks      TaskTag[]
   projects   ProjectTag[]
+  areas      AreaTag[]
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 

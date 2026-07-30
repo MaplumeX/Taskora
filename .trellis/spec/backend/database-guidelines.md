@@ -10,7 +10,7 @@
 - 数据库：PostgreSQL 16
 - 迁移：`prisma migrate dev`（开发）、`prisma migrate deploy`（生产）
 - Schema 位置：`packages/backend/prisma/schema.prisma`
-- 核心模型：`User`、`RefreshToken`、`Task`、`Project`、`Area`、`Tag`、`TagGroup`、`TaskTag`
+- 核心模型：`User`、`RefreshToken`、`Task`、`Project`、`Area`、`Tag`、`TagGroup`、`TaskTag`、`ProjectTag`、`AreaTag`
 
 ---
 
@@ -300,13 +300,13 @@ Project 的 bucket 推导（`ProjectsService.resolveBucket`）与 Task 规则一
 
 Project 软删除/恢复/完成/撤销完成与 Task 行为一致（`remove` 为软删除，非物理删除）。
 
-### 标签关联策略 (Tag / TaskTag / ProjectTag)
+### 标签关联策略 (Tag / TaskTag / ProjectTag / AreaTag)
 
-Task ↔ Tag 与 Project ↔ Tag 均为多对多，分别通过 `TaskTag` / `ProjectTag` 中间表实现。两张中间表结构一致：
+Task ↔ Tag、Project ↔ Tag、Area ↔ Tag 均为多对多，分别通过 `TaskTag` / `ProjectTag` / `AreaTag` 中间表实现。三张中间表结构一致：
 
 - `id`（`@default(uuid())`）+ `createdAt`，因此不用 Prisma 隐式 `{ set: [...] }` 语法，在 service 层用 `deleteMany` + `createMany` 全量替换（`$transaction` 包裹）。
-- `@@unique([taskId, tagId])` / `@@unique([projectId, tagId])` 防重复，配合 `skipDuplicates`。
-- 删除 Tag 时两张中间表均 `onDelete: Cascade` 自动清理。
+- `@@unique([taskId, tagId])` / `@@unique([projectId, tagId])` / `@@unique([areaId, tagId])` 防重复，配合 `skipDuplicates`。
+- 删除 Tag 时三张中间表（`TaskTag` / `ProjectTag` / `AreaTag`）均 `onDelete: Cascade` 自动清理。
 - `include` + map 模式：`include: { tags: { include: { tag: true } } }` 返回中间表数组，service 层 map 成 `Tag[]`，不漏出中间表字段。
 - create 用 nested create（`tags: { create: [...] }`），update 用 `deleteMany` + `createMany` 事务。
 

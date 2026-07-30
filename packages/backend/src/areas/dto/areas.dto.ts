@@ -7,6 +7,11 @@ export class CreateAreaDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tagIds?: string[];
 }
 
 export class UpdateAreaDto {
@@ -17,6 +22,11 @@ export class UpdateAreaDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  tagIds?: string[];
 }
 
 export class ReorderDto {
