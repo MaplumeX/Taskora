@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 24
-- **Last Active**: 2026-07-29
+- **Total Sessions**: 25
+- **Last Active**: 2026-07-30
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~964 | Active |
+| `journal-1.md` | ~999 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 25 | 2026-07-30 | 修复删除逻辑一致性（Area FK + status 拆分 + 级联 trash/restore） | `c20cc0c`, `2c000c1`, `404659d` | `main` |
 | 24 | 2026-07-29 | Empty trash feature | `c519edd` | `main` |
 | 23 | 2026-07-29 | 区域界面底栏添加项目按钮 | `066e978` | `main` |
 | 22 | 2026-07-29 | 项目详情标题前增加状态复选框 | `8745d4e` | `main` |

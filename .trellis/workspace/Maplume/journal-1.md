@@ -962,3 +962,38 @@ Added 'Empty Trash' feature: permanently delete all trashed tasks and projects f
 ### Next Steps
 
 - None - task complete
+
+
+## Session 25: 修复删除逻辑一致性（Area FK + status 拆分 + 级联 trash/restore）
+
+**Date**: 2026-07-30
+**Task**: 修复删除逻辑一致性（Area FK + status 拆分 + 级联 trash/restore）
+**Branch**: `main`
+
+### Summary
+
+修复三类删除逻辑问题：(1) Area 删除时 schema.prisma 补齐 onDelete: SetNull 注解（DB 已有约束，原只是注解缺失）；(2) TRASHED 从 TaskStatus/ProjectStatus enum 移除，status 只保留 ACTIVE|COMPLETED 纯生命周期，trashedAt 成为唯一删除判据——trash/restore 级联到子任务（Task BFS 后代收集 + Project 下属 task），只写 trashedAt 不动 status，COMPLETED 子任务 restore 后仍 COMPLETED；(3) spec 更新 database-guidelines.md 记录三处删除策略决策。3 子任务全部 implement + check 通过，测试 88 passed。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c20cc0c` | (see git log) |
+| `2c000c1` | (see git log) |
+| `404659d` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
