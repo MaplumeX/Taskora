@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "userId 隔离查询规则、删除策略总览、Prisma 模式约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件目录结构、props 约定、样式模式、项目/区域详情页菜单设计（ProjectMoreMenu 参照）"}

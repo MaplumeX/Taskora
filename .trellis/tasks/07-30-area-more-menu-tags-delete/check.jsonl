@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "校验 userId 隔离、删除策略、schema 约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "校验组件结构、InlineTitleEdit、ProjectMoreMenu 对称性"}

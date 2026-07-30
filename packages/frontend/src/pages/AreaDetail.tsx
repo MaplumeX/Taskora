@@ -30,6 +30,7 @@ import { ProjectItem } from '@/components/project/ProjectItem';
 import { TaskListView } from '@/components/task/TaskListView';
 import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
+import { AreaMoreMenu } from '@/components/area/AreaMoreMenu';
 import { toast } from 'sonner';
 
 function SortableProjectItem({ project }: { project: ProjectResponseDto }) {
@@ -105,6 +106,7 @@ export default function AreaDetail() {
             <h1 className="text-xl font-semibold tracking-tight">{t('area:defaultTitle')}</h1>
           )}
         </div>
+        {area && <AreaMoreMenu area={area} />}
         </div>
 
       <h2 className="text-sm font-medium text-muted-foreground">{t('area:projectsLabel')}</h2>

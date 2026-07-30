@@ -219,7 +219,7 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 
 ### 标题内联编辑为唯一入口
 
-内联编辑仅覆盖标题字段。详情页不再提供「编辑」/「删除」**文案按钮**——标题由 `InlineTitleEdit` 直接编辑。项目详情页（`ProjectDetail`）在标题行右侧提供「更多」按钮（`ProjectMoreMenu`，`MoreHorizontal` 图标），弹出内容与项目右键菜单一致（完成切换 / 日期 / 到期 / 标签 / 删除）；区域详情页暂无此按钮。项目/区域的 list 管理页已移除，`ProjectForm` / `AreaForm` 对话框已删除。
+内联编辑仅覆盖标题字段。详情页不再提供「编辑」/「删除」**文案按钮**——标题由 `InlineTitleEdit` 直接编辑。项目详情页（`ProjectDetail`）在标题行右侧提供「更多」按钮（`ProjectMoreMenu`，`MoreHorizontal` 图标），弹出内容与项目右键菜单一致（完成切换 / 日期 / 到期 / 标签 / 删除）；区域详情页（`AreaDetail`）同样在标题行右侧提供「更多」按钮（`AreaMoreMenu`，位于 `src/components/area/AreaMoreMenu.tsx`），菜单仅含「标签」与「删除」两项（区域无完成/日期概念）：标签项打开 `TagsField` picker（popover 二级面板，与 Project 一致），删除项调 `useDeleteArea` 并成功后 `navigate('/today')`。区域标签能力由后端 `AreaTag` join 表支持（与 `ProjectTag` 对称，`tagIds` 全量 set 语义）。项目/区域的 list 管理页已移除，`ProjectForm` / `AreaForm` 对话框已删除。
 
 ---
 

@@ -46,7 +46,7 @@ export async function resetDb(): Promise<void> {
   }
 
   await testPrisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "Task", "Project", "Area", "User" CASCADE',
+    'TRUNCATE TABLE "TaskTag", "ProjectTag", "AreaTag", "Task", "Project", "Area", "Tag", "TagGroup", "User" CASCADE',
   );
 }
 
