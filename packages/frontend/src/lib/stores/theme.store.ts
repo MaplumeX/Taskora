@@ -16,8 +16,8 @@ export function applyTheme(mode: ThemeMode) {
 }
 
 export function applyThemeFromStorage() {
-  const stored = (localStorage.getItem(STORAGE_KEY) as ThemeMode | null) ?? 'system';
-  applyTheme(stored);
+  const { mode } = useThemeStore.getState();
+  applyTheme(mode);
 }
 
 interface ThemeState {
