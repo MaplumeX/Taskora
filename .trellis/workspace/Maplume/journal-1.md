@@ -997,3 +997,36 @@ Added 'Empty Trash' feature: permanently delete all trashed tasks and projects f
 ### Next Steps
 
 - None - task complete
+
+
+## Session 26: 区域详情页更多菜单：删除与标签能力
+
+**Date**: 2026-07-30
+**Task**: 区域详情页更多菜单：删除与标签能力
+**Branch**: `main`
+
+### Summary
+
+为区域详情页标题行添加更多菜单按钮（AreaMoreMenu，MoreHorizontal 图标），菜单含标签与删除两项。后端新增 AreaTag join 表（与 ProjectTag 对称，@@unique([areaId, tagId])，onDelete: Cascade）+ migration；areas.service create/findAll/findOne/update 同步 tagIds 全量 set 语义（include+map，undefined 不动，传数组先删后建）；shared/backend DTO 加 tagIds，AreaResponseDto 加 tags。前端新建 AreaMoreMenu.tsx（popover+二级 picker 复用 TagsField，删除调 useDeleteArea + navigate('/today')），AreaDetail 标题行右侧集成。更新 backend/frontend spec 记录 AreaTag 与区域更多菜单。单元测试 89 passed，前端 build 通过；E2E 为 main 分支既有 DI 基础设施问题（pre-existing）。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `19495eb` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
