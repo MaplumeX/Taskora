@@ -50,12 +50,151 @@ RT 设计要点：
 - `revokedAt` 为软吊销标记（非物理删除），轮换时设为旧 RT 的时间戳，复用检测查 `revokedAt !== null` 即为攻击。
 - `expiresAt` 独立于 `revokedAt`：过期是时间判定，吊销是状态判定。
 
-### 软删除
+### 删除策略总览
 
-Task 使用软删除（`status = TRASHED`），不使用 Prisma `DELETE`：
-- 删除：`update({ where: { id, userId }, data: { status: 'TRASHED', trashedAt: new Date() } })`
-- 恢复：`update({ where: { id, userId }, data: { status: 'ACTIVE', trashedAt: null } })`
-- 查询默认排除已删除：`where: { status: { not: 'TRASHED' } }`
+本系统有三类删除策略，按模型区分：
+
+| 模型 | 策略 | 删除判据 | FK 行为 |
+|------|------|---------|---------|
+| Task | 软删除 | `trashedAt: DateTime?` | parentId `onDelete: NoAction`，projectId/areaId 不阻断 |
+| Project | 软删除 | `trashedAt: DateTime?` | areaId `onDelete: SetNull`；下属 task 级联 trash |
+| Area | 物理删除 | `prisma.area.delete` | 下属 task/project 的 `areaId` `onDelete: SetNull` 脱钩为 null |
+
+---
+
+### status enum 拆分决策
+
+`TaskStatus` / `ProjectStatus` 只保留 `ACTIVE | COMPLETED`（纯生命周期），**不含 `TRASHED`**。
+删除状态唯一由 `trashedAt: DateTime?` 表达。
+
+**为什么移除 `TRASHED`**：
+
+1. **避免 trash 覆盖 COMPLETED 状态**：如果一个已完成的 task 被 trash，旧设计中 `status` 被改为 `TRASHED`，完成状态丢失——从废纸篓恢复后任务不再是 COMPLETED。
+2. **避免级联 trash 丢状态**：trash 父任务会级联后代，若级联也写 `status = TRASHED`，所有后代的 COMPLETED 状态全部丢失。
+3. **正交关注点分离**：`status` 表示生命周期（active ↔ completed），`trashedAt` 表示删除状态（null ↔ timestamp），两者正交，一个 task 可以同时是 COMPLETED + trashed。
+
+> **核心不变量**：trash/restore **只写 `trashedAt`，绝不动 `status`**。
+
+---
+
+### 软删除（Task / Project）
+
+Task 和 Project 使用软删除（`trashedAt`），不使用 Prisma `DELETE`：
+
+- 删除（trash）：`updateMany({ where: { id, userId }, data: { trashedAt: new Date() } })` — 只写 `trashedAt`，不动 `status`
+- 恢复（restore）：`updateMany({ where: { id, userId }, data: { trashedAt: null } })` — 只清 `trashedAt`，不动 `status`
+- 查询默认排除已删除：`where: { trashedAt: null }`
+- 废纸篓视图：`where: { trashedAt: { not: null } }`
+
+```typescript
+// trash — 只写 trashedAt，status 不变
+await tx.task.updateMany({
+  where: { id: { in: allIds }, userId },
+  data: { trashedAt: now },
+});
+
+// restore — 对称恢复
+await tx.task.updateMany({
+  where: { id: { in: allIds }, userId },
+  data: { trashedAt: null },
+});
+```
+
+> views.ts 中每个非-trash view case 都带 `trashedAt: null`；`trash` case 用 `trashedAt: { not: null }`。
+
+---
+
+### trash / restore 级联语义
+
+#### Task 级联（后代）
+
+trash 父任务级联**所有后代**（不限层级）。实现方式：交互式事务内全量读 `select: { id, parentId }`，内存 BFS 从根任务向下收集所有后代 id，然后 `updateMany trashedAt`。
+
+- 级联只写 `trashedAt`，不动 `status`（保持每个后代的 COMPLETED 状态不被破坏）
+- `parentId` 的 FK 使用 `onDelete: NoAction`（数据库层不做级联删除，由 service 层 BFS 管 trash 级联），见 schema.prisma
+- restore 对称：同样的 BFS 集合，`updateMany trashedAt: null`
+
+```typescript
+// BFS 收集后代
+const allTasks = await tx.task.findMany({
+  where: { userId },
+  select: { id: true, parentId: true },
+});
+const childrenOf = new Map<string, string[]>();
+for (const t of allTasks) {
+  if (t.parentId) {
+    const arr = childrenOf.get(t.parentId) ?? [];
+    arr.push(t.id);
+    childrenOf.set(t.parentId, arr);
+  }
+}
+const descendantIds = new Set<string>();
+const queue = [rootId];
+while (queue.length) {
+  const layer = queue.splice(0);
+  for (const parentId of layer) {
+    const kids = childrenOf.get(parentId);
+    if (!kids) continue;
+    for (const kid of kids) {
+      if (!descendantIds.has(kid)) {
+        descendantIds.add(kid);
+        queue.push(kid);
+      }
+    }
+  }
+}
+const allIds = [rootId, ...descendantIds];
+```
+
+> 为什么 BFS 而不递归 SQL：单用户 task 量 << 1000，全量读 + 内存算比递归 CTE 更可控、类型安全，且在交互式事务内保证快照一致。
+
+#### Project 级联（下属 Task）
+
+trash Project 级联其**直接下属 Task**（`projectId` 匹配），不递归 task 的 parentId 层级。
+
+- Project 无 `parentId`，不存在后代级联；只需把 `projectId = id` 的 task 一并 trash
+- 用数组式 `$transaction` 并行 `project.updateMany` + `task.updateMany`
+- restore 对称：同时清 project 和下属 task 的 `trashedAt`
+
+```typescript
+await this.prisma.$transaction([
+  this.prisma.project.updateMany({
+    where: { id, userId },
+    data: { trashedAt: now },
+  }),
+  this.prisma.task.updateMany({
+    where: { projectId: id, userId },
+    data: { trashedAt: now },
+  }),
+]);
+```
+
+---
+
+### Area 删除策略（物理删除 + SetNull）
+
+Area 是**唯一走物理删除**的模型——不走软删除，直接 `prisma.area.delete`。
+
+- 删除：`this.prisma.area.delete({ where: { id } })`（在 `findOne` 校验归属后）
+- 下属 Task / Project 的 `areaId` 通过 schema 的 `onDelete: SetNull` **自动脱钩为 null**，不阻塞删除
+- Task / Project 的 `areaId` 为 `String?`（可空），脱钩后变成「无 Area」状态，bucket 降级为 `INBOX`（详见 resolveBucket 逻辑）
+
+**为什么 Area 不走软删除**：
+
+1. **Things3 一致性**：在 Things3 中，Area 是顶层容器，删除即直接移除，不存在「废纸篓」概念——Area 不含待办事项本身，只是容器，删除容器后下属项脱离即可。
+2. **无状态丢失风险**：与 Task/Project 不同，Area 没有 `status` 生命周期或 `trashedAt` 语义，物理删除不会丢失需要恢复的信息。
+3. **FK 自动脱钩**：`onDelete: SetNull` 确保下属 Task/Project 的 `areaId` 变 null，不会因 FK 约束阻塞删除，也不需要 service 层手工级联。
+
+```typescript
+async remove(userId: string, id: string) {
+  await this.findOne(userId, id); // 校验归属
+  return this.prisma.area.delete({ where: { id } });
+}
+```
+
+> Task / Project 的 `areaId` 为 `String?`，脱钩后变成「无 Area」状态，bucket 降级为 `INBOX`（详见 resolveBucket 逻辑）。TaskTag/ProjectTag 不受 Area 删除影响。
+
+---
 
 ### RefreshToken 吊销（软吊销）
 
@@ -64,12 +203,12 @@ Task 使用软删除（`status = TRASHED`），不使用 Prisma `DELETE`：
 - 复用攻击批量吊销：`updateMany({ where: { familyId, revokedAt: null }, data: { revokedAt: new Date() } })`
 - logout：`updateMany({ where: { tokenHash, revokedAt: null }, data: { revokedAt: new Date() } })`
 
-### 物理删除例外（仅限 FeedService.emptyTrash）
+### 物理删除受控例外（FeedService.emptyTrash）
 
-Task 默认使用软删除（见上节），但「倾倒废纸篓」需要永久删除已软删除的项。这是唯一受控例外：
+Task / Project 默认使用软删除（见上节），但「倾倒废纸篓」需要永久删除已软删除的项。这是除 Area 外仅有的物理 delete 触点：
 
 - **只允许在 `FeedService.emptyTrash` 内**使用 Prisma `deleteMany` 物理删除 task / project。
-- 物理删除的 `where` 必须同时含 `userId` + `id IN`（集合来自已确认 `status=TRASHED` 的数据）。
+- 物理删除的 `where` 必须同时含 `userId` + `id IN`（集合来自已确认 `trashedAt != null` 的数据）。
 - 任何其他路径（service / controller）仍保持软删除，**禁止** `prisma.task.delete` / `prisma.project.delete`。
 - 中间表 `TaskTag` / `ProjectTag` 通过 `onDelete: Cascade` 自动清理，无需手工删。
 
@@ -82,7 +221,9 @@ Task 默认使用软删除（见上节），但「倾倒废纸篓」需要永久
 | **数组式** | `$transaction([op1, op2, ...])` | 多个已知写操作并行执行（如 tag 全量替换 `deleteMany` + `createMany`） |
 | **交互式** | `$transaction(async (tx) => { ... })` | 读-算-写序列（先查询、内存计算、再写入，三步须同事务快照一致） |
 
-`FeedService.emptyTrash` 用交互式事务：先读 trashed task / project 集合，内存算级联删除集（后代 + project 下属 task），再 `deleteMany`。保证读到的快照与删除在同一事务内，不会因并发插入新 trashed task 而漏删或 FK 冲突。
+`FeedService.emptyTrash` 用交互式事务：先读 `trashedAt != null` 的 task / project 集合，内存算级联删除集（后代 + project 下属 task），再 `deleteMany`。保证读到的快照与删除在同一事务内，不会因并发插入新 trashed task 而漏删或 FK 冲突。
+
+> emptyTrash 级联算法：删除集 = trashed tasks ∪ trashed tasks 的所有后代 ∪ trashed projects 的下属 tasks。与 trash 级联的 BFS 逻辑一致，但以「trashed tasks 全体」为根集（而非单个根任务）。
 
 > 测试 mock 交互式事务：`$transaction: vi.fn(async (cb) => cb(mockPrisma))`，将 tx 句柄回传为 mock 本身。
 
@@ -144,7 +285,7 @@ pnpm prisma db seed                              # 填充种子数据
 
 Project 既是 Task 的容器（`Task.projectId`），本身也是一个可出现在聚合视图的待办实体，字段与 Task 对齐：
 
-- `status: ProjectStatus`（`ACTIVE | COMPLETED | TRASHED`，独立枚举，值与 `TaskStatus` 一致）
+- `status: ProjectStatus`（`ACTIVE | COMPLETED`，独立枚举，值与 `TaskStatus` 一致；不含 `TRASHED`，删除判据见「status enum 拆分决策」）
 - `bucket: ProjectBucket`（`INBOX | ANYTIME | SCHEDULED`，独立枚举，值与 `TaskBucket` 一致）
 - `scheduledType: ScheduledType`（复用 Task 的枚举）
 - `scheduledDate: DateTime?`（仅 `scheduledType=DATE` 有值）
@@ -270,19 +411,25 @@ switch (query.view) {
     where.status = TaskStatus.ACTIVE;
     where.scheduledType = ScheduledType.DATE;
     where.scheduledDate = { lte: new Date() };
+    where.trashedAt = null;
     break;
   case 'someday':
     where.scheduledType = ScheduledType.SOMEDAY;
     where.status = TaskStatus.ACTIVE;
+    where.trashedAt = null;
+    break;
+  case 'trash':
+    where.trashedAt = { not: null };
     break;
   case 'logbook':
     where.status = TaskStatus.COMPLETED;
+    where.trashedAt = null;
     break;
   // ...
 }
 ```
 
-新增 view 时：在 DTO 的 `@IsEnum` 数组与联合类型中加入新值，然后在 switch 中追加 case。
+新增 view 时：在 DTO 的 `@IsEnum` 数组与联合类型中加入新值，然后在 `buildTaskViewWhere` / `buildProjectViewWhere` 的 switch 中追加 case。
 
 ### 动态 orderBy
 
