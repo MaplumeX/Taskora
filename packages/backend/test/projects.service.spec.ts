@@ -20,6 +20,9 @@ describe('ProjectsService', () => {
         updateMany: vi.fn(),
         aggregate: vi.fn(),
       },
+      task: {
+        updateMany: vi.fn(),
+      },
       projectTag: {
         deleteMany: vi.fn(),
         createMany: vi.fn(),
@@ -130,7 +133,7 @@ describe('ProjectsService', () => {
       const result = await service.findAll(userId);
 
       expect(mockPrisma.project.findMany).toHaveBeenCalledWith({
-        where: { userId, status: { not: ProjectStatus.TRASHED } },
+        where: { userId, trashedAt: null },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
         include: { tags: { include: { tag: true } } },
       });
@@ -160,6 +163,70 @@ describe('ProjectsService', () => {
       await expect(service.findOne('user-1', 'nonexistent')).rejects.toThrow(
         NotFoundException,
       );
+    });
+  });
+
+  describe('remove (trash)', () => {
+    it('should throw NotFoundException when project does not exist', async () => {
+      mockPrisma.project.findFirst.mockResolvedValue(null);
+
+      await expect(service.remove('user-1', 'nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('trashes project and cascades to下属 tasks', async () => {
+      const userId = 'user-1';
+      const projectId = 'project-1';
+      mockPrisma.project.findFirst.mockResolvedValue({ id: projectId, userId });
+      mockPrisma.project.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.task.updateMany.mockResolvedValue({ count: 2 });
+
+      const result = await service.remove(userId, projectId);
+
+      expect(result.trashedAt).toBeInstanceOf(Date);
+      // project updateMany
+      const projCall = mockPrisma.project.updateMany.mock.calls[0][0];
+      expect(projCall.where).toEqual({ id: projectId, userId });
+      expect(projCall.data.trashedAt).toBeInstanceOf(Date);
+      expect(projCall.data).not.toHaveProperty('status');
+      // task cascade updateMany
+      const taskCall = mockPrisma.task.updateMany.mock.calls[0][0];
+      expect(taskCall.where).toEqual({ projectId, userId });
+      expect(taskCall.data.trashedAt).toBeInstanceOf(Date);
+      expect(taskCall.data).not.toHaveProperty('status');
+      // transaction used
+      expect(mockPrisma.$transaction).toHaveBeenCalled();
+    });
+  });
+
+  describe('restore', () => {
+    it('should throw NotFoundException when project does not exist', async () => {
+      mockPrisma.project.findFirst.mockResolvedValue(null);
+
+      await expect(service.restore('user-1', 'nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('restores project and cascades to下属 tasks', async () => {
+      const userId = 'user-1';
+      const projectId = 'project-1';
+      mockPrisma.project.findFirst.mockResolvedValue({ id: projectId, userId });
+      mockPrisma.project.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.task.updateMany.mockResolvedValue({ count: 2 });
+
+      const result = await service.restore(userId, projectId);
+
+      expect(result.trashedAt).toBeNull();
+      const projCall = mockPrisma.project.updateMany.mock.calls[0][0];
+      expect(projCall.where).toEqual({ id: projectId, userId });
+      expect(projCall.data.trashedAt).toBeNull();
+      expect(projCall.data).not.toHaveProperty('status');
+      const taskCall = mockPrisma.task.updateMany.mock.calls[0][0];
+      expect(taskCall.where).toEqual({ projectId, userId });
+      expect(taskCall.data.trashedAt).toBeNull();
+      expect(taskCall.data).not.toHaveProperty('status');
     });
   });
 

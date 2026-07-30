@@ -25,7 +25,7 @@ export class FeedService {
     return this.prisma.$transaction(async (tx) => {
       // 1. 取本用户所有 trashed project 的 id
       const trashedProjects = await tx.project.findMany({
-        where: { userId, status: ProjectStatus.TRASHED },
+        where: { userId, trashedAt: { not: null } },
         select: { id: true },
       });
       const trashedProjectIds = new Set(trashedProjects.map((p) => p.id));
@@ -34,12 +34,12 @@ export class FeedService {
       //    单用户 task 量级 << 1000,全量读 + 内存算比递归 SQL 更可控、类型安全。
       const allTasks = await tx.task.findMany({
         where: { userId },
-        select: { id: true, parentId: true, projectId: true, status: true },
+        select: { id: true, parentId: true, projectId: true, trashedAt: true },
       });
 
       // 3. 删除集 = trashed tasks ∪ trashed tasks 的所有后代 ∪ trashed project 的下属 tasks
       const trashedTaskIds = new Set(
-        allTasks.filter((t) => t.status === TaskStatus.TRASHED).map((t) => t.id),
+        allTasks.filter((t) => t.trashedAt !== null).map((t) => t.id),
       );
 
       // 3a. 递归收集 trashed task 的后代(B):从 trashed tasks 出发,沿 parentId 向下找所有层级

@@ -25,31 +25,37 @@ export function buildTaskViewWhere(
       where.bucket = TaskBucket.INBOX;
       where.status = TaskStatus.ACTIVE;
       where.scheduledType = ScheduledType.NONE;
+      where.trashedAt = null;
       break;
     case 'today':
       where.status = TaskStatus.ACTIVE;
       where.scheduledType = ScheduledType.DATE;
       where.scheduledDate = { lte: new Date() };
+      where.trashedAt = null;
       break;
     case 'upcoming':
       where.status = TaskStatus.ACTIVE;
       where.scheduledType = ScheduledType.DATE;
       where.scheduledDate = { gt: new Date() };
+      where.trashedAt = null;
       break;
     case 'anytime':
       where.bucket = TaskBucket.ANYTIME;
       where.status = TaskStatus.ACTIVE;
       where.scheduledType = ScheduledType.NONE;
+      where.trashedAt = null;
       break;
     case 'someday':
       where.scheduledType = ScheduledType.SOMEDAY;
       where.status = TaskStatus.ACTIVE;
+      where.trashedAt = null;
       break;
     case 'trash':
-      where.status = TaskStatus.TRASHED;
+      where.trashedAt = { not: null };
       break;
     case 'logbook':
       where.status = TaskStatus.COMPLETED;
+      where.trashedAt = null;
       break;
   }
   return where;

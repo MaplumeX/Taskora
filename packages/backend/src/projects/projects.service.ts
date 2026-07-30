@@ -63,9 +63,9 @@ export class ProjectsService {
   }
 
   async findAll(userId: string) {
-    // 软删除（status=TRASHED）的项目不进入常规列表，仅在废纸篓 feed 中展示
+    // 软删除（trashedAt != null）的项目不进入常规列表，仅在废纸篓 feed 中展示
     const projects = await this.prisma.project.findMany({
-      where: { userId, status: { not: ProjectStatus.TRASHED } },
+      where: { userId, trashedAt: null },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
       include: { tags: { include: { tag: true } } },
     });
@@ -177,13 +177,19 @@ export class ProjectsService {
       throw new NotFoundException('Project not found');
     }
 
-    return this.prisma.project.update({
-      where: { id },
-      data: {
-        status: ProjectStatus.TRASHED,
-        trashedAt: new Date(),
-      },
-    });
+    const now = new Date();
+    await this.prisma.$transaction([
+      this.prisma.project.updateMany({
+        where: { id, userId },
+        data: { trashedAt: now },
+      }),
+      this.prisma.task.updateMany({
+        where: { projectId: id, userId },
+        data: { trashedAt: now },
+      }),
+    ]);
+
+    return { id, trashedAt: now };
   }
 
   async restore(userId: string, id: string) {
@@ -194,13 +200,18 @@ export class ProjectsService {
       throw new NotFoundException('Project not found');
     }
 
-    return this.prisma.project.update({
-      where: { id },
-      data: {
-        status: ProjectStatus.ACTIVE,
-        trashedAt: null,
-      },
-    });
+    await this.prisma.$transaction([
+      this.prisma.project.updateMany({
+        where: { id, userId },
+        data: { trashedAt: null },
+      }),
+      this.prisma.task.updateMany({
+        where: { projectId: id, userId },
+        data: { trashedAt: null },
+      }),
+    ]);
+
+    return { id, trashedAt: null };
   }
 
   async complete(userId: string, id: string) {

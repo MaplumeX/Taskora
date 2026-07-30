@@ -53,7 +53,7 @@ export class ProjectsController {
     return this.projectsService.update(req.user.id, id, dto);
   }
 
-  // Soft delete: sets status=TRASHED + trashedAt
+  // Soft delete: sets trashedAt
   @Delete(':id')
   remove(@Request() req: { user: { id: string } }, @Param('id') id: string) {
     return this.projectsService.remove(req.user.id, id);

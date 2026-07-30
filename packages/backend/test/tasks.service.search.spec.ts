@@ -43,9 +43,10 @@ describe('TasksService — search (q param)', () => {
 
     const call = mockPrisma.task.findMany.mock.calls[0][0];
     expect(call.where.status).toBe(TaskStatus.ACTIVE);
+    expect(call.where.trashedAt).toBeNull();
   });
 
-  it('sets status to [ACTIVE, COMPLETED] when q + completed=true (excludes TRASHED)', async () => {
+  it('sets status to [ACTIVE, COMPLETED] when q + completed=true', async () => {
     mockPrisma.task.findMany.mockResolvedValue([]);
 
     await service.findAll('user-1', { q: 'task', completed: true });
@@ -76,6 +77,7 @@ describe('TasksService — search (q param)', () => {
     const call = mockPrisma.task.findMany.mock.calls[0][0];
     expect(call.where.OR).toBeUndefined();
     expect(call.where.status).toBe(TaskStatus.ACTIVE);
+    expect(call.where.trashedAt).toBeNull();
   });
 
   it('maps taskTags to tags array in results', async () => {

@@ -58,7 +58,6 @@ model Area {
 enum ProjectStatus {
   ACTIVE
   COMPLETED
-  TRASHED
 }
 
 enum ProjectBucket {
@@ -111,7 +110,6 @@ model ProjectTag {
 enum TaskStatus {
   ACTIVE
   COMPLETED
-  TRASHED
 }
 
 enum TaskBucket {
