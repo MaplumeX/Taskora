@@ -76,7 +76,7 @@ model Project {
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   areaId    String?
-  area      Area?    @relation(fields: [areaId], references: [id])
+  area      Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
   tasks     Task[]
 
   sortOrder Int @default(0)
@@ -196,7 +196,7 @@ model Task {
   project   Project? @relation(fields: [projectId], references: [id])
 
   areaId String?
-  area   Area? @relation(fields: [areaId], references: [id])
+  area   Area? @relation(fields: [areaId], references: [id], onDelete: SetNull)
 
   tags TaskTag[]
 
