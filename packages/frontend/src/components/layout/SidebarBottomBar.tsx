@@ -69,7 +69,14 @@ export function SidebarBottomBar() {
             {t('common:add')}
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" className="w-40">
+        <DropdownMenuContent
+          side="top"
+          align="start"
+          className="w-40"
+          // 创建成功后标题输入框会自动聚焦。菜单关闭动画结束时若恢复
+          // trigger 焦点，会让输入框立即 blur 并退出编辑态。
+          onCloseAutoFocus={(event) => event.preventDefault()}
+        >
           <DropdownMenuItem
             disabled={createProject.isPending}
             onClick={handleNewProject}
