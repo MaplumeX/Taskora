@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "DnD 模式与事件隔离约定，用于核对修复不违反现有模式"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "测试约定与质量门，用于核对测试与检查命令"}
