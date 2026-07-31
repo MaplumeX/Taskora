@@ -96,7 +96,7 @@ onReorder,
   emptyHint,
 }: Props) {
   const { t } = useTranslation();
-  const topTasks = tasks.filter((t) => !t.parentId);
+  const topTasks = tasks;
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),

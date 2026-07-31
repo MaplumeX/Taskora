@@ -94,25 +94,13 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 
 **Fix**：在 `main.tsx` render 前同步调用 `applyThemeFromStorage()`（直接操作 `document.documentElement`），hook 只负责后续切换与监听。
 
-### 子任务在列表中重复显示
-
-**Symptom**：子任务既出现在主列表中，又出现在父任务详情中
-
-**Cause**：后端 `GET /tasks` 返回所有任务（含子任务），前端未过滤 `parentId`
-
-**Fix**：在 `TaskList` 中过滤掉 `parentId != null` 的任务，子任务仅在父任务详情中呈现：
-
-```tsx
-const topLevelTasks = tasks.filter((t) => !t.parentId);
-```
-
 ### 展开行直接用列表数据导致子任务不刷新
 
-**Symptom**：展开区中"暂无子任务"常驻，新增子任务后不更新
+**Symptom**：展开区中“暂无子任务”常驻，新增子任务后不更新
 
-**Cause**：`TaskRowExpanded` 直接使用列表传入的 task 对象，该对象不含 children（`GET /tasks` 不 include children）
+**Cause**：`TaskRowExpanded` 直接使用列表传入的 task 对象，该对象不含 subtasks（`GET /tasks` 不 include subtasks）
 
-**Fix**：`TaskRowExpanded` 内部用 `useTaskQuery(task.id)` 获取含 children 的实时数据，子任务操作后 invalidate 父任务 detail query。
+**Fix**：`TaskRowExpanded` 内部用 `useTaskQuery(task.id)` 获取含 subtasks 的实时数据，子任务操作后 invalidate 父任务 detail query。
 
 ---
 
@@ -397,12 +385,11 @@ if (!sortable || !onReorder) {
 ```tsx
 // Correct — hooks 在最顶部，无条件调用
 export function TaskList({ ..., sortable = true, ... }: Props) {
-  const topTasks = tasks.filter((t) => !t.parentId);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
-  if (topTasks.length === 0) {
+  if (tasks.length === 0) {
     return <EmptyState />;
   }
   // ...
@@ -415,7 +402,7 @@ export function TaskList({ ..., sortable = true, ... }: Props) {
 
 **Cause**：`SortableTask` / `SortableTaskItem` 把 `{...attributes} {...listeners}` 铺在整行外层 div 上，展开态的 `TaskRowExpanded` 内部所有可编辑控件都落在这个 listeners 区域内。dnd-kit 的 `KeyboardSensor` 默认把 **Enter / Space** 当作"开始拖拽"按键。用户在输入框按 Enter 时，keydown 冒泡到外层 div 的 `onKeyDown`（listeners）→ KeyboardSensor 启动拖拽 → `isDragging=true`；单元素 `SortableContext` 无可换位落点，键盘拖拽无法自然结束，卡在拖拽态。修复前只对 `onClick` 做了 `stopPropagation`，漏了 `onKeyDown`。
 
-**Fix**：在展开态所有可编辑控件（标题 Input、备注 Textarea、子任务 Input、子任务行内联编辑 Input）的 `onKeyDown` 里，对 `Enter` / `Space` `e.stopPropagation()`，阻止冒泡到 sortable listeners。**Escape 不 stopPropagation**，让事件冒泡到 `TaskItem` 根 div 的 `onKeyDown` 触发折叠。回归测试见 `src/components/task/TaskRowExpanded.test.tsx`。
+**Fix**：在展开态所有可编辑控件（标题 Input、备注 Textarea、子任务 Input、SubtaskRow 内联编辑 Input）的 `onKeyDown` 里，对 `Enter` / `Space` `e.stopPropagation()`，阻止冒泡到 sortable listeners。**Escape 不 stopPropagation**，让事件冒泡到 `TaskItem` 根 div 的 `onKeyDown` 触发折叠。回归测试见 `src/components/task/TaskRowExpanded.test.tsx`。
 
 ```tsx
 onKeyDown={(e) => {

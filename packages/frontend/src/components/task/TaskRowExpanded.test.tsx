@@ -38,18 +38,17 @@ const baseTask = vi.hoisted(() => ({
   completedAt: null,
   trashedAt: null,
   sortOrder: 0,
-  parentId: null,
   projectId: null,
   headingId: null,
   areaId: null,
   tags: [] as TaskResponseDto['tags'],
-  children: [] as TaskResponseDto[],
+  subtasks: [] as TaskResponseDto['subtasks'],
   createdAt: '2025-07-31T00:00:00.000Z',
   updatedAt: '2025-07-31T00:00:00.000Z',
 }));
 
 const mutationMocks = vi.hoisted(() => ({
-  createTask: vi.fn(),
+  createSubtask: vi.fn(),
 }));
 
 /* ------------- mocks ------------- */
@@ -57,10 +56,10 @@ const mutationMocks = vi.hoisted(() => ({
 vi.mock('@/lib/hooks/useTasks', () => ({
   taskKeys: { detail: (id: string) => ['task', id] },
   useTaskQuery: () => ({
-    data: { ...baseTask, children: [] },
+    data: { ...baseTask, subtasks: [] },
   }),
-  useCreateTask: () => ({
-    mutate: mutationMocks.createTask,
+  useCreateSubtask: () => ({
+    mutate: mutationMocks.createSubtask,
     isPending: false,
   }),
   useUpdateTask: () => ({ mutate: vi.fn(), isPending: false }),
@@ -174,9 +173,12 @@ describe('TaskRowExpanded — DnD keyboard stuck regression', () => {
     await user.type(subtaskInput, 'New subtask');
     await user.keyboard('{Enter}');
 
-    // createTask should have been called (subtask created)
-    expect(mutationMocks.createTask).toHaveBeenCalledWith(
-      expect.objectContaining({ title: 'New subtask', parentId: 'task-1' }),
+    // createSubtask should have been called (subtask created)
+    expect(mutationMocks.createSubtask).toHaveBeenCalledWith(
+      expect.objectContaining({
+        taskId: 'task-1',
+        data: { title: 'New subtask' },
+      }),
       expect.anything(),
     );
 

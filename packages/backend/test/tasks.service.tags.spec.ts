@@ -26,7 +26,6 @@ describe('TasksService tagIds set semantics', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
     userId,
-    parentId: null,
     projectId: null,
     areaId: null,
   };

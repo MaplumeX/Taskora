@@ -13,7 +13,6 @@ describe('TasksService heading membership invariant', () => {
     scheduledDate: null,
     dueDate: null,
     bucket: TaskBucket.ANYTIME,
-    parentId: null,
     projectId: 'project-1',
     headingId: 'heading-1',
     areaId: null,
@@ -48,19 +47,6 @@ describe('TasksService heading membership invariant', () => {
       expect.objectContaining({
         data: expect.objectContaining({
           project: { connect: { id: 'project-2' } },
-          heading: { disconnect: true },
-        }),
-      }),
-    );
-  });
-
-  it('clears heading membership when a top-level task becomes a child', async () => {
-    await service.update('user-1', 'task-1', { parentId: 'parent-1' });
-
-    expect(prisma.task.update).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          parent: { connect: { id: 'parent-1' } },
           heading: { disconnect: true },
         }),
       }),

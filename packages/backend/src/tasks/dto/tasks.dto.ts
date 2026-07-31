@@ -35,10 +35,6 @@ export class CreateTaskDto {
 
   @IsOptional()
   @IsString()
-  parentId?: string;
-
-  @IsOptional()
-  @IsString()
   projectId?: string;
 
   @IsOptional()
@@ -78,10 +74,6 @@ export class UpdateTaskDto {
 
   @IsOptional()
   @IsString()
-  parentId?: string | null;
-
-  @IsOptional()
-  @IsString()
   projectId?: string | null;
 
   @IsOptional()
@@ -110,10 +102,6 @@ export class TaskQueryDto {
   @IsOptional()
   @IsString()
   areaId?: string;
-
-  @IsOptional()
-  @IsString()
-  parentId?: string;
 
   @IsOptional()
   @IsString()

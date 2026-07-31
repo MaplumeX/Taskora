@@ -9,8 +9,9 @@ import { TagsModule } from './tags/tags.module';
 import { TagGroupsModule } from './tag-groups/tag-groups.module';
 import { FeedModule } from './feed/feed.module';
 import { ProjectHeadingsModule } from './project-headings/project-headings.module';
+import { SubtasksModule } from './subtasks/subtasks.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule, TasksModule, ProjectsModule, AreasModule, TagsModule, TagGroupsModule, FeedModule, ProjectHeadingsModule],
+  imports: [PrismaModule, AuthModule, UsersModule, TasksModule, ProjectsModule, AreasModule, TagsModule, TagGroupsModule, FeedModule, ProjectHeadingsModule, SubtasksModule],
 })
 export class AppModule {}

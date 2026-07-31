@@ -1,18 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { CreateTaskDto, TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
+import type {
+  CreateSubtaskDto,
+  CreateTaskDto,
+  SubtaskResponseDto,
+  TaskResponseDto,
+  UpdateSubtaskDto,
+  UpdateTaskDto,
+} from '@taskora/shared';
 
 import {
+  completeSubtask,
   completeTask,
   convertTaskToProject,
+  createSubtask,
   createTask,
+  deleteSubtask,
   deleteTask,
   getTask,
   getTasks,
+  reorderSubtasks,
   reorderTasks,
   restoreTask,
   type TaskQuery,
+  uncompleteSubtask,
   uncompleteTask,
+  updateSubtask,
   updateTask,
 } from '@/lib/api/tasks.api';
 
@@ -150,6 +163,82 @@ export function useConvertTaskToProject() {
       void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+// ---------- Subtask hooks ----------
+
+export function useCreateSubtask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, data }: { taskId: string; data: CreateSubtaskDto }) =>
+      createSubtask(taskId, data),
+    onSuccess: (subtask) => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(subtask.taskId) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+export function useUpdateSubtask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpdateSubtaskDto }) =>
+      updateSubtask(id, data),
+    onSuccess: (subtask) => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(subtask.taskId) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+export function useDeleteSubtask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: string; taskId: string }) =>
+      deleteSubtask(id),
+    onSuccess: (_data, { taskId }) => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+export function useCompleteSubtask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => completeSubtask(id),
+    onSuccess: (subtask: SubtaskResponseDto) => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(subtask.taskId) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+export function useUncompleteSubtask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => uncompleteSubtask(id),
+    onSuccess: (subtask: SubtaskResponseDto) => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(subtask.taskId) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+export function useReorderSubtasks() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ taskId, orderedIds }: { taskId: string; orderedIds: string[] }) =>
+      reorderSubtasks(taskId, orderedIds),
+    onSuccess: (_data, { taskId }) => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) });
     },
   });
 }

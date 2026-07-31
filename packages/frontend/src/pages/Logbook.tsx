@@ -46,7 +46,6 @@ export default function Logbook() {
     const yesterday: FeedItem[] = [];
     const earlier: FeedItem[] = [];
     for (const item of items) {
-      if (item.type === 'task' && item.parentId) continue;
       if (!item.completedAt) continue;
       const diff = dayDiff(item.completedAt, new Date());
       if (diff === 0) today.push(item);

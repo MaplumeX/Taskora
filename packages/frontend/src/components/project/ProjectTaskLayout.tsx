@@ -58,7 +58,6 @@ function normalizeLayout(
     containers[id] = [];
   });
   tasks
-    .filter((task) => !task.parentId)
     .forEach((task) => {
       const container =
         task.headingId && knownHeadings.has(task.headingId) ? task.headingId : UNGROUPED;
@@ -277,7 +276,7 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
   const { t } = useTranslation();
   const [layout, setLayout] = React.useState(() => normalizeLayout(tasks, headings));
   const taskMap = React.useMemo(
-    () => new Map(tasks.filter((task) => !task.parentId).map((task) => [task.id, task])),
+    () => new Map(tasks.map((task) => [task.id, task])),
     [tasks],
   );
   const headingMap = React.useMemo(

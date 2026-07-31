@@ -120,7 +120,7 @@ if (secFetchSite === 'cross-site') {
 
 **Symptom**：`?view=invalid` 返回 200 而非 400，查询参数验证被跳过
 
-**Cause**：Controller 的 `@Query()` 使用了交叉类型 `TaskQueryDto & { parentId?: string }`。TypeScript 对交叉类型生成的 `design:paramtypes` 元数据为 `Object`，NestJS ValidationPipe 无法识别目标类型。
+**Cause**：Controller 的 `@Query()` 使用了交叉类型如 `TaskQueryDto & { someExtra?: string }`。TypeScript 对交叉类型生成的 `design:paramtypes` 元数据为 `Object`，NestJS ValidationPipe 无法识别目标类型。
 
 **Fix**：`@Query()` 类型必须用单一 DTO class，所有可选字段定义在该 class 内。Query string 到 boolean 的转换用 `@Transform` 装饰器处理：
 
@@ -129,5 +129,5 @@ if (secFetchSite === 'cross-site') {
 @Query() query: TaskQueryDto  // 单一 class
 
 // Wrong
-@Query() query: TaskQueryDto & { parentId?: string }  // 交叉类型，元数据丢失
+@Query() query: TaskQueryDto & { someExtra?: string }  // 交叉类型，元数据丢失
 ```

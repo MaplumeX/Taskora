@@ -17,7 +17,7 @@ export default function TagDetail() {
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ tagId });
   const showSkeleton = useDelayedLoading(isLoading);
 
-  const topLevel = tasks.filter((t) => !t.parentId);
+  const topLevel = tasks;
 
   return (
     <div className="flex flex-col gap-4">

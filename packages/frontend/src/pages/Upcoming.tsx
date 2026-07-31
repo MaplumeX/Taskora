@@ -45,7 +45,6 @@ export default function Upcoming() {
   const grouped = useMemo(() => {
     const map = new Map<string, FeedItem[]>();
     for (const item of items) {
-      if (item.type === 'task' && item.parentId) continue;
       if (!item.scheduledDate) continue;
       const key = toDateKey(item.scheduledDate);
       const arr = map.get(key) ?? [];

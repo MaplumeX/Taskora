@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "Backend overview: NestJS + Prisma + PostgreSQL layer conventions"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "CRITICAL: Prisma patterns, schema, migrations, trash/restore cascade, reorder API pattern, resolveBucket. Contains current parentId BFS + TaskChildren conventions that this task removes — agent must understand what to change"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "NotFoundException pattern, user data isolation (findFirst with userId), ownership checks"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Controller/service split, testing conventions, class-validator DTOs"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "Module organization in packages/backend/src/ for new SubtasksModule"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "TanStack Query conventions for new subtask hooks; invalidation patterns"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Query key conventions, useMutation patterns for new subtask hooks"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Shared DTO type usage in frontend"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component patterns for TaskRowExpanded / SubtaskRow changes"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "Translation key conventions (task.json has subtask keys)"}

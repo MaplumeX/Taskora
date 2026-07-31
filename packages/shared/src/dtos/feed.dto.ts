@@ -33,7 +33,6 @@ export interface FeedItemBase {
 
 export interface TaskFeedItem extends FeedItemBase {
   type: 'task';
-  parentId: string | null;
   projectId: string | null;
   headingId: string | null;
   areaId: string | null;

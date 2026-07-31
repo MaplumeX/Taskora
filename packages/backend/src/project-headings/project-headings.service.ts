@@ -85,7 +85,6 @@ export class ProjectHeadingsService {
           where: {
             userId,
             projectId: dto.projectId,
-            parentId: null,
             trashedAt: null,
             status: TaskStatus.ACTIVE,
           },
@@ -127,7 +126,6 @@ export class ProjectHeadingsService {
               id,
               userId,
               projectId: dto.projectId,
-              parentId: null,
               trashedAt: null,
               status: TaskStatus.ACTIVE,
             },
@@ -141,7 +139,6 @@ export class ProjectHeadingsService {
                 id,
                 userId,
                 projectId: dto.projectId,
-                parentId: null,
                 trashedAt: null,
                 status: TaskStatus.ACTIVE,
               },
@@ -182,33 +179,16 @@ export class ProjectHeadingsService {
       }
       await this.assertProjectOwnership(userId, heading.projectId, tx);
 
-      const allTasks = await tx.task.findMany({
-        where: { userId },
-        select: { id: true, parentId: true, headingId: true },
+      // Soft-delete all tasks directly under this heading.
+      // Subtasks are not trashed (they stay until parent is physically deleted).
+      const directTasks = await tx.task.findMany({
+        where: { userId, headingId: id },
+        select: { id: true },
       });
-      const childrenOf = new Map<string, string[]>();
-      for (const task of allTasks) {
-        if (!task.parentId) continue;
-        const children = childrenOf.get(task.parentId) ?? [];
-        children.push(task.id);
-        childrenOf.set(task.parentId, children);
-      }
-
-      const ids = new Set(allTasks.filter((task) => task.headingId === id).map((task) => task.id));
-      const queue = [...ids];
-      while (queue.length > 0) {
-        const parentId = queue.shift()!;
-        for (const childId of childrenOf.get(parentId) ?? []) {
-          if (ids.has(childId)) continue;
-          ids.add(childId);
-          queue.push(childId);
-        }
-      }
-
       const trashedAt = new Date();
-      if (ids.size > 0) {
+      if (directTasks.length > 0) {
         await tx.task.updateMany({
-          where: { id: { in: [...ids] }, userId },
+          where: { id: { in: directTasks.map((t) => t.id) }, userId },
           data: { trashedAt },
         });
       }
