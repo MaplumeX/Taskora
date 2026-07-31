@@ -1,0 +1,9 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Heading layout spans database, shared DTOs, backend validation, hooks, and UI; trace every boundary."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Follow ownership, migration, soft-delete, transaction, and descendant-cascade conventions."}
+{"file":".trellis/spec/backend/directory-structure.md","reason":"Place and register the new NestJS project-heading domain consistently."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Apply controller/service DTO, user isolation, and backend testing requirements."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Reuse project UI, inline editing, bottom-bar, menu, and dnd-kit conventions."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Follow TanStack Query keys, invalidation, and half-optimistic reorder behavior."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Keep shared transport contracts in @taskora/shared and avoid duplicate DTOs."}
+{"file":".trellis/spec/frontend/i18n-guidelines.md","reason":"Add matching zh/en project strings and preserve locale parity."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Follow component structure, tests, accessibility, and root quality gates."}
