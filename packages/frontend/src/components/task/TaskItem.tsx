@@ -135,7 +135,10 @@ export function TaskItem({
             placeholder={t('task:newTaskPlaceholder')}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
+                e.stopPropagation();
                 e.currentTarget.blur();
+              } else if (e.key === ' ') {
+                e.stopPropagation();
               } else if (e.key === 'Escape') {
                 setTitle(current.title);
                 e.currentTarget.blur();

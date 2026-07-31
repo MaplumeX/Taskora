@@ -108,6 +108,9 @@ export function TaskRowExpanded({ task, current }: Props) {
         value={notes}
         onChange={(e) => setNotes(e.target.value)}
         onBlur={commitNotes}
+        onKeyDown={(e) =>
+          (e.key === 'Enter' || e.key === ' ') && e.stopPropagation()
+        }
         placeholder={t('task:notePlaceholder')}
         className="min-h-[60px] resize-none border-0 px-0 shadow-none focus-visible:ring-0"
       />
@@ -128,7 +131,14 @@ export function TaskRowExpanded({ task, current }: Props) {
         <Input
           value={subtaskTitle}
           onChange={(e) => setSubtaskTitle(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && addSubtask()}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.stopPropagation();
+              addSubtask();
+            } else if (e.key === ' ') {
+              e.stopPropagation();
+            }
+          }}
           onClick={(e) => e.stopPropagation()}
           placeholder={t('task:addSubtask')}
           className="mt-1 h-8 text-sm"
@@ -317,8 +327,12 @@ function SubtaskRow({
           onBlur={commit}
           onClick={(e) => e.stopPropagation()}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') e.currentTarget.blur();
-            if (e.key === 'Escape') {
+            if (e.key === 'Enter') {
+              e.stopPropagation();
+              e.currentTarget.blur();
+            } else if (e.key === ' ') {
+              e.stopPropagation();
+            } else if (e.key === 'Escape') {
               setDraft(task.title);
               setEditing(false);
             }
