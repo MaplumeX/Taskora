@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 26
-- **Last Active**: 2026-07-30
+- **Total Sessions**: 27
+- **Last Active**: 2026-07-31
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1032 | Active |
+| `journal-1.md` | ~1065 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 27 | 2026-07-31 | Hide completed projects from sidebar | `1e9d19c` | `main` |
 | 26 | 2026-07-30 | 区域详情页更多菜单：删除与标签能力 | `19495eb` | `main` |
 | 25 | 2026-07-30 | 修复删除逻辑一致性（Area FK + status 拆分 + 级联 trash/restore） | `c20cc0c`, `2c000c1`, `404659d` | `main` |
 | 24 | 2026-07-29 | Empty trash feature | `c519edd` | `main` |
