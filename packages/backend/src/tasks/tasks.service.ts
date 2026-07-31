@@ -2,7 +2,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { TaskBucket, TaskStatus, ScheduledType } from '@taskora/shared';
+import { TaskBucket, ProjectBucket, TaskStatus, ScheduledType } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
 import { Prisma } from '@prisma/client';
@@ -329,6 +329,108 @@ export class TasksService {
       });
 
       return { id, trashedAt: null };
+    });
+  }
+
+  async convertToProject(userId: string, id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      // Step 1: find the task with tags and its parent project (for areaId fallback)
+      const existing = await tx.task.findFirst({
+        where: { id, userId },
+        include: { tags: true, project: true },
+      });
+      if (!existing) {
+        throw new NotFoundException('Task not found');
+      }
+      const effectiveAreaId =
+        existing.areaId ?? existing.project?.areaId ?? null;
+
+      // Step 2: BFS-collect all descendant ids (excluding the task itself)
+      const allTasks = await tx.task.findMany({
+        where: { userId },
+        select: { id: true, parentId: true },
+      });
+      const childrenOf = new Map<string, string[]>();
+      for (const tsk of allTasks) {
+        if (tsk.parentId) {
+          const arr = childrenOf.get(tsk.parentId) ?? [];
+          arr.push(tsk.id);
+          childrenOf.set(tsk.parentId, arr);
+        }
+      }
+      const descendantIds = new Set<string>();
+      const directChildIds = childrenOf.get(id) ?? [];
+      const queue: string[] = [...directChildIds];
+      for (const kid of directChildIds) {
+        descendantIds.add(kid);
+      }
+      while (queue.length) {
+        const layer = queue.splice(0);
+        for (const parentId of layer) {
+          const kids = childrenOf.get(parentId);
+          if (!kids) continue;
+          for (const kid of kids) {
+            if (!descendantIds.has(kid)) {
+              descendantIds.add(kid);
+              queue.push(kid);
+            }
+          }
+        }
+      }
+
+      // Step 3: compute next sortOrder for the new project
+      const maxSort = await tx.project.aggregate({
+        where: { userId },
+        _max: { sortOrder: true },
+      });
+      const nextSortOrder = (maxSort._max.sortOrder ?? -1) + 1;
+
+      // Step 4: create the new project
+      const newProject = await tx.project.create({
+        data: {
+          title: existing.title,
+          notes: existing.notes,
+          scheduledDate: existing.scheduledDate,
+          dueDate: existing.dueDate,
+          scheduledType: existing.scheduledType,
+          status: existing.status,
+          completedAt: existing.completedAt,
+          trashedAt: existing.trashedAt,
+          areaId: effectiveAreaId,
+          bucket: existing.bucket as ProjectBucket,
+          sortOrder: nextSortOrder,
+          userId,
+          tags: {
+            create: existing.tags.map((tt) => ({ tagId: tt.tagId })),
+          },
+        },
+        include: { tags: { include: { tag: true } } },
+      });
+
+      // Step 5: migrate descendant tasks to the new project, clear heading
+      if (descendantIds.size > 0) {
+        await tx.task.updateMany({
+          where: { id: { in: [...descendantIds] }, userId },
+          data: { projectId: newProject.id, headingId: null },
+        });
+      }
+
+      // Step 6: clear direct children's parentId (before deleting original task)
+      if (directChildIds.length > 0) {
+        await tx.task.updateMany({
+          where: { id: { in: directChildIds }, userId },
+          data: { parentId: null },
+        });
+      }
+
+      // Step 7: hard-delete the original task (TaskTag cascades automatically)
+      await tx.task.delete({ where: { id } });
+
+      // Step 8: return the new project with resolved tags
+      return {
+        ...newProject,
+        tags: newProject.tags.map((pt) => pt.tag),
+      };
     });
   }
 

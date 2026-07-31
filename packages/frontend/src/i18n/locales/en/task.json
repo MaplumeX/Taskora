@@ -27,5 +27,8 @@
   "yesterday": "Yesterday",
   "earlier": "Earlier",
   "markComplete": "Mark Complete",
-  "markIncomplete": "Mark Incomplete"
+  "markIncomplete": "Mark Incomplete",
+  "convertToProject": "Convert to Project",
+  "convertSuccess": "Converted to project",
+  "convertFailed": "Conversion failed"
 }

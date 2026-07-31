@@ -1,5 +1,6 @@
 import type {
   CreateTaskDto,
+  ProjectResponseDto,
   TaskResponseDto,
   UpdateTaskDto,
 } from '@taskora/shared';
@@ -60,4 +61,10 @@ export function uncompleteTask(id: string): Promise<TaskResponseDto> {
 
 export function reorderTasks(orderedIds: string[]): Promise<void> {
   return apiClient.post('/tasks/reorder', { orderedIds }).then(() => undefined);
+}
+
+export function convertTaskToProject(id: string): Promise<ProjectResponseDto> {
+  return apiClient
+    .post<ProjectResponseDto>(`/tasks/${id}/convert-to-project`)
+    .then((res) => res.data);
 }
