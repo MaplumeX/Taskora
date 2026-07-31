@@ -1,4 +1,5 @@
 import * as React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -30,6 +31,7 @@ export interface ProjectMenuProps {
   project: ProjectResponseDto;
   current: ProjectResponseDto;
   variant?: 'default' | 'trash';
+  onDeleted?: () => void;
 }
 
 type PickerKind = 'scheduled' | 'due' | 'tags' | null;
@@ -41,6 +43,7 @@ export function ProjectMenuPanel({
   project,
   current,
   variant = 'default',
+  onDeleted,
   onClose,
   openPicker,
   firstItemRef,
@@ -80,6 +83,7 @@ export function ProjectMenuPanel({
       onSuccess: () => {
         void queryClient.invalidateQueries({ queryKey: projectKeys.all });
         void queryClient.invalidateQueries({ queryKey: ['feed'] });
+        onDeleted?.();
       },
       onError: () => toast.error(tc('deleteFailed')),
     });
@@ -278,6 +282,9 @@ export function ProjectContextMenu({
 /** Trigger 版：内置 MoreHorizontal 按钮，点击打开菜单 + picker。 */
 export function ProjectMoreMenu({ project, current, variant = 'default' }: ProjectMenuProps) {
   const { t: tc } = useTranslation('common');
+  const navigate = useNavigate();
+
+  const onDeleted = () => navigate('/today');
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
 
@@ -313,6 +320,7 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
             project={project}
             current={current}
             variant={variant}
+            onDeleted={onDeleted}
             onClose={closeMenu}
             openPicker={openPicker}
           />
