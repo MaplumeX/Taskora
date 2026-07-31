@@ -200,6 +200,12 @@ export class TasksService {
         ? { connect: { id: dto.projectId } }
         : { disconnect: true };
     }
+    if (
+      (dto.projectId !== undefined && dto.projectId !== existing.projectId) ||
+      (dto.parentId !== undefined && dto.parentId !== null)
+    ) {
+      data.heading = { disconnect: true };
+    }
     if (dto.areaId !== undefined) {
       data.area = dto.areaId
         ? { connect: { id: dto.areaId } }

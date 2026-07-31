@@ -7,5 +7,14 @@
   "noTasks": "No tasks in this project",
   "created": "Project created",
   "newItemPlaceholder": "New Project",
-  "addProject": "Add project"
+  "addProject": "Add project",
+  "addHeading": "Add heading",
+  "headingPlaceholder": "New heading",
+  "headingActions": "Heading actions",
+  "dragHeading": "Drag heading",
+  "deleteHeading": "Delete heading",
+  "deleteHeadingTitle": "Delete this heading?",
+  "deleteHeadingDescription": "All tasks under this heading, including their subtasks, will be moved to Trash. This cannot be undone directly.",
+  "createHeadingFailed": "Failed to create heading",
+  "deleteHeadingFailed": "Failed to delete heading"
 }

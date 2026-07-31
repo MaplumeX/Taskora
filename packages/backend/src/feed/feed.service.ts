@@ -128,6 +128,7 @@ export class FeedService {
       sortOrder: t.sortOrder,
       parentId: t.parentId,
       projectId: t.projectId,
+      headingId: t.headingId,
       areaId: t.areaId,
       createdAt: t.createdAt.toISOString(),
       updatedAt: t.updatedAt.toISOString(),

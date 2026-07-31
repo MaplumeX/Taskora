@@ -8,8 +8,9 @@ import { AreasModule } from './areas/areas.module';
 import { TagsModule } from './tags/tags.module';
 import { TagGroupsModule } from './tag-groups/tag-groups.module';
 import { FeedModule } from './feed/feed.module';
+import { ProjectHeadingsModule } from './project-headings/project-headings.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule, TasksModule, ProjectsModule, AreasModule, TagsModule, TagGroupsModule, FeedModule],
+  imports: [PrismaModule, AuthModule, UsersModule, TasksModule, ProjectsModule, AreasModule, TagsModule, TagGroupsModule, FeedModule, ProjectHeadingsModule],
 })
 export class AppModule {}

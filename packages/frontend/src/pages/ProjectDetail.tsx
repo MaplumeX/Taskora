@@ -5,8 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { useCompleteProject, useProjectsQuery, useUncompleteProject, useUpdateProject } from '@/lib/hooks/useProjects';
 import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
+import { useProjectHeadingsQuery } from '@/lib/hooks/useProjectHeadings';
 import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
-import { TaskListView } from '@/components/task/TaskListView';
+import { ProjectTaskLayout } from '@/components/project/ProjectTaskLayout';
 import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { TaskCheckbox } from '@/components/task/TaskCheckbox';
@@ -25,7 +26,12 @@ export default function ProjectDetail() {
   const { data: projects = [] } = useProjectsQuery();
   const project = projects.find((p) => p.id === id);
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ projectId: id });
-  const showSkeleton = useDelayedLoading(isLoading);
+  const {
+    data: headings = [],
+    isLoading: headingsLoading,
+    isError: headingsError,
+  } = useProjectHeadingsQuery(id);
+  const showSkeleton = useDelayedLoading(isLoading || headingsLoading);
   const updateProject = useUpdateProject();
   const completeProject = useCompleteProject();
   const uncompleteProject = useUncompleteProject();
@@ -70,10 +76,15 @@ export default function ProjectDetail() {
 
       {showSkeleton ? (
         <TaskListSkeleton />
-      ) : isError ? (
+      ) : isError || headingsError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        <TaskListView tasks={tasks} emptyHint={t('project:noTasks')} />
+        <ProjectTaskLayout
+          projectId={id ?? ''}
+          tasks={tasks}
+          headings={headings}
+          emptyHint={t('project:noTasks')}
+        />
       )}
     </div>
   );
