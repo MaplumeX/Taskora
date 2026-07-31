@@ -1,0 +1,8 @@
+{"file":".trellis/spec/guides/cross-layer-thinking-guide.md","reason":"Verify heading membership and order survive the full API round trip."}
+{"file":".trellis/spec/backend/database-guidelines.md","reason":"Audit user isolation, transaction atomicity, deletion, restore, and migration safety."}
+{"file":".trellis/spec/backend/quality-guidelines.md","reason":"Check DTO validation and backend test coverage."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Review project-only DnD, inline editing, menu, and bottom-bar integration."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Check cache invalidation, optimistic reorder recovery, and query-key scoping."}
+{"file":".trellis/spec/frontend/type-safety.md","reason":"Ensure all API payloads use shared types without unsafe duplication."}
+{"file":".trellis/spec/frontend/i18n-guidelines.md","reason":"Verify Chinese/English key parity and accessible localized labels."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Run and assess lint, typecheck, tests, and component accessibility."}

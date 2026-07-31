@@ -1,0 +1,32 @@
+{
+  "id": "project-headings",
+  "name": "project-headings",
+  "title": "项目标题分组",
+  "description": "Add Things 3-style headings inside project task lists, including CRUD, grouped drag-and-drop, persistence, and cascading trash behavior.",
+  "status": "completed",
+  "dev_type": null,
+  "scope": "fullstack",
+  "package": null,
+  "priority": "P2",
+  "creator": "Maplume",
+  "assignee": "Maplume",
+  "createdAt": "2026-07-31",
+  "completedAt": "2026-07-31",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [
+    "packages/backend/prisma/schema.prisma",
+    "packages/backend/src/tasks/tasks.service.ts",
+    "packages/frontend/src/pages/ProjectDetail.tsx",
+    "packages/frontend/src/components/layout/ContentBottomBar.tsx",
+    "packages/shared/src/dtos/task.dto.ts"
+  ],
+  "notes": "",
+  "meta": {}
+}
