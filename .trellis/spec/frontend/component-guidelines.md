@@ -1,5 +1,25 @@
 # Component Guidelines
 
+## Project heading layouts
+
+Heading-aware task grouping is project-page-only. Keep aggregate task lists on
+the generic `TaskListView`; `ProjectTaskLayout` owns the normalized project
+shape:
+
+```text
+ungrouped task IDs
+ordered heading IDs -> container-local task IDs
+```
+
+Use namespaced DnD identifiers (`heading:`, `task:`, and `container:`) so entity
+IDs cannot collide. Empty heading containers remain droppable. Every completed
+drag serializes and submits the full layout, and a failed save restores the
+latest server-derived layout and shows the shared save-failed toast.
+
+Heading rows are typographic section labels, not task rows: they have no
+completion checkbox, use a dedicated drag handle, allow an empty inline title,
+and require a destructive confirmation before deletion.
+
 > How components are built in this project.
 
 ---

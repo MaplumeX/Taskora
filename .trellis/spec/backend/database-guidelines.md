@@ -16,6 +16,139 @@
 
 ## Query Patterns
 
+## Scenario: Project heading complete-layout persistence
+
+### 1. Scope / Trigger
+
+Use this contract whenever project headings, heading membership, or project-page
+task ordering changes. The feature crosses Prisma, shared DTOs, NestJS services,
+TanStack Query caches, and dnd-kit UI state, so a partial update at any boundary
+can corrupt the visible layout.
+
+### 2. Signatures
+
+Database:
+
+```prisma
+model ProjectHeading {
+  id        String @id @default(uuid())
+  title     String
+  sortOrder Int    @default(0)
+  userId    String
+  projectId String
+  tasks     Task[]
+}
+
+model Task {
+  headingId String?
+  heading   ProjectHeading? @relation(fields: [headingId], references: [id], onDelete: SetNull)
+}
+```
+
+HTTP:
+
+```text
+GET    /project-headings?projectId=:projectId
+POST   /project-headings
+PATCH  /project-headings/:id
+DELETE /project-headings/:id
+POST   /project-headings/reorder
+```
+
+### 3. Contracts
+
+The reorder request is a complete snapshot of every visible active top-level
+task and every heading in one active project:
+
+```typescript
+interface ReorderProjectHeadingLayoutDto {
+  projectId: string;
+  ungroupedTaskIds: string[];
+  groups: Array<{
+    headingId: string;
+    taskIds: string[];
+  }>;
+}
+```
+
+Invariants:
+
+- `ProjectHeading` is owned by both `userId` and `projectId`.
+- Only top-level tasks in the same project may reference a heading.
+- Legacy and newly created project tasks use `headingId = null`.
+- `Task.sortOrder` is container-local on the project page.
+- A layout write updates heading order, task membership, and task order in one
+  interactive transaction.
+- Project soft delete/restore does not modify headings or `headingId`.
+
+### 4. Validation & Error Matrix
+
+| Condition | Result |
+|---|---|
+| Project is missing, trashed, or owned by another user | `404 Project not found` |
+| Heading/task ID is duplicated | `400 Duplicate ... id` |
+| A visible heading/task ID is omitted or an unknown ID is added | `400 Invalid or omitted ... id` |
+| Task is foreign, cross-project, a child, completed, or trashed | Reject as an invalid layout |
+| A row changes between validation and write | `updateMany.count !== 1`; throw and roll back |
+| Heading update/delete loses ownership or active-project validity | Throw and roll back |
+
+The final write predicates must repeat `userId`, `projectId`, top-level, active,
+and non-trashed constraints. The initial read validation alone is insufficient
+because state can change before the writes execute.
+
+### 5. Good / Base / Bad Cases
+
+- **Good:** Move an active top-level task from ungrouped into a heading; the
+  transaction writes `headingId` and its container-local `sortOrder`.
+- **Base:** A legacy project has no headings; all active top-level tasks appear
+  in `ungroupedTaskIds` and remain valid without backfill.
+- **Bad:** Submit a child task, omit an active task, repeat an ID, or reference a
+  heading from another project; reject the complete request without any writes.
+
+Heading deletion is a separate interactive transaction: seed a BFS with direct
+heading members, collect every descendant, soft-delete those tasks by changing
+only `trashedAt`, then physically delete the heading. `onDelete: SetNull` makes
+later task restoration ungrouped.
+
+### 6. Tests Required
+
+- Reorder: ungrouped, same-heading, cross-heading, empty heading, heading order.
+- Validation: duplicate, omitted, unknown, cross-user, cross-project, child,
+  completed, and trashed IDs.
+- Concurrency: mock one final `updateMany` count as zero and assert the
+  transaction rejects instead of reporting success.
+- Delete: empty heading, direct members, multi-level descendants, completed
+  descendants, and preservation of `status`.
+- Compatibility: project trash/restore leaves headings and `headingId`
+  unchanged; moving a task out of its project or making it a child clears
+  `headingId`.
+
+### 7. Wrong vs Correct
+
+```typescript
+// Wrong: validation succeeded earlier, but the final write is unconstrained
+await tx.task.updateMany({
+  where: { id },
+  data: { headingId, sortOrder },
+});
+
+// Correct: repeat invariants and verify that exactly one row was updated
+const result = await tx.task.updateMany({
+  where: {
+    id,
+    userId,
+    projectId,
+    parentId: null,
+    status: TaskStatus.ACTIVE,
+    trashedAt: null,
+  },
+  data: { headingId, sortOrder },
+});
+if (result.count !== 1) {
+  throw new BadRequestException('Layout changed; refresh and retry');
+}
+```
+
 ### 用户数据隔离（CRITICAL）
 
 所有业务查询必须包含 `userId`：
