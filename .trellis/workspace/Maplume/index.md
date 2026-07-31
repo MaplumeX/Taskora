@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 28
+- **Total Sessions**: 29
 - **Last Active**: 2026-07-31
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1099 | Active |
+| `journal-1.md` | ~1132 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 29 | 2026-07-31 | Project detail notes field | `c98c8f4` | `main` |
 | 28 | 2026-07-31 | 实现项目标题分组 | `06d5dcc`, `6ac3835` | `main` |
 | 27 | 2026-07-31 | Hide completed projects from sidebar | `1e9d19c` | `main` |
 | 26 | 2026-07-30 | 区域详情页更多菜单：删除与标签能力 | `19495eb` | `main` |

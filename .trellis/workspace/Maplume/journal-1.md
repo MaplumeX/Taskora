@@ -1097,3 +1097,36 @@ Added 'Empty Trash' feature: permanently delete all trashed tasks and projects f
 ### Next Steps
 
 - None - task complete
+
+
+## Session 29: Project detail notes field
+
+**Date**: 2026-07-31
+**Task**: Project detail notes field
+**Branch**: `main`
+
+### Summary
+
+Added an inline notes Textarea to ProjectDetail.tsx below the title row, mirroring the Task notes interaction in TaskRowExpanded (local state + useEffect sync from query data + onBlur commit via useUpdateProject). Added project:notePlaceholder i18n key for en/zh. Backend/schema already supported Project.notes; no backend changes. check passed all ACs.
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c98c8f4` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
