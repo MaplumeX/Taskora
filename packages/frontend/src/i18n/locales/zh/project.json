@@ -16,5 +16,6 @@
   "deleteHeadingTitle": "删除这个标题？",
   "deleteHeadingDescription": "标题下的所有任务及其子任务都会移到废纸篓。此操作无法直接撤销。",
   "createHeadingFailed": "标题创建失败",
-  "deleteHeadingFailed": "标题删除失败"
+  "deleteHeadingFailed": "标题删除失败",
+  "notePlaceholder": "备注…"
 }

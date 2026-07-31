@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +12,7 @@ import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { TaskCheckbox } from '@/components/task/TaskCheckbox';
 import { ProjectMoreMenu } from '@/components/project/ProjectContextMenu';
+import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
 
 export default function ProjectDetail() {
@@ -35,6 +36,19 @@ export default function ProjectDetail() {
   const updateProject = useUpdateProject();
   const completeProject = useCompleteProject();
   const uncompleteProject = useUncompleteProject();
+
+  const [notes, setNotes] = useState(project?.notes ?? '');
+  useEffect(() => setNotes(project?.notes ?? ''), [project?.notes]);
+
+  const commitNotes = () => {
+    if (!project) return;
+    if (notes !== (project.notes ?? '')) {
+      updateProject.mutate(
+        { id: project.id, data: { notes } },
+        { onError: () => toast.error(t('common:saveFailed')) },
+      );
+    }
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -73,6 +87,16 @@ export default function ProjectDetail() {
         </div>
         {project && <ProjectMoreMenu project={project} current={project} />}
       </div>
+
+      {project ? (
+        <Textarea
+          value={notes}
+          onChange={(e) => setNotes(e.target.value)}
+          onBlur={commitNotes}
+          placeholder={t('project:notePlaceholder')}
+          className="min-h-[60px] resize-none border-0 px-0 shadow-none focus-visible:ring-0"
+        />
+      ) : null}
 
       {showSkeleton ? (
         <TaskListSkeleton />
