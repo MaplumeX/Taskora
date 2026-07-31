@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 30
+- **Total Sessions**: 31
 - **Last Active**: 2026-07-31
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1165 | Active |
+| `journal-1.md` | ~1198 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 31 | 2026-07-31 | Delete project redirects to Today | `e3f1819` | `main` |
 | 30 | 2026-07-31 | Add convert task to project action | `a559bcd` | `main` |
 | 29 | 2026-07-31 | Project detail notes field | `c98c8f4` | `main` |
 | 28 | 2026-07-31 | 实现项目标题分组 | `06d5dcc`, `6ac3835` | `main` |

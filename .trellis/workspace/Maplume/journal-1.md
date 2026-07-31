@@ -1163,3 +1163,36 @@ Added 'Convert to Project' action to the task context menu. The task and all des
 ### Next Steps
 
 - None - task complete
+
+
+## Session 31: Delete project redirects to Today
+
+**Date**: 2026-07-31
+**Task**: Delete project redirects to Today
+**Branch**: `main`
+
+### Summary
+
+Fix: deleting a project from the detail page More menu left the user on an empty /projects/:id shell. Threaded an onDeleted callback through the shared ProjectMenuPanel so only ProjectMoreMenu (detail-page only) navigates to /today on successful delete. Sidebar/feed ProjectContextMenu unchanged. typecheck + lint pass.
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e3f1819` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
