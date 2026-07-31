@@ -75,7 +75,7 @@ export function ProjectHeadingRow({ heading, dragHandleProps }: Props) {
 
   return (
     <>
-      <div className="group flex h-10 items-center gap-1.5 pt-2">
+      <div className="group flex h-10 items-center gap-1.5 border-b border-border pt-2">
         <button
           type="button"
           aria-label={t('project:dragHeading')}
