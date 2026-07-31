@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component patterns incl. inline edit rows; ProjectDetail textarea should mirror TaskRowExpanded notes behavior"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "TanStack Query patterns; reuse existing useUpdateProject mutation semantics"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "zh/en parity rules for new project:notePlaceholder key"}

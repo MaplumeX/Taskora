@@ -16,5 +16,6 @@
   "deleteHeadingTitle": "Delete this heading?",
   "deleteHeadingDescription": "All tasks under this heading, including their subtasks, will be moved to Trash. This cannot be undone directly.",
   "createHeadingFailed": "Failed to create heading",
-  "deleteHeadingFailed": "Failed to delete heading"
+  "deleteHeadingFailed": "Failed to delete heading",
+  "notePlaceholder": "Note…"
 }

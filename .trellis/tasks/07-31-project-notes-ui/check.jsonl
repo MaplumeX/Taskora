@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Code standards and testing baseline for check pass"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "Verify zh/en parity for new key"}
