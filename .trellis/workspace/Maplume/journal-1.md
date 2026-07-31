@@ -1196,3 +1196,37 @@ Fix: deleting a project from the detail page More menu left the user on an empty
 ### Next Steps
 
 - None - task complete
+
+
+## Session 32: fix: 展开态输入框按 Enter 卡在 dnd-kit 拖拽态
+
+**Date**: 2026-07-31
+**Task**: fix: 展开态输入框按 Enter 卡在 dnd-kit 拖拽态
+**Branch**: `main`
+
+### Summary
+
+修复任务展开态的子任务/标题/备注输入框按 Enter 提交后行卡在 isDragging 半透明态的 bug。根因：SortableTask/SortableTaskItem 把 {...listeners} 铺满整行，KeyboardSensor 把 Enter/Space 当作开始拖拽按键。方案：在 TaskRowExpanded/TaskItem 的可编辑控件 onKeyDown 对 Enter/Space stopPropagation，Escape 不阻断（保留根 div Escape 折叠）。新增回归测试 TaskRowExpanded.test.tsx。spec 更新 component-guidelines.md 事件隔离约定与 Common Mistake。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `66ba34e` | (see git log) |
+| `cd5ba93` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
