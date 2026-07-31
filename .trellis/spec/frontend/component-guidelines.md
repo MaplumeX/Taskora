@@ -205,12 +205,13 @@ const topLevelTasks = tasks.filter((t) => !t.parentId);
 
 **状态归属**：`selectedId` 为列表级瞬态用 `useState`（在 `TaskListView` / `Logbook` 中）；`expandedId` 存于 `uiInteractionStore`（Zustand，非持久），以便跨组件（如底部共享栏创建任务后）能驱动某行展开。均抽成 `useTaskRowSelection()` hook 复用，hook 内部委托 store，消费方零改动。刷新后展开态丢失（可接受，属瞬态）。
 
-**事件隔离（关键）**：展开区内的交互不能冒泡到外层空白点击 handler，否则会误折叠：
+**事件隔离（关键）**：展开区内的交互不能冒泡到外层空白点击 handler 与 sortable listeners，否则会误折叠或误触发拖拽：
 
 - 展开区根 div：`onClick={e => e.stopPropagation()}`
 - `PopoverContent`：`onClick` 需 `stopPropagation`（Radix Popover 通过 Portal 渲染，事件仍会冒泡到 document）
 - 子任务编辑 input：`onClick` 需 `stopPropagation`
 - checkbox：已有 `stopPropagation`，不参与状态机
+- **可编辑控件（Input/Textarea）的 `onKeyDown`**：对 `Enter` / `Space` 必须 `e.stopPropagation()`。`SortableTask` / `SortableTaskItem` 把 `{...attributes} {...listeners}` 铺在整行外层 div 上，而 dnd-kit 的 `KeyboardSensor` 默认把 Enter/Space 当作"开始拖拽"按键。若不阻断，在子任务 Input 按 Enter 提交、或在备注 Textarea 按 Enter 换行时，keydown 会冒泡到 listeners 启动键盘拖拽；单元素 `SortableContext` 无可换位落点，`isDragging` 卡在 `true`、行半透明不恢复，且 Space 会被 KeyboardSensor `preventDefault` 吞掉导致空格字符丢失。Escape **不** stopPropagation，让事件冒泡到 `TaskItem` 根 div 的 `onKeyDown` 触发折叠。
 
 ## Accessibility
 
@@ -406,6 +407,28 @@ export function TaskList({ ..., sortable = true, ... }: Props) {
   }
   // ...
 }
+```
+
+### Common Mistake: 展开态输入框按 Enter/Space 卡在拖拽态
+
+**Symptom**：任务行只有一个任务时，展开该任务 → 在子任务 Input 输入文字并按 Enter 提交后，行变半透明（`opacity: 0.45`）且不恢复；Space 也可能被吞掉导致空格字符无法输入。
+
+**Cause**：`SortableTask` / `SortableTaskItem` 把 `{...attributes} {...listeners}` 铺在整行外层 div 上，展开态的 `TaskRowExpanded` 内部所有可编辑控件都落在这个 listeners 区域内。dnd-kit 的 `KeyboardSensor` 默认把 **Enter / Space** 当作"开始拖拽"按键。用户在输入框按 Enter 时，keydown 冒泡到外层 div 的 `onKeyDown`（listeners）→ KeyboardSensor 启动拖拽 → `isDragging=true`；单元素 `SortableContext` 无可换位落点，键盘拖拽无法自然结束，卡在拖拽态。修复前只对 `onClick` 做了 `stopPropagation`，漏了 `onKeyDown`。
+
+**Fix**：在展开态所有可编辑控件（标题 Input、备注 Textarea、子任务 Input、子任务行内联编辑 Input）的 `onKeyDown` 里，对 `Enter` / `Space` `e.stopPropagation()`，阻止冒泡到 sortable listeners。**Escape 不 stopPropagation**，让事件冒泡到 `TaskItem` 根 div 的 `onKeyDown` 触发折叠。回归测试见 `src/components/task/TaskRowExpanded.test.tsx`。
+
+```tsx
+onKeyDown={(e) => {
+  if (e.key === 'Enter') {
+    e.stopPropagation();
+    // ...原逻辑（blur / addSubtask 等）
+  } else if (e.key === ' ') {
+    e.stopPropagation();
+  } else if (e.key === 'Escape') {
+    // 不 stopPropagation；让事件冒泡到根 div 触发折叠
+    // ...原 Escape 逻辑
+  }
+}}
 ```
 
 ---
