@@ -390,6 +390,10 @@ export function TaskList({ ..., sortable = true, ... }: Props) {
 
 ---
 
+## 侧边栏项目可见性过滤（Sidebar）
+
+侧边栏项目列表仅展示 `ACTIVE` 项目，`COMPLETED` 项目不参与导航树。过滤发生在 `Sidebar.tsx` 顶层：将 `useProjectsQuery()` 返回值就过滤 `status !== ProjectStatus.COMPLETED` 后再传给 `SidebarProjectSection`。这是纯展示层过滤——后端 `ProjectsService.findAll` 仍返回所有 `status` 的项目（其它视图如详情页 / feed 可能需要已完成项目）。拖拽排序对子集安全：后端 `reorder` 只更新传入 id 的 `sortOrder`，`SidebarProjectSection` 收到的就是可见子集。
+
 ## 侧边栏拖拽（SidebarProjectSection）
 
 侧边栏的项目/区域拖拽与任务列表拖拽不同：一个 `DndContext` 管理三种拖拽语义（区域间排序、同区域项目排序、跨区域移动项目）。组件位于 `src/components/layout/SidebarProjectSection.tsx`。

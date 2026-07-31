@@ -21,6 +21,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { useLogout } from '@/lib/hooks/useAuth';
+import { ProjectStatus } from '@taskora/shared';
 import { SidebarBottomBar } from '@/components/layout/SidebarBottomBar';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
@@ -145,9 +146,14 @@ export function Sidebar() {
   const user = useAuthStore((s) => s.user);
   const logout = useLogout();
   const navigate = useNavigate();
-  const { data: projects = [] } = useProjectsQuery();
+  const { data: allProjects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const { data: tags = [] } = useTagsQuery();
+
+  // 侧边栏仅展示 ACTIVE 项目，已完成项目不参与侧边栏导航树
+  const projects = allProjects.filter(
+    (p) => p.status !== ProjectStatus.COMPLETED,
+  );
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r bg-secondary/60 backdrop-blur-sm">
