@@ -22,6 +22,7 @@ model User {
   areas         Area[]
   tags          Tag[]
   tagGroups     TagGroup[]
+  projectHeadings ProjectHeading[]
   refreshTokens RefreshToken[]
 }
 
@@ -78,6 +79,7 @@ model Project {
   areaId    String?
   area      Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
   tasks     Task[]
+  headings  ProjectHeading[]
 
   sortOrder Int @default(0)
 
@@ -208,6 +210,9 @@ model Task {
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id])
 
+  headingId String?
+  heading   ProjectHeading? @relation(fields: [headingId], references: [id], onDelete: SetNull)
+
   areaId String?
   area   Area? @relation(fields: [areaId], references: [id], onDelete: SetNull)
 
@@ -216,5 +221,22 @@ model Task {
   @@index([userId])
   @@index([parentId])
   @@index([projectId])
+  @@index([headingId])
   @@index([areaId])
+}
+
+model ProjectHeading {
+  id        String   @id @default(uuid())
+  title     String
+  sortOrder Int      @default(0)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks     Task[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+  @@index([projectId])
 }

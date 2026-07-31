@@ -195,6 +195,7 @@ describe('ProjectsService', () => {
       expect(taskCall.where).toEqual({ projectId, userId });
       expect(taskCall.data.trashedAt).toBeInstanceOf(Date);
       expect(taskCall.data).not.toHaveProperty('status');
+      expect(taskCall.data).not.toHaveProperty('headingId');
       // transaction used
       expect(mockPrisma.$transaction).toHaveBeenCalled();
     });
@@ -227,6 +228,7 @@ describe('ProjectsService', () => {
       expect(taskCall.where).toEqual({ projectId, userId });
       expect(taskCall.data.trashedAt).toBeNull();
       expect(taskCall.data).not.toHaveProperty('status');
+      expect(taskCall.data).not.toHaveProperty('headingId');
     });
   });
 

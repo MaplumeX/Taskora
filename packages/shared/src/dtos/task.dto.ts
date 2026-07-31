@@ -41,6 +41,7 @@ export interface TaskResponseDto {
   sortOrder: number;
   parentId: string | null;
   projectId: string | null;
+  headingId: string | null;
   areaId: string | null;
   tags?: TagResponseDto[];
   children?: TaskResponseDto[];
