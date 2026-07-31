@@ -4,6 +4,7 @@ import type { CreateTaskDto, TaskResponseDto, UpdateTaskDto } from '@taskora/sha
 
 import {
   completeTask,
+  convertTaskToProject,
   createTask,
   deleteTask,
   getTask,
@@ -135,6 +136,19 @@ export function useRestoreTask() {
     onSuccess: (task) => {
       void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+export function useConvertTaskToProject() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => convertTaskToProject(id),
+    onSuccess: (_data, id) => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
+      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });

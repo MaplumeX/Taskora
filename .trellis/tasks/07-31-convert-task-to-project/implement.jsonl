@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "schema 关联策略、onDelete 约定、事务与 userId 隔离规范 — 转换事务核心改动需遵循"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "NotFoundException 等 service 层错误约定"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "service/controller/dto 文件组织约定"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "service 层代码质量约定"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "TaskContextMenu 组件改动需遵循组件规范"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "新增 zh/en i18n key 需遵循国际化规范"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "从 @taskora/shared 引用 DTO 类型,禁止前端重复定义"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "TanStack Query mutation 与缓存失效规范"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "useConvertTaskToProject mutation hook 写法约定"}

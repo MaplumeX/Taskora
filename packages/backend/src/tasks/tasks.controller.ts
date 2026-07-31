@@ -82,4 +82,12 @@ export class TasksController {
   ) {
     return this.tasksService.uncomplete(req.user.id, id);
   }
+
+  @Post(':id/convert-to-project')
+  convertToProject(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.tasksService.convertToProject(req.user.id, id);
+  }
 }

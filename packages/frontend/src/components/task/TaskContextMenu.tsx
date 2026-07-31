@@ -14,6 +14,7 @@ import { cn } from '@/lib/utils';
 import {
   taskKeys,
   useCompleteTask,
+  useConvertTaskToProject,
   useDeleteTask,
   useRestoreTask,
   useUncompleteTask,
@@ -45,6 +46,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const uncompleteTask = useUncompleteTask();
   const deleteTask = useDeleteTask();
   const restoreTask = useRestoreTask();
+  const convertToProjectTask = useConvertTaskToProject();
 
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
@@ -99,6 +101,14 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
         void queryClient.invalidateQueries({ queryKey: ['tasks'] });
       },
       onError: () => toast.error(tc('restoreFailed')),
+    });
+  };
+
+  const handleConvertToProject = () => {
+    closeMenu();
+    convertToProjectTask.mutate(task.id, {
+      onSuccess: () => toast.success(t('convertSuccess')),
+      onError: () => toast.error(t('convertFailed')),
     });
   };
 
@@ -177,6 +187,15 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
           >
             {t('tags')}
           </button>
+          {variant === 'default' && (
+            <button
+              type="button"
+              onClick={handleConvertToProject}
+              className={MENU_ITEM_CLASS}
+            >
+              {t('convertToProject')}
+            </button>
+          )}
           <button
             type="button"
             onClick={variant === 'trash' ? handleRestore : handleDelete}
