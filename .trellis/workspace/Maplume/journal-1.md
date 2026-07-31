@@ -1030,3 +1030,36 @@ Added 'Empty Trash' feature: permanently delete all trashed tasks and projects f
 ### Next Steps
 
 - None - task complete
+
+
+## Session 27: Hide completed projects from sidebar
+
+**Date**: 2026-07-31
+**Task**: Hide completed projects from sidebar
+**Branch**: `main`
+
+### Summary
+
+在 Sidebar.tsx 顶层过滤掉 status === COMPLETED 的项目，使已完成项目不再出现在侧边栏导航树。纯展示层过滤，后端 findAll 不变。更新 frontend component-guidelines spec 记录该约定。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1e9d19c` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
