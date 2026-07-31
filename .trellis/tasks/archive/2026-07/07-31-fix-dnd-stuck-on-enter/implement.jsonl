@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "DnD SortableItem 包装模式、行内展开交互模式、事件隔离约定（stopPropagation）"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "组件测试约定、质量门（lint/typecheck/test）"}
