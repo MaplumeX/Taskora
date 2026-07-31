@@ -1,5 +1,18 @@
 # Hook Guidelines
 
+## Project heading query and mutation scope
+
+Project heading query keys must include `projectId`:
+
+```typescript
+['project-headings', { projectId }]
+```
+
+Heading CRUD invalidates the affected project heading list and all task/feed
+queries. Layout mutations apply the submitted heading order and task
+`headingId`/`sortOrder` values to caches immediately, then invalidate on both
+error and settlement so the server remains authoritative.
+
 > How hooks are used in this project.
 
 ---
