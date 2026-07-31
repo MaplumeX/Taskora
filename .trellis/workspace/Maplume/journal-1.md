@@ -1130,3 +1130,36 @@ Added an inline notes Textarea to ProjectDetail.tsx below the title row, mirrori
 ### Next Steps
 
 - None - task complete
+
+
+## Session 30: Add convert task to project action
+
+**Date**: 2026-07-31
+**Task**: Add convert task to project action
+**Branch**: `main`
+
+### Summary
+
+Added 'Convert to Project' action to the task context menu. The task and all descendants are converted into a new standalone project within a single transaction: scalar fields and tags migrated, effectiveAreaId resolved from the task first then its parent project, descendant tasks reassigned to the new project (headingId cleared), direct children parentId cleared (avoids onDelete: NoAction), original task hard-deleted. Backend: POST /tasks/:id/convert-to-project. Frontend: api helper, useConvertTaskToProject mutation, context menu entry (default variant only), zh/en i18n.
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `a559bcd` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
