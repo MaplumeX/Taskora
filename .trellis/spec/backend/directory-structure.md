@@ -6,7 +6,7 @@
 
 ## Overview
 
-后端代码位于 `packages/backend/`，使用 NestJS 框架。模块化组织，每个业务域一个模块（auth、users、tasks、projects、areas、tags、tag-groups）。
+后端代码位于 `packages/backend/`，使用 NestJS 框架。模块化组织，每个业务域一个模块（auth、users、tasks、subtasks、projects、areas、tags、tag-groups）。
 
 ---
 
@@ -43,6 +43,11 @@ packages/backend/
     │   ├── tasks.controller.ts
     │   ├── tasks.service.ts
     │   └── dto/
+    ├── subtasks/          # 子任务模块
+    │   ├── subtasks.module.ts
+    │   ├── subtasks.controller.ts
+    │   ├── subtasks.service.ts
+    │   └── dto/
     ├── projects/          # 项目模块
     │   ├── projects.module.ts
     │   ├── projects.controller.ts
@@ -71,7 +76,7 @@ packages/backend/
 
 ## Module Organization
 
-- **每个业务域一个模块**：auth、users、tasks、projects、areas、tags、tag-groups 各自独立
+- **每个业务域一个模块**：auth、users、tasks、subtasks、projects、areas、tags、tag-groups 各自独立
 - **模块内分层**：controller（路由）→ service（业务逻辑）→ dto（数据传输对象）
 - **DTO 从 shared 包引用**：`import { CreateTaskDto } from '@taskora/shared'`，避免重复定义
 - **Prisma 作为基础设施模块**：包装 PrismaClient，注入到各 service

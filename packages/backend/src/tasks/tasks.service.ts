@@ -2,7 +2,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { TaskBucket, ProjectBucket, TaskStatus, ScheduledType } from '@taskora/shared';
+import { TaskBucket, ProjectBucket, TaskStatus, ProjectStatus, ScheduledType } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
 import { Prisma } from '@prisma/client';
@@ -55,7 +55,6 @@ export class TasksService {
         dueDate,
         bucket,
         userId,
-        parentId: dto.parentId,
         projectId: dto.projectId,
         areaId: dto.areaId,
         ...(dto.tagIds?.length
@@ -83,9 +82,6 @@ export class TasksService {
     } else {
       if (query.projectId) where.projectId = query.projectId;
       if (query.areaId) where.areaId = query.areaId;
-      if (query.parentId !== undefined) {
-        where.parentId = query.parentId === '' ? null : query.parentId;
-      }
       if (query.tagId) {
         where.tags = { some: { tagId: query.tagId } };
       }
@@ -120,7 +116,10 @@ export class TasksService {
   async findOne(userId: string, id: string) {
     const task = await this.prisma.task.findFirst({
       where: { id, userId },
-      include: { children: true, tags: { include: { tag: true } } },
+      include: {
+        subtasks: { orderBy: { sortOrder: 'asc' } },
+        tags: { include: { tag: true } },
+      },
     });
     if (!task) {
       throw new NotFoundException('Task not found');
@@ -190,19 +189,13 @@ export class TasksService {
       data.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
     }
     data.bucket = bucket;
-    if (dto.parentId !== undefined) {
-      data.parent = dto.parentId
-        ? { connect: { id: dto.parentId } }
-        : { disconnect: true };
-    }
     if (dto.projectId !== undefined) {
       data.project = dto.projectId
         ? { connect: { id: dto.projectId } }
         : { disconnect: true };
     }
     if (
-      (dto.projectId !== undefined && dto.projectId !== existing.projectId) ||
-      (dto.parentId !== undefined && dto.parentId !== null)
+      dto.projectId !== undefined && dto.projectId !== existing.projectId
     ) {
       data.heading = { disconnect: true };
     }
@@ -236,108 +229,44 @@ export class TasksService {
   }
 
   async remove(userId: string, id: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.task.findFirst({
-        where: { id, userId },
-      });
-      if (!existing) {
-        throw new NotFoundException('Task not found');
-      }
-
-      // Collect all descendant ids via BFS on parentId
-      const allTasks = await tx.task.findMany({
-        where: { userId },
-        select: { id: true, parentId: true },
-      });
-      const childrenOf = new Map<string, string[]>();
-      for (const t of allTasks) {
-        if (t.parentId) {
-          const arr = childrenOf.get(t.parentId) ?? [];
-          arr.push(t.id);
-          childrenOf.set(t.parentId, arr);
-        }
-      }
-      const descendantIds = new Set<string>();
-      const queue = [id];
-      while (queue.length) {
-        const layer = queue.splice(0);
-        for (const parentId of layer) {
-          const kids = childrenOf.get(parentId);
-          if (!kids) continue;
-          for (const kid of kids) {
-            if (!descendantIds.has(kid)) {
-              descendantIds.add(kid);
-              queue.push(kid);
-            }
-          }
-        }
-      }
-
-      const allIds = [id, ...descendantIds];
-      const now = new Date();
-      await tx.task.updateMany({
-        where: { id: { in: allIds }, userId },
-        data: { trashedAt: now },
-      });
-
-      return { id, trashedAt: now };
+    const existing = await this.prisma.task.findFirst({
+      where: { id, userId },
     });
+    if (!existing) {
+      throw new NotFoundException('Task not found');
+    }
+
+    const now = new Date();
+    await this.prisma.task.updateMany({
+      where: { id, userId },
+      data: { trashedAt: now },
+    });
+
+    return { id, trashedAt: now };
   }
 
   async restore(userId: string, id: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.task.findFirst({
-        where: { id, userId },
-      });
-      if (!existing) {
-        throw new NotFoundException('Task not found');
-      }
-
-      // Collect all descendant ids via BFS on parentId
-      const allTasks = await tx.task.findMany({
-        where: { userId },
-        select: { id: true, parentId: true },
-      });
-      const childrenOf = new Map<string, string[]>();
-      for (const t of allTasks) {
-        if (t.parentId) {
-          const arr = childrenOf.get(t.parentId) ?? [];
-          arr.push(t.id);
-          childrenOf.set(t.parentId, arr);
-        }
-      }
-      const descendantIds = new Set<string>();
-      const queue = [id];
-      while (queue.length) {
-        const layer = queue.splice(0);
-        for (const parentId of layer) {
-          const kids = childrenOf.get(parentId);
-          if (!kids) continue;
-          for (const kid of kids) {
-            if (!descendantIds.has(kid)) {
-              descendantIds.add(kid);
-              queue.push(kid);
-            }
-          }
-        }
-      }
-
-      const allIds = [id, ...descendantIds];
-      await tx.task.updateMany({
-        where: { id: { in: allIds }, userId },
-        data: { trashedAt: null },
-      });
-
-      return { id, trashedAt: null };
+    const existing = await this.prisma.task.findFirst({
+      where: { id, userId },
     });
+    if (!existing) {
+      throw new NotFoundException('Task not found');
+    }
+
+    await this.prisma.task.updateMany({
+      where: { id, userId },
+      data: { trashedAt: null },
+    });
+
+    return { id, trashedAt: null };
   }
 
   async convertToProject(userId: string, id: string) {
     return this.prisma.$transaction(async (tx) => {
-      // Step 1: find the task with tags and its parent project (for areaId fallback)
+      // Step 1: find the task with tags, subtasks, and its parent project (for areaId fallback)
       const existing = await tx.task.findFirst({
         where: { id, userId },
-        include: { tags: true, project: true },
+        include: { tags: true, subtasks: { orderBy: { sortOrder: 'asc' } }, project: true },
       });
       if (!existing) {
         throw new NotFoundException('Task not found');
@@ -345,47 +274,14 @@ export class TasksService {
       const effectiveAreaId =
         existing.areaId ?? existing.project?.areaId ?? null;
 
-      // Step 2: BFS-collect all descendant ids (excluding the task itself)
-      const allTasks = await tx.task.findMany({
-        where: { userId },
-        select: { id: true, parentId: true },
-      });
-      const childrenOf = new Map<string, string[]>();
-      for (const tsk of allTasks) {
-        if (tsk.parentId) {
-          const arr = childrenOf.get(tsk.parentId) ?? [];
-          arr.push(tsk.id);
-          childrenOf.set(tsk.parentId, arr);
-        }
-      }
-      const descendantIds = new Set<string>();
-      const directChildIds = childrenOf.get(id) ?? [];
-      const queue: string[] = [...directChildIds];
-      for (const kid of directChildIds) {
-        descendantIds.add(kid);
-      }
-      while (queue.length) {
-        const layer = queue.splice(0);
-        for (const parentId of layer) {
-          const kids = childrenOf.get(parentId);
-          if (!kids) continue;
-          for (const kid of kids) {
-            if (!descendantIds.has(kid)) {
-              descendantIds.add(kid);
-              queue.push(kid);
-            }
-          }
-        }
-      }
-
-      // Step 3: compute next sortOrder for the new project
+      // Step 2: compute next sortOrder for the new project
       const maxSort = await tx.project.aggregate({
         where: { userId },
         _max: { sortOrder: true },
       });
       const nextSortOrder = (maxSort._max.sortOrder ?? -1) + 1;
 
-      // Step 4: create the new project
+      // Step 3: create the new project from the task's fields
       const newProject = await tx.project.create({
         data: {
           title: existing.title,
@@ -393,7 +289,10 @@ export class TasksService {
           scheduledDate: existing.scheduledDate,
           dueDate: existing.dueDate,
           scheduledType: existing.scheduledType,
-          status: existing.status,
+          status:
+            existing.status === TaskStatus.COMPLETED
+              ? ProjectStatus.COMPLETED
+              : ProjectStatus.ACTIVE,
           completedAt: existing.completedAt,
           trashedAt: existing.trashedAt,
           areaId: effectiveAreaId,
@@ -407,26 +306,25 @@ export class TasksService {
         include: { tags: { include: { tag: true } } },
       });
 
-      // Step 5: migrate descendant tasks to the new project, clear heading
-      if (descendantIds.size > 0) {
-        await tx.task.updateMany({
-          where: { id: { in: [...descendantIds] }, userId },
-          data: { projectId: newProject.id, headingId: null },
+      // Step 4: promote subtasks to full Tasks under the new project
+      if (existing.subtasks.length > 0) {
+        await tx.task.createMany({
+          data: existing.subtasks.map((st) => ({
+            title: st.title,
+            status: st.status,
+            completedAt: st.completedAt,
+            projectId: newProject.id,
+            userId,
+            bucket: TaskBucket.INBOX,
+            scheduledType: ScheduledType.NONE,
+          })),
         });
       }
 
-      // Step 6: clear direct children's parentId (before deleting original task)
-      if (directChildIds.length > 0) {
-        await tx.task.updateMany({
-          where: { id: { in: directChildIds }, userId },
-          data: { parentId: null },
-        });
-      }
-
-      // Step 7: hard-delete the original task (TaskTag cascades automatically)
+      // Step 5: hard-delete the original task (Subtask + TaskTag cascade automatically)
       await tx.task.delete({ where: { id } });
 
-      // Step 8: return the new project with resolved tags
+      // Step 6: return the new project with resolved tags
       return {
         ...newProject,
         tags: newProject.tags.map((pt) => pt.tag),

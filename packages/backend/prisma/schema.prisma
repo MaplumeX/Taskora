@@ -203,9 +203,7 @@ model Task {
   userId   String
   user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  parentId   String?
-  parent     Task?    @relation("TaskChildren", fields: [parentId], references: [id], onDelete: NoAction)
-  children   Task[]   @relation("TaskChildren")
+  subtasks  Subtask[]
 
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id])
@@ -219,10 +217,23 @@ model Task {
   tags TaskTag[]
 
   @@index([userId])
-  @@index([parentId])
   @@index([projectId])
   @@index([headingId])
   @@index([areaId])
+}
+
+model Subtask {
+  id          String      @id @default(uuid())
+  title       String
+  status      TaskStatus  @default(ACTIVE)
+  completedAt DateTime?
+  sortOrder   Int         @default(0)
+  taskId      String
+  task        Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([taskId])
 }
 
 model ProjectHeading {

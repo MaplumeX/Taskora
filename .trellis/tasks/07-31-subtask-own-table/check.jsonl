@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Testing conventions, controller/service patterns to verify against"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Verify schema/migration, trash/restore, reorder patterns match conventions"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend testing + code quality conventions for component/hook changes"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Type safety standards for new SubtaskResponseDto usage"}

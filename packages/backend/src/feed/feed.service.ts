@@ -30,44 +30,19 @@ export class FeedService {
       });
       const trashedProjectIds = new Set(trashedProjects.map((p) => p.id));
 
-      // 2. 取本用户所有 task 的 id / parentId / projectId / status(用于在内存算级联集合)
-      //    单用户 task 量级 << 1000,全量读 + 内存算比递归 SQL 更可控、类型安全。
+      // 2. 取本用户所有 task 的 id / projectId / trashedAt
       const allTasks = await tx.task.findMany({
         where: { userId },
-        select: { id: true, parentId: true, projectId: true, trashedAt: true },
+        select: { id: true, projectId: true, trashedAt: true },
       });
 
-      // 3. 删除集 = trashed tasks ∪ trashed tasks 的所有后代 ∪ trashed project 的下属 tasks
+      // 3. 删除集 = trashed tasks ∪ trashed project 的下属 tasks
+      //    Subtask 自动 CASCADE（onDelete: Cascade），无需手工收集后代
       const trashedTaskIds = new Set(
         allTasks.filter((t) => t.trashedAt !== null).map((t) => t.id),
       );
 
-      // 3a. 递归收集 trashed task 的后代(B):从 trashed tasks 出发,沿 parentId 向下找所有层级
-      const childrenOf = new Map<string, string[]>();
-      for (const t of allTasks) {
-        if (t.parentId) {
-          const arr = childrenOf.get(t.parentId) ?? [];
-          arr.push(t.id);
-          childrenOf.set(t.parentId, arr);
-        }
-      }
-      const descendantIds = new Set<string>();
-      const queue = [...trashedTaskIds];
-      while (queue.length) {
-        const layer = queue.splice(0);
-        for (const parentId of layer) {
-          const kids = childrenOf.get(parentId);
-          if (!kids) continue;
-          for (const kid of kids) {
-            if (!descendantIds.has(kid) && !trashedTaskIds.has(kid)) {
-              descendantIds.add(kid);
-              queue.push(kid);
-            }
-          }
-        }
-      }
-
-      // 3b. trashed project 下属任务(B'):任何 projectId ∈ trashedProjectIds 的 task
+      // 3a. trashed project 下属任务: projectId ∈ trashedProjectIds 的 task
       const projectOrphanIds = new Set(
         allTasks
           .filter((t) => t.projectId && trashedProjectIds.has(t.projectId))
@@ -76,11 +51,10 @@ export class FeedService {
 
       const taskDeleteIds = new Set<string>([
         ...trashedTaskIds,
-        ...descendantIds,
         ...projectOrphanIds,
       ]);
 
-      // 4. 物理删除:TaskTag/ProjectTag 关联走 onDelete: Cascade 自动清理,无需手工删
+      // 4. 物理删除: TaskTag/ProjectTag/Subtask 关联走 onDelete: Cascade 自动清理
       //    where 再带一次 userId 作防御性约束(集合已来自本用户数据,纯双保险)
       const taskDelete = await tx.task.deleteMany({
         where: { id: { in: [...taskDeleteIds] }, userId },
@@ -126,7 +100,6 @@ export class FeedService {
       completedAt: t.completedAt ? t.completedAt.toISOString() : null,
       trashedAt: t.trashedAt ? t.trashedAt.toISOString() : null,
       sortOrder: t.sortOrder,
-      parentId: t.parentId,
       projectId: t.projectId,
       headingId: t.headingId,
       areaId: t.areaId,

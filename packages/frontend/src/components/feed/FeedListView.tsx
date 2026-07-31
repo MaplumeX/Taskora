@@ -98,11 +98,7 @@ export function FeedListView({ items, emptyHint, sortable }: Props) {
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
-  // Only top-level tasks (no parentId) and all projects are shown in feed lists.
-  // Subtasks are excluded (they appear in parent task's expanded view).
-  const topItems = items.filter(
-    (item) => item.type !== 'task' || !(item as { parentId: string | null }).parentId,
-  );
+  const topItems = items;
 
   if (topItems.length === 0) {
     return (

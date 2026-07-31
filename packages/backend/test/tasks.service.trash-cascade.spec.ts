@@ -6,7 +6,7 @@ import { TaskBucket, TaskStatus, ScheduledType } from '@taskora/shared';
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TasksService } from '../src/tasks/tasks.service';
 
-describe('TasksService — trash/restore cascade', () => {
+describe('TasksService — trash/restore (no BFS cascade)', () => {
   let service: TasksService;
   let mockPrisma: InstanceType<typeof PrismaService>;
 
@@ -27,7 +27,6 @@ describe('TasksService — trash/restore cascade', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
     userId,
-    parentId: null,
     projectId: null,
     areaId: null,
   };
@@ -36,10 +35,8 @@ describe('TasksService — trash/restore cascade', () => {
     mockPrisma = {
       task: {
         findFirst: vi.fn(),
-        findMany: vi.fn(),
         updateMany: vi.fn(),
       },
-      $transaction: vi.fn(async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),
     } as unknown as InstanceType<typeof PrismaService>;
 
     service = new TasksService(mockPrisma);
@@ -54,27 +51,16 @@ describe('TasksService — trash/restore cascade', () => {
       );
     });
 
-    it('trashes the task and all descendants (cascade)', async () => {
+    it('trashes only the task itself (no BFS descendant collection)', async () => {
       mockPrisma.task.findFirst.mockResolvedValue(existingTask);
-      // task-1 → task-2 → task-3, plus unrelated task-4
-      mockPrisma.task.findMany.mockResolvedValue([
-        { id: 'task-1', parentId: null },
-        { id: 'task-2', parentId: 'task-1' },
-        { id: 'task-3', parentId: 'task-2' },
-        { id: 'task-4', parentId: null },
-      ]);
-      mockPrisma.task.updateMany.mockResolvedValue({ count: 3 });
+      mockPrisma.task.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.remove(userId, 'task-1');
 
       expect(result.trashedAt).toBeInstanceOf(Date);
-      // updateMany should set trashedAt for task-1, task-2, task-3 (not task-4)
+      // updateMany should set trashedAt for task-1 only (no findMany for BFS)
       const call = mockPrisma.task.updateMany.mock.calls[0][0];
-      expect(call.where.id.in).toEqual(
-        expect.arrayContaining(['task-1', 'task-2', 'task-3']),
-      );
-      expect(call.where.id.in).toHaveLength(3);
-      expect(call.where.id.in).not.toContain('task-4');
+      expect(call.where.id).toBe('task-1');
       expect(call.where.userId).toBe(userId);
       expect(call.data.trashedAt).toBeInstanceOf(Date);
       // status should NOT be in the data (only trashedAt)
@@ -84,7 +70,6 @@ describe('TasksService — trash/restore cascade', () => {
     it('does not modify status when trashing', async () => {
       const completedTask = { ...existingTask, status: TaskStatus.COMPLETED, id: 'task-c' };
       mockPrisma.task.findFirst.mockResolvedValue(completedTask);
-      mockPrisma.task.findMany.mockResolvedValue([{ id: 'task-c', parentId: null }]);
       mockPrisma.task.updateMany.mockResolvedValue({ count: 1 });
 
       await service.remove(userId, 'task-c');
@@ -104,25 +89,15 @@ describe('TasksService — trash/restore cascade', () => {
       );
     });
 
-    it('restores the task and all descendants (cascade)', async () => {
+    it('restores only the task itself (no BFS descendant collection)', async () => {
       mockPrisma.task.findFirst.mockResolvedValue(existingTask);
-      mockPrisma.task.findMany.mockResolvedValue([
-        { id: 'task-1', parentId: null },
-        { id: 'task-2', parentId: 'task-1' },
-        { id: 'task-3', parentId: 'task-2' },
-        { id: 'task-4', parentId: null },
-      ]);
-      mockPrisma.task.updateMany.mockResolvedValue({ count: 3 });
+      mockPrisma.task.updateMany.mockResolvedValue({ count: 1 });
 
       const result = await service.restore(userId, 'task-1');
 
       expect(result.trashedAt).toBeNull();
       const call = mockPrisma.task.updateMany.mock.calls[0][0];
-      expect(call.where.id.in).toEqual(
-        expect.arrayContaining(['task-1', 'task-2', 'task-3']),
-      );
-      expect(call.where.id.in).toHaveLength(3);
-      expect(call.where.id.in).not.toContain('task-4');
+      expect(call.where.id).toBe('task-1');
       expect(call.where.userId).toBe(userId);
       expect(call.data.trashedAt).toBeNull();
       // status should NOT be in the data
@@ -132,7 +107,6 @@ describe('TasksService — trash/restore cascade', () => {
     it('restores COMPLETED task without changing status', async () => {
       const completedTask = { ...existingTask, status: TaskStatus.COMPLETED, id: 'task-c' };
       mockPrisma.task.findFirst.mockResolvedValue(completedTask);
-      mockPrisma.task.findMany.mockResolvedValue([{ id: 'task-c', parentId: null }]);
       mockPrisma.task.updateMany.mockResolvedValue({ count: 1 });
 
       await service.restore(userId, 'task-c');

@@ -110,7 +110,7 @@ export default function Trash() {
 }
 
 function TrashTaskRow({ item }: { item: FeedItem }) {
-  const task = { ...item, children: [] } as TaskResponseDto;
+  const task = { ...item, subtasks: [] } as TaskResponseDto;
   return (
     <div data-task-item className="group flex flex-col transition-colors">
       <TaskContextMenu task={task} current={task} variant="trash">

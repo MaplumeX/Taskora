@@ -41,7 +41,6 @@ import type { CreateTaskDto, TaskResponseDto, TaskBucket } from '@taskora/shared
 export interface TaskQuery {
   view?: 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash';
   projectId?: string;
-  parentId?: string;
 }
 ```
 

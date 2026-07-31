@@ -11,7 +11,7 @@ import {
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
-import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
+import type { SubtaskResponseDto, TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
 import { ScheduledType } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
@@ -28,10 +28,11 @@ import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
 import {
   taskKeys,
-  useCompleteTask,
-  useCreateTask,
-  useDeleteTask,
-  useUncompleteTask,
+  useCompleteSubtask,
+  useCreateSubtask,
+  useDeleteSubtask,
+  useUncompleteSubtask,
+  useUpdateSubtask,
   useUpdateTask,
 } from '@/lib/hooks/useTasks';
 import { toast } from 'sonner';
@@ -49,7 +50,7 @@ export function TaskRowExpanded({ task, current }: Props) {
   const queryClient = useQueryClient();
 
   const updateTask = useUpdateTask();
-  const createSubtask = useCreateTask();
+  const createSubtask = useCreateSubtask();
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
 
@@ -82,10 +83,8 @@ export function TaskRowExpanded({ task, current }: Props) {
     if (!trimmed) return;
     createSubtask.mutate(
       {
-        title: trimmed,
-        parentId: task.id,
-        projectId: current.projectId ?? undefined,
-        areaId: current.areaId ?? undefined,
+        taskId: task.id,
+        data: { title: trimmed },
       },
       {
         onSuccess: () => {
@@ -97,7 +96,7 @@ export function TaskRowExpanded({ task, current }: Props) {
     );
   };
 
-  const children = current.children ?? [];
+  const subtasks = current.subtasks ?? [];
 
   return (
     <div
@@ -119,10 +118,10 @@ export function TaskRowExpanded({ task, current }: Props) {
 
       <div className="flex flex-col gap-2">
         <h3 className="text-xs font-medium text-muted-foreground">{t('task:subtasks')}</h3>
-        {children.length > 0 ? (
+        {subtasks.length > 0 ? (
           <ul className="flex flex-col gap-0.5">
-            {children.map((c) => (
-              <SubtaskRow key={c.id} task={c} onMutated={invalidateParent} />
+            {subtasks.map((c) => (
+              <SubtaskRow key={c.id} subtask={c} taskId={task.id} onMutated={invalidateParent} />
             ))}
           </ul>
         ) : (
@@ -279,30 +278,32 @@ function IconPopover({
 }
 
 function SubtaskRow({
-  task,
+  subtask,
+  taskId,
   onMutated,
 }: {
-  task: TaskResponseDto;
+  subtask: SubtaskResponseDto;
+  taskId: string;
   onMutated: () => void;
 }) {
   const { t } = useTranslation();
-  const completeTask = useCompleteTask();
-  const uncompleteTask = useUncompleteTask();
-  const deleteTask = useDeleteTask();
-  const updateTask = useUpdateTask();
-  const completed = task.status === 'COMPLETED';
+  const completeSubtask = useCompleteSubtask();
+  const uncompleteSubtask = useUncompleteSubtask();
+  const deleteSubtask = useDeleteSubtask();
+  const updateSubtask = useUpdateSubtask();
+  const completed = subtask.status === 'COMPLETED';
   const [editing, setEditing] = React.useState(false);
-  const [draft, setDraft] = React.useState(task.title);
+  const [draft, setDraft] = React.useState(subtask.title);
 
   const commit = () => {
     const trimmed = draft.trim();
-    if (trimmed && trimmed !== task.title) {
-      updateTask.mutate(
-        { id: task.id, data: { title: trimmed } },
+    if (trimmed && trimmed !== subtask.title) {
+      updateSubtask.mutate(
+        { id: subtask.id, data: { title: trimmed } },
         { onSuccess: onMutated, onError: () => toast.error(t('common:saveFailed')) },
       );
     } else {
-      setDraft(task.title);
+      setDraft(subtask.title);
     }
     setEditing(false);
   };
@@ -314,7 +315,7 @@ function SubtaskRow({
         checked={completed}
         onClick={(e) => e.stopPropagation()}
         onChange={() =>
-          (completed ? uncompleteTask : completeTask).mutate(task.id, {
+          (completed ? uncompleteSubtask : completeSubtask).mutate(subtask.id, {
             onSuccess: onMutated,
           })
         }
@@ -333,7 +334,7 @@ function SubtaskRow({
             } else if (e.key === ' ') {
               e.stopPropagation();
             } else if (e.key === 'Escape') {
-              setDraft(task.title);
+              setDraft(subtask.title);
               setEditing(false);
             }
           }}
@@ -344,19 +345,22 @@ function SubtaskRow({
           type="button"
           onClick={(e) => {
             e.stopPropagation();
-            setDraft(task.title);
+            setDraft(subtask.title);
             setEditing(true);
           }}
           className={cn('flex-1 text-left', completed && 'text-muted-foreground line-through')}
         >
-          {task.title}
+          {subtask.title}
         </button>
       )}
       <button
         className="ml-auto text-muted-foreground hover:text-destructive"
         onClick={(e) => {
           e.stopPropagation();
-          deleteTask.mutate(task.id, { onSuccess: onMutated });
+          deleteSubtask.mutate(
+            { id: subtask.id, taskId },
+            { onSuccess: onMutated },
+          );
         }}
       >
         <Trash2 className="h-3.5 w-3.5" />

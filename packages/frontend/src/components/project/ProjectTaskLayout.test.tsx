@@ -20,7 +20,6 @@ const heading: ProjectHeadingResponseDto = {
 function task(
   id: string,
   headingId: string | null,
-  parentId: string | null = null,
 ): TaskResponseDto {
   return {
     id,
@@ -34,7 +33,6 @@ function task(
     completedAt: null,
     trashedAt: null,
     sortOrder: 0,
-    parentId,
     projectId: 'project-1',
     headingId,
     areaId: null,
@@ -44,12 +42,11 @@ function task(
 }
 
 describe('project task layout normalization', () => {
-  it('keeps ungrouped tasks first, preserves empty headings, and excludes children', () => {
+  it('keeps ungrouped tasks first and preserves empty headings', () => {
     const layout = normalizeLayout(
       [
         task('ungrouped', null),
         task('grouped', 'heading-1'),
-        task('child', 'heading-1', 'grouped'),
       ],
       [heading],
     );

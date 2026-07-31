@@ -25,7 +25,6 @@ describe('TasksService create() tagIds support', () => {
     createdAt: new Date(),
     updatedAt: new Date(),
     userId,
-    parentId: null,
     projectId: null,
     areaId: null,
   };
@@ -65,7 +64,6 @@ describe('TasksService create() tagIds support', () => {
         dueDate: null,
         bucket: TaskBucket.INBOX,
         userId,
-        parentId: undefined,
         projectId: undefined,
         areaId: undefined,
         tags: { create: [{ tagId: 'tag-a' }, { tagId: 'tag-b' }] },
@@ -89,7 +87,6 @@ describe('TasksService create() tagIds support', () => {
         dueDate: null,
         bucket: TaskBucket.INBOX,
         userId,
-        parentId: undefined,
         projectId: undefined,
         areaId: undefined,
       },

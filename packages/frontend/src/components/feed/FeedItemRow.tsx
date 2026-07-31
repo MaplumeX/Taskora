@@ -30,13 +30,13 @@ export function FeedItemRow({
     return <ProjectFeedRow item={item} />;
   }
 
-  // TaskFeedItem is a subset of TaskResponseDto (missing `children`).
+  // TaskFeedItem is a subset of TaskResponseDto (missing `subtasks`).
   // TaskItem internally fetches live data via useTaskQuery(task.id) which
-  // includes children. When the live data is still loading, TaskItem falls
-  // back to the `task` prop — so we provide `children: []` as a default.
+  // includes subtasks. When the live data is still loading, TaskItem falls
+  // back to the `task` prop — so we provide `subtasks: []` as a default.
   const task = {
     ...item,
-    children: [],
+    subtasks: [],
   } as TaskResponseDto;
 
   return (

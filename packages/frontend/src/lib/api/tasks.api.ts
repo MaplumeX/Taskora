@@ -1,7 +1,11 @@
 import type {
+  CreateSubtaskDto,
   CreateTaskDto,
   ProjectResponseDto,
+  ReorderSubtasksDto,
+  SubtaskResponseDto,
   TaskResponseDto,
+  UpdateSubtaskDto,
   UpdateTaskDto,
 } from '@taskora/shared';
 
@@ -14,7 +18,6 @@ export interface TaskQuery {
   view?: TaskView;
   projectId?: string;
   areaId?: string;
-  parentId?: string | null;
   tagId?: string;
   completed?: boolean;
 }
@@ -67,4 +70,48 @@ export function convertTaskToProject(id: string): Promise<ProjectResponseDto> {
   return apiClient
     .post<ProjectResponseDto>(`/tasks/${id}/convert-to-project`)
     .then((res) => res.data);
+}
+
+export function createSubtask(
+  taskId: string,
+  data: CreateSubtaskDto,
+): Promise<SubtaskResponseDto> {
+  return apiClient
+    .post<SubtaskResponseDto>(`/tasks/${taskId}/subtasks`, data)
+    .then((res) => res.data);
+}
+
+export function updateSubtask(
+  id: string,
+  data: UpdateSubtaskDto,
+): Promise<SubtaskResponseDto> {
+  return apiClient
+    .patch<SubtaskResponseDto>(`/subtasks/${id}`, data)
+    .then((res) => res.data);
+}
+
+export function deleteSubtask(id: string): Promise<void> {
+  return apiClient.delete(`/subtasks/${id}`).then(() => undefined);
+}
+
+export function completeSubtask(id: string): Promise<SubtaskResponseDto> {
+  return apiClient
+    .post<SubtaskResponseDto>(`/subtasks/${id}/complete`)
+    .then((res) => res.data);
+}
+
+export function uncompleteSubtask(id: string): Promise<SubtaskResponseDto> {
+  return apiClient
+    .post<SubtaskResponseDto>(`/subtasks/${id}/uncomplete`)
+    .then((res) => res.data);
+}
+
+export function reorderSubtasks(
+  taskId: string,
+  orderedIds: string[],
+): Promise<void> {
+  const body: ReorderSubtasksDto = { orderedIds };
+  return apiClient
+    .post(`/tasks/${taskId}/subtasks/reorder`, body)
+    .then(() => undefined);
 }

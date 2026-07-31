@@ -10,7 +10,7 @@
 - 数据库：PostgreSQL 16
 - 迁移：`prisma migrate dev`（开发）、`prisma migrate deploy`（生产）
 - Schema 位置：`packages/backend/prisma/schema.prisma`
-- 核心模型：`User`、`RefreshToken`、`Task`、`Project`、`Area`、`Tag`、`TagGroup`、`TaskTag`、`ProjectTag`、`AreaTag`
+- 核心模型：`User`、`RefreshToken`、`Task`、`Subtask`、`Project`、`Area`、`Tag`、`TagGroup`、`TaskTag`、`ProjectTag`、`AreaTag`
 
 ---
 
@@ -74,7 +74,8 @@ interface ReorderProjectHeadingLayoutDto {
 Invariants:
 
 - `ProjectHeading` is owned by both `userId` and `projectId`.
-- Only top-level tasks in the same project may reference a heading.
+- Tasks in the same project may reference a heading (tasks no longer nest —
+  there is no `parentId`).
 - Legacy and newly created project tasks use `headingId = null`.
 - `Task.sortOrder` is container-local on the project page.
 - A layout write updates heading order, task membership, and task order in one
@@ -88,7 +89,7 @@ Invariants:
 | Project is missing, trashed, or owned by another user | `404 Project not found` |
 | Heading/task ID is duplicated | `400 Duplicate ... id` |
 | A visible heading/task ID is omitted or an unknown ID is added | `400 Invalid or omitted ... id` |
-| Task is foreign, cross-project, a child, completed, or trashed | Reject as an invalid layout |
+| Task is foreign, cross-project, completed, or trashed | Reject as an invalid layout |
 | A row changes between validation and write | `updateMany.count !== 1`; throw and roll back |
 | Heading update/delete loses ownership or active-project validity | Throw and roll back |
 
@@ -102,26 +103,26 @@ because state can change before the writes execute.
   transaction writes `headingId` and its container-local `sortOrder`.
 - **Base:** A legacy project has no headings; all active top-level tasks appear
   in `ungroupedTaskIds` and remain valid without backfill.
-- **Bad:** Submit a child task, omit an active task, repeat an ID, or reference a
-  heading from another project; reject the complete request without any writes.
+- **Bad:** Omit an active task, repeat an ID, or reference a heading from another
+  project; reject the complete request without any writes.
 
-Heading deletion is a separate interactive transaction: seed a BFS with direct
-heading members, collect every descendant, soft-delete those tasks by changing
-only `trashedAt`, then physically delete the heading. `onDelete: SetNull` makes
-later task restoration ungrouped.
+Heading deletion soft-deletes every task whose `headingId` matches the heading
+(changing only `trashedAt`), then physically deletes the heading. `onDelete:
+SetNull` makes later task restoration ungrouped. Subtasks belonging to those
+tasks are preserved (they have no `trashedAt`).
 
 ### 6. Tests Required
 
 - Reorder: ungrouped, same-heading, cross-heading, empty heading, heading order.
-- Validation: duplicate, omitted, unknown, cross-user, cross-project, child,
+- Validation: duplicate, omitted, unknown, cross-user, cross-project, completed,
   completed, and trashed IDs.
 - Concurrency: mock one final `updateMany` count as zero and assert the
   transaction rejects instead of reporting success.
-- Delete: empty heading, direct members, multi-level descendants, completed
-  descendants, and preservation of `status`.
+- Delete: empty heading, direct members, completed members, and preservation
+  of `status` (subtasks under soft-deleted tasks are preserved).
 - Compatibility: project trash/restore leaves headings and `headingId`
-  unchanged; moving a task out of its project or making it a child clears
-  `headingId`.
+  unchanged; moving a task out of its project clears `headingId` (tasks no
+  longer have `parentId`).
 
 ### 7. Wrong vs Correct
 
@@ -138,7 +139,6 @@ const result = await tx.task.updateMany({
     id,
     userId,
     projectId,
-    parentId: null,
     status: TaskStatus.ACTIVE,
     trashedAt: null,
   },
@@ -189,7 +189,8 @@ RT 设计要点：
 
 | 模型 | 策略 | 删除判据 | FK 行为 |
 |------|------|---------|---------|
-| Task | 软删除 | `trashedAt: DateTime?` | parentId `onDelete: NoAction`，projectId/areaId 不阻断 |
+| Task | 软删除 | `trashedAt: DateTime?` | `Subtask.taskId` `onDelete: Cascade`（物理删除 task 时级联删 subtask）；projectId/areaId 不阻断 |
+| Subtask | 无软删除 | 无 `trashedAt` | `taskId` `onDelete: Cascade`（跟随父 Task 物理删除） |
 | Project | 软删除 | `trashedAt: DateTime?` | areaId `onDelete: SetNull`；下属 task 级联 trash |
 | Area | 物理删除 | `prisma.area.delete` | 下属 task/project 的 `areaId` `onDelete: SetNull` 脱钩为 null |
 
@@ -203,7 +204,7 @@ RT 设计要点：
 **为什么移除 `TRASHED`**：
 
 1. **避免 trash 覆盖 COMPLETED 状态**：如果一个已完成的 task 被 trash，旧设计中 `status` 被改为 `TRASHED`，完成状态丢失——从废纸篓恢复后任务不再是 COMPLETED。
-2. **避免级联 trash 丢状态**：trash 父任务会级联后代，若级联也写 `status = TRASHED`，所有后代的 COMPLETED 状态全部丢失。
+2. **避免级联 trash 丢状态**：旧设计 trash 父任务会级联后代，若级联也写 `status = TRASHED`，所有后代的 COMPLETED 状态全部丢失。
 3. **正交关注点分离**：`status` 表示生命周期（active ↔ completed），`trashedAt` 表示删除状态（null ↔ timestamp），两者正交，一个 task 可以同时是 COMPLETED + trashed。
 
 > **核心不变量**：trash/restore **只写 `trashedAt`，绝不动 `status`**。
@@ -221,14 +222,14 @@ Task 和 Project 使用软删除（`trashedAt`），不使用 Prisma `DELETE`：
 
 ```typescript
 // trash — 只写 trashedAt，status 不变
-await tx.task.updateMany({
-  where: { id: { in: allIds }, userId },
+await this.prisma.task.updateMany({
+  where: { id, userId },
   data: { trashedAt: now },
 });
 
 // restore — 对称恢复
-await tx.task.updateMany({
-  where: { id: { in: allIds }, userId },
+await this.prisma.task.updateMany({
+  where: { id, userId },
   data: { trashedAt: null },
 });
 ```
@@ -239,53 +240,26 @@ await tx.task.updateMany({
 
 ### trash / restore 级联语义
 
-#### Task 级联（后代）
+#### Task（无后代级联）
 
-trash 父任务级联**所有后代**（不限层级）。实现方式：交互式事务内全量读 `select: { id, parentId }`，内存 BFS 从根任务向下收集所有后代 id，然后 `updateMany trashedAt`。
+Task 不再有 `parentId` 自引用，子任务存储在独立的 `Subtask` 表中。trash /
+restore **只作用于 task 本身**，不再有 BFS 后代收集：
 
-- 级联只写 `trashedAt`，不动 `status`（保持每个后代的 COMPLETED 状态不被破坏）
-- `parentId` 的 FK 使用 `onDelete: NoAction`（数据库层不做级联删除，由 service 层 BFS 管 trash 级联），见 schema.prisma
-- restore 对称：同样的 BFS 集合，`updateMany trashedAt: null`
+- trash：`updateMany({ where: { id, userId }, data: { trashedAt: now } })`
+- restore：`updateMany({ where: { id, userId }, data: { trashedAt: null } })`
+- `Subtask` 没有 `trashedAt`：父 Task 软删时 subtask 保留不动；父 restore
+  后子任务仍在。
+- 仅当父 Task 在 `FeedService.emptyTrash` 中被**物理删除**时，`Subtask`
+  才通过 `onDelete: Cascade` 自动删除。
 
-```typescript
-// BFS 收集后代
-const allTasks = await tx.task.findMany({
-  where: { userId },
-  select: { id: true, parentId: true },
-});
-const childrenOf = new Map<string, string[]>();
-for (const t of allTasks) {
-  if (t.parentId) {
-    const arr = childrenOf.get(t.parentId) ?? [];
-    arr.push(t.id);
-    childrenOf.set(t.parentId, arr);
-  }
-}
-const descendantIds = new Set<string>();
-const queue = [rootId];
-while (queue.length) {
-  const layer = queue.splice(0);
-  for (const parentId of layer) {
-    const kids = childrenOf.get(parentId);
-    if (!kids) continue;
-    for (const kid of kids) {
-      if (!descendantIds.has(kid)) {
-        descendantIds.add(kid);
-        queue.push(kid);
-      }
-    }
-  }
-}
-const allIds = [rootId, ...descendantIds];
-```
-
-> 为什么 BFS 而不递归 SQL：单用户 task 量 << 1000，全量读 + 内存算比递归 CTE 更可控、类型安全，且在交互式事务内保证快照一致。
+> 历史背景：旧设计中 Task 通过 `parentId` 自引用，trash/restore 需 BFS
+> 收集所有后代级联软删。子任务改为独立 `Subtask` 表后该级联逻辑不再需要。
 
 #### Project 级联（下属 Task）
 
-trash Project 级联其**直接下属 Task**（`projectId` 匹配），不递归 task 的 parentId 层级。
+trash Project 级联其**直接下属 Task**（`projectId` 匹配）：
 
-- Project 无 `parentId`，不存在后代级联；只需把 `projectId = id` 的 task 一并 trash
+- Project 无自引用，不存在后代级联；只需把 `projectId = id` 的 task 一并 trash
 - 用数组式 `$transaction` 并行 `project.updateMany` + `task.updateMany`
 - restore 对称：同时清 project 和下属 task 的 `trashedAt`
 
@@ -354,22 +328,59 @@ Task / Project 默认使用软删除（见上节），但「倾倒废纸篓」�
 | **数组式** | `$transaction([op1, op2, ...])` | 多个已知写操作并行执行（如 tag 全量替换 `deleteMany` + `createMany`） |
 | **交互式** | `$transaction(async (tx) => { ... })` | 读-算-写序列（先查询、内存计算、再写入，三步须同事务快照一致） |
 
-`FeedService.emptyTrash` 用交互式事务：先读 `trashedAt != null` 的 task / project 集合，内存算级联删除集（后代 + project 下属 task），再 `deleteMany`。保证读到的快照与删除在同一事务内，不会因并发插入新 trashed task 而漏删或 FK 冲突。
+`FeedService.emptyTrash` 用交互式事务：先读 `trashedAt != null` 的 task / project 集合，再 `deleteMany`。保证读到的快照与删除在同一事务内，不会因并发插入新 trashed task 而漏删或 FK 冲突。
 
-> emptyTrash 级联算法：删除集 = trashed tasks ∪ trashed tasks 的所有后代 ∪ trashed projects 的下属 tasks。与 trash 级联的 BFS 逻辑一致，但以「trashed tasks 全体」为根集（而非单个根任务）。
+> emptyTrash 删除集 = trashed tasks ∪ trashed projects 的下属 tasks。Task 被 `deleteMany` 物理删除时，其 `Subtask` 通过 `onDelete: Cascade` 自动清理（无需手工删）。
 
 > 测试 mock 交互式事务：`$transaction: vi.fn(async (cb) => cb(mockPrisma))`，将 tx 句柄回传为 mock 本身。
 
-### 自关联查询（子任务）
+### 子任务（独立 Subtask 表）
 
-Task 有自关联 `parentId`。查询子任务用 `TaskChildren` 关系：
+子任务存储在独立的 `Subtask` 表中，与 `Task` 通过 `taskId` 关联：
+
+```prisma
+model Subtask {
+  id          String      @id @default(uuid())
+  title       String
+  status      TaskStatus  @default(ACTIVE)
+  completedAt DateTime?
+  sortOrder   Int         @default(0)
+  taskId      String
+  task        Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  @@index([taskId])
+}
+```
+
+查询 task 时 include subtasks，按 `sortOrder` 排序：
 
 ```typescript
 const task = await this.prisma.task.findFirst({
   where: { id, userId },
-  include: { children: true },
+  include: {
+    subtasks: { orderBy: { sortOrder: 'asc' } },
+    tags: { include: { tag: true } },
+  },
 });
 ```
+
+Subtask API（`SubtasksController`）：
+
+```text
+POST   /tasks/:taskId/subtasks          创建子任务（body: { title }）
+POST   /tasks/:taskId/subtasks/reorder  重排子任务（body: { orderedIds }）
+PATCH  /subtasks/:id                    更新（title / status）
+DELETE /subtasks/:id                    删除
+POST   /subtasks/:id/complete           标记完成
+POST   /subtasks/:id/uncomplete         取消完成
+```
+
+> 设计决定：旧设计中子任务是 `Task` 的 `parentId` 自引用，共享全部字段
+>（标签、计划时间等），但前端只用到 title + status。独立 `Subtask` 表
+> 让子任务回归真实语义：仅含 title + status + sortOrder 的 checklist 项。
+> `convertToProject` 会将 subtask 一次性提升为正式 Task。
 
 ---
 

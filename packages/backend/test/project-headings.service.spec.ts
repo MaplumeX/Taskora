@@ -173,7 +173,6 @@ describe('ProjectHeadingsService', () => {
         id: 'task-1',
         userId: 'user-1',
         projectId: 'project-1',
-        parentId: null,
         trashedAt: null,
         status: 'ACTIVE',
       },
@@ -215,24 +214,22 @@ describe('ProjectHeadingsService', () => {
     });
   });
 
-  it('trashes direct heading tasks and all descendants without changing status', async () => {
+  it('soft-deletes direct heading tasks without changing status', async () => {
     const prisma = createPrismaMock();
     prisma.projectHeading.findFirst.mockResolvedValue({
       id: 'heading-1',
       projectId: 'project-1',
     });
     prisma.task.findMany.mockResolvedValue([
-      { id: 'root', parentId: null, headingId: 'heading-1' },
-      { id: 'child', parentId: 'root', headingId: null },
-      { id: 'grandchild', parentId: 'child', headingId: null },
-      { id: 'other', parentId: null, headingId: null },
+      { id: 'root' },
+      { id: 'child' },
     ]);
     const service = new ProjectHeadingsService(prisma as unknown as PrismaService);
 
     await service.remove('user-1', 'heading-1');
 
     const update = prisma.task.updateMany.mock.calls[0][0];
-    expect(new Set(update.where.id.in)).toEqual(new Set(['root', 'child', 'grandchild']));
+    expect(new Set(update.where.id.in)).toEqual(new Set(['root', 'child']));
     expect(Object.keys(update.data)).toEqual(['trashedAt']);
     expect(prisma.projectHeading.deleteMany).toHaveBeenCalledWith({
       where: {
