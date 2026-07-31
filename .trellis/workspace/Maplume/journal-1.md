@@ -1063,3 +1063,37 @@ Added 'Empty Trash' feature: permanently delete all trashed tasks and projects f
 ### Next Steps
 
 - None - task complete
+
+
+## Session 28: 实现项目标题分组
+
+**Date**: 2026-07-31
+**Task**: 实现项目标题分组
+**Branch**: `main`
+
+### Summary
+
+为项目详情页新增 Things 3 风格 Heading，支持创建、编辑、删除、完整布局拖拽与持久化；补齐并发事务保护、访问隔离、回归测试和规范文档。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `06d5dcc` | (see git log) |
+| `6ac3835` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
