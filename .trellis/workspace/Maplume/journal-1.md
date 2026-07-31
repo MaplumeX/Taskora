@@ -1230,3 +1230,36 @@ Fix: deleting a project from the detail page More menu left the user on an empty
 ### Next Steps
 
 - None - task complete
+
+
+## Session 33: 独立 Subtask 表重构
+
+**Date**: 2026-07-31
+**Task**: 独立 Subtask 表重构
+**Branch**: `main`
+
+### Summary
+
+将子任务从 Task 自引用 parentId 重构为独立 Subtask 表。新增 Subtask 模型（id/title/status/sortOrder/taskId CASCADE）+ SubtasksController(6 端点) + SubtasksService。TasksService 移除全部 parentId/BFS 逻辑，convertToProject 改为 subtask → task 提升。FeedService/ProjectHeadingsService 移除 BFS。前端新增 6 个 subtask hooks，TaskRowExpanded 适配 SubtaskResponseDto，列表视图移除 parentId 过滤。shared DTOs 更新。补 subtasks.service.spec + convert-to-project.spec。backend 124 tests + frontend 20 tests 全绿。同步更新 backend/frontend specs。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7a1de03` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
