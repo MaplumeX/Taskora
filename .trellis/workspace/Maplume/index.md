@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 34
+- **Total Sessions**: 35
 - **Last Active**: 2026-08-01
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1298 | Active |
+| `journal-1.md` | ~1332 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 35 | 2026-08-01 | Docker 部署基础设施与 API v1 前缀 | `bdf4634`, `7e8402d` | `main` |
 | 34 | 2026-08-01 | Heading 转换为项目 | `b84403e` | `main` |
 | 33 | 2026-07-31 | 独立 Subtask 表重构 | `7a1de03` | `main` |
 | 32 | 2026-07-31 | fix: 展开态输入框按 Enter 卡在 dnd-kit 拖拽态 | `66ba34e`, `cd5ba93` | `main` |

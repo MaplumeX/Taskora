@@ -1296,3 +1296,37 @@ Fix: deleting a project from the detail page More menu left the user on an empty
 ### Next Steps
 
 - None - task complete
+
+
+## Session 35: Docker 部署基础设施与 API v1 前缀
+
+**Date**: 2026-08-01
+**Task**: Docker 部署基础设施与 API v1 前缀
+**Branch**: `main`
+
+### Summary
+
+记录版本管理与部署策略文档（docs/versioning-and-deployment.md），创建 Docker 部署基础设施（backend/frontend 双镜像 Dockerfile + nginx.conf + docker-compose.yml + .dockerignore），给 NestJS 加 /api/v1 全局前缀并同步适配 e2e 测试和 frontend baseURL。检查阶段发现并修复两个问题：refresh token cookie path 需同步到 /api/v1/auth、backend Dockerfile runtime 阶段需 corepack enable。更新 backend spec 记录 cookie path 同步 gotcha 和 Docker 部署注意事项。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `bdf4634` | (see git log) |
+| `7e8402d` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
