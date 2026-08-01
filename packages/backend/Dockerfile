@@ -6,7 +6,7 @@ RUN corepack enable
 WORKDIR /app
 
 # Copy workspace config + lockfile for deterministic install
-COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
 COPY packages/backend/package.json packages/backend/
 
@@ -19,8 +19,8 @@ COPY packages/shared packages/shared
 RUN pnpm --filter @taskora/shared build
 
 COPY packages/backend packages/backend
-RUN pnpm --filter @taskora/backend build
 RUN pnpm --filter @taskora/backend exec prisma generate
+RUN pnpm --filter @taskora/backend build
 
 # ── Stage 3: runtime ──────────────────────────────────────────
 FROM node:22-alpine AS runtime
