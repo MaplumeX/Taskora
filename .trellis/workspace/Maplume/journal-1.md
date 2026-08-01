@@ -1263,3 +1263,36 @@ Fix: deleting a project from the detail page More menu left the user on an empty
 ### Next Steps
 
 - None - task complete
+
+
+## Session 34: Heading 转换为项目
+
+**Date**: 2026-08-01
+**Task**: Heading 转换为项目
+**Branch**: `main`
+
+### Summary
+
+项目详情页 Heading 的 ⋯ 菜单新增“转换为项目”：以 Heading 标题创建新项目（areaId 继承原项目、sortOrder 侧边栏末尾、tags 为空），Heading 下全部顶层任务迁入新项目（Subtask 层级与字段保留），随后删除原 Heading。后端 POST /project-headings/:id/convert-to-project 单事务 + 6 单测；前端菜单项/hook/i18n/测试；lint/typecheck/test 全绿。语义对齐现有任务转换。
+
+### Main Changes
+
+- Detailed change bullets were not supplied; see the summary above.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b84403e` | (see git log) |
+
+### Testing
+
+- Validation was not recorded for this session.
+
+### Status
+
+[OK] **Completed**
+
+### Next Steps
+
+- None - task complete
