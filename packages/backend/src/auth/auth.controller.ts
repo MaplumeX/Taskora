@@ -49,7 +49,7 @@ export class AuthController {
 
     const rt = req.cookies?.[RT_COOKIE_NAME];
     if (!rt) {
-      res.clearCookie(RT_COOKIE_NAME, { path: '/auth' });
+      res.clearCookie(RT_COOKIE_NAME, { path: '/api/v1/auth' });
       throw new UnauthorizedException('No refresh token');
     }
 
@@ -58,7 +58,7 @@ export class AuthController {
       res.cookie(RT_COOKIE_NAME, newRt, COOKIE_OPTS);
       return { accessToken, user };
     } catch {
-      res.clearCookie(RT_COOKIE_NAME, { path: '/auth' });
+      res.clearCookie(RT_COOKIE_NAME, { path: '/api/v1/auth' });
       throw new UnauthorizedException('Invalid refresh token');
     }
   }
@@ -72,7 +72,7 @@ export class AuthController {
   ) {
     const rt = req.cookies?.[RT_COOKIE_NAME];
     await this.authService.revokeRefreshToken(rt);
-    res.clearCookie(RT_COOKIE_NAME, { path: '/auth' });
+    res.clearCookie(RT_COOKIE_NAME, { path: '/api/v1/auth' });
     return { ok: true };
   }
 

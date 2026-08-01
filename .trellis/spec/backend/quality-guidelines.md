@@ -52,7 +52,7 @@ export class TasksController {
 `AuthController` 处理两类端点：
 
 - **登录/注册/refresh**：返回 accessToken + 通过 `@Res({ passthrough: true }) res: Response` 设置 refresh token cookie（`res.cookie(RT_COOKIE_NAME, rt, COOKIE_OPTS)`），不手动返回 RT。
-- **logout/refresh 失败**：`res.clearCookie(RT_COOKIE_NAME, { path: '/auth' })` 清理 cookie。
+- **logout/refresh 失败**：`res.clearCookie(RT_COOKIE_NAME, { path: '/api/v1/auth' })` 清理 cookie。
 
 ```typescript
 @Post('login')
@@ -63,7 +63,11 @@ async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
 }
 ```
 
-RT cookie 选项统一在 `refresh-token.helpers.ts`：`httpOnly: true, sameSite: 'lax', path: '/auth'`，`secure` 仅生产环境。不散落各处。
+RT cookie 选项统一在 `refresh-token.helpers.ts`：`httpOnly: true, sameSite: 'lax', path: '/api/v1/auth'`，`secure` 仅生产环境。不散落各处。
+
+> **Warning: Cookie path 必须与全局前缀同步**
+>
+> `main.ts` 使用 `app.setGlobalPrefix('api/v1')` 后，所有路由从 `/auth/*` 变为 `/api/v1/auth/*`。Cookie 的 `path` 也必须同步从 `'/auth'` 改为 `'/api/v1/auth'`，否则浏览器不会在 `/api/v1/auth/refresh` 等请求中发送该 cookie，导致 refresh/logout 流程静默失效。修改全局前缀时务必检查所有 cookie path。
 
 ### 用户自管端点
 
@@ -129,9 +133,24 @@ RT cookie 选项统一在 `refresh-token.helpers.ts`：`httpOnly: true, sameSite
 
 ---
 
+## Docker 部署注意事项
+
+### main.ts 启动时调用 pnpm
+
+`main.ts` 在 `runDatabaseMigrations()` 中执行 `execSync('pnpm exec prisma migrate deploy')`。因此 backend Dockerfile 的 runtime 阶段必须执行 `RUN corepack enable`，否则容器启动时 `pnpm` 命令不存在，migration 失败导致进程退出。
+
+### 构建上下文 = 仓库根目录
+
+Backend 和 frontend 的 Dockerfile 都放在各自包目录下（`packages/backend/Dockerfile`、`packages/frontend/Dockerfile`），但构建上下文必须是仓库根目录（`docker build -f packages/backend/Dockerfile .`），因为两者都依赖 `packages/shared`（workspace 依赖，不发包）。
+
+### Docker Compose 服务名即网络主机名
+
+`docker-compose.yml` 中 `DATABASE_URL` 的 PostgreSQL host 必须是 compose 服务名 `postgres`，而非 `localhost`。backend 和 frontend 通过 compose 内部网络通信，frontend nginx.conf 中 `proxy_pass http://backend:3000` 同理。
+
 ## Code Review Checklist
 
 - [ ] 所有 Prisma 查询包含 userId 隔离
 - [ ] DTO 从 `@taskora/shared` 引用，不重复定义
 - [ ] 输入校验（class-validator 装饰器）已添加
+- [ ] 修改全局前缀时，所有 cookie path 已同步
 - [ ] `pnpm lint` 和 `pnpm typecheck` 通过

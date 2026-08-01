@@ -8,7 +8,7 @@ export const COOKIE_OPTS = {
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax' as const,
-  path: '/auth',
+  path: '/api/v1/auth',
   maxAge: RT_TTL_MS,
 };
 

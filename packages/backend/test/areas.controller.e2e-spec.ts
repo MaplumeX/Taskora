@@ -27,6 +27,7 @@ e2eDescribe('AreasController (e2e)', () => {
     }).compile();
 
     app = moduleRef.createNestApplication();
+    app.setGlobalPrefix('api/v1');
     app.useGlobalPipes(
       new ValidationPipe({
         whitelist: true,
@@ -59,7 +60,7 @@ e2eDescribe('AreasController (e2e)', () => {
 
   it('POST /areas → 201 create a new area', async () => {
     const res = await request(app.getHttpServer())
-      .post('/areas')
+      .post('/api/v1/areas')
       .set('Authorization', `Bearer ${authToken}`)
       .send({ title: 'Work', notes: 'Work area' })
       .expect(201);
@@ -77,7 +78,7 @@ e2eDescribe('AreasController (e2e)', () => {
     });
 
     const res = await request(app.getHttpServer())
-      .post('/areas')
+      .post('/api/v1/areas')
       .set('Authorization', `Bearer ${authToken}`)
       .send({ title: 'Work', tagIds: [tag.id] })
       .expect(201);
@@ -92,7 +93,7 @@ e2eDescribe('AreasController (e2e)', () => {
     });
 
     const res = await request(app.getHttpServer())
-      .get('/areas')
+      .get('/api/v1/areas')
       .set('Authorization', `Bearer ${authToken}`)
       .expect(200);
 
@@ -108,7 +109,7 @@ e2eDescribe('AreasController (e2e)', () => {
 
     // set tags
     const res1 = await request(app.getHttpServer())
-      .patch(`/areas/${area.id}`)
+      .patch(`/api/v1/areas/${area.id}`)
       .set('Authorization', `Bearer ${authToken}`)
       .send({ tagIds: [tag1.id, tag2.id] })
       .expect(200);
@@ -116,7 +117,7 @@ e2eDescribe('AreasController (e2e)', () => {
 
     // replace with a subset
     const res2 = await request(app.getHttpServer())
-      .patch(`/areas/${area.id}`)
+      .patch(`/api/v1/areas/${area.id}`)
       .set('Authorization', `Bearer ${authToken}`)
       .send({ tagIds: [tag1.id] })
       .expect(200);
@@ -125,7 +126,7 @@ e2eDescribe('AreasController (e2e)', () => {
 
     // clear tags
     const res3 = await request(app.getHttpServer())
-      .patch(`/areas/${area.id}`)
+      .patch(`/api/v1/areas/${area.id}`)
       .set('Authorization', `Bearer ${authToken}`)
       .send({ tagIds: [] })
       .expect(200);
@@ -134,7 +135,7 @@ e2eDescribe('AreasController (e2e)', () => {
 
   it('GET /areas/:id → 404 for a non-existent area', async () => {
     await request(app.getHttpServer())
-      .get('/areas/00000000-0000-0000-0000-000000000000')
+      .get('/api/v1/areas/00000000-0000-0000-0000-000000000000')
       .set('Authorization', `Bearer ${authToken}`)
       .expect(404);
   });
