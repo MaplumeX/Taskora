@@ -22,6 +22,10 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
 
+      # typecheck/test 前置依赖：shared 的 .d.ts 和 prisma client 生成产物
+      - run: pnpm --filter @taskora/shared build
+      - run: pnpm --filter @taskora/backend exec prisma generate
+
       - run: pnpm typecheck
 
       - run: pnpm test
