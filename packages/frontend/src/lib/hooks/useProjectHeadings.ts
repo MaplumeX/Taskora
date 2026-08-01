@@ -8,6 +8,7 @@ import type {
 } from '@taskora/shared';
 
 import {
+  convertProjectHeadingToProject,
   createProjectHeading,
   deleteProjectHeading,
   getProjectHeadings,
@@ -64,6 +65,19 @@ export function useDeleteProjectHeading(projectId: string) {
     mutationFn: (id: string) => deleteProjectHeading(id),
     onSuccess: () => {
       invalidateProjectData(queryClient, projectId);
+    },
+  });
+}
+
+export function useConvertProjectHeadingToProject(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => convertProjectHeadingToProject(id),
+    onSuccess: () => {
+      // Heading list + tasks + feed for the source project, and the sidebar
+      // project list so the newly created project appears.
+      invalidateProjectData(queryClient, projectId);
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 }

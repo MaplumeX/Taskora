@@ -13,6 +13,10 @@ queries. Layout mutations apply the submitted heading order and task
 `headingId`/`sortOrder` values to caches immediately, then invalidate on both
 error and settlement so the server remains authoritative.
 
+`useConvertProjectHeadingToProject(projectId)` invalidates the heading list,
+tasks, and feed (via `invalidateProjectData`) plus the `['projects']` cache so
+the newly created project shows up in the sidebar.
+
 > How hooks are used in this project.
 
 ---

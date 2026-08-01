@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   TaskBucket,
-  ProjectStatus,
   TaskStatus,
   ScheduledType,
 } from '@taskora/shared';

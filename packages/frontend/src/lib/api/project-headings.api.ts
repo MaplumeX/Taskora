@@ -1,6 +1,7 @@
 import type {
   CreateProjectHeadingDto,
   ProjectHeadingResponseDto,
+  ProjectResponseDto,
   ReorderProjectHeadingLayoutDto,
   UpdateProjectHeadingDto,
 } from '@taskora/shared';
@@ -34,6 +35,12 @@ export function updateProjectHeading(
 
 export function deleteProjectHeading(id: string): Promise<void> {
   return apiClient.delete(`/project-headings/${id}`).then(() => undefined);
+}
+
+export function convertProjectHeadingToProject(id: string): Promise<ProjectResponseDto> {
+  return apiClient
+    .post<ProjectResponseDto>(`/project-headings/${id}/convert-to-project`)
+    .then((response) => response.data);
 }
 
 export function reorderProjectHeadingLayout(data: ReorderProjectHeadingLayoutDto): Promise<void> {
