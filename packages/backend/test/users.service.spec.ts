@@ -20,8 +20,6 @@ describe('UsersService', () => {
     email: 'test@example.com',
     displayName: 'Tester',
     avatarUrl: null,
-    timezone: 'Asia/Shanghai',
-    locale: 'zh',
     createdAt: now,
     updatedAt: now,
   };
@@ -43,7 +41,7 @@ describe('UsersService', () => {
 
       await service.updateProfile(userId, {
         displayName: 'New Name',
-        // avatarUrl, timezone, locale are undefined → not touched
+        // avatarUrl is undefined → not touched
       });
 
       const call = mockPrisma.user.update.mock.calls[0][0];
@@ -66,15 +64,11 @@ describe('UsersService', () => {
       await service.updateProfile(userId, {
         displayName: 'X',
         avatarUrl: 'https://example.com/a.png',
-        timezone: 'Europe/London',
-        locale: 'en',
       });
 
       expect(mockPrisma.user.update.mock.calls[0][0].data).toEqual({
         displayName: 'X',
         avatarUrl: 'https://example.com/a.png',
-        timezone: 'Europe/London',
-        locale: 'en',
       });
     });
   });

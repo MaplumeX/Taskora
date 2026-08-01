@@ -1,8 +1,6 @@
 export interface UpdateProfileDto {
   displayName?: string | null;
   avatarUrl?: string | null;
-  timezone?: string | null;
-  locale?: string | null;
 }
 
 export interface UpdatePasswordDto {
@@ -15,8 +13,6 @@ export interface UserResponseDto {
   email: string;
   displayName: string | null;
   avatarUrl: string | null;
-  timezone: string | null;
-  locale: string | null;
   createdAt: string;
   updatedAt: string;
 }

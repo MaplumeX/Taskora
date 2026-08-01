@@ -7,7 +7,7 @@ import { UpdateProfileDto } from '../src/users/dto/users.dto';
 /**
  * DTO-level validation tests (no DB required).
  *
- * Covers PRD acceptance: illegal timezone / locale / avatarUrl must be rejected
+ * Covers PRD acceptance: illegal avatarUrl must be rejected
  * at the validation boundary (class-validator in the global ValidationPipe).
  */
 describe('UpdateProfileDto validation', () => {
@@ -21,8 +21,6 @@ describe('UpdateProfileDto validation', () => {
     const errors = await validateDto({
       displayName: 'Alice',
       avatarUrl: 'https://example.com/a.png',
-      timezone: 'Asia/Shanghai',
-      locale: 'zh',
     });
     expect(errors).toEqual([]);
   });
@@ -31,20 +29,8 @@ describe('UpdateProfileDto validation', () => {
     const errors = await validateDto({
       displayName: null,
       avatarUrl: null,
-      timezone: null,
-      locale: null,
     });
     expect(errors).toEqual([]);
-  });
-
-  it('rejects an invalid IANA timezone', async () => {
-    const errors = await validateDto({ timezone: 'Foo/Bar' });
-    expect(errors).toContain('timezone');
-  });
-
-  it('rejects an unsupported locale', async () => {
-    const errors = await validateDto({ locale: 'fr' });
-    expect(errors).toContain('locale');
   });
 
   it('rejects a non-https avatarUrl', async () => {
