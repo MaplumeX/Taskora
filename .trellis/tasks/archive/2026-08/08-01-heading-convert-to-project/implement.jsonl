@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "backend 层总规范"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Prisma 事务/级联/convertToProject 既有约定"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "404/BadRequest 错误语义"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "mutation hook 与缓存失效约定"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "中英 key 一致性要求"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件/菜单/DropdownMenu 规范"}
