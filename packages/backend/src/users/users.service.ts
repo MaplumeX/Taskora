@@ -13,8 +13,6 @@ export const USER_PUBLIC_SELECT = {
   email: true,
   displayName: true,
   avatarUrl: true,
-  timezone: true,
-  locale: true,
   createdAt: true,
   updatedAt: true,
 } as const satisfies Prisma.UserSelect;
@@ -27,8 +25,6 @@ export class UsersService {
     const data: Prisma.UserUpdateInput = {};
     if (dto.displayName !== undefined) data.displayName = dto.displayName;
     if (dto.avatarUrl !== undefined) data.avatarUrl = dto.avatarUrl;
-    if (dto.timezone !== undefined) data.timezone = dto.timezone;
-    if (dto.locale !== undefined) data.locale = dto.locale;
 
     return this.prisma.user.update({
       where: { id: userId },
