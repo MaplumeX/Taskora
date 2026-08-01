@@ -25,6 +25,13 @@ RUN pnpm --filter @taskora/backend exec prisma generate
 # ── Stage 3: runtime ──────────────────────────────────────────
 FROM node:22-alpine AS runtime
 
+ARG VERSION=dev
+ARG GIT_SHA=unknown
+LABEL org.opencontainers.image.title="taskora-backend"
+LABEL org.opencontainers.image.source="https://github.com/MaplumeX/Taskora"
+LABEL org.opencontainers.image.version="${VERSION}"
+LABEL org.opencontainers.image.revision="${GIT_SHA}"
+
 RUN corepack enable
 
 WORKDIR /app
