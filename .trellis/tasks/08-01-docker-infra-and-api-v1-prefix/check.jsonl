@@ -1,0 +1,3 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "验证 backend 改动符合代码质量规范"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "验证 frontend client.ts 改动符合前端质量规范"}
+{"file": "docs/versioning-and-deployment.md", "reason": "对照 Staged 行动清单确认所有要求项已覆盖"}

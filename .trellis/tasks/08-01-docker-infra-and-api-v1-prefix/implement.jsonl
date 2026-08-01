@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "backend 模块组织规范，确认 main.ts 入口位置和全局配置约定"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "backend 代码质量规范，确保 Dockerfile 和 prefix 改动符合现有约定"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "frontend 目录结构，确认 client.ts 位置和 build 输出目录"}
+{"file": "docs/versioning-and-deployment.md", "reason": "本次任务的决策来源，Staged 行动清单第 1-5 项定义了范围"}
