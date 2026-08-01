@@ -49,6 +49,53 @@ export class ProjectHeadingsService {
     });
   }
 
+  async convertToProject(userId: string, id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      // Validate heading ownership and read the source project's areaId.
+      const heading = await tx.projectHeading.findFirst({
+        where: { id, userId },
+        include: { project: { select: { areaId: true } } },
+      });
+      if (!heading) {
+        throw new NotFoundException('Heading not found');
+      }
+      await this.assertProjectOwnership(userId, heading.projectId, tx);
+
+      // New project is appended after the user's last project in the sidebar.
+      const maxSort = await tx.project.aggregate({
+        where: { userId },
+        _max: { sortOrder: true },
+      });
+      const nextSortOrder = (maxSort._max.sortOrder ?? -1) + 1;
+
+      const newProject = await tx.project.create({
+        data: {
+          title: heading.title,
+          areaId: heading.project.areaId ?? null,
+          sortOrder: nextSortOrder,
+          userId,
+        },
+      });
+
+      // Move every task under the heading (including trashed ones) to the new
+      // project. Only projectId/headingId change; bucket/sortOrder/status/notes
+      // and the subtask tree are preserved as-is.
+      await tx.task.updateMany({
+        where: { userId, headingId: id },
+        data: { projectId: newProject.id, headingId: null },
+      });
+
+      const deleted = await tx.projectHeading.deleteMany({
+        where: { id, userId, projectId: heading.projectId },
+      });
+      if (deleted.count !== 1) {
+        throw new BadRequestException('Heading changed; refresh and retry');
+      }
+
+      return { ...newProject, tags: [] };
+    });
+  }
+
   async update(userId: string, id: string, dto: UpdateProjectHeadingDto) {
     return this.prisma.$transaction(async (tx) => {
       const heading = await tx.projectHeading.findFirst({

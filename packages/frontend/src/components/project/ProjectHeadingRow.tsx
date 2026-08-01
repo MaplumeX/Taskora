@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { GripVertical, MoreHorizontal, Trash2 } from 'lucide-react';
+import { FolderInput, GripVertical, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import type { ProjectHeadingResponseDto } from '@taskora/shared';
@@ -19,7 +19,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useDeleteProjectHeading, useUpdateProjectHeading } from '@/lib/hooks/useProjectHeadings';
+import {
+  useConvertProjectHeadingToProject,
+  useDeleteProjectHeading,
+  useUpdateProjectHeading,
+} from '@/lib/hooks/useProjectHeadings';
 import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 
 interface Props {
@@ -38,6 +42,7 @@ export function ProjectHeadingRow({ heading, dragHandleProps }: Props) {
   const inputRef = React.useRef<HTMLInputElement>(null);
   const updateHeading = useUpdateProjectHeading(heading.projectId);
   const deleteHeading = useDeleteProjectHeading(heading.projectId);
+  const convertHeading = useConvertProjectHeadingToProject(heading.projectId);
 
   React.useEffect(() => {
     if (!autoEdit) return;
@@ -126,6 +131,18 @@ export function ProjectHeadingRow({ heading, dragHandleProps }: Props) {
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
+            <DropdownMenuItem
+              disabled={convertHeading.isPending}
+              onSelect={() =>
+                convertHeading.mutate(heading.id, {
+                  onSuccess: () => toast.success(t('project:convertSuccess')),
+                  onError: () => toast.error(t('project:convertFailed')),
+                })
+              }
+            >
+              <FolderInput className="mr-2 h-4 w-4" />
+              {t('project:convertToProject')}
+            </DropdownMenuItem>
             <DropdownMenuItem
               className="text-destructive focus:text-destructive"
               onSelect={() => setConfirmOpen(true)}

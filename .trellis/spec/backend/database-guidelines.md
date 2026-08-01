@@ -53,6 +53,7 @@ POST   /project-headings
 PATCH  /project-headings/:id
 DELETE /project-headings/:id
 POST   /project-headings/reorder
+POST   /project-headings/:id/convert-to-project
 ```
 
 ### 3. Contracts
@@ -110,6 +111,26 @@ Heading deletion soft-deletes every task whose `headingId` matches the heading
 (changing only `trashedAt`), then physically deletes the heading. `onDelete:
 SetNull` makes later task restoration ungrouped. Subtasks belonging to those
 tasks are preserved (they have no `trashedAt`).
+
+### Convert heading to project
+
+`POST /project-headings/:id/convert-to-project` turns the whole heading group
+into a brand-new project in one interactive transaction:
+
+- Reject with `404` when the heading is missing / not owned by the user / its
+  project is missing or trashed (`assertProjectOwnership`).
+- New project: `title` = heading title (duplicate titles allowed), `areaId`
+  inherited from the source project (`null` when it has none), `tags` empty,
+  `sortOrder` = max over the user's projects + 1 (appears at the sidebar end),
+  other fields at defaults (`status=ACTIVE`, `bucket=INBOX`,
+  `scheduledType=NONE`).
+- Every task with `headingId` matching (including trashed ones) is migrated by
+  `task.updateMany` writing only `projectId` → new project and `headingId` →
+  `null`; `bucket`/`sortOrder`/`status`/`notes`/dates and the `Subtask` tree
+  are untouched. Trashed tasks keep their trash membership in the new project.
+- The heading is then physically deleted; a `deleteMany` count ≠ 1 throws
+  `BadRequest` and rolls the transaction back.
+- Returns the new `ProjectResponseDto` with `tags: []`.
 
 ### 6. Tests Required
 

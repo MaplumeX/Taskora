@@ -9,12 +9,17 @@ import { ProjectHeadingRow } from './ProjectHeadingRow';
 const mutationMocks = vi.hoisted(() => ({
   update: vi.fn(),
   remove: vi.fn(),
+  convert: vi.fn(),
 }));
 
 vi.mock('@/lib/hooks/useProjectHeadings', () => ({
   useUpdateProjectHeading: () => ({ mutate: mutationMocks.update }),
   useDeleteProjectHeading: () => ({
     mutate: mutationMocks.remove,
+    isPending: false,
+  }),
+  useConvertProjectHeadingToProject: () => ({
+    mutate: mutationMocks.convert,
     isPending: false,
   }),
 }));
@@ -92,6 +97,30 @@ describe('ProjectHeadingRow', () => {
       }),
     );
     expect(mutationMocks.remove).toHaveBeenCalledWith(
+      'heading-1',
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    );
+  });
+
+  it('converts the heading to a project from the actions menu', async () => {
+    const user = userEvent.setup();
+    render(<ProjectHeadingRow heading={heading} />);
+
+    await user.click(
+      screen.getByRole('button', {
+        name: /Heading actions|标题操作/,
+      }),
+    );
+    await user.click(
+      await screen.findByRole('menuitem', {
+        name: /Convert to Project|转换为项目/,
+      }),
+    );
+
+    expect(mutationMocks.convert).toHaveBeenCalledWith(
       'heading-1',
       expect.objectContaining({
         onSuccess: expect.any(Function),

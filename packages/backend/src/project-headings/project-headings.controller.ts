@@ -39,6 +39,11 @@ export class ProjectHeadingsController {
     return this.headingsService.reorder(req.user.id, dto);
   }
 
+  @Post(':id/convert-to-project')
+  convertToProject(@Request() req: { user: { id: string } }, @Param('id') id: string) {
+    return this.headingsService.convertToProject(req.user.id, id);
+  }
+
   @Patch(':id')
   update(
     @Request() req: { user: { id: string } },

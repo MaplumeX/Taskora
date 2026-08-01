@@ -18,7 +18,10 @@ latest server-derived layout and shows the shared save-failed toast.
 
 Heading rows are typographic section labels, not task rows: they have no
 completion checkbox, use a dedicated drag handle, allow an empty inline title,
-and require a destructive confirmation before deletion.
+and require a destructive confirmation before deletion. The row's "⋯" menu
+offers "Convert to Project" (before the delete item): it runs without a second
+confirmation, disables while pending, and toasts `project:convertSuccess` /
+`project:convertFailed` on settlement — no navigation to the new project.
 
 > How components are built in this project.
 
