@@ -1372,3 +1372,25 @@ Fix: deleting a project from the detail page More menu left the user on an empty
 ### Status
 
 [OK] **Completed**
+
+
+## Session 38: Remove skeleton loading design
+
+**Date**: 2026-08-07
+**Task**: Remove skeleton loading design
+**Branch**: `main`
+
+### Summary
+
+完全移除前端骨架屏 loading 方案：删除 TaskListSkeleton 组件、useDelayedLoading hook、.skeleton CSS 类与 shimmer 动画；11 个页面 loading 期间改为渲染 null；更新 directory-structure spec。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `c64e726` | (see git log) |
+| `e030727` | (see git log) |
+
+### Status
+
+[OK] **Completed**

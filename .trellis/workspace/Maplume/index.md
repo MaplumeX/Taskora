@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 37
+- **Total Sessions**: 38
 - **Last Active**: 2026-08-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1374 | Active |
+| `journal-1.md` | ~1396 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 38 | 2026-08-07 | Remove skeleton loading design | `c64e726`, `e030727` | `main` |
 | 37 | 2026-08-07 | Optimize frontend first-load performance | `e20b15c` | `main` |
 | 36 | 2026-08-07 | Add optimistic updates to high-frequency CRUD mutations | `7e051a0` | `main` |
 | 35 | 2026-08-01 | Docker 部署基础设施与 API v1 前缀 | `bdf4634`, `7e8402d` | `main` |
