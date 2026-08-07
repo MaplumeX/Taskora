@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Mutation hooks 模式、query key 约定、reorder 乐观更新模板（setQueriesData 批量更新前缀匹配缓存），改造直接参考"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "TanStack Query 服务端状态边界、invalidation 策略、Zustand 红线（服务端数据禁止入 Zustand），确保乐观更新只改 TanStack Query 缓存"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量基线（lint/test/build），Phase F 验证门"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "DTO 类型安全约定，onMutate 预期值推算需保持类型完整"}
