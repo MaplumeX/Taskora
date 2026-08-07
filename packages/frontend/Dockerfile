@@ -15,7 +15,8 @@ COPY packages/shared packages/shared
 RUN pnpm --filter @taskora/shared build
 
 COPY packages/frontend packages/frontend
-RUN VITE_API_URL=/api/v1 pnpm --filter @taskora/frontend build
+ARG VITE_API_URL=/api/v1
+RUN VITE_API_URL="${VITE_API_URL}" pnpm --filter @taskora/frontend build
 
 # ── Stage 2: runtime ──────────────────────────────────────────
 FROM nginx:alpine AS runtime

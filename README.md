@@ -65,6 +65,14 @@ Frontend — `packages/frontend/.env`:
 VITE_API_URL=http://localhost:3000/api/v1
 ```
 
+When using Docker Compose, Compose reads `.env` from the repository root. Create it from the template; do not reuse the backend `.env` directly because the database hostname inside Docker is `postgres`, not `localhost`:
+
+```bash
+cp .env.example .env
+```
+
+Before starting the shared environment, update `POSTGRES_PASSWORD` and `JWT_SECRET` in `.env`.
+
 ### 3. Set up the database
 
 Start PostgreSQL (the compose file includes it, or run your own):
@@ -119,7 +127,8 @@ Backend-specific (run with `pnpm --filter @taskora/backend exec ...`):
 A `docker-compose.yml` is provided for local full-stack runs:
 
 ```bash
-docker compose up -d
+test -f .env || cp .env.example .env  # Create once, then update the secrets
+docker compose up -d --build
 ```
 
 This starts:
@@ -127,6 +136,8 @@ This starts:
 - `postgres` on port 5432
 - `backend` on port 3000 (auto-runs `prisma migrate deploy` on boot)
 - `frontend` on port 8080 (nginx serves the SPA and reverse-proxies `/api` to the backend)
+
+Compose waits for PostgreSQL's health check before starting the backend. If `VITE_API_URL` changes, rebuild the frontend image with `--build` because Vite embeds this value at build time.
 
 ### Building images manually
 
