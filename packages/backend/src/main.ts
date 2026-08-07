@@ -12,7 +12,7 @@ const backendRoot = resolve(__dirname, '..');
 function runDatabaseMigrations(): void {
   try {
     Logger.log('Checking for pending database migrations...', 'Bootstrap');
-    execSync('pnpm exec prisma migrate deploy', {
+    execSync('node node_modules/.bin/prisma migrate deploy', {
       cwd: backendRoot,
       stdio: 'inherit',
     });
