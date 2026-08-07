@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "检查 lint/test/build 通过、组件导出约定、路径别名约定"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "检查 lazy import 未破坏 QueryClient 初始化与服务端数据约定"}
