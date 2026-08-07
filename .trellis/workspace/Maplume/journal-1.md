@@ -1415,3 +1415,24 @@ Implemented Plan A: the subtask block in TaskRowExpanded is no longer rendered w
 ### Status
 
 [OK] **Completed**
+
+
+## Session 40: Hide add-subtask button when subtasks exist
+
+**Date**: 2026-08-07
+**Task**: Hide add-subtask button when subtasks exist
+**Branch**: `main`
+
+### Summary
+
+Repurposed the ListPlus button in TaskRowExpanded from a subtask-block collapse toggle into a 'create first subtask' entry: it now only renders when there are no subtasks and disappears once subtasks exist. Replaced toggleSubtasksOpen with openSubtasks (expand-only + focus input). Updated TaskRowExpanded.test.tsx with an assertion that the button is absent when subtasks exist, and updated the frontend component-guidelines spec to reflect the new behavior.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `33cc094` | (see git log) |
+
+### Status
+
+[OK] **Completed**
