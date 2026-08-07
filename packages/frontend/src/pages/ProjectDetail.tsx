@@ -6,9 +6,7 @@ import { useCompleteProject, useProjectsQuery, useUncompleteProject, useUpdatePr
 import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { useProjectHeadingsQuery } from '@/lib/hooks/useProjectHeadings';
-import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import { ProjectTaskLayout } from '@/components/project/ProjectTaskLayout';
-import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { TaskCheckbox } from '@/components/task/TaskCheckbox';
 import { ProjectMoreMenu } from '@/components/project/ProjectContextMenu';
@@ -32,7 +30,6 @@ export default function ProjectDetail() {
     isLoading: headingsLoading,
     isError: headingsError,
   } = useProjectHeadingsQuery(id);
-  const showSkeleton = useDelayedLoading(isLoading || headingsLoading);
   const updateProject = useUpdateProject();
   const completeProject = useCompleteProject();
   const uncompleteProject = useUncompleteProject();
@@ -98,9 +95,7 @@ export default function ProjectDetail() {
         />
       ) : null}
 
-      {showSkeleton ? (
-        <TaskListSkeleton />
-      ) : isError || headingsError ? (
+      {isLoading || headingsLoading ? null : isError || headingsError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
         <ProjectTaskLayout

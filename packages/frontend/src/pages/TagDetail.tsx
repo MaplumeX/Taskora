@@ -3,9 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useTagsQuery } from '@/lib/hooks/useTags';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
-import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import { TaskListView } from '@/components/task/TaskListView';
-import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
 
 export default function TagDetail() {
   const { t } = useTranslation();
@@ -15,7 +13,6 @@ export default function TagDetail() {
   const tag = tags.find((t) => t.id === tagId);
 
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ tagId });
-  const showSkeleton = useDelayedLoading(isLoading);
 
   const topLevel = tasks;
 
@@ -41,9 +38,7 @@ export default function TagDetail() {
         </div>
       </div>
 
-      {showSkeleton ? (
-        <TaskListSkeleton />
-      ) : isError ? (
+      {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
         <TaskListView tasks={topLevel} emptyHint={t('tag:noTasks')} />

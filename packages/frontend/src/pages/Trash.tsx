@@ -14,10 +14,8 @@ import {
 } from '@/components/ui/dialog';
 import { TaskCheckbox } from '@/components/task/TaskCheckbox';
 import { TaskContextMenu } from '@/components/task/TaskContextMenu';
-import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
 import { TaskDateBadge } from '@/components/task/TaskDateBadge';
 import { useEmptyTrash, useFeedQuery } from '@/lib/hooks/useFeed';
-import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import { useRestoreProject } from '@/lib/hooks/useProjects';
 import { toast } from 'sonner';
 
@@ -27,7 +25,6 @@ export default function Trash() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { data: items = [], isLoading, isError } = useFeedQuery('trash');
-  const showSkeleton = useDelayedLoading(isLoading);
   const restoreProject = useRestoreProject();
   const emptyTrashMutation = useEmptyTrash();
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -47,9 +44,7 @@ export default function Trash() {
           {t('common:emptyTrash')}
         </Button>
       </div>
-      {showSkeleton ? (
-        <TaskListSkeleton />
-      ) : isError ? (
+      {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : items.length === 0 ? (
         <p className="py-8 text-center text-sm text-muted-foreground">{t('task:trashEmpty')}</p>
