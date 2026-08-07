@@ -175,14 +175,23 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 
 1. **标题** — 无边框 Input（`border-0 px-0 py-0 shadow-none focus-visible:ring-0`），onBlur commit。标题/备注采用扁平无边框样式以体现"一体"的编辑体验，不画 Input 边界。
 2. **备注** — 无边框 Textarea（同上 className 约定），onBlur commit。
-3. **子任务区** — `Separator` + 子任务标题 + 列表 + 添加子任务 Input。
-4. **图标按钮行** — 5 个 `IconPopover`（日期 / 到期 / 项目 / 区域 / 标签），左对齐。
+3. **子任务区** — 按需渲染（见下「子任务区按需渲染」）。
+4. **图标按钮行** — 5 个 `IconPopover`（日期 / 到期 / 项目 / 区域 / 标签）+ `Add subtask` 按钮（`ListPlus`），左对齐。
 
 **不放在展开区内**：标记完成按钮（折叠态行勾选框已提供）。展开态仅做编辑，完成交给折叠态行。
 
 > 删除按钮位于展开态行内（`TaskRowExpanded` 图标行的 `Trash2` 按钮），不在折叠态行。此前折叠态行曾有 hover 删除按钮，已于 2025-07 移除（commit `c69f243`），避免与拖拽手柄冲突。
 
 ---
+
+## 子任务区按需渲染（TaskRowExpanded）
+
+子任务区（`Separator` + 子任务标题 + 列表 + 添加子任务 Input）**默认不渲染**，由本地状态 `subtasksOpen`（初始值 = `subtasks.length > 0`）控制可见性：
+
+- **无子任务时**：整个子任务区块不渲染（无标题、无空状态文本、无输入框）。图标按钮行末尾的 `Add subtask` 按钮（`ListPlus` 图标，ghost/size icon）点击后置 `subtasksOpen=true` 并通过 `requestAnimationFrame` 聚焦添加子任务 Input。移除了原先的 `task:noSubtasks` 空状态文本。
+- **有子任务时**：展开即默认渲染子任务区块（`subtasksOpen` 初值 true）。标题显示 `Subtasks (n)`（`t('task:subtasks')` + 计数），列表与添加 Input 照常。
+- **切换可见性**：`Add subtask` 按钮在有子任务时充当折叠/展开切换（`subtasksOpen` 翻转），按钮 `text-primary`（展开）/ `text-muted-foreground`（折叠）。折叠仅隐藏子任务区块，不影响展开区其余部分。
+- 添加首个子任务后区块保持可见（`addSubtask` 不修改 `subtasksOpen`）。
 
 ## 行内展开交互模式（Things 3 风格）
 

@@ -4,6 +4,7 @@ import {
   Check,
   Clock,
   Folder,
+  ListPlus,
   Tag,
   Target,
   Trash2,
@@ -57,6 +58,10 @@ export function TaskRowExpanded({ task, current }: Props) {
   const [notes, setNotes] = React.useState(current.notes ?? '');
   const [subtaskTitle, setSubtaskTitle] = React.useState('');
 
+  const subtasks = current.subtasks ?? [];
+  const [subtasksOpen, setSubtasksOpen] = React.useState(subtasks.length > 0);
+  const subtaskInputRef = React.useRef<HTMLInputElement>(null);
+
   const scheduledType = current.scheduledType ?? ScheduledType.NONE;
 
   const invalidateParent = () =>
@@ -96,7 +101,13 @@ export function TaskRowExpanded({ task, current }: Props) {
     );
   };
 
-  const subtasks = current.subtasks ?? [];
+  const toggleSubtasksOpen = () => {
+    setSubtasksOpen((prev) => {
+      const next = !prev;
+      if (next) requestAnimationFrame(() => subtaskInputRef.current?.focus());
+      return next;
+    });
+  };
 
   return (
     <div
@@ -116,33 +127,38 @@ export function TaskRowExpanded({ task, current }: Props) {
 
       <Separator />
 
-      <div className="flex flex-col gap-2">
-        <h3 className="text-xs font-medium text-muted-foreground">{t('task:subtasks')}</h3>
-        {subtasks.length > 0 ? (
-          <ul className="flex flex-col gap-0.5">
-            {subtasks.map((c) => (
-              <SubtaskRow key={c.id} subtask={c} taskId={task.id} onMutated={invalidateParent} />
-            ))}
-          </ul>
-        ) : (
-          <p className="text-xs text-muted-foreground">{t('task:noSubtasks')}</p>
-        )}
-        <Input
-          value={subtaskTitle}
-          onChange={(e) => setSubtaskTitle(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.stopPropagation();
-              addSubtask();
-            } else if (e.key === ' ') {
-              e.stopPropagation();
-            }
-          }}
-          onClick={(e) => e.stopPropagation()}
-          placeholder={t('task:addSubtask')}
-          className="mt-1 h-8 text-sm"
-        />
-      </div>
+      {subtasksOpen && (
+        <div className="flex flex-col gap-2">
+          <h3 className="text-xs font-medium text-muted-foreground">
+            {subtasks.length > 0
+              ? `${t('task:subtasks')} (${subtasks.length})`
+              : t('task:subtasks')}
+          </h3>
+          {subtasks.length > 0 && (
+            <ul className="flex flex-col gap-0.5">
+              {subtasks.map((c) => (
+                <SubtaskRow key={c.id} subtask={c} taskId={task.id} onMutated={invalidateParent} />
+              ))}
+            </ul>
+          )}
+          <Input
+            ref={subtaskInputRef}
+            value={subtaskTitle}
+            onChange={(e) => setSubtaskTitle(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.stopPropagation();
+                addSubtask();
+              } else if (e.key === ' ') {
+                e.stopPropagation();
+              }
+            }}
+            onClick={(e) => e.stopPropagation()}
+            placeholder={t('task:addSubtask')}
+            className="mt-1 h-8 text-sm"
+          />
+        </div>
+      )}
 
       <div className="flex items-center gap-1">
         <IconPopover
@@ -244,6 +260,19 @@ export function TaskRowExpanded({ task, current }: Props) {
         >
           <TagsField current={current} onPatch={patch} />
         </IconPopover>
+
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn('h-8 w-8', subtasksOpen ? 'text-primary' : 'text-muted-foreground')}
+          aria-label={t('task:addSubtask')}
+          onClick={(e) => {
+            e.stopPropagation();
+            toggleSubtasksOpen();
+          }}
+        >
+          <ListPlus className="h-4 w-4" />
+        </Button>
       </div>
     </div>
   );
