@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 41
+- **Total Sessions**: 42
 - **Last Active**: 2026-08-07
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1459 | Active |
+| `journal-1.md` | ~1481 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 42 | 2026-08-07 | Calendar date picker for scheduled date field | `b4c2099`, `eed74f2` | `main` |
 | 41 | 2026-08-07 | Unify subtask row styling | `73563ba` | `main` |
 | 40 | 2026-08-07 | Hide add-subtask button when subtasks exist | `33cc094` | `main` |
 | 39 | 2026-08-07 | Hide subtask section when task has no subtasks | `7a3857f` | `main` |

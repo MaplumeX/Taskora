@@ -1457,3 +1457,25 @@ Replaced native HTML elements in SubtaskRow (TaskRowExpanded.tsx) with shadcn/ui
 ### Status
 
 [OK] **Completed**
+
+
+## Session 42: Calendar date picker for scheduled date field
+
+**Date**: 2026-08-07
+**Task**: Calendar date picker for scheduled date field
+**Branch**: `main`
+
+### Summary
+
+把 ScheduledDateField 从「无/日期/Someday 三态 segmented control + 原生 date input」重构为 react-day-picker 月历面板：点日历图标直接弹月历，选日期=DATE、Someday=SOMEDAY、清除=NONE，scheduledType 由用户动作派生而非预先声明。底部加快捷「今天」按钮。新增 Calendar 基础 UI 组件（src/components/ui/calendar.tsx），Tailwind 样式走 CSS 变量适配 light/dark。新增 common:clear i18n key（zh/en）。DueDateField 未改。component-guidelines.md 日期编辑 Popover 段落已更新。check 全 AC 通过，typecheck/build/lint/54 tests 全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b4c2099` | (see git log) |
+| `eed74f2` | (see git log) |
+
+### Status
+
+[OK] **Completed**
