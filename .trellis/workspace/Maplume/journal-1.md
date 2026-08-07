@@ -1330,3 +1330,24 @@ Fix: deleting a project from the detail page More menu left the user on an empty
 ### Next Steps
 
 - None - task complete
+
+
+## Session 36: Add optimistic updates to high-frequency CRUD mutations
+
+**Date**: 2026-08-07
+**Task**: Add optimistic updates to high-frequency CRUD mutations
+**Branch**: `main`
+
+### Summary
+
+为 Task/Subtask/Project/Area/Tag 五类实体的 CRUD mutation 添加乐观更新（onMutate snapshot + onError 回滚 + onSettled 同步真值），消除服务器部署后操作延迟感。新增 3 个测试文件、更新 1 个，共 51 个测试通过。更新 hook-guidelines.md spec 记录三段式模式。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7e051a0` | (see git log) |
+
+### Status
+
+[OK] **Completed**
