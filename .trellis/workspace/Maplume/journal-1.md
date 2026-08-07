@@ -1351,3 +1351,24 @@ Fix: deleting a project from the detail page More menu left the user on an empty
 ### Status
 
 [OK] **Completed**
+
+
+## Session 37: Optimize frontend first-load performance
+
+**Date**: 2026-08-07
+**Task**: Optimize frontend first-load performance
+**Branch**: `main`
+
+### Summary
+
+路由级代码分割（14 页面 React.lazy + Suspense）+ vendor 拆包（react/query/i18n/dnd）+ nginx 静态资源长期缓存 + gzip 压缩。首屏 chunk 从 712KB 降至 330KB，页面按需加载，Vite 不再警告。lint/test/build 全绿。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e20b15c` | (see git log) |
+
+### Status
+
+[OK] **Completed**
