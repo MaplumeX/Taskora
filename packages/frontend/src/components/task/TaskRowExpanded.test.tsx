@@ -258,5 +258,8 @@ describe('TaskRowExpanded — hide subtask empty state', () => {
     expect(screen.getByText(/Subtasks|子任务/)).toBeInTheDocument();
     expect(screen.getByText('Existing subtask')).toBeInTheDocument();
     expect(screen.getByPlaceholderText(/Add subtask|添加子任务/)).toBeInTheDocument();
+
+    // Add subtask button should NOT be shown when subtasks already exist
+    expect(screen.queryByRole('button', { name: /Add subtask|添加子任务/ })).not.toBeInTheDocument();
   });
 });
