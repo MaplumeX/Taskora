@@ -65,6 +65,14 @@ JWT_SECRET=your-secret-here
 VITE_API_URL=http://localhost:3000/api/v1
 ```
 
+使用 Docker Compose 时，Compose 读取仓库根目录的 `.env`。请从模板创建它；不要直接复用后端的 `.env`，因为容器内的数据库主机名是 `postgres` 而不是 `localhost`：
+
+```bash
+cp .env.example .env
+```
+
+启动共享环境前，请修改 `.env` 中的 `POSTGRES_PASSWORD` 和 `JWT_SECRET`。
+
 ### 3. 初始化数据库
 
 启动 PostgreSQL（compose 文件已包含，也可自行运行）：
@@ -119,7 +127,8 @@ pnpm dev
 仓库提供 `docker-compose.yml`，用于本地全栈运行：
 
 ```bash
-docker compose up -d
+test -f .env || cp .env.example .env  # 首次运行时创建，并修改其中的密钥
+docker compose up -d --build
 ```
 
 启动的服务：
@@ -127,6 +136,8 @@ docker compose up -d
 - `postgres`：端口 5432
 - `backend`：端口 3000（启动时自动执行 `prisma migrate deploy`）
 - `frontend`：端口 8080（nginx 托管 SPA，并将 `/api` 反向代理到后端）
+
+Compose 会等待 PostgreSQL 健康检查通过后再启动后端。修改 `VITE_API_URL` 后，需要使用 `--build` 重新构建前端镜像。
 
 ### 手动构建镜像
 
