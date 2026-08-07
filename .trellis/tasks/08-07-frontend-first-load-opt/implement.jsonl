@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量基线（lint/test/build 质量门）、组件导出约定（页面用 export default）、路径别名约定"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "QueryClient 配置在 main.tsx、服务端数据走 TanStack Query 的约定，确认 lazy import 不影响 QueryClient 初始化"}

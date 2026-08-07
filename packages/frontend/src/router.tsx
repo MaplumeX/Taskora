@@ -1,25 +1,49 @@
+import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import { AppShell } from '@/components/layout/AppShell';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import Anytime from '@/pages/Anytime';
-import AreaDetail from '@/pages/AreaDetail';
-import Inbox from '@/pages/Inbox';
-import Logbook from '@/pages/Logbook';
-import Login from '@/pages/Login';
-import ProjectDetail from '@/pages/ProjectDetail';
-import Register from '@/pages/Register';
-import SettingsAccount from '@/pages/SettingsAccount';
-import Someday from '@/pages/Someday';
-import Tags from '@/pages/Tags';
-import TagDetail from '@/pages/TagDetail';
-import Today from '@/pages/Today';
-import Trash from '@/pages/Trash';
-import Upcoming from '@/pages/Upcoming';
+
+function PageFallback() {
+  return (
+    <div className="flex h-dvh items-center justify-center">
+      <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-transparent" />
+    </div>
+  );
+}
+
+const Anytime = lazy(() => import('@/pages/Anytime'));
+const AreaDetail = lazy(() => import('@/pages/AreaDetail'));
+const Inbox = lazy(() => import('@/pages/Inbox'));
+const Logbook = lazy(() => import('@/pages/Logbook'));
+const Login = lazy(() => import('@/pages/Login'));
+const ProjectDetail = lazy(() => import('@/pages/ProjectDetail'));
+const Register = lazy(() => import('@/pages/Register'));
+const SettingsAccount = lazy(() => import('@/pages/SettingsAccount'));
+const Someday = lazy(() => import('@/pages/Someday'));
+const TagDetail = lazy(() => import('@/pages/TagDetail'));
+const Tags = lazy(() => import('@/pages/Tags'));
+const Today = lazy(() => import('@/pages/Today'));
+const Trash = lazy(() => import('@/pages/Trash'));
+const Upcoming = lazy(() => import('@/pages/Upcoming'));
 
 export const router = createBrowserRouter([
-  { path: '/login', element: <Login /> },
-  { path: '/register', element: <Register /> },
+  {
+    path: '/login',
+    element: (
+      <Suspense fallback={<PageFallback />}>
+        <Login />
+      </Suspense>
+    ),
+  },
+  {
+    path: '/register',
+    element: (
+      <Suspense fallback={<PageFallback />}>
+        <Register />
+      </Suspense>
+    ),
+  },
   {
     element: <ProtectedRoute />,
     children: [
