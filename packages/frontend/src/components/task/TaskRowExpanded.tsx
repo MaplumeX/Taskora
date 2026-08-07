@@ -40,6 +40,7 @@ import { toast } from 'sonner';
 import { ScheduledDateField } from './fields/ScheduledDateField';
 import { DueDateField } from './fields/DueDateField';
 import { TagsField } from './fields/TagsField';
+import { TaskCheckbox } from './TaskCheckbox';
 
 interface Props {
   task: TaskResponseDto;
@@ -338,18 +339,16 @@ function SubtaskRow({
 
   return (
     <li className="flex items-center gap-2 text-sm">
-      <input
-        type="checkbox"
+      <TaskCheckbox
         checked={completed}
-        onClick={(e) => e.stopPropagation()}
-        onChange={() =>
+        onToggle={() =>
           (completed ? uncompleteSubtask : completeSubtask).mutate(subtask.id, {
             onSuccess: onMutated,
           })
         }
       />
       {editing ? (
-        <input
+        <Input
           autoFocus
           value={draft}
           onChange={(e) => setDraft(e.target.value)}
@@ -366,7 +365,7 @@ function SubtaskRow({
               setEditing(false);
             }
           }}
-          className="flex-1 rounded-sm bg-transparent px-1 outline-none ring-1 ring-ring"
+          className="h-8 flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0"
         />
       ) : (
         <button
@@ -381,8 +380,11 @@ function SubtaskRow({
           {subtask.title}
         </button>
       )}
-      <button
-        className="ml-auto text-muted-foreground hover:text-destructive"
+      <Button
+        variant="ghost"
+        size="icon"
+        className="ml-auto h-8 w-8 text-muted-foreground hover:text-destructive"
+        aria-label={t('common:delete')}
         onClick={(e) => {
           e.stopPropagation();
           deleteSubtask.mutate(
@@ -392,7 +394,7 @@ function SubtaskRow({
         }}
       >
         <Trash2 className="h-3.5 w-3.5" />
-      </button>
+      </Button>
     </li>
   );
 }
