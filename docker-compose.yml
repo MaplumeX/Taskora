@@ -18,9 +18,7 @@ services:
     restart: unless-stopped
 
   backend:
-    build:
-      context: .
-      dockerfile: packages/backend/Dockerfile
+    image: ghcr.io/maplumex/taskora-backend:${IMAGE_TAG:-latest}
     environment:
       DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public"
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required in .env}
@@ -47,11 +45,7 @@ services:
     restart: unless-stopped
 
   frontend:
-    build:
-      context: .
-      dockerfile: packages/frontend/Dockerfile
-      args:
-        VITE_API_URL: ${VITE_API_URL:-/api/v1}
+    image: ghcr.io/maplumex/taskora-frontend:${IMAGE_TAG:-latest}
     depends_on:
       backend:
         condition: service_healthy
