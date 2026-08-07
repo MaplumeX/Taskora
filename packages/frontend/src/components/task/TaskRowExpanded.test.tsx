@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -56,12 +56,16 @@ const mutationMocks = vi.hoisted(() => ({
 vi.mock('@/lib/hooks/useTasks', () => ({
   taskKeys: { detail: (id: string) => ['task', id] },
   useTaskQuery: () => ({
-    data: { ...baseTask, subtasks: [] },
+    data: null,
   }),
   useCreateSubtask: () => ({
     mutate: mutationMocks.createSubtask,
     isPending: false,
   }),
+  useCompleteSubtask: () => ({ mutate: vi.fn(), isPending: false }),
+  useUncompleteSubtask: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteSubtask: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateSubtask: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateTask: () => ({ mutate: vi.fn(), isPending: false }),
   useCompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
   useUncompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
@@ -168,6 +172,10 @@ describe('TaskRowExpanded — DnD keyboard stuck regression', () => {
     await user.click(screen.getByText('My task'));
     expect(useUiInteractionStore.getState().expandedId).toBe('task-1');
 
+    // subtask block is hidden when there are no subtasks; reveal via Add subtask button
+    const addSubtaskBtn = screen.getByRole('button', { name: /Add subtask|添加子任务/ });
+    await user.click(addSubtaskBtn);
+
     // find subtask input and type + Enter
     const subtaskInput = screen.getByPlaceholderText(/Add subtask|添加子任务/) as HTMLInputElement;
     await user.type(subtaskInput, 'New subtask');
@@ -186,5 +194,69 @@ describe('TaskRowExpanded — DnD keyboard stuck regression', () => {
     const row = document.querySelector('[data-task-item]')?.parentElement as HTMLElement;
     expect(row).toBeTruthy();
     expect(row.style.opacity).not.toBe('0.45');
+  });
+});
+
+describe('TaskRowExpanded — hide subtask empty state', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useUiInteractionStore.setState({ expandedId: null, pendingAutoEditId: null });
+  });
+
+  it('hides subtask block and shows Add subtask button when no subtasks', async () => {
+    const user = userEvent.setup();
+    withQueryClient(<DndList task={renderTask} />);
+
+    await user.click(screen.getByText('My task'));
+
+    // no subtask block visible
+    expect(screen.queryByText(/Subtasks|子任务/)).not.toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/Add subtask|添加子任务/)).not.toBeInTheDocument();
+
+    // Add subtask button visible in icon row
+    expect(screen.getByRole('button', { name: /Add subtask|添加子任务/ })).toBeInTheDocument();
+  });
+
+  it('reveals subtask block with focused input on Add subtask click', async () => {
+    const user = userEvent.setup();
+    withQueryClient(<DndList task={renderTask} />);
+
+    await user.click(screen.getByText('My task'));
+
+    const addSubtaskBtn = screen.getByRole('button', { name: /Add subtask|添加子任务/ });
+    await user.click(addSubtaskBtn);
+
+    // subtask block now visible
+    expect(screen.getByText(/Subtasks|子任务/)).toBeInTheDocument();
+    const input = screen.getByPlaceholderText(/Add subtask|添加子任务/) as HTMLInputElement;
+    expect(input).toBeInTheDocument();
+    await waitFor(() => expect(document.activeElement).toBe(input));
+  });
+
+  it('shows subtask block by default when subtasks exist', async () => {
+    const user = userEvent.setup();
+    const taskWithSubtasks: TaskResponseDto = {
+      ...renderTask,
+      subtasks: [
+        {
+          id: 'sub-1',
+          title: 'Existing subtask',
+          status: TaskStatus.ACTIVE,
+          completedAt: null,
+          taskId: 'task-1',
+          sortOrder: 0,
+          createdAt: '2025-07-31T00:00:00.000Z',
+          updatedAt: '2025-07-31T00:00:00.000Z',
+        },
+      ],
+    };
+    withQueryClient(<DndList task={taskWithSubtasks} />);
+
+    await user.click(screen.getByText('My task'));
+
+    // subtask block visible by default, header shows count
+    expect(screen.getByText(/Subtasks|子任务/)).toBeInTheDocument();
+    expect(screen.getByText('Existing subtask')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText(/Add subtask|添加子任务/)).toBeInTheDocument();
   });
 });
