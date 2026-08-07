@@ -4,9 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { FeedItem } from '@taskora/shared';
 
 import { FeedItemRow } from '@/components/feed/FeedItemRow';
-import { TaskListSkeleton } from '@/components/task/TaskListSkeleton';
 import { useFeedQuery } from '@/lib/hooks/useFeed';
-import { useDelayedLoading } from '@/lib/hooks/useDelayedLoading';
 import {
   useCompleteTask,
   useUncompleteTask,
@@ -20,7 +18,6 @@ import { toast } from 'sonner';
 export default function Logbook() {
   const { t } = useTranslation();
   const { data: items = [], isLoading, isError } = useFeedQuery('logbook');
-  const showSkeleton = useDelayedLoading(isLoading);
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const completeTask = useCompleteTask();
@@ -97,9 +94,7 @@ export default function Logbook() {
   return (
     <div className="flex flex-col gap-4" onClick={handleBlankClick}>
       <h1 className="text-xl font-semibold tracking-tight">{t('nav:logbook')}</h1>
-      {showSkeleton ? (
-        <TaskListSkeleton />
-      ) : isError ? (
+      {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : !hasAny ? (
         <p className="py-8 text-center text-sm text-muted-foreground">{t('task:logbookEmpty')}</p>

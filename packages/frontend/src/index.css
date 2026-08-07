@@ -138,28 +138,4 @@
     }
   }
 
-  /* Skeleton shimmer for loading states */
-  .skeleton {
-    position: relative;
-    overflow: hidden;
-    @apply rounded-md bg-muted;
-  }
-  .skeleton::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    transform: translateX(-100%);
-    background: linear-gradient(
-      90deg,
-      transparent,
-      hsl(var(--background) / 0.6),
-      transparent
-    );
-    animation: shimmer 1.5s infinite;
-  }
-  @keyframes shimmer {
-    100% {
-      transform: translateX(100%);
-    }
-  }
 }

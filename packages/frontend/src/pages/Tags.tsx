@@ -71,16 +71,7 @@ export default function Tags() {
         </div>
       </div>
 
-      {isLoading ? (
-        <div className="flex flex-col gap-1">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex h-10 items-center gap-2 px-2">
-              <div className="skeleton h-2.5 w-2.5 shrink-0 rounded-full" />
-              <div className="skeleton h-3.5 w-32" />
-            </div>
-          ))}
-        </div>
-      ) : (
+      {isLoading ? null : (
         <>
           {groups.map((group) => (
             <TagGroupSection
