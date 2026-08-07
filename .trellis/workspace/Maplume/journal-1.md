@@ -1436,3 +1436,24 @@ Repurposed the ListPlus button in TaskRowExpanded from a subtask-block collapse 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 41: Unify subtask row styling
+
+**Date**: 2026-08-07
+**Task**: Unify subtask row styling
+**Branch**: `main`
+
+### Summary
+
+Replaced native HTML elements in SubtaskRow (TaskRowExpanded.tsx) with shadcn/ui components to match the rest of the app: TaskCheckbox for completion toggle, shadcn Input for inline title edit, shadcn Button ghost icon for delete. All stopPropagation and keyboard behavior preserved. Lint, type-check, and TaskRowExpanded tests all pass.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `73563ba` | (see git log) |
+
+### Status
+
+[OK] **Completed**
