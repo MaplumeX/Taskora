@@ -1394,3 +1394,24 @@ Fix: deleting a project from the detail page More menu left the user on an empty
 ### Status
 
 [OK] **Completed**
+
+
+## Session 39: Hide subtask section when task has no subtasks
+
+**Date**: 2026-08-07
+**Task**: Hide subtask section when task has no subtasks
+**Branch**: `main`
+
+### Summary
+
+Implemented Plan A: the subtask block in TaskRowExpanded is no longer rendered when a task has zero subtasks. Added a ListPlus 'Add subtask' button to the icon row that reveals the block (auto-focusing the input) and, when subtasks exist, toggles the block open/collapsed. Removed the noSubtasks empty-state text. Updated TaskRowExpanded tests (empty/click-to-open/with-subtasks-default) and frontend component-guidelines spec.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `7a3857f` | (see git log) |
+
+### Status
+
+[OK] **Completed**
