@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "检查 mutation 是否符合 reorder 乐观更新模式与 invalidation 策略、setQueriesData vs setQueryData 用法"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "检查未误用 Zustand 缓存服务端数据、invalidation 覆盖完整"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "检查 lint/test/build 全量通过"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "检查 onMutate 预期值推算的类型安全"}

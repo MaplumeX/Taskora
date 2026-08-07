@@ -51,31 +51,55 @@ export function useTaskQuery(id: string) {
 }
 ```
 
-### Mutation Hooks
+### Mutation Hooks（乐观更新三段式）
+
+所有高频 CRUD mutation（create / update / delete / complete / uncomplete / restore）使用乐观更新三段式：`onMutate`（cancel + snapshot + 写乐观值）→ `onError`（snapshot 回滚）→ `onSettled`（invalidate 同步真值）。UI 在请求发出后立即反映预期变化，失败时回滚，最终通过 invalidate 同步服务器真值。
 
 ```typescript
-export function useCreateTask() {
-  const queryClient = useQueryClient();
-  return useMutation({
-    mutationFn: (data: CreateTaskDto) => createTask(data),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-    },
-  });
-}
-
 // 多参数用对象解构
 export function useUpdateTask() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTaskDto }) => updateTask(id, data),
-    onSuccess: (task) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
+    onMutate: async ({ id, data }) => {
+      // 1. 取消进行中的查询，避免异步刷新覆盖乐观值
+      await queryClient.cancelQueries({ queryKey: taskKeys.all });
+      // 2. 快照列表缓存（用于 onError 回滚）
+      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all });
+      // 3. 写入预期值（立即反映到 UI）
+      queryClient.setQueriesData<TaskResponseDto[]>(
+        { queryKey: taskKeys.all },  // 前缀匹配所有 ['tasks', {...}] 变体
+        (old) => old?.map((t) => (t.id === id ? { ...t, ...data } : t)),
+      );
+      // 详情缓存也同步
+      queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
+        old ? { ...old, ...data } : old,
+      );
+      return { snapshot };
+    },
+    onError: (_err, _vars, ctx) => {
+      // 4. 失败：用 snapshot 回滚列表缓存
+      if (ctx?.snapshot) {
+        ctx.snapshot.forEach(([key, data]) => {
+          queryClient.setQueryData(key, data);
+        });
+      }
+    },
+    onSettled: (_data, _error, { id }) => {
+      // 5. 无论成败：invalidate 同步服务器真值
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
     },
   });
 }
 ```
+
+**关键设计**：
+- `getQueriesData` 返回 `[key, data][]` 数组，`onError` 逐个 `setQueryData(key, data)` 恢复
+- 列表多变体用 `setQueriesData`（前缀匹配），单条详情用 `setQueryData`（精确匹配）
+- create 类用 `crypto.randomUUID()` 生成临时 id 写入缓存，`onSuccess` 拿到服务器真值后替换临时项
+- toast 错误提示由组件层调用方在 `mutate` 的 `onError` 选项中处理，hook 层只负责缓存回滚
 
 ---
 
@@ -115,16 +139,24 @@ export const taskKeys = {
 
 ## Common Mistakes
 
+### 乐观更新遗漏 snapshot 回滚
+
+**Symptom**：请求失败后本地状态与服务器不一致（脏数据）
+
+**Cause**：`onMutate` 写了乐观值但 `onError` 没回滚，或 snapshot 为 undefined 时未做边界检查
+
+**Fix**：onMutate 必须 `getQueriesData` 取快照并返回；onError 用快照逐个 `setQueryData` 恢复；onSettled 必须 invalidate 同步真值。三段缺一不可。
+
 ### 变更后忘记 invalidate 相关 query
 
 **Symptom**：创建/更新/删除任务后列表不刷新
 
-**Fix**：所有 mutation 的 `onSuccess` 必须 invalidate 对应 query。
+**Fix**：乐观更新 mutation 的 `onSettled` 必须 invalidate 对应 query（不是 `onSuccess`）。
 ---
 
-## Reorder Mutation（乐观更新模式）
+## Reorder Mutation（半乐观更新模式）
 
-拖拽排序的 `useReorderXxx` mutation 使用半乐观更新：`onMutate` 即时重排缓存，`onError`/`onSettled` invalidate 拉取最新。
+拖拽排序的 `useReorderXxx` mutation 使用半乐观更新：`onMutate` 即时重排缓存，`onError`/`onSettled` invalidate 拉取最新。与 CRUD 三段式的区别：reorder 不做 snapshot 回滚（list 数据不大、refetch 快，复杂度匹配收益），CRUD 必须做 snapshot 回滚（脏数据危害更大）。
 
 ```typescript
 export function useReorderTasks() {

@@ -14,8 +14,8 @@ vi.mock('@/lib/api/areas.api', () => ({
   deleteArea: vi.fn(),
 }));
 
-import { getAreas, createArea } from '@/lib/api/areas.api';
-import { useAreasQuery, useCreateArea } from './useAreas';
+import { getAreas, createArea, deleteArea, updateArea } from '@/lib/api/areas.api';
+import { areaKeys, useAreasQuery, useCreateArea, useDeleteArea, useUpdateArea } from './useAreas';
 
 const mockAreas: AreaResponseDto[] = [
   {
@@ -111,5 +111,122 @@ describe('useCreateArea', () => {
 
     expect(createArea).toHaveBeenCalledWith({ title: 'Health' });
     expect(invalidateSpy).toHaveBeenCalled();
+  });
+
+  it('optimistically appends temp area, replaces with real on success', async () => {
+    const realArea: AreaResponseDto = {
+      id: 'area-real',
+      title: 'Health',
+      notes: null,
+      sortOrder: 2,
+      createdAt: '2024-01-03T00:00:00.000Z',
+      updatedAt: '2024-01-03T00:00:00.000Z',
+    };
+    vi.mocked(createArea).mockResolvedValue(realArea);
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(areaKeys.all, [...mockAreas]);
+
+    const { result } = renderHook(() => useCreateArea(), { wrapper });
+
+    result.current.mutate({ title: 'Health' });
+
+    // Immediately has a temp item
+    await waitFor(() => {
+      const listData = queryClient.getQueryData<AreaResponseDto[]>(areaKeys.all);
+      expect(listData).toHaveLength(3);
+      expect(listData?.[2].title).toBe('Health');
+    });
+
+    // After success, temp is replaced with real
+    await waitFor(() => {
+      const listData = queryClient.getQueryData<AreaResponseDto[]>(areaKeys.all);
+      expect(listData?.[2].id).toBe('area-real');
+    });
+  });
+
+  it('rolls back on error', async () => {
+    vi.mocked(createArea).mockRejectedValue(new Error('network'));
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(areaKeys.all, [...mockAreas]);
+
+    const { result } = renderHook(() => useCreateArea(), { wrapper });
+
+    await expect(result.current.mutateAsync({ title: 'Health' })).rejects.toThrow('network');
+
+    const listData = queryClient.getQueryData<AreaResponseDto[]>(areaKeys.all);
+    expect(listData).toHaveLength(2);
+  });
+});
+
+describe('useUpdateArea (optimistic)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('optimistically merges data into list and detail', async () => {
+    vi.mocked(updateArea).mockResolvedValue({ ...mockAreas[0], title: 'Updated' });
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(areaKeys.all, [...mockAreas]);
+    queryClient.setQueryData(areaKeys.detail('area-1'), mockAreas[0]);
+
+    const { result } = renderHook(() => useUpdateArea(), { wrapper });
+
+    result.current.mutate({ id: 'area-1', data: { title: 'Updated' } });
+
+    await waitFor(() => {
+      const listData = queryClient.getQueryData<AreaResponseDto[]>(areaKeys.all);
+      expect(listData?.[0].title).toBe('Updated');
+    });
+
+    const detailData = queryClient.getQueryData<AreaResponseDto>(areaKeys.detail('area-1'));
+    expect(detailData?.title).toBe('Updated');
+  });
+
+  it('rolls back on error', async () => {
+    vi.mocked(updateArea).mockRejectedValue(new Error('network'));
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(areaKeys.all, [...mockAreas]);
+    queryClient.setQueryData(areaKeys.detail('area-1'), mockAreas[0]);
+
+    const { result } = renderHook(() => useUpdateArea(), { wrapper });
+
+    await expect(
+      result.current.mutateAsync({ id: 'area-1', data: { title: 'Updated' } }),
+    ).rejects.toThrow('network');
+
+    const listData = queryClient.getQueryData<AreaResponseDto[]>(areaKeys.all);
+    expect(listData?.[0].title).toBe('Work');
+  });
+});
+
+describe('useDeleteArea (optimistic)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('optimistically removes area from list', async () => {
+    vi.mocked(deleteArea).mockResolvedValue(undefined);
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(areaKeys.all, [...mockAreas]);
+
+    const { result } = renderHook(() => useDeleteArea(), { wrapper });
+
+    result.current.mutate('area-1');
+
+    await waitFor(() => {
+      const listData = queryClient.getQueryData<AreaResponseDto[]>(areaKeys.all);
+      expect(listData).toHaveLength(1);
+    });
+  });
+
+  it('rolls back on error', async () => {
+    vi.mocked(deleteArea).mockRejectedValue(new Error('network'));
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(areaKeys.all, [...mockAreas]);
+
+    const { result } = renderHook(() => useDeleteArea(), { wrapper });
+
+    await expect(result.current.mutateAsync('area-1')).rejects.toThrow('network');
+
+    await waitFor(() => {
+      const listData = queryClient.getQueryData<AreaResponseDto[]>(areaKeys.all);
+      expect(listData).toHaveLength(2);
+    });
   });
 });
