@@ -126,9 +126,17 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 ### 日期编辑 Popover（TaskRowExpanded 内的 Popover 菜单）
 
 - 任务展开区有两个并列的日期编辑 Popover：
-  1.「计划日期」— `Calendar` 图标，编辑 `scheduledDate` + `scheduledType`（NONE/DATE/SOMEDAY 三态）
+  1.「计划日期」— `Calendar` 图标，弹出月历面板（`Calendar` 组件，基于 `react-day-picker`）+ 底部操作行（今天 / Someday / 清除），编辑 `scheduledDate` + `scheduledType`
   2.「到期」— `Clock` 图标，编辑 `dueDate`（仅 `<input type="date">`，无 scheduledType）
-- 两者都复用 `IconPopover` 组件，清空输入框时分别置为 `ScheduledType.NONE` / `null`
+- 计划日期的 `scheduledType` 由用户在面板内的动作**派生**，不再以 segmented control 预先声明：
+  - 点日历某天 → `{ scheduledType: DATE, scheduledDate }`（选中日期高亮，点选后面板保持打开可继续微调）
+  - 点「今天」→ `{ scheduledType: DATE, scheduledDate: 今天 }`
+  - 点「Someday」→ `{ scheduledType: SOMEDAY }`（Someday 按钮在当前为 SOMEDAY 时高亮 `variant="secondary"`）
+  - 点「清除」→ `{ scheduledType: NONE, scheduledDate: null }`（NONE 时清除按钮 disabled）
+  - `scheduledType === SOMEDAY` 或 `NONE` 时日历无选中日期
+- `Calendar` 组件（`src/components/ui/calendar.tsx`）基于 `react-day-picker` 的 `DayPicker`（`mode="single"`），`classNames` 走 CSS 变量（`primary`/`primary-foreground`/`accent`/`muted-foreground`/`ring`），light/dark 均正确。选中态 `bg-primary text-primary-foreground` 圆形填充；今日底部圆点标记（`after:bg-primary`），不与选中态冲突
+- `Calendar` 的 `locale` prop 由 `ScheduledDateField` 按 `i18n.language` 解析后传入（`zh-CN` / `en-US`），组件本身不依赖 i18next
+- 两者都复用 `IconPopover` 组件（计划日期 Popover 内容替换为 `ScheduledDateField`，到期仍为 `DueDateField`）
 - 更新走 `useUpdateTask`，成功后 invalidate `task.detail` 与 `['tasks']` 两个 queryKey
 
 ### 标签多选（TaskRowExpanded 内的 Popover 菜单）

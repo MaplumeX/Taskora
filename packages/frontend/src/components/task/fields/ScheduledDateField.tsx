@@ -1,69 +1,88 @@
 import { useTranslation } from 'react-i18next';
+import { zhCN, enUS } from 'react-day-picker/locale';
 
 import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
 import { ScheduledType } from '@taskora/shared';
 
-import { cn } from '@/lib/utils';
-import { toInputDateValue, fromInputDateValue } from '@/lib/utils/date';
+import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { startOfToday } from '@/lib/utils/date';
 
 interface FieldProps {
   current: TaskResponseDto;
   onPatch: (data: UpdateTaskDto) => void;
 }
 
+const LOCALE_BY_LANG: Record<string, typeof zhCN> = {
+  zh: zhCN,
+  en: enUS,
+};
+
 export function ScheduledDateField({ current, onPatch }: FieldProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
 
   const scheduledType = current.scheduledType ?? ScheduledType.NONE;
-  const dateValue = current.scheduledDate
-    ? toInputDateValue(new Date(current.scheduledDate))
-    : '';
+  const selectedDate =
+    scheduledType === ScheduledType.DATE && current.scheduledDate
+      ? new Date(current.scheduledDate)
+      : undefined;
 
-  const onScheduledTypeChange = (type: ScheduledType) =>
-    onPatch({ scheduledType: type });
+  const locale = LOCALE_BY_LANG[i18n.language] ?? enUS;
 
-  const onDateChange = (value: string) => {
-    if (value)
-      onPatch({
-        scheduledType: ScheduledType.DATE,
-        scheduledDate: fromInputDateValue(value).toISOString(),
-      });
-    else onPatch({ scheduledType: ScheduledType.NONE });
+  const handleDaySelect = (date: Date | undefined) => {
+    if (!date) return;
+    onPatch({
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: startOfTodayOrDate(date).toISOString(),
+    });
   };
 
+  const handleToday = () =>
+    onPatch({
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: startOfToday().toISOString(),
+    });
+
+  const handleSomeday = () => onPatch({ scheduledType: ScheduledType.SOMEDAY });
+
+  const handleClear = () =>
+    onPatch({ scheduledType: ScheduledType.NONE, scheduledDate: null });
+
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex gap-1">
-        {[ScheduledType.NONE, ScheduledType.DATE, ScheduledType.SOMEDAY].map(
-          (type) => (
-            <button
-              key={type}
-              type="button"
-              onClick={() => onScheduledTypeChange(type)}
-              className={cn(
-                'rounded-md px-2.5 py-1 text-xs transition-colors',
-                scheduledType === type
-                  ? 'bg-primary text-primary-foreground'
-                  : 'border border-input text-muted-foreground hover:bg-muted',
-              )}
-            >
-              {type === ScheduledType.NONE
-                ? t('common:none')
-                : type === ScheduledType.DATE
-                  ? t('task:scheduledDate')
-                  : t('task:somedayLabel')}
-            </button>
-          ),
-        )}
+    <div className="flex flex-col">
+      <Calendar
+        selected={selectedDate}
+        onSelect={handleDaySelect}
+        locale={locale}
+      />
+      <div className="flex items-center gap-1 border-t border-border/50 p-2">
+        <Button variant="ghost" size="sm" onClick={handleToday}>
+          {t('common:today')}
+        </Button>
+        <Button
+          variant={scheduledType === ScheduledType.SOMEDAY ? 'secondary' : 'ghost'}
+          size="sm"
+          onClick={handleSomeday}
+        >
+          {t('task:somedayLabel')}
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          disabled={scheduledType === ScheduledType.NONE}
+          onClick={handleClear}
+          className="ml-auto"
+        >
+          {t('common:clear')}
+        </Button>
       </div>
-      {scheduledType === ScheduledType.DATE && (
-        <input
-          type="date"
-          value={dateValue}
-          onChange={(e) => onDateChange(e.target.value)}
-          className="w-full rounded-md border border-input bg-transparent px-2 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        />
-      )}
     </div>
   );
+}
+
+/** Normalize a picked date to local midnight to avoid off-by-one ISO shifts. */
+function startOfTodayOrDate(date: Date): Date {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d;
 }
