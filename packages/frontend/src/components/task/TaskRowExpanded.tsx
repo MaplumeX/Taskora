@@ -101,12 +101,9 @@ export function TaskRowExpanded({ task, current }: Props) {
     );
   };
 
-  const toggleSubtasksOpen = () => {
-    setSubtasksOpen((prev) => {
-      const next = !prev;
-      if (next) requestAnimationFrame(() => subtaskInputRef.current?.focus());
-      return next;
-    });
+  const openSubtasks = () => {
+    setSubtasksOpen(true);
+    requestAnimationFrame(() => subtaskInputRef.current?.focus());
   };
 
   return (
@@ -261,18 +258,20 @@ export function TaskRowExpanded({ task, current }: Props) {
           <TagsField current={current} onPatch={patch} />
         </IconPopover>
 
-        <Button
-          variant="ghost"
-          size="icon"
-          className={cn('h-8 w-8', subtasksOpen ? 'text-primary' : 'text-muted-foreground')}
-          aria-label={t('task:addSubtask')}
-          onClick={(e) => {
-            e.stopPropagation();
-            toggleSubtasksOpen();
-          }}
-        >
-          <ListPlus className="h-4 w-4" />
-        </Button>
+        {subtasks.length === 0 && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 text-muted-foreground"
+            aria-label={t('task:addSubtask')}
+            onClick={(e) => {
+              e.stopPropagation();
+              openSubtasks();
+            }}
+          >
+            <ListPlus className="h-4 w-4" />
+          </Button>
+        )}
       </div>
     </div>
   );
