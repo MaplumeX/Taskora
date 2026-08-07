@@ -11,6 +11,7 @@ import { startOfToday } from '@/lib/utils/date';
 interface FieldProps {
   current: TaskResponseDto;
   onPatch: (data: UpdateTaskDto) => void;
+  onClose?: () => void;
 }
 
 const LOCALE_BY_LANG: Record<string, typeof zhCN> = {
@@ -18,7 +19,7 @@ const LOCALE_BY_LANG: Record<string, typeof zhCN> = {
   en: enUS,
 };
 
-export function ScheduledDateField({ current, onPatch }: FieldProps) {
+export function ScheduledDateField({ current, onPatch, onClose }: FieldProps) {
   const { t, i18n } = useTranslation();
 
   const scheduledType = current.scheduledType ?? ScheduledType.NONE;
@@ -35,18 +36,26 @@ export function ScheduledDateField({ current, onPatch }: FieldProps) {
       scheduledType: ScheduledType.DATE,
       scheduledDate: startOfTodayOrDate(date).toISOString(),
     });
+    onClose?.();
   };
 
-  const handleToday = () =>
+  const handleToday = () => {
     onPatch({
       scheduledType: ScheduledType.DATE,
       scheduledDate: startOfToday().toISOString(),
     });
+    onClose?.();
+  };
 
-  const handleSomeday = () => onPatch({ scheduledType: ScheduledType.SOMEDAY });
+  const handleSomeday = () => {
+    onPatch({ scheduledType: ScheduledType.SOMEDAY });
+    onClose?.();
+  };
 
-  const handleClear = () =>
+  const handleClear = () => {
     onPatch({ scheduledType: ScheduledType.NONE, scheduledDate: null });
+    onClose?.();
+  };
 
   return (
     <div className="flex flex-col">

@@ -165,17 +165,19 @@ function PickerContent({
   kind,
   current,
   patch,
+  onClose,
 }: {
   kind: Exclude<PickerKind, null>;
   current: ProjectResponseDto;
   patch: (data: UpdateProjectDto) => void;
+  onClose: () => void;
 }) {
   const fieldCurrent = current as unknown as Parameters<typeof ScheduledDateField>[0]['current'];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fieldPatch = patch as any;
 
   if (kind === 'scheduled') {
-    return <ScheduledDateField current={fieldCurrent} onPatch={fieldPatch} />;
+    return <ScheduledDateField current={fieldCurrent} onPatch={fieldPatch} onClose={onClose} />;
   }
   if (kind === 'due') {
     return <DueDateField current={fieldCurrent} onPatch={fieldPatch} />;
@@ -271,7 +273,7 @@ export function ProjectContextMenu({
         <PopoverAnchor virtualRef={containerRef} />
         <PopoverContent align="start" onClick={(e) => e.stopPropagation()}>
           {activePicker !== null && (
-            <PickerContent kind={activePicker} current={current} patch={patch} />
+            <PickerContent kind={activePicker} current={current} patch={patch} onClose={() => setActivePicker(null)} />
           )}
         </PopoverContent>
       </Popover>
@@ -334,7 +336,7 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
         <PopoverAnchor virtualRef={containerRef} />
         <PopoverContent align="end" onClick={(e) => e.stopPropagation()}>
           {activePicker !== null && (
-            <PickerContent kind={activePicker} current={current} patch={patch} />
+            <PickerContent kind={activePicker} current={current} patch={patch} onClose={() => setActivePicker(null)} />
           )}
         </PopoverContent>
       </Popover>

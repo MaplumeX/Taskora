@@ -164,7 +164,9 @@ export function TaskRowExpanded({ task, current }: Props) {
           icon={<Calendar className="h-4 w-4" />}
           active={scheduledType !== ScheduledType.NONE}
         >
-          <ScheduledDateField current={current} onPatch={patch} />
+          {(close) => (
+            <ScheduledDateField current={current} onPatch={patch} onClose={close} />
+          )}
         </IconPopover>
 
         <IconPopover
@@ -287,10 +289,11 @@ function IconPopover({
   label: string;
   icon: React.ReactNode;
   active?: boolean;
-  children: React.ReactNode;
+  children: React.ReactNode | ((close: () => void) => React.ReactNode);
 }) {
+  const [open, setOpen] = React.useState(false);
   return (
-    <Popover>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
@@ -301,7 +304,9 @@ function IconPopover({
           {icon}
         </Button>
       </PopoverTrigger>
-      <PopoverContent align="start">{children}</PopoverContent>
+      <PopoverContent align="start">
+        {typeof children === 'function' ? children(() => setOpen(false)) : children}
+      </PopoverContent>
     </Popover>
   );
 }

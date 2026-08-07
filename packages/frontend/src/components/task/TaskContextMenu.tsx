@@ -214,7 +214,11 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
         <PopoverAnchor virtualRef={containerRef} />
         <PopoverContent align="start" onClick={(e) => e.stopPropagation()}>
           {activePicker === 'scheduled' && (
-            <ScheduledDateField current={current} onPatch={patch} />
+            <ScheduledDateField
+              current={current}
+              onPatch={patch}
+              onClose={() => setActivePicker(null)}
+            />
           )}
           {activePicker === 'due' && (
             <DueDateField current={current} onPatch={patch} />
