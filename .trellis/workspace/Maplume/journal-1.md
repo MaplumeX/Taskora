@@ -1671,3 +1671,25 @@ Replaced plain Textarea with Tiptap v3 based MarkdownNotesEditor in TaskRowExpan
 ### Status
 
 [OK] **Completed**
+
+
+## Session 52: Project completed panel preserve layout and in-place edit
+
+**Date**: 2026-08-08
+**Task**: Project completed panel preserve layout and in-place edit
+**Branch**: `main`
+
+### Summary
+
+Restructured ProjectCompletedTasks to preserve pre-archive layout distribution (backend sortOrder instead of completedAt re-sort; ungrouped tasks on top, archived heading blocks below in sortOrder with their tasks grouped) and restore full in-place editing: completed task rows now expand via useTaskRowSelection, archived headings render via a new dual-state ProjectHeadingRow variant (COMPLETED hides drag handle, replaces Archive menu with Unarchive). No DndContext in completed panel — drag reorder intentionally unavailable. Updated component-guidelines spec to reflect the new conventions. 73 frontend tests pass; backend untouched.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0f10d40` | (see git log) |
+| `7892273` | (see git log) |
+
+### Status
+
+[OK] **Completed**
