@@ -1650,3 +1650,24 @@ Replaced plain Textarea with Tiptap v3 based MarkdownNotesEditor in TaskRowExpan
 ### Status
 
 [OK] **Completed**
+
+
+## Session 51: 为分组提供归档功能
+
+**Date**: 2026-08-08
+**Task**: 为分组提供归档功能
+**Branch**: `main`
+
+### Summary
+
+为项目分组标题（ProjectHeading）实现归档功能。归档 = 标记 heading 为 COMPLETED 并级联完成其下所有 ACTIVE task；取消归档 = 只恢复 heading 为 ACTIVE，task 状态不变。Prisma 新增 HeadingStatus enum + completedAt 字段；后端新增 archive/unarchive 端点、findAll 过滤 ACTIVE + includeArchived 参数、reorder 校验对齐；前端 ProjectCompletedTasks 改造为归档 heading 分组展示 + 取消归档菜单，ProjectHeadingRow 新增归档菜单项。全量测试通过（后端 147 passed / 前端 68 passed），lint/typecheck/i18n parity 均通过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `70bff57` | (see git log) |
+
+### Status
+
+[OK] **Completed**
