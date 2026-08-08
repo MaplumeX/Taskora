@@ -31,6 +31,7 @@ Zustand 用于跨组件、非服务端的客户端 UI 状态。按是否需要�
 - **持久类**（`persist` 中间件 + localStorage）：
   - `auth.store.ts`：`token`（内存态，不持久化）、`user`（持久化）、`refreshing`（内存态）。`partialize` 只持久化 `{ user }`——token 不持久化，刷新后靠启动恢复 silent refresh 获取新 token
   - `theme.store.ts`：主题 `mode`（light/dark/system）；action 内部触发 `applyTheme` 同步 DOM class，模块顶层注册 `matchMedia` listener
+  - `projectUiPrefs.store.ts`：项目详情页 UI 偏好，按 `projectId` 存储独立展开状态（`completedPanelExpanded: Record<string, boolean>`），消费方传 `projectId` 读取
 - **非持久类**（内存态，刷新即失）：
   - `uiInteraction.store.ts`：`expandedId`（任务行展开）、`pendingAutoEditId`（创建后自动进入标题编辑的一次性指令）
 

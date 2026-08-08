@@ -534,3 +534,41 @@ const offset = CIRCUMFERENCE * (1 - ratio);
 ### 与 TaskCheckbox 的差异
 
 `TaskCheckbox` 是纯二态勾选框（checked/unchecked）。`ProjectProgressRing` 在二态基础上增加进度环可视化，但点击语义相同（toggle 完成）。两者尺寸一致（18×18），共享 `active:scale-90` 动画与 stopPropagation 模式。
+
+## 已完成任务归档区（ProjectCompletedTasks）
+
+项目详情页底部有一个可折叠的已完成任务区域，组件位于 `src/components/project/ProjectCompletedTasks.tsx`，由 `ProjectDetail` 在 `ProjectTaskLayout` 下方渲染。
+
+### 数据获取与过滤
+
+- 独立调用 `useTasksQuery({ projectId, completed: true })`，与活跃任务的 `useTasksQuery({ projectId })` 缓存隔离（不同 queryKey）
+- 后端 `completed=true` 返回 ACTIVE + COMPLETED 混合，前端需过滤 `status === COMPLETED && trashedAt === null`
+- 过滤后按 `completedAt` 降序（最近完成在前），`completedAt` 为 null 时 `?? 0` 防御
+- `useCompleteTask` / `useUncompleteTask` 的 `onSettled` 已 `invalidateQueries({ queryKey: taskKeys.all })`（前缀 `['tasks']`），会自动刷新此 query，无需额外 invalidate
+
+### 折叠/展开与持久化
+
+- 展开偏好按 `projectId` 存储在 `useProjectUiPrefsStore`（Zustand + `persist`，localStorage key `taskora-project-ui-prefs`），每个项目独立记忆
+- 默认收起（`completedPanelExpanded[projectId] ?? false`）
+- 折叠条头：`ChevronRight` 图标（展开时 `rotate-90`）+ `project:completed` 文案 + 计数
+
+### 任务行复用
+
+- 复用 `TaskItem`（折叠态），传 `onToggleComplete` 调 `useUncompleteTask`，**不传 `onRowClick`**（不进入 selected/expanded 态）
+- `TaskItem` 内置 `TaskContextMenu`，归档区行因此也有右键菜单——这是复用 `TaskItem` 的结果，可接受（归档行右键改标签/删除仍有用）
+- 不参与 DnD 排序、不参与 heading 分组
+
+### 显隐规则
+
+- 无已完成任务（`completedTasks.length === 0`）→ 整块不渲染（`return null`）
+- 加载中（`isLoading`）→ `return null`（不阻塞活跃任务区）
+- 错误态（`isError`）→ `return null`（静默失败）
+
+### 持久化 UI 偏好 store 模式
+
+`src/lib/stores/projectUiPrefs.store.ts` 是「按实体 ID 存储偏好」的持久 store 模式：
+
+- Zustand + `persist` 中间件，localStorage key 用 `taskora-*` 前缀
+- state 为 `Record<entityId, boolean>` 形式，每个实体独立记忆
+- 与 `theme.store.ts`（全局偏好）的区别：按实体 ID 维度存储，消费方传 `projectId` 读取
+- 与 `uiInteraction.store.ts`（瞬态）的区别：持久化，刷新后保持
