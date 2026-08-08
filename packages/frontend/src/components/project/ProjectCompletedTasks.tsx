@@ -154,11 +154,7 @@ export function ProjectCompletedTasks({ projectId }: Props) {
                       onToggleComplete={() => handleToggle(task)}
                     />
                   ))}
-                  {tasks.length === 0 && (
-                    <p className="px-2 py-2 text-sm text-muted-foreground">
-                      {t('noTasks')}
-                    </p>
-                  )}
+
                 </div>
               </div>
             );
