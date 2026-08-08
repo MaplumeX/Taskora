@@ -14,6 +14,7 @@ import {
   completeProject,
   createProject,
   deleteProject,
+  getProject,
   getProjects,
   reorderProjects,
   restoreProject,
@@ -30,6 +31,17 @@ export function useProjectsQuery() {
   return useQuery({
     queryKey: projectKeys.all,
     queryFn: getProjects,
+  });
+}
+
+export function useProjectQuery(
+  id: string,
+  options?: { enabled?: boolean },
+) {
+  return useQuery({
+    queryKey: projectKeys.detail(id),
+    queryFn: () => getProject(id),
+    enabled: !!id && (options?.enabled ?? true),
   });
 }
 

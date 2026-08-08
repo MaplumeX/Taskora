@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "新增 useProjectQuery hook 的 queryKey/queryFn/enabled 约定，以及与 useProjectsQuery 列表缓存的失效协调"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "ProjectDetail 取数改造 + ProjectMoreMenu variant 透传约定（末项随 trashedAt 切换恢复/删除，与 ProjectFeedRow variant 切换对齐）"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "project = foundInList ?? detail 的可选类型守卫，以及兜底 UI 的 undefined 处理"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端代码质量与回归保护基线，确保非 trashed 项目路径行为不变"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "兜底提示复用 common:loadFailed key，确认无新增硬编码字符串"}
