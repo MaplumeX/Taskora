@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { FolderInput, GripVertical, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Archive, FolderInput, GripVertical, MoreHorizontal, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import type { ProjectHeadingResponseDto } from '@taskora/shared';
@@ -20,6 +20,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  useArchiveProjectHeading,
   useConvertProjectHeadingToProject,
   useDeleteProjectHeading,
   useUpdateProjectHeading,
@@ -43,6 +44,7 @@ export function ProjectHeadingRow({ heading, dragHandleProps }: Props) {
   const updateHeading = useUpdateProjectHeading(heading.projectId);
   const deleteHeading = useDeleteProjectHeading(heading.projectId);
   const convertHeading = useConvertProjectHeadingToProject(heading.projectId);
+  const archiveHeading = useArchiveProjectHeading(heading.projectId);
 
   React.useEffect(() => {
     if (!autoEdit) return;
@@ -142,6 +144,18 @@ export function ProjectHeadingRow({ heading, dragHandleProps }: Props) {
             >
               <FolderInput className="mr-2 h-4 w-4" />
               {t('project:convertToProject')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={archiveHeading.isPending}
+              onSelect={() =>
+                archiveHeading.mutate(heading.id, {
+                  onSuccess: () => toast.success(t('project:archiveSuccess')),
+                  onError: () => toast.error(t('project:archiveFailed')),
+                })
+              }
+            >
+              <Archive className="mr-2 h-4 w-4" />
+              {t('project:archive')}
             </DropdownMenuItem>
             <DropdownMenuItem
               className="text-destructive focus:bg-destructive/10 focus:text-destructive"

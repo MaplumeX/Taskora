@@ -21,5 +21,14 @@
   "convertSuccess": "Converted to project",
   "convertFailed": "Failed to convert to project",
   "notePlaceholder": "Note…",
-  "completed": "Completed"
+  "completed": "Completed",
+  "archive": "Archive",
+  "unarchive": "Unarchive",
+  "archiveHeading": "Archive heading",
+  "unarchiveHeading": "Unarchive heading",
+  "archiveSuccess": "Archived",
+  "archiveFailed": "Failed to archive",
+  "unarchiveSuccess": "Unarchived",
+  "unarchiveFailed": "Failed to unarchive",
+  "archivedHeadingCount": "{{count}} archived headings"
 }

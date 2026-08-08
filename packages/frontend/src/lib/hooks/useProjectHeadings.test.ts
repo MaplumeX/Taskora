@@ -3,6 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { createElement, type ReactNode } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectHeadingResponseDto, TaskResponseDto } from '@taskora/shared';
+import { HeadingStatus } from '@taskora/shared';
 
 vi.mock('@/lib/api/project-headings.api', () => ({
   getProjectHeadings: vi.fn(),
@@ -26,6 +27,8 @@ const headings: ProjectHeadingResponseDto[] = [
     projectId: 'project-1',
     title: 'First',
     sortOrder: 0,
+    status: HeadingStatus.ACTIVE,
+    completedAt: null,
     createdAt: '2026-07-31T00:00:00.000Z',
     updatedAt: '2026-07-31T00:00:00.000Z',
   },
@@ -53,7 +56,7 @@ describe('project heading hooks', () => {
 
     await waitFor(() => expect(result.current.isSuccess).toBe(true));
 
-    expect(getProjectHeadings).toHaveBeenCalledWith('project-1');
+    expect(getProjectHeadings).toHaveBeenCalledWith('project-1', { includeArchived: undefined });
     expect(queryClient.getQueryData(projectHeadingKeys.list('project-1'))).toEqual(headings);
     expect(queryClient.getQueryData(projectHeadingKeys.list('project-2'))).toBeUndefined();
   });
@@ -73,7 +76,7 @@ describe('project heading hooks', () => {
     ).rejects.toThrow('network');
 
     expect(invalidate).toHaveBeenCalledWith({
-      queryKey: projectHeadingKeys.list('project-1'),
+      queryKey: ['project-headings', { projectId: 'project-1' }],
     });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['tasks'] });
   });

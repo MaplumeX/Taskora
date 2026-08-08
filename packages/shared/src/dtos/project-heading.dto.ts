@@ -1,3 +1,5 @@
+import { HeadingStatus } from '../enums/heading.enum';
+
 export interface CreateProjectHeadingDto {
   projectId: string;
   title: string;
@@ -12,6 +14,8 @@ export interface ProjectHeadingResponseDto {
   projectId: string;
   title: string;
   sortOrder: number;
+  status: HeadingStatus;
+  completedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

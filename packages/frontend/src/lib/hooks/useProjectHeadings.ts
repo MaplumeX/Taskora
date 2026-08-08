@@ -8,31 +8,39 @@ import type {
 } from '@taskora/shared';
 
 import {
+  archiveProjectHeading,
   convertProjectHeadingToProject,
   createProjectHeading,
   deleteProjectHeading,
   getProjectHeadings,
   reorderProjectHeadingLayout,
+  unarchiveProjectHeading,
   updateProjectHeading,
 } from '@/lib/api/project-headings.api';
 import { taskKeys } from './useTasks';
 
 export const projectHeadingKeys = {
   all: ['project-headings'] as const,
-  list: (projectId: string) => ['project-headings', { projectId }] as const,
+  list: (projectId: string, includeArchived?: boolean) =>
+    ['project-headings', { projectId, includeArchived: includeArchived ?? false }] as const,
 };
 
-export function useProjectHeadingsQuery(projectId?: string) {
+export function useProjectHeadingsQuery(
+  projectId?: string,
+  options?: { includeArchived?: boolean },
+) {
+  const includeArchived = options?.includeArchived;
   return useQuery({
-    queryKey: projectHeadingKeys.list(projectId ?? ''),
-    queryFn: () => getProjectHeadings(projectId!),
+    queryKey: projectHeadingKeys.list(projectId ?? '', includeArchived),
+    queryFn: () => getProjectHeadings(projectId!, { includeArchived }),
     enabled: !!projectId,
   });
 }
 
 function invalidateProjectData(queryClient: ReturnType<typeof useQueryClient>, projectId: string) {
+  // Invalidate all heading query variants (active-only + includeArchived) for this project.
   void queryClient.invalidateQueries({
-    queryKey: projectHeadingKeys.list(projectId),
+    queryKey: ['project-headings', { projectId }],
   });
   void queryClient.invalidateQueries({ queryKey: taskKeys.all });
   void queryClient.invalidateQueries({ queryKey: ['feed'] });
@@ -78,6 +86,26 @@ export function useConvertProjectHeadingToProject(projectId: string) {
       // project list so the newly created project appears.
       invalidateProjectData(queryClient, projectId);
       void queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+}
+
+export function useArchiveProjectHeading(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => archiveProjectHeading(id),
+    onSuccess: () => {
+      invalidateProjectData(queryClient, projectId);
+    },
+  });
+}
+
+export function useUnarchiveProjectHeading(projectId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => unarchiveProjectHeading(id),
+    onSuccess: () => {
+      invalidateProjectData(queryClient, projectId);
     },
   });
 }

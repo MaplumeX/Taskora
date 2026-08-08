@@ -21,5 +21,14 @@
   "convertSuccess": "已转换为项目",
   "convertFailed": "转换为项目失败",
   "notePlaceholder": "备注…",
-  "completed": "已完成"
+  "completed": "已完成",
+  "archive": "归档",
+  "unarchive": "取消归档",
+  "archiveHeading": "归档标题",
+  "unarchiveHeading": "取消归档标题",
+  "archiveSuccess": "已归档",
+  "archiveFailed": "归档失败",
+  "unarchiveSuccess": "已取消归档",
+  "unarchiveFailed": "取消归档失败",
+  "archivedHeadingCount": "{{count}} 个已归档标题"
 }

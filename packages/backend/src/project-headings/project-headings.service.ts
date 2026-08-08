@@ -1,5 +1,5 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
-import { TaskStatus } from '@taskora/shared';
+import { HeadingStatus, TaskStatus } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   CreateProjectHeadingDto,
@@ -26,10 +26,17 @@ export class ProjectHeadingsService {
     }
   }
 
-  async findAll(userId: string, projectId: string) {
+  async findAll(userId: string, projectId: string, includeArchived?: boolean) {
     await this.assertProjectOwnership(userId, projectId);
+    const where: { userId: string; projectId: string; status?: HeadingStatus } = {
+      userId,
+      projectId,
+    };
+    if (!includeArchived) {
+      where.status = HeadingStatus.ACTIVE;
+    }
     return this.prisma.projectHeading.findMany({
-      where: { userId, projectId },
+      where,
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
   }
@@ -120,13 +127,73 @@ export class ProjectHeadingsService {
     });
   }
 
+  async archive(userId: string, id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const heading = await tx.projectHeading.findFirst({
+        where: { id, userId },
+        select: { id: true, projectId: true },
+      });
+      if (!heading) {
+        throw new NotFoundException('Heading not found');
+      }
+      await this.assertProjectOwnership(userId, heading.projectId, tx);
+
+      const now = new Date();
+
+      // Complete all ACTIVE tasks under the heading.
+      await tx.task.updateMany({
+        where: {
+          userId,
+          headingId: id,
+          status: TaskStatus.ACTIVE,
+          trashedAt: null,
+        },
+        data: { status: TaskStatus.COMPLETED, completedAt: now },
+      });
+
+      // Mark the heading itself as COMPLETED.
+      const updated = await tx.projectHeading.updateMany({
+        where: { id, userId, projectId: heading.projectId },
+        data: { status: HeadingStatus.COMPLETED, completedAt: now },
+      });
+      if (updated.count !== 1) {
+        throw new BadRequestException('Heading changed; refresh and retry');
+      }
+
+      return tx.projectHeading.findFirst({ where: { id, userId } });
+    });
+  }
+
+  async unarchive(userId: string, id: string) {
+    return this.prisma.$transaction(async (tx) => {
+      const heading = await tx.projectHeading.findFirst({
+        where: { id, userId },
+        select: { id: true, projectId: true },
+      });
+      if (!heading) {
+        throw new NotFoundException('Heading not found');
+      }
+      await this.assertProjectOwnership(userId, heading.projectId, tx);
+
+      const updated = await tx.projectHeading.updateMany({
+        where: { id, userId, projectId: heading.projectId },
+        data: { status: HeadingStatus.ACTIVE, completedAt: null },
+      });
+      if (updated.count !== 1) {
+        throw new BadRequestException('Heading changed; refresh and retry');
+      }
+
+      return tx.projectHeading.findFirst({ where: { id, userId } });
+    });
+  }
+
   async reorder(userId: string, dto: ReorderProjectHeadingLayoutDto) {
     return this.prisma.$transaction(async (tx) => {
       await this.assertProjectOwnership(userId, dto.projectId, tx);
 
       const [headings, visibleTasks] = await Promise.all([
         tx.projectHeading.findMany({
-          where: { userId, projectId: dto.projectId },
+          where: { userId, projectId: dto.projectId, status: HeadingStatus.ACTIVE },
           select: { id: true },
         }),
         tx.task.findMany({

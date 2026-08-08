@@ -139,6 +139,11 @@ enum ScheduledType {
   SOMEDAY
 }
 
+enum HeadingStatus {
+  ACTIVE
+  COMPLETED
+}
+
 model TagGroup {
   id        String   @id @default(uuid())
   title     String
@@ -236,16 +241,18 @@ model Subtask {
 }
 
 model ProjectHeading {
-  id        String   @id @default(uuid())
-  title     String
-  sortOrder Int      @default(0)
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  projectId String
-  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tasks     Task[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String        @id @default(uuid())
+  title       String
+  sortOrder   Int           @default(0)
+  userId      String
+  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId   String
+  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks       Task[]
+  status      HeadingStatus @default(ACTIVE)
+  completedAt DateTime?
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 
   @@index([userId])
   @@index([projectId])

@@ -26,7 +26,11 @@ export class ProjectHeadingsController {
 
   @Get()
   findAll(@Request() req: { user: { id: string } }, @Query() query: ProjectHeadingQueryDto) {
-    return this.headingsService.findAll(req.user.id, query.projectId);
+    return this.headingsService.findAll(
+      req.user.id,
+      query.projectId,
+      query.includeArchived,
+    );
   }
 
   @Post()
@@ -42,6 +46,16 @@ export class ProjectHeadingsController {
   @Post(':id/convert-to-project')
   convertToProject(@Request() req: { user: { id: string } }, @Param('id') id: string) {
     return this.headingsService.convertToProject(req.user.id, id);
+  }
+
+  @Post(':id/archive')
+  archive(@Request() req: { user: { id: string } }, @Param('id') id: string) {
+    return this.headingsService.archive(req.user.id, id);
+  }
+
+  @Post(':id/unarchive')
+  unarchive(@Request() req: { user: { id: string } }, @Param('id') id: string) {
+    return this.headingsService.unarchive(req.user.id, id);
   }
 
   @Patch(':id')

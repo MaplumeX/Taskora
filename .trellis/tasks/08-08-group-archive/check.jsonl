@@ -1,0 +1,7 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "后端质量/测试门——验证 archive/unarchive 测试覆盖"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端质量/测试门——验证 ProjectCompletedTasks 改造测试覆盖"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "check 复核错误语义——归档/取消归档异常路径"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "复核 Prisma 迁移与事务实现符合数据库规范"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "i18n key 一致性复核——归档/取消归档文案"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "DTO 类型安全复核——HeadingStatus enum 与 ProjectHeadingResponseDto 变更"}
+{"file": ".trellis/tasks/08-08-group-archive/prd.md", "reason": "对照验收标准逐条核对实现完成度"}

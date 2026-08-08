@@ -8,10 +8,13 @@ import type {
 
 import { apiClient } from './client';
 
-export function getProjectHeadings(projectId: string): Promise<ProjectHeadingResponseDto[]> {
+export function getProjectHeadings(
+  projectId: string,
+  options?: { includeArchived?: boolean },
+): Promise<ProjectHeadingResponseDto[]> {
   return apiClient
     .get<ProjectHeadingResponseDto[]>('/project-headings', {
-      params: { projectId },
+      params: { projectId, includeArchived: options?.includeArchived },
     })
     .then((response) => response.data);
 }
@@ -45,4 +48,16 @@ export function convertProjectHeadingToProject(id: string): Promise<ProjectRespo
 
 export function reorderProjectHeadingLayout(data: ReorderProjectHeadingLayoutDto): Promise<void> {
   return apiClient.post('/project-headings/reorder', data).then(() => undefined);
+}
+
+export function archiveProjectHeading(id: string): Promise<ProjectHeadingResponseDto> {
+  return apiClient
+    .post<ProjectHeadingResponseDto>(`/project-headings/${id}/archive`)
+    .then((response) => response.data);
+}
+
+export function unarchiveProjectHeading(id: string): Promise<ProjectHeadingResponseDto> {
+  return apiClient
+    .post<ProjectHeadingResponseDto>(`/project-headings/${id}/unarchive`)
+    .then((response) => response.data);
 }
