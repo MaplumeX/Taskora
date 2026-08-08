@@ -497,7 +497,7 @@ interface Props {
 }
 ```
 
-`isDone = projectStatus === COMPLETED || (total > 0 && completed === total)` → 满环 + 中心勾 + primary 实心。
+区分两个概念：`isChecked = projectStatus === COMPLETED`（实心圆 + 勾）；满环 = `total > 0 && completed === total`（进度弧满圈，无实心、无勾）。两者独立——全部任务完成但项目未标记完成时只显示满环，不显示勾。
 
 ### SVG 环形结构
 
@@ -506,13 +506,20 @@ interface Props {
 ```tsx
 const CIRCUMFERENCE = 2 * Math.PI * 7;  // ≈ 43.98
 const offset = CIRCUMFERENCE * (1 - ratio);
-// 轨道圆（muted），进度圆（primary，rotate(-90) 从顶部起始）
-// isDone 时：实心 circle + SVG path 画勾（text-primary-foreground）
+// 轨道圆（isChecked 时 text-primary，否则 muted），进度圆（primary，rotate(-90) 从顶部起始）
+// isChecked 时：实心 circle + SVG path 画勾（text-primary-foreground）
 ```
 
-- 空项目（total=0, 非完成）：空环（muted 描边，无进度弧）
-- 进行中：轨道 + 按比例填充的进度弧（`strokeLinecap: round`）
-- 全完成或项目已标记完成：实心 primary 圆 + 白色勾
+视觉状态矩阵：
+
+| 项目 status | 任务完成 | 轨道 | 进度弧 | 实心圆 | 勾 |
+|---|---|---|---|---|---|
+| ACTIVE | 0 | muted | 无 | 无 | 无 |
+| ACTIVE | 部分 | muted | primary 填充 | 无 | 无 |
+| ACTIVE | 全部 | muted | 满圈(offset=0) | 无 | 无 |
+| COMPLETED | 任意 | primary | 无 | primary | 白色 |
+
+`aria-checked` 用 `isChecked`（项目完成状态），而非满环状态。
 
 ### 点击与导航隔离
 
@@ -522,6 +529,7 @@ const offset = CIRCUMFERENCE * (1 - ratio);
 
 - `ProjectItem`（侧边栏 / Area 详情）：`onToggle` 调 `useCompleteProject` / `useUncompleteProject`，已完成态补 `line-through text-muted-foreground`
 - `ProjectFeedRow`（聚合 feed 视图）：同上，`item.status as ProjectStatus` cast 安全（`TaskStatus` 与 `ProjectStatus` 枚举值一致）
+- `ProjectDetail`（项目详情页标题左侧）：`onToggle` 调 `useCompleteProject` / `useUncompleteProject`，复用 complete/uncomplete mutation
 
 ### 与 TaskCheckbox 的差异
 

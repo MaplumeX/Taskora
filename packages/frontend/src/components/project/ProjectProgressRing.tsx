@@ -23,9 +23,7 @@ export function ProjectProgressRing({
 }: Props) {
   const { t } = useTranslation('task');
 
-  const isDone =
-    projectStatus === ProjectStatus.COMPLETED ||
-    (total > 0 && completed === total);
+  const isChecked = projectStatus === ProjectStatus.COMPLETED;
   const ratio = total > 0 ? completed / total : 0;
   const offset = CIRCUMFERENCE * (1 - ratio);
 
@@ -33,8 +31,8 @@ export function ProjectProgressRing({
     <button
       type="button"
       role="checkbox"
-      aria-checked={isDone}
-      aria-label={t(isDone ? 'markIncomplete' : 'markComplete')}
+      aria-checked={isChecked}
+      aria-label={t(isChecked ? 'markIncomplete' : 'markComplete')}
       disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();
@@ -42,7 +40,7 @@ export function ProjectProgressRing({
       }}
       className={cn(
         'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full transition-all duration-200 active:scale-90',
-        !isDone && 'hover:ring-2 hover:ring-primary/20',
+        !isChecked && 'hover:ring-2 hover:ring-primary/20',
         disabled && 'opacity-50',
       )}
     >
@@ -55,10 +53,10 @@ export function ProjectProgressRing({
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
-          className={isDone ? 'text-primary' : 'text-muted-foreground/30'}
+          className={isChecked ? 'text-primary' : 'text-muted-foreground/30'}
         />
-        {/* 进度圆（进行中且有进度时） */}
-        {!isDone && ratio > 0 && (
+        {/* 进度弧（进行中且有进度时，满环时满圈无实心无勾） */}
+        {!isChecked && ratio > 0 && (
           <circle
             cx="9"
             cy="9"
@@ -73,12 +71,12 @@ export function ProjectProgressRing({
             strokeLinecap="round"
           />
         )}
-        {/* 满环时实心填充 */}
-        {isDone && (
+        {/* 已完成时实心填充 */}
+        {isChecked && (
           <circle cx="9" cy="9" r={RADIUS} fill="currentColor" className="text-primary" />
         )}
-        {/* 中心勾 */}
-        {isDone && (
+        {/* 中心勾（仅项目已完成时） */}
+        {isChecked && (
           <path
             d="M5.5 9 L8 11.5 L12.5 6.5"
             fill="none"

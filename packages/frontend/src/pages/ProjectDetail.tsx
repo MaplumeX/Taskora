@@ -8,7 +8,7 @@ import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { useProjectHeadingsQuery } from '@/lib/hooks/useProjectHeadings';
 import { ProjectTaskLayout } from '@/components/project/ProjectTaskLayout';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
-import { TaskCheckbox } from '@/components/task/TaskCheckbox';
+import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
 import { ProjectMoreMenu } from '@/components/project/ProjectContextMenu';
 import { Textarea } from '@/components/ui/textarea';
 import { toast } from 'sonner';
@@ -52,8 +52,10 @@ export default function ProjectDetail() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
           {project ? (
-            <TaskCheckbox
-              checked={project.status === 'COMPLETED'}
+            <ProjectProgressRing
+              total={project.taskTotalCount}
+              completed={project.taskCompletedCount}
+              projectStatus={project.status}
               onToggle={() => {
                 if (!project) return;
                 const completed = project.status === 'COMPLETED';
