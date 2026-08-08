@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "展开区布局、键盘事件冒泡规则（Enter/Space stopPropagation、Escape 放行）、无边框扁平样式约定、主题 CSS 变量体系"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "组件 props 类型定义与 shared DTO 引用约定"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "可复用组件应放在 src/components/common/ 的目录约定"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "placeholder 文案沿用现有 i18n key 的约定"}
