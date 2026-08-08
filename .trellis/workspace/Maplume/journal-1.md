@@ -1500,3 +1500,24 @@ Replaced folder icon on project rows with a circular progress ring (ProjectProgr
 ### Status
 
 [OK] **Completed**
+
+
+## Session 44: Progress ring fixes: live updates, detail page, full-ring state
+
+**Date**: 2026-08-08
+**Task**: Progress ring fixes: live updates, detail page, full-ring state
+**Branch**: `main`
+
+### Summary
+
+Fixed 3 issues: (1) useTasks mutations now invalidate ['projects'] so ring updates on task status change; (2) ProjectDetail swapped TaskCheckbox for ProjectProgressRing; (3) split isDone into isChecked (COMPLETED only, shows check) vs full ring (all tasks done, shows full arc without check). Updated component-guidelines and hook-guidelines specs.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `29d1c0d` | (see git log) |
+
+### Status
+
+[OK] **Completed**
