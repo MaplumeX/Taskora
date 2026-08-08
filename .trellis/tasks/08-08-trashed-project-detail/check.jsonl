@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "核对 useProjectQuery hook 实现符合 query key/enabled 约定，未引入重复请求或缓存冲突"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "核对 ProjectMoreMenu variant 透传与既有 ProjectFeedRow variant 约定一致，spec 需补充 ProjectDetail variant 切换记录"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "核对 foundInList ?? detail 的类型安全，兜底分支无 undefined 解引用"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "核对非 trashed 项目回归基线，改动未引入额外复杂度"}
+{"file": ".trellis/tasks/08-08-trashed-project-detail/prd.md", "reason": "逐条核对验收标准是否全部满足"}
+{"file": ".trellis/tasks/08-08-trashed-project-detail/implement.md", "reason": "核对执行清单每一项已完成，验证命令已运行"}

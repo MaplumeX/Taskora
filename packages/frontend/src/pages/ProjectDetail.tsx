@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { useCompleteProject, useProjectsQuery, useUncompleteProject, useUpdateProject } from '@/lib/hooks/useProjects';
+import { useCompleteProject, useProjectQuery, useProjectsQuery, useUncompleteProject, useUpdateProject } from '@/lib/hooks/useProjects';
 import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { useProjectHeadingsQuery } from '@/lib/hooks/useProjectHeadings';
@@ -24,7 +24,11 @@ export default function ProjectDetail() {
     if (autoEdit) clearPendingAutoEditId();
   }, [autoEdit, clearPendingAutoEditId]);
   const { data: projects = [] } = useProjectsQuery();
-  const project = projects.find((p) => p.id === id);
+  const foundInList = projects.find((p) => p.id === id);
+  const { data: detail, isLoading: detailLoading, isError: detailError } = useProjectQuery(id ?? '', {
+    enabled: !foundInList,
+  });
+  const project = foundInList ?? detail;
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ projectId: id });
   const {
     data: headings = [],
@@ -81,11 +85,19 @@ export default function ProjectDetail() {
                 );
               }}
             />
+          ) : detailError && !detailLoading ? (
+            <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
           ) : (
             <h1 className="text-xl font-semibold tracking-tight">{t('project:defaultTitle')}</h1>
           )}
         </div>
-        {project && <ProjectMoreMenu project={project} current={project} />}
+        {project && (
+          <ProjectMoreMenu
+            project={project}
+            current={project}
+            variant={project.trashedAt != null ? 'trash' : 'default'}
+          />
+        )}
       </div>
 
       {project ? (
