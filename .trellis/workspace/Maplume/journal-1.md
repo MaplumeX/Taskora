@@ -1564,3 +1564,24 @@ Fixed 3 issues: (1) useTasks mutations now invalidate ['projects'] so ring updat
 ### Status
 
 [OK] **Completed**
+
+
+## Session 47: 设置中心重构与用户偏好持久化
+
+**Date**: 2026-08-08
+**Task**: 设置中心重构与用户偏好持久化
+**Branch**: `main`
+
+### Summary
+
+将设置页从'账户资料编辑器'升级为完整设置中心,含外观/账户/数据/关于四个子路由页面。后端新增 User.preferences(Json?)+三个 API(preferences CRUD/delete account/export data)。前端偏好同步层:localStorage 快速层+后端跨端同步,hydrateFromServer 在 login/session recovery/useCurrentUser 三路径触发。Calendar 支持 weekStartsOn。侧边栏齿轮按钮改为直接跳转设置页。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `13ca604` | (see git log) |
+
+### Status
+
+[OK] **Completed**
