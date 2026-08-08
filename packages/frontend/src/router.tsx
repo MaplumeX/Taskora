@@ -19,11 +19,6 @@ const Logbook = lazy(() => import('@/pages/Logbook'));
 const Login = lazy(() => import('@/pages/Login'));
 const ProjectDetail = lazy(() => import('@/pages/ProjectDetail'));
 const Register = lazy(() => import('@/pages/Register'));
-const SettingsLayout = lazy(() => import('@/components/settings/SettingsLayout'));
-const SettingsAppearance = lazy(() => import('@/pages/SettingsAppearance'));
-const SettingsAccount = lazy(() => import('@/pages/SettingsAccount'));
-const SettingsData = lazy(() => import('@/pages/SettingsData'));
-const SettingsAbout = lazy(() => import('@/pages/SettingsAbout'));
 const Someday = lazy(() => import('@/pages/Someday'));
 const TagDetail = lazy(() => import('@/pages/TagDetail'));
 const Tags = lazy(() => import('@/pages/Tags'));
@@ -66,17 +61,6 @@ export const router = createBrowserRouter([
           { path: '/tags', element: <Tags /> },
           { path: '/tags/:tagId', element: <TagDetail /> },
           { path: '/trash', element: <Trash /> },
-          {
-            path: '/settings',
-            element: <SettingsLayout />,
-            children: [
-              { index: true, element: <Navigate to="/settings/appearance" replace /> },
-              { path: 'appearance', element: <SettingsAppearance /> },
-              { path: 'account', element: <SettingsAccount /> },
-              { path: 'data', element: <SettingsData /> },
-              { path: 'about', element: <SettingsAbout /> },
-            ],
-          },
         ],
       },
     ],

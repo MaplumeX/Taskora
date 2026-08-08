@@ -83,7 +83,7 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 
 **FOUC 防护（关键）**：在 `main.tsx` 的 `ReactDOM.createRoot().render()` **之前**同步调用 `applyThemeFromStorage()`。不能等 React 渲染后再加 `.dark` class，否则首帧会浅后暗闪屏。
 
-**切换器**：`/settings/appearance` 设置页内三选一 segmented control（light / dark / system）。`SunMedium`/`Moon`/`Monitor` 图标避开 Sidebar 已用于 Today 的 `Sun`。偏好即时生效（localStorage + DOM）+ 异步同步后端（`PUT /users/me/preferences`）。
+**切换器**：设置 modal「外观」tab 内三选一 segmented control（light / dark / system）。`SunMedium`/`Moon`/`Monitor` 图标避开 Sidebar 已用于 Today 的 `Sun`。偏好即时生效（localStorage + DOM）+ 异步同步后端（`PUT /users/me/preferences`）。
 
 ---
 
@@ -168,7 +168,7 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 - **菜单项图标映射**（统一约定，勿混用）：完成 `Check` / 未完成 `Circle`、计划日期 `CalendarClock`、到期 `CalendarDays`、标签 `Tag`、转为项目 `FolderInput`、删除 `Trash2`、恢复 `RotateCcw`。
 - **分组分隔线**：语义分组间用 `<div className="-mx-1 my-1 h-px bg-muted" />`。分组规则：`[完成]` / `[日期+标签]` / `[转为项目]`（仅 default）/ `[删除/恢复]`。`AreaMoreMenu` 只有 `[标签]` / `[删除]` 两组。
 - **DropdownMenuItem 的危险项**：不使用 `MenuRow`，但在 className 上补 `focus:bg-destructive/10 focus:text-destructive`（见 `ProjectHeadingRow` 删除 heading 项）。
-- **SidebarBottomBar 设置按钮**：齿轮按钮直接跳转 `/settings/appearance`（不再有 DropdownMenu）。新增菜单项用 `FolderPlus`（新项目）/ `Layers`（新区域）图标。
+- **SidebarBottomBar 设置按钮**：齿轮按钮点击后调 `uiInteractionStore.openSettings('appearance')` 弹出设置 modal（不再 `navigate('/settings/appearance')`）。新增菜单项用 `FolderPlus`（新项目）/ `Layers`（新区域）图标。
 
 ### 右键菜单（ProjectContextMenu / ProjectMoreMenu）
 
@@ -269,7 +269,7 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 `src/components/layout/SidebarBottomBar.tsx` 抽离自 `Sidebar.tsx`，布局左右两端：
 
 - **左：新增按钮**（`Plus` + `common:add`）→ `DropdownMenu` 含 `common:newProject` / `common:newArea`。点击直接 `createProject.mutate({ title: '' })` / `createArea.mutate({ title: '' })`（后端 `@IsString()` 允许空串），成功后 `uiInteractionStore.setPendingAutoEditId(created.id)` 再 `navigate` 跳转详情页。`isPending` 时禁用菜单项防重复提交。
-- **右：设置按钮**（齿轮 `Settings`，icon-only + `aria-label`）→ 直接 `navigate('/settings/appearance')` 跳转设置页。主题 / 语言切换已移至 `/settings/appearance` 页面，不再通过 DropdownMenu。
+- **右：设置按钮**（齿轮 `Settings`，icon-only + `aria-label`）→ 点击后调 `uiInteractionStore.openSettings('appearance')` 弹出设置 modal。主题 / 语言切换在 modal「外观」tab 内，不再通过 DropdownMenu。
 
 ---
 

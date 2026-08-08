@@ -98,11 +98,7 @@ export default function SettingsAccount() {
   };
 
   return (
-    <div className="mx-auto max-w-lg">
-      <h1 className="mb-6 text-2xl font-semibold tracking-tight">
-        {t('auth:accountSettings')}
-      </h1>
-
+    <div className="flex flex-col">
       <form onSubmit={handleProfileSubmit} className="flex flex-col gap-4">
         <h2 className="text-sm font-medium text-muted-foreground">{t('auth:profile')}</h2>
 

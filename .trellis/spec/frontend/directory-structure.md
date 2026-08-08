@@ -60,7 +60,7 @@ packages/frontend/
     │   ├── task/          # 任务相关组件
     │   ├── project/       # 项目相关组件
     │   ├── area/          # 区域相关组件
-    │   ├── settings/      # 设置中心布局（SettingsLayout：左侧导航 + Outlet）
+    │   ├── settings/      # 设置 modal（SettingsModal：左侧导航 + 右侧内容，挂在 AppShell）
     │   └── ProtectedRoute.tsx  # 鉴权路由守卫（读 token/refreshing）
     └── pages/
         ├── Login.tsx

@@ -22,7 +22,7 @@ src/i18n/
     ├── zh/             # 中文资源（10 个 namespace JSON）
     └── en/             # 英文资源（同结构，key 集合必须与 zh 一致）
 
-> 语言 / 主题切换入口位于 `/settings/appearance` 设置页（`SidebarBottomBar` 齿轮按钮直接跳转）。
+> 语言 / 主题切换入口位于设置 modal 的「外观」tab（`SidebarBottomBar` 齿轮按钮点击后弹出 modal）。
 ```
 
 ### Namespace 划分

@@ -20,6 +20,7 @@ export function SidebarBottomBar() {
   const createProject = useCreateProject();
   const createArea = useCreateArea();
   const setPendingAutoEditId = useUiInteractionStore((s) => s.setPendingAutoEditId);
+  const openSettings = useUiInteractionStore((s) => s.openSettings);
 
   const handleNewProject = () => {
     createProject.mutate({ title: '' }, {
@@ -82,7 +83,7 @@ export function SidebarBottomBar() {
         size="icon"
         className="h-8 w-8 text-muted-foreground"
         aria-label={t('common:settings')}
-        onClick={() => navigate('/settings/appearance')}
+        onClick={() => openSettings('appearance')}
       >
         <Settings className="h-4 w-4" />
       </Button>

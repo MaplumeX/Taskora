@@ -74,7 +74,6 @@ export const router = createBrowserRouter([
           { path: '/areas/:id', element: <AreaDetail /> },
           { path: '/tags', element: <Tags /> },
           { path: '/tags/:tagId', element: <TagDetail /> },
-          { path: '/settings/account', element: <SettingsAccount /> },
           { path: '/trash', element: <Trash /> },
         ],
       },
