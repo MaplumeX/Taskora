@@ -114,6 +114,46 @@
   .task-complete-anim {
     animation: task-complete 280ms ease forwards;
   }
+
+  /*
+   * Notes WYSIWYG editor prose overrides.
+   * Tiptap renders rich text inside .notes-prose; we override the
+   * typography plugin's gray-scale defaults with project CSS variables so
+   * headings, links, code, and borders match the Things3 theme.
+   */
+  .notes-prose {
+    --tw-prose-body: hsl(var(--foreground));
+    --tw-prose-headings: hsl(var(--foreground));
+    --tw-prose-links: hsl(var(--primary));
+    --tw-prose-bold: hsl(var(--foreground));
+    --tw-prose-quotes: hsl(var(--muted-foreground));
+    --tw-prose-quote-borders: hsl(var(--border));
+    --tw-prose-code: hsl(var(--foreground));
+    --tw-prose-pre-bg: hsl(var(--muted));
+    --tw-prose-pre-code: hsl(var(--foreground));
+    --tw-prose-hr: hsl(var(--border));
+    --tw-prose-bullets: hsl(var(--muted-foreground));
+    --tw-prose-counters: hsl(var(--muted-foreground));
+  }
+  /*
+   * Placeholder for the empty WYSIWYG editor. Tiptap renders a non-empty
+   * `.ProseMirror > <p><br/></p>` even when the document is empty, so `:empty`
+   * never matches. The component toggles `data-empty="true"` on the wrapper
+   * via `useEditorState`; `data-placeholder` is applied directly to the
+   * `.ProseMirror` element (via `editorProps.attributes`) so that `attr()` in
+   * the `::before` pseudo reads from the pseudo's own host element.
+   */
+  .notes-prose[data-empty="true"] .ProseMirror::before {
+    content: attr(data-placeholder);
+    color: hsl(var(--muted-foreground));
+    pointer-events: none;
+    float: left;
+    height: 0;
+  }
+  .notes-prose .ProseMirror:focus {
+    outline: none;
+  }
+
   @keyframes task-complete {
     0% {
       opacity: 1;
