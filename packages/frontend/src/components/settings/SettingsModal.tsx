@@ -52,7 +52,7 @@ export function SettingsModal() {
 
   return (
     <Dialog open={settingsOpen} onOpenChange={(v) => { if (!v) closeSettings(); }}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl">
         <DialogHeader>
           <DialogTitle>{t('common:settings')}</DialogTitle>
         </DialogHeader>
