@@ -8,6 +8,7 @@ import type { ProjectHeadingResponseDto, TaskResponseDto } from '@taskora/shared
 import { HeadingStatus, ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
 
 import { useProjectUiPrefsStore } from '@/lib/stores/projectUiPrefs.store';
+import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 import { ProjectCompletedTasks } from './ProjectCompletedTasks';
 
 /* ------------- fixtures (hoisted so vi.mock can reference them) ------------- */
@@ -16,6 +17,10 @@ const queryMocks = vi.hoisted(() => ({
   useTasksQuery: vi.fn(),
   useUncompleteTask: vi.fn(),
   useProjectHeadingsQuery: vi.fn(),
+  useUpdateProjectHeading: vi.fn(),
+  useDeleteProjectHeading: vi.fn(),
+  useConvertProjectHeadingToProject: vi.fn(),
+  useArchiveProjectHeading: vi.fn(),
   useUnarchiveProjectHeading: vi.fn(),
 }));
 
@@ -41,8 +46,28 @@ vi.mock('@/lib/hooks/useTasks', () => ({
 
 vi.mock('@/lib/hooks/useProjectHeadings', () => ({
   useProjectHeadingsQuery: (...args: unknown[]) => queryMocks.useProjectHeadingsQuery(...args),
+  useUpdateProjectHeading: () => queryMocks.useUpdateProjectHeading(),
+  useDeleteProjectHeading: () => queryMocks.useDeleteProjectHeading(),
+  useConvertProjectHeadingToProject: () => queryMocks.useConvertProjectHeadingToProject(),
+  useArchiveProjectHeading: () => queryMocks.useArchiveProjectHeading(),
   useUnarchiveProjectHeading: () => queryMocks.useUnarchiveProjectHeading(),
 }));
+
+vi.mock('@/lib/hooks/useProjects', () => ({
+  useProjectsQuery: () => ({ data: [] }),
+}));
+
+vi.mock('@/lib/hooks/useAreas', () => ({
+  useAreasQuery: () => ({ data: [] }),
+}));
+
+vi.mock('@/lib/hooks/useTags', () => ({
+  useTagsQuery: () => ({ data: [] }),
+}));
+
+// useTaskRowSelection delegates to the Zustand uiInteractionStore. We let it
+// run for real so that expanded-state selection logic is exercised — just
+// reset the store between tests.
 
 /* ------------- helpers ------------- */
 
@@ -102,10 +127,17 @@ function mockHeadings(headings: ProjectHeadingResponseDto[]) {
   });
 }
 
-function mockUnarchive() {
-  const mutate = vi.fn();
-  queryMocks.useUnarchiveProjectHeading.mockReturnValue({ mutate, isPending: false });
-  return { mutate };
+function mockHeadingMutations() {
+  queryMocks.useUpdateProjectHeading.mockReturnValue({ mutate: vi.fn(), isPending: false });
+  queryMocks.useDeleteProjectHeading.mockReturnValue({ mutate: vi.fn(), isPending: false });
+  queryMocks.useConvertProjectHeadingToProject.mockReturnValue({ mutate: vi.fn(), isPending: false });
+  queryMocks.useArchiveProjectHeading.mockReturnValue({ mutate: vi.fn(), isPending: false });
+  const unarchiveMutate = vi.fn();
+  queryMocks.useUnarchiveProjectHeading.mockReturnValue({
+    mutate: unarchiveMutate,
+    isPending: false,
+  });
+  return { unarchiveMutate };
 }
 
 function makeHeading(overrides: Partial<ProjectHeadingResponseDto> = {}): ProjectHeadingResponseDto {
@@ -127,11 +159,12 @@ function makeHeading(overrides: Partial<ProjectHeadingResponseDto> = {}): Projec
 describe('ProjectCompletedTasks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    // reset persisted prefs store
+    // reset persisted prefs store + uiInteraction store
     useProjectUiPrefsStore.setState({ completedPanelExpanded: {} });
-    // default: no archived headings, unarchive mock ready
+    useUiInteractionStore.setState({ expandedId: null, pendingAutoEditId: null });
+    // default: no archived headings, heading mutations ready
     mockHeadings([]);
-    mockUnarchive();
+    mockHeadingMutations();
   });
 
   it('renders nothing when there are no completed tasks', () => {
@@ -236,46 +269,75 @@ describe('ProjectCompletedTasks', () => {
     expect(screen.queryByText('Trashed')).not.toBeInTheDocument();
   });
 
-  it('sorts completed tasks by completedAt descending', async () => {
+  it('preserves server sortOrder instead of re-sorting by completedAt', async () => {
     const user = userEvent.setup();
+    // sortOrder dictates display order: t-first (sortOrder 0) then t-second (1).
+    // completedAt desc would put t-second first — assert that does NOT happen.
     mockQuery([
-      makeTask({ id: 't-old', title: 'Old', completedAt: '2025-08-01T00:00:00.000Z' }),
-      makeTask({ id: 't-new', title: 'New', completedAt: '2025-08-10T00:00:00.000Z' }),
+      makeTask({
+        id: 't-first',
+        title: 'First',
+        sortOrder: 0,
+        completedAt: '2025-08-01T00:00:00.000Z',
+      }),
+      makeTask({
+        id: 't-second',
+        title: 'Second',
+        sortOrder: 1,
+        completedAt: '2025-08-10T00:00:00.000Z',
+      }),
     ]);
     mockUncomplete();
     withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
 
     await user.click(screen.getByRole('button', { expanded: false }));
 
-    // "New" should appear before "Old" in the DOM
-    const allItems = screen.getAllByText(/New|Old/);
-    expect(allItems[0]).toHaveTextContent('New');
-    expect(allItems[1]).toHaveTextContent('Old');
+    const allItems = screen.getAllByText(/First|Second/);
+    expect(allItems[0]).toHaveTextContent('First');
+    expect(allItems[1]).toHaveTextContent('Second');
   });
 
   /* --------------------------- archived heading grouping --------------------------- */
 
-  it('groups completed tasks under archived headings and shows flat tasks separately', async () => {
+  it('renders ungrouped tasks first, then archived heading blocks in sortOrder', async () => {
     const user = userEvent.setup();
-    const archivedHeading = makeHeading({ id: 'h-1', title: 'Sprint 1' });
-    mockHeadings([archivedHeading]);
+    const h1 = makeHeading({ id: 'h-1', title: 'Sprint 1', sortOrder: 0 });
+    const h2 = makeHeading({ id: 'h-2', title: 'Sprint 2', sortOrder: 1 });
+    mockHeadings([h1, h2]);
     mockQuery([
-      makeTask({ id: 't-grouped', title: 'Grouped task', headingId: 'h-1' }),
-      makeTask({ id: 't-flat', title: 'Flat task', headingId: null }),
+      // ungrouped tasks (headingId null) come first
+      makeTask({ id: 't-flat-1', title: 'Flat 1', headingId: null, sortOrder: 0 }),
+      makeTask({ id: 't-flat-2', title: 'Flat 2', headingId: null, sortOrder: 1 }),
+      // grouped under h-1
+      makeTask({ id: 't-g1', title: 'Grouped 1', headingId: 'h-1', sortOrder: 0 }),
+      // grouped under h-2 (empty of tasks, heading still shows)
     ]);
     mockUncomplete();
     withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
 
-    // count = 2 tasks + 1 archived heading = 3
-    expect(screen.getByText('3')).toBeInTheDocument();
+    // count = 3 tasks + 2 archived headings = 5
+    expect(screen.getByText('5')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { expanded: false }));
 
-    // Archived heading title appears as a group label
+    // Archived heading titles appear as group labels
     expect(screen.getByText('Sprint 1')).toBeInTheDocument();
-    // Both tasks are visible
-    expect(screen.getByText('Grouped task')).toBeInTheDocument();
-    expect(screen.getByText('Flat task')).toBeInTheDocument();
+    expect(screen.getByText('Sprint 2')).toBeInTheDocument();
+    // All tasks visible
+    expect(screen.getByText('Flat 1')).toBeInTheDocument();
+    expect(screen.getByText('Flat 2')).toBeInTheDocument();
+    expect(screen.getByText('Grouped 1')).toBeInTheDocument();
+
+    // Verify DOM order: flat tasks before heading blocks
+    const flat1 = screen.getByText('Flat 1');
+    const flat2 = screen.getByText('Flat 2');
+    const sprint1 = screen.getByText('Sprint 1');
+    const grouped1 = screen.getByText('Grouped 1');
+    const sprint2 = screen.getByText('Sprint 2');
+    expect(flat1.compareDocumentPosition(flat2)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(flat2.compareDocumentPosition(sprint1)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(sprint1.compareDocumentPosition(grouped1)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(grouped1.compareDocumentPosition(sprint2)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   it('displays archived heading even when it has no completed tasks', async () => {
@@ -299,13 +361,13 @@ describe('ProjectCompletedTasks', () => {
     const archivedHeading = makeHeading({ id: 'h-1', title: 'Sprint 1' });
     mockHeadings([archivedHeading]);
     mockQuery([makeTask({ id: 't-1', title: 'Task', headingId: 'h-1' })]);
-    const { mutate: unarchiveMutate } = mockUnarchive();
+    const { unarchiveMutate } = mockHeadingMutations();
     mockUncomplete();
     withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
 
     await user.click(screen.getByRole('button', { expanded: false }));
 
-    // open the archived heading's dropdown menu
+    // open the archived heading's dropdown menu (now via ProjectHeadingRow)
     await user.click(
       screen.getByRole('button', { name: /Heading actions|标题操作/ }),
     );
@@ -331,5 +393,46 @@ describe('ProjectCompletedTasks', () => {
       <ProjectCompletedTasks projectId="project-1" />,
     );
     expect(container).toBeEmptyDOMElement();
+  });
+
+  /* --------------------------- in-place editing --------------------------- */
+
+  it('expands a completed task row for editing when clicked', async () => {
+    const user = userEvent.setup();
+    mockQuery([makeTask({ id: 't1', title: 'Editable task' })]);
+    mockUncomplete();
+    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+
+    await user.click(screen.getByRole('button', { expanded: false }));
+
+    // Click the task row (the span with the title) to select
+    await user.click(screen.getByText('Editable task'));
+
+    // Click again to expand — the title Input should become visible
+    await user.click(screen.getByText('Editable task'));
+
+    // expanded state shows a title input with the task title as value
+    const input = screen.getByRole('textbox') as HTMLInputElement;
+    expect(input).toBeInTheDocument();
+    expect(input.value).toBe('Editable task');
+  });
+
+  it('enters inline edit mode when an archived heading title is clicked', async () => {
+    const user = userEvent.setup();
+    const archivedHeading = makeHeading({ id: 'h-1', title: 'Sprint 1' });
+    mockHeadings([archivedHeading]);
+    mockQuery([makeTask({ id: 't-1', title: 'Task', headingId: 'h-1' })]);
+    mockHeadingMutations();
+    mockUncomplete();
+    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+
+    await user.click(screen.getByRole('button', { expanded: false }));
+
+    // Click the heading title button to enter inline edit
+    await user.click(screen.getByRole('button', { name: 'Sprint 1' }));
+
+    // An input with the heading title should be visible
+    const input = await screen.findByDisplayValue('Sprint 1');
+    expect(input).toBeInTheDocument();
   });
 });

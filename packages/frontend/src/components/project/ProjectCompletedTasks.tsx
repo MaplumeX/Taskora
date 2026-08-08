@@ -1,26 +1,18 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronRight, MoreHorizontal, RotateCcw } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { HeadingStatus, TaskStatus } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { TaskItem } from '@/components/task/TaskItem';
-import { Button } from '@/components/ui/button';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { cn } from '@/lib/utils';
 import { useTasksQuery, useUncompleteTask } from '@/lib/hooks/useTasks';
-import {
-  useProjectHeadingsQuery,
-  useUnarchiveProjectHeading,
-} from '@/lib/hooks/useProjectHeadings';
+import { useTaskRowSelection } from '@/lib/hooks/useTaskRowSelection';
+import { useProjectHeadingsQuery } from '@/lib/hooks/useProjectHeadings';
 import { useProjectUiPrefsStore } from '@/lib/stores/projectUiPrefs.store';
+import { cn } from '@/lib/utils';
+import { ProjectHeadingRow } from './ProjectHeadingRow';
 
 interface Props {
   projectId: string;
@@ -42,17 +34,12 @@ export function ProjectCompletedTasks({ projectId }: Props) {
     (s) => s.setCompletedPanelExpanded,
   );
   const uncompleteTask = useUncompleteTask();
-  const unarchiveHeading = useUnarchiveProjectHeading(projectId);
+  const { selectedId, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
 
+  // Keep server-returned order (sortOrder asc, createdAt desc) — do NOT re-sort
+  // by completedAt. This preserves the pre-archive structural distribution.
   const completedTasks = useMemo(
-    () =>
-      mixedTasks
-        .filter((t) => t.status === TaskStatus.COMPLETED && t.trashedAt === null)
-        .sort(
-          (a, b) =>
-            new Date(b.completedAt ?? 0).getTime() -
-            new Date(a.completedAt ?? 0).getTime(),
-        ),
+    () => mixedTasks.filter((t) => t.status === TaskStatus.COMPLETED && t.trashedAt === null),
     [mixedTasks],
   );
 
@@ -61,20 +48,21 @@ export function ProjectCompletedTasks({ projectId }: Props) {
     [allHeadings],
   );
 
-  // Partition completed tasks: those under an archived heading vs. flat.
-  const { groupedTasks, flatTasks } = useMemo(() => {
+  // Partition: ungrouped tasks (no headingId or headingId not in archived set)
+  // on top, then archived heading blocks (in sortOrder) with their grouped tasks.
+  const { ungroupedTasks, groupedTasks } = useMemo(() => {
     const archivedHeadingIds = new Set(archivedHeadings.map((h) => h.id));
     const grouped: Record<string, TaskResponseDto[]> = {};
-    const flat: TaskResponseDto[] = [];
+    const ungrouped: TaskResponseDto[] = [];
     for (const task of completedTasks) {
       if (task.headingId && archivedHeadingIds.has(task.headingId)) {
         if (!grouped[task.headingId]) grouped[task.headingId] = [];
         grouped[task.headingId].push(task);
       } else {
-        flat.push(task);
+        ungrouped.push(task);
       }
     }
-    return { groupedTasks: grouped, flatTasks: flat };
+    return { ungroupedTasks: ungrouped, groupedTasks: grouped };
   }, [completedTasks, archivedHeadings]);
 
   // Loading or error: silently hide (don't block the active task area).
@@ -89,14 +77,19 @@ export function ProjectCompletedTasks({ projectId }: Props) {
     });
   };
 
-  const handleUnarchive = (headingId: string) => {
-    unarchiveHeading.mutate(headingId, {
-      onSuccess: () => toast.success(t('unarchiveSuccess')),
-      onError: () => toast.error(t('unarchiveFailed')),
-    });
-  };
-
   const totalCount = completedTasks.length + archivedHeadings.length;
+
+  const renderTask = (task: TaskResponseDto) => (
+    <TaskItem
+      key={task.id}
+      task={task}
+      selectionState={
+        expandedId === task.id ? 'expanded' : selectedId === task.id ? 'selected' : 'idle'
+      }
+      onRowClick={() => handleRowClick(task.id)}
+      onToggleComplete={() => handleToggle(task)}
+    />
+  );
 
   return (
     <div className="flex flex-col gap-1 pt-4">
@@ -114,58 +107,19 @@ export function ProjectCompletedTasks({ projectId }: Props) {
       </button>
 
       {expanded && (
-        <div className="flex flex-col">
+        <div className="flex flex-col" onClick={handleBlankClick}>
+          {ungroupedTasks.map(renderTask)}
           {archivedHeadings.map((heading) => {
             const tasks = groupedTasks[heading.id] ?? [];
             return (
-              <div key={heading.id} className="mt-2">
-                <div className="group flex h-10 items-center gap-1.5 border-b border-border pt-2">
-                  <span className="min-w-0 flex-1 truncate text-left text-sm font-semibold tracking-wide text-muted-foreground">
-                    {heading.title || t('headingPlaceholder')}
-                  </span>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        aria-label={t('headingActions')}
-                        className="h-7 w-7 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
-                      >
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        disabled={unarchiveHeading.isPending}
-                        onSelect={() => handleUnarchive(heading.id)}
-                      >
-                        <RotateCcw className="mr-2 h-4 w-4" />
-                        {t('unarchive')}
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+              <section key={heading.id} className="mt-2">
+                <ProjectHeadingRow heading={heading} />
                 <div className="flex flex-col">
-                  {tasks.map((task) => (
-                    <TaskItem
-                      key={task.id}
-                      task={task}
-                      onToggleComplete={() => handleToggle(task)}
-                    />
-                  ))}
-
+                  {tasks.map(renderTask)}
                 </div>
-              </div>
+              </section>
             );
           })}
-          {flatTasks.map((task) => (
-            <TaskItem
-              key={task.id}
-              task={task}
-              onToggleComplete={() => handleToggle(task)}
-            />
-          ))}
         </div>
       )}
     </div>

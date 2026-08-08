@@ -12,6 +12,7 @@ const mutationMocks = vi.hoisted(() => ({
   remove: vi.fn(),
   convert: vi.fn(),
   archive: vi.fn(),
+  unarchive: vi.fn(),
 }));
 
 vi.mock('@/lib/hooks/useProjectHeadings', () => ({
@@ -26,6 +27,10 @@ vi.mock('@/lib/hooks/useProjectHeadings', () => ({
   }),
   useArchiveProjectHeading: () => ({
     mutate: mutationMocks.archive,
+    isPending: false,
+  }),
+  useUnarchiveProjectHeading: () => ({
+    mutate: mutationMocks.unarchive,
     isPending: false,
   }),
 }));
@@ -153,6 +158,57 @@ describe('ProjectHeadingRow', () => {
     );
 
     expect(mutationMocks.archive).toHaveBeenCalledWith(
+      'heading-1',
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    );
+  });
+
+  /* --------------------------- archived-state variant --------------------------- */
+
+  const archivedHeading: ProjectHeadingResponseDto = {
+    ...heading,
+    status: HeadingStatus.COMPLETED,
+    completedAt: '2026-07-31T00:00:00.000Z',
+  };
+
+  it('hides the drag handle for an archived heading', () => {
+    render(<ProjectHeadingRow heading={archivedHeading} />);
+    expect(
+      screen.queryByRole('button', { name: /Drag heading|拖动标题/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('shows Unarchive (not Archive) in the menu for an archived heading', async () => {
+    const user = userEvent.setup();
+    render(<ProjectHeadingRow heading={archivedHeading} />);
+
+    await user.click(
+      screen.getByRole('button', { name: /Heading actions|标题操作/ }),
+    );
+
+    expect(
+      await screen.findByRole('menuitem', { name: /Unarchive|取消归档/ }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: /^Archive$|^归档$/ }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('unarchives the heading from the actions menu', async () => {
+    const user = userEvent.setup();
+    render(<ProjectHeadingRow heading={archivedHeading} />);
+
+    await user.click(
+      screen.getByRole('button', { name: /Heading actions|标题操作/ }),
+    );
+    await user.click(
+      await screen.findByRole('menuitem', { name: /Unarchive|取消归档/ }),
+    );
+
+    expect(mutationMocks.unarchive).toHaveBeenCalledWith(
       'heading-1',
       expect.objectContaining({
         onSuccess: expect.any(Function),
