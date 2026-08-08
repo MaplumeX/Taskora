@@ -1585,3 +1585,24 @@ Fixed 3 issues: (1) useTasks mutations now invalidate ['projects'] so ring updat
 ### Status
 
 [OK] **Completed**
+
+
+## Session 48: Settings modal refactor
+
+**Date**: 2026-08-08
+**Task**: Settings modal refactor
+**Branch**: `main`
+
+### Summary
+
+Refactored settings center from a full-page route (/settings with SettingsLayout + 4 child pages) to a global modal. New SettingsModal mounted in AppShell uses uiInteractionStore for open/tab state, reuses the 4 existing settings page components via lazy+Suspense with left-nav+right-content layout. Removed /settings routes from router.tsx, deleted SettingsLayout. Two entry points (SidebarBottomBar gear + Sidebar user menu) now call openSettings(tab). Specs updated to reflect modal mode.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `3fa326c` | (see git log) |
+
+### Status
+
+[OK] **Completed**
