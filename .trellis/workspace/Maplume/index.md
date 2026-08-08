@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 44
+- **Total Sessions**: 45
 - **Last Active**: 2026-08-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1523 | Active |
+| `journal-1.md` | ~1545 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 45 | 2026-08-08 | 项目详情页已完成任务折叠区域 | `08d0d7a`, `55a2966` | `main` |
 | 44 | 2026-08-08 | Progress ring fixes: live updates, detail page, full-ring state | `29d1c0d` | `main` |
 | 43 | 2026-08-08 | Project progress ring checkbox | `8f98607` | `main` |
 | 42 | 2026-08-07 | Calendar date picker for scheduled date field | `b4c2099`, `eed74f2` | `main` |
