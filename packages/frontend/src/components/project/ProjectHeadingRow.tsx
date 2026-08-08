@@ -1,7 +1,8 @@
 import * as React from 'react';
-import { Archive, FolderInput, GripVertical, MoreHorizontal, Trash2 } from 'lucide-react';
+import { Archive, FolderInput, GripVertical, MoreHorizontal, RotateCcw, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { HeadingStatus } from '@taskora/shared';
 import type { ProjectHeadingResponseDto } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
@@ -23,6 +24,7 @@ import {
   useArchiveProjectHeading,
   useConvertProjectHeadingToProject,
   useDeleteProjectHeading,
+  useUnarchiveProjectHeading,
   useUpdateProjectHeading,
 } from '@/lib/hooks/useProjectHeadings';
 import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
@@ -41,10 +43,12 @@ export function ProjectHeadingRow({ heading, dragHandleProps }: Props) {
   const [draft, setDraft] = React.useState(heading.title);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const archived = heading.status === HeadingStatus.COMPLETED;
   const updateHeading = useUpdateProjectHeading(heading.projectId);
   const deleteHeading = useDeleteProjectHeading(heading.projectId);
   const convertHeading = useConvertProjectHeadingToProject(heading.projectId);
   const archiveHeading = useArchiveProjectHeading(heading.projectId);
+  const unarchiveHeading = useUnarchiveProjectHeading(heading.projectId);
 
   React.useEffect(() => {
     if (!autoEdit) return;
@@ -83,14 +87,16 @@ export function ProjectHeadingRow({ heading, dragHandleProps }: Props) {
   return (
     <>
       <div className="group flex h-10 items-center gap-1.5 border-b border-border pt-2">
-        <button
-          type="button"
-          aria-label={t('project:dragHeading')}
-          className="cursor-grab rounded p-1 text-muted-foreground/60 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
-          {...dragHandleProps}
-        >
-          <GripVertical className="h-4 w-4" />
-        </button>
+        {!archived && (
+          <button
+            type="button"
+            aria-label={t('project:dragHeading')}
+            className="cursor-grab rounded p-1 text-muted-foreground/60 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
+            {...dragHandleProps}
+          >
+            <GripVertical className="h-4 w-4" />
+          </button>
+        )}
         {editing ? (
           <input
             ref={inputRef}
@@ -145,18 +151,33 @@ export function ProjectHeadingRow({ heading, dragHandleProps }: Props) {
               <FolderInput className="mr-2 h-4 w-4" />
               {t('project:convertToProject')}
             </DropdownMenuItem>
-            <DropdownMenuItem
-              disabled={archiveHeading.isPending}
-              onSelect={() =>
-                archiveHeading.mutate(heading.id, {
-                  onSuccess: () => toast.success(t('project:archiveSuccess')),
-                  onError: () => toast.error(t('project:archiveFailed')),
-                })
-              }
-            >
-              <Archive className="mr-2 h-4 w-4" />
-              {t('project:archive')}
-            </DropdownMenuItem>
+            {archived ? (
+              <DropdownMenuItem
+                disabled={unarchiveHeading.isPending}
+                onSelect={() =>
+                  unarchiveHeading.mutate(heading.id, {
+                    onSuccess: () => toast.success(t('project:unarchiveSuccess')),
+                    onError: () => toast.error(t('project:unarchiveFailed')),
+                  })
+                }
+              >
+                <RotateCcw className="mr-2 h-4 w-4" />
+                {t('project:unarchive')}
+              </DropdownMenuItem>
+            ) : (
+              <DropdownMenuItem
+                disabled={archiveHeading.isPending}
+                onSelect={() =>
+                  archiveHeading.mutate(heading.id, {
+                    onSuccess: () => toast.success(t('project:archiveSuccess')),
+                    onError: () => toast.error(t('project:archiveFailed')),
+                  })
+                }
+              >
+                <Archive className="mr-2 h-4 w-4" />
+                {t('project:archive')}
+              </DropdownMenuItem>
+            )}
             <DropdownMenuItem
               className="text-destructive focus:bg-destructive/10 focus:text-destructive"
               onSelect={() => setConfirmOpen(true)}
