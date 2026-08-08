@@ -1,6 +1,7 @@
 import { Sidebar } from './Sidebar';
 import { MainContent } from './MainContent';
 import { ContentBottomBar } from '@/components/layout/ContentBottomBar';
+import { SettingsModal } from '@/components/settings/SettingsModal';
 
 export function AppShell() {
   return (
@@ -10,6 +11,7 @@ export function AppShell() {
         <MainContent />
         <ContentBottomBar />
       </div>
+      <SettingsModal />
     </div>
   );
 }

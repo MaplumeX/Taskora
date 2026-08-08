@@ -24,6 +24,7 @@ import { useLogout } from '@/lib/hooks/useAuth';
 import { ProjectStatus } from '@taskora/shared';
 import { SidebarBottomBar } from '@/components/layout/SidebarBottomBar';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
+import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
 import { useTagsQuery } from '@/lib/hooks/useTags';
@@ -35,7 +36,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useNavigate } from 'react-router-dom';
 
 interface NavItem {
   to: string;
@@ -145,7 +145,7 @@ export function Sidebar() {
   const { t } = useTranslation();
   const user = useAuthStore((s) => s.user);
   const logout = useLogout();
-  const navigate = useNavigate();
+  const openSettings = useUiInteractionStore((s) => s.openSettings);
   const { data: allProjects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const { data: tags = [] } = useTagsQuery();
@@ -181,7 +181,7 @@ export function Sidebar() {
           <DropdownMenuContent align="start" className="w-56">
             <DropdownMenuLabel className="truncate">{user?.displayName ?? user?.email}</DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => navigate('/settings/account')}>
+            <DropdownMenuItem onClick={() => openSettings('account')}>
               <Settings className="mr-2 h-4 w-4" />
               {t('auth:accountSettings')}
             </DropdownMenuItem>
