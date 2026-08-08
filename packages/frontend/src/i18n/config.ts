@@ -11,6 +11,7 @@ import tagZh from './locales/zh/tag.json';
 import authZh from './locales/zh/auth.json';
 import searchZh from './locales/zh/search.json';
 import themeZh from './locales/zh/theme.json';
+import settingsZh from './locales/zh/settings.json';
 
 import commonEn from './locales/en/common.json';
 import navEn from './locales/en/nav.json';
@@ -21,6 +22,7 @@ import tagEn from './locales/en/tag.json';
 import authEn from './locales/en/auth.json';
 import searchEn from './locales/en/search.json';
 import themeEn from './locales/en/theme.json';
+import settingsEn from './locales/en/settings.json';
 
 export const defaultNS = 'common';
 export const namespaces = [
@@ -33,6 +35,7 @@ export const namespaces = [
   'auth',
   'search',
   'theme',
+  'settings',
 ] as const;
 
 void i18n
@@ -50,6 +53,7 @@ void i18n
         auth: authZh,
         search: searchZh,
         theme: themeZh,
+        settings: settingsZh,
       },
       en: {
         common: commonEn,
@@ -61,6 +65,7 @@ void i18n
         auth: authEn,
         search: searchEn,
         theme: themeEn,
+        settings: settingsEn,
       },
     },
     supportedLngs: ['zh', 'en'],

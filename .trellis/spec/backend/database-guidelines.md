@@ -430,8 +430,10 @@ pnpm prisma db seed                              # 填充种子数据
 
 - `email`：`@unique`，登录凭证
 - `passwordHash`：bcrypt 哈希（`bcrypt.hash(pw, 10)`），不存明文
-- `displayName` / `avatarUrl` / `timezone` / `locale`：可选 profile 字段（`String?`），由 `PUT /users/me` 更新
+- `displayName` / `avatarUrl`：可选 profile 字段（`String?`），由 `PUT /users/me` 更新
+- `preferences`：`Json?`，用户偏好（`{ theme, language, weekStartsOn }`），由 `PUT /users/me/preferences` 更新。可空，null 表示用户从未设置偏好。使用 JSON 类型而非独立列，因为偏好字段整体读写、低频写入，未来加字段不需迁移
 - `refreshTokens`：关联 `RefreshToken[]`（`onDelete: Cascade`，删除用户时自动清理 RT）
+- 所有业务关联（tasks / projects / areas / tags / tagGroups / projectHeadings / refreshTokens）均为 `onDelete: Cascade`，`prisma.user.delete` 级联清空全部用户数据（账户删除用）
 
 ### RefreshToken
 

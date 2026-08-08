@@ -19,15 +19,15 @@
 src/i18n/
 ├── config.ts           # i18next 实例配置（资源静态 import、检测、fallback）
 └── locales/
-    ├── zh/             # 中文资源（9 个 namespace JSON）
+    ├── zh/             # 中文资源（10 个 namespace JSON）
     └── en/             # 英文资源（同结构，key 集合必须与 zh 一致）
 
-> 语言 / 主题切换入口位于 `components/layout/SidebarBottomBar.tsx`（侧边栏底栏右侧“设置”按钮的下拉菜单内）。
+> 语言 / 主题切换入口位于 `/settings/appearance` 设置页（`SidebarBottomBar` 齿轮按钮直接跳转）。
 ```
 
 ### Namespace 划分
 
-按「页面/领域」切分：`common`（共享词，defaultNS）、`nav`、`task`、`project`、`area`、`tag`、`auth`、`search`、`theme`。
+按「页面/领域」切分：`common`（共享词，defaultNS）、`nav`、`task`、`project`、`area`、`tag`、`auth`、`search`、`theme`、`settings`。
 
 ### 语言检测与持久化
 
@@ -126,7 +126,7 @@ function NavRow({ item }: { item: NavItem }) {
 
 **校验**：
 ```bash
-for f in common nav task project area tag auth search theme; do
+for f in common nav task project area tag auth search theme settings; do
   diff <(jq -S 'keys' src/i18n/locales/zh/$f.json) \
        <(jq -S 'keys' src/i18n/locales/en/$f.json) && echo "✓ $f"
 done

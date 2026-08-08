@@ -1,9 +1,20 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { updateProfile, updatePassword } from '@/lib/api/users.api';
+import {
+  updateProfile,
+  updatePassword,
+  updatePreferences,
+  deleteAccount,
+  exportData,
+} from '@/lib/api/users.api';
 import { useAuthStore } from '@/lib/stores/auth.store';
 import { authKeys } from '@/lib/hooks/useAuth';
-import type { UpdateProfileDto, UpdatePasswordDto } from '@taskora/shared';
+import type {
+  UpdateProfileDto,
+  UpdatePasswordDto,
+  UpdatePreferencesDto,
+  DeleteAccountDto,
+} from '@taskora/shared';
 
 export function useUpdateProfile() {
   const queryClient = useQueryClient();
@@ -17,6 +28,7 @@ export function useUpdateProfile() {
         email: user.email,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
+        preferences: user.preferences,
       });
       void queryClient.invalidateQueries({ queryKey: authKeys.me });
     },
@@ -26,5 +38,27 @@ export function useUpdateProfile() {
 export function useUpdatePassword() {
   return useMutation({
     mutationFn: (data: UpdatePasswordDto) => updatePassword(data),
+  });
+}
+
+export function useUpdatePreferences() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: UpdatePreferencesDto) => updatePreferences(data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: authKeys.me });
+    },
+  });
+}
+
+export function useDeleteAccount() {
+  return useMutation({
+    mutationFn: (data: DeleteAccountDto) => deleteAccount(data),
+  });
+}
+
+export function useExportData() {
+  return useMutation({
+    mutationFn: () => exportData(),
   });
 }

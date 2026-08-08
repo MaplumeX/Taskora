@@ -44,7 +44,13 @@ export class AuthService {
     const passwordHash = await bcrypt.hash(dto.password, 10);
     const user = await this.prisma.user.create({
       data: { email: dto.email, passwordHash },
-      select: { id: true, email: true, displayName: true, avatarUrl: true },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        avatarUrl: true,
+        preferences: true,
+      },
     });
 
     return user;
@@ -74,6 +80,7 @@ export class AuthService {
         email: user.email,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
+        preferences: user.preferences,
       },
     };
   }
@@ -162,7 +169,13 @@ export class AuthService {
 
     const user = await this.prisma.user.findUnique({
       where: { id: row.userId },
-      select: { id: true, email: true, displayName: true, avatarUrl: true },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        avatarUrl: true,
+        preferences: true,
+      },
     });
     if (!user) {
       throw new UnauthorizedException('User not found');

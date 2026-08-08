@@ -43,14 +43,15 @@ packages/frontend/
     │   │   ├── usePageTaskContext.ts   # 路由→CreateTaskDto 上下文映射
     │   │   ├── useTheme.ts
     │   │   └── useDebouncedValue.ts
-    │   ├── stores/        # Zustand stores（auth / theme / uiInteraction）
+    │   ├── stores/        # Zustand stores（auth / theme / preferences / uiInteraction）
     │   │   ├── auth.store.ts           # token(内存) + user(持久) + refreshing
     │   │   ├── theme.store.ts          # 主题 mode + resolved + applyTheme 副作用
+    │   │   ├── preferences.store.ts    # weekStartsOn + hydrateFromServer（偏好跨端同步）
     │   │   └── uiInteraction.store.ts  # expandedId / pendingAutoEditId
     │   └── utils/         # 工具函数（utils.ts cn()、utils/date.ts 格式化、等）
     ├── i18n/              # 国际化（react-i18next）
     │   ├── config.ts      # i18next 实例配置（导出 i18n）
-    │   └── locales/{zh,en}/*.json  # 按 namespace 切分的资源（9 个 namespace）
+    │   └── locales/{zh,en}/*.json  # 按 namespace 切分的资源（10 个 namespace，含 settings）
     ├── components/
     │   ├── ui/            # shadcn/ui 组件
     │   ├── common/        # 跨域通用组件（InlineTitleEdit）
@@ -59,6 +60,7 @@ packages/frontend/
     │   ├── task/          # 任务相关组件
     │   ├── project/       # 项目相关组件
     │   ├── area/          # 区域相关组件
+    │   ├── settings/      # 设置中心布局（SettingsLayout：左侧导航 + Outlet）
     │   └── ProtectedRoute.tsx  # 鉴权路由守卫（读 token/refreshing）
     └── pages/
         ├── Login.tsx
@@ -73,7 +75,10 @@ packages/frontend/
         ├── AreaDetail.tsx
         ├── Tags.tsx
         ├── TagDetail.tsx
-        ├── SettingsAccount.tsx
+        ├── SettingsAccount.tsx     # 账户管理（资料/密码/账户删除）
+        ├── SettingsAppearance.tsx   # 外观偏好（主题/语言/周首日）
+        ├── SettingsData.tsx         # 数据导出
+        ├── SettingsAbout.tsx        # 关于
         └── Trash.tsx
 ```
 

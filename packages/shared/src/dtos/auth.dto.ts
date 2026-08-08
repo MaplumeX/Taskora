@@ -12,5 +12,8 @@ import type { UserResponseDto } from './user.dto';
 
 export interface AuthResponseDto {
   accessToken: string;
-  user: Pick<UserResponseDto, 'id' | 'email' | 'displayName' | 'avatarUrl'>;
+  user: Pick<
+    UserResponseDto,
+    'id' | 'email' | 'displayName' | 'avatarUrl' | 'preferences'
+  >;
 }

@@ -8,6 +8,7 @@ import { router } from '@/router';
 import { applyThemeFromStorage } from '@/lib/hooks/useTheme';
 import { refresh } from '@/lib/api/auth.api';
 import { useAuthStore } from '@/lib/stores/auth.store';
+import { hydrateFromServer } from '@/lib/stores/preferences.store';
 import '@/i18n/config';
 import '@/index.css';
 
@@ -34,6 +35,7 @@ async function tryRecoverSession() {
   try {
     const data = await refresh();
     setAuth(data.accessToken, data.user);
+    hydrateFromServer(data.user.preferences ?? null);
   } catch {
     clear();
   } finally {

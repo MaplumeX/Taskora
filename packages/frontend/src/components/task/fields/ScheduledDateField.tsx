@@ -7,6 +7,7 @@ import { ScheduledType } from '@taskora/shared';
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { startOfToday } from '@/lib/utils/date';
+import { usePreferencesStore } from '@/lib/stores/preferences.store';
 
 interface FieldProps {
   current: TaskResponseDto;
@@ -21,6 +22,7 @@ const LOCALE_BY_LANG: Record<string, typeof zhCN> = {
 
 export function ScheduledDateField({ current, onPatch, onClose }: FieldProps) {
   const { t, i18n } = useTranslation();
+  const weekStartsOn = usePreferencesStore((s) => s.weekStartsOn);
 
   const scheduledType = current.scheduledType ?? ScheduledType.NONE;
   const selectedDate =
@@ -63,6 +65,7 @@ export function ScheduledDateField({ current, onPatch, onClose }: FieldProps) {
         selected={selectedDate}
         onSelect={handleDaySelect}
         locale={locale}
+        weekStartsOn={weekStartsOn}
       />
       <div className="flex items-center gap-1 border-t border-border/50 p-2">
         <Button variant="ghost" size="sm" onClick={handleToday}>

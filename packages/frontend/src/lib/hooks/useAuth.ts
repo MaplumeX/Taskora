@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
+import { useEffect } from 'react';
 
 import type { LoginDto, RegisterDto } from '@taskora/shared';
 
 import { getMe, login, register, logout as logoutApi } from '@/lib/api/auth.api';
 import { useAuthStore } from '@/lib/stores/auth.store';
+import { hydrateFromServer } from '@/lib/stores/preferences.store';
 import { i18n } from '@/i18n/config';
 import { toast } from 'sonner';
 
@@ -19,6 +21,7 @@ export function useLogin() {
     mutationFn: (data: LoginDto) => login(data),
     onSuccess: (data) => {
       setAuth(data.accessToken, data.user);
+      hydrateFromServer(data.user.preferences ?? null);
       navigate('/today');
     },
     onError: (error: unknown) => {
@@ -47,11 +50,22 @@ export function useRegister() {
 
 export function useCurrentUser() {
   const token = useAuthStore((s) => s.token);
-  return useQuery({
+  const query = useQuery({
     queryKey: authKeys.me,
     queryFn: getMe,
     enabled: !!token,
   });
+
+  // Hydrate preferences (theme/language/weekStartsOn) when user identity changes.
+  // Only runs when user.id changes (login/switch) to avoid repeated side-effects
+  // on staleTime refetches.
+  useEffect(() => {
+    if (query.data?.id) {
+      hydrateFromServer(query.data.preferences ?? null);
+    }
+  }, [query.data?.id]);
+
+  return query;
 }
 
 export function useLogout() {

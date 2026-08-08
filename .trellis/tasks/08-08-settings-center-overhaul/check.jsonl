@@ -1,0 +1,9 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "检查后端控制器/服务/DTO 是否符合规范:userId 隔离、class-validator 装饰器、USER_PUBLIC_SELECT 复用、测试覆盖"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "检查 Prisma schema 变更:preferences Json? 字段、迁移文件、Cascade 语义验证"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "检查 Zustand store 模式:persist + localStorage key 前缀、偏好同步层不缓存服务端数据红线"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "检查 TanStack Query mutation:invalidate 策略、queryKey 约定、乐观更新/非乐观更新选择"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "检查 i18n:settings namespace 注册、zh/en key parity、labelKey 模式、不在模块顶层调 t()"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "检查组件:Calendar weekStartsOn prop 透传、SidebarBottomBar 齿轮按钮简化、destructive 样式、FOUC 防护未破坏"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "检查类型:DTO 从 shared 引用、无 any 滥用、shared build 刷新"}
+{"file": ".trellis/tasks/08-08-settings-center-overhaul/prd.md", "reason": "对照验收标准 AC1-AC11 逐条检查"}
+{"file": ".trellis/tasks/08-08-settings-center-overhaul/design.md", "reason": "对照技术设计检查实现一致性:API 路由、DTO 字段、同步流程、导出结构"}
