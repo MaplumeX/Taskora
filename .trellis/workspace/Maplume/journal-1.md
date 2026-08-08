@@ -1479,3 +1479,24 @@ Replaced native HTML elements in SubtaskRow (TaskRowExpanded.tsx) with shadcn/ui
 ### Status
 
 [OK] **Completed**
+
+
+## Session 43: Project progress ring checkbox
+
+**Date**: 2026-08-08
+**Task**: Project progress ring checkbox
+**Branch**: `main`
+
+### Summary
+
+Replaced folder icon on project rows with a circular progress ring (ProjectProgressRing) that visualizes task completion ratio and toggles project completion on click. Added taskTotalCount/taskCompletedCount to ProjectResponseDto and ProjectFeedItem; injected via two batched groupBy queries in ProjectsService and FeedService (no N+1, excludes subtasks, trashedAt-filtered). Updated backend/frontend specs.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8f98607` | (see git log) |
+
+### Status
+
+[OK] **Completed**
