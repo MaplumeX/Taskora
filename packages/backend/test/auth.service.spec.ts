@@ -87,6 +87,7 @@ describe('AuthService — refresh tokens', () => {
           email: 'test@example.com',
           displayName: 'Tester',
           avatarUrl: null,
+          preferences: null,
         }),
       },
       $transaction: vi.fn(async (operations: Promise<unknown>[]) => {

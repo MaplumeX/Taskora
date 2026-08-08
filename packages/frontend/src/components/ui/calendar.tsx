@@ -9,6 +9,7 @@ export type CalendarProps = {
   selected?: Date;
   onSelect: (date: Date | undefined) => void;
   locale?: Locale;
+  weekStartsOn?: 0 | 1;
   autoFocus?: boolean;
   className?: string;
 };
@@ -17,6 +18,7 @@ export function Calendar({
   selected,
   onSelect,
   locale,
+  weekStartsOn,
   autoFocus,
   className,
 }: CalendarProps) {
@@ -26,6 +28,7 @@ export function Calendar({
       selected={selected}
       onSelect={onSelect}
       locale={locale}
+      weekStartsOn={weekStartsOn}
       autoFocus={autoFocus}
       className={cn('p-3', className)}
       classNames={{

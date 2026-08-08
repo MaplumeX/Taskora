@@ -109,7 +109,7 @@ async function tryRecoverSession() {
 
 ### 持久 UI 偏好：store + persist
 
-**What**：主题（light/dark/system）等需持久化的 UI 偏好放入 Zustand + `persist` 中间件。
+**What**：主题（light/dark/system）、每周起始日等需持久化的 UI 偏好放入 Zustand + `persist` 中间件。
 
 **Why**：这类状态需跨组件广播、刷新保持、外部副作用（DOM class、matchMedia listener）。store 将副作用收敛在 action 内，消费方只读 state。比手写 `useEffect` + localStorage 更直白，也避免每个消费点重复订阅。
 
@@ -118,6 +118,26 @@ async function tryRecoverSession() {
 - `persist` + `partialize: { mode }`，localStorage key 用项目前缀 `taskora-theme`
 - 模块顶层注册 `matchMedia` listener 一次
 - `main.tsx` 在 React 渲染前同步调用 `applyThemeFromStorage()` 避免 FOUC（该函数从 localStorage 直读并 apply，与 store 初始化解耦）
+
+### 偏好跨端同步：localStorage 快速层 + 后端同步层
+
+**What**：用户偏好（theme / language / weekStartsOn）采用双层存储——localStorage 作为前端快速层（避免 FOUC、即时生效），后端 `User.preferences`（`Json?`）作为跨端同步层。
+
+**Why**：主题和语言在页面加载早期就要生效（避免 FOUC），localStorage 保证即时应用；后端 `preferences` 保证换设备后偏好同步过来。纯后端方案会在 API 返回前闪烁。
+
+**Stores**：
+- `theme.store.ts`：主题 mode（localStorage key `taskora-theme`）
+- `preferences.store.ts`：weekStartsOn（localStorage key `taskora-week-starts`）；同时导出独立 `hydrateFromServer()` 函数供非 React 代码调用
+- 语言：i18next browser detector 自动持久化（localStorage key `taskora-lang`）
+
+**Hydrate 时机（关键）**：`hydrateFromServer(prefs)` 必须在三条路径都触发，否则偏好只在特定页面才同步：
+1. **登录**：`useLogin` 的 `onSuccess` 中 `setAuth` 后调 `hydrateFromServer(data.user.preferences ?? null)`
+2. **Session recovery**：`main.tsx` 的 `tryRecoverSession` 中 `setAuth` 后调 `hydrateFromServer(data.user.preferences ?? null)`
+3. **useCurrentUser**：`useEffect` 监听 `query.data?.id` 变化时调（只在 user.id 变化时跑，避免 refetch 循环）
+
+**Hydrate 行为**：`prefs` 非 null 时覆盖 localStorage（theme/language/weekStartsOn）；`prefs` 为 null 时不覆盖（保持 localStorage 现有值，不强制回默认值）。
+
+**偏好变更流程**：用户改偏好 → 先更新 localStorage（即时生效）→ 异步 `PUT /users/me/preferences` 同步后端。同步失败 toast 提示，不回滚本地（本地已生效，回滚会闪）。
 
 ### 一次性导航指令：store 内存态
 

@@ -13,6 +13,7 @@ model User {
   passwordHash String
   displayName  String?
   avatarUrl    String?
+  preferences  Json?
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
   tasks         Task[]

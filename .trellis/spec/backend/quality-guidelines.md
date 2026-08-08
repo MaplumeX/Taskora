@@ -71,7 +71,43 @@ RT cookie 选项统一在 `refresh-token.helpers.ts`：`httpOnly: true, sameSite
 
 ### 用户自管端点
 
-`UsersController` 提供 `PUT /users/me`（profile 字段部分更新）和 `PUT /users/me/password`（改密码）。与 auth 注册/登录分离，避免 auth 模块职责过重。改密码需验证 `currentPassword`（bcrypt.compare），改 profile 字段用部分更新（仅传入字段才更新）。
+`UsersController` 提供以下端点，与 auth 注册/登录分离，避免 auth 模块职责过重：
+
+| 端点 | 功能 | 说明 |
+|------|------|------|
+| `PUT /users/me` | profile 字段部分更新 | 仅传入字段才更新 |
+| `PUT /users/me/password` | 改密码 | 需验证 `currentPassword`（bcrypt.compare） |
+| `PUT /users/me/preferences` | 更新用户偏好 | 合并语义：读现有 preferences → 浅合并 dto → 写回。preferences 是 `Json?` 字段 |
+| `DELETE /users/me` | 删除账户 | 需验证密码（bcrypt.compare），`prisma.user.delete` 级联清空所有关联（`onDelete: Cascade`） |
+| `GET /users/me/export` | 导出全部数据 | `Promise.all` 并行查全部业务表（where 含 userId），返回嵌套 JSON |
+
+### User preferences（Json? 字段）合并语义
+
+`updatePreferences` 采用读-合并-写模式（非 Prisma 原子操作）：
+
+```typescript
+const user = await this.prisma.user.findUnique({
+  where: { id: userId },
+  select: { preferences: true },
+});
+const current = (user.preferences ?? {}) as Record<string, unknown>;
+const merged = { ...current, ...dto };
+await this.prisma.user.update({
+  where: { id: userId },
+  data: { preferences: merged },
+});
+```
+
+- null preferences 起步时用空对象 `{}`
+- 浅合并：dto 中传入的字段覆盖现有值，未传入的字段保留
+- 并发写入竞态可接受（最终一致），不做乐观锁
+
+### 账户删除（物理删除 + Cascade）
+
+`deleteAccount` 是用户模块中唯一的物理 `prisma.user.delete` 触点：
+- 验证密码后直接 `prisma.user.delete({ where: { id: userId } })`
+- `User` 的所有关联（tasks / projects / areas / tags / tagGroups / projectHeadings / refreshTokens）通过 schema `onDelete: Cascade` 自动清空
+- 不需要手工级联删除各业务表
 
 ### Service 层
 - `@Injectable()` 装饰，构造函数注入 `PrismaService`（及 `JwtService` 等）
