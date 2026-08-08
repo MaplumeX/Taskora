@@ -26,12 +26,27 @@ settlement (`project:convertSuccess`/`convertFailed`,
 `useArchiveProjectHeading`, which cascade-completes the heading's ACTIVE tasks
 server-side. No navigation occurs.
 
+`ProjectHeadingRow` is a dual-state component keyed on `heading.status`: ACTIVE
+(active layout) shows the drag handle and the "Archive" menu item; COMPLETED
+(completed panel) hides the drag handle and replaces "Archive" with "Unarchive"
+(`useUnarchiveProjectHeading`, `RotateCcw` icon, toasts
+`project:unarchiveSuccess`/`unarchiveFailed`). Title inline edit, Convert to
+Project, and Delete with confirmation are shared across both states. The caller
+in the completed panel passes no `dragHandleProps`.
+
 The completed panel (`ProjectCompletedTasks`) reuses the existing expand/collapse
-toggle and displays archived headings (COMPLETED) as group title rows with a
-"⋯" menu containing only "Unarchive" (`useUnarchiveProjectHeading`). Tasks
-under an archived heading are grouped beneath it; all other completed tasks
-(task with no headingId, or headingId pointing to an ACTIVE heading) display
-flat.
+toggle and renders archived headings (COMPLETED) via the same `ProjectHeadingRow`
+used in the active layout, so each archived heading keeps full in-place edit
+capability (title inline edit / Convert to Project / Unarchive / Delete) with
+the drag handle hidden and the "Archive" menu item replaced by "Unarchive"
+(`useUnarchiveProjectHeading`). Distribution preserves the pre-archive structure:
+completed tasks keep backend `sortOrder` (no `completedAt` re-sort), ungrouped
+completed tasks (no `headingId`, or `headingId` pointing to an ACTIVE heading)
+display flat at the top, followed by archived heading blocks in `sortOrder`
+with their tasks grouped beneath. Completed task rows pass `onRowClick` +
+`selectionState` and reuse `useTaskRowSelection`, so they expand into
+`TaskRowExpanded` for in-place editing just like active rows. The panel is not
+wrapped in a `DndContext`, so drag reorder is unavailable by design.
 
 > How components are built in this project.
 
@@ -658,7 +673,7 @@ const offset = CIRCUMFERENCE * (1 - ratio);
 
 - 独立调用 `useTasksQuery({ projectId, completed: true })`，与活跃任务的 `useTasksQuery({ projectId })` 缓存隔离（不同 queryKey）
 - 后端 `completed=true` 返回 ACTIVE + COMPLETED 混合，前端需过滤 `status === COMPLETED && trashedAt === null`
-- 过滤后按 `completedAt` 降序（最近完成在前），`completedAt` 为 null 时 `?? 0` 防御
+- **保留后端 `sortOrder` 顺序**，不再按 `completedAt` 降序重排——已完成任务与归档分组各自保留归档前的相对位置，还原“归档前结构分布”
 - `useCompleteTask` / `useUncompleteTask` 的 `onSettled` 已 `invalidateQueries({ queryKey: taskKeys.all })`（前缀 `['tasks']`），会自动刷新此 query，无需额外 invalidate
 
 ### 折叠/展开与持久化
@@ -667,11 +682,20 @@ const offset = CIRCUMFERENCE * (1 - ratio);
 - 默认收起（`completedPanelExpanded[projectId] ?? false`）
 - 折叠条头：`ChevronRight` 图标（展开时 `rotate-90`）+ `project:completed` 文案 + 计数
 
-### 任务行复用
+### 分布与分组结构
 
-- 复用 `TaskItem`（折叠态），传 `onToggleComplete` 调 `useUncompleteTask`，**不传 `onRowClick`**（不进入 selected/expanded 态）
-- `TaskItem` 内置 `TaskContextMenu`，归档区行因此也有右键菜单——这是复用 `TaskItem` 的结果，可接受（归档行右键改标签/删除仍有用）
-- 不参与 DnD 排序、不参与 heading 分组
+- `archivedHeadings = allHeadings.filter(status === COMPLETED)`（后端已按 `sortOrder` 返回）
+- `ungroupedTasks`：`completedTasks` 中 `headingId` 为空或不在 `archivedHeadingIds` 集合者（含 `headingId` 指向 ACTIVE 分组的已完成任务）
+- 渲染顺序：`ungroupedTasks` 在上 → 各 `archivedHeading` 块按 `sortOrder` 依次，每个块内任务留在该分组下（按 `sortOrder`）
+- 这保留了归档前“无分组在上、分组在各自位置、分组内任务归属不变”的结构感
+
+### 任务行复用与在位编辑
+
+- 复用 `TaskItem`，传 `onToggleComplete` 调 `useUncompleteTask`，**并传 `onRowClick` + `selectionState`**，使已完成任务可展开行内编辑（与活跃区一致）
+- 调用 `useTaskRowSelection()` 获取 `selectedId` / `expandedId` / `handleRowClick` / `handleBlankClick`；`expandedId` 来自 `uiInteractionStore`（全局单例），与活跃区共用同一展开槽——同一时刻只有一个任务行展开，两区不会互相干扰
+- 展开后渲染 `TaskRowExpanded`，可改标题/notes/日期/标签/子任务
+- `TaskItem` 内置 `TaskContextMenu`，归档区行因此也有右键菜单
+- **不包 `DndContext`**：已完成区不参与拖拽排序（想调整顺序须先取消归档/取消完成回到活跃区再排）
 
 ### 显隐规则
 
