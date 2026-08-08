@@ -40,7 +40,6 @@ export function ProjectProgressRing({
       }}
       className={cn(
         'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full transition-all duration-200 active:scale-90',
-        !isChecked && 'hover:ring-2 hover:ring-primary/20',
         disabled && 'opacity-50',
       )}
     >
