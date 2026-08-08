@@ -1,13 +1,19 @@
-import { Folder } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
+import { ProjectStatus } from '@taskora/shared';
 import type { ProjectFeedItem, ProjectResponseDto } from '@taskora/shared';
 
 import { cn } from '@/lib/utils';
 import { TaskDateBadge } from '@/components/task/TaskDateBadge';
 import { TaskDueDateBadge } from '@/components/task/TaskDueDateBadge';
 import { ProjectContextMenu } from '@/components/project/ProjectContextMenu';
+import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
+import {
+  useCompleteProject,
+  useUncompleteProject,
+} from '@/lib/hooks/useProjects';
 
 interface Props {
   item: ProjectFeedItem;
@@ -16,10 +22,18 @@ interface Props {
 export function ProjectFeedRow({ item }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const completeProject = useCompleteProject();
+  const uncompleteProject = useUncompleteProject();
   const completed = item.status === 'COMPLETED';
   const trashed = item.trashedAt !== null;
 
   const projectCast = item as unknown as ProjectResponseDto;
+
+  const handleToggle = () => {
+    (completed ? uncompleteProject : completeProject).mutate(item.id, {
+      onError: () => toast.error(t('common:saveFailed')),
+    });
+  };
 
   return (
     <ProjectContextMenu
@@ -37,11 +51,11 @@ export function ProjectFeedRow({ item }: Props) {
         role="button"
         tabIndex={0}
       >
-        <Folder
-          className={cn(
-            'h-4 w-4 shrink-0 text-primary',
-            (completed || trashed) && 'text-muted-foreground',
-          )}
+        <ProjectProgressRing
+          total={item.taskTotalCount}
+          completed={item.taskCompletedCount}
+          projectStatus={item.status as ProjectStatus}
+          onToggle={handleToggle}
         />
         <span
           className={cn(

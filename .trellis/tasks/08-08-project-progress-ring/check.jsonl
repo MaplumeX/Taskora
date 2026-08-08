@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality gates to verify against"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend quality gates and test conventions"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Verify new component follows project conventions"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Verify DTO type changes flow correctly to frontend"}

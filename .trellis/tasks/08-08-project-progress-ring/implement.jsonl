@@ -1,0 +1,8 @@
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Prisma query patterns, groupBy conventions, project-heading layout contract"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "NestJS module layout — projects/feed modules location"}
+{"file": ".trellis/spec/backend/quality-guidelines.md", "reason": "Backend quality gates and test conventions"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "React component structure, shadcn/ui usage, project row conventions"}
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Frontend file placement for new ProjectProgressRing component"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "i18n key conventions for aria-labels"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "TanStack Query cache invalidation patterns for project mutations"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Shared DTO type flow from backend to frontend"}

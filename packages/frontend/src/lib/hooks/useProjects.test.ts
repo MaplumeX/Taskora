@@ -47,6 +47,8 @@ const baseProject: ProjectResponseDto = {
   completedAt: null,
   trashedAt: null,
   tags: [],
+  taskTotalCount: 0,
+  taskCompletedCount: 0,
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-01T00:00:00.000Z',
 };
