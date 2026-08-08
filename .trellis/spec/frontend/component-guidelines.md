@@ -204,6 +204,99 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 
 ---
 
+## 备注 Markdown WYSIWYG 编辑器（MarkdownNotesEditor）
+
+任务备注（`TaskRowExpanded`）与项目备注（`ProjectDetail`）使用可复用组件 `src/components/common/MarkdownNotesEditor.tsx`，基于 Tiptap v3 实现所见即所得编辑。后端 `notes` 字段仍存 Markdown 字符串，后端零改动。
+
+### 选型与依赖
+
+- `@tiptap/react`（MIT）— React 封装，`useEditor` + `EditorContent`
+- `@tiptap/starter-kit`（MIT）— 基础节点集合（标题/列表/引用/代码块/分隔线/链接等），v3 已内置 Link 扩展
+- `@tiptap/markdown`（MIT，官方）— Markdown 双向解析/序列化，通过 module augmentation 给 `Editor` 添加 `getMarkdown()` 方法、给 `EditorOptions` 添加 `contentType: 'markdown'` 选项
+- `@tailwindcss/typography`（MIT）— `.prose` 排版样式
+
+不选 Lexical 的原因：Tiptap 的 React API 更直观，Markdown 双向转换有官方扩展，对备注这种轻量场景上手成本更低。
+
+### 组件契约
+
+```tsx
+interface MarkdownNotesEditorProps {
+  value: string;            // Markdown 字符串
+  onChange: (md: string) => void;   // 内容变化回调（同步本地 state）
+  onBlurCommit: () => void;        // 失焦提交回调（保留失焦提交语义）
+  placeholder?: string;
+}
+```
+
+### 数据流
+
+```
+Markdown 字符串 (props.value)
+  → useEditor({ content: value, contentType: 'markdown' })  [挂载]
+  → ProseMirror 内部文档 (所见即所得编辑)
+  → onUpdate → editor.getMarkdown() → onChange(md)  [本地 state 同步]
+  → onBlur → onBlurCommit() → patch({ notes: md })  [失焦保存]
+```
+
+### 外部 value 同步（防循环更新）
+
+`useEditor` 在初始化时绑定 `content`，后续外部 `value` 变化（如 server refresh）需用 `useEffect` 监听并调 `editor.commands.setContent(value, { contentType: 'markdown' })`。`setContent` 会触发 `onUpdate`，需用 ref（`skipNextUpdate`）跳过该次 `onChange`，否则会 echo 回父组件形成循环。仅在 `value !== editor.getMarkdown()` 时才 `setContent`，避免编辑中 caret 被 clobber。
+
+### Placeholder 实现
+
+Tiptap 空文档渲染 `.ProseMirror > <p><br class="ProseMirror-trailingBreak"></p>`，wrapper 永远非 `:empty`，不能用 CSS `:empty` 伪类。
+
+方案：用 `useEditorState` 跟踪 `editor.isEmpty`，在 wrapper 上设 `data-empty="true|false"`；`data-placeholder` 通过 `editorProps.attributes` 直接挂在 `.ProseMirror` 元素上（不是 React wrapper div），CSS `attr()` 读取伪元素宿主的属性。CSS：
+
+```css
+.notes-prose[data-empty="true"] .ProseMirror::before {
+  content: attr(data-placeholder);
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+```
+
+placeholder prop 变化时（如 i18n 语言切换）用 `editor.setOptions({ editorProps })` 重新应用。
+
+### 样式约定
+
+- 外层 `className="prose prose-sm dark:prose-invert notes-prose min-h-[60px] resize-none border-0 px-0 shadow-none focus-visible:ring-0"`，沿用无边框内嵌文本风格。
+- `.notes-prose` 自定义类用 CSS 变量覆盖 typography 插件的灰色系默认值（`--tw-prose-body` / `--tw-prose-headings` / `--tw-prose-links` 等映射到 `--foreground` / `--primary` / `--border` / `--muted-foreground`）。
+- `.ProseMirror:focus { outline: none }` 去掉默认 focus outline。
+
+---
+
+### Common Mistake: Tiptap 编辑器键盘 stopPropagation 用 capture 阶段阻断 ProseMirror 输入
+
+**Symptom**：Tiptap 编辑器中按 Enter 不换行，按 Space 不输入空格，编辑器无法正常输入。
+
+**Cause**：在 `EditorContent` 的 wrapper div 上用 `onKeyDownCapture`（capture 阶段）`stopPropagation`。ProseMirror 在 `.ProseMirror` contenteditable 上注册的 native `addEventListener('keydown', …)` 在 at-target / bubble 阶段触发。capture 阶段 `stopPropagation` 会阻止事件下传到 `.ProseMirror` 目标元素，ProseMirror 的 keymap（如 Enter → splitBlock）永远收不到事件。
+
+**Fix**：改用 `onKeyDown`（bubble 阶段）`stopPropagation`。让 ProseMirror 先在 at-target 处理完 keymap（插入段落/空格），事件冒泡到 wrapper 时再 `stopPropagation` 阻断外层 sortable 的 dnd-kit `onKeyDown` listener。Enter/Space 仍被阻止冒泡到 dnd-kit KeyboardSensor，Escape 仍放行触发行折叠——与原 Textarea 的 `onKeyDown` pattern 对齐。
+
+```tsx
+// ✅ Correct — bubble phase, ProseMirror processes keymap first
+<EditorContent
+  onKeyDown={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.stopPropagation();
+    }
+    // Escape 不 stopPropagation，让事件冒泡到 TaskItem 触发折叠
+  }}
+/>
+
+// ❌ Wrong — capture phase blocks ProseMirror keymap
+<EditorContent
+  onKeyDownCapture={(e) => {
+    if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
+  }}
+/>
+```
+
+---
+
 ## 子任务区按需渲染（TaskRowExpanded）
 
 子任务区（`Separator` + 子任务标题 + 列表 + 添加子任务 Input）**默认不渲染**，由本地状态 `subtasksOpen`（初始值 = `subtasks.length > 0`）控制可见性：
@@ -231,7 +324,7 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 - `PopoverContent`：`onClick` 需 `stopPropagation`（Radix Popover 通过 Portal 渲染，事件仍会冒泡到 document）
 - 子任务编辑 input：`onClick` 需 `stopPropagation`
 - checkbox：已有 `stopPropagation`，不参与状态机
-- **可编辑控件（Input/Textarea）的 `onKeyDown`**：对 `Enter` / `Space` 必须 `e.stopPropagation()`。`SortableTask` / `SortableTaskItem` 把 `{...attributes} {...listeners}` 铺在整行外层 div 上，而 dnd-kit 的 `KeyboardSensor` 默认把 Enter/Space 当作"开始拖拽"按键。若不阻断，在子任务 Input 按 Enter 提交、或在备注 Textarea 按 Enter 换行时，keydown 会冒泡到 listeners 启动键盘拖拽；单元素 `SortableContext` 无可换位落点，`isDragging` 卡在 `true`、行半透明不恢复，且 Space 会被 KeyboardSensor `preventDefault` 吞掉导致空格字符丢失。Escape **不** stopPropagation，让事件冒泡到 `TaskItem` 根 div 的 `onKeyDown` 触发折叠。
+- **可编辑控件（Input/Textarea/Tiptap EditorContent）的 `onKeyDown`**：对 `Enter` / `Space` 必须 `e.stopPropagation()`。`SortableTask` / `SortableTaskItem` 把 `{...attributes} {...listeners}` 铺在整行外层 div 上，而 dnd-kit 的 `KeyboardSensor` 默认把 Enter/Space 当作"开始拖拽"按键。若不阻断，在子任务 Input 按 Enter 提交、或在备注 Textarea 按 Enter 换行时，keydown 会冒泡到 listeners 启动键盘拖拽；单元素 `SortableContext` 无可换位落点，`isDragging` 卡在 `true`、行半透明不恢复，且 Space 会被 KeyboardSensor `preventDefault` 吞掉导致空格字符丢失。Escape **不** stopPropagation，让事件冒泡到 `TaskItem` 根 div 的 `onKeyDown` 触发折叠。备注 WYSIWYG 编辑器（`MarkdownNotesEditor`）的 `onKeyDown` 必须用 **bubble 阶段**（非 capture），否则会阻断 ProseMirror 自身的 keymap 处理（见「备注 Markdown WYSIWYG 编辑器」小节的 Common Mistake）。
 
 ## Accessibility
 
