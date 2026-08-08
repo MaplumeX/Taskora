@@ -1,0 +1,10 @@
+{"file": ".trellis/spec/backend/index.md", "reason": "backend 层总规范，确认模块组织约定"}
+{"file": ".trellis/spec/backend/database-guidelines.md", "reason": "Prisma schema 迁移、事务、级联删除约定——archive/unarchive 事务实现依据"}
+{"file": ".trellis/spec/backend/error-handling.md", "reason": "404/BadRequest 错误语义，archive/unarchive 校验归属时的异常处理"}
+{"file": ".trellis/spec/backend/directory-structure.md", "reason": "后端模块/DTO/controller 组织约定"}
+{"file": ".trellis/spec/frontend/index.md", "reason": "前端 spec 总入口"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "mutation hook 与缓存失效约定——archive/unarchive hook 实现"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件组织与样式约定——ProjectCompletedTasks 改造依据"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "中英 i18n key 一致性要求"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "TanStack Query 缓存策略——归档后多 query 失效"}
+{"file": ".trellis/tasks/08-08-group-archive/design.md", "reason": "本次任务技术设计：数据模型变更、后端服务方法、前端改造方案"}

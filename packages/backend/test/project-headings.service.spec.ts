@@ -60,7 +60,7 @@ describe('ProjectHeadingsService', () => {
       select: { id: true },
     });
     expect(prisma.projectHeading.findMany).toHaveBeenCalledWith({
-      where: { userId: 'user-1', projectId: 'project-1' },
+      where: { userId: 'user-1', projectId: 'project-1', status: 'ACTIVE' },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
     });
   });

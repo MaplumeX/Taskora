@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectHeadingResponseDto } from '@taskora/shared';
+import { HeadingStatus } from '@taskora/shared';
 
 import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 import { ProjectHeadingRow } from './ProjectHeadingRow';
@@ -10,6 +11,7 @@ const mutationMocks = vi.hoisted(() => ({
   update: vi.fn(),
   remove: vi.fn(),
   convert: vi.fn(),
+  archive: vi.fn(),
 }));
 
 vi.mock('@/lib/hooks/useProjectHeadings', () => ({
@@ -22,6 +24,10 @@ vi.mock('@/lib/hooks/useProjectHeadings', () => ({
     mutate: mutationMocks.convert,
     isPending: false,
   }),
+  useArchiveProjectHeading: () => ({
+    mutate: mutationMocks.archive,
+    isPending: false,
+  }),
 }));
 
 const heading: ProjectHeadingResponseDto = {
@@ -29,6 +35,8 @@ const heading: ProjectHeadingResponseDto = {
   projectId: 'project-1',
   title: 'Build',
   sortOrder: 0,
+  status: HeadingStatus.ACTIVE,
+  completedAt: null,
   createdAt: '2026-07-31T00:00:00.000Z',
   updatedAt: '2026-07-31T00:00:00.000Z',
 };
@@ -121,6 +129,30 @@ describe('ProjectHeadingRow', () => {
     );
 
     expect(mutationMocks.convert).toHaveBeenCalledWith(
+      'heading-1',
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    );
+  });
+
+  it('archives the heading from the actions menu', async () => {
+    const user = userEvent.setup();
+    render(<ProjectHeadingRow heading={heading} />);
+
+    await user.click(
+      screen.getByRole('button', {
+        name: /Heading actions|标题操作/,
+      }),
+    );
+    await user.click(
+      await screen.findByRole('menuitem', {
+        name: /Archive|归档/,
+      }),
+    );
+
+    expect(mutationMocks.archive).toHaveBeenCalledWith(
       'heading-1',
       expect.objectContaining({
         onSuccess: expect.any(Function),

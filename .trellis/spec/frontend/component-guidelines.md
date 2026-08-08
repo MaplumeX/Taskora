@@ -19,9 +19,19 @@ latest server-derived layout and shows the shared save-failed toast.
 Heading rows are typographic section labels, not task rows: they have no
 completion checkbox, use a dedicated drag handle, allow an empty inline title,
 and require a destructive confirmation before deletion. The row's "⋯" menu
-offers "Convert to Project" (before the delete item): it runs without a second
-confirmation, disables while pending, and toasts `project:convertSuccess` /
-`project:convertFailed` on settlement — no navigation to the new project.
+offers "Convert to Project" then "Archive" (both before the delete item): each
+runs without a second confirmation, disables while pending, and toasts on
+settlement (`project:convertSuccess`/`convertFailed`,
+`project:archiveSuccess`/`archiveFailed`). Archive calls
+`useArchiveProjectHeading`, which cascade-completes the heading's ACTIVE tasks
+server-side. No navigation occurs.
+
+The completed panel (`ProjectCompletedTasks`) reuses the existing expand/collapse
+toggle and displays archived headings (COMPLETED) as group title rows with a
+"⋯" menu containing only "Unarchive" (`useUnarchiveProjectHeading`). Tasks
+under an archived heading are grouped beneath it; all other completed tasks
+(task with no headingId, or headingId pointing to an ACTIVE heading) display
+flat.
 
 > How components are built in this project.
 

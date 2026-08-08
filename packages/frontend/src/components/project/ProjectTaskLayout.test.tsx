@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ProjectHeadingResponseDto, TaskResponseDto } from '@taskora/shared';
-import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { HeadingStatus, ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
 import {
   applyLayoutDrag,
   normalizeLayout,
@@ -13,6 +13,8 @@ const heading: ProjectHeadingResponseDto = {
   projectId: 'project-1',
   title: 'Build',
   sortOrder: 0,
+  status: HeadingStatus.ACTIVE,
+  completedAt: null,
   createdAt: '2026-07-31T00:00:00.000Z',
   updatedAt: '2026-07-31T00:00:00.000Z',
 };

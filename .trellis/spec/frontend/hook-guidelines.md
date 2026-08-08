@@ -5,8 +5,13 @@
 Project heading query keys must include `projectId`:
 
 ```typescript
-['project-headings', { projectId }]
+['project-headings', { projectId, includeArchived }]
 ```
+
+The default query (no `includeArchived` or `false`) returns only `ACTIVE`
+headings for the active task layout. The `includeArchived: true` variant
+returns all headings (ACTIVE + COMPLETED) for the completed panel to group
+archived-heading tasks.
 
 Heading CRUD invalidates the affected project heading list and all task/feed
 queries. Layout mutations apply the submitted heading order and task
@@ -16,6 +21,11 @@ error and settlement so the server remains authoritative.
 `useConvertProjectHeadingToProject(projectId)` invalidates the heading list,
 tasks, and feed (via `invalidateProjectData`) plus the `['projects']` cache so
 the newly created project shows up in the sidebar.
+
+`useArchiveProjectHeading(projectId)` and `useUnarchiveProjectHeading(projectId)`
+invalidate all heading query variants (active-only + includeArchived) for the
+project, plus tasks and feed, so both the active layout and the completed panel
+refresh.
 
 > How hooks are used in this project.
 

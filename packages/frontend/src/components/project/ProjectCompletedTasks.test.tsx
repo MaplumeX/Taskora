@@ -4,8 +4,8 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { TaskResponseDto } from '@taskora/shared';
-import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import type { ProjectHeadingResponseDto, TaskResponseDto } from '@taskora/shared';
+import { HeadingStatus, ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
 
 import { useProjectUiPrefsStore } from '@/lib/stores/projectUiPrefs.store';
 import { ProjectCompletedTasks } from './ProjectCompletedTasks';
@@ -15,6 +15,8 @@ import { ProjectCompletedTasks } from './ProjectCompletedTasks';
 const queryMocks = vi.hoisted(() => ({
   useTasksQuery: vi.fn(),
   useUncompleteTask: vi.fn(),
+  useProjectHeadingsQuery: vi.fn(),
+  useUnarchiveProjectHeading: vi.fn(),
 }));
 
 /* ------------- mocks ------------- */
@@ -35,6 +37,11 @@ vi.mock('@/lib/hooks/useTasks', () => ({
   useConvertTaskToProject: () => ({ mutate: vi.fn(), isPending: false }),
   useReorderTasks: () => ({ mutate: vi.fn(), isPending: false }),
   taskKeys: { all: ['tasks'], detail: (id: string) => ['task', id] },
+}));
+
+vi.mock('@/lib/hooks/useProjectHeadings', () => ({
+  useProjectHeadingsQuery: (...args: unknown[]) => queryMocks.useProjectHeadingsQuery(...args),
+  useUnarchiveProjectHeading: () => queryMocks.useUnarchiveProjectHeading(),
 }));
 
 /* ------------- helpers ------------- */
@@ -87,6 +94,34 @@ function mockUncomplete() {
   return { mutate };
 }
 
+function mockHeadings(headings: ProjectHeadingResponseDto[]) {
+  queryMocks.useProjectHeadingsQuery.mockReturnValue({
+    data: headings,
+    isLoading: false,
+    isError: false,
+  });
+}
+
+function mockUnarchive() {
+  const mutate = vi.fn();
+  queryMocks.useUnarchiveProjectHeading.mockReturnValue({ mutate, isPending: false });
+  return { mutate };
+}
+
+function makeHeading(overrides: Partial<ProjectHeadingResponseDto> = {}): ProjectHeadingResponseDto {
+  return {
+    id: 'heading-1',
+    projectId: 'project-1',
+    title: 'Archived group',
+    sortOrder: 0,
+    status: HeadingStatus.COMPLETED,
+    completedAt: '2025-08-08T00:00:00.000Z',
+    createdAt: '2025-08-08T00:00:00.000Z',
+    updatedAt: '2025-08-08T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
 /* ------------- tests ------------- */
 
 describe('ProjectCompletedTasks', () => {
@@ -94,6 +129,9 @@ describe('ProjectCompletedTasks', () => {
     vi.clearAllMocks();
     // reset persisted prefs store
     useProjectUiPrefsStore.setState({ completedPanelExpanded: {} });
+    // default: no archived headings, unarchive mock ready
+    mockHeadings([]);
+    mockUnarchive();
   });
 
   it('renders nothing when there are no completed tasks', () => {
@@ -213,5 +251,85 @@ describe('ProjectCompletedTasks', () => {
     const allItems = screen.getAllByText(/New|Old/);
     expect(allItems[0]).toHaveTextContent('New');
     expect(allItems[1]).toHaveTextContent('Old');
+  });
+
+  /* --------------------------- archived heading grouping --------------------------- */
+
+  it('groups completed tasks under archived headings and shows flat tasks separately', async () => {
+    const user = userEvent.setup();
+    const archivedHeading = makeHeading({ id: 'h-1', title: 'Sprint 1' });
+    mockHeadings([archivedHeading]);
+    mockQuery([
+      makeTask({ id: 't-grouped', title: 'Grouped task', headingId: 'h-1' }),
+      makeTask({ id: 't-flat', title: 'Flat task', headingId: null }),
+    ]);
+    mockUncomplete();
+    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+
+    // count = 2 tasks + 1 archived heading = 3
+    expect(screen.getByText('3')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { expanded: false }));
+
+    // Archived heading title appears as a group label
+    expect(screen.getByText('Sprint 1')).toBeInTheDocument();
+    // Both tasks are visible
+    expect(screen.getByText('Grouped task')).toBeInTheDocument();
+    expect(screen.getByText('Flat task')).toBeInTheDocument();
+  });
+
+  it('displays archived heading even when it has no completed tasks', async () => {
+    const user = userEvent.setup();
+    const archivedHeading = makeHeading({ id: 'h-empty', title: 'Empty archive' });
+    mockHeadings([archivedHeading]);
+    mockQuery([]);
+    mockUncomplete();
+    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+
+    // count = 0 tasks + 1 archived heading = 1
+    expect(screen.getByText('1')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { expanded: false }));
+
+    expect(screen.getByText('Empty archive')).toBeInTheDocument();
+  });
+
+  it('calls unarchive mutation when unarchive menu item is clicked', async () => {
+    const user = userEvent.setup();
+    const archivedHeading = makeHeading({ id: 'h-1', title: 'Sprint 1' });
+    mockHeadings([archivedHeading]);
+    mockQuery([makeTask({ id: 't-1', title: 'Task', headingId: 'h-1' })]);
+    const { mutate: unarchiveMutate } = mockUnarchive();
+    mockUncomplete();
+    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+
+    await user.click(screen.getByRole('button', { expanded: false }));
+
+    // open the archived heading's dropdown menu
+    await user.click(
+      screen.getByRole('button', { name: /Heading actions|标题操作/ }),
+    );
+
+    // click unarchive menu item
+    await user.click(
+      await screen.findByRole('menuitem', { name: /Unarchive|取消归档/ }),
+    );
+
+    expect(unarchiveMutate).toHaveBeenCalledWith(
+      'h-1',
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    );
+  });
+
+  it('renders nothing when there are no completed tasks and no archived headings', () => {
+    mockQuery([]);
+    mockUncomplete();
+    const { container } = withQueryClient(
+      <ProjectCompletedTasks projectId="project-1" />,
+    );
+    expect(container).toBeEmptyDOMElement();
   });
 });

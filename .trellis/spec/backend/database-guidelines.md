@@ -31,12 +31,14 @@ Database:
 
 ```prisma
 model ProjectHeading {
-  id        String @id @default(uuid())
-  title     String
-  sortOrder Int    @default(0)
-  userId    String
-  projectId String
-  tasks     Task[]
+  id          String        @id @default(uuid())
+  title       String
+  sortOrder   Int           @default(0)
+  userId      String
+  projectId   String
+  tasks       Task[]
+  status      HeadingStatus @default(ACTIVE)
+  completedAt DateTime?
 }
 
 model Task {
@@ -48,12 +50,14 @@ model Task {
 HTTP:
 
 ```text
-GET    /project-headings?projectId=:projectId
+GET    /project-headings?projectId=:projectId[&includeArchived=true]
 POST   /project-headings
 PATCH  /project-headings/:id
 DELETE /project-headings/:id
 POST   /project-headings/reorder
 POST   /project-headings/:id/convert-to-project
+POST   /project-headings/:id/archive
+POST   /project-headings/:id/unarchive
 ```
 
 ### 3. Contracts
@@ -133,6 +137,37 @@ into a brand-new project in one interactive transaction:
   `BadRequest` and rolls the transaction back.
 - Returns the new `ProjectResponseDto` with `tags: []`.
 
+### Archive / unarchive heading
+
+`POST /project-headings/:id/archive` and `POST /project-headings/:id/unarchive`
+manage the archived (COMPLETED) state of a heading in one interactive transaction each.
+
+**Archive** (`status: ACTIVE → COMPLETED`, cascade complete):
+- Reject with `404` when the heading is missing / not owned by the user / its
+  project is missing or trashed (`assertProjectOwnership`).
+- Complete all `status=ACTIVE`, non-trashed tasks under the heading:
+  `task.updateMany({ where: { userId, headingId, status: ACTIVE, trashedAt: null }, data: { status: COMPLETED, completedAt: now } })`.
+  Already-COMPLETED tasks are left unchanged. Subtasks are NOT touched
+  (they manage their own status independently, same as task `complete`).
+- Mark the heading itself `status=COMPLETED` + `completedAt=now`;
+  `updateMany` count ≠ 1 throws `BadRequest` and rolls back.
+
+**Unarchive** (`status: COMPLETED → ACTIVE`, heading only):
+- Reject with `404` when the heading is missing / not owned by the user / its
+  project is missing or trashed.
+- Mark the heading `status=ACTIVE` + `completedAt=null`.
+  **Does NOT touch any tasks** — tasks that were cascade-completed during
+  archive stay COMPLETED.
+
+**`findAll` filtering**: by default only returns `status=ACTIVE` headings
+(for the active task layout). Pass `includeArchived=true` query param to
+return all headings (ACTIVE + COMPLETED) — used by the completed panel to
+group archived-heading tasks.
+
+**`reorder` validation alignment**: the heading validation set queries
+`status: ACTIVE` only, matching `findAll`'s default filter. Archived headings
+are not part of the reorder layout and must not cause validation failures.
+
 ### 6. Tests Required
 
 - Reorder: ungrouped, same-heading, cross-heading, empty heading, heading order.
@@ -145,6 +180,11 @@ into a brand-new project in one interactive transaction:
 - Compatibility: project trash/restore leaves headings and `headingId`
   unchanged; moving a task out of its project clears `headingId` (tasks no
   longer have `parentId`).
+- Archive: cascade-complete ACTIVE tasks, mark heading COMPLETED, reject when
+  heading/project not found, rollback when heading disappears before final write.
+- Unarchive: mark heading ACTIVE only (no task changes), reject when not found,
+  rollback when heading disappears.
+- findAll: default filters `status=ACTIVE`; `includeArchived=true` returns all.
 
 ### 7. Wrong vs Correct
 
