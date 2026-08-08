@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 45
+- **Total Sessions**: 46
 - **Last Active**: 2026-08-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1545 | Active |
+| `journal-1.md` | ~1566 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 46 | 2026-08-08 | 统一菜单视觉美化（图标+分组+分隔线） | `b8f0718` | `main` |
 | 45 | 2026-08-08 | 项目详情页已完成任务折叠区域 | `08d0d7a`, `55a2966` | `main` |
 | 44 | 2026-08-08 | Progress ring fixes: live updates, detail page, full-ring state | `29d1c0d` | `main` |
 | 43 | 2026-08-08 | Project progress ring checkbox | `8f98607` | `main` |
