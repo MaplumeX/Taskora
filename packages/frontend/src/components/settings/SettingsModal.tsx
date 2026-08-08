@@ -86,7 +86,7 @@ export function SettingsModal() {
           </nav>
 
           {/* 右侧内容区 */}
-          <ScrollArea key={settingsTab} className="max-h-[70vh] min-w-0 flex-1">
+          <ScrollArea key={settingsTab} className="h-[70vh] min-w-0 flex-1">
             <Suspense
               fallback={
                 <div className="flex items-center justify-center py-12">
