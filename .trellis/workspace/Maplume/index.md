@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 48
+- **Total Sessions**: 49
 - **Last Active**: 2026-08-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1608 | Active |
+| `journal-1.md` | ~1631 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 49 | 2026-08-08 | Task notes markdown WYSIWYG editor | `9d657c8`, `52d251a`, `b004938` | `main` |
 | 48 | 2026-08-08 | Settings modal refactor | `3fa326c` | `main` |
 | 47 | 2026-08-08 | 设置中心重构与用户偏好持久化 | `13ca604` | `main` |
 | 46 | 2026-08-08 | 统一菜单视觉美化（图标+分组+分隔线） | `b8f0718` | `main` |

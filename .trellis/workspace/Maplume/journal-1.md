@@ -1606,3 +1606,26 @@ Refactored settings center from a full-page route (/settings with SettingsLayout
 ### Status
 
 [OK] **Completed**
+
+
+## Session 49: Task notes markdown WYSIWYG editor
+
+**Date**: 2026-08-08
+**Task**: Task notes markdown WYSIWYG editor
+**Branch**: `main`
+
+### Summary
+
+Replaced plain Textarea with Tiptap v3 based MarkdownNotesEditor in TaskRowExpanded and ProjectDetail. Content stored as markdown string (backend unchanged), parsed/serialized via @tiptap/markdown. Added @tailwindcss/typography with .notes-prose CSS variable overrides. Keyboard stopPropagation uses bubble phase to avoid blocking ProseMirror keymap. Updated component-guidelines spec with editor conventions and capture-phase gotcha.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `9d657c8` | (see git log) |
+| `52d251a` | (see git log) |
+| `b004938` | (see git log) |
+
+### Status
+
+[OK] **Completed**
