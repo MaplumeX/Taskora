@@ -20,5 +20,6 @@
   "convertToProject": "Convert to Project",
   "convertSuccess": "Converted to project",
   "convertFailed": "Failed to convert to project",
-  "notePlaceholder": "Note…"
+  "notePlaceholder": "Note…",
+  "completed": "Completed"
 }

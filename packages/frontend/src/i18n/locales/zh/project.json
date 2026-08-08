@@ -20,5 +20,6 @@
   "convertToProject": "转换为项目",
   "convertSuccess": "已转换为项目",
   "convertFailed": "转换为项目失败",
-  "notePlaceholder": "备注…"
+  "notePlaceholder": "备注…",
+  "completed": "已完成"
 }

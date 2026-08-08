@@ -7,6 +7,7 @@ import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 import { useTasksQuery } from '@/lib/hooks/useTasks';
 import { useProjectHeadingsQuery } from '@/lib/hooks/useProjectHeadings';
 import { ProjectTaskLayout } from '@/components/project/ProjectTaskLayout';
+import { ProjectCompletedTasks } from '@/components/project/ProjectCompletedTasks';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
 import { ProjectMoreMenu } from '@/components/project/ProjectContextMenu';
@@ -107,6 +108,8 @@ export default function ProjectDetail() {
           emptyHint={t('project:noTasks')}
         />
       )}
+
+      <ProjectCompletedTasks projectId={id ?? ''} />
     </div>
   );
 }
