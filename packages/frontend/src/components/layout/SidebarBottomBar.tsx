@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Plus, Settings, SunMedium, Moon, Monitor, type LucideIcon } from 'lucide-react';
+import { Plus, Settings, SunMedium, Moon, Monitor, Check, FolderPlus, Layers, type LucideIcon } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -81,12 +81,14 @@ export function SidebarBottomBar() {
             disabled={createProject.isPending}
             onClick={handleNewProject}
           >
+            <FolderPlus className="mr-2 h-4 w-4" />
             {t('common:newProject')}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={createArea.isPending}
             onClick={handleNewArea}
           >
+            <Layers className="mr-2 h-4 w-4" />
             {t('common:newArea')}
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -121,7 +123,7 @@ export function SidebarBottomBar() {
                   i18n.language === lng.code ? 'opacity-100' : 'opacity-0',
                 )}
               >
-                ●
+                <Check className="h-4 w-4" />
               </span>
               {lng.label}
             </DropdownMenuItem>

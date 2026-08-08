@@ -158,6 +158,18 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 - **日期/标签子交互**：点击对应菜单项 → 关闭主菜单 + `setActivePicker(kind)` → 用第二个受控 `Popover`（锚定到行容器 ref）渲染对应 Field picker。
 - **键盘**：主菜单打开 autoFocus 首项、Esc 关闭、Tab + Enter 触发（方向键 roving 导航未实现，列为 Deferred）。
 
+### 共享菜单行组件（MenuRow）
+
+`src/components/common/MenuRow.tsx` 是 Popover 手写菜单（`TaskContextMenu` / `ProjectMenuPanel` / `AreaMoreMenu`）共用的菜单行组件，消除此前三处各自定义的 `MENU_ITEM_CLASS` 常量。
+
+- **结构**：`React.forwardRef` 包装 `<button>`，props `{ icon: LucideIcon; destructive?: boolean; onClick; children }`。布局 `flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm`，图标 `h-4 w-4 shrink-0` 跟随 `currentColor`。
+- **dangerous variant**：`destructive` 为 true 时静态 `text-destructive` + hover `hover:bg-destructive/10 hover:text-destructive`；否则 `hover:bg-accent hover:text-accent-foreground`。
+- **ref 转发**：首项需要 autoFocus 的场景（`TaskContextMenu` / `ProjectMenuPanel`）通过 `ref={firstItemRef}` 传入。
+- **菜单项图标映射**（统一约定，勿混用）：完成 `Check` / 未完成 `Circle`、计划日期 `CalendarClock`、到期 `CalendarDays`、标签 `Tag`、转为项目 `FolderInput`、删除 `Trash2`、恢复 `RotateCcw`。
+- **分组分隔线**：语义分组间用 `<div className="-mx-1 my-1 h-px bg-muted" />`。分组规则：`[完成]` / `[日期+标签]` / `[转为项目]`（仅 default）/ `[删除/恢复]`。`AreaMoreMenu` 只有 `[标签]` / `[删除]` 两组。
+- **DropdownMenuItem 的危险项**：不使用 `MenuRow`，但在 className 上补 `focus:bg-destructive/10 focus:text-destructive`（见 `ProjectHeadingRow` 删除 heading 项）。
+- **SidebarBottomBar 语言切换**：当前语言用 `Check` 图标（`opacity-100`），非当前语言 `opacity-0` 保持占位对齐；新增菜单项用 `FolderPlus`（新项目）/ `Layers`（新区域）图标。
+
 ### 右键菜单（ProjectContextMenu / ProjectMoreMenu）
 
 项目条目（`ProjectItem` / `ProjectFeedRow`）支持与 `TaskContextMenu` 对齐的右键上下文菜单，组件位于 `src/components/project/ProjectContextMenu.tsx`。

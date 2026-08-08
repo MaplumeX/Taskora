@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "验证菜单组件改造是否符合现有组件约定(图标尺寸/分隔线/destructive 样式/firstItemRef)"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "验证 lint/test/build 通过且测试查询方式不受影响"}
