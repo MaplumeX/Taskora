@@ -16,8 +16,9 @@ export class ProjectHeadingsService {
     projectId: string,
     tx: Pick<PrismaService, 'project'> = this.prisma,
   ) {
+    // 不过滤 trashedAt：废纸篓项目详情页仍需展示/管理 headings，与 ProjectsService.findOne 对齐
     const project = await tx.project.findFirst({
-      where: { id: projectId, userId, trashedAt: null },
+      where: { id: projectId, userId },
       select: { id: true },
     });
     if (!project) {

@@ -75,6 +75,7 @@ interface ReorderProjectHeadingLayoutDto {
 Invariants:
 
 - `ProjectHeading` is owned by both `userId` and `projectId`.
+- Ownership check (`assertProjectOwnership`) queries `project.findFirst({ where: { id, userId } })` **without** `trashedAt: null` filtering: a trashed project's detail page still lists/manages its headings (aligned with `ProjectsService.findOne`, which also ignores `trashedAt`).
 - Tasks in the same project may reference a heading (tasks no longer nest —
   there is no `parentId`).
 - Legacy and newly created project tasks use `headingId = null`.

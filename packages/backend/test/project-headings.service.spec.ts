@@ -49,14 +49,14 @@ describe('ProjectHeadingsService', () => {
     });
   });
 
-  it('scopes heading reads to an owned, non-trashed project', async () => {
+  it('scopes heading reads to an owned project (trashed allowed)', async () => {
     const prisma = createPrismaMock();
     const service = new ProjectHeadingsService(prisma as unknown as PrismaService);
 
     await service.findAll('user-1', 'project-1');
 
     expect(prisma.project.findFirst).toHaveBeenCalledWith({
-      where: { id: 'project-1', userId: 'user-1', trashedAt: null },
+      where: { id: 'project-1', userId: 'user-1' },
       select: { id: true },
     });
     expect(prisma.projectHeading.findMany).toHaveBeenCalledWith({
