@@ -17,7 +17,7 @@ import { ScheduledType } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
+import { MarkdownNotesEditor } from '@/components/common/MarkdownNotesEditor';
 import { Separator } from '@/components/ui/separator';
 import {
   Popover,
@@ -112,15 +112,11 @@ export function TaskRowExpanded({ task, current }: Props) {
       className="flex flex-col gap-3 px-2 pb-3 pt-1"
       onClick={(e) => e.stopPropagation()}
     >
-      <Textarea
+      <MarkdownNotesEditor
         value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        onBlur={commitNotes}
-        onKeyDown={(e) =>
-          (e.key === 'Enter' || e.key === ' ') && e.stopPropagation()
-        }
+        onChange={setNotes}
+        onBlurCommit={commitNotes}
         placeholder={t('task:notePlaceholder')}
-        className="min-h-[60px] resize-none border-0 px-0 shadow-none focus-visible:ring-0"
       />
 
       <Separator />

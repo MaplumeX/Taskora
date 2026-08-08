@@ -11,7 +11,7 @@ import { ProjectCompletedTasks } from '@/components/project/ProjectCompletedTask
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
 import { ProjectMoreMenu } from '@/components/project/ProjectContextMenu';
-import { Textarea } from '@/components/ui/textarea';
+import { MarkdownNotesEditor } from '@/components/common/MarkdownNotesEditor';
 import { toast } from 'sonner';
 
 export default function ProjectDetail() {
@@ -89,12 +89,11 @@ export default function ProjectDetail() {
       </div>
 
       {project ? (
-        <Textarea
+        <MarkdownNotesEditor
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          onBlur={commitNotes}
+          onChange={setNotes}
+          onBlurCommit={commitNotes}
           placeholder={t('project:notePlaceholder')}
-          className="min-h-[60px] resize-none border-0 px-0 shadow-none focus-visible:ring-0"
         />
       ) : null}
 
