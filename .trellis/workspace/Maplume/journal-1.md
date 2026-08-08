@@ -1543,3 +1543,24 @@ Fixed 3 issues: (1) useTasks mutations now invalidate ['projects'] so ring updat
 ### Status
 
 [OK] **Completed**
+
+
+## Session 46: 统一菜单视觉美化（图标+分组+分隔线）
+
+**Date**: 2026-08-08
+**Task**: 统一菜单视觉美化（图标+分组+分隔线）
+**Branch**: `main`
+
+### Summary
+
+为 TaskContextMenu/ProjectContextMenu/AreaMoreMenu 统一添加 lucide 图标、分组分隔线和 destructive hover 样式。提取共享 MenuRow 组件消除三处重复的 MENU_ITEM_CLASS。SidebarBottomBar 语言切换 ● 改为 Check 图标，新增菜单项加 FolderPlus/Layers。ProjectHeadingRow 危险项补 focus:bg-destructive/10。lint/test/build 全部通过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `b8f0718` | (see git log) |
+
+### Status
+
+[OK] **Completed**
