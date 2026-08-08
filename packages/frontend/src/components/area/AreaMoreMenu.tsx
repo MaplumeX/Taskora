@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, Tag, Trash2 } from 'lucide-react';
 
 import type { AreaResponseDto, UpdateAreaDto } from '@taskora/shared';
 
@@ -14,7 +14,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { MenuRow } from '@/components/common/MenuRow';
 import { areaKeys, useDeleteArea, useUpdateArea } from '@/lib/hooks/useAreas';
 import { TagsField } from '@/components/task/fields/TagsField';
 
@@ -23,9 +23,6 @@ export interface AreaMoreMenuProps {
 }
 
 type PickerKind = 'tags' | null;
-
-const MENU_ITEM_CLASS =
-  'relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent';
 
 export function AreaMoreMenu({ area }: AreaMoreMenuProps) {
   const { t } = useTranslation('task');
@@ -89,20 +86,13 @@ export function AreaMoreMenu({ area }: AreaMoreMenuProps) {
           className="w-44 p-1"
           onClick={(e) => e.stopPropagation()}
         >
-          <button
-            type="button"
-            onClick={() => openPicker('tags')}
-            className={MENU_ITEM_CLASS}
-          >
+          <MenuRow icon={Tag} onClick={() => openPicker('tags')}>
             {t('tags')}
-          </button>
-          <button
-            type="button"
-            onClick={handleDelete}
-            className={cn(MENU_ITEM_CLASS, 'text-destructive')}
-          >
+          </MenuRow>
+          <div className="-mx-1 my-1 h-px bg-muted" />
+          <MenuRow icon={Trash2} destructive onClick={handleDelete}>
             {tc('delete')}
-          </button>
+          </MenuRow>
         </PopoverContent>
       </Popover>
 

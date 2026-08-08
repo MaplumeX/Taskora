@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "右键菜单(TaskContextMenu/ProjectContextMenu/AreaMoreMenu)的现有结构与约定，MenuRow 提取需遵循组件结构/样式模式规范"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "前端代码标准、路由、测试约定，确保 MenuRow 改造符合质量要求"}

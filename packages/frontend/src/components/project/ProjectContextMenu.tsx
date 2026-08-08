@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { MoreHorizontal } from 'lucide-react';
+import { MoreHorizontal, Check, Circle, CalendarClock, CalendarDays, Tag, Trash2, RotateCcw } from 'lucide-react';
 
 import type { ProjectResponseDto, UpdateProjectDto } from '@taskora/shared';
 
@@ -14,7 +14,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+import { MenuRow } from '@/components/common/MenuRow';
 import {
   projectKeys,
   useCompleteProject,
@@ -35,9 +35,6 @@ export interface ProjectMenuProps {
 }
 
 type PickerKind = 'scheduled' | 'due' | 'tags' | null;
-
-const MENU_ITEM_CLASS =
-  'relative flex w-full cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent';
 
 export function ProjectMenuPanel({
   project,
@@ -102,42 +99,31 @@ export function ProjectMenuPanel({
 
   return (
     <div className="flex flex-col" onClick={(e) => e.stopPropagation()}>
-      <button
+      <MenuRow
         ref={firstItemRef}
-        type="button"
+        icon={completed ? Circle : Check}
         onClick={handleToggleComplete}
-        className={MENU_ITEM_CLASS}
       >
         {completed ? t('markIncomplete') : t('markComplete')}
-      </button>
-      <button
-        type="button"
-        onClick={() => openPicker('scheduled')}
-        className={MENU_ITEM_CLASS}
-      >
+      </MenuRow>
+      <div className="-mx-1 my-1 h-px bg-muted" />
+      <MenuRow icon={CalendarClock} onClick={() => openPicker('scheduled')}>
         {t('scheduledDate')}
-      </button>
-      <button
-        type="button"
-        onClick={() => openPicker('due')}
-        className={MENU_ITEM_CLASS}
-      >
+      </MenuRow>
+      <MenuRow icon={CalendarDays} onClick={() => openPicker('due')}>
         {t('dueDate')}
-      </button>
-      <button
-        type="button"
-        onClick={() => openPicker('tags')}
-        className={MENU_ITEM_CLASS}
-      >
+      </MenuRow>
+      <MenuRow icon={Tag} onClick={() => openPicker('tags')}>
         {t('tags')}
-      </button>
-      <button
-        type="button"
+      </MenuRow>
+      <div className="-mx-1 my-1 h-px bg-muted" />
+      <MenuRow
+        icon={variant === 'trash' ? RotateCcw : Trash2}
+        destructive
         onClick={variant === 'trash' ? handleRestore : handleDelete}
-        className={cn(MENU_ITEM_CLASS, 'text-destructive')}
       >
         {variant === 'trash' ? tc('restore') : tc('delete')}
-      </button>
+      </MenuRow>
     </div>
   );
 }

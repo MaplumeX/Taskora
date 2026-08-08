@@ -144,7 +144,7 @@ export function ProjectHeadingRow({ heading, dragHandleProps }: Props) {
               {t('project:convertToProject')}
             </DropdownMenuItem>
             <DropdownMenuItem
-              className="text-destructive focus:text-destructive"
+              className="text-destructive focus:bg-destructive/10 focus:text-destructive"
               onSelect={() => setConfirmOpen(true)}
             >
               <Trash2 className="mr-2 h-4 w-4" />
