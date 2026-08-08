@@ -22,6 +22,8 @@ describe('ProjectsService', () => {
       },
       task: {
         updateMany: vi.fn(),
+        groupBy: vi.fn(),
+        aggregate: vi.fn(),
       },
       projectTag: {
         deleteMany: vi.fn(),
@@ -54,9 +56,11 @@ describe('ProjectsService', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         tags: [],
+        taskTotalCount: 0,
+        taskCompletedCount: 0,
       };
       mockPrisma.project.aggregate.mockResolvedValue({ _max: { sortOrder: 2 } });
-      mockPrisma.project.create.mockResolvedValue({ ...expected, tags: [] });
+      mockPrisma.project.create.mockResolvedValue({ ...expected, tags: [], taskTotalCount: undefined, taskCompletedCount: undefined });
 
       const result = await service.create(userId, dto);
 
@@ -97,9 +101,11 @@ describe('ProjectsService', () => {
         createdAt: new Date(),
         updatedAt: new Date(),
         tags: [],
+        taskTotalCount: 0,
+        taskCompletedCount: 0,
       };
       mockPrisma.project.aggregate.mockResolvedValue({ _max: { sortOrder: null } });
-      mockPrisma.project.create.mockResolvedValue({ ...expected, tags: [] });
+      mockPrisma.project.create.mockResolvedValue({ ...expected, tags: [], taskTotalCount: undefined, taskCompletedCount: undefined });
 
       const result = await service.create(userId, dto);
 
@@ -129,6 +135,14 @@ describe('ProjectsService', () => {
         { id: 'project-2', title: 'B', notes: null, userId, sortOrder: 1, tags: [] },
       ];
       mockPrisma.project.findMany.mockResolvedValue(expected);
+      mockPrisma.task.groupBy
+        .mockResolvedValueOnce([
+          { projectId: 'project-1', _count: { _all: 5 } },
+          { projectId: 'project-2', _count: { _all: 0 } },
+        ])
+        .mockResolvedValueOnce([
+          { projectId: 'project-1', _count: { _all: 3 } },
+        ]);
 
       const result = await service.findAll(userId);
 
@@ -137,7 +151,10 @@ describe('ProjectsService', () => {
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
         include: { tags: { include: { tag: true } } },
       });
-      expect(result).toEqual(expected);
+      expect(result).toEqual([
+        { ...expected[0], taskTotalCount: 5, taskCompletedCount: 3 },
+        { ...expected[1], taskTotalCount: 0, taskCompletedCount: 0 },
+      ]);
     });
   });
 
@@ -145,8 +162,11 @@ describe('ProjectsService', () => {
     it('should return a project by id', async () => {
       const userId = 'user-1';
       const projectId = 'project-1';
-      const expected = { id: projectId, title: 'Taskora', notes: null, userId, tags: [] };
-      mockPrisma.project.findFirst.mockResolvedValue({ ...expected, tags: [] });
+      const expected = { id: projectId, title: 'Taskora', notes: null, userId, tags: [], taskTotalCount: 5, taskCompletedCount: 2 };
+      mockPrisma.project.findFirst.mockResolvedValue({ id: projectId, title: 'Taskora', notes: null, userId, tags: [] });
+      mockPrisma.task.aggregate
+        .mockResolvedValueOnce({ _count: { _all: 5 } })
+        .mockResolvedValueOnce({ _count: { _all: 2 } });
 
       const result = await service.findOne(userId, projectId);
 

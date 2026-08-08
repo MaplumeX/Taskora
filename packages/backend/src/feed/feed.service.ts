@@ -108,24 +108,65 @@ export class FeedService {
       tags: t.tags.map((tt) => mapTag(tt.tag)),
     }));
 
-    const projectItems: ProjectFeedItem[] = projects.map((p) => ({
-      id: p.id,
-      type: 'project' as const,
-      title: p.title,
-      notes: p.notes,
-      scheduledDate: p.scheduledDate ? p.scheduledDate.toISOString() : null,
-      scheduledType: p.scheduledType as ScheduledType,
-      dueDate: p.dueDate ? p.dueDate.toISOString() : null,
-      status: p.status as ProjectStatus,
-      bucket: p.bucket as ProjectBucket,
-      completedAt: p.completedAt ? p.completedAt.toISOString() : null,
-      trashedAt: p.trashedAt ? p.trashedAt.toISOString() : null,
-      sortOrder: p.sortOrder,
-      areaId: p.areaId,
-      createdAt: p.createdAt.toISOString(),
-      updatedAt: p.updatedAt.toISOString(),
-      tags: p.tags.map((pt) => mapTag(pt.tag)),
-    }));
+    const projectIds = projects.map((p) => p.id);
+
+    // 统计口径：项目下所有非 trashed task（不受 feed view 过滤影响）
+    const [totalCounts, completedCounts] = await Promise.all([
+      this.prisma.task.groupBy({
+        by: ['projectId'],
+        where: { userId, projectId: { in: projectIds }, trashedAt: null },
+        _count: { _all: true },
+      }),
+      this.prisma.task.groupBy({
+        by: ['projectId'],
+        where: {
+          userId,
+          projectId: { in: projectIds },
+          trashedAt: null,
+          status: TaskStatus.COMPLETED,
+        },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const countMap = new Map<string, { total: number; completed: number }>();
+    for (const row of totalCounts) {
+      if (!row.projectId) continue;
+      countMap.set(row.projectId, { total: row._count._all, completed: 0 });
+    }
+    for (const row of completedCounts) {
+      if (!row.projectId) continue;
+      const entry = countMap.get(row.projectId);
+      if (entry) {
+        entry.completed = row._count._all;
+      } else {
+        countMap.set(row.projectId, { total: 0, completed: row._count._all });
+      }
+    }
+
+    const projectItems: ProjectFeedItem[] = projects.map((p) => {
+      const counts = countMap.get(p.id);
+      return {
+        id: p.id,
+        type: 'project' as const,
+        title: p.title,
+        notes: p.notes,
+        scheduledDate: p.scheduledDate ? p.scheduledDate.toISOString() : null,
+        scheduledType: p.scheduledType as ScheduledType,
+        dueDate: p.dueDate ? p.dueDate.toISOString() : null,
+        status: p.status as ProjectStatus,
+        bucket: p.bucket as ProjectBucket,
+        completedAt: p.completedAt ? p.completedAt.toISOString() : null,
+        trashedAt: p.trashedAt ? p.trashedAt.toISOString() : null,
+        sortOrder: p.sortOrder,
+        areaId: p.areaId,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+        tags: p.tags.map((pt) => mapTag(pt.tag)),
+        taskTotalCount: counts?.total ?? 0,
+        taskCompletedCount: counts?.completed ?? 0,
+      };
+    });
 
     // Merge and sort: default sortOrder asc, createdAt desc; logbook already
     // sorted by completedAt desc from each query, but since we mix two sources

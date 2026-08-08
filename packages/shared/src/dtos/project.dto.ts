@@ -38,6 +38,8 @@ export interface ProjectResponseDto {
   completedAt: string | null;
   trashedAt: string | null;
   tags?: TagResponseDto[];
+  taskTotalCount: number;
+  taskCompletedCount: number;
   createdAt: string;
   updatedAt: string;
 }

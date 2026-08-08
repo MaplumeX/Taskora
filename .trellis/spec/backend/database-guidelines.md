@@ -465,6 +465,48 @@ Project 的 bucket 推导（`ProjectsService.resolveBucket`）与 Task 规则一
 
 Project 软删除/恢复/完成/撤销完成与 Task 行为一致（`remove` 为软删除，非物理删除）。
 
+### Project 任务聚合统计（taskTotalCount / taskCompletedCount）
+
+`ProjectResponseDto` 和 `ProjectFeedItem` 携带两个聚合字段，供前端环形进度复选框展示项目内任务完成比例：
+
+```ts
+interface ProjectResponseDto {
+  // ...原有字段...
+  taskTotalCount: number;      // 项目下所有非 trashed task 数量
+  taskCompletedCount: number;   // 其中 status = COMPLETED 的数量
+}
+```
+
+**统计口径**：`projectId = X AND trashedAt = null` 的所有 Task（含 heading 内任务，因 heading task 也有 `projectId`）。**不含 Subtask**（独立模型，不参与统计）。`status = COMPLETED` 计入 completed 数。
+
+**查询模式 — 两次 groupBy 避免 N+1**（`findAll` / `feed.findAll`）：
+
+```typescript
+const [totalCounts, completedCounts] = await Promise.all([
+  this.prisma.task.groupBy({
+    by: ['projectId'],
+    where: { userId, projectId: { in: projectIds }, trashedAt: null },
+    _count: { _all: true },
+  }),
+  this.prisma.task.groupBy({
+    by: ['projectId'],
+    where: {
+      userId,
+      projectId: { in: projectIds },
+      trashedAt: null,
+      status: TaskStatus.COMPLETED,
+    },
+    _count: { _all: true },
+  }),
+]);
+```
+
+Prisma `groupBy` 无法在单查询里同时输出总数与 completed 数，故用两次 groupBy（`Promise.all` 并行），构建 `Map<projectId, { total, completed }>` 注入返回值。`findOne` / `update` 对单项目用两次 `task.aggregate`。
+
+**关键**：feed 统计不受 feed view 过滤影响——统计 where 只带 `{ userId, projectId in, trashedAt: null }`，不带 `buildProjectViewWhere` 条件。统计的是项目下所有非 trashed task，而非只符合当前 view 的 task。
+
+`create` 返回 `taskTotalCount: 0, taskCompletedCount: 0`（新建项目无任务）。`update` 在更新后用两次 `aggregate` 重算当前项目统计再注入。
+
 ### 标签关联策略 (Tag / TaskTag / ProjectTag / AreaTag)
 
 Task ↔ Tag、Project ↔ Tag、Area ↔ Tag 均为多对多，分别通过 `TaskTag` / `ProjectTag` / `AreaTag` 中间表实现。三张中间表结构一致：

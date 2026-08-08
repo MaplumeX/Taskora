@@ -480,3 +480,49 @@ const AREA_PREFIX = 'area:';
 ### Sortable 包装层
 
 与 `TaskItem` 一样，不修改展示组件（`SidebarAreaRow` / `ProjectItem`），在其上包一层 `SortableAreaRow` / `SortableProjectItem`。`listeners` 挂在外层 div 上，保留内层 `NavLink` 导航与 chevron 折叠行为。
+
+## 项目进度环形复选框（ProjectProgressRing）
+
+项目条目（`ProjectItem` / `ProjectFeedRow`）前缀用环形进度复选框替代文件夹图标，既展示项目内任务完成比例，又可点击完成/恢复整个项目。组件位于 `src/components/project/ProjectProgressRing.tsx`。
+
+### Props 与状态判定
+
+```tsx
+interface Props {
+  total: number;              // project.taskTotalCount
+  completed: number;          // project.taskCompletedCount
+  projectStatus: ProjectStatus;
+  onToggle: () => void;       // 完成/恢复项目
+  disabled?: boolean;
+}
+```
+
+`isDone = projectStatus === COMPLETED || (total > 0 && completed === total)` → 满环 + 中心勾 + primary 实心。
+
+### SVG 环形结构
+
+尺寸 18×18（与 `TaskCheckbox` 一致），r=7，strokeWidth=2。用 `strokeDasharray` / `strokeDashoffset` 实现进度环：
+
+```tsx
+const CIRCUMFERENCE = 2 * Math.PI * 7;  // ≈ 43.98
+const offset = CIRCUMFERENCE * (1 - ratio);
+// 轨道圆（muted），进度圆（primary，rotate(-90) 从顶部起始）
+// isDone 时：实心 circle + SVG path 画勾（text-primary-foreground）
+```
+
+- 空项目（total=0, 非完成）：空环（muted 描边，无进度弧）
+- 进行中：轨道 + 按比例填充的进度弧（`strokeLinecap: round`）
+- 全完成或项目已标记完成：实心 primary 圆 + 白色勾
+
+### 点击与导航隔离
+
+`button` 包裹 SVG，`onClick` 先 `e.stopPropagation()` 再调 `onToggle()`——与 `TaskCheckbox` 模式一致，避免点击环形触发外层导航。点击条目其他区域（标题等）仍导航到项目详情。
+
+### 使用方
+
+- `ProjectItem`（侧边栏 / Area 详情）：`onToggle` 调 `useCompleteProject` / `useUncompleteProject`，已完成态补 `line-through text-muted-foreground`
+- `ProjectFeedRow`（聚合 feed 视图）：同上，`item.status as ProjectStatus` cast 安全（`TaskStatus` 与 `ProjectStatus` 枚举值一致）
+
+### 与 TaskCheckbox 的差异
+
+`TaskCheckbox` 是纯二态勾选框（checked/unchecked）。`ProjectProgressRing` 在二态基础上增加进度环可视化，但点击语义相同（toggle 完成）。两者尺寸一致（18×18），共享 `active:scale-90` 动画与 stopPropagation 模式。

@@ -2,7 +2,7 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
+import { ProjectBucket, ProjectStatus, ScheduledType, TaskStatus } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateProjectDto, UpdateProjectDto } from './dto/projects.dto';
 import { Prisma } from '@prisma/client';
@@ -59,7 +59,12 @@ export class ProjectsService {
       },
       include: { tags: { include: { tag: true } } },
     });
-    return { ...created, tags: created.tags.map((pt) => pt.tag) };
+    return {
+      ...created,
+      tags: created.tags.map((pt) => pt.tag),
+      taskTotalCount: 0,
+      taskCompletedCount: 0,
+    };
   }
 
   async findAll(userId: string) {
@@ -69,7 +74,52 @@ export class ProjectsService {
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
       include: { tags: { include: { tag: true } } },
     });
-    return projects.map((p) => ({ ...p, tags: p.tags.map((pt) => pt.tag) }));
+
+    const projectIds = projects.map((p) => p.id);
+
+    // 两次 groupBy 避免 N+1：一次总数，一次 completed 数
+    const [totalCounts, completedCounts] = await Promise.all([
+      this.prisma.task.groupBy({
+        by: ['projectId'],
+        where: { userId, projectId: { in: projectIds }, trashedAt: null },
+        _count: { _all: true },
+      }),
+      this.prisma.task.groupBy({
+        by: ['projectId'],
+        where: {
+          userId,
+          projectId: { in: projectIds },
+          trashedAt: null,
+          status: TaskStatus.COMPLETED,
+        },
+        _count: { _all: true },
+      }),
+    ]);
+
+    const countMap = new Map<string, { total: number; completed: number }>();
+    for (const row of totalCounts) {
+      if (!row.projectId) continue;
+      countMap.set(row.projectId, { total: row._count._all, completed: 0 });
+    }
+    for (const row of completedCounts) {
+      if (!row.projectId) continue;
+      const entry = countMap.get(row.projectId);
+      if (entry) {
+        entry.completed = row._count._all;
+      } else {
+        countMap.set(row.projectId, { total: 0, completed: row._count._all });
+      }
+    }
+
+    return projects.map((p) => {
+      const counts = countMap.get(p.id);
+      return {
+        ...p,
+        tags: p.tags.map((pt) => pt.tag),
+        taskTotalCount: counts?.total ?? 0,
+        taskCompletedCount: counts?.completed ?? 0,
+      };
+    });
   }
 
   async findOne(userId: string, id: string) {
@@ -80,7 +130,29 @@ export class ProjectsService {
     if (!project) {
       throw new NotFoundException('Project not found');
     }
-    return { ...project, tags: project.tags.map((pt) => pt.tag) };
+
+    const [totalAgg, completedAgg] = await Promise.all([
+      this.prisma.task.aggregate({
+        where: { userId, projectId: id, trashedAt: null },
+        _count: { _all: true },
+      }),
+      this.prisma.task.aggregate({
+        where: {
+          userId,
+          projectId: id,
+          trashedAt: null,
+          status: TaskStatus.COMPLETED,
+        },
+        _count: { _all: true },
+      }),
+    ]);
+
+    return {
+      ...project,
+      tags: project.tags.map((pt) => pt.tag),
+      taskTotalCount: totalAgg._count._all,
+      taskCompletedCount: completedAgg._count._all,
+    };
   }
 
   async update(userId: string, id: string, dto: UpdateProjectDto) {
@@ -166,7 +238,29 @@ export class ProjectsService {
       data,
       include: { tags: { include: { tag: true } } },
     });
-    return { ...updated, tags: updated.tags.map((pt) => pt.tag) };
+
+    const [totalAgg, completedAgg] = await Promise.all([
+      this.prisma.task.aggregate({
+        where: { userId, projectId: id, trashedAt: null },
+        _count: { _all: true },
+      }),
+      this.prisma.task.aggregate({
+        where: {
+          userId,
+          projectId: id,
+          trashedAt: null,
+          status: TaskStatus.COMPLETED,
+        },
+        _count: { _all: true },
+      }),
+    ]);
+
+    return {
+      ...updated,
+      tags: updated.tags.map((pt) => pt.tag),
+      taskTotalCount: totalAgg._count._all,
+      taskCompletedCount: completedAgg._count._all,
+    };
   }
 
   async remove(userId: string, id: string) {

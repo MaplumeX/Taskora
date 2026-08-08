@@ -88,6 +88,8 @@ export function useCreateProject() {
         completedAt: null,
         trashedAt: null,
         tags: [],
+        taskTotalCount: 0,
+        taskCompletedCount: 0,
         createdAt: now,
         updatedAt: now,
       };

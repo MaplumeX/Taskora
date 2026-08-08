@@ -41,6 +41,8 @@ export interface TaskFeedItem extends FeedItemBase {
 export interface ProjectFeedItem extends FeedItemBase {
   type: 'project';
   areaId: string | null;
+  taskTotalCount: number;
+  taskCompletedCount: number;
 }
 
 export type FeedItem = TaskFeedItem | ProjectFeedItem;
