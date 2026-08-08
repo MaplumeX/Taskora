@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { SunMedium, User, Download, Info, type LucideIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -56,7 +57,7 @@ export function SettingsModal() {
           <DialogTitle>{t('common:settings')}</DialogTitle>
         </DialogHeader>
 
-        <div className="flex gap-6">
+        <div className="flex gap-6 overflow-hidden">
           {/* 左侧导航 */}
           <nav className="w-40 shrink-0">
             <ul className="flex flex-col gap-1">
@@ -85,7 +86,7 @@ export function SettingsModal() {
           </nav>
 
           {/* 右侧内容区 */}
-          <div key={settingsTab} className="min-w-0 flex-1">
+          <ScrollArea key={settingsTab} className="max-h-[70vh] min-w-0 flex-1">
             <Suspense
               fallback={
                 <div className="flex items-center justify-center py-12">
@@ -95,7 +96,7 @@ export function SettingsModal() {
             >
               {renderContent()}
             </Suspense>
-          </div>
+          </ScrollArea>
         </div>
       </DialogContent>
     </Dialog>
