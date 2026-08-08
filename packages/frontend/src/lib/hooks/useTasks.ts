@@ -148,6 +148,7 @@ export function useCreateTask() {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 }
@@ -192,6 +193,7 @@ export function useUpdateTask() {
       void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 }
@@ -219,6 +221,7 @@ export function useDeleteTask() {
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 }
@@ -262,6 +265,7 @@ export function useCompleteTask() {
       void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 }
@@ -304,6 +308,7 @@ export function useUncompleteTask() {
       void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
       void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
     },
   });
 }

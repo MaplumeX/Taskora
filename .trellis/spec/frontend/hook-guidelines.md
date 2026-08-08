@@ -101,6 +101,18 @@ export function useUpdateTask() {
 - create 类用 `crypto.randomUUID()` 生成临时 id 写入缓存，`onSuccess` 拿到服务器真值后替换临时项
 - toast 错误提示由组件层调用方在 `mutate` 的 `onError` 选项中处理，hook 层只负责缓存回滚
 
+### 跨资源 invalidate 约定
+
+当 mutation 改变的资源会影响其他资源缓存的派生字段时，`onSettled` 必须追加被影响资源的 invalidate。典型场景：task mutation 会改变 project 缓存中的 `taskTotalCount` / `taskCompletedCount` 聚合字段。
+
+`useTasks.ts` 中所有可能改变项目 task 计数的 mutation（`useCreateTask` / `useUpdateTask` / `useDeleteTask` / `useCompleteTask` / `useUncompleteTask`）的 `onSettled` 必须追加：
+
+```typescript
+void queryClient.invalidateQueries({ queryKey: ['projects'] });
+```
+
+`useReorderTasks` 只改 `sortOrder`，不影响计数，不需追加。
+
 ---
 
 ## Data Fetching
