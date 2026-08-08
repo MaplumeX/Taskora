@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 49
+- **Total Sessions**: 50
 - **Last Active**: 2026-08-08
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1631 | Active |
+| `journal-1.md` | ~1652 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 50 | 2026-08-08 | Fix trashed project detail page | `0da3421` | `main` |
 | 49 | 2026-08-08 | Task notes markdown WYSIWYG editor | `9d657c8`, `52d251a`, `b004938` | `main` |
 | 48 | 2026-08-08 | Settings modal refactor | `3fa326c` | `main` |
 | 47 | 2026-08-08 | 设置中心重构与用户偏好持久化 | `13ca604` | `main` |

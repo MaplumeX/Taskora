@@ -1629,3 +1629,24 @@ Replaced plain Textarea with Tiptap v3 based MarkdownNotesEditor in TaskRowExpan
 ### Status
 
 [OK] **Completed**
+
+
+## Session 50: Fix trashed project detail page
+
+**Date**: 2026-08-08
+**Task**: Fix trashed project detail page
+**Branch**: `main`
+
+### Summary
+
+修复废纸篓里的项目点击后打开为空壳页的问题。ProjectDetail 原先仅依赖 useProjectsQuery()（后端 findAll 过滤 trashedAt:null）+ .find()，trashed 项目不在列表中导致 project===undefined 降级。新增 useProjectQuery hook（后端 findOne 不过滤 trashedAt），采用「列表优先、未命中则按 id 单查」回退，trashed 项目详情页可显示真实标题/进度环/备注/任务列表。按方案 B2 完全可编辑：ProjectMoreMenu 按 project.trashedAt 切换 variant，trashed 末项显示「恢复」其余菜单项仍可用；取数失败显示 common:loadFailed 兜底。非 trashed 项目路径 foundInList 命中时 useProjectQuery enabled=false 不发请求，回归不变。改动仅 useProjects.ts（加 hook）+ ProjectDetail.tsx（取数/variant/兜底）。typecheck + lint 通过，check agent 无阻塞问题。更新 frontend spec 记录 ProjectDetail variant 切换与列表优先/findOne 回退取数流。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0da3421` | (see git log) |
+
+### Status
+
+[OK] **Completed**
