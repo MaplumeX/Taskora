@@ -1521,3 +1521,25 @@ Fixed 3 issues: (1) useTasks mutations now invalidate ['projects'] so ring updat
 ### Status
 
 [OK] **Completed**
+
+
+## Session 45: 项目详情页已完成任务折叠区域
+
+**Date**: 2026-08-08
+**Task**: 项目详情页已完成任务折叠区域
+**Branch**: `main`
+
+### Summary
+
+在项目详情页底部新增可折叠的已完成任务区域（ProjectCompletedTasks）。toggle 按钮显示「已完成 (N)」+ 计数，展开时按 completedAt 降序列出已完成任务，checkbox 可取消完成回到活跃区。展开偏好按 projectId 持久化到新建的 projectUiPrefs.store（Zustand + persist）。复用 TaskItem 折叠态，独立 query（completed: true）+ 前端过滤 COMPLETED。新增 zh/en i18n key project:completed。spec 更新：component-guidelines 补充归档区组件约定，state-management 补充 projectUiPrefs store。9 个组件测试，lint/typecheck/test 全通过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `08d0d7a` | (see git log) |
+| `55a2966` | (see git log) |
+
+### Status
+
+[OK] **Completed**
