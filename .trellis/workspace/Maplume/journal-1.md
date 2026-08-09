@@ -1737,3 +1737,25 @@ Aligned outside task drops with the last visible drag preview, added regression 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 55: Improve sidebar project drag feedback
+
+**Date**: 2026-08-10
+**Task**: Improve sidebar project drag feedback
+**Branch**: `main`
+
+### Summary
+
+Added sticky drag previews, precise project placeholders, empty and collapsed area targets, guarded cross-area persistence, regression tests, and updated frontend DnD specifications.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `4308554` | (see git log) |
+| `bea57bd` | (see git log) |
+
+### Status
+
+[OK] **Completed**
