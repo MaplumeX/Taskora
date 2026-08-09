@@ -1693,3 +1693,25 @@ Restructured ProjectCompletedTasks to preserve pre-archive layout distribution (
 ### Status
 
 [OK] **Completed**
+
+
+## Session 53: 优化任务跨分组拖动体验
+
+**Date**: 2026-08-09
+**Task**: 优化任务跨分组拖动体验
+**Branch**: `main`
+
+### Summary
+
+实现项目任务跨分组拖动的紧凑浮层、实时占位、精确落点、取消恢复与单次持久化，并补齐碰撞、键盘、状态同步和失败回滚测试。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `922cfb2` | (see git log) |
+| `bfa2d5d` | (see git log) |
+
+### Status
+
+[OK] **Completed**
