@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/index.md", "reason": "Frontend spec entry point and routing to component, state, hook, and quality conventions"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "ProjectTaskLayout ownership, namespaced DnD IDs, empty droppable containers, full-layout persistence, and failure rollback conventions"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Keep transient drag preview local while using the existing Zustand expanded-task UI state correctly"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "Existing half-optimistic reorder mutation and cache invalidation boundary must remain unchanged"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Frontend component/helper test conventions and lint/typecheck/test quality gates"}
+{"file": ".trellis/tasks/08-09-improve-cross-group-task-drag/research/dnd-drag-preview.md", "reason": "Codebase evidence, installed dnd-kit constraints, official multi-container/DragOverlay guidance, and chosen interaction rules"}
