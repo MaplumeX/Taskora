@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 54
-- **Last Active**: 2026-08-09
+- **Total Sessions**: 55
+- **Last Active**: 2026-08-10
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1739 | Active |
+| `journal-1.md` | ~1761 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 55 | 2026-08-10 | Improve sidebar project drag feedback | `4308554`, `bea57bd` | `main` |
 | 54 | 2026-08-09 | Fix outside drag preview drop alignment | `5ff727c`, `c5d75dd` | `main` |
 | 53 | 2026-08-09 | 优化任务跨分组拖动体验 | `922cfb2`, `bfa2d5d` | `main` |
 | 52 | 2026-08-08 | Project completed panel preserve layout and in-place edit | `0f10d40`, `7892273` | `main` |
