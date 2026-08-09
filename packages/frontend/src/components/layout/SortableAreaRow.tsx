@@ -4,13 +4,14 @@ import { CSS } from '@dnd-kit/utilities';
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 
 import { SidebarAreaRow } from '@/components/layout/SidebarAreaRow';
+import { areaDndId } from '@/components/layout/sidebarProjectLayout';
 
 interface Props {
   area: AreaResponseDto;
   projects: ProjectResponseDto[];
+  activeProjectId: string | null;
+  projectDragActive: boolean;
 }
-
-const AREA_PREFIX = 'area:';
 
 /**
  * 侧边栏可拖拽区域条目包装。
@@ -18,9 +19,14 @@ const AREA_PREFIX = 'area:';
  * - sortable id 采用 `area:<areaId>` 前缀。
  * - listeners 挂在外层 div 上，保留 SidebarAreaRow 内 NavLink 导航与 chevron 折叠行为。
  */
-export function SortableAreaRow({ area, projects }: Props) {
+export function SortableAreaRow({
+  area,
+  projects,
+  activeProjectId,
+  projectDragActive,
+}: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: `${AREA_PREFIX}${area.id}` });
+    useSortable({ id: areaDndId(area.id) });
 
   return (
     <div
@@ -34,7 +40,12 @@ export function SortableAreaRow({ area, projects }: Props) {
       {...attributes}
       {...listeners}
     >
-      <SidebarAreaRow area={area} projects={projects} />
+      <SidebarAreaRow
+        area={area}
+        projects={projects}
+        activeProjectId={activeProjectId}
+        projectDragActive={projectDragActive}
+      />
     </div>
   );
 }

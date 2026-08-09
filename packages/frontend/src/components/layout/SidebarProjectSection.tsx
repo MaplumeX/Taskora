@@ -1,160 +1,388 @@
+import * as React from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
   DndContext,
+  DragOverlay,
+  MeasuringStrategy,
   PointerSensor,
+  closestCenter,
+  pointerWithin,
+  useDroppable,
   useSensor,
   useSensors,
-  closestCenter,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragMoveEvent,
+  type DragOverEvent,
+  type DragStartEvent,
 } from '@dnd-kit/core';
 import {
   SortableContext,
-  verticalListSortingStrategy,
   arrayMove,
+  verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 
 import { SortableProjectItem } from '@/components/layout/SortableProjectItem';
 import { SortableAreaRow } from '@/components/layout/SortableAreaRow';
+import { ProjectItem } from '@/components/project/ProjectItem';
 import { useReorderProjects, useUpdateProject } from '@/lib/hooks/useProjects';
 import { useReorderAreas } from '@/lib/hooks/useAreas';
+import { cn } from '@/lib/utils';
+import {
+  AREA_DND_PREFIX,
+  PROJECT_CONTAINER_DND_PREFIX,
+  PROJECT_DND_PREFIX,
+  STANDALONE_PROJECT_CONTAINER,
+  areaDndId,
+  cloneSidebarProjectLayout,
+  findProjectContainer,
+  moveProjectToPlacement,
+  normalizeSidebarProjectLayout,
+  projectContainerDndId,
+  projectDndId,
+  resolveProjectPlacement,
+  serializeProjectOrder,
+  sidebarProjectLayoutsEqual,
+  type ProjectPlacementEdge,
+  type SidebarProjectLayout,
+} from '@/components/layout/sidebarProjectLayout';
 
 interface Props {
   projects: ProjectResponseDto[];
   areas: AreaResponseDto[];
 }
 
-const PROJ_PREFIX = 'proj:';
-const AREA_PREFIX = 'area:';
+interface ProjectContainerProps {
+  projectIds: string[];
+  projectMap: Map<string, ProjectResponseDto>;
+  activeProjectId: string | null;
+  projectDragActive: boolean;
+}
 
-/**
- * 计算拖拽后的全量项目 orderedIds。
- *
- * - 移除被拖项目后，将其插入到 `overProjectId` 当前所在位置（同列表排序）；
- * - 若 over 是区域标题（overProjectId 为 null），则插入到目标区域分组的末尾。
- *
- * `useReorderProjects` 接收全局 orderedIds，后端按 index 写入 sortOrder。
- */
-function computeReorderedGlobalIds(
-  projects: ProjectResponseDto[],
-  activeProjectId: string,
-  overProjectId: string | null,
-  targetAreaId: string | null,
-): string[] {
-  const dragged = projects.find((p) => p.id === activeProjectId);
-  if (!dragged) return projects.map((p) => p.id);
+function StandaloneProjectContainer({
+  projectIds,
+  projectMap,
+  activeProjectId,
+  projectDragActive,
+}: ProjectContainerProps) {
+  const { setNodeRef } = useDroppable({
+    id: projectContainerDndId(STANDALONE_PROJECT_CONTAINER),
+  });
 
-  const remaining = projects.filter((p) => p.id !== activeProjectId);
-
-  let insertIndex: number;
-  if (overProjectId) {
-    const idx = remaining.findIndex((p) => p.id === overProjectId);
-    insertIndex = idx === -1 ? remaining.length : idx;
-  } else {
-    // 落到区域标题：插入到该区域项目分组的末尾
-    let lastIdx = -1;
-    for (let i = 0; i < remaining.length; i++) {
-      if ((remaining[i].areaId ?? null) === targetAreaId) lastIdx = i;
-    }
-    insertIndex = lastIdx + 1;
-  }
-
-  const result = [...remaining];
-  result.splice(insertIndex, 0, dragged);
-  return result.map((p) => p.id);
+  return (
+    <SortableContext
+      items={projectIds.map(projectDndId)}
+      strategy={verticalListSortingStrategy}
+    >
+      <div
+        ref={setNodeRef}
+        data-project-container={STANDALONE_PROJECT_CONTAINER}
+        className={cn(
+          'flex flex-col gap-0.5',
+          projectDragActive && projectIds.length === 0 && 'min-h-8',
+        )}
+      >
+        {projectIds.map((id) => {
+          const project = projectMap.get(id);
+          if (!project) return null;
+          return (
+            <SortableProjectItem
+              key={id}
+              project={project}
+              placeholder={id === activeProjectId}
+              projectDragActive={projectDragActive}
+            />
+          );
+        })}
+      </div>
+    </SortableContext>
+  );
 }
 
 /**
- * 侧边栏合并后的统一「项目」section：标题为纯文本（无折叠按钮、无导航链接）。
- * 内容顺序：顶部列出无区域归属的项目，下方每个区域作为可折叠条目（含该区域项目列表）。
- *
- * 外层 DndContext 统一处理拖拽：独立项目排序、区域内项目排序、跨区域移动、区域间排序。
+ * 侧边栏合并后的统一「项目」section。
+ * 项目拖拽使用本地布局预览；区域拖拽继续使用独立的 area-only 排序路径。
  */
 export function SidebarProjectSection({ projects, areas }: Props) {
   const { t } = useTranslation();
-  const standaloneProjects = projects.filter((p) => !p.areaId);
+  const serverLayout = React.useMemo(
+    () => normalizeSidebarProjectLayout(projects, areas),
+    [projects, areas],
+  );
+  const [layout, setLayout] = React.useState(serverLayout);
+  const [activeProject, setActiveProject] =
+    React.useState<ProjectResponseDto | null>(null);
+  const layoutRef = React.useRef(layout);
+  const serverLayoutRef = React.useRef(serverLayout);
+  const dragStartLayoutRef = React.useRef<SidebarProjectLayout | null>(null);
+  const pendingServerLayoutRef = React.useRef<SidebarProjectLayout | null>(null);
+  const activeProjectIdRef = React.useRef<string | null>(null);
+  const persistenceActiveRef = React.useRef(false);
+  const lastProjectTargetRef = React.useRef<{
+    overKey: string;
+    edge: ProjectPlacementEdge;
+  } | null>(null);
+  serverLayoutRef.current = serverLayout;
+
+  const projectMap = React.useMemo(
+    () => new Map(projects.map((project) => [project.id, project])),
+    [projects],
+  );
   const reorderProjects = useReorderProjects();
   const reorderAreas = useReorderAreas();
   const updateProject = useUpdateProject();
-
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
   );
 
-  const handleDragEnd = (e: DragEndEvent) => {
-    const { active, over } = e;
-    if (!over || active.id === over.id) return;
+  const updateRenderedLayout = React.useCallback(
+    (next: SidebarProjectLayout) => {
+      layoutRef.current = next;
+      setLayout(next);
+    },
+    [],
+  );
 
-    const activeId = String(active.id);
-    const overId = String(over.id);
-    const isActiveArea = activeId.startsWith(AREA_PREFIX);
-    const isOverArea = overId.startsWith(AREA_PREFIX);
+  React.useEffect(() => {
+    if (
+      activeProjectIdRef.current !== null ||
+      persistenceActiveRef.current
+    ) {
+      pendingServerLayoutRef.current = serverLayout;
+      return;
+    }
+    pendingServerLayoutRef.current = null;
+    updateRenderedLayout(serverLayout);
+  }, [serverLayout, updateRenderedLayout]);
 
-    // 1. 区域间排序
-    if (isActiveArea && isOverArea) {
-      const areaIds = areas.map((a) => `${AREA_PREFIX}${a.id}`);
-      const reordered = arrayMove(
-        areaIds,
-        areaIds.indexOf(activeId),
-        areaIds.indexOf(overId),
-      );
-      reorderAreas.mutate(reordered.map((id) => id.slice(AREA_PREFIX.length)));
+  const cleanupProjectDrag = () => {
+    activeProjectIdRef.current = null;
+    dragStartLayoutRef.current = null;
+    pendingServerLayoutRef.current = null;
+    lastProjectTargetRef.current = null;
+    setActiveProject(null);
+  };
+
+  const restoreProjectDrag = () => {
+    const restored =
+      pendingServerLayoutRef.current ?? dragStartLayoutRef.current;
+    cleanupProjectDrag();
+    if (restored) updateRenderedLayout(restored);
+  };
+
+  const persistProjectLayout = (
+    snapshot: SidebarProjectLayout,
+    next: SidebarProjectLayout,
+    activeProjectId: string,
+  ) => {
+    const sourceContainerId = findProjectContainer(snapshot, activeProjectId);
+    const targetContainerId = findProjectContainer(next, activeProjectId);
+    if (!sourceContainerId || !targetContainerId) {
+      updateRenderedLayout(serverLayoutRef.current);
       return;
     }
 
-    // 仅项目 active 时继续
-    if (!activeId.startsWith(PROJ_PREFIX)) return;
+    const rollbackLayout = cloneSidebarProjectLayout(serverLayoutRef.current);
+    const orderedIds = serializeProjectOrder(next, areas);
+    persistenceActiveRef.current = true;
+    updateRenderedLayout(next);
 
-    const projectId = activeId.slice(PROJ_PREFIX.length);
-    const project = projects.find((p) => p.id === projectId);
+    const finishPersistence = () => {
+      persistenceActiveRef.current = false;
+      pendingServerLayoutRef.current = null;
+    };
+    const handleSaveError = () => {
+      finishPersistence();
+      updateRenderedLayout(rollbackLayout);
+      toast.error(t('common:saveFailed'));
+    };
+    const reorder = () => {
+      reorderProjects.mutate(orderedIds, {
+        onSuccess: finishPersistence,
+        onError: handleSaveError,
+      });
+    };
+
+    if (sourceContainerId === targetContainerId) {
+      reorder();
+      return;
+    }
+
+    updateProject.mutate(
+      {
+        id: activeProjectId,
+        data: {
+          areaId:
+            targetContainerId === STANDALONE_PROJECT_CONTAINER
+              ? null
+              : targetContainerId,
+        },
+      },
+      {
+        onSuccess: reorder,
+        onError: handleSaveError,
+      },
+    );
+  };
+
+  const collisionDetection = React.useCallback<CollisionDetection>((args) => {
+    const activeKey = String(args.active.id);
+    if (activeKey.startsWith(AREA_DND_PREFIX)) {
+      return closestCenter({
+        ...args,
+        droppableContainers: args.droppableContainers.filter((container) =>
+          String(container.id).startsWith(AREA_DND_PREFIX),
+        ),
+      });
+    }
+    if (!activeKey.startsWith(PROJECT_DND_PREFIX)) return [];
+
+    const compatibleContainers = args.droppableContainers.filter((container) => {
+      const id = String(container.id);
+      return (
+        id.startsWith(PROJECT_DND_PREFIX) ||
+        id.startsWith(PROJECT_CONTAINER_DND_PREFIX) ||
+        id.startsWith(AREA_DND_PREFIX)
+      );
+    });
+    if (!args.pointerCoordinates) return [];
+    const collisions = pointerWithin({
+      ...args,
+      droppableContainers: compatibleContainers,
+    });
+    if (collisions.length === 0) return [];
+
+    const collision =
+      collisions.find(({ id }) => String(id).startsWith(PROJECT_DND_PREFIX)) ??
+      collisions.find(({ id }) =>
+        String(id).startsWith(PROJECT_CONTAINER_DND_PREFIX),
+      ) ??
+      collisions.find(({ id }) => String(id).startsWith(AREA_DND_PREFIX));
+    if (!collision) return [];
+
+    const overKey = String(collision.id);
+    let edge: ProjectPlacementEdge = 'before';
+    if (overKey.startsWith(PROJECT_DND_PREFIX)) {
+      const rect = args.droppableRects.get(collision.id);
+      if (rect) {
+        edge =
+          args.pointerCoordinates.y >= rect.top + rect.height / 2
+            ? 'after'
+            : 'before';
+      }
+    }
+    lastProjectTargetRef.current = { overKey, edge };
+    return [collision];
+  }, []);
+
+  const handleDragStart = ({ active }: DragStartEvent) => {
+    const activeKey = String(active.id);
+    if (!activeKey.startsWith(PROJECT_DND_PREFIX)) return;
+    const activeId = activeKey.slice(PROJECT_DND_PREFIX.length);
+    const project = projectMap.get(activeId);
     if (!project) return;
 
-    // 计算目标 areaId 与（可选）over 项目
-    let targetAreaId: string | null;
-    let overProjectId: string | null = null;
-
-    if (isOverArea) {
-      targetAreaId = overId.slice(AREA_PREFIX.length);
-    } else if (overId.startsWith(PROJ_PREFIX)) {
-      overProjectId = overId.slice(PROJ_PREFIX.length);
-      const overProject = projects.find((p) => p.id === overProjectId);
-      if (!overProject) return;
-      targetAreaId = overProject.areaId ?? null;
-    } else {
-      return;
-    }
-
-    const currentAreaId = project.areaId ?? null;
-
-    // 2a. 跨区域移动：先改 areaId，再持久化新顺序
-    if (targetAreaId !== currentAreaId) {
-      const newOrderedIds = computeReorderedGlobalIds(
-        projects,
-        projectId,
-        overProjectId,
-        targetAreaId,
-      );
-      updateProject.mutate(
-        { id: projectId, data: { areaId: targetAreaId } },
-        {
-          onSettled: () => reorderProjects.mutate(newOrderedIds),
-          onError: () => toast.error(t('common:saveFailed')),
-        },
-      );
-      return;
-    }
-
-    // 2b. 同列表排序
-    const newOrderedIds = computeReorderedGlobalIds(
-      projects,
-      projectId,
-      overProjectId,
-      currentAreaId,
-    );
-    reorderProjects.mutate(newOrderedIds);
+    dragStartLayoutRef.current = cloneSidebarProjectLayout(layoutRef.current);
+    pendingServerLayoutRef.current = null;
+    activeProjectIdRef.current = activeId;
+    lastProjectTargetRef.current = null;
+    setActiveProject(project);
   };
+
+  const previewProjectTarget = (activeKey: string) => {
+    if (!activeKey.startsWith(PROJECT_DND_PREFIX)) return;
+    const activeId = activeKey.slice(PROJECT_DND_PREFIX.length);
+    if (activeProjectIdRef.current !== activeId) return;
+
+    const target = lastProjectTargetRef.current;
+    if (!target) return;
+    const placement = resolveProjectPlacement(
+      layoutRef.current,
+      target.overKey,
+      target.edge,
+    );
+    if (!placement) return;
+    const next = moveProjectToPlacement(layoutRef.current, activeId, placement);
+    if (next) updateRenderedLayout(next);
+  };
+
+  const handleDragMove = ({ active }: DragMoveEvent) => {
+    // dnd-kit only emits onDragOver when over.id changes. Read the edge captured
+    // by collision detection on every pointer move so crossing one row's midpoint
+    // updates the placeholder without requiring a different target id.
+    previewProjectTarget(String(active.id));
+  };
+
+  const handleDragOver = ({ active, over }: DragOverEvent) => {
+    const activeKey = String(active.id);
+    if (!activeKey.startsWith(PROJECT_DND_PREFIX) || !over) return;
+
+    const overKey = String(over.id);
+    if (lastProjectTargetRef.current?.overKey !== overKey) {
+      lastProjectTargetRef.current = { overKey, edge: 'before' };
+    }
+    previewProjectTarget(activeKey);
+  };
+
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    const activeKey = String(active.id);
+    if (activeKey.startsWith(PROJECT_DND_PREFIX)) {
+      const activeId = activeKey.slice(PROJECT_DND_PREFIX.length);
+      const snapshot = dragStartLayoutRef.current;
+      if (!snapshot || activeProjectIdRef.current !== activeId) {
+        cleanupProjectDrag();
+        return;
+      }
+
+      let finalLayout = layoutRef.current;
+      if (over) {
+        const overKey = String(over.id);
+        const edge =
+          lastProjectTargetRef.current?.overKey === overKey
+            ? lastProjectTargetRef.current.edge
+            : 'before';
+        const placement = resolveProjectPlacement(finalLayout, overKey, edge);
+        if (!placement) {
+          restoreProjectDrag();
+          return;
+        }
+        finalLayout =
+          moveProjectToPlacement(finalLayout, activeId, placement) ?? finalLayout;
+      }
+
+      if (sidebarProjectLayoutsEqual(snapshot, finalLayout)) {
+        restoreProjectDrag();
+        return;
+      }
+
+      cleanupProjectDrag();
+      persistProjectLayout(snapshot, finalLayout, activeId);
+      return;
+    }
+
+    if (!over || !activeKey.startsWith(AREA_DND_PREFIX)) return;
+    const overKey = String(over.id);
+    if (!overKey.startsWith(AREA_DND_PREFIX) || activeKey === overKey) return;
+    const areaIds = areas.map((area) => areaDndId(area.id));
+    const oldIndex = areaIds.indexOf(activeKey);
+    const newIndex = areaIds.indexOf(overKey);
+    if (oldIndex < 0 || newIndex < 0) return;
+    reorderAreas.mutate(
+      arrayMove(areaIds, oldIndex, newIndex).map((id) =>
+        id.slice(AREA_DND_PREFIX.length),
+      ),
+    );
+  };
+
+  const handleDragCancel = () => {
+    if (activeProjectIdRef.current !== null) restoreProjectDrag();
+  };
+
+  const activeProjectId = activeProject?.id ?? null;
+  const projectDragActive = activeProject !== null;
 
   return (
     <div className="flex flex-col gap-1">
@@ -163,31 +391,57 @@ export function SidebarProjectSection({ projects, areas }: Props) {
       </div>
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCenter}
+        collisionDetection={collisionDetection}
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+        onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
+        onDragCancel={handleDragCancel}
       >
         <div className="ml-2 flex flex-col gap-0.5">
+          <StandaloneProjectContainer
+            projectIds={
+              layout.containers[STANDALONE_PROJECT_CONTAINER] ?? []
+            }
+            projectMap={projectMap}
+            activeProjectId={activeProjectId}
+            projectDragActive={projectDragActive}
+          />
           <SortableContext
-            items={standaloneProjects.map((p) => `${PROJ_PREFIX}${p.id}`)}
+            items={areas.map((area) => areaDndId(area.id))}
             strategy={verticalListSortingStrategy}
           >
-            {standaloneProjects.map((p) => (
-              <SortableProjectItem key={p.id} project={p} />
-            ))}
-          </SortableContext>
-          <SortableContext
-            items={areas.map((a) => `${AREA_PREFIX}${a.id}`)}
-            strategy={verticalListSortingStrategy}
-          >
-            {areas.map((area) => (
-              <SortableAreaRow
-                key={area.id}
-                area={area}
-                projects={projects.filter((p) => p.areaId === area.id)}
-              />
-            ))}
+            {areas.map((area) => {
+              const areaProjects = (layout.containers[area.id] ?? []).flatMap(
+                (id) => {
+                  const project = projectMap.get(id);
+                  return project ? [project] : [];
+                },
+              );
+              return (
+                <SortableAreaRow
+                  key={area.id}
+                  area={area}
+                  projects={areaProjects}
+                  activeProjectId={activeProjectId}
+                  projectDragActive={projectDragActive}
+                />
+              );
+            })}
           </SortableContext>
         </div>
+        <DragOverlay>
+          {activeProject ? (
+            <div
+              className="pointer-events-none w-56 overflow-hidden rounded-lg border border-border/70 bg-card shadow-md"
+              aria-hidden="true"
+              {...{ inert: '' }}
+            >
+              <ProjectItem project={activeProject} showChevron={false} />
+            </div>
+          ) : null}
+        </DragOverlay>
       </DndContext>
     </div>
   );
