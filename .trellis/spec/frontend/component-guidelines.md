@@ -21,13 +21,14 @@ containers, then the heading block; a task's upper/lower half means before/after
 while heading and blank-container targets mean first and last. Keyboard movement
 uses `closestCenter` plus the arrow direction for a stable before/after edge.
 
-A changed valid drop serializes and submits the full layout exactly once. A no-op,
-cancelled, or outside drop submits nothing and restores the drag-start snapshot
-(or server props deferred during the drag). Freeze the latest server-derived layout
-before starting the reorder mutation so its optimistic props cannot corrupt the
-failure rollback; a failed save restores that layout and shows the shared
-save-failed toast. Heading dragging stays on its isolated heading-only collision
-and persistence path.
+A changed drop serializes and submits the full layout exactly once. When the pointer
+leaves all valid targets, keep the last valid task preview; releasing outside commits
+that rendered preview if it differs from the drag-start snapshot. A no-op or cancelled
+drop submits nothing and restores the drag-start snapshot (or server props deferred
+during the drag). Freeze the latest server-derived layout before starting the reorder
+mutation so its optimistic props cannot corrupt the failure rollback; a failed save
+restores that layout and shows the shared save-failed toast. Heading dragging stays
+on its isolated heading-only collision and persistence path.
 
 Heading rows are typographic section labels, not task rows: they have no
 completion checkbox, use a dedicated drag handle, allow an empty inline title,
