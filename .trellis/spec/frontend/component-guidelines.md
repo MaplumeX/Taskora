@@ -12,9 +12,22 @@ ordered heading IDs -> container-local task IDs
 ```
 
 Use namespaced DnD identifiers (`heading:`, `task:`, and `container:`) so entity
-IDs cannot collide. Empty heading containers remain droppable. Every completed
-drag serializes and submits the full layout, and a failed save restores the
-latest server-derived layout and shows the shared save-failed toast.
+IDs cannot collide. Empty heading containers and the ungrouped container remain
+droppable without destination background tint. Task dragging keeps a mounted
+`DragOverlay`, replaces the in-list task with a task-height insertion placeholder,
+and updates only the local normalized layout during `onDragOver`. Pointer collision
+resolution keeps the active task eligible and prefers nested task rows, then
+containers, then the heading block; a task's upper/lower half means before/after,
+while heading and blank-container targets mean first and last. Keyboard movement
+uses `closestCenter` plus the arrow direction for a stable before/after edge.
+
+A changed valid drop serializes and submits the full layout exactly once. A no-op,
+cancelled, or outside drop submits nothing and restores the drag-start snapshot
+(or server props deferred during the drag). Freeze the latest server-derived layout
+before starting the reorder mutation so its optimistic props cannot corrupt the
+failure rollback; a failed save restores that layout and shows the shared
+save-failed toast. Heading dragging stays on its isolated heading-only collision
+and persistence path.
 
 Heading rows are typographic section labels, not task rows: they have no
 completion checkbox, use a dedicated drag handle, allow an empty inline title,
