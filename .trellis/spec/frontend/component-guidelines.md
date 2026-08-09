@@ -588,42 +588,17 @@ onKeyDown={(e) => {
 
 侧边栏项目列表仅展示 `ACTIVE` 项目，`COMPLETED` 项目不参与导航树。过滤发生在 `Sidebar.tsx` 顶层：将 `useProjectsQuery()` 返回值就过滤 `status !== ProjectStatus.COMPLETED` 后再传给 `SidebarProjectSection`。这是纯展示层过滤——后端 `ProjectsService.findAll` 仍返回所有 `status` 的项目（其它视图如详情页 / feed 可能需要已完成项目）。拖拽排序对子集安全：后端 `reorder` 只更新传入 id 的 `sortOrder`，`SidebarProjectSection` 收到的就是可见子集。
 
-## 侧边栏拖拽（SidebarProjectSection）
+## Sidebar drag and drop (`SidebarProjectSection`)
 
-侧边栏的项目/区域拖拽与任务列表拖拽不同：一个 `DndContext` 管理三种拖拽语义（区域间排序、同区域项目排序、跨区域移动项目）。组件位于 `src/components/layout/SidebarProjectSection.tsx`。
+The merged sidebar section keeps standalone projects above collapsible area rows and uses one `DndContext`, but project dragging and area dragging have isolated state and collision paths. IDs are namespaced as `proj:`, `area:`, and `project-container:`.
 
-### 合并 Section 结构
+Project dragging owns a normalized local layout (`standalone` plus one container per area). It keeps a compact, inert `DragOverlay` mounted, renders the active project as a project-row-height insertion placeholder in the target container, and updates only that local layout during pointer hover. Pointer collisions prefer nested project rows, then explicit project containers, then area headings. A project's upper/lower half means before/after; refresh the preview on each pointer move because dnd-kit does not emit another `onDragOver` when the target ID stays the same while the pointer crosses its midpoint. An area heading means index zero; a container means its final slot. The standalone container and expanded area containers remain droppable when empty, using always-on droppable measurement. A collapsed area does not auto-expand: dropping on its heading shows the same first-slot placeholder directly below the heading.
 
-侧边栏不再分「独立项目」与「区域」两个独立列表，而是合并为一个 section：顶部列出无区域归属的项目，下方每个区域作为可折叠条目（含该区域项目列表）。外层 `DndContext` 统一处理所有拖拽。
+The placeholder is the only destination emphasis; do not add area background tint or heading-only rings. When the pointer leaves all valid targets, retain the last valid preview. Releasing outside commits a changed preview, while cancellation restores the drag-start snapshot or newer server props deferred during the drag. A no-op submits nothing.
 
-### ID 前缀区分类型
+Persistence follows the existing backend boundary. A changed move within one ownership container submits one global `orderedIds` reorder. A move between standalone and an area, or between areas, first updates the project's `areaId`; only `onSuccess` starts one global reorder. An ownership failure must not start reorder. Either failure shows `common:saveFailed`, restores the frozen server-derived layout, and relies on the mutation hooks' rollback/invalidation to converge on server truth.
 
-同一 `DndContext` 内区域和项目混排，用前缀区分 sortable id：
-
-```typescript
-const PROJ_PREFIX = 'proj:';
-const AREA_PREFIX = 'area:';
-// useSortable({ id: `${PROJ_PREFIX}${project.id}` })
-// useSortable({ id: `${AREA_PREFIX}${area.id}` })
-```
-
-`handleDragEnd` 根据 `active.id` / `over.id` 的前缀分支：
-
-1. **区域间排序**（active & over 都是 area）：`arrayMove` 区域顺序 → `reorderAreas.mutate`。
-2. **跨区域移动项目**（项目 active，目标 areaId 与当前不同）：先 `updateProject.mutate({ id, data: { areaId: targetAreaId } })`，`onSettled` 后再 `reorderProjects.mutate(newOrderedIds)` 持久化新顺序。
-3. **同列表排序**（项目 active，目标 areaId 与当前相同）：`computeReorderedGlobalIds` 计算全量 orderedIds → `reorderProjects.mutate`。
-
-### 跨区域移动的两步提交
-
-跨区域移动必须先改 `areaId` 再重排，不能用单个 reorder 端点。因为后端 `reorder` 只写 `sortOrder`，不改 `areaId`。两步用 `onSettled` 串联，失败时 `toast.error`。
-
-### 落到区域标题的插入策略
-
-当 `over.id` 是区域前缀但不是项目（即拖到区域标题）时，项目插入到目标区域分组的末尾，而非区域第一个项目之前。`computeReorderedGlobalIds` 用 `overProjectId === null` 分支处理。
-
-### Sortable 包装层
-
-与 `TaskItem` 一样，不修改展示组件（`SidebarAreaRow` / `ProjectItem`），在其上包一层 `SortableAreaRow` / `SortableProjectItem`。`listeners` 挂在外层 div 上，保留内层 `NavLink` 导航与 chevron 折叠行为。
+Area dragging stays on area-only `closestCenter`, `arrayMove`, and `useReorderAreas`; project and container droppables must not participate. Keep the PointerSensor 5px activation distance, default auto-scroll, outer sortable listeners, project/area navigation, project context menus, and area chevrons unchanged.
 
 ## 项目进度环形复选框（ProjectProgressRing）
 
