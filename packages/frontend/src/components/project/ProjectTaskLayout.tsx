@@ -532,7 +532,13 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
         return;
       }
       if (!over) {
-        restoreTaskDrag();
+        const finalLayout = layoutRef.current;
+        if (layoutsEqual(snapshot, finalLayout)) {
+          restoreTaskDrag();
+          return;
+        }
+        cleanupTaskDrag();
+        persist(finalLayout);
         return;
       }
 
