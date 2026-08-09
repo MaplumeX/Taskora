@@ -2,12 +2,18 @@ import * as React from 'react';
 import {
   closestCenter,
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   PointerSensor,
+  pointerWithin,
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
+  type DragOverEvent,
+  type DragStartEvent,
+  type KeyboardCoordinateGetter,
 } from '@dnd-kit/core';
 import {
   arrayMove,
@@ -29,11 +35,17 @@ import { TaskItem } from '@/components/task/TaskItem';
 import { useCompleteTask, useUncompleteTask } from '@/lib/hooks/useTasks';
 import { useTaskRowSelection } from '@/lib/hooks/useTaskRowSelection';
 import { useReorderProjectHeadingLayout } from '@/lib/hooks/useProjectHeadings';
-import { cn } from '@/lib/utils';
 import { ProjectHeadingRow } from './ProjectHeadingRow';
 
 const UNGROUPED = 'ungrouped';
-type ContainerId = typeof UNGROUPED | string;
+export type ContainerId = typeof UNGROUPED | string;
+
+export type TaskPlacementEdge = 'before' | 'after';
+
+export interface TaskPlacement {
+  containerId: ContainerId;
+  index: number;
+}
 
 export interface LayoutState {
   headingIds: string[];
@@ -57,12 +69,11 @@ function normalizeLayout(
   headingIds.forEach((id) => {
     containers[id] = [];
   });
-  tasks
-    .forEach((task) => {
-      const container =
-        task.headingId && knownHeadings.has(task.headingId) ? task.headingId : UNGROUPED;
-      containers[container].push(task.id);
-    });
+  tasks.forEach((task) => {
+    const container =
+      task.headingId && knownHeadings.has(task.headingId) ? task.headingId : UNGROUPED;
+    containers[container].push(task.id);
+  });
   return { headingIds, containers };
 }
 
@@ -93,6 +104,91 @@ function findTaskContainer(layout: LayoutState, id: string) {
   return Object.keys(layout.containers).find((container) =>
     layout.containers[container].includes(id),
   );
+}
+
+function cloneLayout(layout: LayoutState): LayoutState {
+  return {
+    headingIds: [...layout.headingIds],
+    containers: Object.fromEntries(
+      Object.entries(layout.containers).map(([id, ids]) => [id, [...ids]]),
+    ),
+  };
+}
+
+function layoutsEqual(left: LayoutState, right: LayoutState) {
+  if (left.headingIds.length !== right.headingIds.length) return false;
+  if (left.headingIds.some((id, index) => id !== right.headingIds[index])) return false;
+  const containerIds = Object.keys(left.containers);
+  if (containerIds.length !== Object.keys(right.containers).length) return false;
+  return containerIds.every((id) => {
+    const leftIds = left.containers[id];
+    const rightIds = right.containers[id];
+    return (
+      rightIds !== undefined &&
+      leftIds.length === rightIds.length &&
+      leftIds.every((task, index) => task === rightIds[index])
+    );
+  });
+}
+
+export function resolveTaskPlacement(
+  layout: LayoutState,
+  overKey: string,
+  edge: TaskPlacementEdge,
+): TaskPlacement | null {
+  if (overKey.startsWith('task:')) {
+    const overTask = overKey.slice('task:'.length);
+    const target = findTaskContainer(layout, overTask);
+    if (!target) return null;
+    const overIndex = layout.containers[target].indexOf(overTask);
+    if (overIndex < 0) return null;
+    return {
+      containerId: target,
+      index: overIndex + (edge === 'after' ? 1 : 0),
+    };
+  }
+
+  if (overKey.startsWith('heading:')) {
+    const target = overKey.slice('heading:'.length);
+    if (!layout.containers[target]) return null;
+    return { containerId: target, index: 0 };
+  }
+
+  if (overKey.startsWith('container:')) {
+    const target = overKey.slice('container:'.length);
+    const targetIds = layout.containers[target];
+    if (!targetIds) return null;
+    return { containerId: target, index: targetIds.length };
+  }
+
+  return null;
+}
+
+export function moveTaskToPlacement(
+  layout: LayoutState,
+  activeTaskId: string,
+  placement: TaskPlacement,
+): LayoutState | null {
+  const source = findTaskContainer(layout, activeTaskId);
+  const targetIds = layout.containers[placement.containerId];
+  if (!source || !targetIds) return null;
+
+  const sourceIndex = layout.containers[source].indexOf(activeTaskId);
+  let insertionIndex = Math.max(0, Math.min(placement.index, targetIds.length));
+  if (source === placement.containerId && sourceIndex < insertionIndex) {
+    insertionIndex -= 1;
+  }
+  const maxIndexAfterRemoval =
+    source === placement.containerId ? targetIds.length - 1 : targetIds.length;
+  insertionIndex = Math.min(insertionIndex, maxIndexAfterRemoval);
+  if (source === placement.containerId && sourceIndex === insertionIndex) return null;
+
+  const containers = Object.fromEntries(
+    Object.entries(layout.containers).map(([id, ids]) => [id, [...ids]]),
+  );
+  containers[source].splice(sourceIndex, 1);
+  containers[placement.containerId].splice(insertionIndex, 0, activeTaskId);
+  return { ...layout, containers };
 }
 
 function applyLayoutDrag(
@@ -126,40 +222,13 @@ function applyLayoutDrag(
 
   if (!activeKey.startsWith('task:')) return null;
   const activeTask = activeKey.slice('task:'.length);
-  const source = findTaskContainer(layout, activeTask);
-  if (!source) return null;
-
-  let target: string | undefined;
-  let overTask: string | undefined;
-  if (overKey.startsWith('task:')) {
-    overTask = overKey.slice('task:'.length);
-    target = findTaskContainer(layout, overTask);
-  } else if (overKey.startsWith('container:')) {
-    target = overKey.slice('container:'.length);
-  } else if (overKey.startsWith('heading:')) {
-    target = overKey.slice('heading:'.length);
-  }
-  if (!target || !layout.containers[target]) return null;
-
-  const containers = Object.fromEntries(
-    Object.entries(layout.containers).map(([id, ids]) => [id, [...ids]]),
-  );
-  if (source === target && overTask) {
-    const oldIndex = containers[source].indexOf(activeTask);
-    const newIndex = containers[target].indexOf(overTask);
-    if (oldIndex < 0 || newIndex < 0 || oldIndex === newIndex) return null;
-    containers[source] = arrayMove(containers[source], oldIndex, newIndex);
-  } else {
-    containers[source] = containers[source].filter((id) => id !== activeTask);
-    const targetIds = containers[target];
-    const insertionIndex = overTask ? Math.max(0, targetIds.indexOf(overTask)) : targetIds.length;
-    targetIds.splice(insertionIndex, 0, activeTask);
-  }
-  return { ...layout, containers };
+  const placement = resolveTaskPlacement(layout, overKey, 'before');
+  return placement ? moveTaskToPlacement(layout, activeTask, placement) : null;
 }
 
 interface SortableTaskProps {
   task: TaskResponseDto;
+  placeholder: boolean;
   selected: boolean;
   expanded: boolean;
   onRowClick: () => void;
@@ -168,6 +237,7 @@ interface SortableTaskProps {
 
 function SortableTask({
   task,
+  placeholder,
   selected,
   expanded,
   onRowClick,
@@ -179,21 +249,32 @@ function SortableTask({
   return (
     <div
       ref={setNodeRef}
+      data-sortable-task-id={task.id}
       style={{
         transform: CSS.Translate.toString(transform),
         transition,
-        opacity: isDragging ? 0.45 : undefined,
-        zIndex: isDragging ? 10 : undefined,
+        opacity: isDragging && !placeholder ? 0.45 : undefined,
+        zIndex: isDragging && !placeholder ? 10 : undefined,
       }}
       {...attributes}
       {...listeners}
     >
-      <TaskItem
-        task={task}
-        selectionState={expanded ? 'expanded' : selected ? 'selected' : 'idle'}
-        onRowClick={onRowClick}
-        onToggleComplete={onToggleComplete}
-      />
+      {placeholder ? (
+        <div
+          data-testid={`task-placeholder-${task.id}`}
+          className="relative h-10"
+          aria-hidden="true"
+        >
+          <div className="absolute inset-x-2 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-primary" />
+        </div>
+      ) : (
+        <TaskItem
+          task={task}
+          selectionState={expanded ? 'expanded' : selected ? 'selected' : 'idle'}
+          onRowClick={onRowClick}
+          onToggleComplete={onToggleComplete}
+        />
+      )}
     </div>
   );
 }
@@ -202,6 +283,7 @@ interface TaskContainerProps {
   id: ContainerId;
   taskIds: string[];
   taskMap: Map<string, TaskResponseDto>;
+  activeTaskId: string | null;
   selectedId: string | null;
   expandedId: string | null;
   onRowClick: (id: string) => void;
@@ -212,18 +294,16 @@ function TaskContainer({
   id,
   taskIds,
   taskMap,
+  activeTaskId,
   selectedId,
   expandedId,
   onRowClick,
   onToggleComplete,
 }: TaskContainerProps) {
-  const { setNodeRef, isOver } = useDroppable({ id: containerId(id) });
+  const { setNodeRef } = useDroppable({ id: containerId(id) });
   return (
     <SortableContext items={taskIds.map(taskId)} strategy={verticalListSortingStrategy}>
-      <div
-        ref={setNodeRef}
-        className={cn('min-h-8 rounded-md transition-colors', isOver && 'bg-muted/60')}
-      >
+      <div ref={setNodeRef} data-task-container={id} className="min-h-10 rounded-md pb-2">
         {taskIds.map((id) => {
           const task = taskMap.get(id);
           if (!task) return null;
@@ -231,6 +311,7 @@ function TaskContainer({
             <SortableTask
               key={id}
               task={task}
+              placeholder={activeTaskId === id}
               selected={selectedId === id}
               expanded={expandedId === id}
               onRowClick={() => onRowClick(id)}
@@ -274,11 +355,21 @@ function SortableHeadingBlock({
 
 export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Props) {
   const { t } = useTranslation();
-  const [layout, setLayout] = React.useState(() => normalizeLayout(tasks, headings));
-  const taskMap = React.useMemo(
-    () => new Map(tasks.map((task) => [task.id, task])),
-    [tasks],
-  );
+  const serverLayout = React.useMemo(() => normalizeLayout(tasks, headings), [tasks, headings]);
+  const [layout, setLayout] = React.useState(serverLayout);
+  const [activeTask, setActiveTask] = React.useState<TaskResponseDto | null>(null);
+  const layoutRef = React.useRef(layout);
+  const serverLayoutRef = React.useRef(serverLayout);
+  const activeTaskIdRef = React.useRef<string | null>(null);
+  const dragStartLayoutRef = React.useRef<LayoutState | null>(null);
+  const pendingServerLayoutRef = React.useRef<LayoutState | null>(null);
+  const keyboardTaskEdgeRef = React.useRef<TaskPlacementEdge>('before');
+  const lastTaskTargetRef = React.useRef<{
+    overKey: string;
+    edge: TaskPlacementEdge;
+  } | null>(null);
+  serverLayoutRef.current = serverLayout;
+  const taskMap = React.useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
   const headingMap = React.useMemo(
     () => new Map(headings.map((heading) => [heading.id, heading])),
     [headings],
@@ -287,14 +378,32 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const saveLayout = useReorderProjectHeadingLayout();
+  const keyboardCoordinates = React.useCallback<KeyboardCoordinateGetter>((event, args) => {
+    if (event.code === 'ArrowDown' || event.code === 'ArrowRight') {
+      keyboardTaskEdgeRef.current = 'after';
+    } else if (event.code === 'ArrowUp' || event.code === 'ArrowLeft') {
+      keyboardTaskEdgeRef.current = 'before';
+    }
+    return sortableKeyboardCoordinates(event, args);
+  }, []);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+    useSensor(KeyboardSensor, { coordinateGetter: keyboardCoordinates }),
   );
 
+  const updateRenderedLayout = React.useCallback((next: LayoutState) => {
+    layoutRef.current = next;
+    setLayout(next);
+  }, []);
+
   React.useEffect(() => {
-    setLayout(normalizeLayout(tasks, headings));
-  }, [tasks, headings]);
+    if (activeTaskIdRef.current !== null) {
+      pendingServerLayoutRef.current = serverLayout;
+      return;
+    }
+    pendingServerLayoutRef.current = null;
+    updateRenderedLayout(serverLayout);
+  }, [serverLayout, updateRenderedLayout]);
 
   const toggleComplete = (task: TaskResponseDto) => {
     const mutation = task.status === 'COMPLETED' ? uncompleteTask : completeTask;
@@ -304,23 +413,165 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
   };
 
   const persist = (next: LayoutState) => {
-    setLayout(next);
+    // Freeze the server-derived layout before the mutation's optimistic cache update
+    // feeds the submitted layout back through props.
+    const rollbackLayout = cloneLayout(serverLayoutRef.current);
+    updateRenderedLayout(next);
     saveLayout.mutate(serializeLayout(projectId, next), {
       onError: () => {
-        setLayout(normalizeLayout(tasks, headings));
+        updateRenderedLayout(rollbackLayout);
         toast.error(t('common:saveFailed'));
       },
     });
   };
 
+  const cleanupTaskDrag = () => {
+    activeTaskIdRef.current = null;
+    dragStartLayoutRef.current = null;
+    pendingServerLayoutRef.current = null;
+    keyboardTaskEdgeRef.current = 'before';
+    lastTaskTargetRef.current = null;
+    setActiveTask(null);
+  };
+
+  const restoreTaskDrag = () => {
+    const restoredLayout = pendingServerLayoutRef.current ?? dragStartLayoutRef.current;
+    cleanupTaskDrag();
+    if (restoredLayout) updateRenderedLayout(restoredLayout);
+  };
+
+  const collisionDetection = React.useCallback<CollisionDetection>((args) => {
+    const activeKey = String(args.active.id);
+    if (activeKey.startsWith('heading:')) {
+      return closestCenter({
+        ...args,
+        droppableContainers: args.droppableContainers.filter((container) =>
+          String(container.id).startsWith('heading:'),
+        ),
+      });
+    }
+    if (!activeKey.startsWith('task:')) return [];
+
+    const compatibleContainers = args.droppableContainers.filter((container) => {
+      const id = String(container.id);
+      return (
+        id.startsWith('task:') || id.startsWith('container:') || id.startsWith('heading:')
+      );
+    });
+    const collisions = args.pointerCoordinates
+      ? pointerWithin({ ...args, droppableContainers: compatibleContainers })
+      : closestCenter({ ...args, droppableContainers: compatibleContainers });
+    if (collisions.length === 0) return [];
+
+    const collision = args.pointerCoordinates
+      ? (collisions.find(({ id }) => String(id).startsWith('task:')) ??
+        collisions.find(({ id }) => String(id).startsWith('container:')) ??
+        collisions.find(({ id }) => String(id).startsWith('heading:')))
+      : collisions[0];
+    if (!collision) return [];
+
+    const overKey = String(collision.id);
+    let edge: TaskPlacementEdge = 'before';
+    if (overKey.startsWith('task:')) {
+      const rect = args.droppableRects.get(collision.id);
+      if (args.pointerCoordinates && rect) {
+        edge = args.pointerCoordinates.y >= rect.top + rect.height / 2 ? 'after' : 'before';
+      } else {
+        edge = keyboardTaskEdgeRef.current;
+      }
+    }
+    lastTaskTargetRef.current = { overKey, edge };
+    return [collision];
+  }, []);
+
+  const handleDragStart = ({ active }: DragStartEvent) => {
+    const activeKey = String(active.id);
+    if (!activeKey.startsWith('task:')) return;
+    const activeId = activeKey.slice('task:'.length);
+    const task = taskMap.get(activeId);
+    if (!task) return;
+
+    const focused = document.activeElement as HTMLElement | null;
+    const sortableTask = focused?.closest<HTMLElement>('[data-sortable-task-id]');
+    if (sortableTask?.dataset.sortableTaskId === activeId) focused?.blur();
+    handleBlankClick();
+
+    dragStartLayoutRef.current = cloneLayout(layoutRef.current);
+    pendingServerLayoutRef.current = null;
+    activeTaskIdRef.current = activeId;
+    keyboardTaskEdgeRef.current = 'before';
+    lastTaskTargetRef.current = null;
+    setActiveTask(task);
+  };
+
+  const handleDragOver = ({ active, over }: DragOverEvent) => {
+    const activeKey = String(active.id);
+    if (!activeKey.startsWith('task:') || !over) return;
+    const activeId = activeKey.slice('task:'.length);
+    if (activeTaskIdRef.current !== activeId) return;
+
+    const overKey = String(over.id);
+    const edge =
+      lastTaskTargetRef.current?.overKey === overKey
+        ? lastTaskTargetRef.current.edge
+        : keyboardTaskEdgeRef.current;
+    lastTaskTargetRef.current = { overKey, edge };
+    const placement = resolveTaskPlacement(layoutRef.current, overKey, edge);
+    if (!placement) return;
+    const next = moveTaskToPlacement(layoutRef.current, activeId, placement);
+    if (next) updateRenderedLayout(next);
+  };
+
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    const activeKey = String(active.id);
+    if (activeKey.startsWith('task:')) {
+      const activeId = activeKey.slice('task:'.length);
+      const snapshot = dragStartLayoutRef.current;
+      if (!snapshot || activeTaskIdRef.current !== activeId) {
+        cleanupTaskDrag();
+        return;
+      }
+      if (!over) {
+        restoreTaskDrag();
+        return;
+      }
+
+      const overKey = String(over.id);
+      const edge =
+        lastTaskTargetRef.current?.overKey === overKey
+          ? lastTaskTargetRef.current.edge
+          : keyboardTaskEdgeRef.current;
+      const placement = resolveTaskPlacement(layoutRef.current, overKey, edge);
+      if (!placement) {
+        restoreTaskDrag();
+        return;
+      }
+
+      const finalLayout =
+        moveTaskToPlacement(layoutRef.current, activeId, placement) ?? layoutRef.current;
+      if (!layoutsEqual(finalLayout, layoutRef.current)) updateRenderedLayout(finalLayout);
+      const changed = !layoutsEqual(snapshot, finalLayout);
+      if (!changed) {
+        restoreTaskDrag();
+        return;
+      }
+      cleanupTaskDrag();
+      persist(finalLayout);
+      return;
+    }
+
     if (!over) return;
-    const next = applyLayoutDrag(layout, String(active.id), String(over.id));
+    const next = applyLayoutDrag(layoutRef.current, activeKey, String(over.id));
     if (next) persist(next);
+  };
+
+  const handleDragCancel = () => {
+    if (activeTaskIdRef.current !== null) restoreTaskDrag();
   };
 
   const commonContainerProps = {
     taskMap,
+    activeTaskId: activeTask?.id ?? null,
     selectedId,
     expandedId,
     onRowClick: handleRowClick,
@@ -333,7 +584,14 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
       {!hasContent ? (
         <div className="mt-12 py-16 text-center text-sm text-muted-foreground">{emptyHint}</div>
       ) : (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={collisionDetection}
+          onDragStart={handleDragStart}
+          onDragOver={handleDragOver}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
           <TaskContainer
             {...commonContainerProps}
             id={UNGROUPED}
@@ -356,6 +614,21 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
               );
             })}
           </SortableContext>
+          <DragOverlay>
+            {activeTask ? (
+              <div
+                className="pointer-events-none w-[min(36rem,calc(100vw-2rem))] overflow-hidden rounded-md border border-border/70 bg-card shadow-lg"
+                aria-hidden="true"
+                {...{ inert: '' }}
+              >
+                <TaskItem
+                  task={activeTask}
+                  selectionState="idle"
+                  onToggleComplete={() => undefined}
+                />
+              </div>
+            ) : null}
+          </DragOverlay>
         </DndContext>
       )}
     </div>
