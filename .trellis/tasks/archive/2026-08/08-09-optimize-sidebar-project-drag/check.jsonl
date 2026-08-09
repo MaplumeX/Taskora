@@ -1,0 +1,5 @@
+{"file":".trellis/spec/frontend/index.md","reason":"Frontend spec index for independent compliance review."}
+{"file":".trellis/spec/frontend/component-guidelines.md","reason":"Verify project/sidebar DnD interaction, rendering, and regression contracts."}
+{"file":".trellis/spec/frontend/hook-guidelines.md","reason":"Verify mutation sequencing, rollback, and query invalidation behavior."}
+{"file":".trellis/spec/frontend/quality-guidelines.md","reason":"Verify lint, typecheck, focused/full tests, and code-quality expectations."}
+{"file":".trellis/tasks/08-09-optimize-sidebar-project-drag/research/sidebar-dnd-evidence.md","reason":"Review implementation against evidence, rejected historical approaches, and known risks."}
