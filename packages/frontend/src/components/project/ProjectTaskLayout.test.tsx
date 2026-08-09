@@ -444,6 +444,21 @@ describe('ProjectTaskLayout drag sessions', () => {
     });
   }
 
+  function dragOutside(activeId: string) {
+    let collisions: Array<{ id: unknown }> = [];
+    act(() => {
+      collisions =
+        handlers().collisionDetection?.({
+          active: { id: activeId },
+          pointerCoordinates: { x: 200, y: 200 },
+          droppableContainers: [{ id: 'container:heading-2' }],
+          droppableRects: new Map(),
+        }) ?? [];
+      handlers().onDragOver?.({ active: { id: activeId }, over: null });
+    });
+    expect(collisions).toEqual([]);
+  }
+
   it('previews locally and persists one complete layout on a changed drop', () => {
     renderLayout();
     startTaskDrag('task-u1');
@@ -643,10 +658,46 @@ describe('ProjectTaskLayout drag sessions', () => {
     ).toBeInTheDocument();
   });
 
-  it('restores the snapshot without persistence when dropped outside', () => {
+  it('keeps the last valid preview and persists it when dropped outside', () => {
     renderLayout();
     startTaskDrag('task-u1');
     dragOver('task:task-u1', 'heading:heading-2');
+
+    dragOutside('task:task-u1');
+    expect(
+      within(
+        document.querySelector('[data-task-container="heading-2"]') as HTMLElement,
+      ).getByTestId('task-placeholder-task-u1'),
+    ).toBeInTheDocument();
+    expect(within(screen.getByTestId('drag-overlay')).getByText('task-u1')).toBeInTheDocument();
+
+    act(() => {
+      handlers().onDragEnd?.({ active: { id: 'task:task-u1' }, over: null });
+    });
+
+    expect(harness.saveMutate).toHaveBeenCalledTimes(1);
+    expect(harness.saveMutate).toHaveBeenCalledWith(
+      {
+        projectId: 'project-1',
+        ungroupedTaskIds: ['task-u2'],
+        groups: [
+          { headingId: 'heading-1', taskIds: ['task-a', 'task-b'] },
+          { headingId: 'heading-2', taskIds: ['task-u1'] },
+        ],
+      },
+      expect.any(Object),
+    );
+    expect(
+      within(
+        document.querySelector('[data-task-container="heading-2"]') as HTMLElement,
+      ).getByText('task-u1'),
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId('task-placeholder-task-u1')).not.toBeInTheDocument();
+  });
+
+  it('does not persist an outside drop without a new placement', () => {
+    renderLayout();
+    startTaskDrag('task-u1');
 
     act(() => {
       handlers().onDragEnd?.({ active: { id: 'task:task-u1' }, over: null });
@@ -658,6 +709,49 @@ describe('ProjectTaskLayout drag sessions', () => {
         'task-u1',
       ),
     ).toBeInTheDocument();
+  });
+
+  it('does not persist an outside drop when the last preview matches the snapshot', () => {
+    renderLayout();
+    startTaskDrag('task-a');
+    dragOver('task:task-a', 'heading:heading-2');
+    dragOver('task:task-a', 'heading:heading-1');
+
+    act(() => {
+      handlers().onDragEnd?.({ active: { id: 'task:task-a' }, over: null });
+    });
+
+    expect(harness.saveMutate).not.toHaveBeenCalled();
+    expect(
+      within(
+        document.querySelector('[data-task-container="heading-1"]') as HTMLElement,
+      ).getByText('task-a'),
+    ).toBeInTheDocument();
+  });
+
+  it('persists the updated preview after leaving and re-entering valid targets', () => {
+    renderLayout();
+    startTaskDrag('task-u1');
+    dragOver('task:task-u1', 'heading:heading-2');
+
+    dragOutside('task:task-u1');
+    dragOver('task:task-u1', 'task:task-b');
+    expect(
+      within(
+        document.querySelector('[data-task-container="heading-1"]') as HTMLElement,
+      ).getByTestId('task-placeholder-task-u1'),
+    ).toBeInTheDocument();
+    dragOutside('task:task-u1');
+
+    act(() => {
+      handlers().onDragEnd?.({ active: { id: 'task:task-u1' }, over: null });
+    });
+
+    expect(harness.saveMutate).toHaveBeenCalledTimes(1);
+    expect(harness.saveMutate.mock.calls[0][0].groups).toEqual([
+      { headingId: 'heading-1', taskIds: ['task-a', 'task-u1', 'task-b'] },
+      { headingId: 'heading-2', taskIds: [] },
+    ]);
   });
 
   it('does not persist a no-op drop', () => {
