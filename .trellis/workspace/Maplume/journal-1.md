@@ -1715,3 +1715,25 @@ Restructured ProjectCompletedTasks to preserve pre-archive layout distribution (
 ### Status
 
 [OK] **Completed**
+
+
+## Session 54: Fix outside drag preview drop alignment
+
+**Date**: 2026-08-09
+**Task**: Fix outside drag preview drop alignment
+**Branch**: `main`
+
+### Summary
+
+Aligned outside task drops with the last visible drag preview, added regression coverage, and documented the sticky preview contract.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `5ff727c` | (see git log) |
+| `c5d75dd` | (see git log) |
+
+### Status
+
+[OK] **Completed**
