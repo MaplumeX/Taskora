@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.5] - 2026-08-10
+
+### Features
+
+- **notes**: Add a markdown WYSIWYG editor (Tiptap) for task and project notes.
+- **project-headings**: Add archive/unarchive with cascade-complete.
+- **project-headings**: Improve cross-group task drag feedback with a drag preview.
+- **project-headings**: Preserve layout and restore in-place edit in the completed panel.
+- **sidebar**: Improve project drag feedback.
+
+### Fixes
+
+- **project-headings**: Remove misleading empty-state text under archived headings.
+- **project-headings**: Align outside drops with the drag preview.
+- **project-headings**: Allow trashed project headings to load.
+- **project**: Allow trashed project detail page to open and edit.
+- **project**: Tighten ProjectItem vertical padding from py-2.5 to py-1.5.
+
+---
+
 ## [0.1.4] - 2026-08-08
 
 ### Features
