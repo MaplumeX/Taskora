@@ -1811,3 +1811,24 @@ Upcoming day headers now show M.D for dates outside today's month. After the 7-d
 ### Status
 
 [OK] **Completed**
+
+
+## Session 58: Soft Studio 视觉风格重构
+
+**Date**: 2026-08-26
+**Task**: Soft Studio 视觉风格重构
+**Branch**: `feat/project-visual-style-refactor`
+
+### Summary
+
+将 frontend 视觉从 Things3 蓝整体替换为 Soft Studio 风格（奶油白 + 暖炭 + 单一紫罗兰 + Outfit Display 字体 + 加大圆角 + 暖色阴影）。仅视觉层改动：index.css token 全量替换（light+dark）、tailwind.config.js 新增 font-display、index.html 加载 Outfit；ui/* 基础组件弹层阴影统一为 shadow-lift、focus ring 紫色 offset；Sidebar 选中态胶囊化 rounded-full；TaskItem 折叠态 hover 改 bg-accent/50、选中态 bg-accent rounded-lg；页面标题统一 font-display text-3xl font-semibold tracking-tight；空状态/Login/Register 同步升级。所有 128 个前端测试 + lint + typecheck 通过。Spec（component-guidelines.md）同步 Things3 蓝描述为 Soft Studio。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `6803ad0` | (see git log) |
+
+### Status
+
+[OK] **Completed**

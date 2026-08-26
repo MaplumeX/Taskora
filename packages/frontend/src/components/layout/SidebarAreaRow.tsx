@@ -56,7 +56,7 @@ export function SidebarAreaRow({
           to={`/areas/${area.id}`}
           className={({ isActive }) =>
             cn(
-              'flex flex-1 items-center gap-2.5 rounded-md px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground',
+              'flex flex-1 items-center gap-2.5 rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-accent-foreground',
               isActive && 'bg-accent font-medium text-foreground',
             )
           }

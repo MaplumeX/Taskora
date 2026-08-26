@@ -30,7 +30,7 @@ export function Calendar({
       locale={locale}
       weekStartsOn={weekStartsOn}
       autoFocus={autoFocus}
-      className={cn('p-3', className)}
+      className={cn('p-3 rounded-lg', className)}
       classNames={{
         root: 'text-foreground',
         months: 'flex flex-col sm:flex-row gap-2',

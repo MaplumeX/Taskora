@@ -64,10 +64,10 @@ export default function Upcoming() {
     return (
       <div key={day.dateKey} className="flex flex-col gap-1">
         <div className="flex items-center gap-3">
-          <span className="text-3xl font-semibold tabular-nums leading-none">
+          <span className="font-display text-3xl font-semibold tabular-nums leading-none">
             {day.numberLabel}
           </span>
-          <span className="text-sm text-muted-foreground">{label}</span>
+          <span className="text-sm tabular-nums text-muted-foreground">{label}</span>
           <div className="min-w-4 flex-1 border-t border-border" aria-hidden="true" />
         </div>
         <div className="flex min-h-12 flex-col gap-1">
@@ -98,7 +98,7 @@ export default function Upcoming() {
 
   return (
     <div className="flex flex-col gap-4" onClick={handleBlankClick}>
-      <h1 className="text-xl font-semibold tracking-tight">{t('nav:upcoming')}</h1>
+      <h1 className="font-display text-3xl font-semibold tracking-tight">{t('nav:upcoming')}</h1>
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
@@ -106,7 +106,7 @@ export default function Upcoming() {
           {layout.week.map(renderDay)}
           {layout.later.map((month) => (
             <div key={`${month.year}-${month.month}`} className="flex flex-col gap-6">
-              <h2 className="pt-4 text-lg font-semibold tracking-tight">
+              <h2 className="pt-4 font-display text-lg font-semibold tracking-tight">
                 {month.headingKind === 'range'
                   ? `${month.month}/${month.rangeStartDay}-${month.month}/${month.rangeEndDay}`
                   : new Intl.DateTimeFormat(
