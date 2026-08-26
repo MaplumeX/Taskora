@@ -12,6 +12,7 @@ interface Props {
   selectionState?: SelectionState;
   onToggleComplete?: () => void;
   onRowClick?: () => void;
+  showScheduledBadge?: boolean;
 }
 
 function isTaskFeedItem(item: FeedItem): item is TaskFeedItem {
@@ -25,9 +26,10 @@ export function FeedItemRow({
   selectionState = 'idle',
   onToggleComplete,
   onRowClick,
+  showScheduledBadge,
 }: Props) {
   if (!isTaskFeedItem(item)) {
-    return <ProjectFeedRow item={item} />;
+    return <ProjectFeedRow item={item} showScheduledBadge={showScheduledBadge} />;
   }
 
   // TaskFeedItem is a subset of TaskResponseDto (missing `subtasks`).
@@ -47,6 +49,7 @@ export function FeedItemRow({
       selectionState={selectionState}
       onToggleComplete={onToggleComplete ?? (() => {})}
       onRowClick={onRowClick}
+      showScheduledBadge={showScheduledBadge}
     />
   );
 }

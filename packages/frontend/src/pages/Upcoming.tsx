@@ -12,7 +12,11 @@ import {
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
 import { useTaskRowSelection } from '@/lib/hooks/useTaskRowSelection';
-import { toDateKey } from '@/lib/utils/date';
+import { fromInputDateValue } from '@/lib/utils/date';
+import {
+  buildUpcomingLayout,
+  type UpcomingDay,
+} from '@/lib/utils/upcomingLayout';
 import { i18n } from '@/i18n/config';
 import { toast } from 'sonner';
 
@@ -39,17 +43,10 @@ export default function Upcoming() {
     [areas],
   );
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, FeedItem[]>();
-    for (const item of items) {
-      if (!item.scheduledDate) continue;
-      const key = toDateKey(item.scheduledDate);
-      const arr = map.get(key) ?? [];
-      arr.push(item);
-      map.set(key, arr);
-    }
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [items]);
+  const layout = useMemo(
+    () => buildUpcomingLayout(items, new Date()),
+    [items],
+  );
 
   const toggleComplete = (item: FeedItem) => {
     if (item.type !== 'task') return;
@@ -57,44 +54,70 @@ export default function Upcoming() {
     else completeTask.mutate(item.id, { onError: () => toast.error(t('common:operationFailed')) });
   };
 
+  const renderDay = (day: UpcomingDay) => {
+    const label = day.isTomorrow
+      ? t('common:tomorrow')
+      : new Intl.DateTimeFormat(i18n.language, { weekday: 'long' }).format(
+          fromInputDateValue(day.dateKey),
+        );
+
+    return (
+      <div key={day.dateKey} className="flex flex-col gap-1">
+        <div className="flex items-center gap-3">
+          <span className="text-3xl font-semibold tabular-nums leading-none">
+            {day.dayOfMonth}
+          </span>
+          <span className="text-sm text-muted-foreground">{label}</span>
+          <div className="min-w-4 flex-1 border-t border-border" aria-hidden="true" />
+        </div>
+        {day.items.map((item) => {
+          const isTask = item.type === 'task';
+          const taskItem = item as { projectId: string | null; areaId: string | null };
+          const selectionState =
+            isTask
+              ? expandedId === item.id ? 'expanded' : selectedId === item.id ? 'selected' : 'idle'
+              : 'idle';
+          return (
+            <FeedItemRow
+              key={item.id}
+              item={item}
+              projectTitle={isTask && taskItem.projectId ? projectMap[taskItem.projectId] : undefined}
+              areaTitle={isTask && taskItem.areaId ? areaMap[taskItem.areaId] : undefined}
+              selectionState={selectionState}
+              onToggleComplete={() => toggleComplete(item)}
+              onRowClick={isTask ? () => handleRowClick(item.id) : undefined}
+              showScheduledBadge={false}
+            />
+          );
+        })}
+      </div>
+    );
+  };
+
   return (
     <div className="flex flex-col gap-4" onClick={handleBlankClick}>
       <h1 className="text-xl font-semibold tracking-tight">{t('nav:upcoming')}</h1>
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
-      ) : grouped.length === 0 ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">{t('task:upcomingEmpty')}</p>
       ) : (
-        grouped.map(([dateKey, group]) => (
-          <div key={dateKey} className="flex flex-col gap-1">
-            <h2 className="px-2 pb-1 pt-4 text-sm font-medium text-muted-foreground">
-              {new Intl.DateTimeFormat(i18n.language, {
-                month: 'long',
-                day: 'numeric',
-                weekday: 'long',
-              }).format(new Date(dateKey))}
-            </h2>
-            {group.map((item) => {
-              const isTask = item.type === 'task';
-              const taskItem = item as { projectId: string | null; areaId: string | null };
-              const selectionState =
-                isTask
-                  ? expandedId === item.id ? 'expanded' : selectedId === item.id ? 'selected' : 'idle'
-                  : 'idle';
-              return (
-                <FeedItemRow
-                  key={item.id}
-                  item={item}
-                  projectTitle={isTask && taskItem.projectId ? projectMap[taskItem.projectId] : undefined}
-                  areaTitle={isTask && taskItem.areaId ? areaMap[taskItem.areaId] : undefined}
-                  selectionState={selectionState}
-                  onToggleComplete={() => toggleComplete(item)}
-                  onRowClick={isTask ? () => handleRowClick(item.id) : undefined}
-                />
-              );
-            })}
-          </div>
-        ))
+        <div className="flex flex-col gap-6">
+          {layout.week.map(renderDay)}
+          {layout.later.map((month) => (
+            <div key={`${month.year}-${month.month}`} className="flex flex-col gap-6">
+              {month.showHeading && (
+                <h2 className="pt-4 text-lg font-semibold tracking-tight">
+                  {new Intl.DateTimeFormat(
+                    i18n.language,
+                    month.showYear
+                      ? { month: 'long', year: 'numeric' }
+                      : { month: 'long' },
+                  ).format(new Date(month.year, month.month - 1, 1))}
+                </h2>
+              )}
+              {month.days.map(renderDay)}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

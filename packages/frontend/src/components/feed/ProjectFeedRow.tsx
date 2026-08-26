@@ -17,9 +17,10 @@ import {
 
 interface Props {
   item: ProjectFeedItem;
+  showScheduledBadge?: boolean;
 }
 
-export function ProjectFeedRow({ item }: Props) {
+export function ProjectFeedRow({ item, showScheduledBadge = true }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const completeProject = useCompleteProject();
@@ -82,7 +83,9 @@ export function ProjectFeedRow({ item }: Props) {
               ))}
             </div>
           )}
-          <TaskDateBadge scheduledDate={item.scheduledDate} />
+          {showScheduledBadge && (
+            <TaskDateBadge scheduledDate={item.scheduledDate} />
+          )}
           <TaskDueDateBadge dueDate={item.dueDate} />
         </div>
       </div>
