@@ -1759,3 +1759,33 @@ Added sticky drag previews, precise project placeholders, empty and collapsed ar
 ### Status
 
 [OK] **Completed**
+
+
+## Session 56: Things 3 style Upcoming week skeleton
+
+**Date**: 2026-08-26
+**Task**: Things 3 style Upcoming week skeleton
+**Branch**: `feat/upcoming-things3-inspired-ui`
+
+### Summary
+
+Rebuilt Upcoming as a Things 3-style week board: always-visible next 7 days from tomorrow (including empty days), later items grouped by month, scheduled-date badges hidden on those rows, and frontend spec updated.
+
+### Main Changes
+
+- Added buildUpcomingLayout and rewrote Upcoming with 7-day skeleton plus later month headings
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `db06454` | (see git log) |
+| `8615862` | (see git log) |
+
+### Testing
+
+- [OK] pnpm --filter @taskora/frontend test -- upcomingLayout; lint; typecheck
+
+### Status
+
+[OK] **Completed**

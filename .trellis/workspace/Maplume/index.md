@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 55
-- **Last Active**: 2026-08-10
+- **Total Sessions**: 56
+- **Last Active**: 2026-08-26
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1761 | Active |
+| `journal-1.md` | ~1791 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 56 | 2026-08-26 | Things 3 style Upcoming week skeleton | `db06454`, `8615862` | `feat/upcoming-things3-inspired-ui` |
 | 55 | 2026-08-10 | Improve sidebar project drag feedback | `4308554`, `bea57bd` | `main` |
 | 54 | 2026-08-09 | Fix outside drag preview drop alignment | `5ff727c`, `c5d75dd` | `main` |
 | 53 | 2026-08-09 | 优化任务跨分组拖动体验 | `922cfb2`, `bfa2d5d` | `main` |
