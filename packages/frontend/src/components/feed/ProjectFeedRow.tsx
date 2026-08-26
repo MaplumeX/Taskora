@@ -44,7 +44,7 @@ export function ProjectFeedRow({ item, showScheduledBadge = true }: Props) {
     >
       <div
         data-task-item
-        className="group flex h-10 items-center gap-3 px-2 transition-colors hover:bg-accent/40 cursor-pointer"
+        className="group flex h-10 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-accent/40 cursor-pointer"
         onClick={(e) => {
           e.stopPropagation();
           navigate(`/projects/${item.id}`);

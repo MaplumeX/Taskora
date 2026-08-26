@@ -4,67 +4,67 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 220 14% 18%;
+    --background: 40 33% 97%;
+    --foreground: 270 12% 18%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 220 14% 18%;
+    --card: 40 30% 98%;
+    --card-foreground: 270 12% 18%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 220 14% 18%;
+    --popover: 40 30% 98%;
+    --popover-foreground: 270 12% 18%;
 
-    /* Things3 blue */
-    --primary: 218 52% 50%;
+    /* Soft studio violet */
+    --primary: 262 60% 58%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 220 14% 97%;
-    --secondary-foreground: 220 14% 18%;
+    --secondary: 36 18% 93%;
+    --secondary-foreground: 270 12% 18%;
 
-    --muted: 220 14% 97%;
-    --muted-foreground: 220 8% 46%;
+    --muted: 36 18% 93%;
+    --muted-foreground: 280 6% 45%;
 
-    --accent: 220 14% 93%;
-    --accent-foreground: 220 14% 18%;
+    --accent: 36 22% 90%;
+    --accent-foreground: 270 12% 18%;
 
-    --destructive: 0 58% 53%;
+    --destructive: 0 55% 52%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 220 14% 90%;
-    --input: 220 14% 90%;
-    --ring: 218 52% 50%;
+    --border: 36 14% 87%;
+    --input: 36 14% 87%;
+    --ring: 262 60% 58%;
 
-    --radius: 0.5rem;
+    --radius: 0.75rem;
   }
 
   .dark {
-    --background: 220 14% 11%;
-    --foreground: 220 14% 88%;
+    --background: 270 14% 9%;
+    --foreground: 38 18% 90%;
 
-    --card: 220 14% 13%;
-    --card-foreground: 220 14% 88%;
+    --card: 270 12% 12%;
+    --card-foreground: 38 18% 90%;
 
-    --popover: 220 14% 13%;
-    --popover-foreground: 220 14% 88%;
+    --popover: 270 12% 12%;
+    --popover-foreground: 38 18% 90%;
 
-    /* Things3 blue, brightened for dark background */
-    --primary: 218 60% 58%;
-    --primary-foreground: 0 0% 100%;
+    /* Soft studio violet, brightened for dark background */
+    --primary: 262 65% 68%;
+    --primary-foreground: 270 20% 10%;
 
-    --secondary: 220 14% 16%;
-    --secondary-foreground: 220 14% 88%;
+    --secondary: 270 10% 15%;
+    --secondary-foreground: 38 18% 90%;
 
-    --muted: 220 14% 16%;
-    --muted-foreground: 220 8% 58%;
+    --muted: 270 10% 15%;
+    --muted-foreground: 275 8% 60%;
 
-    --accent: 220 14% 18%;
-    --accent-foreground: 220 14% 88%;
+    --accent: 270 10% 18%;
+    --accent-foreground: 38 18% 90%;
 
-    --destructive: 0 63% 50%;
+    --destructive: 0 58% 55%;
     --destructive-foreground: 0 0% 98%;
 
-    --border: 220 14% 22%;
-    --input: 220 14% 22%;
-    --ring: 218 60% 58%;
+    --border: 270 10% 20%;
+    --input: 270 10% 20%;
+    --ring: 262 65% 68%;
   }
 }
 
@@ -102,13 +102,25 @@
   /* Tinted shadows that carry the background hue */
   .shadow-soft {
     box-shadow:
-      0 1px 2px hsl(220 14% 18% / 0.04),
-      0 2px 8px hsl(220 14% 18% / 0.06);
+      0 1px 2px hsl(270 12% 18% / 0.05),
+      0 4px 16px hsl(270 12% 18% / 0.07);
   }
   .dark .shadow-soft {
     box-shadow:
-      0 1px 2px hsl(220 14% 0% / 0.2),
-      0 2px 8px hsl(220 14% 0% / 0.25);
+      0 1px 2px hsl(0 0% 0% / 0.25),
+      0 4px 16px hsl(0 0% 0% / 0.3);
+  }
+
+  /* Floating surfaces: popovers, dropdowns, dialogs, toasts */
+  .shadow-lift {
+    box-shadow:
+      0 2px 4px hsl(270 12% 18% / 0.06),
+      0 12px 32px hsl(270 12% 18% / 0.12);
+  }
+  .dark .shadow-lift {
+    box-shadow:
+      0 2px 4px hsl(0 0% 0% / 0.3),
+      0 12px 32px hsl(0 0% 0% / 0.4);
   }
 
   .task-complete-anim {

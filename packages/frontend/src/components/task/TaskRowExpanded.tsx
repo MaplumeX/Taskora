@@ -183,7 +183,7 @@ export function TaskRowExpanded({ task, current }: Props) {
               type="button"
               onClick={() => patch({ projectId: null })}
               className={cn(
-                'rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
+                'rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent',
                 !current.projectId && 'font-medium text-primary',
               )}
             >
@@ -195,7 +195,7 @@ export function TaskRowExpanded({ task, current }: Props) {
                 type="button"
                 onClick={() => p.id !== current.projectId && patch({ projectId: p.id })}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
+                  'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent',
                   p.id === current.projectId && 'font-medium text-primary',
                 )}
               >
@@ -221,7 +221,7 @@ export function TaskRowExpanded({ task, current }: Props) {
               type="button"
               onClick={() => patch({ areaId: null })}
               className={cn(
-                'rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
+                'rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent',
                 !current.areaId && 'font-medium text-primary',
               )}
             >
@@ -233,7 +233,7 @@ export function TaskRowExpanded({ task, current }: Props) {
                 type="button"
                 onClick={() => a.id !== current.areaId && patch({ areaId: a.id })}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
+                  'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent',
                   a.id === current.areaId && 'font-medium text-primary',
                 )}
               >

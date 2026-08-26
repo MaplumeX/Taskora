@@ -98,7 +98,7 @@ export function TaskItem({
       data-task-item
       className={cn(
         'group flex flex-col transition-colors',
-        selectionState === 'selected' && 'bg-muted/60',
+        selectionState === 'selected' && 'bg-accent rounded-lg',
         selectionState === 'expanded' &&
           'rounded-xl border border-border/60 bg-card shadow-soft'
       )}
@@ -115,7 +115,8 @@ export function TaskItem({
       <TaskContextMenu task={task} current={current}>
         <div
           className={cn(
-            'flex h-10 items-center gap-3 px-2 transition-opacity',
+            'flex h-10 items-center gap-3 rounded-lg px-2 transition-[opacity,background-color]',
+            !expanded && 'hover:bg-accent/50',
             exiting && 'task-complete-anim',
           )}
           onClick={(e) => {

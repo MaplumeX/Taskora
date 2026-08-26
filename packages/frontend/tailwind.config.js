@@ -14,13 +14,15 @@ module.exports = {
           'system-ui',
           'sans-serif',
         ],
-      },
-      fontWeight: {
-        light: '300',
-        normal: '400',
-        medium: '500',
-        semibold: '600',
-        bold: '700',
+        display: [
+          'Outfit',
+          'Inter',
+          '-apple-system',
+          'BlinkMacSystemFont',
+          'Segoe UI',
+          'system-ui',
+          'sans-serif',
+        ],
       },
       colors: {
         border: 'hsl(var(--border))',
