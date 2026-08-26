@@ -4,7 +4,7 @@ import { fromInputDateValue, toDateKey, toInputDateValue } from './date';
 
 export type UpcomingDay = {
   dateKey: string;
-  dayOfMonth: number;
+  numberLabel: string;
   isTomorrow: boolean;
   items: FeedItem[];
 };
@@ -13,7 +13,9 @@ export type UpcomingLaterMonth = {
   year: number;
   month: number; // 1-12
   showYear: boolean;
-  showHeading: boolean;
+  headingKind: 'range' | 'name';
+  rangeStartDay: number | null;
+  rangeEndDay: number | null;
   days: UpcomingDay[];
 };
 
@@ -37,6 +39,20 @@ function sameYearMonth(
   return a.year === b.year && a.month === b.month;
 }
 
+function numberLabel(date: Date, today: Date): string {
+  if (
+    date.getFullYear() === today.getFullYear() &&
+    date.getMonth() === today.getMonth()
+  ) {
+    return String(date.getDate());
+  }
+  return `${date.getMonth() + 1}.${date.getDate()}`;
+}
+
+function monthEndDate(ym: { year: number; month: number }): Date {
+  return new Date(ym.year, ym.month, 0);
+}
+
 export function buildUpcomingLayout(items: FeedItem[], today: Date): UpcomingLayout {
   const weekStart = localDay(today, 1);
   const week: UpcomingDay[] = [];
@@ -48,13 +64,35 @@ export function buildUpcomingLayout(items: FeedItem[], today: Date): UpcomingLay
     weekIndex.set(dateKey, i);
     week.push({
       dateKey,
-      dayOfMonth: date.getDate(),
+      numberLabel: numberLabel(date, today),
       isTomorrow: i === 0,
       items: [],
     });
   }
 
   const weekEndKey = week[6].dateKey;
+  let cursor = localDay(fromInputDateValue(weekEndKey), 1);
+  const later: UpcomingLaterMonth[] = [];
+
+  for (let i = 0; i < 3; i++) {
+    const ym = yearMonth(cursor);
+    const monthEnd = monthEndDate(ym);
+    const overlapsWeek = week.some((day) =>
+      sameYearMonth(yearMonth(fromInputDateValue(day.dateKey)), ym),
+    );
+    later.push({
+      year: ym.year,
+      month: ym.month,
+      showYear: ym.year !== today.getFullYear(),
+      headingKind: overlapsWeek ? 'range' : 'name',
+      rangeStartDay: overlapsWeek ? cursor.getDate() : null,
+      rangeEndDay: overlapsWeek ? monthEnd.getDate() : null,
+      days: [],
+    });
+    cursor = localDay(monthEnd, 1);
+  }
+
+  const laterEndKey = toInputDateValue(monthEndDate(later[2]));
   const laterByDate = new Map<string, FeedItem[]>();
 
   for (const item of items) {
@@ -65,7 +103,7 @@ export function buildUpcomingLayout(items: FeedItem[], today: Date): UpcomingLay
       week[idx].items.push(item);
       continue;
     }
-    if (dateKey > weekEndKey) {
+    if (dateKey > weekEndKey && dateKey <= laterEndKey) {
       const bucket = laterByDate.get(dateKey);
       if (bucket) bucket.push(item);
       else laterByDate.set(dateKey, [item]);
@@ -73,31 +111,16 @@ export function buildUpcomingLayout(items: FeedItem[], today: Date): UpcomingLay
   }
 
   const laterDateKeys = [...laterByDate.keys()].sort((a, b) => a.localeCompare(b));
-  const todayYear = today.getFullYear();
-  const weekEnd = yearMonth(fromInputDateValue(weekEndKey));
-  const later: UpcomingLaterMonth[] = [];
-
   for (const dateKey of laterDateKeys) {
     const date = fromInputDateValue(dateKey);
     const ym = yearMonth(date);
-    const day: UpcomingDay = {
+    const month = later.find((block) => sameYearMonth(block, ym));
+    if (!month) continue;
+    month.days.push({
       dateKey,
-      dayOfMonth: date.getDate(),
+      numberLabel: numberLabel(date, today),
       isTomorrow: false,
       items: laterByDate.get(dateKey) ?? [],
-    };
-    const current = later[later.length - 1];
-    if (current && sameYearMonth(current, ym)) {
-      current.days.push(day);
-      continue;
-    }
-    const prev = current ?? weekEnd;
-    later.push({
-      year: ym.year,
-      month: ym.month,
-      showYear: ym.year !== todayYear,
-      showHeading: !sameYearMonth(ym, prev),
-      days: [day],
     });
   }
 
