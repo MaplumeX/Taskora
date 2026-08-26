@@ -1789,3 +1789,25 @@ Rebuilt Upcoming as a Things 3-style week board: always-visible next 7 days from
 ### Status
 
 [OK] **Completed**
+
+
+## Session 57: Upcoming month labels and 3-month later window
+
+**Date**: 2026-08-26
+**Task**: Upcoming month labels and 3-month later window
+**Branch**: `feat/upcoming-things3-inspired-ui`
+
+### Summary
+
+Upcoming day headers now show M.D for dates outside today's month. After the 7-day window, always render 3 month blocks (overlapping months as remaining-date range titles). Empty headers keep placeholder space; items past the 3-month window are not shown. Spec updated.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `03ad456` | (see git log) |
+| `3545721` | (see git log) |
+
+### Status
+
+[OK] **Completed**
