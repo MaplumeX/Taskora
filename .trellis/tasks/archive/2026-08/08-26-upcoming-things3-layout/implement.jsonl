@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "New upcomingLayout helper and page rewrite must follow frontend file layout (pages vs components vs lib/utils)"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Upcoming day headers and FeedItemRow/TaskItem/ProjectFeedRow badge prop must match existing component patterns"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Lint, typecheck, test, export, and naming conventions for the new helper and page"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "Tomorrow label uses common:tomorrow; weekday/month via Intl; zh/en parity; do not add unused keys"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "FeedItem types come from @taskora/shared; no duplicate DTOs"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse toDateKey/toInputDateValue instead of inventing a second date-key helper"}
