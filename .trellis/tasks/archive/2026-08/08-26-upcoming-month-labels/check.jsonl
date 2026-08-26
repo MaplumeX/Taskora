@@ -1,0 +1,5 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Verify Upcoming day numbers, 3-month later section, range headings, and empty placeholders"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Verify lint, typecheck, tests, and no extra abstractions"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "Verify tomorrow/weekday/month labeling and that range titles do not add unused keys"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "Verify no local DTO duplication and shared types for FeedItem"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Verify date-key helper reuse and no parallel grouping logic"}

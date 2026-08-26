@@ -22,6 +22,7 @@ interface Props {
   selectionState?: SelectionState;
   onToggleComplete: () => void;
   onRowClick?: () => void;
+  showScheduledBadge?: boolean;
 }
 
 export function TaskItem({
@@ -31,6 +32,7 @@ export function TaskItem({
   selectionState = 'idle',
   onToggleComplete,
   onRowClick,
+  showScheduledBadge = true,
 }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -181,7 +183,9 @@ export function TaskItem({
           {tag && (
             <span className="hidden text-xs text-muted-foreground sm:inline">{tag}</span>
           )}
-          <TaskDateBadge scheduledDate={current.scheduledDate} />
+          {showScheduledBadge && (
+            <TaskDateBadge scheduledDate={current.scheduledDate} />
+          )}
           <TaskDueDateBadge dueDate={current.dueDate} />
 
         </div>

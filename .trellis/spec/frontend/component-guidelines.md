@@ -536,7 +536,7 @@ if (!sortable || !onReorder) {
 ```
 
 - `SearchModal`、`Trash`、`Logbook` 等不应拖拽的页面传 `sortable={false}`
-- `Upcoming` 不走 `TaskListView`，自己渲染 `TaskItem`，天然无 DnD
+- `Upcoming` 不走 `TaskListView` / `FeedListView`，自己按日头渲染 `FeedItemRow`，天然无 DnD
 
 ### Common Mistake: useSensors 在 early return 之后调用
 
@@ -700,3 +700,15 @@ const offset = CIRCUMFERENCE * (1 - ratio);
 - state 为 `Record<entityId, boolean>` 形式，每个实体独立记忆
 - 与 `theme.store.ts`（全局偏好）的区别：按实体 ID 维度存储，消费方传 `projectId` 读取
 - 与 `uiInteraction.store.ts`（瞬态）的区别：持久化，刷新后保持
+
+## Upcoming page layout
+
+`Upcoming.tsx` is a week board starting tomorrow, not a flat date-grouped list:
+
+- Always render 7 day headers from local tomorrow (including empty days). The success state does not use the `task:upcomingEmpty` page empty state.
+- Day number: if the date is in today's calendar month, show the day only (`31`). Otherwise show `M.D` with no zero-padding (`9.1`, `9.12`). Week days and later-month days share this rule. The first day still uses `common:tomorrow`; other days use `Intl` weekday long. Header: large tabular-nums date + weekday + `border-border` rule.
+- After the 7-day window, always render 3 month blocks. If that month overlaps the week window, the heading is the remaining date range `M/D-M/D` (no padding), e.g. `9/3-9/30`. Non-overlapping months use `Intl` `{ month: 'long' }`, plus year when the month is not in today's year.
+- Layout is built by the pure function `buildUpcomingLayout(items, today)`. Items after the 7th day and within those 3 months bucket into the matching month; days inside a month are listed only when they have items. Items without `scheduledDate`, before the window, or after the last day of the 3rd month are dropped (feed data is unchanged).
+- Each week day header and each month heading has a content slot with `min-h-12` so empty titles still leave placeholder space.
+- The page uses `FeedItemRow` with `showScheduledBadge={false}` (the scheduled date is already the day header; due-date badges still show). `TaskItem` / `ProjectFeedRow` default `showScheduledBadge` to `true`, so Today / Inbox and other lists are unchanged.
+- Drag-reschedule, add-on-a-day, and a mini calendar are not implemented.
