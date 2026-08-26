@@ -117,7 +117,7 @@ export function FeedListView({ items, emptyHint, sortable }: Props) {
             <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
           </svg>
         </div>
-        <p className="text-sm text-muted-foreground">
+        <p className="font-display text-base font-semibold text-muted-foreground">
           {emptyHint ?? t('task:empty')}
         </p>
       </div>

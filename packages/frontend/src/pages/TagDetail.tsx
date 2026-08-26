@@ -32,7 +32,7 @@ export default function TagDetail() {
               style={{ backgroundColor: tag.color }}
             />
           )}
-          <h1 className="text-xl font-semibold tracking-tight">
+          <h1 className="font-display text-3xl font-semibold tracking-tight">
             {tag?.title ?? t('tag:defaultTitle')}
           </h1>
         </div>

@@ -36,7 +36,7 @@ export function TagsField({ current, onPatch }: FieldProps) {
                 onPatch({ tagIds: next });
               }}
               className={cn(
-                'flex items-center gap-1.5 rounded-sm px-2 py-1.5 text-left text-sm hover:bg-accent',
+                'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent',
                 selected ? 'opacity-100' : 'opacity-50',
               )}
               style={{ color: tag.color }}

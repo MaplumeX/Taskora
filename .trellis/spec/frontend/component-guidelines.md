@@ -112,7 +112,7 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 - Tailwind utility classes，不用 CSS modules
 - shadcn/ui 组件作为基础，用 `className` prop 覆盖样式
 - `cn()` 工具函数（`src/lib/utils.ts`）合并条件类名
-- Things3 配色：主色蓝 `primary`（浅色 HSL `218 45% 54%` ≈ #4477CE；暗色 `218 65% 62%` 提亮避免暗底发闷）
+- Soft Studio 配色：奶油白底 `40 33% 97%` / 暖炭前景 `270 12% 18%` / 单一紫罗兰主色 `primary`（浅色 HSL `262 60% 58%`；暗色提亮到 `262 65% 68%`，`primary-foreground` 暗色换为深色 `270 20% 10%` 保证对比）；暖灰 token hue 集中 30–40；`--radius: 0.75rem`；Display 字体 `Outfit`（`font-display` 工具类）用于 ≥text-xl 标题，正文 Inter；`shadow-soft`（暖色双层柔影）/ `shadow-lift`（弹层浮起）为统一阴影工具类
 - 主题色全部走 CSS 变量（HSL，定义在 `src/index.css` 的 `:root` 和 `.dark`），不硬编码 `bg-white`/`text-black` 类
 - 暗色模式：`tailwind.config.js` 已开 `darkMode: ['class']`，`<html>` 上切换 `.dark` class
 
@@ -158,7 +158,7 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 - `TaskItem` 在标题右侧渲染两个日期徽章（顺序：计划日期 → 到期日期）：
   1. `TaskDateBadge` — 计划日期（`task.scheduledDate`），使用 `Calendar` 图标
   2. `TaskDueDateBadge` — 到期日期（`task.dueDate`），使用 `Clock` 图标
-- 两者复用 `formatDateLabel` / `isOverdue` / `isToday`（`@/lib/utils/date`），今天/逾期渲染为 `text-[#CC4444]`，其余 `text-muted-foreground`
+- 两者复用 `formatDateLabel` / `isOverdue` / `isToday`（`@/lib/utils/date`），今天/逾期渲染为 `text-destructive`，其余 `text-muted-foreground`
 - 日期为 `null` 时徽章组件返回 `null`（不渲染）
 - `Calendar` 与 `Clock` 两个图标区分两个日期语义，勿混用
 
@@ -228,7 +228,7 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 
 ### 展开编辑态纵向布局（TaskRowExpanded）
 
-展开区根 `<div>` 使用 paper 容器样式：`rounded-xl border border-border/50 bg-card px-3 py-2.5 shadow-sm`，视觉上从列表行中浮起为独立卡片。外层 `TaskItem` 展开态保留 `bg-muted/60` 作为画布衬托。
+展开区根 `<div>` 使用 paper 容器样式：`rounded-xl border border-border/60 bg-card px-3 py-2.5 shadow-soft`，视觉上从列表行中浮起为独立卡片。外层 `TaskItem` 展开态保留 `bg-muted/50 rounded-lg` 作为画布衬托；折叠态行 hover 用 `hover:bg-accent/50`、选中态用 `bg-accent rounded-lg`（均不再用 muted）。
 
 展开区从上到下依次为：
 

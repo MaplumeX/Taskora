@@ -88,7 +88,7 @@ export default function ProjectDetail() {
           ) : detailError && !detailLoading ? (
             <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
           ) : (
-            <h1 className="text-xl font-semibold tracking-tight">{t('project:defaultTitle')}</h1>
+            <h1 className="font-display text-3xl font-semibold tracking-tight">{t('project:defaultTitle')}</h1>
           )}
         </div>
         {project && (

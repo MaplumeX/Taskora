@@ -23,9 +23,9 @@ export default function Register() {
   const mismatch = confirm.length > 0 && password !== confirm;
 
   return (
-    <div className="flex min-h-dvh items-center justify-center bg-secondary/40 px-4 noise-overlay">
-      <div className="relative w-full max-w-sm rounded-2xl border border-border/50 bg-card p-8 shadow-soft">
-        <h1 className="mb-1 text-center text-2xl font-semibold tracking-tight">
+    <div className="flex min-h-dvh items-center justify-center bg-secondary/40 px-4 noise-overlay bg-[radial-gradient(60%_50%_at_50%_0%,hsl(var(--primary)/0.06),transparent)]">
+      <div className="relative w-full max-w-sm rounded-2xl border border-border/50 bg-card p-8 shadow-lift">
+        <h1 className="mb-1 text-center font-display text-3xl font-semibold tracking-tight">
           {t('auth:createAccount')}
         </h1>
         <p className="mb-6 text-center text-sm text-muted-foreground">{t('auth:registerSubtitle')}</p>

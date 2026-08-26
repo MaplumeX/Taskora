@@ -55,7 +55,7 @@ export default function Tags() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold tracking-tight">{t('nav:tags')}</h1>
+        <h1 className="font-display text-3xl font-semibold tracking-tight">{t('nav:tags')}</h1>
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => setGroupFormOpen(true)}>
             {t('tag:newGroup')}

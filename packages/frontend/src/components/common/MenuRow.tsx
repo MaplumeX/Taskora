@@ -11,7 +11,7 @@ interface MenuRowProps {
 }
 
 const BASE_CLASS =
-  'relative flex w-full cursor-default select-none items-center gap-2 rounded-sm px-2 py-1.5 text-sm outline-none transition-colors';
+  'relative flex w-full cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none transition-colors';
 
 export const MenuRow = React.forwardRef<HTMLButtonElement, MenuRowProps>(
   ({ icon: Icon, destructive, onClick, children }, ref) => {

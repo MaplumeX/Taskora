@@ -93,11 +93,13 @@ export default function Logbook() {
 
   return (
     <div className="flex flex-col gap-4" onClick={handleBlankClick}>
-      <h1 className="text-xl font-semibold tracking-tight">{t('nav:logbook')}</h1>
+      <h1 className="font-display text-3xl font-semibold tracking-tight">{t('nav:logbook')}</h1>
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : !hasAny ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">{t('task:logbookEmpty')}</p>
+        <p className="py-8 text-center font-display text-base font-semibold text-muted-foreground">
+          {t('task:logbookEmpty')}
+        </p>
       ) : (
         <>
           {renderGroup(t('common:today'), grouped.today)}

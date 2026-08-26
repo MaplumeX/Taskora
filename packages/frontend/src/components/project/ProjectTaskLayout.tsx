@@ -623,7 +623,7 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
           <DragOverlay>
             {activeTask ? (
               <div
-                className="pointer-events-none w-[min(36rem,calc(100vw-2rem))] overflow-hidden rounded-md border border-border/70 bg-card shadow-lg"
+                className="pointer-events-none w-[min(36rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border/70 bg-card shadow-lift"
                 aria-hidden="true"
                 {...{ inert: '' }}
               >

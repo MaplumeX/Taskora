@@ -1,0 +1,5 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component patterns, inline-edit, sidebar drag, TaskRowExpanded styling — implementer must not break these while re-theming"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Quality bar: tests, lint, typecheck"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "i18n keys unchanged — visual refactor must not touch locales"}
+{"file": ".trellis/tasks/08-26-redesign-visual-style/design.md", "reason": "Source of truth for Soft Studio tokens, radius, shadow, motion, per-component changes"}

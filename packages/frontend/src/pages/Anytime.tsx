@@ -9,7 +9,7 @@ export default function Anytime() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="text-xl font-semibold tracking-tight">{t('nav:anytime')}</h1>
+      <h1 className="font-display text-3xl font-semibold tracking-tight">{t('nav:anytime')}</h1>
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (

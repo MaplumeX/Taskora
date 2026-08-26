@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 57
+- **Total Sessions**: 58
 - **Last Active**: 2026-08-26
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1813 | Active |
+| `journal-1.md` | ~1834 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 58 | 2026-08-26 | Soft Studio 视觉风格重构 | `6803ad0` | `feat/project-visual-style-refactor` |
 | 57 | 2026-08-26 | Upcoming month labels and 3-month later window | `03ad456`, `3545721` | `feat/upcoming-things3-inspired-ui` |
 | 56 | 2026-08-26 | Things 3 style Upcoming week skeleton | `db06454`, `8615862` | `feat/upcoming-things3-inspired-ui` |
 | 55 | 2026-08-10 | Improve sidebar project drag feedback | `4308554`, `bea57bd` | `main` |
