@@ -536,7 +536,7 @@ if (!sortable || !onReorder) {
 ```
 
 - `SearchModal`、`Trash`、`Logbook` 等不应拖拽的页面传 `sortable={false}`
-- `Upcoming` 不走 `TaskListView`，自己渲染 `TaskItem`，天然无 DnD
+- `Upcoming` 不走 `TaskListView` / `FeedListView`，自己按日头渲染 `FeedItemRow`，天然无 DnD
 
 ### Common Mistake: useSensors 在 early return 之后调用
 
@@ -700,3 +700,13 @@ const offset = CIRCUMFERENCE * (1 - ratio);
 - state 为 `Record<entityId, boolean>` 形式，每个实体独立记忆
 - 与 `theme.store.ts`（全局偏好）的区别：按实体 ID 维度存储，消费方传 `projectId` 读取
 - 与 `uiInteraction.store.ts`（瞬态）的区别：持久化，刷新后保持
+
+## Upcoming 页面布局
+
+`Upcoming.tsx` 是从明天起的周计划板，不是按日期分组的扁平列表：
+
+- 从本地明天起固定渲染 7 个日头（含空日），成功态不使用 `task:upcomingEmpty` 整页空态。
+- 日头：大号等宽日期数字 + `common:tomorrow` 或 `Intl` weekday long + `border-border` 细线。
+- 晚于第 7 天的事项按月收束，只渲染有事项的日子；换月时才出月份标题（`showHeading`），非当前年带年份（`showYear`）。
+- 分组由纯函数 `buildUpcomingLayout(items, today)` 完成；页面用 `FeedItemRow` 且传 `showScheduledBadge={false}`（计划日已由日头表达，截止日徽章仍显示）。`TaskItem` / `ProjectFeedRow` 的 `showScheduledBadge` 默认 `true`，Today / Inbox 等其他列表行为不变。
+- 未实现拖拽改期、某天新增、右侧月历。
