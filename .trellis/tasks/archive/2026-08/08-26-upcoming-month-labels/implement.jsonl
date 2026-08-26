@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "upcomingLayout helper stays in lib/utils; Upcoming page stays in pages"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Upcoming skeleton, day headers, empty placeholders, and FeedItemRow badge behavior"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "Lint, typecheck, test, export, and naming conventions"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "Tomorrow uses common:tomorrow; weekday/month via Intl; range titles are numeric; no unused keys"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "FeedItem types from @taskora/shared; no duplicate DTOs"}
+{"file": ".trellis/spec/guides/code-reuse-thinking-guide.md", "reason": "Reuse toDateKey/toInputDateValue; do not invent a second date-key helper"}

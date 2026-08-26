@@ -1,0 +1,28 @@
+{
+  "id": "upcoming-things3-layout",
+  "name": "upcoming-things3-layout",
+  "title": "Things 3 style Upcoming visual skeleton",
+  "description": "",
+  "status": "completed",
+  "dev_type": null,
+  "scope": null,
+  "package": null,
+  "priority": "P2",
+  "creator": "Maplume",
+  "assignee": "Maplume",
+  "createdAt": "2026-08-26",
+  "completedAt": "2026-08-26",
+  "branch": null,
+  "base_branch": "main",
+  "worktree_path": null,
+  "commit": null,
+  "pr_url": null,
+  "subtasks": [],
+  "children": [],
+  "parent": null,
+  "relatedFiles": [],
+  "notes": "",
+  "meta": {
+    "description": "Upcoming page visual skeleton like Things 3: always-visible next 7 days, large day headers, month grouping after the week. No drag-reschedule or calendar."
+  }
+}
