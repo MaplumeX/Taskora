@@ -5,6 +5,16 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.1.6] - 2026-08-28
+
+### Features
+
+- **frontend**: Refresh UI with the Soft Studio visual system (#10).
+- **upcoming**: Refine layout with month labels and empty-day spacing (#9).
+- **frontend**: Replace favicon with the project icon.
+
+---
+
 ## [0.1.5] - 2026-08-10
 
 ### Features
