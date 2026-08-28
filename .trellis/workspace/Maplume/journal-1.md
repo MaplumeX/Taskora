@@ -1832,3 +1832,24 @@ Upcoming day headers now show M.D for dates outside today's month. After the 7-d
 ### Status
 
 [OK] **Completed**
+
+
+## Session 59: Release v0.1.6
+
+**Date**: 2026-08-28
+**Task**: Release v0.1.6
+**Branch**: `main`
+
+### Summary
+
+发布小版本 v0.1.6：根包与三个子包版本号升级至 0.1.6，CHANGELOG 新增 0.1.6 条目（Soft Studio UI 刷新 #10、Upcoming 月标签布局 #9、favicon 替换），打 tag v0.1.6 并推送。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e2d06c0` | (see git log) |
+
+### Status
+
+[OK] **Completed**
