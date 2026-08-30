@@ -1,6 +1,6 @@
 {
   "worktree": {
-    "setup": "cp \"$PASEO_SOURCE_CHECKOUT_PATH/.trellis/.developer\" .trellis/.developer"
+    "setup": "cp \"$PASEO_SOURCE_CHECKOUT_PATH/.trellis/.developer\" .trellis/.developer\ncp \"$PASEO_SOURCE_CHECKOUT_PATH/.env\" .env\ncp \"$PASEO_SOURCE_CHECKOUT_PATH/packages/backend/.env\" packages/backend/.env\ncp \"$PASEO_SOURCE_CHECKOUT_PATH/packages/frontend/.env\" packages/frontend/.env"
   },
   "metadataGeneration": {
     "branchName": {
