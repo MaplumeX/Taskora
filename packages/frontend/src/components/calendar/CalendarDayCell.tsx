@@ -41,7 +41,7 @@ export function CalendarDayCell({
     <div
       data-calendar-date={dateKey}
       className={cn(
-        'flex min-h-16 flex-col gap-0.5 rounded-lg border border-border/40 bg-card p-1 transition-colors hover:bg-accent/30',
+        'flex min-h-24 flex-col gap-1 rounded-lg border border-border/40 bg-card p-2 transition-colors hover:bg-accent/30',
         outOfMonth && 'opacity-50',
       )}
       // Single click on the cell's blank area opens quick-add (PRD R4).

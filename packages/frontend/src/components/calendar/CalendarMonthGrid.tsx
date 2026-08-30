@@ -31,8 +31,8 @@ export function CalendarMonthGrid({
   );
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="grid grid-cols-7 gap-1">
+    <div className="flex flex-col gap-1.5">
+      <div className="grid grid-cols-7 gap-1.5">
         {weekdayLabels.map((label) => (
           <span
             key={label}
@@ -42,7 +42,7 @@ export function CalendarMonthGrid({
           </span>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid grid-cols-7 gap-1.5">
         {cells.map((date) => (
           <div key={date.toISOString()} className="group/day">
             <CalendarDayCell

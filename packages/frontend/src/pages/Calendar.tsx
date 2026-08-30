@@ -6,16 +6,12 @@ import { toast } from 'sonner';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { CalendarMonthGrid } from '@/components/calendar/CalendarMonthGrid';
-import { CalendarWeekGrid } from '@/components/calendar/CalendarWeekGrid';
 import { Button } from '@/components/ui/button';
 import { useDueTasksQuery } from '@/lib/hooks/useDueTasksQuery';
 import { useCompleteTask, useUncompleteTask } from '@/lib/hooks/useTasks';
 import { usePreferencesStore } from '@/lib/stores/preferences.store';
-import { addDays, addMonths, buildWeekDays, groupByDueDate } from '@/lib/utils/calendarGrid';
-import { cn } from '@/lib/utils';
+import { addMonths, groupByDueDate } from '@/lib/utils/calendarGrid';
 import { i18n } from '@/i18n/config';
-
-type CalendarViewMode = 'month' | 'week';
 
 export default function Calendar() {
   const { t } = useTranslation();
@@ -24,7 +20,6 @@ export default function Calendar() {
   const uncompleteTask = useUncompleteTask();
   const weekStartsOn = usePreferencesStore((s) => s.weekStartsOn);
 
-  const [viewMode, setViewMode] = useState<CalendarViewMode>('month');
   const [anchor, setAnchor] = useState(() => new Date());
 
   const tasksByDate = useMemo(() => groupByDueDate(tasks), [tasks]);
@@ -42,9 +37,7 @@ export default function Calendar() {
   };
 
   const step = (direction: 1 | -1) => {
-    setAnchor((prev) =>
-      viewMode === 'month' ? addMonths(prev, direction) : addDays(prev, direction * 7),
-    );
+    setAnchor((prev) => addMonths(prev, direction));
   };
 
   const periodLabel = useMemo(() => {
@@ -52,19 +45,8 @@ export default function Calendar() {
       month: 'long',
       year: 'numeric',
     });
-    if (viewMode === 'month') {
-      return formatter.format(anchor);
-    }
-    const [start, end] = (() => {
-      const days = buildWeekDays(anchor, weekStartsOn);
-      return [days[0], days[6]];
-    })();
-    const rangeFormatter = new Intl.DateTimeFormat(i18n.language, {
-      month: 'short',
-      day: 'numeric',
-    });
-    return `${rangeFormatter.format(start)} – ${rangeFormatter.format(end)}`;
-  }, [anchor, viewMode, weekStartsOn, i18n.language]);
+    return formatter.format(anchor);
+  }, [anchor, i18n.language]);
 
   return (
     <div className="flex flex-col gap-4">
@@ -72,23 +54,6 @@ export default function Calendar() {
         <h1 className="font-display text-3xl font-semibold tracking-tight">
           {t('nav:calendar')}
         </h1>
-        <div className="flex items-center gap-1 rounded-full bg-secondary p-1">
-          {(['month', 'week'] as const).map((mode) => (
-            <button
-              key={mode}
-              type="button"
-              onClick={() => setViewMode(mode)}
-              className={cn(
-                'rounded-full px-3 py-1 text-sm transition-colors',
-                viewMode === mode
-                  ? 'bg-background font-medium text-foreground shadow-soft'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-            >
-              {t(`calendar:view_${mode}`)}
-            </button>
-          ))}
-        </div>
       </div>
 
       <div className="flex items-center justify-between gap-2">
@@ -116,16 +81,8 @@ export default function Calendar() {
 
       {isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
-      ) : isLoading ? null : viewMode === 'month' ? (
+      ) : isLoading ? null : (
         <CalendarMonthGrid
-          anchor={anchor}
-          tasksByDate={tasksByDate}
-          weekStartsOn={weekStartsOn}
-          locale={i18n.language}
-          onToggleComplete={handleToggleComplete}
-        />
-      ) : (
-        <CalendarWeekGrid
           anchor={anchor}
           tasksByDate={tasksByDate}
           weekStartsOn={weekStartsOn}

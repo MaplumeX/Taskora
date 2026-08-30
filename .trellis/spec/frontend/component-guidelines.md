@@ -712,3 +712,14 @@ const offset = CIRCUMFERENCE * (1 - ratio);
 - Each week day header and each month heading has a content slot with `min-h-12` so empty titles still leave placeholder space.
 - The page uses `FeedItemRow` with `showScheduledBadge={false}` (the scheduled date is already the day header; due-date badges still show). `TaskItem` / `ProjectFeedRow` default `showScheduledBadge` to `true`, so Today / Inbox and other lists are unchanged.
 - Drag-reschedule, add-on-a-day, and a mini calendar are not implemented.
+
+## Calendar page (month view only)
+
+`Calendar.tsx` renders a single month grid (no view switcher; the former week view was removed):
+
+- Navigation: prev/next step whole months via `addMonths` (overflow-safe, e.g. Jan 31 → Feb 28); "Today" resets the anchor. The period label is always `Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' })`.
+- The 6x7 grid is built by `buildMonthCells(anchor, weekStartsOn)` from `calendarGrid.ts`; weekday labels come from `buildWeekdayLabels(locale, weekStartsOn)`. `weekStartsOn` follows the user preference store.
+- `CalendarDayCell` cells are `min-h-24` with `p-2` so the grid fills the main viewport area. `maxRows={3}` caps visible task rows with a `+N more` overflow indicator.
+- Today is a `bg-primary text-primary-foreground` round badge; out-of-month cells dim to `opacity-50`.
+- Quick-add: single click on a day cell's blank area, the hover plus button, or double-click. Task completion toggles inline.
+- `buildWeekDays`/`addDays` were removed with the week view; Upcoming has its own independent `upcomingLayout.ts` — do not couple them.
