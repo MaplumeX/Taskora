@@ -9,13 +9,7 @@ import { CalendarDayCell } from './CalendarDayCell';
 
 /* ------------- mocks ------------- */
 
-const createTaskMock = vi.hoisted(() => vi.fn());
-
 vi.mock('@/lib/hooks/useTasks', () => ({
-  useCreateTask: () => ({
-    mutate: createTaskMock,
-    isPending: false,
-  }),
   useCompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
   useUncompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
 }));
@@ -168,7 +162,7 @@ describe('CalendarDayCell', () => {
     expect(container).toBeTruthy();
   });
 
-  it('single click on blank area opens quick-add', async () => {
+  it('single click on blank area does not open a quick-add input', async () => {
     const user = userEvent.setup();
     render(
       <CalendarDayCell
@@ -184,74 +178,8 @@ describe('CalendarDayCell', () => {
 
     await user.click(cell);
 
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
-  });
-
-  it('click on a task row does not open quick-add', async () => {
-    const user = userEvent.setup();
-    render(
-      <CalendarDayCell
-        date={new Date(2026, 7, 30)}
-        tasks={[task('alpha', '2026-08-30T12:00:00.000Z')]}
-        onToggleComplete={onToggleComplete}
-      />,
-    );
-
-    const row = screen.getByText('alpha');
-    await user.click(row);
-
+    // Regression: calendar is a read-only overview surface — no quick-add
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-  });
-
-  it('quick-add fires create with correct ISO dueDate on Enter', async () => {
-    const user = userEvent.setup();
-    render(
-      <CalendarDayCell
-        date={new Date(2026, 7, 30)}
-        tasks={[]}
-        onToggleComplete={onToggleComplete}
-      />,
-    );
-
-    // open quick-add via the plus button
-    const addButtons = screen.getAllByRole('button');
-    const plusButton = addButtons.find((b) => b.querySelector('svg.lucide-plus'));
-    expect(plusButton).toBeTruthy();
-    await user.click(plusButton!);
-
-    const input = screen.getByLabelText(/task|添加任务|Add task/);
-    await user.type(input, 'New calendar task');
-    await user.keyboard('{Enter}');
-
-    expect(createTaskMock).toHaveBeenCalledWith(
-      {
-        title: 'New calendar task',
-        dueDate: new Date(2026, 7, 30).toISOString(),
-        scheduledType: ScheduledType.NONE,
-      },
-      expect.anything(),
-    );
-  });
-
-  it('ignores empty quick-add title on Enter', async () => {
-    createTaskMock.mockClear();
-    const user = userEvent.setup();
-    render(
-      <CalendarDayCell
-        date={new Date(2026, 7, 30)}
-        tasks={[]}
-        onToggleComplete={onToggleComplete}
-      />,
-    );
-
-    const addButtons = screen.getAllByRole('button');
-    const plusButton = addButtons.find((b) => b.querySelector('svg.lucide-plus'));
-    await user.click(plusButton!);
-
-    const input = screen.getByLabelText(/task|添加任务|Add task/);
-    await user.type(input, '   ');
-    await user.keyboard('{Enter}');
-
-    expect(createTaskMock).not.toHaveBeenCalled();
+    expect(screen.queryByPlaceholderText(/添加任务|Add task/)).not.toBeInTheDocument();
   });
 });

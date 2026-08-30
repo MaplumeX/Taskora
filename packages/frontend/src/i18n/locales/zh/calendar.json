@@ -2,8 +2,6 @@
   "today": "今天",
   "previous": "上一个",
   "next": "下一个",
-  "quickAddPlaceholder": "添加任务…",
-  "addTaskOnDate": "在{{date}}添加任务",
   "overflowMore": "还有 {{count}} 项",
   "monthGridLabel": "月视图网格"
 }
