@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 59
-- **Last Active**: 2026-08-28
+- **Total Sessions**: 60
+- **Last Active**: 2026-08-30
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1855 | Active |
+| `journal-1.md` | ~1876 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 60 | 2026-08-30 | Calendar view feature | `0a86692` | `feat/calendar-view` |
 | 59 | 2026-08-28 | Release v0.1.6 | `e2d06c0` | `main` |
 | 58 | 2026-08-26 | Soft Studio 视觉风格重构 | `6803ad0` | `feat/project-visual-style-refactor` |
 | 57 | 2026-08-26 | Upcoming month labels and 3-month later window | `03ad456`, `3545721` | `feat/upcoming-things3-inspired-ui` |
