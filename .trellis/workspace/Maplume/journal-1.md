@@ -1874,3 +1874,24 @@ Added /calendar page: month (6x7 grid, 3-row overflow) and week views keyed by t
 ### Status
 
 [OK] **Completed**
+
+
+## Session 61: Calendar view optimization: month-only, larger grid
+
+**Date**: 2026-08-30
+**Task**: Calendar view optimization: month-only, larger grid
+**Branch**: `feat/optimize-calendar-view`
+
+### Summary
+
+Removed the calendar week view (CalendarWeekGrid.tsx, viewMode switcher, buildWeekDays/addDays exports, view_month/view_week i18n keys); Calendar page is now month-only with addMonths stepping and fixed month+year period label. Enlarged the month grid: day cell min-h-16 -> min-h-24, p-2 padding, gap-1.5 so the 6x7 grid fills the main viewport; today badge, out-of-month dimming, +N more overflow, quick-add and inline complete preserved. Added Calendar page section to frontend component-guidelines spec. lint/typecheck/vitest (156 tests) all green.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e4dbaef` | (see git log) |
+
+### Status
+
+[OK] **Completed**
