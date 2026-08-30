@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 63
+- **Total Sessions**: 64
 - **Last Active**: 2026-08-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1939 | Active |
+| `journal-1.md` | ~1960 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 64 | 2026-08-30 | Fix settings preference storage & hydration | `03ba5ff` | `fix/settings-data-storage` |
 | 63 | 2026-08-30 | Remove task creation from calendar view | `85011e2` | `feat/optimize-calendar-view` |
 | 62 | 2026-08-30 | Calendar full-width layout, viewport grid, overflow popover | `1e3e811` | `feat/optimize-calendar-view` |
 | 61 | 2026-08-30 | Calendar view optimization: month-only, larger grid | `e4dbaef` | `feat/optimize-calendar-view` |

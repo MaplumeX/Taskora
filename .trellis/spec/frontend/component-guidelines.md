@@ -698,7 +698,7 @@ const offset = CIRCUMFERENCE * (1 - ratio);
 
 - Zustand + `persist` 中间件，localStorage key 用 `taskora-*` 前缀
 - state 为 `Record<entityId, boolean>` 形式，每个实体独立记忆
-- 与 `theme.store.ts`（全局偏好）的区别：按实体 ID 维度存储，消费方传 `projectId` 读取
+- 与 `preferences.store.ts`（全局偏好）的区别：按实体 ID 维度存储，消费方传 `projectId` 读取
 - 与 `uiInteraction.store.ts`（瞬态）的区别：持久化，刷新后保持
 
 ## Upcoming page layout

@@ -1,0 +1,4 @@
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "zustand store refactor: unify preferences/theme stores, persist + merge + migration rules"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "language setting must keep i18next detector key in sync; changeLanguage side effects"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "frontend quality bar and test expectations"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "normalization helper typing (unknown -> validated prefs)"}
