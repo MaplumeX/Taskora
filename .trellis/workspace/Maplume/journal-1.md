@@ -1895,3 +1895,24 @@ Removed the calendar week view (CalendarWeekGrid.tsx, viewMode switcher, buildWe
 ### Status
 
 [OK] **Completed**
+
+
+## Session 62: Calendar full-width layout, viewport grid, overflow popover
+
+**Date**: 2026-08-30
+**Task**: Calendar full-width layout, viewport grid, overflow popover
+**Branch**: `feat/optimize-calendar-view`
+
+### Summary
+
+Researched how FullCalendar/Google Calendar/Notion Calendar handle month-view density, then rebuilt the calendar page: MainContent gained a route-aware canvas variant (/calendar full-width, other pages keep max-w-2xl), the 6x7 grid now stretches to viewport height via flex/grid chain with repeat(6, minmax(80px,1fr)) tracks and short-viewport scroll fallback, task rows compacted to ~22px chips (TaskCheckbox className override), and '+N more' became a FullCalendar-style Radix popover with full day list and inline complete. Check pass fixed a short-viewport row-overlap bug. 158 tests green; frontend spec updated.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1e3e811` | (see git log) |
+
+### Status
+
+[OK] **Completed**

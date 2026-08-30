@@ -8,7 +8,7 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 61
+- **Total Sessions**: 62
 - **Last Active**: 2026-08-30
 <!-- @@@/auto:current-status -->
 
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1897 | Active |
+| `journal-1.md` | ~1918 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 62 | 2026-08-30 | Calendar full-width layout, viewport grid, overflow popover | `1e3e811` | `feat/optimize-calendar-view` |
 | 61 | 2026-08-30 | Calendar view optimization: month-only, larger grid | `e4dbaef` | `feat/optimize-calendar-view` |
 | 60 | 2026-08-30 | Calendar view feature | `0a86692` | `feat/calendar-view` |
 | 59 | 2026-08-28 | Release v0.1.6 | `e2d06c0` | `main` |
