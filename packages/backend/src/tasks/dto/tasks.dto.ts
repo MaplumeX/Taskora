@@ -116,6 +116,16 @@ export class TaskQueryDto {
     return value;
   })
   completed?: boolean;
+
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => {
+    if (value === undefined) return undefined;
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
+  hasDue?: boolean;
 }
 
 export class ReorderDto {

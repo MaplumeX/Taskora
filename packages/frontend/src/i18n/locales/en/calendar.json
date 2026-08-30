@@ -1,0 +1,11 @@
+{
+  "view_month": "Month",
+  "view_week": "Week",
+  "today": "Today",
+  "previous": "Previous",
+  "next": "Next",
+  "quickAddPlaceholder": "Add task…",
+  "addTaskOnDate": "Add task on {{date}}",
+  "monthGridLabel": "Month grid",
+  "overflowMore": "+{{count}} more"
+}

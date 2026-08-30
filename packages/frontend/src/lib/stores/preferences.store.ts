@@ -29,6 +29,17 @@ export const usePreferencesStore = create<PreferencesState>()(
     {
       name: 'taskora-week-starts',
       partialize: (state) => ({ weekStartsOn: state.weekStartsOn }),
+      // Normalize the persisted value: older/hand-written localStorage entries may
+      // store "1"/"0" as strings or be missing entirely. A non-numeric weekStartsOn
+      // poisons date math (Invalid Date) in the calendar and day-picker.
+      merge: (persisted, current) => {
+        const stored = (persisted ?? {}) as Partial<PreferencesState>;
+        const raw: unknown = stored.weekStartsOn;
+        // Strict whitelist: only 0 or "0" mean Sunday start (Number(null) === 0
+        // would otherwise mistype a null entry as Sunday).
+        const weekStartsOn: WeekStartsOn = raw === 0 || raw === '0' ? 0 : 1;
+        return { ...current, ...stored, weekStartsOn };
+      },
     },
   ),
 );

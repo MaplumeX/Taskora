@@ -14,6 +14,7 @@ function PageFallback() {
 
 const Anytime = lazy(() => import('@/pages/Anytime'));
 const AreaDetail = lazy(() => import('@/pages/AreaDetail'));
+const Calendar = lazy(() => import('@/pages/Calendar'));
 const Inbox = lazy(() => import('@/pages/Inbox'));
 const Logbook = lazy(() => import('@/pages/Logbook'));
 const Login = lazy(() => import('@/pages/Login'));
@@ -53,6 +54,7 @@ export const router = createBrowserRouter([
           { path: '/inbox', element: <Inbox /> },
           { path: '/today', element: <Today /> },
           { path: '/upcoming', element: <Upcoming /> },
+          { path: '/calendar', element: <Calendar /> },
           { path: '/anytime', element: <Anytime /> },
           { path: '/someday', element: <Someday /> },
           { path: '/logbook', element: <Logbook /> },

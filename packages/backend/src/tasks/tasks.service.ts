@@ -85,6 +85,9 @@ export class TasksService {
       if (query.tagId) {
         where.tags = { some: { tagId: query.tagId } };
       }
+      if (query.hasDue === true) {
+        where.dueDate = { not: null };
+      }
       if (query.q) {
         // q mode: default ACTIVE, completed=true → [ACTIVE, COMPLETED]
         where.status = query.completed

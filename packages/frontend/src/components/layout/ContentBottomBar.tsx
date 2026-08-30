@@ -15,7 +15,7 @@ import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
 import { useCreateProjectHeading } from '@/lib/hooks/useProjectHeadings';
 
-const HIDE_ADD_TASK_ROUTES = ['/upcoming', '/logbook', '/trash'];
+const HIDE_ADD_TASK_ROUTES = ['/upcoming', '/calendar', '/logbook', '/trash'];
 
 export function ContentBottomBar() {
   const { t } = useTranslation();

@@ -20,6 +20,7 @@ export interface TaskQuery {
   areaId?: string;
   tagId?: string;
   completed?: boolean;
+  hasDue?: boolean;
 }
 
 export function getTasks(params?: TaskQuery): Promise<TaskResponseDto[]> {

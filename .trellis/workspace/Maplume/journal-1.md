@@ -1853,3 +1853,24 @@ Upcoming day headers now show M.D for dates outside today's month. After the 7-d
 ### Status
 
 [OK] **Completed**
+
+
+## Session 60: Calendar view feature
+
+**Date**: 2026-08-30
+**Task**: Calendar view feature
+**Branch**: `feat/calendar-view`
+
+### Summary
+
+Added /calendar page: month (6x7 grid, 3-row overflow) and week views keyed by task dueDate, quick-add on day-cell click, prev/next/today navigation (overflow-safe addMonths/addDays), week start from user preference. Backend GET /tasks gained optional hasDue filter. New calendar i18n namespace (zh/en). Tests: calendarGrid (19) + CalendarDayCell (8); lint/typecheck/test all green.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `0a86692` | (see git log) |
+
+### Status
+
+[OK] **Completed**
