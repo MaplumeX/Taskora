@@ -4,6 +4,7 @@ import { initReactI18next } from 'react-i18next';
 
 import commonZh from './locales/zh/common.json';
 import navZh from './locales/zh/nav.json';
+import calendarZh from './locales/zh/calendar.json';
 import taskZh from './locales/zh/task.json';
 import projectZh from './locales/zh/project.json';
 import areaZh from './locales/zh/area.json';
@@ -15,6 +16,7 @@ import settingsZh from './locales/zh/settings.json';
 
 import commonEn from './locales/en/common.json';
 import navEn from './locales/en/nav.json';
+import calendarEn from './locales/en/calendar.json';
 import taskEn from './locales/en/task.json';
 import projectEn from './locales/en/project.json';
 import areaEn from './locales/en/area.json';
@@ -28,6 +30,7 @@ export const defaultNS = 'common';
 export const namespaces = [
   'common',
   'nav',
+  'calendar',
   'task',
   'project',
   'area',
@@ -46,6 +49,7 @@ void i18n
       zh: {
         common: commonZh,
         nav: navZh,
+        calendar: calendarZh,
         task: taskZh,
         project: projectZh,
         area: areaZh,
@@ -58,6 +62,7 @@ void i18n
       en: {
         common: commonEn,
         nav: navEn,
+        calendar: calendarEn,
         task: taskEn,
         project: projectEn,
         area: areaEn,

@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
+  Calendar,
   CalendarDays,
   ChevronDown,
   Circle,
@@ -47,6 +48,7 @@ const mainNav: NavItem[] = [
   { to: '/inbox', labelKey: 'nav:inbox', icon: Inbox },
   { to: '/today', labelKey: 'nav:today', icon: Sun },
   { to: '/upcoming', labelKey: 'nav:upcoming', icon: CalendarDays },
+  { to: '/calendar', labelKey: 'nav:calendar', icon: Calendar },
   { to: '/anytime', labelKey: 'nav:anytime', icon: Circle },
   { to: '/someday', labelKey: 'nav:someday', icon: CloudSun },
   { to: '/logbook', labelKey: 'nav:logbook', icon: Notebook },

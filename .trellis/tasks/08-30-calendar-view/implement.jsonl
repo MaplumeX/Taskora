@@ -1,0 +1,6 @@
+{"file": ".trellis/spec/frontend/directory-structure.md", "reason": "Where pages/components/hooks/utils files must live for the new calendar feature"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "Component patterns, theme/Soft Studio styling conventions for new calendar components"}
+{"file": ".trellis/spec/frontend/hook-guidelines.md", "reason": "TanStack Query hook conventions for useDueTasksQuery and cache invalidation"}
+{"file": ".trellis/spec/frontend/state-management.md", "reason": "Query key / cache conventions the calendar list must follow"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "Namespace setup and zh/en parity rules for new calendar strings"}
+{"file": ".trellis/spec/frontend/type-safety.md", "reason": "shared DTO import rules when extending TaskQuery with hasDue"}
