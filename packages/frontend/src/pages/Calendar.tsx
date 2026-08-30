@@ -11,7 +11,7 @@ import { Button } from '@/components/ui/button';
 import { useDueTasksQuery } from '@/lib/hooks/useDueTasksQuery';
 import { useCompleteTask, useUncompleteTask } from '@/lib/hooks/useTasks';
 import { usePreferencesStore } from '@/lib/stores/preferences.store';
-import { addDays, addMonths, groupByDueDate } from '@/lib/utils/calendarGrid';
+import { addDays, addMonths, buildWeekDays, groupByDueDate } from '@/lib/utils/calendarGrid';
 import { cn } from '@/lib/utils';
 import { i18n } from '@/i18n/config';
 
@@ -55,10 +55,10 @@ export default function Calendar() {
     if (viewMode === 'month') {
       return formatter.format(anchor);
     }
-    const start = new Date(anchor);
-    start.setDate(start.getDate() - ((anchor.getDay() - weekStartsOn + 7) % 7));
-    const end = new Date(start);
-    end.setDate(start.getDate() + 6);
+    const [start, end] = (() => {
+      const days = buildWeekDays(anchor, weekStartsOn);
+      return [days[0], days[6]];
+    })();
     const rangeFormatter = new Intl.DateTimeFormat(i18n.language, {
       month: 'short',
       day: 'numeric',
