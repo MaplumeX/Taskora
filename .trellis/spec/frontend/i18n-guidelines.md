@@ -41,7 +41,7 @@ supportedLngs: ['zh', 'en'],
 fallbackLng: 'en',
 ```
 
-- localStorage key：`taskora-lang`（与 `taskora-theme`、`taskora-auth` 同前缀约定）
+- localStorage key：`taskora-lang`（与 `taskora-preferences`、`taskora-auth` 同前缀约定）；该 key 仍由 detector 读写（回滚到旧版本安全），但语言的单一读取来源是统一偏好 store（`taskora-preferences`）
 - 切换语言调 `i18n.changeLanguage(lng)`，detector 自动持久化，无需手写 localStorage
 
 ---

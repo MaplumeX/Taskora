@@ -5,6 +5,13 @@ import type { AuthResponseDto } from '@taskora/shared';
 
 export type AuthUser = AuthResponseDto['user'];
 
+/** Strip the `preferences` field from a user object (auth snapshot hygiene). */
+function omitPreferences(user: AuthUser): Omit<AuthUser, 'preferences'> {
+  const { preferences, ...rest } = user;
+  void preferences;
+  return rest;
+}
+
 interface AuthState {
   token: string | null;
   user: AuthUser | null;
@@ -30,7 +37,13 @@ export const useAuthStore = create<AuthState>()(
     }),
     {
       name: 'taskora-auth',
-      partialize: (state) => ({ user: state.user }),
+      // Persist the user snapshot for session recovery, but strip the
+      // `preferences` field — preferences live in the unified preferences
+      // store (`taskora-preferences`) and are re-hydrated from the server
+      // during recovery. Keeping a copy here left a stale duplicate.
+      partialize: (state) => ({
+        user: state.user ? omitPreferences(state.user) : null,
+      }),
     },
   ),
 );

@@ -1937,3 +1937,24 @@ Removed CalendarQuickAdd and all quick-add entry points (blank-area click/double
 ### Status
 
 [OK] **Completed**
+
+
+## Session 64: Fix settings preference storage & hydration
+
+**Date**: 2026-08-30
+**Task**: Fix settings preference storage & hydration
+**Branch**: `fix/settings-data-storage`
+
+### Summary
+
+Diagnosed 'selected setting shows no highlight' bug: hydrateFromServer bypassed normalization, letting dirty server Json values (string '0' weekStartsOn) into the store where strict-equality UI checks match nothing. Fixed by consolidating theme+language+weekStartsOn into one preferences store (key taskora-preferences) with normalizePreferences() as the single whitelist entry for both localStorage rehydrate and server hydration, legacy-key migration (old keys kept for rollback), optimistic-update rollback on save failure, and stripping preferences from the persisted auth snapshot. Updated state-management/i18n/directory-structure specs. All gates green: 176 tests, typecheck, lint.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `03ba5ff` | (see git log) |
+
+### Status
+
+[OK] **Completed**
