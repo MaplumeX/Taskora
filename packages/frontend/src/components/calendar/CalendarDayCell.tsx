@@ -6,6 +6,7 @@ import type { TaskResponseDto } from '@taskora/shared';
 
 import { CalendarQuickAdd } from './CalendarQuickAdd';
 import { CalendarTaskRow } from './CalendarTaskRow';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { isToday, toInputDateValue } from '@/lib/utils/date';
 import { i18n } from '@/i18n/config';
@@ -37,11 +38,17 @@ export function CalendarDayCell({
 
   const startAdd = () => setAdding(true);
 
+  const popoverDateLabel = new Intl.DateTimeFormat(i18n.language, {
+    month: 'short',
+    day: 'numeric',
+    weekday: 'long',
+  }).format(date);
+
   return (
     <div
       data-calendar-date={dateKey}
       className={cn(
-        'flex min-h-24 flex-col gap-1 rounded-lg border border-border/40 bg-card p-2 transition-colors hover:bg-accent/30',
+        'group/day flex min-h-20 flex-col gap-1 overflow-hidden rounded-lg border border-border/40 bg-card p-2 transition-colors hover:bg-accent/30',
         outOfMonth && 'opacity-50',
       )}
       // Single click on the cell's blank area opens quick-add (PRD R4).
@@ -84,9 +91,35 @@ export function CalendarDayCell({
       ))}
 
       {overflowCount > 0 && (
-        <span className="px-1 text-[11px] text-muted-foreground">
-          {t('calendar:overflowMore', { count: overflowCount })}
-        </span>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              onClick={(e) => e.stopPropagation()}
+              className="rounded-sm px-1 text-left text-[11px] font-medium text-primary hover:bg-accent/60"
+            >
+              {t('calendar:overflowMore', { count: overflowCount })}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            className="flex max-h-80 w-64 flex-col gap-1 p-3"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="px-1 pb-1 text-sm font-semibold text-foreground">
+              {popoverDateLabel}
+            </p>
+            <div className="flex flex-col gap-0.5 overflow-y-auto">
+              {tasks.map((task) => (
+                <CalendarTaskRow
+                  key={task.id}
+                  task={task}
+                  onToggleComplete={onToggleComplete}
+                />
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
       )}
 
       {adding && <CalendarQuickAdd dateKey={dateKey} onDone={() => setAdding(false)} />}

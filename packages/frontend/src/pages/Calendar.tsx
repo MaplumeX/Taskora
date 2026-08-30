@@ -49,7 +49,7 @@ export default function Calendar() {
   }, [anchor, i18n.language]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex h-full flex-col gap-3 pb-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="font-display text-3xl font-semibold tracking-tight">
           {t('nav:calendar')}
