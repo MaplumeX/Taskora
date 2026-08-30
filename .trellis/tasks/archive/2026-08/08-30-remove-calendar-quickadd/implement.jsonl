@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "frontend layer spec overview"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "calendar day-cell component changes"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "removing i18n keys for quick-add"}

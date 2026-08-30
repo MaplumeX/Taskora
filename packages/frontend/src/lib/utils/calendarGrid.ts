@@ -34,26 +34,6 @@ export function addMonths(anchor: Date, direction: number): Date {
   return new Date(anchor.getFullYear(), targetMonth, 1);
 }
 
-/** Shift `anchor` by whole days (timezone-safe via calendar-day math). */
-export function addDays(anchor: Date, days: number): Date {
-  return new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate() + days);
-}
-
-/** Build the 7 days of the week containing `anchor`, starting on `weekStartsOn`. */
-export function buildWeekDays(anchor: Date, weekStartsOn: WeekStartsOn = 1): Date[] {
-  const shift = (anchor.getDay() - weekStartsOn + 7) % 7;
-  const start = new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate());
-  start.setDate(start.getDate() - shift);
-
-  const days: Date[] = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(start);
-    d.setDate(start.getDate() + i);
-    days.push(d);
-  }
-  return days;
-}
-
 /**
  * Group tasks by their local-date `dueDate` key (`yyyy-MM-dd`).
  * Tasks without a `dueDate` are skipped.

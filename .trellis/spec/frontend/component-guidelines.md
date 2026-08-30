@@ -712,3 +712,15 @@ const offset = CIRCUMFERENCE * (1 - ratio);
 - Each week day header and each month heading has a content slot with `min-h-12` so empty titles still leave placeholder space.
 - The page uses `FeedItemRow` with `showScheduledBadge={false}` (the scheduled date is already the day header; due-date badges still show). `TaskItem` / `ProjectFeedRow` default `showScheduledBadge` to `true`, so Today / Inbox and other lists are unchanged.
 - Drag-reschedule, add-on-a-day, and a mini calendar are not implemented.
+
+## Calendar page (month view only)
+
+`Calendar.tsx` renders a single month grid (no view switcher; the former week view was removed). It is registered as a **canvas route** in `MainContent.tsx` (`CANVAS_ROUTES = ['/calendar']`): that route drops the `max-w-2xl` list container and instead gets a full-width, full-height container (`h-full px-6 pt-4`; all other routes keep `max-w-2xl px-6 pb-12 pt-8`). The Calendar page root is `flex h-full flex-col` so the grid area takes the remaining viewport height (`flex-1 min-h-0`); the page adds its own `pb-4`. Both route variants keep `overflow-y-auto` on `main` — canvas pages simply fit the height so no scrollbar appears, while short viewports scroll as a fallback.
+
+- Navigation: prev/next step whole months via `addMonths` (overflow-safe, e.g. Jan 31 → Feb 28); "Today" resets the anchor. The period label is always `Intl.DateTimeFormat(locale, { month: 'long', year: 'numeric' })`.
+- The 6x7 grid is built by `buildMonthCells(anchor, weekStartsOn)` from `calendarGrid.ts`; weekday labels come from `buildWeekdayLabels(locale, weekStartsOn)`. `weekStartsOn` follows the user preference store.
+- The grid container is `grid grid-cols-7 grid-rows-[repeat(6,minmax(80px,1fr))] gap-1.5 min-h-0 flex-1` — week rows evenly split the remaining viewport height (no fixed cell height); each row keeps a 80px `minmax` floor so short viewports fall back to page scroll instead of overlapping cells. `CalendarDayCell` keeps a `min-h-20` collapse guard and `overflow-hidden` so extra rows clip instead of stretching the row.
+- `maxRows={3}` caps visible task rows; the "+N more" indicator is a button that opens a Radix `Popover` (`@/components/ui/popover`) with a date header (`Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric', weekday: 'long' })`) and the day's full task list reusing `CalendarTaskRow` — completion can be toggled inside the popover. Clicking outside closes it. A fixed `maxRows` + popover was chosen over dynamic row estimation for simplicity and reliability.
+- Today is a `bg-primary text-primary-foreground` round badge; out-of-month cells dim to `opacity-50`.
+- Quick-add / task creation was removed from the calendar view: day cells have no click handlers or plus button, and `CalendarQuickAdd.tsx` is deleted. The calendar is read-only for creation; task completion toggles inline.
+- `buildWeekDays`/`addDays` were removed with the week view; Upcoming has its own independent `upcomingLayout.ts` — do not couple them.

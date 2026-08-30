@@ -3,10 +3,8 @@ import type { TaskResponseDto } from '@taskora/shared';
 import { describe, expect, it } from 'vitest';
 
 import {
-  addDays,
   addMonths,
   buildMonthCells,
-  buildWeekDays,
   buildWeekdayLabels,
   groupByDueDate,
 } from './calendarGrid';
@@ -58,20 +56,6 @@ describe('addMonths', () => {
   });
 });
 
-describe('addDays', () => {
-  it('shifts by whole days across month boundaries', () => {
-    const next = addDays(new Date(2026, 7, 30), 7);
-    expect(next.getDate()).toBe(6);
-    expect(next.getMonth()).toBe(8);
-  });
-
-  it('supports negative shifts', () => {
-    const prev = addDays(new Date(2026, 8, 2), -7);
-    expect(prev.getDate()).toBe(26);
-    expect(prev.getMonth()).toBe(7);
-  });
-});
-
 describe('buildMonthCells', () => {
   it('returns exactly 42 cells', () => {
     expect(buildMonthCells(new Date(2026, 7, 15))).toHaveLength(42);
@@ -115,33 +99,6 @@ describe('buildMonthCells', () => {
         (cells[i].getTime() - cells[i - 1].getTime()) / 86_400_000;
       expect(diff).toBe(1);
     }
-  });
-});
-
-describe('buildWeekDays', () => {
-  it('returns 7 consecutive days starting on the week start', () => {
-    // 2026-08-30 is a Sunday → Monday-start week runs 08-24..08-30
-    const days = buildWeekDays(new Date(2026, 7, 30));
-    expect(days).toHaveLength(7);
-    expect(days[0].getDay()).toBe(1);
-    expect(days.map((d) => d.getDate())).toEqual([24, 25, 26, 27, 28, 29, 30]);
-    expect(days[0].getMonth()).toBe(7);
-  });
-
-  it('handles Sunday week start', () => {
-    // 2026-08-28 is a Friday → Sunday-start week runs 08-23..08-29
-    const days = buildWeekDays(new Date(2026, 7, 28), 0);
-    expect(days[0].getDay()).toBe(0);
-    expect(days.map((d) => d.getDate())).toEqual([23, 24, 25, 26, 27, 28, 29]);
-  });
-
-  it('spans across a month boundary', () => {
-    // 2026-09-01 is a Tuesday → Monday-start week runs 08-31..09-06
-    const days = buildWeekDays(new Date(2026, 8, 1));
-    expect(days[0].getDate()).toBe(31);
-    expect(days[0].getMonth()).toBe(7);
-    expect(days[6].getDate()).toBe(6);
-    expect(days[6].getMonth()).toBe(8);
   });
 });
 
