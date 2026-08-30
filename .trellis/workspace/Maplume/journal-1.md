@@ -1916,3 +1916,24 @@ Researched how FullCalendar/Google Calendar/Notion Calendar handle month-view de
 ### Status
 
 [OK] **Completed**
+
+
+## Session 63: Remove task creation from calendar view
+
+**Date**: 2026-08-30
+**Task**: Remove task creation from calendar view
+**Branch**: `feat/optimize-calendar-view`
+
+### Summary
+
+Removed CalendarQuickAdd and all quick-add entry points (blank-area click/double-click, hover plus button) from the calendar day cell so the calendar is a read-only overview surface. Deleted CalendarQuickAdd.tsx, removed quickAddPlaceholder/addTaskOnDate i18n keys (zh/en), replaced quick-add tests with a regression test, and updated the frontend calendar spec note.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `85011e2` | (see git log) |
+
+### Status
+
+[OK] **Completed**
