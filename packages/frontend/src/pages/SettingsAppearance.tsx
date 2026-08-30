@@ -1,15 +1,17 @@
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import type { UpdatePreferencesDto } from '@taskora/shared';
+
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
-import { useTheme, type ThemeMode } from '@/lib/hooks/useTheme';
-import { usePreferencesStore } from '@/lib/stores/preferences.store';
+import {
+  usePreferencesStore,
+  type Language,
+  type ThemeMode,
+  type WeekStartsOn,
+} from '@/lib/stores/preferences.store';
 import { useUpdatePreferences } from '@/lib/hooks/useUsers';
-import { i18n } from '@/i18n/config';
-
-type Language = 'zh' | 'en';
-type WeekStartsOn = 0 | 1;
 
 function OptionButton({
   active,
@@ -38,8 +40,11 @@ function OptionButton({
 
 export default function SettingsAppearance() {
   const { t } = useTranslation(['settings', 'theme', 'common']);
-  const { mode, setMode } = useTheme();
+  const theme = usePreferencesStore((s) => s.theme);
+  const language = usePreferencesStore((s) => s.language);
   const weekStartsOn = usePreferencesStore((s) => s.weekStartsOn);
+  const setTheme = usePreferencesStore((s) => s.setTheme);
+  const setLanguage = usePreferencesStore((s) => s.setLanguage);
   const setWeekStartsOn = usePreferencesStore((s) => s.setWeekStartsOn);
   const updatePreferences = useUpdatePreferences();
 
@@ -61,19 +66,33 @@ export default function SettingsAppearance() {
 
   const syncError = () => toast.error(t('common:saveFailed'));
 
+  // Optimistic update with rollback: capture the previous triple so a failed
+  // server sync restores local state instead of leaving a silent divergence.
+  const withRollback = (apply: () => void, payload: UpdatePreferencesDto) => {
+    const { theme: prevTheme, language: prevLanguage, weekStartsOn: prevWeekStartsOn } =
+      usePreferencesStore.getState();
+    apply();
+    updatePreferences.mutate(payload, {
+      onError: () => {
+        // Restore the exact prior triple so local and server stay consistent.
+        usePreferencesStore.getState().setTheme(prevTheme);
+        usePreferencesStore.getState().setLanguage(prevLanguage);
+        usePreferencesStore.getState().setWeekStartsOn(prevWeekStartsOn);
+        syncError();
+      },
+    });
+  };
+
   const handleChangeTheme = (value: ThemeMode) => {
-    setMode(value);
-    updatePreferences.mutate({ theme: value }, { onError: syncError });
+    withRollback(() => setTheme(value), { theme: value });
   };
 
   const handleChangeLanguage = (value: Language) => {
-    void i18n.changeLanguage(value);
-    updatePreferences.mutate({ language: value }, { onError: syncError });
+    withRollback(() => setLanguage(value), { language: value });
   };
 
   const handleChangeWeekStartsOn = (value: WeekStartsOn) => {
-    setWeekStartsOn(value);
-    updatePreferences.mutate({ weekStartsOn: value }, { onError: syncError });
+    withRollback(() => setWeekStartsOn(value), { weekStartsOn: value });
   };
 
   return (
@@ -85,7 +104,7 @@ export default function SettingsAppearance() {
           {themes.map((opt) => (
             <OptionButton
               key={opt.value}
-              active={mode === opt.value}
+              active={theme === opt.value}
               onClick={() => handleChangeTheme(opt.value)}
             >
               {t(opt.labelKey)}
@@ -101,7 +120,7 @@ export default function SettingsAppearance() {
           {languages.map((opt) => (
             <OptionButton
               key={opt.value}
-              active={i18n.language === opt.value}
+              active={language === opt.value}
               onClick={() => handleChangeLanguage(opt.value)}
             >
               {opt.label}

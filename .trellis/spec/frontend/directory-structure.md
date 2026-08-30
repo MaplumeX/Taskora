@@ -43,10 +43,10 @@ packages/frontend/
     │   │   ├── usePageTaskContext.ts   # 路由→CreateTaskDto 上下文映射
     │   │   ├── useTheme.ts
     │   │   └── useDebouncedValue.ts
-    │   ├── stores/        # Zustand stores（auth / theme / preferences / uiInteraction）
-    │   │   ├── auth.store.ts           # token(内存) + user(持久) + refreshing
-    │   │   ├── theme.store.ts          # 主题 mode + resolved + applyTheme 副作用
-    │   │   ├── preferences.store.ts    # weekStartsOn + hydrateFromServer（偏好跨端同步）
+    │   ├── stores/        # Zustand stores（auth / preferences / uiInteraction）
+    │   │   ├── auth.store.ts           # token(内存) + user(持久，剥离 preferences) + refreshing
+    │   │   ├── preferences.store.ts    # 统一偏好 theme+language+weekStartsOn（key taskora-preferences，含旧 key 迁移与归一化）
+    │   │   ├── projectUiPrefs.store.ts # 项目详情页 UI 偏好（按 projectId）
     │   │   └── uiInteraction.store.ts  # expandedId / pendingAutoEditId
     │   └── utils/         # 工具函数（utils.ts cn()、utils/date.ts 格式化、等）
     ├── i18n/              # 国际化（react-i18next）
@@ -90,7 +90,7 @@ packages/frontend/
 - **components/**：可复用 UI 组件，按业务域分组（task/project/area/search），跨域组件放 common/，布局放 layout/
 - **lib/api/**：API 调用封装，每个资源一个文件，类型从 `@taskora/shared` 引用；axios 拦截器集中放 `client.ts`
 - **lib/hooks/**：TanStack Query hooks，封装数据获取与变更逻辑
-- **lib/stores/**：Zustand stores，`auth.store`（token 内存态 + user 持久化 + refreshing 标志）、`theme.store`（主题）、`uiInteraction.store`（跨组件 UI 态）
+- **lib/stores/**：Zustand stores，`auth.store`（token 内存态 + user 持久化 + refreshing 标志）、`preferences.store`（统一偏好：theme/language/weekStartsOn）、`uiInteraction.store`（跨组件 UI 态）
 - **components/ProtectedRoute.tsx**：鉴权路由守卫位于 components 根目录（非 layout/），读 `useAuthStore` 的 token/refreshing 决定渲染 Outlet / 等待 / 重定向 login
 
 ### 状态管理分层

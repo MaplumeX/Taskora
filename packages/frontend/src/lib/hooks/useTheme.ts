@@ -1,9 +1,12 @@
-import { useThemeStore } from '@/lib/stores/theme.store';
+import { usePreferencesStore } from '@/lib/stores/preferences.store';
 
-export type { ThemeMode } from '@/lib/stores/theme.store';
-export { applyTheme, applyThemeFromStorage } from '@/lib/stores/theme.store';
+export type { ThemeMode } from '@/lib/utils/preferences';
+export { applyTheme, applyThemeFromStorage } from '@/lib/stores/preferences.store';
 
 export function useTheme() {
-  const { mode, resolved, setMode, cycle } = useThemeStore();
+  const mode = usePreferencesStore((s) => s.theme);
+  const resolved = usePreferencesStore((s) => s.resolved);
+  const setMode = usePreferencesStore((s) => s.setTheme);
+  const cycle = usePreferencesStore((s) => s.cycle);
   return { mode, resolved, setMode, cycle };
 }
