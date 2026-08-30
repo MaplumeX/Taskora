@@ -1,0 +1,4 @@
+{"_example": "Fill with {\"file\": \"<path>\", \"reason\": \"<why>\"}. Put spec/research files only — no code paths. Run `python3 .trellis/scripts/get_context.py --mode packages` to list available specs. Delete this line once real entries are added."}
+{"file": ".trellis/spec/frontend/index.md", "reason": "frontend spec 入口，实现前总览约束"}
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "含 Calendar 页面（month view only）章节与 Upcoming 布局约定，布局改动需对照"}
+{"file": ".trellis/spec/frontend/i18n-guidelines.md", "reason": "新增 popover 相关文案需走 i18n，zh/en parity"}

@@ -31,8 +31,8 @@ export function CalendarMonthGrid({
   );
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="grid grid-cols-7 gap-1">
+    <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+      <div className="grid shrink-0 grid-cols-7 gap-1.5">
         {weekdayLabels.map((label) => (
           <span
             key={label}
@@ -42,17 +42,16 @@ export function CalendarMonthGrid({
           </span>
         ))}
       </div>
-      <div className="grid grid-cols-7 gap-1">
+      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-[repeat(6,minmax(80px,1fr))] gap-1.5">
         {cells.map((date) => (
-          <div key={date.toISOString()} className="group/day">
-            <CalendarDayCell
-              date={date}
-              tasks={tasksByDate.get(toInputDateValue(date)) ?? []}
-              maxRows={3}
-              outOfMonth={date.getMonth() !== anchor.getMonth()}
-              onToggleComplete={onToggleComplete}
-            />
-          </div>
+          <CalendarDayCell
+            key={date.toISOString()}
+            date={date}
+            tasks={tasksByDate.get(toInputDateValue(date)) ?? []}
+            maxRows={3}
+            outOfMonth={date.getMonth() !== anchor.getMonth()}
+            onToggleComplete={onToggleComplete}
+          />
         ))}
       </div>
       <p className={cn('sr-only')}>{t('calendar:monthGridLabel')}</p>

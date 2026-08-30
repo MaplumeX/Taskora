@@ -8,9 +8,11 @@ interface Props {
   checked: boolean;
   onToggle: () => void;
   disabled?: boolean;
+  /** Size override (e.g. compact calendar rows); defaults to 18px */
+  className?: string;
 }
 
-export function TaskCheckbox({ checked, onToggle, disabled }: Props) {
+export function TaskCheckbox({ checked, onToggle, disabled, className }: Props) {
   const { t } = useTranslation();
   return (
     <button
@@ -24,11 +26,12 @@ export function TaskCheckbox({ checked, onToggle, disabled }: Props) {
         onToggle();
       }}
       className={cn(
-        'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full border transition-all duration-200 active:scale-90',
+        'flex shrink-0 items-center justify-center rounded-full border transition-all duration-200 active:scale-90',
         checked
           ? 'border-primary bg-primary text-primary-foreground checkbox-pop'
           : 'border-muted-foreground/40 text-transparent hover:border-primary',
         disabled && 'opacity-50',
+        className ?? 'h-[18px] w-[18px]',
       )}
     >
       <Check className="h-3 w-3" strokeWidth={3} />

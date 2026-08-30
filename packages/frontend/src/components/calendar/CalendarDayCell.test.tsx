@@ -9,13 +9,7 @@ import { CalendarDayCell } from './CalendarDayCell';
 
 /* ------------- mocks ------------- */
 
-const createTaskMock = vi.hoisted(() => vi.fn());
-
 vi.mock('@/lib/hooks/useTasks', () => ({
-  useCreateTask: () => ({
-    mutate: createTaskMock,
-    isPending: false,
-  }),
   useCompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
   useUncompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
 }));
@@ -102,12 +96,73 @@ describe('CalendarDayCell', () => {
       />,
     );
 
-    // 4th task hidden
+    // 4th task hidden in the cell body
     expect(screen.queryByText('t4')).not.toBeInTheDocument();
-    expect(screen.getByText('+1 more')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: '+1 more' })).toBeInTheDocument();
   });
 
-  it('single click on blank area opens quick-add', async () => {
+  it('opens a popover with the full task list when "+N more" is clicked', async () => {
+    const user = userEvent.setup();
+    const tasks = [
+      task('t1', '2026-08-30T12:00:00.000Z'),
+      task('t2', '2026-08-30T12:00:00.000Z'),
+      task('t3', '2026-08-30T12:00:00.000Z'),
+      task('t4', '2026-08-30T12:00:00.000Z'),
+    ];
+    render(
+      <CalendarDayCell
+        date={new Date(2026, 7, 30)}
+        tasks={tasks}
+        maxRows={3}
+        onToggleComplete={onToggleComplete}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '+1 more' }));
+
+    // Popover (rendered via portal) shows the date header and ALL tasks
+    expect(await screen.findByText('Sunday, Aug 30')).toBeInTheDocument();
+    for (const taskName of ['t1', 't2', 't3', 't4']) {
+      expect(screen.getAllByText(taskName).length).toBeGreaterThanOrEqual(1);
+    }
+  });
+
+  it('popover checkbox toggles complete callback and clicking outside closes it', async () => {
+    const user = userEvent.setup();
+    const tasks = [
+      task('t1', '2026-08-30T12:00:00.000Z'),
+      task('t2', '2026-08-30T12:00:00.000Z'),
+      task('t3', '2026-08-30T12:00:00.000Z'),
+      task('t4', '2026-08-30T12:00:00.000Z'),
+    ];
+    const { container } = render(
+      <CalendarDayCell
+        date={new Date(2026, 7, 30)}
+        tasks={tasks}
+        maxRows={3}
+        onToggleComplete={onToggleComplete}
+      />,
+    );
+
+    await user.click(screen.getByRole('button', { name: '+1 more' }));
+
+    // The overflowed task (t4) only exists inside the popover
+    const popoverRow = screen.getAllByText('t4')[0].closest('div')!;
+    expect(popoverRow?.className).toContain('group/taskrow');
+    const checkbox = popoverRow.querySelector('button[role="checkbox"]') as HTMLElement;
+    await user.click(checkbox);
+
+    expect(onToggleComplete).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 't4' }),
+    );
+
+    // Click outside (on document body) closes the popover
+    await user.click(document.body);
+    expect(screen.queryByText('Sunday, Aug 30')).not.toBeInTheDocument();
+    expect(container).toBeTruthy();
+  });
+
+  it('single click on blank area does not open a quick-add input', async () => {
     const user = userEvent.setup();
     render(
       <CalendarDayCell
@@ -123,74 +178,8 @@ describe('CalendarDayCell', () => {
 
     await user.click(cell);
 
-    expect(screen.getByRole('textbox')).toBeInTheDocument();
-  });
-
-  it('click on a task row does not open quick-add', async () => {
-    const user = userEvent.setup();
-    render(
-      <CalendarDayCell
-        date={new Date(2026, 7, 30)}
-        tasks={[task('alpha', '2026-08-30T12:00:00.000Z')]}
-        onToggleComplete={onToggleComplete}
-      />,
-    );
-
-    const row = screen.getByText('alpha');
-    await user.click(row);
-
+    // Regression: calendar is a read-only overview surface — no quick-add
     expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
-  });
-
-  it('quick-add fires create with correct ISO dueDate on Enter', async () => {
-    const user = userEvent.setup();
-    render(
-      <CalendarDayCell
-        date={new Date(2026, 7, 30)}
-        tasks={[]}
-        onToggleComplete={onToggleComplete}
-      />,
-    );
-
-    // open quick-add via the plus button
-    const addButtons = screen.getAllByRole('button');
-    const plusButton = addButtons.find((b) => b.querySelector('svg.lucide-plus'));
-    expect(plusButton).toBeTruthy();
-    await user.click(plusButton!);
-
-    const input = screen.getByLabelText(/task|添加任务|Add task/);
-    await user.type(input, 'New calendar task');
-    await user.keyboard('{Enter}');
-
-    expect(createTaskMock).toHaveBeenCalledWith(
-      {
-        title: 'New calendar task',
-        dueDate: new Date(2026, 7, 30).toISOString(),
-        scheduledType: ScheduledType.NONE,
-      },
-      expect.anything(),
-    );
-  });
-
-  it('ignores empty quick-add title on Enter', async () => {
-    createTaskMock.mockClear();
-    const user = userEvent.setup();
-    render(
-      <CalendarDayCell
-        date={new Date(2026, 7, 30)}
-        tasks={[]}
-        onToggleComplete={onToggleComplete}
-      />,
-    );
-
-    const addButtons = screen.getAllByRole('button');
-    const plusButton = addButtons.find((b) => b.querySelector('svg.lucide-plus'));
-    await user.click(plusButton!);
-
-    const input = screen.getByLabelText(/task|添加任务|Add task/);
-    await user.type(input, '   ');
-    await user.keyboard('{Enter}');
-
-    expect(createTaskMock).not.toHaveBeenCalled();
+    expect(screen.queryByPlaceholderText(/添加任务|Add task/)).not.toBeInTheDocument();
   });
 });

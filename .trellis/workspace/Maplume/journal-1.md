@@ -1874,3 +1874,66 @@ Added /calendar page: month (6x7 grid, 3-row overflow) and week views keyed by t
 ### Status
 
 [OK] **Completed**
+
+
+## Session 61: Calendar view optimization: month-only, larger grid
+
+**Date**: 2026-08-30
+**Task**: Calendar view optimization: month-only, larger grid
+**Branch**: `feat/optimize-calendar-view`
+
+### Summary
+
+Removed the calendar week view (CalendarWeekGrid.tsx, viewMode switcher, buildWeekDays/addDays exports, view_month/view_week i18n keys); Calendar page is now month-only with addMonths stepping and fixed month+year period label. Enlarged the month grid: day cell min-h-16 -> min-h-24, p-2 padding, gap-1.5 so the 6x7 grid fills the main viewport; today badge, out-of-month dimming, +N more overflow, quick-add and inline complete preserved. Added Calendar page section to frontend component-guidelines spec. lint/typecheck/vitest (156 tests) all green.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `e4dbaef` | (see git log) |
+
+### Status
+
+[OK] **Completed**
+
+
+## Session 62: Calendar full-width layout, viewport grid, overflow popover
+
+**Date**: 2026-08-30
+**Task**: Calendar full-width layout, viewport grid, overflow popover
+**Branch**: `feat/optimize-calendar-view`
+
+### Summary
+
+Researched how FullCalendar/Google Calendar/Notion Calendar handle month-view density, then rebuilt the calendar page: MainContent gained a route-aware canvas variant (/calendar full-width, other pages keep max-w-2xl), the 6x7 grid now stretches to viewport height via flex/grid chain with repeat(6, minmax(80px,1fr)) tracks and short-viewport scroll fallback, task rows compacted to ~22px chips (TaskCheckbox className override), and '+N more' became a FullCalendar-style Radix popover with full day list and inline complete. Check pass fixed a short-viewport row-overlap bug. 158 tests green; frontend spec updated.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `1e3e811` | (see git log) |
+
+### Status
+
+[OK] **Completed**
+
+
+## Session 63: Remove task creation from calendar view
+
+**Date**: 2026-08-30
+**Task**: Remove task creation from calendar view
+**Branch**: `feat/optimize-calendar-view`
+
+### Summary
+
+Removed CalendarQuickAdd and all quick-add entry points (blank-area click/double-click, hover plus button) from the calendar day cell so the calendar is a read-only overview surface. Deleted CalendarQuickAdd.tsx, removed quickAddPlaceholder/addTaskOnDate i18n keys (zh/en), replaced quick-add tests with a regression test, and updated the frontend calendar spec note.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `85011e2` | (see git log) |
+
+### Status
+
+[OK] **Completed**
