@@ -149,7 +149,7 @@ export function TaskItem({
             }}
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              'flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0',
+              'flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
               completed && 'text-muted-foreground line-through',
             )}
           />

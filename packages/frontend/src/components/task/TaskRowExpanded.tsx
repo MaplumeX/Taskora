@@ -366,7 +366,7 @@ function SubtaskRow({
               setEditing(false);
             }
           }}
-          className="h-8 flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0"
+          className="h-8 flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
         />
       ) : (
         <button
