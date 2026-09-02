@@ -8,8 +8,8 @@
 
 <!-- @@@auto:current-status -->
 - **Active File**: `journal-1.md`
-- **Total Sessions**: 64
-- **Last Active**: 2026-08-30
+- **Total Sessions**: 65
+- **Last Active**: 2026-09-02
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,7 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1960 | Active |
+| `journal-1.md` | ~1981 | Active |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +29,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 65 | 2026-09-02 | Fix task title edit input residual focus ring | `8de2aac` | `fix/task-title-input-edit-border` |
 | 64 | 2026-08-30 | Fix settings preference storage & hydration | `03ba5ff` | `fix/settings-data-storage` |
 | 63 | 2026-08-30 | Remove task creation from calendar view | `85011e2` | `feat/optimize-calendar-view` |
 | 62 | 2026-08-30 | Calendar full-width layout, viewport grid, overflow popover | `1e3e811` | `feat/optimize-calendar-view` |

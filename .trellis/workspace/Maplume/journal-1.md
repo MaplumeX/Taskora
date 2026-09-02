@@ -1958,3 +1958,24 @@ Diagnosed 'selected setting shows no highlight' bug: hydrateFromServer bypassed 
 ### Status
 
 [OK] **Completed**
+
+
+## Session 65: Fix task title edit input residual focus ring
+
+**Date**: 2026-09-02
+**Task**: Fix task title edit input residual focus ring
+**Branch**: `fix/task-title-input-edit-border`
+
+### Summary
+
+Investigated why the task title input showed a border in edit mode. Verified with headless Chromium that border-0 worked but the base Input's focus-visible:ring-offset-2 survived twMerge, leaving a 2px ring-offset shadow on focus. Added focus-visible:ring-offset-0 to the expanded task title input (TaskItem.tsx) and subtask title editor (TaskRowExpanded.tsx). Typecheck, lint, and 176 tests pass. Started dev stack (postgres via docker compose, prisma generate, pnpm dev) for manual verification.
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `8de2aac` | (see git log) |
+
+### Status
+
+[OK] **Completed**
