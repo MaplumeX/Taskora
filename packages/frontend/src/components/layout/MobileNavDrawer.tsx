@@ -55,7 +55,7 @@ export function MobileNavDrawer({ open, onOpenChange }: Props) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
-        className="left-0 right-0 bottom-0 top-auto max-h-[85dvh] w-full max-w-none translate-x-0 translate-y-0 gap-0 rounded-t-2xl border-border/50 p-0 data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0"
+        className="left-0 right-0 bottom-0 top-auto max-h-[85dvh] w-full max-w-none max-md:max-w-none translate-x-0 translate-y-0 gap-0 rounded-t-2xl border-border/50 p-0 data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0"
       >
         <div
           aria-hidden

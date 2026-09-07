@@ -154,7 +154,7 @@ export function TaskRowExpanded({ task, current }: Props) {
         </div>
       )}
 
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         <IconPopover
           label={t('task:scheduledDate')}
           icon={<Calendar className="h-4 w-4" />}

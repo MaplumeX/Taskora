@@ -153,4 +153,13 @@ describe('buildWeekdayLabels', () => {
     );
     expect(en[0]).toBe(sunday);
   });
+
+  it('yields single-letter labels with narrow style', () => {
+    const en = buildWeekdayLabels('en-US', 1, 'narrow');
+    const monday = new Intl.DateTimeFormat('en-US', { weekday: 'narrow' }).format(
+      new Date(2024, 0, 8),
+    );
+    expect(en[0]).toBe(monday);
+    expect(en).toHaveLength(7);
+  });
 });

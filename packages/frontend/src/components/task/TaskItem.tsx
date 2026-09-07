@@ -115,7 +115,7 @@ export function TaskItem({
       <TaskContextMenu task={task} current={current}>
         <div
           className={cn(
-            'flex h-10 items-center gap-3 rounded-lg px-2 transition-[opacity,background-color]',
+            'flex h-10 min-w-0 items-center gap-3 rounded-lg px-2 transition-[opacity,background-color]',
             !expanded && 'hover:bg-accent/50',
             exiting && 'task-complete-anim',
           )}
@@ -168,9 +168,9 @@ export function TaskItem({
           </span>
         )}
 
-        <div className="flex items-center gap-2">
+        <div className="flex min-w-0 shrink items-center gap-2">
           {current.tags && current.tags.length > 0 && (
-            <div className="hidden items-center gap-1 sm:flex">
+            <div className="hidden items-center gap-1 md:flex">
               {current.tags.slice(0, 5).map((tag) => (
                 <span
                   key={tag.id}
@@ -182,12 +182,15 @@ export function TaskItem({
             </div>
           )}
           {tag && (
-            <span className="hidden text-xs text-muted-foreground sm:inline">{tag}</span>
+            <span className="hidden max-w-24 truncate text-xs text-muted-foreground md:inline">{tag}</span>
           )}
           {showScheduledBadge && (
-            <TaskDateBadge scheduledDate={current.scheduledDate} />
+            <TaskDateBadge
+              scheduledDate={current.scheduledDate}
+              className="shrink-0"
+            />
           )}
-          <TaskDueDateBadge dueDate={current.dueDate} />
+          <TaskDueDateBadge dueDate={current.dueDate} className="shrink-0" />
 
         </div>
         </div>

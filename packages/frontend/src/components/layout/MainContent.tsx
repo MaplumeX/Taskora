@@ -25,8 +25,8 @@ export function MainContent() {
         className={cn(
           'relative z-10 mx-auto w-full',
           canvas
-            ? 'h-full px-6 pt-4'
-            : 'max-w-2xl px-6 pb-20 pt-8 md:pb-12',
+            ? 'h-full px-3 pt-2 md:px-6 md:pt-4'
+            : 'max-w-2xl px-4 pb-20 pt-8 md:px-6 md:pb-12',
         )}
       >
         <Suspense

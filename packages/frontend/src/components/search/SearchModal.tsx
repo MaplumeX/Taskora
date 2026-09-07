@@ -51,7 +51,7 @@ export function SearchModal({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+      <DialogContent className="max-w-xl max-md:max-w-[calc(100vw-1rem)] max-md:p-4">
         <DialogHeader>
           <DialogTitle>{t('title')}</DialogTitle>
         </DialogHeader>
@@ -93,7 +93,7 @@ export function SearchModal({ open, onOpenChange }: Props) {
                 <p className="py-4 text-sm text-destructive">{t('searchFailed')}</p>
               )}
               {!isPending && !isError && (
-                <ScrollArea className="max-h-[60vh]">
+                <ScrollArea className="max-h-[60dvh]">
                   {tasks.length > 0 ? (
                     <TaskListView
                       tasks={tasks}

@@ -19,18 +19,18 @@
 
 ## 阶段 3：弹窗与通用响应式
 
-- [ ] 3.1 `ui/dialog.tsx`：DialogContent 手机端近全宽（`w-[calc(100vw-1.5rem)] max-w-none md:max-w-xl` 之类的通用手机样式）。
-- [ ] 3.2 `SearchModal` / `SettingsModal` 手机端样式（SettingsModal 侧栏改手机端顶部标签行）。
-- [ ] 3.3 `MainContent` padding 手机端 `px-4`，日历 canvas `px-3`。
-- [ ] 3.4 验证：手机端打开/滚动/关闭搜索与设置弹窗。
+- [x] 3.1 `ui/dialog.tsx`：DialogContent 手机端近全宽（基础类追加 `max-md:max-w-[calc(100vw-1.5rem)]`，与消费方 className 的无前缀 `max-w-*` 经 tailwind-merge 不冲突，桌面零回归；MobileNavDrawer 抽屉已显式 `max-md:max-w-none` 保持全宽贴边）。
+- [x] 3.2 `SearchModal` / `SettingsModal` 手机端样式（SearchModal：`max-md:max-w-[calc(100vw-1rem)]` + `max-md:p-4`，结果区改 `max-h-[60dvh]`；SettingsModal：手机端 flex-col 堆叠，导航列改为顶部水平标签行 `flex overflow-x-auto md:flex-col md:w-40`，内容区手机端 `max-md:h-[60dvh]`）。
+- [x] 3.3 `MainContent` padding 手机端 `px-4`，日历 canvas `px-3 pt-2 md:px-6 md:pt-4`。
+- [x] 3.4 验证：lint/typecheck/test 全绿（手机端打开/滚动/关闭搜索与设置弹窗的实机验证待主会话 dev server 巡检）。
 
 ## 阶段 4：日历与任务列表
 
-- [ ] 4.1 `CalendarMonthGrid` 手机端：短星期表头（补 i18n 键）、单元格 `minmax(64px,1fr)`、任务行截断缩略。
-- [ ] 4.2 `TaskItem`：手机端操作按钮 `hidden md:flex`，标题/徽章截断换行。
-- [ ] 4.3 `TaskRowExpanded`：手机端单列堆叠（`flex-col md:flex-row`）。
-- [ ] 4.4 风险 fallback：若 4.1 不可读，改为单元格仅显示数量、点按弹当日任务列表（需回到本文件更新计划后再做）。
-- [ ] 4.5 验证：375px 下日历页、任务列表、展开行无横向溢出。
+- [x] 4.1 `CalendarMonthGrid` 手机端：短星期表头用 `Intl.DateTimeFormat(locale, { weekday: 'narrow' })`（`buildWeekdayLabels` 增加 style 参数，`md:hidden`/`hidden md:inline` 切换两套标签，未新增 i18n 键）、行高 `minmax(64px,1fr)`（`md:` 恢复 80px）、CalendarDayCell 手机端 `min-h-16 p-1.5`（`md:min-h-20 md:p-2`）、任务行已有 truncate。
+- [x] 4.2 `TaskItem`：手机端标签色点与 project/area 文字改为 `md:flex`/`md:inline`（原 `sm:` 断点前缀升级为 `md:`），project/area 文字加 `max-w-24 truncate`；日期徽章 `shrink-0` 防挤压，行容器加 `min-w-0` 保证截断生效。
+- [x] 4.3 `TaskRowExpanded`：本就为纵向堆叠布局，无需两列改造；图标按钮行加 `flex-wrap`（375px 放不下时换行），表单字段全宽。
+- [ ] 4.4 风险 fallback：若 4.1 不可读，改为单元格仅显示数量、点按弹当日任务列表（需回到本文件更新计划后再做）。【实机巡检后决定，当前未触发】
+- [x] 4.5 验证：lint/typecheck/test 全绿（375px 实机巡检待主会话 dev server 验证）。
 
 ## 阶段 5：剩余页面排查
 
