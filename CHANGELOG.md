@@ -5,6 +5,21 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-09-05
+
+### Features
+
+- **calendar**: Add calendar view with month/week grids keyed by dueDate (#11).
+- **calendar**: Optimize calendar to a full-width month view (#12).
+- **frontend**: Mobile responsive layout with bottom tab bar (#14).
+
+### Fixes
+
+- **frontend**: Unify preference storage with normalization and rollback (#13).
+- **frontend**: Remove residual focus ring on task title edit input.
+
+---
+
 ## [0.1.6] - 2026-08-28
 
 ### Features
