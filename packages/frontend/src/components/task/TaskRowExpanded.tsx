@@ -154,7 +154,7 @@ export function TaskRowExpanded({ task, current }: Props) {
         </div>
       )}
 
-      <div className="flex items-center gap-1">
+      <div className="flex flex-wrap items-center gap-1">
         <IconPopover
           label={t('task:scheduledDate')}
           icon={<Calendar className="h-4 w-4" />}
@@ -183,7 +183,7 @@ export function TaskRowExpanded({ task, current }: Props) {
               type="button"
               onClick={() => patch({ projectId: null })}
               className={cn(
-                'rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent',
+                'rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent max-md:py-2.5',
                 !current.projectId && 'font-medium text-primary',
               )}
             >
@@ -195,7 +195,7 @@ export function TaskRowExpanded({ task, current }: Props) {
                 type="button"
                 onClick={() => p.id !== current.projectId && patch({ projectId: p.id })}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent',
+                  'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent max-md:py-2.5',
                   p.id === current.projectId && 'font-medium text-primary',
                 )}
               >
@@ -221,7 +221,7 @@ export function TaskRowExpanded({ task, current }: Props) {
               type="button"
               onClick={() => patch({ areaId: null })}
               className={cn(
-                'rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent',
+                'rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent max-md:py-2.5',
                 !current.areaId && 'font-medium text-primary',
               )}
             >
@@ -233,7 +233,7 @@ export function TaskRowExpanded({ task, current }: Props) {
                 type="button"
                 onClick={() => a.id !== current.areaId && patch({ areaId: a.id })}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent',
+                  'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent max-md:py-2.5',
                   a.id === current.areaId && 'font-medium text-primary',
                 )}
               >
@@ -261,7 +261,7 @@ export function TaskRowExpanded({ task, current }: Props) {
           <Button
             variant="ghost"
             size="icon"
-            className="h-8 w-8 text-muted-foreground"
+            className="h-8 w-8 text-muted-foreground max-md:h-11 max-md:w-11"
             aria-label={t('task:addSubtask')}
             onClick={(e) => {
               e.stopPropagation();
@@ -294,7 +294,7 @@ function IconPopover({
         <Button
           variant="ghost"
           size="icon"
-          className={cn('h-8 w-8', active ? 'text-primary' : 'text-muted-foreground')}
+          className={cn('h-8 w-8 max-md:h-11 max-md:w-11', active ? 'text-primary' : 'text-muted-foreground')}
           aria-label={label}
         >
           {icon}
@@ -384,7 +384,7 @@ function SubtaskRow({
       <Button
         variant="ghost"
         size="icon"
-        className="ml-auto h-8 w-8 text-muted-foreground hover:text-destructive"
+        className="ml-auto h-8 w-8 text-muted-foreground hover:text-destructive max-md:h-11 max-md:w-11"
         aria-label={t('common:delete')}
         onClick={(e) => {
           e.stopPropagation();

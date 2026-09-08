@@ -407,7 +407,7 @@ placeholder prop 变化时（如 i18n 语言切换）用 `editor.setOptions({ ed
 
 ## 内容底栏（ContentBottomBar）
 
-`src/components/layout/ContentBottomBar.tsx` 是页面底部共享栏，跨任务视图复用：
+`src/components/layout/ContentBottomBar.tsx` 是页面底部共享栏，跨任务视图复用（桌面端专用，外层 `hidden md:flex`；手机端的等价入口是 MobileFab，两者共用 `useContentBottomActions` hook）：
 
 - **搜索按钮**（`Search` 图标，`aria-label`）→ 打开 `SearchModal`（`Cmd/Ctrl+K` 快捷键全局监听），始终显示。
 - **添加项目按钮**（`FolderPlus` 图标，`aria-label` `project:addProject`）→ 仅在 `/areas/:id`（且该 area 存在）时显示。`createProject.mutate({ title: '', areaId })`（`areaId` 取当前路由 id，与 `SidebarBottomBar.handleNewProject` 的差异仅在于携带 `areaId`）。成功后 `uiInteractionStore.setPendingAutoEditId(p.id)` + `navigate('/projects/{id}')`，失败 toast `common:createFailed`，`isPending` 时 disabled。
@@ -415,7 +415,7 @@ placeholder prop 变化时（如 i18n 语言切换）用 `editor.setOptions({ ed
 
 ### 按钮显隐控制
 
-添加任务按钮并非所有页面都显示。`ContentBottomBar` 内部用 `useLocation()` 做精确路由匹配，在语义上不应添加任务的页面隐藏按钮（搜索按钮始终保留）：
+添加任务按钮并非所有页面都显示。显隐逻辑已抽到 `useContentBottomActions` hook（ContentBottomBar 与 MobileFab 共用），内部用 `useLocation()` 做精确路由匹配，在语义上不应添加任务的页面隐藏按钮（搜索按钮始终保留）：
 
 - `/upcoming`：未来日期列表，添加任务需要额外的默认日期决策，暂不支持直接添加
 - `/logbook`：已完成任务归档
@@ -724,3 +724,28 @@ const offset = CIRCUMFERENCE * (1 - ratio);
 - Today is a `bg-primary text-primary-foreground` round badge; out-of-month cells dim to `opacity-50`.
 - Quick-add / task creation was removed from the calendar view: day cells have no click handlers or plus button, and `CalendarQuickAdd.tsx` is deleted. The calendar is read-only for creation; task completion toggles inline.
 - `buildWeekDays`/`addDays` were removed with the week view; Upcoming has its own independent `upcomingLayout.ts` — do not couple them.
+
+---
+
+## 移动端适配（md: 断点双布局）
+
+项目以 Tailwind `md:` 断点（768px）做双布局：≥768px 桌面（Sidebar + ContentBottomBar）、<768px 手机（底部 TabBar + 抽屉 + FAB + 顶部搜索）。任务来源：`.trellis/tasks/09-07-mobile-responsive/`。
+
+### 布局组件契约
+
+- `AppShell`：桌面 Sidebar 用 `<div className="hidden md:flex">` 包裹（不改 Sidebar 本身）；手机组件（MobileTabBar / MobileNavDrawer / MobileTopBar / MobileFab）全部 `md:hidden` 增量挂载，桌面渲染路径零改动。
+- `MobileTabBar`（4 标签 + 更多）：固定 `bottom-0 inset-x-0`，`env(safe-area-inset-bottom)` 安全区 padding，触控目标 `min-h-[56px]`；「更多」按 `DRAWER_ROUTE_PREFIXES` 前缀匹配高亮。
+- `MobileNavDrawer`：基于现有 Radix `Dialog` 从底部滑入（`slide-in-from-bottom`、`max-h-[85dvh]`、`rounded-t-2xl`），不引入 vaul 等新依赖；抽屉需显式 `max-md:max-w-none` 抵消 DialogContent 基础类的手机宽度约束。
+- `MobileFab`：`fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))]`；**多动作页（area/project 详情）点击弹出朝上菜单列出全部动作，单动作页直接执行**——不要用 `!showAddTask && (showAddProject || showAddHeading)` 判断（showAddTask 在详情页为 true 会导致菜单永不触发，此为已修复缺陷）。
+- `MobileTopBar`：sticky 搜索入口，打开共享的 SearchModal。
+- 导航数据单一来源 `components/layout/navItems.ts`（`mainNav` + `NavItem` interface，`labelKey` 字段不在顶层调 `t()`）；Sidebar / MobileTabBar / MobileNavDrawer 三方共用。
+- 添加动作逻辑单一来源 `lib/hooks/useContentBottomActions.ts`（showAddTask/showAddProject/showAddHeading + handlers + pending 态），ContentBottomBar（桌面）与 MobileFab（手机）共用；**hook 内部用 `useParams` 拿 routeId 只在渲染于路由树内时有效**——AppShell 在 Router 内渲染故两者都可用。
+
+### 响应式样式约定
+
+- **手机端适配一律用 `max-md:` / `md:` 前缀隔离**，禁止无前缀改动既有桌面样式。基础组件（dialog/popover/dropdown-menu/calendar）的宽度类用 `max-md:` 追加（如 `max-md:max-w-[calc(100vw-1.5rem)]`），与消费方无前缀 `max-w-*` 经 tailwind-merge 分组不冲突、桌面零回归。
+- 触控目标：手机端可点击元素 ≥44px，用 `max-md:h-11` / `max-md:py-2.5` 类放大；桌面 hover 才显示的按钮在手机端需常显（无 hover）。
+- 截断链：flex 行内长文本截断需要三层配合——容器 `min-w-0`、文本元素 `truncate`、次要元素 `shrink-0`，缺一层截断不生效。
+- 断点统一 `md:`（768px），不使用 `sm:`（640px）——640–768px 窗口属平板 out-of-scope，`sm:` 会造成两套断点行为不一致。
+- 日历星期表头手机端用 `Intl.DateTimeFormat(locale, { weekday: 'narrow' })`（`buildWeekdayLabels` 的 `style` 参数），不新增 i18n 键。
+- 弹窗滚动高度用 `dvh`（`max-h-[60dvh]`）而非 `vh`，避免手机地址栏收展导致裁切。
