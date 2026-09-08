@@ -1,0 +1,2 @@
+{"file": ".trellis/spec/frontend/component-guidelines.md", "reason": "组件 className/CSS utility 约定，新增 utility class 需符合规范"}
+{"file": ".trellis/spec/frontend/quality-guidelines.md", "reason": "lint/test 验证要求"}

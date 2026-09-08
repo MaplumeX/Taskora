@@ -29,3 +29,24 @@
 ### Status
 
 [OK] **Completed**
+
+
+## Session 67: Fix sidebar hover transition lag
+
+**Date**: 2026-09-08
+**Task**: Fix sidebar hover transition lag
+**Branch**: `emdash/sharp-jobs-greet-96qtx`
+
+### Summary
+
+研究侧边栏 hover 不跟手问题：根因是条目 className 的 transition-colors（150ms 渐入渐出）让高亮追不上光标。在 index.css 新增 .hover-instant utility（进入即时高亮、离开 150ms 淡出、reduced-motion 禁用），替换 Sidebar/SidebarAreaRow/ProjectItem 共 5 处；同步更新 frontend component-guidelines 样式约定。lint/typecheck/189 测试全过。
+
+### Git Commits
+
+| Hash | Message |
+|------|---------|
+| `783c7d5` | (see git log) |
+
+### Status
+
+[OK] **Completed**

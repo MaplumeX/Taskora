@@ -39,7 +39,7 @@ export function ProjectItem({ project, taskCount, showChevron = true }: Props) {
       <button
         type="button"
         onClick={() => navigate(`/projects/${project.id}`)}
-        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-left transition-colors hover:bg-accent max-md:py-2.5"
+        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-left hover-instant hover:bg-accent max-md:py-2.5"
       >
         <ProjectProgressRing
           total={project.taskTotalCount}

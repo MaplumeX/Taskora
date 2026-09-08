@@ -115,6 +115,7 @@ export function TaskItem({ task, onComplete }: TaskItemProps) {
 - Soft Studio 配色：奶油白底 `40 33% 97%` / 暖炭前景 `270 12% 18%` / 单一紫罗兰主色 `primary`（浅色 HSL `262 60% 58%`；暗色提亮到 `262 65% 68%`，`primary-foreground` 暗色换为深色 `270 20% 10%` 保证对比）；暖灰 token hue 集中 30–40；`--radius: 0.75rem`；Display 字体 `Outfit`（`font-display` 工具类）用于 ≥text-xl 标题，正文 Inter；`shadow-soft`（暖色双层柔影）/ `shadow-lift`（弹层浮起）为统一阴影工具类
 - 主题色全部走 CSS 变量（HSL，定义在 `src/index.css` 的 `:root` 和 `.dark`），不硬编码 `bg-white`/`text-black` 类
 - 暗色模式：`tailwind.config.js` 已开 `darkMode: ['class']`，`<html>` 上切换 `.dark` class
+- **列表行 hover 过渡约定（`.hover-instant`，定义在 `src/index.css` `@layer utilities`）**：侧边栏及复用列表条目（导航行 / Tags 区 / 区域行 / `ProjectItem` 等）的 hover 高亮不用 `transition-colors`，统一用 `.hover-instant` —— 常态 `transition: background-color 150ms ease, color 150ms ease`、`:hover` 时 `transition: none`，即「进入即时高亮、离开 150ms 淡出」（Things3 风格）。原因：`transition-colors` 的 150ms 渐入会让高亮在快速滑动时「追不上」光标；`prefers-reduced-motion: reduce` 下该 utility 两个状态均禁用过渡。条目内子元素自身动画（如 chevron 的 `transition-transform`）不受影响。
 
 ### 主题系统约定
 
