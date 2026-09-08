@@ -54,9 +54,9 @@ export default function Tags() {
 
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="font-display text-3xl font-semibold tracking-tight">{t('nav:tags')}</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setGroupFormOpen(true)}>
             {t('tag:newGroup')}
           </Button>
@@ -151,7 +151,7 @@ function TagGroupSection({
               key={tag.id}
               type="button"
               onClick={() => onEditTag(tag)}
-              className="group flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
+              className="group flex items-center gap-2.5 rounded-lg px-3 py-2 text-left text-sm transition-colors hover:bg-accent max-md:py-3"
             >
               <span
                 className="h-3 w-3 shrink-0 rounded-full"
@@ -160,7 +160,7 @@ function TagGroupSection({
               <span className="flex-1 truncate">{tag.title}</span>
               <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 transition-opacity group-hover:opacity-100" />
               <button
-                className="text-muted-foreground hover:text-destructive"
+                className="text-muted-foreground hover:text-destructive max-md:-mr-2 max-md:p-2"
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!window.confirm(t('tag:deleteConfirm', { name: tag.title }))) return;
@@ -266,7 +266,7 @@ function TagForm({
                   key={c}
                   type="button"
                   onClick={() => setColor(c)}
-                  className={`h-6 w-6 rounded-full transition-transform ${
+                  className={`h-6 w-6 rounded-full transition-transform max-md:h-8 max-md:w-8 ${
                     color === c ? 'ring-2 ring-ring ring-offset-2' : ''
                   }`}
                   style={{ backgroundColor: c }}

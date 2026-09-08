@@ -142,7 +142,7 @@ function TrashProjectRow({
         {item.title || t('project:newItemPlaceholder')}
       </span>
       <button
-        className="ml-auto text-xs text-muted-foreground hover:text-foreground"
+        className="ml-auto rounded px-1 py-2 text-xs text-muted-foreground hover:text-foreground max-md:-my-2"
         onClick={(e) => {
           e.stopPropagation();
           onRestore();

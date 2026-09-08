@@ -115,7 +115,7 @@ export function TaskItem({
       <TaskContextMenu task={task} current={current}>
         <div
           className={cn(
-            'flex h-10 min-w-0 items-center gap-3 rounded-lg px-2 transition-[opacity,background-color]',
+            'flex h-10 min-w-0 items-center gap-3 rounded-lg px-2 transition-[opacity,background-color] max-md:h-11',
             !expanded && 'hover:bg-accent/50',
             exiting && 'task-complete-anim',
           )}

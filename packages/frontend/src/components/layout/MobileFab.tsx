@@ -35,8 +35,11 @@ export function MobileFab() {
 
   if (!showAddTask && !showAddProject && !showAddHeading) return null;
 
-  // 场景详情页（area/project）点击 FAB 弹出朝上菜单；普通页面直接添加任务
-  const hasMenu = !showAddTask && (showAddProject || showAddHeading);
+  // 场景详情页（area/project）点击 FAB 弹出朝上菜单展示全部可用动作（添加任务+项目/标题）；
+  // 普通页面仅有一个动作时直接执行，减少一次点击
+  const actionCount =
+    (showAddTask ? 1 : 0) + (showAddProject ? 1 : 0) + (showAddHeading ? 1 : 0);
+  const hasMenu = actionCount > 1;
   const pending = addTaskPending || addProjectPending || addHeadingPending;
 
   const fab = (
@@ -61,6 +64,15 @@ export function MobileFab() {
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>{fab}</DropdownMenuTrigger>
           <DropdownMenuContent side="top" align="end">
+            {showAddTask && (
+              <DropdownMenuItem
+                disabled={addTaskPending}
+                onClick={() => handleAddTask()}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                {t('task:addTask')}
+              </DropdownMenuItem>
+            )}
             {showAddProject && (
               <DropdownMenuItem
                 disabled={addProjectPending}

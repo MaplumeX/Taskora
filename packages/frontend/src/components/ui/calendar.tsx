@@ -39,9 +39,9 @@ export function Calendar({
         caption_label: 'text-sm font-medium',
         nav: 'flex items-center justify-between absolute inset-x-1 top-3',
         button_previous:
-          'inline-flex items-center justify-center rounded-md size-7 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:pointer-events-none',
+          'inline-flex items-center justify-center rounded-md size-7 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:pointer-events-none max-md:size-11 max-md:rounded-full',
         button_next:
-          'inline-flex items-center justify-center rounded-md size-7 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:pointer-events-none',
+          'inline-flex items-center justify-center rounded-md size-7 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:pointer-events-none max-md:size-11 max-md:rounded-full',
         month_grid: 'w-full border-collapse',
         weekdays: 'flex',
         weekday:
@@ -52,7 +52,7 @@ export function Calendar({
           'rdp-day relative',
         ),
         day_button:
-          'inline-flex items-center justify-center rounded-full size-9 text-sm tabular-nums transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30 disabled:pointer-events-none',
+          'inline-flex items-center justify-center rounded-full size-9 text-sm tabular-nums transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30 disabled:pointer-events-none max-md:size-10',
         outside: 'text-muted-foreground/50',
         today:
           'after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:size-1 after:rounded-full after:bg-primary after:content-[""]',

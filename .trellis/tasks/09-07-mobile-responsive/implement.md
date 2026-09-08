@@ -34,8 +34,9 @@
 
 ## 阶段 5：剩余页面排查
 
-- [ ] 5.1 排查并修复 Tags / Trash / Login / Register / Logbook / Upcoming / Anytime / Someday / Area/Project/Tag 详情页的固定宽度与横向溢出。
-- [ ] 5.2 全路由 375px 巡检（dev server 手动过一遍），记录发现的问题并修复。
+- [x] 5.1 排查并修复 Tags / Trash / Login / Register / Logbook / Upcoming / Anytime / Someday / Area/Project/Tag 详情页的固定宽度与横向溢出。
+  - 修复清单：Tags 页头部按钮组 flex-wrap、标签行与色板触控目标放大；Trash 恢复按钮触控目标；ProjectFeedRow 标签点 `sm:`→`md:`；ProjectHeadingRow 更多按钮 max-md 放大且手机端常显；TaskRowExpanded 图标/删除/列表项触控目标；TaskItem 折叠行手机端 h-11；Login/Register 卡片手机端 p-6；InlineTitleEdit h1 break-words；ProjectDetail/AreaDetail 头部容器 min-w-0 + gap-2；TagDetail 标题 truncate；PopoverContent 手机端全宽减边距；ui/calendar 手机端日期/导航按钮放大；MenuRow/DropdownMenuItem/ProjectItem/TagsField 列表项触控目标 max-md:py-2.5。
+- [ ] 5.2 全路由 375px 巡检（dev server 手动过一遍），记录发现的问题并修复。【由主会话 dev server 实机验证】
 - [x] 5.3 新组件补充基础渲染测试（MobileTabBar active 态、MobileNavDrawer 打开与链接跳转）。（在阶段 2 已一并完成）
 
 ## 阶段 6：收尾

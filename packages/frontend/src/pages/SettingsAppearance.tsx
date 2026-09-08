@@ -27,7 +27,7 @@ function OptionButton({
       type="button"
       onClick={onClick}
       className={cn(
-        'rounded-md border px-3 py-1.5 text-sm transition-colors',
+        'rounded-md border px-3 py-1.5 text-sm transition-colors max-md:py-2.5',
         active
           ? 'bg-primary text-primary-foreground border-primary'
           : 'bg-transparent hover:bg-accent border-border',
