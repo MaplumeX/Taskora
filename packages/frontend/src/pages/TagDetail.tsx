@@ -21,7 +21,7 @@ export default function TagDetail() {
       <div>
         <button
           onClick={() => navigate('/tags')}
-          className="mb-1 text-xs text-muted-foreground hover:text-foreground"
+          className="mb-1 text-xs text-muted-foreground hover:text-foreground max-md:-ml-2 max-md:px-2 max-md:py-2"
         >
           {t('common:backTo', { label: t('nav:tags') })}
         </button>
@@ -32,7 +32,7 @@ export default function TagDetail() {
               style={{ backgroundColor: tag.color }}
             />
           )}
-          <h1 className="font-display text-3xl font-semibold tracking-tight">
+          <h1 className="truncate font-display text-3xl font-semibold tracking-tight">
             {tag?.title ?? t('tag:defaultTitle')}
           </h1>
         </div>

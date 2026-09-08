@@ -1,16 +1,9 @@
 import * as React from 'react';
 import { NavLink } from 'react-router-dom';
 import {
-  Calendar,
-  CalendarDays,
   ChevronDown,
-  Circle,
-  Inbox,
-  Notebook,
-  Sun,
   Tags as TagsIcon,
   Trash2,
-  CloudSun,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
@@ -25,6 +18,7 @@ import { useLogout } from '@/lib/hooks/useAuth';
 import { ProjectStatus } from '@taskora/shared';
 import { SidebarBottomBar } from '@/components/layout/SidebarBottomBar';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
+import { mainNav, type NavItem } from '@/components/layout/navItems';
 import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
 import { useProjectsQuery } from '@/lib/hooks/useProjects';
 import { useAreasQuery } from '@/lib/hooks/useAreas';
@@ -37,22 +31,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-
-interface NavItem {
-  to: string;
-  labelKey: string;
-  icon: LucideIcon;
-}
-
-const mainNav: NavItem[] = [
-  { to: '/inbox', labelKey: 'nav:inbox', icon: Inbox },
-  { to: '/today', labelKey: 'nav:today', icon: Sun },
-  { to: '/upcoming', labelKey: 'nav:upcoming', icon: CalendarDays },
-  { to: '/calendar', labelKey: 'nav:calendar', icon: Calendar },
-  { to: '/anytime', labelKey: 'nav:anytime', icon: Circle },
-  { to: '/someday', labelKey: 'nav:someday', icon: CloudSun },
-  { to: '/logbook', labelKey: 'nav:logbook', icon: Notebook },
-];
 
 const NavRow = ({ item }: { item: NavItem }) => {
   const { t } = useTranslation();

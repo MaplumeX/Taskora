@@ -7,9 +7,9 @@
 ## Current Status
 
 <!-- @@@auto:current-status -->
-- **Active File**: `journal-1.md`
-- **Total Sessions**: 65
-- **Last Active**: 2026-09-02
+- **Active File**: `journal-2.md`
+- **Total Sessions**: 66
+- **Last Active**: 2026-09-08
 <!-- @@@/auto:current-status -->
 
 ---
@@ -19,7 +19,8 @@
 <!-- @@@auto:active-documents -->
 | File | Lines | Status |
 |------|-------|--------|
-| `journal-1.md` | ~1981 | Active |
+| `journal-2.md` | ~31 | Active |
+| `journal-1.md` | ~1981 | Archived |
 <!-- @@@/auto:active-documents -->
 
 ---
@@ -29,6 +30,7 @@
 <!-- @@@auto:session-history -->
 | # | Date | Title | Commits | Branch |
 |---|------|-------|---------|--------|
+| 66 | 2026-09-08 | 移动端适配：底部标签栏与响应式布局 | `e9b07fb`, `87e179d`, `4e75844`, `3262841` | `emdash/dark-ways-search-ybrh7` |
 | 65 | 2026-09-02 | Fix task title edit input residual focus ring | `8de2aac` | `fix/task-title-input-edit-border` |
 | 64 | 2026-08-30 | Fix settings preference storage & hydration | `03ba5ff` | `fix/settings-data-storage` |
 | 63 | 2026-08-30 | Remove task creation from calendar view | `85011e2` | `feat/optimize-calendar-view` |

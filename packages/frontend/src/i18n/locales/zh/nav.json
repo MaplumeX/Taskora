@@ -11,5 +11,7 @@
   "tags": "标签",
   "collapse": "收起{{label}}",
   "expand": "展开{{label}}",
-  "emptyTags": "暂无标签"
+  "emptyTags": "暂无标签",
+  "mainNavigation": "主导航",
+  "moreNavigation": "更多导航"
 }

@@ -55,11 +55,18 @@ export function groupByDueDate(
   return map;
 }
 
-/** Short weekday labels (7 entries) starting at `weekStartsOn`, formatted by `locale`. */
-export function buildWeekdayLabels(locale: string, weekStartsOn: WeekStartsOn = 1): string[] {
+/**
+ * Short weekday labels (7 entries) starting at `weekStartsOn`, formatted by `locale`.
+ * `narrow` yields the single-letter form (一/T/M) for compact mobile grids.
+ */
+export function buildWeekdayLabels(
+  locale: string,
+  weekStartsOn: WeekStartsOn = 1,
+  style: 'short' | 'narrow' = 'short',
+): string[] {
   // 2024-01-07 is a Sunday; use it to get one of each weekday deterministically.
   const sunday = new Date(2024, 0, 7);
-  const formatter = new Intl.DateTimeFormat(locale, { weekday: 'short' });
+  const formatter = new Intl.DateTimeFormat(locale, { weekday: style });
   const labels: string[] = [];
   for (let i = 0; i < 7; i++) {
     const d = new Date(sunday);

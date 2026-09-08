@@ -41,7 +41,7 @@ export function CalendarDayCell({
     <div
       data-calendar-date={toInputDateValue(date)}
       className={cn(
-        'flex min-h-20 flex-col gap-1 overflow-hidden rounded-lg border border-border/40 bg-card p-2 transition-colors hover:bg-accent/30',
+        'flex min-h-16 max-w-full flex-col gap-1 overflow-hidden rounded-lg border border-border/40 bg-card p-1.5 transition-colors hover:bg-accent/30 md:min-h-20 md:p-2',
         outOfMonth && 'opacity-50',
       )}
     >

@@ -133,7 +133,7 @@ export function ProjectHeadingRow({ heading, dragHandleProps }: Props) {
               variant="ghost"
               size="icon"
               aria-label={t('project:headingActions')}
-              className="h-7 w-7 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
+              className="h-7 w-7 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 max-md:h-11 max-md:w-11 max-md:opacity-100"
             >
               <MoreHorizontal className="h-4 w-4" />
             </Button>

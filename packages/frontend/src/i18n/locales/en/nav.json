@@ -11,5 +11,7 @@
   "tags": "Tags",
   "collapse": "Collapse {{label}}",
   "expand": "Expand {{label}}",
-  "emptyTags": "No tags"
+  "emptyTags": "No tags",
+  "mainNavigation": "Main navigation",
+  "moreNavigation": "More navigation"
 }

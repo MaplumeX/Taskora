@@ -72,7 +72,7 @@ export function ProjectFeedRow({ item, showScheduledBadge = true }: Props) {
         </span>
         <div className="flex items-center gap-2">
           {item.tags.length > 0 && (
-            <div className="hidden items-center gap-1 sm:flex">
+            <div className="hidden items-center gap-1 md:flex">
               {item.tags.slice(0, 5).map((tag) => (
                 <span
                   key={tag.id}
