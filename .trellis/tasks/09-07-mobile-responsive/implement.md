@@ -36,14 +36,14 @@
 
 - [x] 5.1 排查并修复 Tags / Trash / Login / Register / Logbook / Upcoming / Anytime / Someday / Area/Project/Tag 详情页的固定宽度与横向溢出。
   - 修复清单：Tags 页头部按钮组 flex-wrap、标签行与色板触控目标放大；Trash 恢复按钮触控目标；ProjectFeedRow 标签点 `sm:`→`md:`；ProjectHeadingRow 更多按钮 max-md 放大且手机端常显；TaskRowExpanded 图标/删除/列表项触控目标；TaskItem 折叠行手机端 h-11；Login/Register 卡片手机端 p-6；InlineTitleEdit h1 break-words；ProjectDetail/AreaDetail 头部容器 min-w-0 + gap-2；TagDetail 标题 truncate；PopoverContent 手机端全宽减边距；ui/calendar 手机端日期/导航按钮放大；MenuRow/DropdownMenuItem/ProjectItem/TagsField 列表项触控目标 max-md:py-2.5。
-- [ ] 5.2 全路由 375px 巡检（dev server 手动过一遍），记录发现的问题并修复。【由主会话 dev server 实机验证】
+- [x] 5.2 全路由 375px 巡检：主会话用 Playwright 实机巡检全部基础路由 + 3 个详情页 + 登录注册页，375px/320px 均 0 溢出；发现并修复 MobileFab 在 area/project 详情页不弹菜单的缺陷（4e75844）。【由主会话 dev server 实机验证】
 - [x] 5.3 新组件补充基础渲染测试（MobileTabBar active 态、MobileNavDrawer 打开与链接跳转）。（在阶段 2 已一并完成）
 
 ## 阶段 6：收尾
 
-- [ ] 6.1 全量验证：`pnpm --filter frontend lint && typecheck && test`。
-- [ ] 6.2 对照 PRD Acceptance Criteria 逐条核验。
-- [ ] 6.3 桌面端（≥768px）关键页面人工比对无回归。
+- [x] 6.1 全量验证：lint/typecheck/test 全绿（21 文件 189 测试，含 shared build 前置）。
+- [x] 6.2 对照 PRD Acceptance Criteria 逐条核验：trellis-check 判定 PASS（5 条全部通过，无 Blocker）。
+- [x] 6.3 桌面端（≥768px）比对：1280px 实机验证 Sidebar 可见、移动 fixed 元素隐藏；check 子代理代码层逐文件确认所有功能性改动均带 md:/max-md: 前缀隔离。
 
 ## 验证命令
 
