@@ -123,6 +123,24 @@
       0 12px 32px hsl(0 0% 0% / 0.4);
   }
 
+  /*
+   * 侧边栏条目 hover 高亮（Things3 风格）：进入 hover 即时高亮（transition: none），
+   * 离开时以 150ms 淡出，消除快速滑动时高亮"追不上"光标的滞后感。
+   * reduced-motion 下不做任何渐变。
+   */
+  .hover-instant {
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+  .hover-instant:hover {
+    transition: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hover-instant,
+    .hover-instant:hover {
+      transition: none;
+    }
+  }
+
   .task-complete-anim {
     animation: task-complete 280ms ease forwards;
   }

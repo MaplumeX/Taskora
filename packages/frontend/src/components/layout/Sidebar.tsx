@@ -40,7 +40,7 @@ const NavRow = ({ item }: { item: NavItem }) => {
       to={item.to}
       className={({ isActive }) =>
         cn(
-          'flex items-center gap-2.5 rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-accent-foreground',
+          'flex items-center gap-2.5 rounded-full px-3 py-1.5 text-sm text-muted-foreground hover-instant hover:bg-accent/60 hover:text-accent-foreground',
           isActive && 'bg-accent font-medium text-foreground',
         )
       }
@@ -76,7 +76,7 @@ function CollapsibleSection({
           to={to}
           className={({ isActive }) =>
             cn(
-              'flex flex-1 items-center gap-2.5 rounded-full px-3 py-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-accent-foreground',
+              'flex flex-1 items-center gap-2.5 rounded-full px-3 py-1.5 text-sm text-muted-foreground hover-instant hover:bg-accent/60 hover:text-accent-foreground',
               isActive && 'bg-accent font-medium text-foreground',
             )
           }
@@ -106,7 +106,7 @@ function CollapsibleSection({
                 to={item.href}
                 className={({ isActive }) =>
                   cn(
-                    'truncate rounded-full px-3 py-1 text-sm text-muted-foreground transition-colors hover:bg-accent/60 hover:text-accent-foreground',
+                    'truncate rounded-full px-3 py-1 text-sm text-muted-foreground hover-instant hover:bg-accent/60 hover:text-accent-foreground',
                     isActive && 'bg-accent font-medium text-foreground',
                   )
                 }
