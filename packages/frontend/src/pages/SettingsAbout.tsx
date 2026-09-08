@@ -13,7 +13,7 @@ export default function SettingsAbout() {
       </div>
       <div className="flex flex-col gap-1">
         <Label className="text-muted-foreground">{t('appVersion')}</Label>
-        <p className="text-sm">0.1.6</p>
+        <p className="text-sm">0.2.0</p>
       </div>
       <div className="flex flex-col gap-1">
         <Label className="text-muted-foreground">{t('techStack')}</Label>
