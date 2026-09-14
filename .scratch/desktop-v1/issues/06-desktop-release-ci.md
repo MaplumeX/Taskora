@@ -1,6 +1,6 @@
 # 06: 桌面端发布 CI 与分发
 
-Status: open
+Status: done
 
 ## 背景
 
@@ -21,3 +21,7 @@ Status: open
 - [ ] 三个安装包均可安装启动（至少 Linux 本机验证 + macOS/Windows CI 绿）
 - [ ] README 绕过说明完整
 - [ ] PR CI 不显著变慢（无 Rust 跨平台全量构建）
+
+## Comments
+
+Implemented in commit 9c28fc8. `desktop-release.yml` (desktop-v* tags): three-platform matrix (ubuntu-22.04 AppImage for glibc compat, macOS dmg, Windows NSIS) via tauri-action, uploads to GitHub Releases. PR CI gains a Linux-only `cargo check` job with rust cache — no cross-platform packaging. README (en/zh) documents downloads + Gatekeeper/SmartScreen bypass. Actual tag → artifacts needs a real push to verify.

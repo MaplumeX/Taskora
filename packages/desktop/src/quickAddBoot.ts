@@ -3,9 +3,9 @@
  * layer (token store + API base URL) for the independent quick-add webview.
  */
 import {
-  apiClient,
   configureTokenStore,
   hydrateAuthSnapshot,
+  setApiBaseUrl,
 } from '@taskora/api';
 import { createKeyringTokenStore, hydrateKeyringToken } from './keyring-token-store';
 import { getServerUrl } from './server-settings';
@@ -19,7 +19,7 @@ export function bootQuickAdd(): Promise<void> {
       configureTokenStore(createKeyringTokenStore());
       const serverUrl = getServerUrl();
       if (serverUrl) {
-        apiClient.defaults.baseURL = serverUrl;
+        setApiBaseUrl(serverUrl);
         const token = await hydrateKeyringToken();
         if (token) hydrateAuthSnapshot(null);
       }

@@ -10,7 +10,7 @@ import { useServerSettings, parseServerUrl } from '@/server-settings';
  * First-run / pre-login server configuration screen.
  * Points the client at a self-hosted Taskora deployment (`/api/v1`).
  */
-export function ServerSetup({ onDone }: { onDone: () => void }) {
+export function ServerSetup() {
   const { t } = useTranslation('settings');
   const serverUrl = useServerSettings((s) => s.serverUrl);
   const setServerUrl = useServerSettings((s) => s.setServerUrl);
@@ -38,7 +38,7 @@ export function ServerSetup({ onDone }: { onDone: () => void }) {
         throw new Error('unreachable');
       });
       setServerUrl(normalized);
-      onDone();
+      // The App re-renders onto the login view via the serverUrl change.
     } catch {
       setError(t('serverUnreachable', { defaultValue: 'Cannot reach this server' }));
     } finally {

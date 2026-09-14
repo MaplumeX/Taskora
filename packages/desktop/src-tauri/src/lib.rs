@@ -91,9 +91,17 @@ pub fn run() {
             // macOS convention: closing the window keeps the app in the Dock
             // (re-openable). Windows/Linux: default close → process exits.
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "main" && cfg!(target_os = "macos") {
-                    api.prevent_close();
-                    let _ = window.hide();
+                if window.label() == "main" {
+                    if cfg!(target_os = "macos") {
+                        api.prevent_close();
+                        let _ = window.hide();
+                    } else {
+                        // Windows/Linux convention: closing the main window
+                        // exits the process. The hidden quick-add window would
+                        // otherwise keep the event loop alive, so exit
+                        // explicitly instead of relying on last-window-close.
+                        window.app_handle().exit(0);
+                    }
                 }
             }
         })

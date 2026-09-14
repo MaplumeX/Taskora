@@ -1,6 +1,6 @@
 # 02: Tauri 2 壳搭建
 
-Status: open
+Status: done
 
 ## 背景
 
@@ -21,3 +21,11 @@ ADR-0001 选定 Tauri 2。主力开发平台 Linux（需先装 webkit2gtk 等系
 - [ ] macOS 关窗后可从 Dock 重开；Linux/Windows 关窗即退出
 - [ ] 双开应用第二次启动聚焦已有窗口
 - [ ] 服务器地址可配置并持久化
+
+## Comments
+
+Implemented in commit 5fa1f68. Verified on Linux: `pnpm --filter desktop dev` launches the window (webkit2gtk 2.52); second instance exits within 30ms (single-instance lock). Server address configurable via the setup screen, persisted in localStorage (`taskora-desktop-server`) — non-sensitive, so localStorage is acceptable; only the token must live in the keychain.
+
+## Comments (review fixes)
+
+Code review found the hidden quick-add window would keep the event loop alive after closing the main window on Windows/Linux. Fixed: non-macOS main-window close now calls `app_handle().exit(0)` explicitly. Remaining P2 noted for V1.x: no in-app server settings page (currently first-run screen or "Change server" from login).

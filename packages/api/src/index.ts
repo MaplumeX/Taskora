@@ -9,8 +9,6 @@ export { apiClient, setApiBaseUrl, setUnauthorizedHandler } from './api/client';
 export {
   type TokenStore,
   noopTokenStore,
-  TokenStoreProvider,
-  useTokenStore,
   configureTokenStore,
   getTokenStore,
 } from './token-store';

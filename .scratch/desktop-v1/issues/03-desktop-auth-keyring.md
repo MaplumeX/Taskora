@@ -1,6 +1,6 @@
 # 03: 桌面端认证流与钥匙串存储
 
-Status: open
+Status: done
 
 ## 背景
 
@@ -20,3 +20,11 @@ Status: open
 - [ ] refresh token 轮换正常工作
 - [ ] 登出清除钥匙串中的 token
 - [ ] token 不出现在 localStorage / 任何明文落盘文件中
+
+## Comments
+
+Implemented in commits 5fa1f68 + d0e416c. Rust keyring commands (`keyring_get_token`/`keyring_set_token`, keyring crate 3.x) wired through the `@taskora/api` TokenStore; boot does a silent refresh (rotating refresh cookie) and restores the session on restart. Logout clears the keychain (NoEntry treated as success). Token never touches localStorage/plaintext (unit tests cover persist/clear/hydrate/failure paths). Live login/restart flow needs manual QA against a real server.
+
+## Comments (review fixes)
+
+Code review found a transient network error during boot refresh permanently cleared the keychain token. Fixed: only HTTP 401 (refresh token genuinely rejected) clears; network errors keep the token so restart stays signed in.

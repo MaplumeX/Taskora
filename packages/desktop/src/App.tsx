@@ -43,7 +43,7 @@ export function App() {
   }
 
   if (!serverUrl) {
-    return <ServerSetup onDone={() => undefined} />;
+    return <ServerSetup />;
   }
 
   if (!token && !user) {
@@ -80,8 +80,10 @@ function Boot({ onReady }: { onReady: () => void }) {
         const token = await hydrateKeyringToken();
         if (token) {
           hydrateAuthSnapshot(null);
-          // Try to refresh the access token (rotating refresh cookie);
-          // on failure the bootstrapping continues logged-out.
+          // Try to refresh the access token (rotating refresh cookie).
+          // A 401 means the refresh token is genuinely rejected → real
+          // logout. Network errors are transient: keep the keychain token
+          // so the user stays signed in across restarts (issue 03).
           const { setAuth, clear, setRefreshing } = useAuthStore.getState();
           setRefreshing(true);
           try {
@@ -89,8 +91,10 @@ function Boot({ onReady }: { onReady: () => void }) {
             if (cancelled) return;
             setAuth(data.accessToken, data.user);
             hydrateFromServer(data.user.preferences ?? null);
-          } catch {
-            if (!cancelled) clear();
+          } catch (err) {
+            const status = (err as { response?: { status?: number } })?.response
+              ?.status;
+            if (!cancelled && status === 401) clear();
           } finally {
             if (!cancelled) setRefreshing(false);
           }

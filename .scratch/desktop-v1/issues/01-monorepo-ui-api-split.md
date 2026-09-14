@@ -1,6 +1,6 @@
 # 01: monorepo 拆分 packages/ui 与 packages/api
 
-Status: open
+Status: done
 
 ## 背景
 
@@ -19,3 +19,7 @@ Status: open
 - [ ] web 前端行为与迁移前完全一致
 - [ ] `ui` 包不含 web 特定逻辑（路由、window 依赖）；`api` 包不含 UI 代码
 - [ ] token 存储抽象有两种实现并被 frontend 使用
+
+## Comments
+
+Implemented in commits 3db4e04 (+d0e416c tests). `packages/api` holds the axios client, TokenStore abstraction (web: localStorage via `createLocalTokenStore`, desktop: keyring), query hooks, auth flow with injectable navigation, i18n resources and date/calendar utils. `packages/ui` holds all business components + page views. Frontend is shell-only; web behavior preserved (all 336 tests moved to ui/api and pass; legacy `taskora-auth` snapshot migrated on first load).

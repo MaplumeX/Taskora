@@ -13,6 +13,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { listen } from '@tauri-apps/api/event';
 import { createTask, i18n, useAuthStore } from '@taskora/api';
 
@@ -41,19 +42,24 @@ export function QuickAddApp() {
     };
   }, []);
 
+  // Not signed in: focus the main window to run the guided setup/login
+  // flow (issue 05 strategy), then hide this window out of the way.
+  useEffect(() => {
+    if (authToken) return;
+    void (async () => {
+      const main = await WebviewWindow.getByLabel('main');
+      if (main) {
+        await main.show().catch(() => undefined);
+        await main.setFocus().catch(() => undefined);
+      }
+      await getCurrentWindow().hide();
+    })();
+  }, [authToken]);
+
   if (!authToken) {
-    // Not signed in: quick add cannot work. Show a hint; the Rust shortcut
-    // handler already focused the main window in this case (fallback), so
-    // simply keep this window minimal and dismissable.
-    return (
-      <div className="flex h-screen items-center justify-center bg-background px-4">
-        <p className="text-sm text-muted-foreground">
-          {t('task:quickAddNotSignedIn', {
-            defaultValue: 'Sign in from the main window to use quick add',
-          })}
-        </p>
-      </div>
-    );
+    // Not signed in: quick add cannot work — the effect above already
+    // focused the main window; this window hides itself.
+    return null;
   }
 
   const handleSubmit = async (e: React.FormEvent) => {

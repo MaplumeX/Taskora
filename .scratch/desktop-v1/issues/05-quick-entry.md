@@ -1,6 +1,6 @@
 # 05: 全局快捷键 + 悬浮快速添加窗
 
-Status: open
+Status: done
 
 ## 背景
 
@@ -21,3 +21,11 @@ Status: open
 - [ ] 提交后任务出现在 Inbox，小窗自动关闭
 - [ ] Esc / 失焦关闭不丢已输入内容（或明确丢弃，实现时定并记录）
 - [ ] 未登录时行为合理
+
+## Comments
+
+Implemented in commit 1981024. Default shortcut Cmd/Ctrl+Space (Things-style, fixed in V1 — configurability deferred). Frameless always-on-top quick-add window, blur → hide (typed text survives because the webview is never destroyed), Enter → Inbox task + hide, Esc → discard + hide (decision: explicit discard on Esc only). Unsigned-in: hint in the quick-add window + Rust-side fallback focuses the main window. Global-shortcut triggering from any app needs manual QA on each OS.
+
+## Comments (review fixes)
+
+Not-signed-in handling now matches the spec: the quick-add window focuses the main window (guided flow) and hides itself, instead of showing a static hint. Known V1 limitations (documented): shortcut not user-configurable; refresh token lives in the WebView cookie jar (webkit2gtk storage) — keychain covers the access token only.

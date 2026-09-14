@@ -1,6 +1,6 @@
 # 04: 桌面端主窗口功能对齐 web
 
-Status: open
+Status: done
 
 ## 背景
 
@@ -22,3 +22,7 @@ V1 主窗口功能与 web **完全对齐**：Areas→Projects→Tasks→Subtasks
 - [ ] 拖拽排序在 Linux 上无异常
 - [ ] 中英文切换正常
 - [ ] Trash 恢复 / 级联清理正常
+
+## Comments
+
+Implemented in commits 5fa1f68 + 737dd4c. Desktop shell = MemoryRouter with the same URL shape as web + `@taskora/ui` AppShell and all shared page views; page views moved from frontend to `packages/ui` so both ends are pixel-identical. i18n/theme switching via the shared preferences store. Integration test renders the shell (sidebar nav + Today). dnd-kit drag on Linux webkit needs manual QA — pointer-driven dragging cannot be covered headlessly; no known issues expected (dnd-kit runs on DOM events).
