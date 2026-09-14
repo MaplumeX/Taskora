@@ -5,12 +5,17 @@ use tauri_plugin_global_shortcut::ShortcutState;
 /// Global quick-add shortcut (Things-style): Cmd/Ctrl + Space.
 const QUICK_ADD_SHORTCUT: &str = "CmdOrCtrl+Space";
 
-/// Keyring service + account identifiers for the auth token entry.
+/// Keyring service + account identifiers for the auth token entries.
 const KEYRING_SERVICE: &str = "app.taskora.desktop";
 const KEYRING_ACCOUNT: &str = "auth-token";
+const KEYRING_RT_ACCOUNT: &str = "refresh-token";
 
 fn token_entry() -> keyring::Result<Entry> {
     Entry::new(KEYRING_SERVICE, KEYRING_ACCOUNT)
+}
+
+fn refresh_token_entry() -> keyring::Result<Entry> {
+    Entry::new(KEYRING_SERVICE, KEYRING_RT_ACCOUNT)
 }
 
 /// Read the persisted access token from the OS keychain.
@@ -38,6 +43,36 @@ fn keyring_set_token(token: Option<String>) -> Result<(), String> {
         None => match entry.delete_credential() {
             Ok(()) => Ok(()),
             // Deleting an already-absent entry is a successful clear.
+            Err(keyring::Error::NoEntry) => Ok(()),
+            Err(err) => Err(format!("keychain clear failed: {err}")),
+        },
+    }
+}
+
+/// Read the persisted refresh token from the OS keychain.
+/// Returns null when nothing is stored (web-style cookie flow / logged out).
+#[tauri::command]
+fn keyring_get_refresh_token() -> Result<Option<String>, String> {
+    match refresh_token_entry() {
+        Ok(entry) => match entry.get_password() {
+            Ok(token) => Ok(Some(token)),
+            Err(keyring::Error::NoEntry) => Ok(None),
+            Err(err) => Err(format!("keychain read failed: {err}")),
+        },
+        Err(err) => Err(format!("keychain unavailable: {err}")),
+    }
+}
+
+/// Persist (or clear, when null) the refresh token in the OS keychain.
+#[tauri::command]
+fn keyring_set_refresh_token(refresh_token: Option<String>) -> Result<(), String> {
+    let entry = refresh_token_entry().map_err(|err| format!("keychain unavailable: {err}"))?;
+    match refresh_token {
+        Some(token) => entry
+            .set_password(&token)
+            .map_err(|err| format!("keychain write failed: {err}")),
+        None => match entry.delete_credential() {
+            Ok(()) => Ok(()),
             Err(keyring::Error::NoEntry) => Ok(()),
             Err(err) => Err(format!("keychain clear failed: {err}")),
         },
@@ -107,7 +142,9 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             keyring_get_token,
-            keyring_set_token
+            keyring_set_token,
+            keyring_get_refresh_token,
+            keyring_set_refresh_token
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

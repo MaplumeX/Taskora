@@ -6,6 +6,7 @@ import {
   configureTokenStore,
   hydrateAuthSnapshot,
   setApiBaseUrl,
+  setClientKind,
 } from '@taskora/api';
 import { createKeyringTokenStore, hydrateKeyringToken } from './keyring-token-store';
 import { getServerUrl } from './server-settings';
@@ -17,6 +18,7 @@ export function bootQuickAdd(): Promise<void> {
   if (!ready) {
     ready = (async () => {
       configureTokenStore(createKeyringTokenStore());
+      setClientKind('desktop');
       const serverUrl = getServerUrl();
       if (serverUrl) {
         setApiBaseUrl(serverUrl);

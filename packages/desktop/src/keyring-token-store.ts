@@ -2,8 +2,13 @@
  * OS-keychain-backed TokenStore for the desktop client.
  *
  * The actual keychain access lives in the Rust process (keyring crate),
- * exposed through the `keyring_get_token` / `keyring_set_token` Tauri
- * commands. The token never touches localStorage or any plaintext file.
+ * exposed through the `keyring_*_token` Tauri commands. Neither token
+ * ever touches localStorage or any plaintext file.
+ *
+ * Two entries are kept: the short-lived access token and the rotating
+ * refresh token. The refresh token must live here (not in a cookie)
+ * because the bundled Tauri webview is cross-origin to the self-hosted
+ * server, so SameSite cookies cannot carry it.
  */
 import type { TokenStore } from '@taskora/api';
 
@@ -47,18 +52,39 @@ export function createKeyringTokenStore(): TokenStore {
         .invoke<string | null>('keyring_set_token', { token })
         .catch((err) => console.error('[keyring] persist failed:', err));
     },
+    getRefreshToken() {
+      return memoryRefreshToken;
+    },
+    setRefreshToken(refreshToken) {
+      memoryRefreshToken = refreshToken;
+      void tauriInvoke
+        .invoke<string | null>('keyring_set_refresh_token', { refreshToken })
+        .catch((err) => console.error('[keyring] persist refresh failed:', err));
+    },
   };
 }
 
 let memoryToken: string | null = null;
+let memoryRefreshToken: string | null = null;
 
-/** Hydrate the in-memory token from the OS keychain at startup. */
+/**
+ * Hydrate the in-memory tokens (access + refresh) from the OS keychain at
+ * startup. Returns the access token (null when signed out).
+ */
 export async function hydrateKeyringToken(): Promise<string | null> {
   try {
     memoryToken = await tauriInvoke.invoke<string | null>('keyring_get_token');
   } catch (err) {
     console.error('[keyring] read failed:', err);
     memoryToken = null;
+  }
+  try {
+    memoryRefreshToken = await tauriInvoke.invoke<string | null>(
+      'keyring_get_refresh_token',
+    );
+  } catch (err) {
+    console.error('[keyring] read refresh failed:', err);
+    memoryRefreshToken = null;
   }
   return memoryToken;
 }

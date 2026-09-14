@@ -61,13 +61,63 @@ describe('keyring token store', () => {
 
   it('falls back to null when the keychain read fails', async () => {
     invoke.mockRejectedValueOnce(new Error('no keyring'));
+    invoke.mockResolvedValueOnce('rt-kept');
     const token = await hydrateKeyringToken();
     expect(token).toBeNull();
+  });
+
+  it('persists refresh tokens to a separate keychain entry', () => {
+    invoke.mockResolvedValue(null);
+    const store = createKeyringTokenStore();
+    store.setRefreshToken?.('rt-1');
+    expect(invoke).toHaveBeenCalledWith('keyring_set_refresh_token', {
+      refreshToken: 'rt-1',
+    });
+    expect(store.getRefreshToken?.()).toBe('rt-1');
+    // The two entries are independent.
+    expect(store.get()).toBeNull();
+  });
+
+  it('clears the refresh token entry on setRefreshToken(null)', () => {
+    invoke.mockResolvedValue(null);
+    const store = createKeyringTokenStore();
+    store.setRefreshToken?.('rt-1');
+    store.setRefreshToken?.(null);
+    expect(invoke).toHaveBeenLastCalledWith('keyring_set_refresh_token', {
+      refreshToken: null,
+    });
+    expect(store.getRefreshToken?.()).toBeNull();
+  });
+
+  it('survives refresh-token write failures without crashing', () => {
+    invoke.mockRejectedValueOnce(new Error('locked'));
+    const store = createKeyringTokenStore();
+    expect(() => store.setRefreshToken?.('rt-2')).not.toThrow();
+    expect(store.getRefreshToken?.()).toBe('rt-2');
+  });
+
+  it('hydrates both tokens from the keychain', async () => {
+    invoke.mockResolvedValueOnce('restored-token');
+    invoke.mockResolvedValueOnce('restored-rt');
+    const token = await hydrateKeyringToken();
+    expect(token).toBe('restored-token');
+    const store = createKeyringTokenStore();
+    expect(store.get()).toBe('restored-token');
+    expect(store.getRefreshToken?.()).toBe('restored-rt');
+  });
+
+  it('keeps the access token when the refresh-token read fails', async () => {
+    invoke.mockResolvedValueOnce('restored-token');
+    invoke.mockRejectedValueOnce(new Error('no keyring'));
+    const token = await hydrateKeyringToken();
+    expect(token).toBe('restored-token');
+    expect(createKeyringTokenStore().getRefreshToken?.()).toBeNull();
   });
 
   it('falls back to null when Tauri internals are missing', async () => {
     delete (window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
     const token = await hydrateKeyringToken();
     expect(token).toBeNull();
+    expect(createKeyringTokenStore().getRefreshToken?.()).toBeNull();
   });
 });

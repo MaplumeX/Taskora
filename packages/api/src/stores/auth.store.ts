@@ -3,7 +3,6 @@ import { create } from 'zustand';
 import type { AuthResponseDto } from '@taskora/shared';
 
 import { getTokenStore } from '@/token-store';
-
 export type AuthUser = AuthResponseDto['user'];
 
 /** Strip the `preferences` field from a user object (auth snapshot hygiene). */
@@ -23,7 +22,7 @@ interface AuthState {
   token: string | null;
   user: AuthUser | null;
   refreshing: boolean;
-  setAuth: (token: string, user: AuthUser) => void;
+  setAuth: (token: string, user: AuthUser, refreshToken?: string) => void;
   setToken: (token: string) => void;
   setUser: (user: AuthUser) => void;
   setRefreshing: (refreshing: boolean) => void;
@@ -34,8 +33,11 @@ export const useAuthStore = create<AuthState>()((set) => ({
   token: null,
   user: null,
   refreshing: false,
-  setAuth: (token, user) => {
+  setAuth: (token, user, refreshToken) => {
     getTokenStore().set(token);
+    // Desktop login responses carry the refresh token in the body; persist
+    // it when provided (web keeps it in the HttpOnly cookie instead).
+    if (refreshToken !== undefined) getTokenStore().setRefreshToken?.(refreshToken);
     set({ token, user });
   },
   setToken: (token) => {
@@ -46,6 +48,7 @@ export const useAuthStore = create<AuthState>()((set) => ({
   setRefreshing: (refreshing) => set({ refreshing }),
   clear: () => {
     getTokenStore().set(null);
+    getTokenStore().setRefreshToken?.(null);
     set({ token: null, user: null, refreshing: false });
   },
 }));

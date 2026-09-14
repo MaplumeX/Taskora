@@ -3,7 +3,14 @@
 // i18n resources + shared UI-agnostic stores/utils.
 
 // API client & configuration
-export { apiClient, setApiBaseUrl, setUnauthorizedHandler } from './api/client';
+export {
+  apiClient,
+  setApiBaseUrl,
+  setUnauthorizedHandler,
+  setClientKind,
+  getClientKind,
+  type ClientKind,
+} from './api/client';
 
 // Token storage abstraction
 export {
@@ -11,6 +18,8 @@ export {
   noopTokenStore,
   configureTokenStore,
   getTokenStore,
+  readRefreshToken,
+  writeRefreshToken,
 } from './token-store';
 
 // Web (localStorage) token store implementation
