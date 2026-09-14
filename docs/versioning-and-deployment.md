@@ -9,17 +9,20 @@ Taskora 是 pnpm monorepo，所有客户端和服务端共享同一仓库。
 
 ```
 packages/
-├── backend/       # NestJS API 服务器（当前主战场）
-├── frontend/      # Vite + React SPA（Web 客户端）
-├── shared/        # 跨端共享 DTO / 枚举 / 类型
-├── mobile/        # 未来：React Native / Expo
-└── desktop/       # 未来：Tauri / Electron（独立成包）
+├── backend/       # NestJS API 服务器
+├── frontend/       # Vite + React SPA（Web 客户端壳：路由、入口、登录页）
+├── desktop/        # Tauri 2 桌面客户端（见 docs/adr/0001）
+├── ui/             # 跨 web/desktop 共享业务组件与页面视图
+├── api/            # 跨端共享 API client + Query hooks + 认证流 + i18n
+├── shared/         # 跨端共享 DTO / 枚举 / 类型
+└── mobile/         # 未来：React Native / Expo
 ```
 
 ### 关键决策
 
 - **所有客户端留在同一 monorepo**：跨端共享 `shared` 包、统一 CI。
-- **桌面端独立成包**，而不是把 web 用 Tauri 包一层：未来桌面端会有独立导航、原生 IPC 需求。
+- **桌面端独立成包**，而不是把 web 用 Tauri 包一层：未来桌面端会有独立导航、原生 IPC 需求。详见 `docs/adr/0001-tauri-for-desktop.md`。
+- **桌面端 UI 复用而非重写**：业务组件（任务列表、编辑器等）渐进式抽入 `packages/ui`，数据层（API client、Query hooks、认证流）抽入 `packages/api`，两端各自持有导航壳。
 - **`shared` 不对外发布 npm**：仅 monorepo 内部通过 `workspace:*` 引用，不引入 changesets，不发版 CI。
 
 ## 二、版本号策略
@@ -57,6 +60,15 @@ packages/
   - `desktop-v0.1.0`
 
 make Git tag 从无前缀迁移到带前缀是纯加法，不破坏历史 tag。
+
+## 二·五、桌面端发布（已定）
+
+- **平台**：三平台出包，主力开发平台为 Linux，Linux 构建质量优先保证。
+- **安装包格式**：macOS `.dmg`、Windows NSIS `.exe`、Linux AppImage。`.deb` 等后续有需求再加。
+- **CI 策略**：PR / main CI 只跑 desktop 的 typecheck + 单测，跨平台出包仅在 tag `desktop-v*` 时触发。理由：Rust 侧编译慢，三平台全量构建放 PR 会拖慢所有 PR。
+- **V1 无自动更新**：用户手动从 GitHub Releases 下载新版；后续再上 `tauri-plugin-updater`（需 updater 签名密钥）。
+- **V1 不签名**：macOS 需右键打开绕过 Gatekeeper，Windows 会触发 SmartScreen 警告；README 需写清绕过方法。待有真实用户后购证书。
+- **Token 存储**：OS 钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），不用 WebView localStorage。
 
 ## 三、分支策略
 

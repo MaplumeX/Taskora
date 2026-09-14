@@ -1,6 +1,6 @@
 import { Navigate, Outlet } from 'react-router-dom';
 
-import { useAuthStore } from '@/lib/stores/auth.store';
+import { useAuthStore } from '@taskora/api';
 
 export function ProtectedRoute() {
   const token = useAuthStore((s) => s.token);

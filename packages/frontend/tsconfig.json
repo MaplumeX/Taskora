@@ -15,7 +15,17 @@
     "types": ["vitest/globals", "@testing-library/jest-dom"],
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/components/*": ["../ui/src/components/*"],
+      "@/lib/utils": ["../ui/src/lib/utils"],
+      "@/*": ["./src/*"],
+      "@taskora/ui": ["../ui/src/index.ts"],
+      "@taskora/ui/*": ["../ui/src/*"],
+      "@/api/*": ["../api/src/api/*"],
+      "@/hooks/*": ["../api/src/hooks/*"],
+      "@/stores/*": ["../api/src/stores/*"],
+      "@/utils/*": ["../api/src/utils/*"],
+      "@/token-store": ["../api/src/token-store"],
+      "@/i18n/config": ["../api/src/i18n/config"]
     }
   },
   "include": ["src", "vite.config.ts", "vitest.config.ts", "tailwind.config.js", "postcss.config.js"]
