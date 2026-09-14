@@ -3,6 +3,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 
+import pkg from '../package.json';
 import { Toaster } from '@taskora/ui/components/ui/sonner';
 import {
   apiClient,
@@ -12,6 +13,7 @@ import {
   hydrateAuthSnapshot,
   readLegacyAuthSnapshot,
   refresh,
+  setAppVersion,
   setUnauthorizedHandler,
   useAuthStore,
   hydrateFromServer,
@@ -21,6 +23,9 @@ import '@/index.css';
 
 // Apply theme synchronously before React renders to prevent FOUC
 applyThemeFromStorage();
+
+// Web version comes from the frontend package.json.
+setAppVersion(pkg.version);
 
 const queryClient = new QueryClient({
   defaultOptions: {
