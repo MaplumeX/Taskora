@@ -28,3 +28,32 @@ Implemented in commits 5fa1f68 + d0e416c. Rust keyring commands (`keyring_get_to
 ## Comments (review fixes)
 
 Code review found a transient network error during boot refresh permanently cleared the keychain token. Fixed: only HTTP 401 (refresh token genuinely rejected) clears; network errors keep the token so restart stays signed in.
+
+## Comments (restart login bug — Windows)
+
+Bug: on the packaged Windows build, closing and reopening the app always
+required a fresh login. Root cause: the refresh token only ever lived in
+the `rt` HttpOnly cookie, but the Tauri 2 production webview origin
+(`http://tauri.localhost`) is cross-site to the self-hosted server, so
+(1) WebView2 refuses the SameSite=Lax cookie entirely and (2) the backend
+CSRF guard rejects `sec-fetch-site: cross-site` refresh calls with 401 —
+which the boot logic treats as a real logout. The keychain-stored access
+token (15 min TTL) alone can never survive a restart.
+
+Fix — body-based refresh-token flow for desktop:
+
+- shared: `AuthResponseDto.refreshToken?` + `RefreshRequestDto`.
+- backend: `login`/`refresh`/`logout` accept `X-Client: desktop`; refresh
+  token is returned/accepted in the body instead of a cookie. The
+  sec-fetch-site CSRF check only applies to the cookie (web) flow.
+- api: `TokenStore` gained optional `getRefreshToken`/`setRefreshToken`;
+  `setClientKind('desktop')` sets the `X-Client` header; the refresh
+  interceptor and `auth.api` send the keychain RT in the body and persist
+  the rotated one; logout revokes it server-side.
+- desktop: second keyring entry (`refresh-token`) via new Rust commands
+  `keyring_get_refresh_token`/`keyring_set_refresh_token`; boot hydrates
+  both tokens and declares `setClientKind('desktop')` (main + quick-add).
+
+Tests: `packages/backend/test/auth.controller.spec.ts` (transport matrix),
+`packages/api/src/api/client.test.ts` (interceptor refresh flows), updated
+keyring store tests. Web flow unchanged (no header, empty refresh body).
