@@ -1,0 +1,70 @@
+name: Desktop Release
+
+on:
+  push:
+    tags:
+      - 'desktop-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Linux is the primary platform — keep it on the oldest supported
+          # runner for glibc compatibility of the AppImage.
+          - platform: ubuntu-22.04
+            args: '--bundles appimage'
+          - platform: macos-latest
+            args: '--bundles dmg'
+          - platform: windows-latest
+            args: '--bundles nsis'
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Linux system deps for Tauri (webkit2gtk etc.)
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      # shared DTOs are consumed from source; build its .d.ts for tsc
+      - run: pnpm --filter @taskora/shared build
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: packages/desktop
+          tagName: ${{ github.ref_name }}
+          releaseName: 'Taskora Desktop ${{ github.ref_name }}'
+          releaseBody: 'Desktop client build ${{ github.ref_name }}. V1 builds are unsigned — see the README for Gatekeeper / SmartScreen instructions.'
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}

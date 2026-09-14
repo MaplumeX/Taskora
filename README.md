@@ -2,7 +2,7 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
-A Things-inspired task manager built as a pnpm monorepo. NestJS API + Prisma/PostgreSQL on the backend, Vite + React + Tailwind on the frontend, with a shared DTO package and Docker-based deployment.
+A Things-inspired task manager built as a pnpm monorepo. NestJS API + Prisma/PostgreSQL on the backend, Vite + React + Tailwind on the frontend, with a shared DTO package and Docker-based deployment. A Tauri 2 desktop client shares the web app's views and data layer.
 
 ## Features
 
@@ -14,6 +14,7 @@ A Things-inspired task manager built as a pnpm monorepo. NestJS API + Prisma/Pos
 - **JWT auth** with access tokens and rotating refresh tokens (bcrypt password hashing).
 - **i18n** with English and 简体中文 locales.
 - **Drag-and-drop** reordering via dnd-kit.
+- **Desktop client** (Tauri 2): full feature parity with the web app, OS-keychain token storage, global-shortcut quick add (Ctrl/Cmd+Space).
 
 ## Tech Stack
 
@@ -30,7 +31,10 @@ A Things-inspired task manager built as a pnpm monorepo. NestJS API + Prisma/Pos
 ```
 packages/
 ├── backend/       # NestJS API (Prisma schema, migrations, modules)
-├── frontend/      # Vite + React SPA
+├── frontend/      # Vite + React SPA (shell: router, entry, auth pages)
+├── desktop/       # Tauri 2 desktop client (shell, quick add, keyring auth)
+├── ui/            # Cross-client business components & page views
+├── api/           # Cross-client API client, query hooks, auth, i18n
 └── shared/        # Cross-package DTOs / enums / types
 ```
 
@@ -122,6 +126,37 @@ Backend-specific (run with `pnpm --filter @taskora/backend exec ...`):
 - `prisma generate` — regenerate the Prisma client
 - `prisma db seed` — load seed data
 
+## Desktop Client
+
+Prebuilt desktop installers are published on the [GitHub Releases page](https://github.com/maplumex/taskora/releases) under tags matching `desktop-v*`:
+
+| Platform | Artifact |
+| --- | --- |
+| macOS (Apple Silicon & Intel) | `Taskora_x.y.z_aarch64.dmg` / `_x64.dmg` |
+| Windows | `Taskora_x.y.z_x64-setup.exe` (NSIS) |
+| Linux | `Taskora_x.y.z_amd64.AppImage` |
+
+On first launch you configure the address of your self-hosted server (the API base URL, e.g. `https://taskora.example.com/api/v1`) and sign in with your account. The access token is stored in the OS keychain (macOS Keychain / Windows Credential Manager / Linux Secret Service) — never in browser storage.
+
+### Unsigned builds — how to bypass the warnings
+
+V1 builds are **not code-signed**, so both platforms will warn on first launch:
+
+- **macOS Gatekeeper**: right-click the app → *Open* → *Open* in the dialog (or System Settings → Privacy & Security → *Open Anyway*). This is only needed once.
+- **Windows SmartScreen**: click *More info* → *Run anyway*.
+- **Linux**: AppImages are not affected; make the file executable (`chmod +x`) and run it.
+
+Code signing and auto-update will be added once there are real users; until then, download new versions manually from Releases.
+
+### Building from source
+
+```bash
+# Linux: install webkit2gtk and friends first, see
+# https://tauri.app/start/prerequisites/
+pnpm --filter @taskora/desktop dev    # dev window
+pnpm --filter @taskora/desktop build  # installers for your platform
+```
+
 ## Docker Deployment
 
 A `docker-compose.yml` is provided for local full-stack runs:
@@ -150,10 +185,11 @@ docker build -f packages/frontend/Dockerfile -t taskora-frontend .
 
 GitHub Actions workflows live in `.github/workflows/`:
 
-- **CI** (`ci.yml`) — on every PR and `main` push: install, typecheck, test, and verify both Docker images build.
+- **CI** (`ci.yml`) — on every PR and `main` push: install, typecheck, test, desktop Rust check (Linux only), and verify both Docker images build.
 - **Release** (`release.yml`) — on git tags matching `v*`: builds and pushes images to GHCR.
   - `ghcr.io/maplumex/taskora-backend:vX.Y.Z` / `:latest`
   - `ghcr.io/maplumex/taskora-frontend:vX.Y.Z` / `:latest`
+- **Desktop Release** (`desktop-release.yml`) — on git tags matching `desktop-v*`: builds the three-platform desktop installers (dmg / NSIS exe / AppImage) and uploads them to a GitHub Release. V1 builds are unsigned and have no auto-update.
 
 See [docs/versioning-and-deployment.md](docs/versioning-and-deployment.md) for the full versioning, branching, and multi-client rollout strategy.
 

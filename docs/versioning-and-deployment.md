@@ -9,13 +9,13 @@ Taskora 是 pnpm monorepo，所有客户端和服务端共享同一仓库。
 
 ```
 packages/
-├── backend/       # NestJS API 服务器（当前主战场）
-├── frontend/      # Vite + React SPA（Web 客户端）
-├── shared/        # 跨端共享 DTO / 枚举 / 类型
-├── mobile/        # 未来：React Native / Expo
-└── desktop/       # 桌面客户端（Tauri 2，见 docs/adr/0001）
-├── ui/            # 未来：跨 web/desktop 共享业务组件
-└── api/           # 未来：跨端共享 API client + Query hooks + 认证流
+├── backend/       # NestJS API 服务器
+├── frontend/       # Vite + React SPA（Web 客户端壳：路由、入口、登录页）
+├── desktop/        # Tauri 2 桌面客户端（见 docs/adr/0001）
+├── ui/             # 跨 web/desktop 共享业务组件与页面视图
+├── api/            # 跨端共享 API client + Query hooks + 认证流 + i18n
+├── shared/         # 跨端共享 DTO / 枚举 / 类型
+└── mobile/         # 未来：React Native / Expo
 ```
 
 ### 关键决策
