@@ -30,5 +30,8 @@
   "markIncomplete": "Mark Incomplete",
   "convertToProject": "Convert to Project",
   "convertSuccess": "Converted to project",
-  "convertFailed": "Conversion failed"
+  "convertFailed": "Conversion failed",
+  "quickAddPlaceholder": "Add a task to Inbox…",
+  "quickAddNotSignedIn": "Sign in from the main window to use quick add",
+  "quickAddFailed": "Could not create the task"
 }

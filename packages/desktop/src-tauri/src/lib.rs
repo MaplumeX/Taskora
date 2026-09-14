@@ -1,5 +1,9 @@
 use keyring::Entry;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
+use tauri_plugin_global_shortcut::ShortcutState;
+
+/// Global quick-add shortcut (Things-style): Cmd/Ctrl + Space.
+const QUICK_ADD_SHORTCUT: &str = "CmdOrCtrl+Space";
 
 /// Keyring service + account identifiers for the auth token entry.
 const KEYRING_SERVICE: &str = "app.taskora.desktop";
@@ -51,7 +55,39 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_shortcuts([QUICK_ADD_SHORTCUT])
+                .expect("failed to register quick-add shortcut")
+                .with_handler(|app, shortcut, event| {
+                    if event.state != ShortcutState::Pressed {
+                        return;
+                    }
+                    // Only the quick-add shortcut is registered; toggling it
+                    // shows/hides the floating quick-add window.
+                    let _ = shortcut; // (multiple shortcuts would branch here)
+                    if let Some(window) = app.get_webview_window("quick-add") {
+                        let _ = window.show();
+                        let _ = window.set_focus();
+                        let _ = window.emit_to("quick-add", "quick-add://open", ());
+                    } else {
+                        // No quick-add window (shouldn't happen — declared in
+                        // tauri.conf.json); fall back to focusing the main one.
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                })
+                .build(),
+        )
         .on_window_event(|window, event| {
+            // Quick-add window: hide on blur (fill-and-go interaction).
+            if window.label() == "quick-add" {
+                if let tauri::WindowEvent::Focused(false) = event {
+                    let _ = window.hide();
+                }
+            }
             // macOS convention: closing the window keeps the app in the Dock
             // (re-openable). Windows/Linux: default close → process exits.
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {

@@ -19,6 +19,21 @@
         "minWidth": 420,
         "minHeight": 320,
         "center": true
+      },
+      {
+        "label": "quick-add",
+        "title": "Quick Add",
+        "url": "index.html?window=quick-add",
+        "width": 520,
+        "height": 120,
+        "resizable": false,
+        "decorations": false,
+        "transparent": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "center": true,
+        "focus": true
       }
     ],
     "security": {

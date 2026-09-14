@@ -30,5 +30,8 @@
   "markIncomplete": "标记未完成",
   "convertToProject": "转换为项目",
   "convertSuccess": "已转换为项目",
-  "convertFailed": "转换失败"
+  "convertFailed": "转换失败",
+  "quickAddPlaceholder": "添加任务到收件箱…",
+  "quickAddNotSignedIn": "请先在主窗口登录后再使用快速添加",
+  "quickAddFailed": "任务创建失败"
 }
