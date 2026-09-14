@@ -5,13 +5,13 @@ import { toast } from 'sonner';
 
 import type { TaskResponseDto } from '@taskora/shared';
 
-import { CalendarMonthGrid } from '@/components/calendar/CalendarMonthGrid';
-import { Button } from '@/components/ui/button';
-import { useDueTasksQuery } from '@/lib/hooks/useDueTasksQuery';
-import { useCompleteTask, useUncompleteTask } from '@/lib/hooks/useTasks';
-import { usePreferencesStore } from '@/lib/stores/preferences.store';
-import { addMonths, groupByDueDate } from '@/lib/utils/calendarGrid';
-import { i18n } from '@/i18n/config';
+import { CalendarMonthGrid } from '@taskora/ui/components/calendar/CalendarMonthGrid';
+import { Button } from '@taskora/ui/components/ui/button';
+import { useDueTasksQuery } from '@taskora/api';
+import { useCompleteTask, useUncompleteTask } from '@taskora/api';
+import { usePreferencesStore } from '@taskora/api';
+import { addMonths, groupByDueDate } from '@taskora/api';
+import { i18n } from '@taskora/api';
 
 export default function Calendar() {
   const { t } = useTranslation();

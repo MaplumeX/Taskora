@@ -2,16 +2,16 @@ import { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { useCompleteProject, useProjectQuery, useProjectsQuery, useUncompleteProject, useUpdateProject } from '@/lib/hooks/useProjects';
-import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
-import { useTasksQuery } from '@/lib/hooks/useTasks';
-import { useProjectHeadingsQuery } from '@/lib/hooks/useProjectHeadings';
-import { ProjectTaskLayout } from '@/components/project/ProjectTaskLayout';
-import { ProjectCompletedTasks } from '@/components/project/ProjectCompletedTasks';
-import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
-import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
-import { ProjectMoreMenu } from '@/components/project/ProjectContextMenu';
-import { MarkdownNotesEditor } from '@/components/common/MarkdownNotesEditor';
+import { useCompleteProject, useProjectQuery, useProjectsQuery, useUncompleteProject, useUpdateProject } from '@taskora/api';
+import { useUiInteractionStore } from '@taskora/api';
+import { useTasksQuery } from '@taskora/api';
+import { useProjectHeadingsQuery } from '@taskora/api';
+import { ProjectTaskLayout } from '@taskora/ui/components/project/ProjectTaskLayout';
+import { ProjectCompletedTasks } from '@taskora/ui/components/project/ProjectCompletedTasks';
+import { InlineTitleEdit } from '@taskora/ui/components/common/InlineTitleEdit';
+import { ProjectProgressRing } from '@taskora/ui/components/project/ProjectProgressRing';
+import { ProjectMoreMenu } from '@taskora/ui/components/project/ProjectContextMenu';
+import { MarkdownNotesEditor } from '@taskora/ui/components/common/MarkdownNotesEditor';
 import { toast } from 'sonner';
 
 export default function ProjectDetail() {

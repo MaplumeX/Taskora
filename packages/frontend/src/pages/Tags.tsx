@@ -4,27 +4,27 @@ import { useTranslation } from 'react-i18next';
 
 import type { CreateTagDto, TagResponseDto, UpdateTagDto } from '@taskora/shared';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@taskora/ui/components/ui/button';
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
+} from '@taskora/ui/components/ui/dialog';
+import { Input } from '@taskora/ui/components/ui/input';
+import { Label } from '@taskora/ui/components/ui/label';
 import {
   useTagsQuery,
   useCreateTag,
   useUpdateTag,
   useDeleteTag,
-} from '@/lib/hooks/useTags';
+} from '@taskora/api';
 import {
   useTagGroupsQuery,
   useCreateTagGroup,
   useDeleteTagGroup,
-} from '@/lib/hooks/useTagGroups';
+} from '@taskora/api';
 import { toast } from 'sonner';
 
 const PRESET_COLORS = [

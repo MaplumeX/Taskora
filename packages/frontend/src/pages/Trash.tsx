@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Folder, Trash2 } from 'lucide-react';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@taskora/ui/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -11,12 +11,12 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { TaskCheckbox } from '@/components/task/TaskCheckbox';
-import { TaskContextMenu } from '@/components/task/TaskContextMenu';
-import { TaskDateBadge } from '@/components/task/TaskDateBadge';
-import { useEmptyTrash, useFeedQuery } from '@/lib/hooks/useFeed';
-import { useRestoreProject } from '@/lib/hooks/useProjects';
+} from '@taskora/ui/components/ui/dialog';
+import { TaskCheckbox } from '@taskora/ui/components/task/TaskCheckbox';
+import { TaskContextMenu } from '@taskora/ui/components/task/TaskContextMenu';
+import { TaskDateBadge } from '@taskora/ui/components/task/TaskDateBadge';
+import { useEmptyTrash, useFeedQuery } from '@taskora/api';
+import { useRestoreProject } from '@taskora/api';
 import { toast } from 'sonner';
 
 import type { FeedItem, TaskResponseDto } from '@taskora/shared';

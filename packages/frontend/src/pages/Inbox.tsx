@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
-import { useFeedQuery } from '@/lib/hooks/useFeed';
-import { FeedListView } from '@/components/feed/FeedListView';
+import { useFeedQuery } from '@taskora/api';
+import { FeedListView } from '@taskora/ui/components/feed/FeedListView';
 
 export default function Inbox() {
   const { t } = useTranslation();

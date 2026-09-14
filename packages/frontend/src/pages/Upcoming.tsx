@@ -3,21 +3,21 @@ import { useTranslation } from 'react-i18next';
 
 import type { FeedItem } from '@taskora/shared';
 
-import { FeedItemRow } from '@/components/feed/FeedItemRow';
-import { useFeedQuery } from '@/lib/hooks/useFeed';
+import { FeedItemRow } from '@taskora/ui/components/feed/FeedItemRow';
+import { useFeedQuery } from '@taskora/api';
 import {
   useCompleteTask,
   useUncompleteTask,
-} from '@/lib/hooks/useTasks';
-import { useProjectsQuery } from '@/lib/hooks/useProjects';
-import { useAreasQuery } from '@/lib/hooks/useAreas';
-import { useTaskRowSelection } from '@/lib/hooks/useTaskRowSelection';
-import { fromInputDateValue } from '@/lib/utils/date';
+} from '@taskora/api';
+import { useProjectsQuery } from '@taskora/api';
+import { useAreasQuery } from '@taskora/api';
+import { useTaskRowSelection } from '@taskora/api';
+import { fromInputDateValue } from '@taskora/api';
 import {
   buildUpcomingLayout,
   type UpcomingDay,
-} from '@/lib/utils/upcomingLayout';
-import { i18n } from '@/i18n/config';
+} from '@taskora/api';
+import { i18n } from '@taskora/api';
 import { toast } from 'sonner';
 
 export default function Upcoming() {

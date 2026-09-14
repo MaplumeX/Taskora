@@ -20,15 +20,15 @@ import { CSS } from '@dnd-kit/utilities';
 
 import type { ProjectResponseDto } from '@taskora/shared';
 
-import { useAreasQuery, useUpdateArea } from '@/lib/hooks/useAreas';
-import { useProjectsQuery, useReorderProjects } from '@/lib/hooks/useProjects';
-import { useUiInteractionStore } from '@/lib/stores/uiInteraction.store';
-import { useTasksQuery } from '@/lib/hooks/useTasks';
-import { Separator } from '@/components/ui/separator';
-import { ProjectItem } from '@/components/project/ProjectItem';
-import { TaskListView } from '@/components/task/TaskListView';
-import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
-import { AreaMoreMenu } from '@/components/area/AreaMoreMenu';
+import { useAreasQuery, useUpdateArea } from '@taskora/api';
+import { useProjectsQuery, useReorderProjects } from '@taskora/api';
+import { useUiInteractionStore } from '@taskora/api';
+import { useTasksQuery } from '@taskora/api';
+import { Separator } from '@taskora/ui/components/ui/separator';
+import { ProjectItem } from '@taskora/ui/components/project/ProjectItem';
+import { TaskListView } from '@taskora/ui/components/task/TaskListView';
+import { InlineTitleEdit } from '@taskora/ui/components/common/InlineTitleEdit';
+import { AreaMoreMenu } from '@taskora/ui/components/area/AreaMoreMenu';
 import { toast } from 'sonner';
 
 function SortableProjectItem({ project }: { project: ProjectResponseDto }) {

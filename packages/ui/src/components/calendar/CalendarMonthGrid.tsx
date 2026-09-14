@@ -1,0 +1,65 @@
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import type { TaskResponseDto } from '@taskora/shared';
+
+import { CalendarDayCell } from './CalendarDayCell';
+import { buildMonthCells, buildWeekdayLabels, type WeekStartsOn } from '@taskora/api';
+import { toInputDateValue } from '@taskora/api';
+import { cn } from '@/lib/utils';
+
+interface CalendarMonthGridProps {
+  anchor: Date;
+  tasksByDate: Map<string, TaskResponseDto[]>;
+  weekStartsOn: WeekStartsOn;
+  locale: string;
+  onToggleComplete: (task: TaskResponseDto) => void;
+}
+
+export function CalendarMonthGrid({
+  anchor,
+  tasksByDate,
+  weekStartsOn,
+  locale,
+  onToggleComplete,
+}: CalendarMonthGridProps) {
+  const { t } = useTranslation();
+  const cells = useMemo(() => buildMonthCells(anchor, weekStartsOn), [anchor, weekStartsOn]);
+  const weekdayLabels = useMemo(
+    () => buildWeekdayLabels(locale, weekStartsOn),
+    [locale, weekStartsOn],
+  );
+  const weekdayLabelsNarrow = useMemo(
+    () => buildWeekdayLabels(locale, weekStartsOn, 'narrow'),
+    [locale, weekStartsOn],
+  );
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+      <div className="grid shrink-0 grid-cols-7 gap-1.5">
+        {weekdayLabels.map((label, i) => (
+          <span
+            key={label}
+            className="pb-1 text-center text-xs font-medium uppercase tracking-wide text-muted-foreground"
+          >
+            <span className="md:hidden" aria-hidden>{weekdayLabelsNarrow[i]}</span>
+            <span className="hidden md:inline">{label}</span>
+          </span>
+        ))}
+      </div>
+      <div className="grid min-h-0 flex-1 grid-cols-7 grid-rows-[repeat(6,minmax(64px,1fr))] gap-1.5 md:grid-rows-[repeat(6,minmax(80px,1fr))]">
+        {cells.map((date) => (
+          <CalendarDayCell
+            key={date.toISOString()}
+            date={date}
+            tasks={tasksByDate.get(toInputDateValue(date)) ?? []}
+            maxRows={3}
+            outOfMonth={date.getMonth() !== anchor.getMonth()}
+            onToggleComplete={onToggleComplete}
+          />
+        ))}
+      </div>
+      <p className={cn('sr-only')}>{t('calendar:monthGridLabel')}</p>
+    </div>
+  );
+}

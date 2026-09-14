@@ -1,9 +1,9 @@
 import { useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { useTagsQuery } from '@/lib/hooks/useTags';
-import { useTasksQuery } from '@/lib/hooks/useTasks';
-import { TaskListView } from '@/components/task/TaskListView';
+import { useTagsQuery } from '@taskora/api';
+import { useTasksQuery } from '@taskora/api';
+import { TaskListView } from '@taskora/ui/components/task/TaskListView';
 
 export default function TagDetail() {
   const { t } = useTranslation();

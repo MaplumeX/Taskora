@@ -1,8 +1,8 @@
 import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
-import { AppShell } from '@/components/layout/AppShell';
-import { ProtectedRoute } from '@/components/ProtectedRoute';
+import { AppShell } from '@taskora/ui/components/layout/AppShell';
+import { ProtectedRoute } from './components/ProtectedRoute';
 
 function PageFallback() {
   return (
