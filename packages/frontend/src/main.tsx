@@ -3,13 +3,20 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { RouterProvider } from 'react-router-dom';
 
-import { Toaster } from '@/components/ui/sonner';
+import { Toaster } from '@taskora/ui/components/ui/sonner';
+import {
+  apiClient,
+  applyThemeFromStorage,
+  configureTokenStore,
+  createLocalTokenStore,
+  hydrateAuthSnapshot,
+  readLegacyAuthSnapshot,
+  refresh,
+  setUnauthorizedHandler,
+  useAuthStore,
+  hydrateFromServer,
+} from '@taskora/api';
 import { router } from '@/router';
-import { applyThemeFromStorage } from '@/lib/hooks/useTheme';
-import { refresh } from '@/lib/api/auth.api';
-import { useAuthStore } from '@/lib/stores/auth.store';
-import { hydrateFromServer } from '@/lib/stores/preferences.store';
-import '@/i18n/config';
 import '@/index.css';
 
 // Apply theme synchronously before React renders to prevent FOUC
@@ -24,6 +31,22 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+// Web wiring: localStorage-backed token store + API base URL from env.
+configureTokenStore(createLocalTokenStore());
+if (import.meta.env.VITE_API_URL) {
+  apiClient.defaults.baseURL = import.meta.env.VITE_API_URL;
+}
+
+// 401-after-refresh-failure → back to the login page.
+setUnauthorizedHandler(() => {
+  if (window.location.pathname !== '/login') {
+    window.location.href = '/login';
+  }
+});
+
+// Restore the session from the persisted token (+ legacy user snapshot).
+hydrateAuthSnapshot(readLegacyAuthSnapshot());
 
 // Startup recovery: if we have a persisted user snapshot but no in-memory token,
 // try to silently refresh via the HttpOnly cookie.

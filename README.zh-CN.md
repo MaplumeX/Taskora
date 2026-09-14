@@ -2,7 +2,7 @@
 
 [English](README.md) · [简体中文](README.zh-CN.md)
 
-一个受 Things 启发的任务管理应用，采用 pnpm monorepo 架构。后端为 NestJS API + Prisma/PostgreSQL，前端为 Vite + React + Tailwind，附带共享 DTO 包与 Docker 部署方案。
+一个受 Things 启发的任务管理应用，采用 pnpm monorepo 架构。后端为 NestJS API + Prisma/PostgreSQL，前端为 Vite + React + Tailwind，附带共享 DTO 包与 Docker 部署方案。另提供 Tauri 2 桌面客户端，与 Web 端共享视图与数据层。
 
 ## 功能特性
 
@@ -14,6 +14,7 @@
 - **JWT 认证**：访问令牌 + 轮换刷新令牌（bcrypt 密码哈希）。
 - **国际化**：内置英语与简体中文。
 - **拖拽排序**：基于 dnd-kit 实现。
+- **桌面客户端**（Tauri 2）：与 Web 端功能对齐，令牌存 OS 钥匙串，全局快捷键快速添加（Ctrl/Cmd+Space）。
 
 ## 技术栈
 
@@ -30,7 +31,10 @@
 ```
 packages/
 ├── backend/       # NestJS API（Prisma schema、迁移、各模块）
-├── frontend/      # Vite + React SPA
+├── frontend/      # Vite + React SPA（壳：路由、入口、登录页）
+├── desktop/       # Tauri 2 桌面客户端（壳、快速添加、钥匙串认证）
+├── ui/            # 跨端业务组件与页面视图
+├── api/           # 跨端 API client、Query hooks、认证、i18n
 └── shared/        # 跨包共享的 DTO / 枚举 / 类型
 ```
 
@@ -122,6 +126,37 @@ pnpm dev
 - `prisma generate` — 重新生成 Prisma client
 - `prisma db seed` — 加载种子数据
 
+## 桌面客户端
+
+预编译的桌面安装包发布在 [GitHub Releases](https://github.com/maplumex/taskora/releases)，对应 `desktop-v*` tag：
+
+| 平台 | 产物 |
+| --- | --- |
+| macOS（Apple Silicon 与 Intel） | `Taskora_x.y.z_aarch64.dmg` / `_x64.dmg` |
+| Windows | `Taskora_x.y.z_x64-setup.exe`（NSIS） |
+| Linux | `Taskora_x.y.z_amd64.AppImage` |
+
+首次启动时配置自托管服务器地址（API 基础地址，如 `https://taskora.example.com/api/v1`）并登录。访问令牌存入 OS 钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），绝不落浏览器存储。
+
+### 未签名安装包绕过方法
+
+V1 安装包**未做代码签名**，首次启动时两个平台都会警告：
+
+- **macOS Gatekeeper**：右键点击应用 → 「打开」→ 对话框中再点「打开」（或系统设置 → 隐私与安全性 → 「仍要打开」）。只需一次。
+- **Windows SmartScreen**：点「更多信息」→ 「仍要运行」。
+- **Linux**：AppImage 不受影响；赋予可执行权限（`chmod +x`）后运行。
+
+待有真实用户后再购证书做签名与自动更新；在此之前请手动从 Releases 下载新版。
+
+### 从源码构建
+
+```bash
+# Linux：先安装 webkit2gtk 等系统依赖，见
+# https://tauri.app/start/prerequisites/
+pnpm --filter @taskora/desktop dev    # 开发窗口
+pnpm --filter @taskora/desktop build  # 当前平台安装包
+```
+
 ## Docker 部署
 
 仓库提供 `docker-compose.yml`，用于本地全栈运行：
@@ -150,10 +185,11 @@ docker build -f packages/frontend/Dockerfile -t taskora-frontend .
 
 GitHub Actions 工作流位于 `.github/workflows/`：
 
-- **CI**（`ci.yml`）—— 每次 PR 和 `main` 分支 push 时触发：安装、类型检查、测试，并验证两个 Docker 镜像可成功构建。
+- **CI**（`ci.yml`）—— 每次 PR 和 `main` 分支 push 时触发：安装、类型检查、测试、桌面端 Rust 检查（仅 Linux），并验证两个 Docker 镜像可成功构建。
 - **Release**（`release.yml`）—— 匹配 `v*` 的 git tag 触发：构建并推送镜像到 GHCR。
   - `ghcr.io/maplumex/taskora-backend:vX.Y.Z` / `:latest`
   - `ghcr.io/maplumex/taskora-frontend:vX.Y.Z` / `:latest`
+- **桌面端 Release**（`desktop-release.yml`）—— 匹配 `desktop-v*` 的 git tag 触发：三平台安装包（dmg / NSIS exe / AppImage）构建并上传到 GitHub Release。V1 不签名、无自动更新。
 
 完整的版本管理、分支策略与多客户端演进计划详见 [docs/versioning-and-deployment.md](docs/versioning-and-deployment.md)。
 

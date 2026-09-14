@@ -1,0 +1,30 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "noEmit": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "useDefineForClassFields": true,
+    "isolatedModules": true,
+    "types": ["vitest/globals", "@testing-library/jest-dom"],
+    "strict": true,
+    "skipLibCheck": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@/api/*": ["../api/src/api/*"],
+      "@/hooks/*": ["../api/src/hooks/*"],
+      "@/stores/*": ["../api/src/stores/*"],
+      "@/utils/*": ["../api/src/utils/*"],
+      "@/token-store": ["../api/src/token-store"],
+      "@/i18n/config": ["../api/src/i18n/config"]
+    }
+  },
+  "include": ["src", "vitest.config.ts"]
+}

@@ -1,0 +1,95 @@
+import { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react';
+import { toast } from 'sonner';
+
+import type { TaskResponseDto } from '@taskora/shared';
+
+import { CalendarMonthGrid } from '@/components/calendar/CalendarMonthGrid';
+import { Button } from '@/components/ui/button';
+import { useDueTasksQuery } from '@taskora/api';
+import { useCompleteTask, useUncompleteTask } from '@taskora/api';
+import { usePreferencesStore } from '@taskora/api';
+import { addMonths, groupByDueDate } from '@taskora/api';
+import { i18n } from '@taskora/api';
+
+export default function Calendar() {
+  const { t } = useTranslation();
+  const { data: tasks = [], isLoading, isError } = useDueTasksQuery();
+  const completeTask = useCompleteTask();
+  const uncompleteTask = useUncompleteTask();
+  const weekStartsOn = usePreferencesStore((s) => s.weekStartsOn);
+
+  const [anchor, setAnchor] = useState(() => new Date());
+
+  const tasksByDate = useMemo(() => groupByDueDate(tasks), [tasks]);
+
+  const handleToggleComplete = (task: TaskResponseDto) => {
+    if (task.status === 'COMPLETED') {
+      uncompleteTask.mutate(task.id, {
+        onError: () => toast.error(t('common:operationFailed')),
+      });
+    } else {
+      completeTask.mutate(task.id, {
+        onError: () => toast.error(t('common:operationFailed')),
+      });
+    }
+  };
+
+  const step = (direction: 1 | -1) => {
+    setAnchor((prev) => addMonths(prev, direction));
+  };
+
+  const periodLabel = useMemo(() => {
+    const formatter = new Intl.DateTimeFormat(i18n.language, {
+      month: 'long',
+      year: 'numeric',
+    });
+    return formatter.format(anchor);
+  }, [anchor, i18n.language]);
+
+  return (
+    <div className="flex h-full flex-col gap-3 pb-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="font-display text-3xl font-semibold tracking-tight">
+          {t('nav:calendar')}
+        </h1>
+      </div>
+
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-1">
+          <Button variant="ghost" size="icon" aria-label={t('calendar:previous')} onClick={() => step(-1)}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <Button variant="ghost" size="icon" aria-label={t('calendar:next')} onClick={() => step(1)}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="gap-1.5"
+            onClick={() => setAnchor(new Date())}
+          >
+            <CalendarRange className="h-4 w-4" />
+            {t('calendar:today')}
+          </Button>
+        </div>
+        <span className="font-display text-lg font-semibold tracking-tight text-foreground">
+          {periodLabel}
+        </span>
+      </div>
+
+      {isError ? (
+        <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
+      ) : isLoading ? null : (
+        <CalendarMonthGrid
+          anchor={anchor}
+          tasksByDate={tasksByDate}
+          weekStartsOn={weekStartsOn}
+          locale={i18n.language}
+          onToggleComplete={handleToggleComplete}
+        />
+      )}
+    </div>
+  );
+}
