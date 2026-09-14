@@ -12,20 +12,20 @@ function PageFallback() {
   );
 }
 
-const Anytime = lazy(() => import('@/pages/Anytime'));
-const AreaDetail = lazy(() => import('@/pages/AreaDetail'));
-const Calendar = lazy(() => import('@/pages/Calendar'));
-const Inbox = lazy(() => import('@/pages/Inbox'));
-const Logbook = lazy(() => import('@/pages/Logbook'));
+const Anytime = lazy(() => import('@taskora/ui/pages/Anytime'));
+const AreaDetail = lazy(() => import('@taskora/ui/pages/AreaDetail'));
+const Calendar = lazy(() => import('@taskora/ui/pages/Calendar'));
+const Inbox = lazy(() => import('@taskora/ui/pages/Inbox'));
+const Logbook = lazy(() => import('@taskora/ui/pages/Logbook'));
 const Login = lazy(() => import('@/pages/Login'));
-const ProjectDetail = lazy(() => import('@/pages/ProjectDetail'));
+const ProjectDetail = lazy(() => import('@taskora/ui/pages/ProjectDetail'));
 const Register = lazy(() => import('@/pages/Register'));
-const Someday = lazy(() => import('@/pages/Someday'));
-const TagDetail = lazy(() => import('@/pages/TagDetail'));
-const Tags = lazy(() => import('@/pages/Tags'));
-const Today = lazy(() => import('@/pages/Today'));
-const Trash = lazy(() => import('@/pages/Trash'));
-const Upcoming = lazy(() => import('@/pages/Upcoming'));
+const Someday = lazy(() => import('@taskora/ui/pages/Someday'));
+const TagDetail = lazy(() => import('@taskora/ui/pages/TagDetail'));
+const Tags = lazy(() => import('@taskora/ui/pages/Tags'));
+const Today = lazy(() => import('@taskora/ui/pages/Today'));
+const Trash = lazy(() => import('@taskora/ui/pages/Trash'));
+const Upcoming = lazy(() => import('@taskora/ui/pages/Upcoming'));
 
 export const router = createBrowserRouter([
   {

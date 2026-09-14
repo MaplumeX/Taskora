@@ -26,5 +26,13 @@
   "appName": "Taskora",
   "appVersion": "Version",
   "techStack": "Tech Stack",
-  "techStackValue": "NestJS + React + Prisma + PostgreSQL"
+  "techStackValue": "NestJS + React + Prisma + PostgreSQL",
+  "changeServer": "Change server",
+  "serverSetupSubtitle": "Connect to your self-hosted Taskora server",
+  "serverUrl": "Server address",
+  "serverUrlHint": "The API base URL, including /api/v1",
+  "serverUrlInvalid": "Invalid server address",
+  "serverUnreachable": "Cannot reach this server",
+  "serverChecking": "Connecting…",
+  "serverConnect": "Connect"
 }
