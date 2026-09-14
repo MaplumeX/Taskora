@@ -1,7 +1,10 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { getVersion } from '@tauri-apps/api/app';
 
+import pkg from '../package.json';
 import '@taskora/api';
+import { setAppVersion } from '@taskora/api';
 import { App } from './App';
 import { QuickAddApp } from './QuickAddApp';
 import { bootQuickAdd } from './quickAddBoot';
@@ -12,6 +15,14 @@ import './index.css';
  * based on the `window` query param (see tauri.conf.json window URLs).
  */
 async function mount() {
+  // Desktop version comes from tauri.conf.json (via Tauri), falling back
+  // to the desktop package.json when not running under Tauri (e.g. vitest).
+  try {
+    setAppVersion(await getVersion());
+  } catch {
+    setAppVersion(pkg.version);
+  }
+
   const kind = new URLSearchParams(window.location.search).get('window');
 
   if (kind === 'quick-add') {

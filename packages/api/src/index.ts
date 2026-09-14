@@ -71,6 +71,7 @@ export { applyTheme, applyThemeFromStorage } from './stores/preferences.store';
 
 // Utilities
 export * from './utils/date';
+export { setAppVersion, getAppVersion } from './utils/appInfo';
 export {
   normalizePreferences,
   isValidLanguage,
