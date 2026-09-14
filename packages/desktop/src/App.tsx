@@ -6,6 +6,7 @@ import {
   hydrateAuthSnapshot,
   refresh,
   setApiBaseUrl,
+  setClientKind,
   useAuthStore,
   hydrateFromServer,
 } from '@taskora/api';
@@ -74,6 +75,9 @@ function Boot({ onReady }: { onReady: () => void }) {
 
     const boot = async () => {
       configureTokenStore(createKeyringTokenStore());
+      // Desktop runs cross-origin to the server: cookies can't carry the
+      // refresh token, so tell the backend to use the body-based flow.
+      setClientKind('desktop');
       const serverUrl = getServerUrl();
       if (serverUrl) {
         setApiBaseUrl(serverUrl);
@@ -89,7 +93,7 @@ function Boot({ onReady }: { onReady: () => void }) {
           try {
             const data = await refresh();
             if (cancelled) return;
-            setAuth(data.accessToken, data.user);
+            setAuth(data.accessToken, data.user, data.refreshToken);
             hydrateFromServer(data.user.preferences ?? null);
           } catch (err) {
             const status = (err as { response?: { status?: number } })?.response

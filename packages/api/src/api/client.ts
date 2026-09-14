@@ -1,7 +1,7 @@
 import axios from 'axios';
 
 import { useAuthStore } from '@/stores/auth.store';
-import { getTokenStore } from '@/token-store';
+import { getTokenStore, readRefreshToken, writeRefreshToken } from '@/token-store';
 
 /**
  * Axios instance shared by all API modules.
@@ -10,6 +10,10 @@ import { getTokenStore } from '@/token-store';
  *   startup; desktop points it at the configured self-hosted server).
  * - The access token is injected from the configured `TokenStore`
  *   (localStorage on web, OS keychain on desktop).
+ * - Desktop additionally sends `X-Client: desktop` so the server returns
+ *   the rotating refresh token in the response body instead of a cookie
+ *   (the Tauri webview is cross-origin to the server, so cookies can't
+ *   carry it).
  */
 export const apiClient = axios.create({
   baseURL: 'http://localhost:3000/api/v1',
@@ -20,6 +24,41 @@ export const apiClient = axios.create({
 /** Point the client at another server (desktop: configured base URL). */
 export function setApiBaseUrl(url: string): void {
   apiClient.defaults.baseURL = url;
+}
+
+/** Client kind reported to the server via the `X-Client` header. */
+export type ClientKind = 'web' | 'desktop';
+
+let clientKind: ClientKind = 'web';
+
+/**
+ * Declare the client kind. Desktop must call this (once, at boot) so the
+ * backend uses the body-based refresh-token flow instead of cookies.
+ */
+export function setClientKind(kind: ClientKind): void {
+  clientKind = kind;
+  if (kind === 'desktop') {
+    apiClient.defaults.headers['X-Client'] = 'desktop';
+  } else {
+    delete apiClient.defaults.headers['X-Client'];
+  }
+}
+
+/** Current client kind ('web' until the host opts into the desktop flow). */
+export function getClientKind(): ClientKind {
+  return clientKind;
+}
+
+/** Body for refresh requests: keychain token on desktop, empty on web. */
+function refreshRequestBody(): { refreshToken?: string } {
+  const refreshToken = readRefreshToken();
+  return refreshToken ? { refreshToken } : {};
+}
+
+/** Persist a successful refresh response (both tokens on desktop). */
+function persistRefreshResponse(data: { accessToken: string; refreshToken?: string }): void {
+  useAuthStore.getState().setToken(data.accessToken);
+  if (data.refreshToken) writeRefreshToken(data.refreshToken);
 }
 
 /** Called when the refresh flow fails; the host navigates to login. */
@@ -51,6 +90,7 @@ apiClient.interceptors.response.use(
     if (original?.url?.includes('/auth/refresh')) {
       useAuthStore.getState().clear();
       getTokenStore().set(null);
+      writeRefreshToken(null);
       return Promise.reject(error);
     }
 
@@ -66,11 +106,10 @@ apiClient.interceptors.response.use(
       isRefreshing = true;
       useAuthStore.getState().setRefreshing(true);
       try {
-        const { accessToken } = await apiClient
-          .post('/auth/refresh')
-          .then((res) => res.data as { accessToken: string });
-        useAuthStore.getState().setToken(accessToken);
-        getTokenStore().set(accessToken);
+        const data = await apiClient
+          .post('/auth/refresh', refreshRequestBody())
+          .then((res) => res.data as { accessToken: string; refreshToken?: string });
+        persistRefreshResponse(data);
         waitingQueue.forEach((cb) => cb());
         waitingQueue = [];
         original._retry = true;
@@ -78,6 +117,7 @@ apiClient.interceptors.response.use(
       } catch {
         useAuthStore.getState().clear();
         getTokenStore().set(null);
+        writeRefreshToken(null);
         onUnauthorized?.();
         return Promise.reject(error);
       } finally {

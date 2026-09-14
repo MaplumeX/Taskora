@@ -36,7 +36,7 @@ export function useLogin() {
   return useMutation({
     mutationFn: (data: LoginDto) => login(data),
     onSuccess: (data) => {
-      setAuth(data.accessToken, data.user);
+      setAuth(data.accessToken, data.user, data.refreshToken);
       hydrateFromServer(data.user.preferences ?? null);
       navigation.afterLogin();
     },
