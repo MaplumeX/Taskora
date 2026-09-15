@@ -58,7 +58,7 @@ jobs:
       - run: pnpm --filter @taskora/shared build
 
       - name: Test native session storage
-        run: cargo test --locked --lib --manifest-path packages/desktop/src-tauri/Cargo.toml session::
+        run: 'cargo test --locked --lib --manifest-path packages/desktop/src-tauri/Cargo.toml session::'
 
       - uses: tauri-apps/tauri-action@v0
         env:

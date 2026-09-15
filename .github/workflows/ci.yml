@@ -75,4 +75,4 @@ jobs:
 
       - name: Test DPAPI session persistence and migration
         working-directory: packages/desktop/src-tauri
-        run: cargo test --locked --lib session::
+        run: 'cargo test --locked --lib session::'
