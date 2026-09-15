@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.2] - 2026-09-15
+
+### Fixes
+
+- **frontend**: Restore the web UI styling. The Tailwind `content` globs
+  still pointed at `./src` after 0.2.1 moved every component and page into
+  `@taskora/ui`, so the built stylesheet shipped almost no utility classes
+  and the deployed app rendered as unstyled text. `../ui/src/**/*.{ts,tsx}`
+  is now scanned, as it already was for the desktop client.
+
+---
+
 ## [0.2.1] - 2026-09-15
 
 ### Features
