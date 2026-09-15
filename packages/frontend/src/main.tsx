@@ -56,16 +56,15 @@ hydrateAuthSnapshot(readLegacyAuthSnapshot());
 // Startup recovery: if we have a persisted user snapshot but no in-memory token,
 // try to silently refresh via the HttpOnly cookie.
 async function tryRecoverSession() {
-  const { user, token, setAuth, clear, setRefreshing } = useAuthStore.getState();
+  const { user, token, setRefreshing } = useAuthStore.getState();
   if (token || !user) return;
 
   setRefreshing(true);
   try {
     const data = await refresh();
-    setAuth(data.accessToken, data.user);
     hydrateFromServer(data.user.preferences ?? null);
   } catch {
-    clear();
+    // refresh() clears rejected credentials; transient failures retain them.
   } finally {
     setRefreshing(false);
   }

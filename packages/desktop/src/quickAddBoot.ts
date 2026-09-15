@@ -1,32 +1,33 @@
-/**
- * Quick-add window bootstrap: wires the shared i18n instance and the data
- * layer (token store + API base URL) for the independent quick-add webview.
- */
+/** Reload when opening quick-add: the main window may have logged in or rotated. */
 import {
   configureTokenStore,
   hydrateAuthSnapshot,
   setApiBaseUrl,
   setClientKind,
+  useAuthStore,
 } from '@taskora/api';
-import { createKeyringTokenStore, hydrateKeyringToken } from './keyring-token-store';
-import { getServerUrl } from './server-settings';
+import { createSecureTokenStore, type SecureTokenStore } from './secure-token-store';
+import { getServerUrl, useServerSettings } from './server-settings';
 
-let ready: Promise<void> | null = null;
+let store: SecureTokenStore | null = null;
+let storedServer: string | null = null;
 
-/** One-time async wiring for the quick-add webview context. */
-export function bootQuickAdd(): Promise<void> {
-  if (!ready) {
-    ready = (async () => {
-      configureTokenStore(createKeyringTokenStore());
-      setClientKind('desktop');
-      const serverUrl = getServerUrl();
-      if (serverUrl) {
-        setApiBaseUrl(serverUrl);
-        const token = await hydrateKeyringToken();
-        if (token) hydrateAuthSnapshot(null);
-      }
-      // Importing '@taskora/api' already initialized i18n (side effect).
-    })();
+export async function bootQuickAdd(): Promise<void> {
+  // The main window can change this persisted setting in its own webview.
+  await useServerSettings.persist.rehydrate();
+  setClientKind('desktop');
+  const serverUrl = getServerUrl();
+  if (!serverUrl) {
+    useAuthStore.setState({ token: null, user: null });
+    return;
   }
-  return ready;
+  setApiBaseUrl(serverUrl);
+  if (!store || storedServer !== serverUrl) {
+    store = createSecureTokenStore(serverUrl);
+    storedServer = serverUrl;
+  }
+  configureTokenStore(store);
+  await store.hydrate();
+  useAuthStore.setState({ token: null, user: null });
+  hydrateAuthSnapshot(null);
 }

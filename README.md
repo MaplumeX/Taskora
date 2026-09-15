@@ -136,7 +136,7 @@ Prebuilt desktop installers are published on the [GitHub Releases page](https://
 | Windows | `Taskora_x.y.z_x64-setup.exe` (NSIS) |
 | Linux | `Taskora_x.y.z_amd64.AppImage` |
 
-On first launch you configure the address of your self-hosted server (the API base URL, e.g. `https://taskora.example.com/api/v1`) and sign in with your account. The access token is stored in the OS keychain (macOS Keychain / Windows Credential Manager / Linux Secret Service) — never in browser storage.
+On first launch you configure the address of your self-hosted server (the API base URL, e.g. `https://taskora.example.com/api/v1`) and sign in with your account. Windows stores the access and refresh tokens together in a per-user DPAPI-encrypted file (normally `%LOCALAPPDATA%\app.taskora.desktop\session.dpapi`); macOS / Linux use the OS keychain. Tokens never reach plaintext files or browser storage. Legacy credentials are migrated automatically.
 
 ### Unsigned builds — how to bypass the warnings
 

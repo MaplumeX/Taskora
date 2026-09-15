@@ -57,3 +57,12 @@ Fix — body-based refresh-token flow for desktop:
 Tests: `packages/backend/test/auth.controller.spec.ts` (transport matrix),
 `packages/api/src/api/client.test.ts` (interceptor refresh flows), updated
 keyring store tests. Web flow unchanged (no header, empty refresh body).
+
+## Comments (Windows encrypted session storage)
+
+Superseded the Windows keyring storage implementation with a DPAPI-encrypted
+session file, including legacy migration and awaited atomic persistence.
+The previously documented transient-refresh fix did not cover the shared axios
+interceptor; the unified refresh path now clears only on HTTP 401. Startup
+is single-flight, including React StrictMode and auth-state re-renders.
+See `.scratch/windows-session-storage/` and ADR-0002.

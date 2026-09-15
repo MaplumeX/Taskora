@@ -58,10 +58,10 @@ CI 按 tag 前缀自动接管（`release.yml` / `desktop-release.yml`）。
 
 - **平台**：三平台出包，主力开发平台为 Linux，Linux 构建质量优先保证。
 - **安装包格式**：macOS `.dmg`、Windows NSIS `.exe`、Linux AppImage。`.deb` 等后续有需求再加。
-- **CI 策略**：PR / main CI 只跑 desktop 的 typecheck + 单测，跨平台出包仅在 tag `desktop-v*` 时触发。理由：Rust 侧编译慢，三平台全量构建放 PR 会拖慢所有 PR。
+- **CI 策略**：PR / main CI 运行 desktop 的 typecheck、单测、Linux Rust 编译检查和 Windows 原生会话测试；三平台安装包仅在 tag `desktop-v*` 时构建发布。
 - **V1 无自动更新**：用户手动从 GitHub Releases 下载新版；后续再上 `tauri-plugin-updater`（需 updater 签名密钥）。
 - **V1 不签名**：macOS 需右键打开绕过 Gatekeeper，Windows 会触发 SmartScreen 警告；README 需写清绕过方法。待有真实用户后购证书。
-- **Token 存储**：OS 钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），不用 WebView localStorage。
+- **Token 存储**：Windows 使用当前用户 DPAPI 加密的本地 `session.dpapi` 文件；macOS Keychain / Linux Secret Service 保存完整会话条目。不用 WebView localStorage 保存令牌。旧凭据自动迁移，详见 [ADR-0002](adr/0002-windows-dpapi-session-file.md)。
 
 ## 三、分支策略
 

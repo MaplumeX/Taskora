@@ -8,9 +8,9 @@ import { useLogin, i18n } from '@taskora/api';
 
 /**
  * Desktop login screen — same JWT flow as web, but the token is persisted
- * through the OS keychain (via the injected TokenStore in @taskora/api).
+ * through the native secure storage (via the injected TokenStore in @taskora/api).
  */
-export function Login({ onBack }: { onBack: () => void }) {
+export function Login({ onBack }: { onBack: () => Promise<void> }) {
   const { t } = useTranslation();
   const login = useLogin();
   const [email, setEmail] = useState('');
@@ -24,10 +24,7 @@ export function Login({ onBack }: { onBack: () => void }) {
       { email, password },
       {
         onError: (err) => {
-          setError(
-            (err as { message?: string })?.message ??
-              i18n.t('auth:loginFailed'),
-          );
+          setError((err as { message?: string })?.message ?? i18n.t('auth:loginFailed'));
         },
       },
     );
@@ -39,9 +36,7 @@ export function Login({ onBack }: { onBack: () => void }) {
         <h1 className="mb-1 text-center font-display text-3xl font-semibold tracking-tight">
           Taskora
         </h1>
-        <p className="mb-6 text-center text-sm text-muted-foreground">
-          {t('auth:loginSubtitle')}
-        </p>
+        <p className="mb-6 text-center text-sm text-muted-foreground">{t('auth:loginSubtitle')}</p>
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor="email">{t('auth:email')}</Label>
@@ -76,7 +71,10 @@ export function Login({ onBack }: { onBack: () => void }) {
         <button
           type="button"
           className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground"
-          onClick={onBack}
+          disabled={login.isPending}
+          onClick={() => {
+            void onBack().catch((err: Error) => setError(err.message));
+          }}
         >
           {t('settings:changeServer', { defaultValue: 'Change server' })}
         </button>

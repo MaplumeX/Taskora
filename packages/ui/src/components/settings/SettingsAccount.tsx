@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { useCurrentUser } from '@taskora/api';
 import { useUpdateProfile, useUpdatePassword, useDeleteAccount } from '@taskora/api';
-import { useAuthStore } from '@taskora/api';
+import { useAuthStore, withSessionLock } from '@taskora/api';
 
 export default function SettingsAccount() {
   const { t } = useTranslation(['auth', 'common', 'settings']);
@@ -87,10 +87,13 @@ export default function SettingsAccount() {
       { password: deletePassword },
       {
         onSuccess: () => {
-          useAuthStore.getState().clear();
-          queryClient.clear();
-          navigate('/login');
-          toast.success(t('settings:deleteAccountSuccess'));
+          void withSessionLock(() => useAuthStore.getState().clear())
+            .then(() => {
+              queryClient.clear();
+              navigate('/login');
+              toast.success(t('settings:deleteAccountSuccess'));
+            })
+            .catch((error: Error) => toast.error(error.message));
         },
         onError: () => toast.error(t('settings:deleteAccountFailed')),
       },
@@ -180,12 +183,8 @@ export default function SettingsAccount() {
 
       {/* 账户删除区 */}
       <div className="flex flex-col gap-4">
-        <h2 className="text-sm font-medium text-destructive">
-          {t('settings:deleteAccount')}
-        </h2>
-        <p className="text-sm text-muted-foreground">
-          {t('settings:deleteAccountDescription')}
-        </p>
+        <h2 className="text-sm font-medium text-destructive">{t('settings:deleteAccount')}</h2>
+        <p className="text-sm text-muted-foreground">{t('settings:deleteAccountDescription')}</p>
         <Button
           variant="destructive"
           className="w-fit"
@@ -202,14 +201,10 @@ export default function SettingsAccount() {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{t('settings:deleteAccountConfirm')}</DialogTitle>
-            <DialogDescription>
-              {t('settings:deleteAccountConfirmDescription')}
-            </DialogDescription>
+            <DialogDescription>{t('settings:deleteAccountConfirmDescription')}</DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-2">
-            <Label htmlFor="deletePassword">
-              {t('settings:deleteAccountPasswordLabel')}
-            </Label>
+            <Label htmlFor="deletePassword">{t('settings:deleteAccountPasswordLabel')}</Label>
             <Input
               id="deletePassword"
               type="password"

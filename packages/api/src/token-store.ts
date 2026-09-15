@@ -2,7 +2,7 @@
  * Token storage abstraction.
  *
  * The web client persists its auth token via a localStorage store, while
- * the desktop client stores it in the OS keychain (Tauri command). Both
+ * the desktop client uses native secure storage (Tauri command). Both
  * implementations satisfy this minimal interface and are injected into
  * the API layer via `configureTokenStore` before any request fires.
  */
@@ -11,15 +11,19 @@ export interface TokenStore {
   /** Read the persisted access token, if any. */
   get(): string | null;
   /** Persist (or clear, when null) the access token. */
-  set(token: string | null): void;
+  set(token: string | null): void | Promise<void>;
   /**
    * Optional refresh-token persistence. Desktop implementations store the
-   * rotating refresh token next to the access token (OS keychain) because
+   * rotating refresh token next to the access token because
    * the webview cannot rely on cookies. The web store leaves these unset —
    * its refresh token lives in an HttpOnly cookie.
    */
   getRefreshToken?(): string | null;
-  setRefreshToken?(refreshToken: string | null): void;
+  setRefreshToken?(refreshToken: string | null): void | Promise<void>;
+  /** Save the pair atomically, resolving only after durable storage succeeds. */
+  setTokens?(token: string | null, refreshToken: string | null): Promise<void>;
+  /** Serialize session operations across desktop windows and reload current credentials. */
+  withSessionLock?<T>(operation: () => Promise<T>, options?: { reload?: boolean }): Promise<T>;
 }
 
 /** Read-through token store backed by nothing (default). */
@@ -49,6 +53,32 @@ export function readRefreshToken(): string | null {
 }
 
 /** @internal — persist (or clear) the refresh token when the store supports it. */
-export function writeRefreshToken(refreshToken: string | null): void {
-  ambientTokenStore.setRefreshToken?.(refreshToken);
+export async function writeRefreshToken(refreshToken: string | null): Promise<void> {
+  await ambientTokenStore.setRefreshToken?.(refreshToken);
+}
+
+export async function saveTokens(
+  token: string | null,
+  refreshToken?: string | null,
+): Promise<void> {
+  const store = ambientTokenStore;
+  if (store.setTokens) {
+    await store.setTokens(
+      token,
+      refreshToken === undefined ? (store.getRefreshToken?.() ?? null) : refreshToken,
+    );
+  } else {
+    await store.set(token);
+    if (refreshToken !== undefined) await store.setRefreshToken?.(refreshToken);
+  }
+}
+
+/** Coordinate login/logout with refresh when the host has multiple windows. */
+export function withSessionLock<T>(
+  operation: () => Promise<T>,
+  options?: { reload?: boolean },
+): Promise<T> {
+  return ambientTokenStore.withSessionLock
+    ? ambientTokenStore.withSessionLock(operation, options)
+    : operation();
 }

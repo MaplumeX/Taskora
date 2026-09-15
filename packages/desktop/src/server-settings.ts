@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 
 /**
  * Desktop connection settings (non-sensitive, localStorage is fine —
- * only the auth token is required to live in the OS keychain).
+ * auth tokens use native secure storage).
  */
 interface ServerSettingsState {
   /** Base URL of the self-hosted server API, e.g. https://taskora.example.com/api/v1 */

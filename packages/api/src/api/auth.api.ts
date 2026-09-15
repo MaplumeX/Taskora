@@ -1,6 +1,6 @@
 import type { AuthResponseDto, LoginDto, RegisterDto, UserResponseDto } from '@taskora/shared';
 
-import { apiClient } from './client';
+import { apiClient, refreshSession } from './client';
 import { readRefreshToken } from '@/token-store';
 
 export type AuthUser = AuthResponseDto['user'];
@@ -18,12 +18,7 @@ export function getMe(): Promise<UserResponseDto> {
 }
 
 export function refresh(): Promise<AuthResponseDto> {
-  // Desktop sends its keychain refresh token in the body (cookies are
-  // unusable from the cross-origin Tauri webview); web sends an empty body
-  // and relies on the HttpOnly cookie.
-  const refreshToken = readRefreshToken();
-  const body = refreshToken ? { refreshToken } : {};
-  return apiClient.post<AuthResponseDto>('/auth/refresh', body).then((res) => res.data);
+  return refreshSession();
 }
 
 export function logout(): Promise<void> {
