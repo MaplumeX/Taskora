@@ -5,6 +5,23 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## Desktop [0.1.2] - 2026-09-15
+
+### Fixes
+
+- **desktop**: Require a 2xx response from the backend health probe before
+  saving the server URL in server setup. A typo pointing at an unrelated
+  host (or a path that 404s) was previously accepted silently and only
+  surfaced later as failing API calls; the form now reports an unreachable
+  server up front. Depends on the unauthenticated `/api/v1/health` endpoint
+  shipped with the v0.2.1 backend.
+- **ui**: Stop nesting buttons inside the project row button (React
+  `validateDOMNesting` warning); row navigation now uses a `role="button"`
+  div with Enter/Space activation, and Space on the progress ring toggles
+  completion without navigating.
+
+---
+
 ## [0.2.2] - 2026-09-15
 
 ### Fixes
