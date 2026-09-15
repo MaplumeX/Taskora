@@ -1,5 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import { toast } from 'sonner';
+import { withSessionLock } from '@/token-store';
 
 import type { LoginDto, RegisterDto } from '@taskora/shared';
 
@@ -34,9 +36,13 @@ export function setAuthFlowNavigation(nav: AuthFlowNavigation): void {
 export function useLogin() {
   const setAuth = useAuthStore((s) => s.setAuth);
   return useMutation({
-    mutationFn: (data: LoginDto) => login(data),
+    mutationFn: (input: LoginDto) =>
+      withSessionLock(async () => {
+        const data = await login(input);
+        await setAuth(data.accessToken, data.user, data.refreshToken);
+        return data;
+      }),
     onSuccess: (data) => {
-      setAuth(data.accessToken, data.user, data.refreshToken);
       hydrateFromServer(data.user.preferences ?? null);
       navigation.afterLogin();
     },
@@ -77,12 +83,19 @@ export function useLogout() {
   const queryClient = useQueryClient();
   return async () => {
     try {
-      await logoutApi();
-    } catch {
-      // tolerate failure — proceed to clear local state
+      await withSessionLock(async () => {
+        try {
+          await logoutApi();
+        } catch {
+          // Offline logout still clears the local session.
+        }
+        await clear();
+      });
+      queryClient.clear();
+      navigation.onLoggedOut();
+    } catch (error) {
+      // Do not pretend logout succeeded when the saved session remains.
+      toast.error((error as Error).message);
     }
-    clear();
-    queryClient.clear();
-    navigation.onLoggedOut();
   };
 }

@@ -16,6 +16,16 @@ import { getCurrentWindow } from '@tauri-apps/api/window';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { listen } from '@tauri-apps/api/event';
 import { createTask, i18n, useAuthStore } from '@taskora/api';
+import { bootQuickAdd } from './quickAddBoot';
+
+async function showMainWindow() {
+  const main = await WebviewWindow.getByLabel('main');
+  if (main) {
+    await main.show().catch(() => undefined);
+    await main.setFocus().catch(() => undefined);
+  }
+  await getCurrentWindow().hide();
+}
 
 export function QuickAddApp() {
   const { t } = useTranslation();
@@ -32,8 +42,19 @@ export function QuickAddApp() {
   // Focus the input whenever the shortcut re-opens the window.
   useEffect(() => {
     const unlisten = listen('quick-add://open', () => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
+      void bootQuickAdd()
+        .then(async () => {
+          if (!useAuthStore.getState().token) {
+            await showMainWindow();
+            return;
+          }
+          inputRef.current?.focus();
+          inputRef.current?.select();
+        })
+        .catch(() => {
+          useAuthStore.setState({ token: null, user: null });
+          void showMainWindow();
+        });
     });
 
     inputRef.current?.focus();
@@ -46,14 +67,7 @@ export function QuickAddApp() {
   // flow (issue 05 strategy), then hide this window out of the way.
   useEffect(() => {
     if (authToken) return;
-    void (async () => {
-      const main = await WebviewWindow.getByLabel('main');
-      if (main) {
-        await main.show().catch(() => undefined);
-        await main.setFocus().catch(() => undefined);
-      }
-      await getCurrentWindow().hide();
-    })();
+    void showMainWindow();
   }, [authToken]);
 
   if (!authToken) {
@@ -102,9 +116,7 @@ export function QuickAddApp() {
           autoFocus
           className="h-12 w-full rounded-xl border border-border/60 bg-card px-4 text-base shadow-sm outline-none placeholder:text-muted-foreground/70 focus:border-primary"
         />
-        {error && (
-          <p className="mt-1 px-1 text-xs text-destructive">{error}</p>
-        )}
+        {error && <p className="mt-1 px-1 text-xs text-destructive">{error}</p>}
       </form>
     </div>
   );

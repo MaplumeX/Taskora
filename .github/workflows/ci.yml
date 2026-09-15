@@ -37,8 +37,8 @@ jobs:
       - name: Build frontend image
         run: docker build -f packages/frontend/Dockerfile -t taskora-frontend:ci .
 
-  # Desktop: 只跑 Rust 编译检查（Linux 单平台），三平台打包在 desktop-v* tag 的
-  # desktop-release.yml 中触发（Rust 跨平台全量构建不进 PR CI）。
+  # Linux 编译检查；Windows 会话测试验证真实 DPAPI。三平台安装包仍由
+  # desktop-v* tag 的 desktop-release.yml 构建。
   desktop-rust-check:
     runs-on: ubuntu-22.04
     steps:
@@ -60,3 +60,19 @@ jobs:
       - name: cargo check
         working-directory: packages/desktop/src-tauri
         run: cargo check --locked
+
+  desktop-windows-session-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: packages/desktop/src-tauri
+
+      - name: Test DPAPI session persistence and migration
+        working-directory: packages/desktop/src-tauri
+        run: 'cargo test --locked --lib session::'

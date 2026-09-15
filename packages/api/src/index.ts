@@ -20,6 +20,7 @@ export {
   getTokenStore,
   readRefreshToken,
   writeRefreshToken,
+  withSessionLock,
 } from './token-store';
 
 // Web (localStorage) token store implementation

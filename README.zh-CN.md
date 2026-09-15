@@ -136,7 +136,7 @@ pnpm dev
 | Windows | `Taskora_x.y.z_x64-setup.exe`（NSIS） |
 | Linux | `Taskora_x.y.z_amd64.AppImage` |
 
-首次启动时配置自托管服务器地址（API 基础地址，如 `https://taskora.example.com/api/v1`）并登录。访问令牌存入 OS 钥匙串（macOS Keychain / Windows Credential Manager / Linux Secret Service），绝不落浏览器存储。
+首次启动时配置自托管服务器地址（API 基础地址，如 `https://taskora.example.com/api/v1`）并登录。Windows 将访问令牌和刷新令牌一起保存到系统 DPAPI 加密的本地文件（通常为 `%LOCALAPPDATA%\app.taskora.desktop\session.dpapi`）；macOS / Linux 使用系统钥匙串。令牌不以明文落盘，也不保存在浏览器存储中。旧版系统凭据会自动迁移。
 
 ### 未签名安装包绕过方法
 
