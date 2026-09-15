@@ -5,6 +5,30 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.2.1] - 2026-09-15
+
+### Features
+
+- **monorepo**: Extract the `@taskora/api` and `@taskora/ui` packages so the
+  web and desktop clients share one data layer and component set (#16).
+- **settings**: Show the real per-client version in Settings → About instead
+  of a hardcoded value (#17).
+
+### Fixes
+
+- **backend**: Support the desktop refresh flow — `POST /auth/login`,
+  `/auth/refresh` and `/auth/logout` now accept and return the rotating
+  refresh token in the request body when the client sends `X-Client: desktop`.
+  Non-cookie clients (the Tauri webview) could never hold the `SameSite` `rt`
+  cookie, so every restart ended in a forced re-login (#18). Requires desktop
+  client 0.1.1 or newer.
+- **backend**: Add an unauthenticated `/api/v1/health` liveness probe for
+  clients and container healthchecks.
+- **ui**: Stop nesting buttons inside the project row button.
+- **frontend**: Make the sidebar hover highlight instant on enter (#15).
+
+---
+
 ## Desktop [0.1.1] - 2026-09-15
 
 ### Fixes
