@@ -5,6 +5,7 @@ import {
   Tags as TagsIcon,
   Trash2,
   Settings,
+  Notebook,
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +20,15 @@ import { ProjectStatus } from '@taskora/shared';
 import { SidebarBottomBar } from '@/components/layout/SidebarBottomBar';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
 import { mainNav, type NavItem } from '@/components/layout/navItems';
+
+/** 侧边栏主导航（日志移至与废纸篓同一分组） */
+const SIDEBAR_MAIN_NAV = mainNav.filter((item) => item.to !== '/logbook');
+
+/** 日志 + 废纸篓：位于主导航与区域之间的中间分组 */
+const SIDEBAR_UTILITIES_NAV: NavItem[] = [
+  { to: '/logbook', labelKey: 'nav:logbook', icon: Notebook },
+  { to: '/trash', labelKey: 'nav:trash', icon: Trash2 },
+];
 import { useUiInteractionStore } from '@taskora/api';
 import { useProjectsQuery } from '@taskora/api';
 import { useAreasQuery } from '@taskora/api';
@@ -174,7 +184,16 @@ export function Sidebar() {
 
       <ScrollArea className="flex-1 px-2">
         <div className="flex flex-col gap-0.5">
-          {mainNav.map((item) => (
+          {SIDEBAR_MAIN_NAV.map((item) => (
+            <NavRow key={item.to} item={item} />
+          ))}
+        </div>
+
+        <Separator className="my-3" />
+
+        {/* 日志 / 废纸篓 */}
+        <div className="flex flex-col gap-0.5">
+          {SIDEBAR_UTILITIES_NAV.map((item) => (
             <NavRow key={item.to} item={item} />
           ))}
         </div>
@@ -199,10 +218,6 @@ export function Sidebar() {
         </div>
 
         <Separator className="my-3" />
-
-        <div className="flex flex-col gap-0.5">
-          <NavRow item={{ to: '/trash', labelKey: 'nav:trash', icon: Trash2 }} />
-        </div>
       </ScrollArea>
 
       <SidebarBottomBar />
