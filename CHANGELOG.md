@@ -9,6 +9,12 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Fixes
 
+- **desktop (0.1.1 re-release)**: Store Windows sessions in a per-user
+  DPAPI-encrypted local file, migrate legacy credentials, and wait for
+  the complete token pair to be saved before completing login.
+- **desktop**: Restore sessions once at startup, coordinate token rotation
+  across windows, and retain credentials on network/timeout/server errors.
+  Session recovery errors now offer retry or explicit local-session reset.
 - **desktop**: Keep sessions signed in across restarts via a body-based
   refresh-token flow stored in the OS keychain (#18). Requires backend
   and desktop to be deployed together.

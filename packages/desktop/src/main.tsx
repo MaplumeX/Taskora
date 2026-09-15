@@ -26,7 +26,7 @@ async function mount() {
   const kind = new URLSearchParams(window.location.search).get('window');
 
   if (kind === 'quick-add') {
-    await bootQuickAdd();
+    await bootQuickAdd().catch(() => undefined);
     ReactDOM.createRoot(document.getElementById('root')!).render(
       <React.StrictMode>
         <QuickAddApp />

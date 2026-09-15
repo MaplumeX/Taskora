@@ -1,30 +1,20 @@
-import { useEffect, useState } from 'react';
-
-import {
-  applyThemeFromStorage,
-  configureTokenStore,
-  hydrateAuthSnapshot,
-  refresh,
-  setApiBaseUrl,
-  setClientKind,
-  useAuthStore,
-  hydrateFromServer,
-} from '@taskora/api';
+import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useAuthStore, withSessionLock } from '@taskora/api';
+import { Button } from '@taskora/ui/components/ui/button';
+import { bootDesktop, resetDesktopSession } from './boot';
 import { ServerSetup } from './ServerSetup';
 import { Login } from './Login';
 import { MainApp } from './MainApp';
-import { createKeyringTokenStore, hydrateKeyringToken } from './keyring-token-store';
-import { getServerUrl, useServerSettings } from './server-settings';
+import { useServerSettings } from './server-settings';
 
 /**
  * Desktop app bootstrap: server setup → login → main window.
  *
- * The heavy work (keychain hydration, token store wiring, API base URL)
- * happens once in main.tsx before React mounts; this component only
- * routes between the three top-level states.
+ * Startup restores the session once through bootDesktop; this component
+ * routes between setup, login and the main window.
  */
 export function App() {
-  const [booted, setBooted] = useState(false);
   const serverUrl = useServerSettings((s) => s.serverUrl);
   const setServerUrl = useServerSettings((s) => s.setServerUrl);
 
@@ -32,15 +22,11 @@ export function App() {
   const user = useAuthStore((s) => s.user);
   const refreshing = useAuthStore((s) => s.refreshing);
 
-  // Re-apply the API base URL whenever the server setting changes.
-  useEffect(() => {
-    if (serverUrl) setApiBaseUrl(serverUrl);
-  }, [serverUrl]);
+  const [readyServer, setReadyServer] = useState<string | null | undefined>(undefined);
+  const onReady = useCallback(() => setReadyServer(serverUrl), [serverUrl]);
 
-  if (!booted) {
-    return (
-      <Boot onReady={() => setBooted(true)} />
-    );
+  if (readyServer !== serverUrl) {
+    return <Boot key={serverUrl ?? ''} onReady={onReady} />;
   }
 
   if (!serverUrl) {
@@ -50,9 +36,9 @@ export function App() {
   if (!token && !user) {
     return (
       <Login
-        onBack={() => {
+        onBack={async () => {
           // Switching servers invalidates the stored session.
-          useAuthStore.getState().clear();
+          await withSessionLock(() => useAuthStore.getState().clear());
           setServerUrl(null);
         }}
       />
@@ -65,60 +51,59 @@ export function App() {
   return <MainApp />;
 }
 
-/**
- * One-time async boot: hydrate the keychain token, wire the API base URL
- * and attempt a silent session refresh before first paint decisions.
- */
+/** Startup failures are retryable; they never masquerade as a fresh login. */
 function Boot({ onReady }: { onReady: () => void }) {
+  const { t } = useTranslation();
+  const [error, setError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+
   useEffect(() => {
     let cancelled = false;
-
-    const boot = async () => {
-      configureTokenStore(createKeyringTokenStore());
-      // Desktop runs cross-origin to the server: cookies can't carry the
-      // refresh token, so tell the backend to use the body-based flow.
-      setClientKind('desktop');
-      const serverUrl = getServerUrl();
-      if (serverUrl) {
-        setApiBaseUrl(serverUrl);
-        const token = await hydrateKeyringToken();
-        if (token) {
-          hydrateAuthSnapshot(null);
-          // Try to refresh the access token (rotating refresh cookie).
-          // A 401 means the refresh token is genuinely rejected → real
-          // logout. Network errors are transient: keep the keychain token
-          // so the user stays signed in across restarts (issue 03).
-          const { setAuth, clear, setRefreshing } = useAuthStore.getState();
-          setRefreshing(true);
-          try {
-            const data = await refresh();
-            if (cancelled) return;
-            setAuth(data.accessToken, data.user, data.refreshToken);
-            hydrateFromServer(data.user.preferences ?? null);
-          } catch (err) {
-            const status = (err as { response?: { status?: number } })?.response
-              ?.status;
-            if (!cancelled && status === 401) clear();
-          } finally {
-            if (!cancelled) setRefreshing(false);
-          }
-        }
-      }
-      if (!cancelled) {
-        applyThemeFromStorage();
-        onReady();
-      }
-    };
-
-    void boot();
+    void bootDesktop().then(
+      () => {
+        if (!cancelled) onReady();
+      },
+      () => {
+        if (!cancelled) setError(true);
+      },
+    );
     return () => {
       cancelled = true;
     };
-  }, [onReady]);
+  }, [onReady, attempt]);
 
   return (
-    <div className="flex h-dvh items-center justify-center">
-      <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-transparent" />
+    <div className="flex h-dvh flex-col items-center justify-center gap-4 px-6">
+      {error ? (
+        <>
+          <p role="alert" className="text-center text-sm text-muted-foreground">
+            {t('auth:sessionRestoreFailed')}
+          </p>
+          <Button
+            onClick={() => {
+              setError(false);
+              setAttempt((value) => value + 1);
+            }}
+          >
+            {t('auth:retrySession')}
+          </Button>
+          <Button
+            variant="ghost"
+            onClick={() => {
+              setError(false);
+              void resetDesktopSession()
+                .then(() => {
+                  setAttempt((value) => value + 1);
+                })
+                .catch(() => setError(true));
+            }}
+          >
+            {t('auth:resetSession')}
+          </Button>
+        </>
+      ) : (
+        <div className="h-6 w-6 animate-spin rounded-full border-2 border-muted border-t-transparent" />
+      )}
     </div>
   );
 }

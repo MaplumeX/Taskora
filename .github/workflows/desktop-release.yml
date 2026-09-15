@@ -57,6 +57,9 @@ jobs:
       # shared DTOs are consumed from source; build its .d.ts for tsc
       - run: pnpm --filter @taskora/shared build
 
+      - name: Test native session storage
+        run: cargo test --locked --lib --manifest-path packages/desktop/src-tauri/Cargo.toml session::
+
       - uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,11 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AxiosError, type AxiosAdapter, type AxiosRequestConfig } from 'axios';
 
-import {
-  apiClient,
-  setClientKind,
-  setUnauthorizedHandler,
-} from '@/api/client';
+import { apiClient, setClientKind, refreshSession, setUnauthorizedHandler } from '@/api/client';
 import { configureTokenStore, type TokenStore } from '@/token-store';
 import { useAuthStore } from '@/stores/auth.store';
 
@@ -15,7 +11,10 @@ import { useAuthStore } from '@/stores/auth.store';
  * - desktop: keychain refresh token in the body, rotated token in the
  *   response body gets persisted back to the store.
  */
-function memoryTokenStore(tokens: { token?: string | null; refreshToken?: string | null }): TokenStore {
+function memoryTokenStore(tokens: {
+  token?: string | null;
+  refreshToken?: string | null;
+}): TokenStore {
   let token = tokens.token ?? null;
   let refreshToken = tokens.refreshToken ?? null;
   return {
@@ -65,10 +64,10 @@ describe('api client — refresh token transports', () => {
     setUnauthorizedHandler(null);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
     setClientKind('web');
     setUnauthorizedHandler(null);
-    useAuthStore.getState().clear();
+    await useAuthStore.getState().clear();
     configureTokenStore({
       get: () => null,
       set: () => undefined,
@@ -145,5 +144,105 @@ describe('api client — refresh token transports', () => {
     expect(store.getRefreshToken?.()).toBeNull();
     expect(onUnauthorized).toHaveBeenCalled();
     expect(useAuthStore.getState().token).toBeNull();
+  });
+  it.each([0, 500, 503])('keeps credentials on transient refresh failure (%s)', async (status) => {
+    const store = memoryTokenStore({ token: 'at', refreshToken: 'rt' });
+    configureTokenStore(store);
+    const unauthorized = vi.fn();
+    setUnauthorizedHandler(unauthorized);
+    apiClient.defaults.adapter = scriptedAdapter({ status: 401 }, { status }).adapter;
+    await expect(apiClient.get('/tasks')).rejects.toBeDefined();
+    expect(store.get()).toBe('at');
+    expect(store.getRefreshToken?.()).toBe('rt');
+    expect(unauthorized).not.toHaveBeenCalled();
+    expect(useAuthStore.getState().refreshing).toBe(false);
+  });
+
+  it.each([AxiosError.ERR_NETWORK, AxiosError.ECONNABORTED])(
+    'keeps credentials on startup transport failure (%s) and permits a later refresh',
+    async (code) => {
+      const store = memoryTokenStore({ token: 'at', refreshToken: 'rt' });
+      configureTokenStore(store);
+      apiClient.defaults.adapter = async (config) => {
+        throw new AxiosError('Network Error', code, config);
+      };
+      await expect(refreshSession()).rejects.toThrow('Network Error');
+      expect(store.getRefreshToken?.()).toBe('rt');
+      apiClient.defaults.adapter = scriptedAdapter({
+        status: 200,
+        data: {
+          accessToken: 'at-2',
+          refreshToken: 'rt-2',
+          user: { id: 'user' },
+        },
+      }).adapter;
+      await refreshSession();
+      expect(store.getRefreshToken?.()).toBe('rt-2');
+    },
+  );
+
+  it.each([401, 503])('settles all concurrent requests when refresh fails (%s)', async (status) => {
+    configureTokenStore(memoryTokenStore({ token: 'at', refreshToken: 'rt' }));
+    let rejectRefresh!: () => void;
+    let refreshCount = 0;
+    apiClient.defaults.adapter = async (config) => {
+      const response = { data: {}, status: 401, statusText: '', headers: {}, config };
+      if (config.url === '/auth/refresh') {
+        refreshCount++;
+        await new Promise<void>((_resolve, reject) => {
+          rejectRefresh = () =>
+            reject(
+              new AxiosError('refresh failed', undefined, config, undefined, {
+                ...response,
+                status,
+              }),
+            );
+        });
+      }
+      throw new AxiosError('unauthorized', undefined, config, undefined, response);
+    };
+    const settled = Promise.allSettled([apiClient.get('/tasks'), apiClient.get('/projects')]);
+    await vi.waitFor(() => expect(refreshCount).toBe(1));
+    rejectRefresh();
+    expect((await settled).map((result) => result.status)).toEqual(['rejected', 'rejected']);
+    expect(refreshCount).toBe(1);
+  });
+
+  it('does not finish login before native persistence succeeds', async () => {
+    let commit!: () => void;
+    const save = new Promise<void>((resolve) => {
+      commit = resolve;
+    });
+    configureTokenStore({ ...memoryTokenStore({}), setTokens: () => save });
+    const user = { id: 'user' } as Parameters<
+      ReturnType<typeof useAuthStore.getState>['setAuth']
+    >[1];
+    const pending = useAuthStore.getState().setAuth('at', user, 'rt');
+    expect(useAuthStore.getState().token).toBeNull();
+    commit();
+    await pending;
+    expect(useAuthStore.getState().token).toBe('at');
+  });
+
+  it('surfaces persistence failure without presenting a successful login', async () => {
+    configureTokenStore({
+      ...memoryTokenStore({}),
+      setTokens: vi.fn().mockRejectedValueOnce(new Error('disk full')).mockResolvedValue(undefined),
+    });
+    const user = { id: 'user' } as Parameters<
+      ReturnType<typeof useAuthStore.getState>['setAuth']
+    >[1];
+    await expect(useAuthStore.getState().setAuth('at', user, 'rt')).rejects.toThrow('disk full');
+    expect(useAuthStore.getState().token).toBeNull();
+  });
+
+  it('does not attempt refresh or delete credentials for a wrong login password', async () => {
+    const store = memoryTokenStore({ token: 'at', refreshToken: 'rt' });
+    configureTokenStore(store);
+    const { seen, adapter } = scriptedAdapter({ status: 401 });
+    apiClient.defaults.adapter = adapter;
+    await expect(apiClient.post('/auth/login', {})).rejects.toBeDefined();
+    expect(seen).toHaveLength(1);
+    expect(store.getRefreshToken?.()).toBe('rt');
   });
 });
