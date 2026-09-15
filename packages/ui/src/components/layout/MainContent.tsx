@@ -7,9 +7,10 @@ import { cn } from '@/lib/utils';
  * Canvas-style pages break out of the narrow `max-w-2xl` list container and
  * fill the main content area (full width + viewport height; the page content
  * itself stretches to fill, scrolling only as a short-viewport fallback).
- * Currently only `/calendar`; all other routes keep the centered list layout.
+ * `/calendar` and the Assistant chat (`/agent`); all other routes keep the
+ * centered list layout.
  */
-const CANVAS_ROUTES = ['/calendar'];
+const CANVAS_ROUTES = ['/calendar', '/agent'];
 
 function isCanvasRoute(pathname: string): boolean {
   return CANVAS_ROUTES.includes(pathname);

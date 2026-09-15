@@ -6,6 +6,7 @@ import {
   Trash2,
   Settings,
   Notebook,
+  Bot,
   type LucideIcon,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -27,6 +28,7 @@ const SIDEBAR_MAIN_NAV = mainNav.filter((item) => item.to !== '/logbook');
 /** 日志 + 废纸篓：位于主导航与区域之间的中间分组 */
 const SIDEBAR_UTILITIES_NAV: NavItem[] = [
   { to: '/logbook', labelKey: 'nav:logbook', icon: Notebook },
+  { to: '/agent', labelKey: 'nav:assistant', icon: Bot },
   { to: '/trash', labelKey: 'nav:trash', icon: Trash2 },
 ];
 import { useUiInteractionStore } from '@taskora/api';

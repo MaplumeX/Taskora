@@ -10,10 +10,11 @@ import { TagGroupsModule } from './tag-groups/tag-groups.module';
 import { FeedModule } from './feed/feed.module';
 import { ProjectHeadingsModule } from './project-headings/project-headings.module';
 import { SubtasksModule } from './subtasks/subtasks.module';
+import { AgentModule } from './agent/agent.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule, TasksModule, ProjectsModule, AreasModule, TagsModule, TagGroupsModule, FeedModule, ProjectHeadingsModule, SubtasksModule],
+  imports: [PrismaModule, AuthModule, UsersModule, TasksModule, ProjectsModule, AreasModule, TagsModule, TagGroupsModule, FeedModule, ProjectHeadingsModule, SubtasksModule, AgentModule],
   controllers: [HealthController],
 })
 export class AppModule {}
