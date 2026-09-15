@@ -12,13 +12,11 @@ import {
   createLocalTokenStore,
   hydrateAuthSnapshot,
   readLegacyAuthSnapshot,
-  refresh,
   setAppVersion,
   setUnauthorizedHandler,
-  useAuthStore,
-  hydrateFromServer,
 } from '@taskora/api';
 import { router } from '@/router';
+import { tryRecoverSession } from '@/lib/sessionRecovery';
 import '@/index.css';
 
 // Apply theme synchronously before React renders to prevent FOUC
@@ -53,24 +51,8 @@ setUnauthorizedHandler(() => {
 // Restore the session from the persisted token (+ legacy user snapshot).
 hydrateAuthSnapshot(readLegacyAuthSnapshot());
 
-// Startup recovery: if we have a persisted user snapshot but no in-memory token,
-// try to silently refresh via the HttpOnly cookie.
-async function tryRecoverSession() {
-  const { user, token, setRefreshing } = useAuthStore.getState();
-  if (token || !user) return;
-
-  setRefreshing(true);
-  try {
-    const data = await refresh();
-    hydrateFromServer(data.user.preferences ?? null);
-  } catch {
-    // refresh() clears rejected credentials; transient failures retain them.
-  } finally {
-    setRefreshing(false);
-  }
-}
-
-// Kick off recovery before rendering so ProtectedRoute can wait on `refreshing`.
+// Kick off recovery (restores the user after a full page reload) before
+// rendering so ProtectedRoute can wait on `refreshing`.
 const recoveryPromise = tryRecoverSession();
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
