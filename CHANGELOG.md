@@ -5,6 +5,18 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## Desktop [0.1.1] - 2026-09-15
+
+### Fixes
+
+- **desktop**: Keep sessions signed in across restarts via a body-based
+  refresh-token flow stored in the OS keychain (#18). Requires backend
+  and desktop to be deployed together.
+- **ui**: Show the per-client version in Settings → About instead of a
+  hardcoded value (#17).
+
+---
+
 ## [0.2.0] - 2026-09-05
 
 ### Features
