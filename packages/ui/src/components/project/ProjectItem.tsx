@@ -36,10 +36,18 @@ export function ProjectItem({ project, taskCount, showChevron = true }: Props) {
 
   return (
     <ProjectContextMenu project={project} current={project}>
-      <button
-        type="button"
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => navigate(`/projects/${project.id}`)}
-        className="flex w-full items-center gap-2.5 rounded-lg px-3 py-1.5 text-left hover-instant hover:bg-accent max-md:py-2.5"
+        onKeyDown={(e) => {
+          // Ignore keys coming from the nested progress ring button.
+          if (e.target !== e.currentTarget) return;
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          navigate(`/projects/${project.id}`);
+        }}
+        className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-1.5 text-left hover-instant hover:bg-accent max-md:py-2.5"
       >
         <ProjectProgressRing
           total={project.taskTotalCount}
@@ -58,7 +66,7 @@ export function ProjectItem({ project, taskCount, showChevron = true }: Props) {
           <span className="text-xs text-muted-foreground">{taskCount}</span>
         )}
         {showChevron && <ChevronRight className="h-4 w-4 text-muted-foreground" />}
-      </button>
+      </div>
     </ProjectContextMenu>
   );
 }

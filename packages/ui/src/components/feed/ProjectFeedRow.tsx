@@ -49,6 +49,13 @@ export function ProjectFeedRow({ item, showScheduledBadge = true }: Props) {
           e.stopPropagation();
           navigate(`/projects/${item.id}`);
         }}
+        onKeyDown={(e) => {
+          // Ignore keys coming from the nested progress ring button.
+          if (e.target !== e.currentTarget) return;
+          if (e.key !== 'Enter' && e.key !== ' ') return;
+          e.preventDefault();
+          navigate(`/projects/${item.id}`);
+        }}
         role="button"
         tabIndex={0}
       >
