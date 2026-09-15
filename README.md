@@ -170,7 +170,7 @@ This starts:
 
 - `postgres` on port 5432
 - `backend` on port 3000 (auto-runs `prisma migrate deploy` on boot)
-- `frontend` on port 8080 (nginx serves the SPA and reverse-proxies `/api` to the backend)
+- `frontend` on port 7646 (nginx serves the SPA and reverse-proxies `/api` to the backend)
 
 Compose waits for PostgreSQL's health check before starting the backend. If `VITE_API_URL` changes, rebuild the frontend image with `--build` because Vite embeds this value at build time.
 

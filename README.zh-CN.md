@@ -170,7 +170,7 @@ docker compose up -d --build
 
 - `postgres`：端口 5432
 - `backend`：端口 3000（启动时自动执行 `prisma migrate deploy`）
-- `frontend`：端口 8080（nginx 托管 SPA，并将 `/api` 反向代理到后端）
+- `frontend`：端口 7646（nginx 托管 SPA，并将 `/api` 反向代理到后端）
 
 Compose 会等待 PostgreSQL 健康检查通过后再启动后端。修改 `VITE_API_URL` 后，需要使用 `--build` 重新构建前端镜像。
 
