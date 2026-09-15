@@ -27,39 +27,32 @@ packages/
 
 ## 二、版本号策略
 
-### 当前阶段（服务端开发期）
+**双轨制版本（当前已生效）：**
 
-**统一版本号，写在根 `package.json`：**
+| 轨道       | 包                                                       | 版本号                                             | Tag              |
+| ---------- | -------------------------------------------------------- | -------------------------------------------------- | ---------------- |
+| **主轨**   | 根 package.json + backend / frontend / api / ui / shared | 统一版本号，写在根 `package.json` 并同步到五个子包 | `v0.2.0`         |
+| **桌面轨** | desktop                                                  | 独立版本号                                         | `desktop-v0.1.1` |
 
-```json
-{ "version": "0.0.1" }
+- 主轨所有子包共享同一版本号，不单独漂移。
+- desktop 独立发版（桌面端发版节奏由 UI 迭代决定，与后端无关），见二·五节。
+
+**发版命令（已落地）：**
+
+```bash
+pnpm release main 0.2.1      # bump 根 + 五个主轨子包 → tag v0.2.1
+pnpm release desktop 0.2.0   # 仅 bump packages/desktop → tag desktop-v0.2.0
 ```
 
-- 所有子包继承根版本，不单独打版本号。
-- 开发阶段继续 `0.0.x` 递增，每次正式发版手动 bump。
+脚本（`scripts/release.mjs`）负责：写版本号、拦截降级、检查工作区干净。
+发版流程：`pnpm release <track> <version>` → 编辑 `CHANGELOG.md` →
+`git commit -am "release: <tag>"` → `git tag <tag> && git push origin main --tags`。
+CI 按 tag 前缀自动接管（`release.yml` / `desktop-release.yml`）。
 
 **不引入 changesets**，理由：
+
 - `shared` 不发包 → 无跨包版本联动需求。
-- 当前只有一条发版线 → 无版本协调问题。
-
-### 未来阶段（多客户端引入后）
-
-**双轨制版本：**
-
-| 轨道 | 格式 | 适用对象 | 发版触发 |
-|---|---|---|---|
-| **包版本（SemVer）** | `x.y.z` | `@taskora/shared`（若未来对外发布）、backend | changesets / 手动 tag |
-| **应用版本** | `x.y.z` + build 号 | mobile（商店需要 build 号）、desktop（自更新通道）| tag `mobile-v*` / `desktop-v*` 触发独立 CI |
-
-**Tag 前缀约定：**
-
-- 当前只有 backend 发版：`v0.1.0`、`v0.2.0`...
-- 多客户端阶段改为带前缀：
-  - `backend-v0.1.0`
-  - `mobile-v1.0.0`
-  - `desktop-v0.1.0`
-
-make Git tag 从无前缀迁移到带前缀是纯加法，不破坏历史 tag。
+- 主轨只有一条发版线，桌面轨独立；版本协调由 release 脚本 + tag 前缀解决。
 
 ## 二·五、桌面端发布（已定）
 
@@ -115,12 +108,12 @@ feature/xxx → PR → main (CI 全绿)
 
 **双镜像带来的收益：**
 
-| 场景 | 双镜像 |
-|---|---|
-| 改前端文案 | 只重打 frontend |
-| backend hotfix | 只重打 backend |
-| 移动端对接稳定 API | backend 独立版本，可承诺 API 契约 |
-| 未来加 mobile/desktop client | backend 镜像零改动 |
+| 场景                         | 双镜像                            |
+| ---------------------------- | --------------------------------- |
+| 改前端文案                   | 只重打 frontend                   |
+| backend hotfix               | 只重打 backend                    |
+| 移动端对接稳定 API           | backend 独立版本，可承诺 API 契约 |
+| 未来加 mobile/desktop client | backend 镜像零改动                |
 
 ### Docker Compose 拓扑
 
@@ -141,9 +134,9 @@ services:
 
 ### 镜像版本 Tag
 
-| 镜像 tag | 来源 | 用途 |
-|---|---|---|
-| `taskora-backend:v0.1.0` | git tag `v0.1.0` | 正式发版，部署生产 |
+| 镜像 tag                          | 来源              | 用途                    |
+| --------------------------------- | ----------------- | ----------------------- |
+| `taskora-backend:v0.1.0`          | git tag `v0.1.0`  | 正式发版，部署生产      |
 | `taskora-backend:sha-<7位commit>` | 每次合并到 `main` | staging 部署 / 回滚定位 |
 
 镜像 label 写入版本信息，方便从运行中的容器反查：
@@ -208,12 +201,13 @@ LABEL org.opencontainers.image.revision="${GIT_SHA}"
 2. 写 `packages/frontend/Dockerfile`（nginx 托管静态文件 + 反代 /api）
 3. 写 `.dockerignore`（过滤 node_modules / dist / .git 等）
 4. 写 `docker-compose.yml`（本地开发用，跑 postgres + backend + frontend）
-5. 给 NestJS 加 `/api/v1` 前缀（`app.setGlobalPrefix('api/v1')`）
-6. CI 加 `typecheck + test + docker build` 步骤（验证可构建）
+5. ~~给 NestJS 加 `/api/v1` 前缀（`app.setGlobalPrefix('api/v1')`）~~ ✅ 已完成（`backend/src/main.ts`）
+6. ~~CI 加 `typecheck + test + docker build` 步骤（验证可构建）~~ ✅ 已完成（`ci.yml`）
+7. ~~发版脚本：`pnpm release main|desktop <version>`~~ ✅ 已完成（`scripts/release.mjs`）
 
 **未来要做（多客户端阶段，加法，不推翻现在决策）：**
 
-1. tag 改为带前缀：`backend-v*` / `mobile-v*` / `desktop-v*`
+1. 加 mobile 后新增 `mobile-v*` tag 前缀（现有 `v*` 保持主轨不变，无需迁移）
 2. 拆分 CI pipeline 为每客户端一条
 3. 设计增量同步协议（`updated_at` + `deleted_at` + 客户端 ID）
 4. 移动端 EAS Update / Submit 管道对接 git tag
