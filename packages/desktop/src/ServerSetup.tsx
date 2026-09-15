@@ -32,11 +32,15 @@ export function ServerSetup() {
     }
     setChecking(true);
     try {
-      // Probe the server before saving: a GET on /health (or any endpoint)
-      // that answers with HTTP is enough to prove reachability.
-      await fetch(`${normalized}/health`, { method: 'GET' }).catch(() => {
-        throw new Error('unreachable');
-      });
+      // Probe the server before saving. `/health` is an unauthenticated
+      // liveness endpoint, so a 2xx proves the address really points at a
+      // Taskora API and not at an unrelated host that answers everything.
+      const res = await fetch(`${normalized}/health`, { method: 'GET' }).catch(
+        () => {
+          throw new Error('unreachable');
+        },
+      );
+      if (!res.ok) throw new Error('unhealthy');
       setServerUrl(normalized);
       // The App re-renders onto the login view via the serverUrl change.
     } catch {
