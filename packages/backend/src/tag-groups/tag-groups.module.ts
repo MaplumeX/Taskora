@@ -5,5 +5,6 @@ import { TagGroupsService } from './tag-groups.service';
 @Module({
   controllers: [TagGroupsController],
   providers: [TagGroupsService],
+  exports: [TagGroupsService],
 })
 export class TagGroupsModule {}

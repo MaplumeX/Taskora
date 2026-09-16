@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { FolderPlus, Heading, Plus, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,6 +9,7 @@ import { useContentBottomActionsForRoute } from '@taskora/api';
 
 export function ContentBottomBar() {
   const { t } = useTranslation();
+  const { pathname } = useLocation();
   const [searchOpen, setSearchOpen] = useState(false);
   const {
     showAddTask,
@@ -32,6 +34,9 @@ export function ContentBottomBar() {
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
   }, []);
+
+  // 助手页有自己的输入框与搜索能力，隐藏任务管理的底部动作条
+  if (pathname.startsWith('/agent')) return null;
 
   return (
     <>

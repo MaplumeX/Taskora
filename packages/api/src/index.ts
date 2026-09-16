@@ -54,6 +54,8 @@ export * from './api/tag-groups.api';
 export * from './api/tags.api';
 export * from './api/tasks.api';
 export * from './api/users.api';
+export * from './api/agent.api';
+export { subscribeAgentEvents } from './api/agent-sse';
 
 // Query hooks
 export * from './hooks/useAreas';
@@ -65,6 +67,7 @@ export * from './hooks/useTags';
 export * from './hooks/useTasks';
 export * from './hooks/useDueTasksQuery';
 export * from './hooks/useUsers';
+export * from './hooks/useAgent';
 export * from './hooks/useContentBottomActions';
 export * from './hooks/useContentBottomActionsRoute';
 export * from './hooks/useTaskRowSelection';

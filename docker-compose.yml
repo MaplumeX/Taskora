@@ -22,6 +22,7 @@ services:
     environment:
       DATABASE_URL: "postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?schema=public"
       JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required in .env}
+      AGENT_ENCRYPTION_KEY: ${AGENT_ENCRYPTION_KEY:?AGENT_ENCRYPTION_KEY is required in .env}
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 3000
     depends_on:

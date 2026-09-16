@@ -12,3 +12,4 @@ export * from './dtos/reorder.dto';
 export * from './dtos/user.dto';
 export * from './dtos/tag-group.dto';
 export * from './dtos/project-heading.dto';
+export * from './dtos/agent.dto';

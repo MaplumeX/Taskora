@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type SettingsTab = 'appearance' | 'account' | 'data' | 'about';
+export type SettingsTab = 'appearance' | 'account' | 'data' | 'about' | 'assistant';
 
 interface UiInteractionState {
   expandedId: string | null;

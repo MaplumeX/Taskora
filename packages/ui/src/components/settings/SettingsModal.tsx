@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SunMedium, User, Download, Info, type LucideIcon } from 'lucide-react';
+import { SunMedium, User, Download, Info, Bot, type LucideIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -16,6 +16,7 @@ const SettingsAppearance = lazy(() => import('@/components/settings/SettingsAppe
 const SettingsAccount = lazy(() => import('@/components/settings/SettingsAccount'));
 const SettingsData = lazy(() => import('@/components/settings/SettingsData'));
 const SettingsAbout = lazy(() => import('@/components/settings/SettingsAbout'));
+const SettingsAssistant = lazy(() => import('@/components/settings/SettingsAssistant'));
 
 interface SettingsNavItem {
   tab: SettingsTab;
@@ -27,6 +28,7 @@ const settingsNav: SettingsNavItem[] = [
   { tab: 'appearance', labelKey: 'settings:appearance', icon: SunMedium },
   { tab: 'account', labelKey: 'settings:account', icon: User },
   { tab: 'data', labelKey: 'settings:data', icon: Download },
+  { tab: 'assistant', labelKey: 'settings:assistant', icon: Bot },
   { tab: 'about', labelKey: 'settings:about', icon: Info },
 ];
 
@@ -45,6 +47,8 @@ export function SettingsModal() {
         return <SettingsAccount />;
       case 'data':
         return <SettingsData />;
+      case 'assistant':
+        return <SettingsAssistant />;
       case 'about':
         return <SettingsAbout />;
     }

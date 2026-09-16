@@ -12,6 +12,7 @@ function PageFallback() {
   );
 }
 
+const AgentPage = lazy(() => import('@taskora/ui/pages/Agent'));
 const Anytime = lazy(() => import('@taskora/ui/pages/Anytime'));
 const AreaDetail = lazy(() => import('@taskora/ui/pages/AreaDetail'));
 const Calendar = lazy(() => import('@taskora/ui/pages/Calendar'));
@@ -50,6 +51,7 @@ export function MainApp() {
               <Route path="/tags" element={<Tags />} />
               <Route path="/tags/:tagId" element={<TagDetail />} />
               <Route path="/trash" element={<Trash />} />
+              <Route path="/agent" element={<AgentPage />} />
               <Route path="*" element={<Navigate to="/today" replace />} />
             </Route>
           </Route>

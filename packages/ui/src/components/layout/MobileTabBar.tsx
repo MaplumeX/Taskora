@@ -14,6 +14,7 @@ const TAB_ITEMS = [
 
 /** 「更多」抽屉收纳的入口路由前缀，「更多」标签在这些路由下高亮 */
 const DRAWER_ROUTE_PREFIXES = [
+  '/agent',
   '/upcoming',
   '/someday',
   '/logbook',

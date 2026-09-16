@@ -5,5 +5,6 @@ import { ProjectHeadingsService } from './project-headings.service';
 @Module({
   controllers: [ProjectHeadingsController],
   providers: [ProjectHeadingsService],
+  exports: [ProjectHeadingsService],
 })
 export class ProjectHeadingsModule {}
