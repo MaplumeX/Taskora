@@ -311,6 +311,8 @@ model AgentApproval {
   toolCallId     String
   toolName       String
   args           Json
+  /// id → entity title, so the approval card shows names, not database ids.
+  labels         Json?        @default("{}")
   status         String       @default("pending") // pending | approved | rejected | expired
   createdAt      DateTime     @default(now())
   resolvedAt     DateTime?

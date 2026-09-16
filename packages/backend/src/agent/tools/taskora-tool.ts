@@ -2,14 +2,15 @@ import type { AgentTool } from '@earendil-works/pi-agent-core';
 import type { Static, TSchema } from 'typebox';
 
 /**
- * AgentTool extension marking operations that mutate global structure or are
- * irreversible. The approval interceptor (issue 04) blocks these until the
- * user approves them via the UI.
+ * AgentTool extension marking irreversible operations. The approval
+ * interceptor (issue 04) blocks these until the user approves them via the
+ * UI. Only truly irreversible tools (hard delete, empty trash) should carry
+ * this flag — gating reversible writes would dilute the approval signal.
  */
 export interface TaskoraAgentTool<
   TParameters extends TSchema = TSchema,
 > extends AgentTool<TParameters> {
-  /** True when this tool requires explicit user approval before executing. */
+  /** True when this tool is irreversible and requires explicit user approval. */
   destructive?: boolean;
 }
 

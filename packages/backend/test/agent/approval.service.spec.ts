@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ConflictException, NotFoundException } from '@nestjs/common';
 
 import { AgentApprovalService } from '../../src/agent/approvals/approval.service';
@@ -10,6 +10,7 @@ type ApprovalRow = {
   toolCallId: string;
   toolName: string;
   args: object;
+  labels: Record<string, string>;
   status: string;
   createdAt: Date;
   resolvedAt: Date | null;
@@ -22,8 +23,9 @@ function createRow(partial: Partial<ApprovalRow>): ApprovalRow {
     toolCallId: partial.toolCallId ?? 'call-1',
     toolName: partial.toolName ?? 'delete_task',
     args: partial.args ?? { id: 't1' },
+    labels: partial.labels ?? {},
     status: partial.status ?? 'pending',
-    createdAt: new Date(),
+    createdAt: partial.createdAt ?? new Date(),
     resolvedAt: partial.resolvedAt ?? null,
   };
 }
@@ -39,6 +41,8 @@ function createService() {
           conversationId: data.conversationId as string,
           toolCallId: data.toolCallId as string,
           toolName: data.toolName as string,
+          args: data.args as object,
+          labels: (data.labels as Record<string, string>) ?? {},
         });
         rows.set(row.id, row);
         return row;
@@ -70,6 +74,16 @@ function createService() {
   return { service, prisma, hub, rows };
 }
 
+function request(ctx: ReturnType<typeof createService>, overrides = {}) {
+  return ctx.service.requestApproval({
+    conversationId: 'conv-1',
+    toolCallId: 'call-1',
+    toolName: 'empty_trash',
+    args: {},
+    ...overrides,
+  });
+}
+
 describe('AgentApprovalService', () => {
   let ctx: ReturnType<typeof createService>;
 
@@ -77,13 +91,17 @@ describe('AgentApprovalService', () => {
     ctx = createService();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('emits approval_request and waits for the decision', async () => {
     const pending = ctx.service.requestApproval({
-      userId: 'user-1',
       conversationId: 'conv-1',
       toolCallId: 'call-1',
       toolName: 'empty_trash',
       args: {},
+      labels: {},
     });
     await new Promise((r) => setTimeout(r, 10));
     expect(ctx.hub.emit).toHaveBeenCalledWith(
@@ -100,9 +118,26 @@ describe('AgentApprovalService', () => {
     );
   });
 
+  it('persists labels with the approval for the UI card', async () => {
+    const pending = ctx.service.requestApproval({
+      conversationId: 'conv-1',
+      toolCallId: 'call-1',
+      toolName: 'delete_area',
+      args: { id: 'area-1' },
+      labels: { 'area-1': 'Work' },
+    });
+    await new Promise((r) => setTimeout(r, 10));
+    await ctx.service.resolve('user-1', 'conv-1', 'approval-1', 'approve');
+    expect(await pending).toBe('approve');
+
+    const emitted = ctx.hub.emit.mock.calls.at(-1)?.[1] as {
+      approval: { labels: Record<string, string> };
+    };
+    expect(emitted.approval.labels).toEqual({ 'area-1': 'Work' });
+  });
+
   it('rejecting resolves the waiter with reject', async () => {
     const pending = ctx.service.requestApproval({
-      userId: 'user-1',
       conversationId: 'conv-1',
       toolCallId: 'call-2',
       toolName: 'delete_area',
@@ -113,10 +148,26 @@ describe('AgentApprovalService', () => {
     expect(await pending).toBe('reject');
   });
 
+  it('resolves the waiter with expire on timeout so the run never deadlocks', async () => {
+    vi.useFakeTimers();
+    const pending = request(ctx);
+    await vi.advanceTimersByTimeAsync(10);
+
+    await vi.advanceTimersByTimeAsync(APPROVAL_TIMEOUT_MS);
+    // The blocked beforeToolCall must wake up — otherwise the agent run and
+    // every message queued behind it hang forever.
+    expect(await pending).toBe('expire');
+    expect(ctx.rows.get('approval-1')?.status).toBe('expired');
+
+    // The expired row is no longer resolvable.
+    await expect(ctx.service.resolve('user-1', 'conv-1', 'approval-1', 'approve')).rejects.toThrow(
+      ConflictException,
+    );
+  });
+
   it('throws NotFound for foreign users and unknown ids', async () => {
     const pending = ctx.service
       .requestApproval({
-        userId: 'user-1',
         conversationId: 'conv-1',
         toolCallId: 'call-1',
         toolName: 'delete_task',
@@ -136,7 +187,6 @@ describe('AgentApprovalService', () => {
 
   it('throws Conflict when already resolved', async () => {
     const pending = ctx.service.requestApproval({
-      userId: 'user-1',
       conversationId: 'conv-1',
       toolCallId: 'call-1',
       toolName: 'delete_task',
@@ -150,21 +200,24 @@ describe('AgentApprovalService', () => {
     );
   });
 
-  it('rejectAllPending unblocks every waiter', async () => {
+  it('resolving a pending row without a waiter (restart orphan) expires it and fails loudly', async () => {
+    // Simulate a row left pending by a restart: DB row exists, no waiter.
+    ctx.rows.set('orphan', createRow({ id: 'orphan', status: 'pending', createdAt: new Date() }));
+    await expect(ctx.service.resolve('user-1', 'conv-1', 'orphan', 'approve')).rejects.toThrow(
+      ConflictException,
+    );
+    expect(ctx.rows.get('orphan')?.status).toBe('expired');
+  });
+
+  it('expireAllPending unblocks every waiter with expire', async () => {
     ctx.prisma.agentApproval.findMany.mockImplementationOnce(async () => [createRow({})]);
-    const p = ctx.service
-      .requestApproval({
-        userId: 'user-1',
-        conversationId: 'conv-1',
-        toolCallId: 'call-1',
-        toolName: 'delete_task',
-        args: {},
-      })
-      .catch(() => 'reject');
+    const p = request(ctx);
     await new Promise((r) => setTimeout(r, 10));
-    // Simulate conversation deletion: pending rows found in db, waiter still set.
-    await ctx.service.rejectAllPending('conv-1');
-    expect(await p).toBe('reject');
+    // Simulate run teardown (conversation deleted / restart): pending rows
+    // found in db, waiter still set.
+    await ctx.service.expireAllPending('conv-1');
+    expect(await p).toBe('expire');
+    expect(ctx.rows.get('approval-1')?.status).toBe('expired');
   });
 
   it('uses a 10 minute timeout', () => {

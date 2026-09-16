@@ -157,18 +157,22 @@ function createHarness(options: { storedMessages?: AgentMessage[]; hasTitle?: bo
     } as AgentTool<never>,
   ];
 
-  const toolsService = { build: vi.fn(() => tools) };
+  const toolsService = {
+    build: vi.fn(() => tools),
+    resolveCallLabels: vi.fn(async () => ({ 'area-1': 'Work' })),
+  };
 
   let approvalDecision: Harness['approvalDecision'] = null;
   let decisionResolve!: (d: 'approve' | 'reject') => void;
   const approvals = {
-    requestApproval: vi.fn(async () => {
+    requestApproval: vi.fn(async (input: { toolName: string; args: Record<string, unknown> }) => {
+      expect(input.labels).toEqual({ 'area-1': 'Work' });
       approvalDecision = new Promise((resolve) => {
         decisionResolve = resolve;
       });
       return approvalDecision;
     }),
-    rejectAllPending: vi.fn(async () => {}),
+    expireAllPending: vi.fn(async () => {}),
   };
 
   const prisma = {

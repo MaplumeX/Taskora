@@ -7,7 +7,7 @@ Status: done
 - 将现有 service 能力封装为 `AgentTool`（typebox 参数 schema），全部以请求用户 `userId` 过滤，禁止跨用户数据：
   - 只读：列出/查询 areas、projects、tasks（含 Today / Upcoming / Inbox 等 Bucket 视图）、tags、feed、搜索。
   - 写：创建 task/subtask、完成、改日期/截止、移动 project/area、打标签。
-  - 破坏性：删除（软删入 Trash）、清空 Trash、创建/改名/删除 area 与 project、project heading 结构变更 —— 工具定义上标记 `destructive`（供 04 的拦截器识别）。
+  - 破坏性（2026-09-18 收窄）：仅真正不可逆的操作标记 `destructive`（供 04 的拦截器识别）——`empty_trash`（永久删除）、`delete_area`（硬删）、`delete_project_heading`（硬删）。软删（delete_task / delete_project → Trash 可恢复）与可再编辑的结构变更（create/update area/project/heading、reorder）不再弹批准卡。
 - 工具命名与参数描述面向 LLM 可用性（含英文 description），返回精简结构化文本。
 - 错误处理遵循 pi-agent-core 约定：失败时 throw，不返回错误文本。
 
@@ -21,5 +21,5 @@ Status: done
 ### 2026-09-16: 新增排序（reorder）工具
 
 - `reorder_tasks` / `reorder_projects` / `reorder_areas` / `reorder_subtasks`:纯 sortOrder 变更，非 destructive,复用既有 service `reorder`。
-- `reorder_project_layout`:整体重排 project 内 headings 与任务分组(复用 `ProjectHeadingsService.reorder`,要求精确全集 id),标记 `destructive`。
+- `reorder_project_layout`:整体重排 project 内 headings 与任务分组(复用 `ProjectHeadingsService.reorder`,要求精确全集 id,不删任何数据、可随时重排),非 destructive。
 - 单测见 `packages/backend/test/agent/agent-tools.spec.ts`。

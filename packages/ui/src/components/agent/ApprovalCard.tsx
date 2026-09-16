@@ -24,9 +24,15 @@ export function ApprovalCard({
     approval.status === 'approved' ? 'approve' : approval.status === 'rejected' ? 'reject' : null;
   const effective = resolved ?? statusFallback;
 
+  // Prefer resolved entity titles (approval.labels) over raw database ids
+  // so the card reads "Work" instead of "ckxyz…".
   const argSummary = Object.entries(approval.args)
     .filter(([, v]) => v !== null && v !== undefined && v !== '')
-    .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+    .map(([k, v]) => {
+      const label = typeof v === 'string' ? approval.labels?.[v] : undefined;
+      const rendered = label ?? (typeof v === 'object' ? JSON.stringify(v) : String(v));
+      return `${k}: ${rendered}`;
+    })
     .join(', ');
 
   const handle = (decision: 'approve' | 'reject') => {
