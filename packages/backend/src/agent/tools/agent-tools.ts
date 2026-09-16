@@ -268,7 +268,7 @@ export class AgentToolsService {
         name: 'search',
         label: 'Search tasks and projects',
         description:
-          'Full-text search across task titles/notes and project titles/notes. Returns matching active tasks and projects.',
+          'Full-text search across task titles/notes and project titles/notes. Returns matching non-trashed tasks (both active and completed) and projects (including completed). Trashed items are not searchable; use list_tasks with view=trash instead.',
         parameters: Type.Object({ q: Type.String({ description: 'Search query' }) }),
         execute: async (_id, params) => {
           const [taskResults, projects] = await Promise.all([
