@@ -35,16 +35,16 @@ export function addMonths(anchor: Date, direction: number): Date {
 }
 
 /**
- * Group tasks by their local-date `dueDate` key (`yyyy-MM-dd`).
- * Tasks without a `dueDate` are skipped.
+ * Group tasks by their local-date `scheduledDate` key (`yyyy-MM-dd`).
+ * Tasks without a `scheduledDate` are skipped.
  */
-export function groupByDueDate(
+export function groupByScheduledDate(
   tasks: TaskResponseDto[],
 ): Map<string, TaskResponseDto[]> {
   const map = new Map<string, TaskResponseDto[]>();
   for (const task of tasks) {
-    if (!task.dueDate) continue;
-    const key = toDateKey(task.dueDate);
+    if (!task.scheduledDate) continue;
+    const key = toDateKey(task.scheduledDate);
     const list = map.get(key);
     if (list) {
       list.push(task);
