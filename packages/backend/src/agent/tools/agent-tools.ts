@@ -24,9 +24,12 @@ import {
  * user's `userId` and delegates to the existing services, so cross-user access
  * is impossible no matter what arguments the model produces.
  *
- * Destructive tools (delete / empty trash / area & project structure changes /
- * project-heading changes) carry `destructive: true` for the approval
- * interceptor.
+ * Only irreversible operations carry `destructive: true` and go through the
+ * approval interceptor: `empty_trash` (permanent delete), `delete_area`
+ * (hard delete) and `delete_project_heading` (hard delete). Soft deletes
+ * (delete_task / delete_project → trash, restorable) and reversible
+ * structure changes (create/update area/project/heading) run without an
+ * approval card to keep the approval signal meaningful.
  */
 
 const LIST_LIMIT = 40;
@@ -73,6 +76,53 @@ export class AgentToolsService {
     private readonly projectHeadings: ProjectHeadingsService,
     private readonly feed: FeedService,
   ) {}
+
+  /**
+   * Best-effort resolution of entity ids in tool-call args to entity titles,
+   * for the approval card snapshot (show names, not database ids). Ids that
+   * match nothing are simply left out.
+   */
+  async resolveCallLabels(
+    userId: string,
+    args: Record<string, unknown>,
+  ): Promise<Record<string, string>> {
+    const ids = new Set<string>();
+    for (const [key, value] of Object.entries(args)) {
+      if (key === 'tagIds' && Array.isArray(value)) {
+        for (const item of value) {
+          if (typeof item === 'string') ids.add(item);
+        }
+      } else if ((key === 'id' || /Id$/.test(key)) && typeof value === 'string') {
+        ids.add(value);
+      }
+    }
+    if (ids.size === 0) return {};
+
+    const labels: Record<string, string> = {};
+    await Promise.all(
+      [...ids].map(async (id) => {
+        // The `id` arg is ambiguous across entity types: try each service in
+        // turn and keep the first hit.
+        const lookups: Array<() => Promise<{ title?: string | null }>> = [
+          () => this.projectHeadings.findOne(userId, id),
+          () => this.areas.findOne(userId, id),
+          () => this.projects.findOne(userId, id),
+          () => this.tasks.findOne(userId, id),
+          () => this.tags.findOne(userId, id),
+        ];
+        for (const lookup of lookups) {
+          try {
+            const found = await lookup();
+            if (found.title) labels[id] = found.title;
+            return;
+          } catch {
+            // not this entity type; try the next
+          }
+        }
+      }),
+    );
+    return labels;
+  }
 
   /** Tool set bound to a single user. */
   build(userId: string): AnyAgentTool[] {
@@ -449,13 +499,14 @@ export class AgentToolsService {
         },
       }),
 
-      // --------------------------------------------------------- destructive
+      // ---------------------------------------------------------- dangerous
+      // Only irreversible operations land here; everything above is either
+      // read-only or reversible (soft delete / re-editable structure).
       defineTool({
         name: 'delete_task',
         label: 'Delete task (to trash)',
         description:
-          'Soft-delete a task: it moves to the trash and stays restorable. This is destructive and needs user approval.',
-        destructive: true,
+          'Soft-delete a task: it moves to the trash and stays restorable (see restore_task).',
         parameters: Type.Object({ id: Type.String() }),
         execute: async (_id, params) => {
           const result = await this.tasks.remove(userId, params.id);
@@ -466,8 +517,7 @@ export class AgentToolsService {
         name: 'delete_project',
         label: 'Delete project (to trash)',
         description:
-          'Soft-delete a project (its tasks move to the trash with it). Destructive: needs user approval.',
-        destructive: true,
+          'Soft-delete a project: it and its tasks move to the trash and stay restorable (see restore_project).',
         parameters: Type.Object({ id: Type.String() }),
         execute: async (_id, params) => {
           const result = await this.projects.remove(userId, params.id);
@@ -490,8 +540,7 @@ export class AgentToolsService {
         name: 'create_area',
         label: 'Create area',
         description:
-          'Create a new top-level area. Areas organize projects and tasks. Destructive (structure change): needs user approval.',
-        destructive: true,
+          'Create a new top-level area. Areas organize projects and tasks. Reversible: the area can be renamed or deleted later.',
         parameters: Type.Object({
           title: Type.String(),
           notes: Type.Optional(Type.String()),
@@ -507,9 +556,7 @@ export class AgentToolsService {
       defineTool({
         name: 'update_area',
         label: 'Update area',
-        description:
-          'Rename an area or change its notes. Destructive (structure change): needs user approval.',
-        destructive: true,
+        description: 'Rename an area or change its notes. Reversible: edit again later.',
         parameters: Type.Object({
           id: Type.String(),
           title: Type.Optional(Type.String()),
@@ -527,7 +574,7 @@ export class AgentToolsService {
         name: 'delete_area',
         label: 'Delete area',
         description:
-          'Delete an area. Projects and tasks lose their area assignment (they are kept). Destructive: needs user approval.',
+          'Permanently delete an area (hard delete, cannot be undone). Projects and tasks lose their area assignment but are kept. Destructive: needs user approval.',
         destructive: true,
         parameters: Type.Object({ id: Type.String() }),
         execute: async (_id, params) => {
@@ -539,8 +586,7 @@ export class AgentToolsService {
         name: 'create_project',
         label: 'Create project',
         description:
-          'Create a new project, optionally inside an area. Destructive (structure change): needs user approval.',
-        destructive: true,
+          'Create a new project, optionally inside an area. Reversible: the project can be edited or deleted later.',
         parameters: Type.Object({
           title: Type.String(),
           notes: Type.Optional(Type.String()),
@@ -567,8 +613,7 @@ export class AgentToolsService {
         name: 'update_project',
         label: 'Update project',
         description:
-          'Rename a project, edit notes, change dates or move it to another area (null clears). Destructive (structure change): needs user approval.',
-        destructive: true,
+          'Rename a project, edit notes, change dates or move it to another area (null clears). Reversible: edit again later.',
         parameters: Type.Object({
           id: Type.String(),
           title: Type.Optional(Type.String()),
@@ -620,8 +665,7 @@ export class AgentToolsService {
         name: 'create_project_heading',
         label: 'Create project heading',
         description:
-          'Create a static grouping heading inside a project to organize its tasks. Destructive (structure change): needs user approval.',
-        destructive: true,
+          'Create a static grouping heading inside a project to organize its tasks. Reversible: the heading can be renamed or deleted later.',
         parameters: Type.Object({
           projectId: Type.String(),
           title: Type.String(),
@@ -637,9 +681,7 @@ export class AgentToolsService {
       defineTool({
         name: 'update_project_heading',
         label: 'Update project heading',
-        description:
-          'Rename a project heading. Destructive (structure change): needs user approval.',
-        destructive: true,
+        description: 'Rename a project heading. Reversible: edit again later.',
         parameters: Type.Object({
           id: Type.String(),
           title: Type.String(),
@@ -657,7 +699,7 @@ export class AgentToolsService {
         name: 'delete_project_heading',
         label: 'Delete project heading',
         description:
-          'Delete a heading from a project (its tasks become ungrouped). Destructive (structure change): needs user approval.',
+          'Permanently delete a heading (hard delete, cannot be undone). Its tasks are soft-deleted to the trash and stay restorable. Destructive: needs user approval.',
         destructive: true,
         parameters: Type.Object({ id: Type.String() }),
         execute: async (_id, params) => {

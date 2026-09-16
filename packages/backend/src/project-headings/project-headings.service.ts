@@ -57,6 +57,19 @@ export class ProjectHeadingsService {
     });
   }
 
+  /** One heading by id (with project ownership check). */
+  async findOne(userId: string, id: string) {
+    const heading = await this.prisma.projectHeading.findFirst({
+      where: { id, userId },
+      select: { id: true, projectId: true, title: true, status: true },
+    });
+    if (!heading) {
+      throw new NotFoundException('Heading not found');
+    }
+    await this.assertProjectOwnership(userId, heading.projectId);
+    return heading;
+  }
+
   async convertToProject(userId: string, id: string) {
     return this.prisma.$transaction(async (tx) => {
       // Validate heading ownership and read the source project's areaId.
