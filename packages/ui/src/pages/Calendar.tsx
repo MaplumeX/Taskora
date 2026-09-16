@@ -7,22 +7,22 @@ import type { TaskResponseDto } from '@taskora/shared';
 
 import { CalendarMonthGrid } from '@/components/calendar/CalendarMonthGrid';
 import { Button } from '@/components/ui/button';
-import { useDueTasksQuery } from '@taskora/api';
+import { useScheduledTasksQuery } from '@taskora/api';
 import { useCompleteTask, useUncompleteTask } from '@taskora/api';
 import { usePreferencesStore } from '@taskora/api';
-import { addMonths, groupByDueDate } from '@taskora/api';
+import { addMonths, groupByScheduledDate } from '@taskora/api';
 import { i18n } from '@taskora/api';
 
 export default function Calendar() {
   const { t } = useTranslation();
-  const { data: tasks = [], isLoading, isError } = useDueTasksQuery();
+  const { data: tasks = [], isLoading, isError } = useScheduledTasksQuery();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const weekStartsOn = usePreferencesStore((s) => s.weekStartsOn);
 
   const [anchor, setAnchor] = useState(() => new Date());
 
-  const tasksByDate = useMemo(() => groupByDueDate(tasks), [tasks]);
+  const tasksByDate = useMemo(() => groupByScheduledDate(tasks), [tasks]);
 
   const handleToggleComplete = (task: TaskResponseDto) => {
     if (task.status === 'COMPLETED') {

@@ -6,21 +6,21 @@ import {
   addMonths,
   buildMonthCells,
   buildWeekdayLabels,
-  groupByDueDate,
+  groupByScheduledDate,
 } from './calendarGrid';
 
 function localNoonIso(year: number, month: number, day: number): string {
   return new Date(year, month - 1, day, 12).toISOString();
 }
 
-function task(id: string, dueDate: string | null): TaskResponseDto {
+function task(id: string, scheduledDate: string | null): TaskResponseDto {
   return {
     id,
     title: id,
     notes: null,
-    scheduledDate: null,
-    scheduledType: ScheduledType.NONE,
-    dueDate,
+    scheduledDate,
+    scheduledType: ScheduledType.DATE,
+    dueDate: null,
     bucket: TaskBucket.INBOX,
     status: TaskStatus.ACTIVE,
     completedAt: null,
@@ -102,9 +102,9 @@ describe('buildMonthCells', () => {
   });
 });
 
-describe('groupByDueDate', () => {
-  it('groups tasks by local-date key of dueDate', () => {
-    const map = groupByDueDate([
+describe('groupByScheduledDate', () => {
+  it('groups tasks by local-date key of scheduledDate', () => {
+    const map = groupByScheduledDate([
       task('a', localNoonIso(2026, 8, 30)),
       task('b', localNoonIso(2026, 8, 30)),
       task('c', localNoonIso(2026, 9, 1)),
@@ -114,21 +114,21 @@ describe('groupByDueDate', () => {
     expect(map.size).toBe(2);
   });
 
-  it('keeps keys stable regardless of dueDate time-of-day (local date)', () => {
+  it('keeps keys stable regardless of scheduledDate time-of-day (local date)', () => {
     // 23:00 local on the 30th — must still key to the 30th, not roll to UTC 31st
     const lateEvening = new Date(2026, 7, 30, 23, 30).toISOString();
-    const map = groupByDueDate([task('late', lateEvening)]);
+    const map = groupByScheduledDate([task('late', lateEvening)]);
     expect(map.has('2026-08-30')).toBe(true);
   });
 
-  it('skips tasks without dueDate', () => {
-    const map = groupByDueDate([task('a', null), task('b', localNoonIso(2026, 8, 30))]);
+  it('skips tasks without scheduledDate', () => {
+    const map = groupByScheduledDate([task('a', null), task('b', localNoonIso(2026, 8, 30))]);
     expect(map.size).toBe(1);
     expect(map.has('2026-08-30')).toBe(true);
   });
 
   it('returns empty map for empty input', () => {
-    expect(groupByDueDate([]).size).toBe(0);
+    expect(groupByScheduledDate([]).size).toBe(0);
   });
 });
 

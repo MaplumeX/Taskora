@@ -65,7 +65,7 @@ export * from './hooks/useProjects';
 export * from './hooks/useTagGroups';
 export * from './hooks/useTags';
 export * from './hooks/useTasks';
-export * from './hooks/useDueTasksQuery';
+export * from './hooks/useScheduledTasksQuery';
 export * from './hooks/useUsers';
 export * from './hooks/useAgent';
 export * from './hooks/useContentBottomActions';

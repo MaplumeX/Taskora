@@ -125,7 +125,7 @@ export class TaskQueryDto {
     if (value === 'false') return false;
     return value;
   })
-  hasDue?: boolean;
+  hasScheduled?: boolean;
 }
 
 export class ReorderDto {
