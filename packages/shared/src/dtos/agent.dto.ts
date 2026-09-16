@@ -149,6 +149,8 @@ export interface AgentApprovalDto {
   toolCallId: string;
   toolName: string;
   args: Record<string, unknown>;
+  /** Entity id → human-readable title, resolved when the approval was created. */
+  labels: Record<string, string>;
   status: 'pending' | 'approved' | 'rejected' | 'expired';
   createdAt: string;
   resolvedAt: string | null;

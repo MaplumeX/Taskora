@@ -1,6 +1,8 @@
 # 后端 Agent（pi-agent-core）+ BYOK 加密落库
 
-Taskora 引入对话式助手，Agent 实例跑在后端 NestJS `agent` 模块内（基于 `@earendil-works/pi-agent-core` + `@earendil-works/pi-ai`），工具直接复用现有 service 并以请求用户 `userId` 隔离。LLM 采用 BYOK：用户在设置页配置 OpenAI 兼容端点三件套（Base URL + API Key + Model ID，附 provider 预设），API Key 以 AES-256-GCM 加密存 Postgres，主密钥来自服务端环境变量。事件流走 SSE；破坏性操作经 `beforeToolCall` 拦截并由用户批准。
+Taskora 引入对话式助手，Agent 实例跑在后端 NestJS `agent` 模块内（基于 `@earendil-works/pi-agent-core` + `@earendil-works/pi-ai`），工具直接复用现有 service 并以请求用户 `userId` 隔离。LLM 采用 BYOK：用户在设置页配置 OpenAI 兼容端点三件套（Base URL + API Key + Model ID，附 provider 预设），API Key 以 AES-256-GCM 加密存 Postgres，主密钥来自服务端环境变量。事件流走 SSE；不可逆操作经 `beforeToolCall` 拦截并由用户批准。
+
+批准门槛只覆盖真正不可逆的工具（`empty_trash`、`delete_area`、`delete_project_heading`，均为硬删除）：软删除（delete_task / delete_project → Trash，可恢复）与可再编辑的结构变更（create/update area/project/heading）不弹批准卡，避免「批准」信号被滥用而失去意义。
 
 ## Considered Options
 
@@ -10,6 +12,7 @@ Taskora 引入对话式助手，Agent 实例跑在后端 NestJS `agent` 模块�
 
 ## Consequences
 
+- **单实例约束**：批准等待器（waiter）与 SSE 事件总线（`AgentEventHub`）都存在进程内存中，当前部署假设后端单实例。横向扩展时，SSE 连接与批准 POST 可能落在不同实例上，等待器无人唤醒、事件无人投递；需 sticky session 或把等待器唤醒外置到 DB 轮询 / 消息通知后才能多副本。
 - 换运行时（pi-agent-core → 其他框架）意味着跨 web/desktop 重写工具层与事件流协议，属高成本变更。
 - 加密仅保护 at-rest：拥有 env 主密钥的服务端进程内存中仍会出现明文 key。
 - pi-agent-core 版本演进较快（当前 0.x），升级需盯 changelog。

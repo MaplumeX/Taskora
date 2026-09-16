@@ -8,8 +8,11 @@ import { AgentEventHub } from '../runtime/agent-event-hub';
 /** How long an approval card stays actionable before it expires. */
 export const APPROVAL_TIMEOUT_MS = 10 * 60 * 1000;
 
+/** Outcome of a blocked tool call: the user's decision, or expiry. */
+export type ApprovalOutcome = ApprovalDecision | 'expire';
+
 interface ApprovalWaiter {
-  resolve: (decision: ApprovalDecision | 'expire') => void;
+  resolve: (outcome: ApprovalOutcome) => void;
   timer: ReturnType<typeof setTimeout>;
 }
 
@@ -21,6 +24,10 @@ interface ApprovalWaiter {
  * conversation goes away. Approving resolves with `approve` so the exact same
  * tool call continues; rejecting resolves with `reject` and the loop emits an
  * error tool result the LLM can respond to naturally.
+ *
+ * NOTE: waiters live in this process's memory. The approval flow therefore
+ * assumes a single backend instance (see ADR 0003); horizontal scaling needs
+ * sticky sessions or an externalized wake-up mechanism.
  */
 @Injectable()
 export class AgentApprovalService {
@@ -33,22 +40,24 @@ export class AgentApprovalService {
 
   /**
    * Create a pending approval and wait for the user's decision.
-   * Emits `approval_request` over SSE immediately.
+   * Emits `approval_request` over SSE immediately. `labels` maps entity ids
+   * in `args` to human-readable titles so the approval card can show
+   * "Work" instead of a database id.
    */
   async requestApproval(input: {
-    userId: string;
     conversationId: string;
     toolCallId: string;
     toolName: string;
     args: Record<string, unknown>;
-  }): Promise<ApprovalDecision | 'expire'> {
+    labels?: Record<string, string>;
+  }): Promise<ApprovalOutcome> {
     const approval = await this.prisma.agentApproval.create({
       data: {
         conversationId: input.conversationId,
         toolCallId: input.toolCallId,
         toolName: input.toolName,
         args: input.args as object,
-        status: 'pending',
+        labels: input.labels ?? {},
       },
     });
     this.hub.emit(input.conversationId, {
@@ -56,10 +65,14 @@ export class AgentApprovalService {
       approval: this.toDto(approval),
     });
 
-    return new Promise<ApprovalDecision | 'expire'>((resolve) => {
+    return new Promise<ApprovalOutcome>((resolve) => {
       const timer = setTimeout(() => {
+        // Wake the blocked run first, then flip the row: forgetting to
+        // resolve here would leave the agent run (and every message queued
+        // behind it) stuck forever.
         this.waiters.delete(approval.id);
-        void this.finalize(approval.id, 'expired');
+        resolve('expire');
+        void this.finalize(approval.id, 'expired').catch(() => undefined);
       }, APPROVAL_TIMEOUT_MS);
       this.waiters.set(approval.id, { resolve, timer });
     });
@@ -80,16 +93,22 @@ export class AgentApprovalService {
       throw new ConflictException(`Approval already ${approval.status}`);
     }
 
+    const waiter = this.waiters.get(approval.id);
+    if (!waiter) {
+      // Pending row without a waiter: the backing run died with a restart or
+      // reconfiguration. Nothing can act on this decision anymore, so expire
+      // the card instead of reporting a success that executed nothing.
+      await this.finalize(approval.id, 'expired').catch(() => undefined);
+      throw new ConflictException('Approval is no longer actionable');
+    }
+
     const updated = await this.finalize(
       approval.id,
       decision === 'approve' ? 'approved' : 'rejected',
     );
-    const waiter = this.waiters.get(approval.id);
-    if (waiter) {
-      clearTimeout(waiter.timer);
-      this.waiters.delete(approval.id);
-      waiter.resolve(decision);
-    }
+    clearTimeout(waiter.timer);
+    this.waiters.delete(approval.id);
+    waiter.resolve(decision);
     return updated;
   }
 
@@ -120,10 +139,13 @@ export class AgentApprovalService {
   }
 
   /**
-   * Reject everything still pending for a conversation — used when the
-   * conversation is deleted so a waiting agent run unblocks immediately.
+   * Expire everything still pending for a conversation — used when the
+   * conversation is deleted, the run is torn down (restart, BYOK config
+   * change) so a waiting agent run unblocks immediately. Resolves waiters
+   * with `expire` rather than `reject`: the user did not decline anything,
+   * the run was simply interrupted.
    */
-  async rejectAllPending(conversationId: string): Promise<void> {
+  async expireAllPending(conversationId: string): Promise<void> {
     const pending = await this.prisma.agentApproval.findMany({
       where: { conversationId, status: 'pending' },
     });
@@ -132,9 +154,9 @@ export class AgentApprovalService {
       if (waiter) {
         clearTimeout(waiter.timer);
         this.waiters.delete(approval.id);
-        waiter.resolve('reject');
+        waiter.resolve('expire');
       }
-      await this.finalize(approval.id, 'rejected').catch(() => undefined);
+      await this.finalize(approval.id, 'expired').catch(() => undefined);
     }
   }
 
@@ -160,6 +182,7 @@ export class AgentApprovalService {
       toolCallId: approval.toolCallId,
       toolName: approval.toolName,
       args: (approval.args ?? {}) as Record<string, unknown>,
+      labels: ((approval.labels ?? {}) as Record<string, string>) ?? {},
       status: approval.status as AgentApprovalDto['status'],
       createdAt: approval.createdAt.toISOString(),
       resolvedAt: approval.resolvedAt?.toISOString() ?? null,

@@ -85,7 +85,7 @@ export class AgentRuntimeService implements OnModuleDestroy {
         // aborting an idle agent is a no-op that may throw; ignore.
       }
       this.entries.delete(conversationId);
-      void this.approvals.rejectAllPending(conversationId).catch(() => undefined);
+      void this.approvals.expireAllPending(conversationId).catch(() => undefined);
     }
   }
 
@@ -100,7 +100,7 @@ export class AgentRuntimeService implements OnModuleDestroy {
       }
       this.entries.delete(conversationId);
     }
-    await this.approvals.rejectAllPending(conversationId);
+    await this.approvals.expireAllPending(conversationId);
   }
 
   /** Reject pending approvals and drop entries on shutdown. */
@@ -112,7 +112,7 @@ export class AgentRuntimeService implements OnModuleDestroy {
         // ignore
       }
       this.entries.delete(conversationId);
-      await this.approvals.rejectAllPending(conversationId).catch(() => undefined);
+      await this.approvals.expireAllPending(conversationId).catch(() => undefined);
     }
   }
 
@@ -184,8 +184,9 @@ export class AgentRuntimeService implements OnModuleDestroy {
   }
 
   /**
-   * Destructive tool gate (issue 04): block the call, persist a pending
-   * approval, notify the client over SSE and wait for the decision. Approve
+   * Irreversible-tool gate (issue 04): block the call, persist a pending
+   * approval (with entity ids resolved to titles for the card), notify the
+   * client over SSE and wait for the decision. Approve
    * → undefined (the same tool call then runs with identical arguments);
    * reject/expire → blocked with an explanatory reason the LLM sees as the
    * tool result.
@@ -201,12 +202,17 @@ export class AgentRuntimeService implements OnModuleDestroy {
     const tool = toolMap.get(ctx.toolCall.name);
     if (!tool?.destructive) return undefined;
 
+    // Resolve ids → titles so the approval card reads "Work", not "ckxyz…".
+    const labels = await this.toolsService
+      .resolveCallLabels(userId, ctx.toolCall.arguments)
+      .catch(() => ({}) as Record<string, string>);
+
     const decision = await this.approvals.requestApproval({
-      userId,
       conversationId,
       toolCallId: ctx.toolCall.id,
       toolName: ctx.toolCall.name,
       args: ctx.toolCall.arguments,
+      labels,
     });
 
     if (decision === 'approve') return undefined;
@@ -215,7 +221,7 @@ export class AgentRuntimeService implements OnModuleDestroy {
       reason:
         decision === 'reject'
           ? 'The user declined this operation. Acknowledge it politely, do not retry it, and offer an alternative if it makes sense.'
-          : 'The approval request expired before the user responded. Ask the user whether they still want to proceed.',
+          : 'The approval request expired or the run was interrupted before the user responded (e.g. settings changed or the conversation was closed). Ask the user whether they still want to proceed.',
     };
   }
 

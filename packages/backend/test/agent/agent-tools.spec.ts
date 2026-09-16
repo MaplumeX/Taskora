@@ -34,6 +34,7 @@ function createService() {
     },
     areas: {
       findAll: vi.fn().mockResolvedValue([]),
+      findOne: vi.fn().mockRejectedValue(new Error('not found')),
       create: vi.fn().mockResolvedValue({ id: 'a1', title: 'Area' }),
       update: vi.fn().mockResolvedValue({ id: 'a1', title: 'Renamed' }),
       remove: vi.fn().mockResolvedValue({}),
@@ -41,6 +42,7 @@ function createService() {
     },
     tags: {
       findAll: vi.fn().mockResolvedValue([]),
+      findOne: vi.fn().mockRejectedValue(new Error('not found')),
       create: vi.fn().mockResolvedValue({ id: 'g1', title: 'tag', color: '#fff' }),
     },
     tagGroups: { findAll: vi.fn().mockResolvedValue([]) },
@@ -51,6 +53,7 @@ function createService() {
     },
     projectHeadings: {
       findAll: vi.fn().mockResolvedValue([]),
+      findOne: vi.fn().mockRejectedValue(new Error('not found')),
       create: vi.fn().mockResolvedValue({ id: 'h1', title: 'Heading' }),
       update: vi.fn().mockResolvedValue({ id: 'h1', title: 'Renamed' }),
       remove: vi.fn().mockResolvedValue({}),
@@ -118,36 +121,56 @@ describe('AgentToolsService', () => {
     }
   });
 
-  it('marks destructive tools', () => {
-    for (const name of [
-      'delete_task',
-      'delete_project',
-      'empty_trash',
-      'create_area',
-      'update_area',
-      'delete_area',
-      'create_project',
-      'update_project',
-      'create_project_heading',
-      'update_project_heading',
-      'delete_project_heading',
-      'reorder_project_layout',
-    ]) {
+  it('marks exactly the irreversible tools as destructive', () => {
+    // Truly irreversible: permanent delete / hard delete.
+    for (const name of ['empty_trash', 'delete_area', 'delete_project_heading']) {
       expect(tool(name).destructive, `${name} should be destructive`).toBe(true);
     }
-    // Plain writes must NOT be destructive.
-    for (const name of [
-      'create_task',
-      'update_task',
-      'create_tag',
-      'restore_task',
-      'reorder_tasks',
-      'reorder_projects',
-      'reorder_areas',
-      'reorder_subtasks',
-    ]) {
+    // Everything else — including restorable soft deletes (delete_task /
+    // delete_project), re-editable structure changes and reorder tools
+    // (reorder_project_layout requires an exact id set, so nothing can be
+    // lost) — must run without an approval card so the approval signal
+    // stays meaningful.
+    for (const name of tools.map((t) => t.name)) {
+      if (['empty_trash', 'delete_area', 'delete_project_heading'].includes(name)) continue;
       expect(tool(name).destructive, `${name} should not be destructive`).toBeFalsy();
     }
+  });
+
+  it('resolves entity ids in tool args to titles for the approval card', async () => {
+    const service2 = createService();
+    service2.tasks.findOne = vi.fn(async (_userId: string, id: string) => {
+      if (id !== 't1') throw new Error('not found');
+      return { id, title: 'Task' };
+    });
+    service2.areas.findOne = vi.fn(async (_userId: string, id: string) => {
+      if (id !== 'a1') throw new Error('not found');
+      return { id, title: 'Work' };
+    });
+    service2.projects.findOne = vi.fn(async (_userId: string, id: string) => {
+      if (id !== 'p1') throw new Error('not found');
+      return { id, title: 'Renovation' };
+    });
+    const resolver = new AgentToolsService(
+      service2.tasks as never,
+      service2.projects as never,
+      service2.areas as never,
+      service2.tags as never,
+      service2.tagGroups as never,
+      service2.subtasks as never,
+      service2.projectHeadings as never,
+      service2.feed as never,
+    );
+
+    const labels = await resolver.resolveCallLabels('user-1', {
+      id: 'a1',
+      projectId: 'p1',
+      unknownId: 'missing',
+      q: 'text',
+    });
+    expect(labels).toEqual({ a1: 'Work', p1: 'Renovation' });
+    // No id-shaped args at all.
+    await expect(resolver.resolveCallLabels('user-1', { q: 'text' })).resolves.toEqual({});
   });
 
   it('scopes every service call to the bound userId', async () => {
