@@ -35,6 +35,26 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ---
 
+## Desktop [0.2.0] - 2026-09-16
+
+### Features
+
+- **agent**: Conversational Assistant in the desktop client (#22): the shared
+  `/agent` chat view (streaming bubbles, tool and approval cards) and the
+  Assistant settings tab with BYOK provider presets. Requires backend v0.3.0
+  or newer and a configured `AGENT_ENCRYPTION_KEY`.
+
+### Fixes
+
+- **frontend**: Restore the user after a full page reload (#21).
+
+### Refactors
+
+- **ui**: Group logbook and trash between the main navigation and areas in
+  the sidebar (#20).
+
+---
+
 ## Desktop [0.1.2] - 2026-09-15
 
 ### Fixes
