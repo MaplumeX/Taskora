@@ -41,7 +41,7 @@ export function ConversationSidebar({
   const [deleting, setDeleting] = useState<ConversationDto | null>(null);
 
   return (
-    <div className="flex h-full w-64 shrink-0 flex-col border-r border-border">
+    <div className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-muted/30">
       <div className="p-3">
         <Button
           className="w-full justify-start gap-2"
