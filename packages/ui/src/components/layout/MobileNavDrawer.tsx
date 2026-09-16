@@ -1,14 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { LogOut, Settings, Tags as TagsIcon, Trash2 } from 'lucide-react';
+import { Bot, LogOut, Settings, Tags as TagsIcon, Trash2 } from 'lucide-react';
 
 import { ProjectStatus } from '@taskora/shared';
 
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
@@ -42,9 +38,7 @@ export function MobileNavDrawer({ open, onOpenChange }: Props) {
   const { data: areas = [] } = useAreasQuery();
   const { data: tags = [] } = useTagsQuery();
 
-  const projects = allProjects.filter(
-    (p) => p.status !== ProjectStatus.COMPLETED,
-  );
+  const projects = allProjects.filter((p) => p.status !== ProjectStatus.COMPLETED);
 
   const close = () => onOpenChange(false);
   const go = (to: string) => {
@@ -54,9 +48,7 @@ export function MobileNavDrawer({ open, onOpenChange }: Props) {
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="left-0 right-0 bottom-0 top-auto max-h-[85dvh] w-full max-w-none max-md:max-w-none translate-x-0 translate-y-0 gap-0 rounded-t-2xl border-border/50 p-0 data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0"
-      >
+      <DialogContent className="left-0 right-0 bottom-0 top-auto max-h-[85dvh] w-full max-w-none max-md:max-w-none translate-x-0 translate-y-0 gap-0 rounded-t-2xl border-border/50 p-0 data-[state=open]:slide-in-from-bottom data-[state=closed]:slide-out-to-bottom data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=open]:fade-in-0 data-[state=closed]:fade-out-0">
         <div
           aria-hidden
           className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-muted-foreground/30"
@@ -67,11 +59,7 @@ export function MobileNavDrawer({ open, onOpenChange }: Props) {
           <div className="flex items-center gap-2.5 px-2 py-1.5">
             <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
               {user?.avatarUrl ? (
-                <img
-                  src={user.avatarUrl}
-                  alt=""
-                  className="h-8 w-8 rounded-full object-cover"
-                />
+                <img src={user.avatarUrl} alt="" className="h-8 w-8 rounded-full object-cover" />
               ) : (
                 (user?.displayName?.[0] ?? user?.email?.[0] ?? '?').toUpperCase()
               )}
@@ -79,6 +67,22 @@ export function MobileNavDrawer({ open, onOpenChange }: Props) {
             <span className="truncate text-sm font-medium">
               {user?.displayName ?? user?.email ?? t('common:notLoggedIn')}
             </span>
+          </div>
+
+          <Separator className="my-2" />
+
+          {/* 助手：顶部独立入口（与桌面侧边栏的 copilot 位对齐） */}
+          <div className="flex flex-col gap-0.5">
+            <NavLink
+              to="/agent"
+              onClick={close}
+              className={({ isActive }) =>
+                cn(DRAWER_ROW_CLASS, isActive && 'bg-accent font-medium text-foreground')
+              }
+            >
+              <Bot className="h-4 w-4" />
+              {t('nav:assistant')}
+            </NavLink>
           </div>
 
           <Separator className="my-2" />
@@ -151,11 +155,7 @@ export function MobileNavDrawer({ open, onOpenChange }: Props) {
 
           {/* 回收站 / 设置 / 登出 */}
           <div className="flex flex-col gap-0.5 pb-2">
-            <button
-              type="button"
-              className={DRAWER_ROW_CLASS}
-              onClick={() => go('/trash')}
-            >
+            <button type="button" className={DRAWER_ROW_CLASS} onClick={() => go('/trash')}>
               <Trash2 className="h-4 w-4" />
               {t('nav:trash')}
             </button>

@@ -25,10 +25,16 @@ import { mainNav, type NavItem } from '@/components/layout/navItems';
 /** 侧边栏主导航（日志移至与废纸篓同一分组） */
 const SIDEBAR_MAIN_NAV = mainNav.filter((item) => item.to !== '/logbook');
 
+/**
+ * 助手：顶部独立分组（Notion AI / Linear Agent 的 copilot 位）。
+ * 它是横跨所有视图的行动者，不属于任何 Bucket 视图，也不属于
+ * Logbook/Trash 那类被动回顾/删除工具组。
+ */
+const SIDEBAR_ASSISTANT_NAV: NavItem[] = [{ to: '/agent', labelKey: 'nav:assistant', icon: Bot }];
+
 /** 日志 + 废纸篓：位于主导航与区域之间的中间分组 */
 const SIDEBAR_UTILITIES_NAV: NavItem[] = [
   { to: '/logbook', labelKey: 'nav:logbook', icon: Notebook },
-  { to: '/agent', labelKey: 'nav:assistant', icon: Bot },
   { to: '/trash', labelKey: 'nav:trash', icon: Trash2 },
 ];
 import { useUiInteractionStore } from '@taskora/api';
@@ -102,9 +108,7 @@ function CollapsibleSection({
           aria-label={open ? t('nav:collapse', { label }) : t('nav:expand', { label })}
           className="absolute right-1 flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent"
         >
-          <ChevronDown
-            className={cn('h-3.5 w-3.5 transition-transform', !open && '-rotate-90')}
-          />
+          <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', !open && '-rotate-90')} />
         </button>
       </div>
       {open && (
@@ -143,35 +147,30 @@ export function Sidebar() {
   const { data: tags = [] } = useTagsQuery();
 
   // 侧边栏仅展示 ACTIVE 项目，已完成项目不参与侧边栏导航树
-  const projects = allProjects.filter(
-    (p) => p.status !== ProjectStatus.COMPLETED,
-  );
+  const projects = allProjects.filter((p) => p.status !== ProjectStatus.COMPLETED);
 
   return (
     <aside className="flex h-screen w-60 flex-col border-r bg-secondary/60 backdrop-blur-sm">
       <div className="px-4 pb-2 pt-4">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              className="w-full justify-start gap-2 px-2 font-medium"
-            >
+            <Button variant="ghost" className="w-full justify-start gap-2 px-2 font-medium">
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
                 {user?.avatarUrl ? (
-                  <img
-                    src={user.avatarUrl}
-                    alt=""
-                    className="h-7 w-7 rounded-full object-cover"
-                  />
+                  <img src={user.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
                 ) : (
                   (user?.displayName?.[0] ?? user?.email?.[0] ?? '?').toUpperCase()
                 )}
               </span>
-              <span className="truncate">{user?.displayName ?? user?.email ?? t('common:notLoggedIn')}</span>
+              <span className="truncate">
+                {user?.displayName ?? user?.email ?? t('common:notLoggedIn')}
+              </span>
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="start" className="w-56">
-            <DropdownMenuLabel className="truncate">{user?.displayName ?? user?.email}</DropdownMenuLabel>
+            <DropdownMenuLabel className="truncate">
+              {user?.displayName ?? user?.email}
+            </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => openSettings('account')}>
               <Settings className="mr-2 h-4 w-4" />
@@ -185,6 +184,15 @@ export function Sidebar() {
       <Separator className="mb-2" />
 
       <ScrollArea className="flex-1 px-2">
+        {/* 助手：顶部独立分组 */}
+        <div className="flex flex-col gap-0.5">
+          {SIDEBAR_ASSISTANT_NAV.map((item) => (
+            <NavRow key={item.to} item={item} />
+          ))}
+        </div>
+
+        <Separator className="my-3" />
+
         <div className="flex flex-col gap-0.5">
           {SIDEBAR_MAIN_NAV.map((item) => (
             <NavRow key={item.to} item={item} />
