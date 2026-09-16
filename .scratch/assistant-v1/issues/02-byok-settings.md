@@ -1,6 +1,6 @@
 # 02 — BYOK 配置存储与设置页
 
-Status: open
+Status: done
 
 ## 任务
 

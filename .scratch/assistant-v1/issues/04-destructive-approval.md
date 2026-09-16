@@ -1,6 +1,6 @@
 # 04 — 破坏性操作拦截与批准流
 
-Status: open
+Status: done
 
 ## 任务
 

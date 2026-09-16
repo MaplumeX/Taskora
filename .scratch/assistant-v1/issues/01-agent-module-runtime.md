@@ -1,6 +1,6 @@
 # 01 — agent 模块与 pi-agent-core 运行时接入
 
-Status: open
+Status: done
 
 ## 任务
 

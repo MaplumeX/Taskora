@@ -1,6 +1,6 @@
 # 06 — 聊天视图与 web/desktop 接入
 
-Status: open
+Status: done
 
 ## 任务
 

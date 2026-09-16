@@ -1,6 +1,6 @@
 # 05 — Conversation 持久化、SSE 流式端点、自动标题
 
-Status: open
+Status: done
 
 ## 任务
 

@@ -1,6 +1,6 @@
 # 03 — 工具层：现有 service 封装为 AgentTool
 
-Status: open
+Status: done
 
 ## 任务
 
