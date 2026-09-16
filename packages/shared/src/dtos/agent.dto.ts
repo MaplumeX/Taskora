@@ -55,6 +55,8 @@ export interface AgentConfigResponseDto {
   modelId: string | null;
   /** Masked key like `••••ab12`; null when no key is stored. */
   apiKeyMasked: string | null;
+  /** True when reasoning/thinking output is requested from the model. */
+  thinkingEnabled: boolean;
 }
 
 export interface UpdateAgentConfigDto {
@@ -64,6 +66,7 @@ export interface UpdateAgentConfigDto {
   /** Write-only: stored encrypted (AES-256-GCM). Never returned. */
   apiKey?: string;
   modelId?: string;
+  thinkingEnabled?: boolean;
 }
 
 /** Connectivity test can probe the stored config or an unsaved draft. */

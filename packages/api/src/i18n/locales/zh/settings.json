@@ -54,5 +54,7 @@
   "assistantConfigured": "已配置",
   "assistantNotConfigured": "未配置",
   "assistantSaveFailed": "保存失败",
-  "providerPlaceholder": "选择服务商"
+  "providerPlaceholder": "选择服务商",
+  "assistantThinking": "思考模式",
+  "assistantThinkingHint": "启用后，支持推理的模型（如 deepseek-reasoner、qwen3）会在回答前展示思考过程。"
 }

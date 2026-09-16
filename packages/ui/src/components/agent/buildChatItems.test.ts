@@ -28,6 +28,24 @@ describe('buildChatItems', () => {
     expect(items[0]).toMatchObject({ kind: 'user', text: 'from blocks' });
   });
 
+  it('extracts thinking blocks before the assistant text', () => {
+    const items = buildChatItems([
+      { role: 'user', content: 'hi' },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'thinking', thinking: 'let me think' },
+          { type: 'text', text: 'answer' },
+        ],
+      },
+    ]);
+    expect(items).toEqual([
+      { kind: 'user', text: 'hi', id: 'm-0' },
+      { kind: 'thinking', text: 'let me think', id: 'm-1-th' },
+      { kind: 'assistant', text: 'answer', id: 'm-1-t' },
+    ]);
+  });
+
   it('pairs tool calls with their results', () => {
     const items = buildChatItems([
       { role: 'user', content: 'list tasks' },

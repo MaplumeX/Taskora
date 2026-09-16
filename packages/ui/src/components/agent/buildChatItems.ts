@@ -3,6 +3,7 @@ import type { AgentMessageJson } from '@taskora/shared';
 export type ChatItem =
   | { kind: 'user'; text: string; id: string }
   | { kind: 'assistant'; text: string; id: string }
+  | { kind: 'thinking'; text: string; id: string }
   | {
       kind: 'tool';
       id: string;
@@ -31,6 +32,18 @@ export function textOf(content: unknown): string {
       .join('');
   }
   return '';
+}
+
+/** Concatenate thinking blocks (or nothing) of a message content payload. */
+export function thinkingOf(content: unknown): string {
+  if (!Array.isArray(content)) return '';
+  return content
+    .filter(
+      (c): c is { type: string; thinking?: string } =>
+        c?.type === 'thinking' && typeof c.thinking === 'string',
+    )
+    .map((c) => c.thinking ?? '')
+    .join('');
 }
 
 /** One-line "k: v, k2: v2" summary of tool-call arguments (null/empty skipped). */
@@ -87,6 +100,8 @@ export function buildChatItems(
       if (text) items.push({ kind: 'user', text, id });
     } else if (message.role === 'assistant') {
       const content = message.content as unknown;
+      const thinking = thinkingOf(content);
+      if (thinking) items.push({ kind: 'thinking', text: thinking, id: `${id}-th` });
       const text = textOf(content);
       if (text) items.push({ kind: 'assistant', text, id: `${id}-t` });
       for (const call of toolCallsOf(content)) {

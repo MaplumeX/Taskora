@@ -7,6 +7,10 @@ import { normalizeBaseUrl } from '../byok/agent-config.service';
  * [OI]-compatible endpoint configured by the user (BYOK). The provider id is
  * a synthetic string — pi-ai treats unknown providers generically as long as
  * `baseUrl` and `api: 'openai-completions'` are set.
+ *
+ * `reasoning` is advertised as supported so users can point the config at a
+ * reasoning model (deepseek-reasoner, qwen3, …) and get thinking output;
+ * non-reasoning endpoints simply ignore the effort parameter.
  */
 export function buildByokModel(config: ResolvedAgentConfig): Model<'openai-completions'> {
   return {
@@ -15,7 +19,7 @@ export function buildByokModel(config: ResolvedAgentConfig): Model<'openai-compl
     api: 'openai-completions',
     provider: 'taskora-byok',
     baseUrl: normalizeBaseUrl(config.baseUrl),
-    reasoning: false,
+    reasoning: true,
     input: ['text'],
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128_000,
@@ -50,7 +54,7 @@ export function resolveDevConfig(): ResolvedAgentConfig | null {
   const apiKey = process.env.AGENT_DEV_API_KEY?.trim();
   const modelId = process.env.AGENT_DEV_MODEL?.trim();
   if (!baseUrl || !apiKey || !modelId) return null;
-  return { baseUrl, apiKey, modelId };
+  return { baseUrl, apiKey, modelId, thinkingEnabled: process.env.AGENT_DEV_THINKING === '1' };
 }
 
 /**

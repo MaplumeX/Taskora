@@ -148,7 +148,9 @@ export class AgentRuntimeService implements OnModuleDestroy {
       initialState: {
         systemPrompt: renderSystemPrompt(),
         model,
-        thinkingLevel: 'off',
+        // Reasoning models stream a thinking block that the UI shows in a
+        // collapsible section; off keeps requests free of effort parameters.
+        thinkingLevel: config.thinkingEnabled ? 'medium' : 'off',
         messages,
         tools,
       },

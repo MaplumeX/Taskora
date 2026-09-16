@@ -44,11 +44,15 @@ describe('agent-model helpers', () => {
     process.env.AGENT_DEV_BASE_URL = 'http://localhost:1234/v1';
     process.env.AGENT_DEV_API_KEY = 'k';
     process.env.AGENT_DEV_MODEL = 'm';
+    delete process.env.AGENT_DEV_THINKING;
     expect(resolveDevConfig()).toEqual({
       baseUrl: 'http://localhost:1234/v1',
       apiKey: 'k',
       modelId: 'm',
+      thinkingEnabled: false,
     });
+    process.env.AGENT_DEV_THINKING = '1';
+    expect(resolveDevConfig()?.thinkingEnabled).toBe(true);
     Object.assign(process.env, prev);
   });
 });

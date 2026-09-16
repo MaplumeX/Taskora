@@ -19,7 +19,14 @@ import type { AgentMessageJson, ApprovalDecision, ConversationMessageDto } from 
 
 import { buildChatItems, type ChatItem } from './buildChatItems';
 import { ApprovalCard } from './ApprovalCard';
-import { AssistantBubble, ErrorBubble, ToolCallCard, TypingIndicator, UserBubble } from './bubbles';
+import {
+  AssistantBubble,
+  ErrorBubble,
+  ThinkingBlock,
+  ToolCallCard,
+  TypingIndicator,
+  UserBubble,
+} from './bubbles';
 import { useAgentStream } from './useAgentStream';
 
 /**
@@ -38,6 +45,9 @@ export function AgentChatView({ conversationId }: { conversationId: string }) {
   const openSettings = useUiInteractionStore((s) => s.openSettings);
   const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
+  /** Stick to the bottom only while the user is already there; scrolling up
+   *  through history pauses auto-scroll until they return to the bottom. */
+  const stickToBottomRef = useRef(true);
 
   const stream = useAgentStream(conversationId);
 
@@ -50,15 +60,22 @@ export function AgentChatView({ conversationId }: { conversationId: string }) {
     [messages, stream.runningToolCallIds],
   );
 
+  const handleScroll = () => {
+    const el = scrollRef.current;
+    if (!el) return;
+    stickToBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+  };
+
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [items.length, stream.streamingText, approvals.length]);
+    if (el && stickToBottomRef.current) el.scrollTop = el.scrollHeight;
+  }, [items, stream.streamingText, stream.streamingThinking, approvals.length]);
 
   const handleSend = () => {
     const content = input.trim();
     if (!content || sendMessage.isPending) return;
     setInput('');
+    stickToBottomRef.current = true;
     // Optimistic user bubble; the SSE message_end is deduped by text.
     queryClient.setQueryData<ConversationMessageDto[]>(
       agentKeys.messages(conversationId),
@@ -100,19 +117,54 @@ export function AgentChatView({ conversationId }: { conversationId: string }) {
         </div>
       ) : null}
 
-      <div ref={scrollRef} className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-6 pt-6 md:px-6">
-          {items.map((item) => {
-            if (item.kind === 'user') return <UserBubble key={item.id} text={item.text} />;
+          {items.map((item, i) => {
+            // Sub-elements (thinking/tool) belong to the assistant turn above
+            // them — tighten the gap so they read as part of that turn
+            // instead of standalone messages.
+            const prev = items[i - 1]?.kind;
+            const tight =
+              (item.kind === 'tool' && prev && prev !== 'user') ||
+              (item.kind === 'assistant' && prev === 'thinking');
+            const className = tight ? '-mt-2.5' : undefined;
+            if (item.kind === 'user')
+              return (
+                <div key={item.id} className={className}>
+                  <UserBubble text={item.text} />
+                </div>
+              );
             if (item.kind === 'assistant')
-              return <AssistantBubble key={item.id} text={item.text} />;
-            if (item.kind === 'tool') return <ToolCallCard key={item.id} item={item} />;
-            return <ErrorBubble key={item.id} text={item.text} />;
+              return (
+                <div key={item.id} className={className}>
+                  <AssistantBubble text={item.text} />
+                </div>
+              );
+            if (item.kind === 'thinking')
+              return (
+                <div key={item.id} className={className}>
+                  <ThinkingBlock text={item.text} />
+                </div>
+              );
+            if (item.kind === 'tool')
+              return (
+                <div key={item.id} className={className}>
+                  <ToolCallCard item={item} />
+                </div>
+              );
+            return (
+              <div key={item.id} className={className}>
+                <ErrorBubble text={item.text} />
+              </div>
+            );
           })}
 
+          {stream.streamingThinking ? (
+            <ThinkingBlock text={stream.streamingThinking} streaming={!stream.streamingText} />
+          ) : null}
           {stream.streamingText !== null ? (
             <AssistantBubble text={stream.streamingText} />
-          ) : stream.agentActive ? (
+          ) : stream.agentActive && !stream.streamingThinking ? (
             <TypingIndicator />
           ) : null}
 

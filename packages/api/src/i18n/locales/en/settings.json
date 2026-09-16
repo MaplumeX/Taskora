@@ -54,5 +54,7 @@
   "assistantConfigured": "Configured",
   "assistantNotConfigured": "Not configured",
   "assistantSaveFailed": "Failed to save",
-  "providerPlaceholder": "Select a provider"
+  "providerPlaceholder": "Select a provider",
+  "assistantThinking": "Thinking mode",
+  "assistantThinkingHint": "When enabled, reasoning models (e.g. deepseek-reasoner, qwen3) show their thought process before answering."
 }

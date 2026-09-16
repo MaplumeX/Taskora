@@ -1,4 +1,4 @@
-import { IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
 
 import type { TestAgentConfigDto, UpdateAgentConfigDto } from '@taskora/shared';
 
@@ -22,6 +22,10 @@ export class UpdateAgentConfigBody implements UpdateAgentConfigDto {
   @IsString()
   @MaxLength(256)
   modelId?: string;
+
+  @IsOptional()
+  @IsBoolean()
+  thinkingEnabled?: boolean;
 }
 
 export class TestAgentConfigBody implements TestAgentConfigDto {

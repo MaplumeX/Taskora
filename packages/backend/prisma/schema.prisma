@@ -270,6 +270,8 @@ model AgentConfig {
   baseUrl         String?
   apiKeyEncrypted String?
   modelId         String?
+  /// Request reasoning/thinking output from the model when true.
+  thinkingEnabled Boolean  @default(false)
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

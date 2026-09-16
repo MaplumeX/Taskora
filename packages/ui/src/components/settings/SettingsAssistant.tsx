@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
 import { AGENT_PROVIDER_PRESETS, type AgentConfigTestResultDto } from '@taskora/shared';
 import { useAgentConfig, useTestAgentConfig, useUpdateAgentConfig } from '@taskora/api';
 
@@ -23,6 +24,7 @@ export default function SettingsAssistant() {
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [modelId, setModelId] = useState('');
+  const [thinkingEnabled, setThinkingEnabled] = useState(false);
   const [testResult, setTestResult] = useState<AgentConfigTestResultDto | null>(null);
 
   useEffect(() => {
@@ -30,6 +32,7 @@ export default function SettingsAssistant() {
       setProvider(config.provider);
       setBaseUrl(config.baseUrl ?? '');
       setModelId(config.modelId ?? '');
+      setThinkingEnabled(config.thinkingEnabled);
     }
   }, [config]);
 
@@ -49,6 +52,7 @@ export default function SettingsAssistant() {
         provider,
         baseUrl: baseUrl.trim(),
         modelId: modelId.trim(),
+        thinkingEnabled,
         // Omit the key entirely when untouched so the stored one is kept.
         ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
       },
@@ -155,6 +159,18 @@ export default function SettingsAssistant() {
           placeholder="deepseek-chat"
         />
         <p className="text-xs text-muted-foreground">{t('settings:assistantModelIdHint')}</p>
+      </section>
+
+      <section className="flex items-start justify-between gap-4 rounded-xl border border-border bg-muted/30 px-4 py-3">
+        <div className="space-y-1">
+          <Label htmlFor="agent-thinking">{t('settings:assistantThinking')}</Label>
+          <p className="text-xs text-muted-foreground">{t('settings:assistantThinkingHint')}</p>
+        </div>
+        <Switch
+          id="agent-thinking"
+          checked={thinkingEnabled}
+          onCheckedChange={setThinkingEnabled}
+        />
       </section>
 
       <section className="flex flex-wrap items-center gap-2">

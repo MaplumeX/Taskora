@@ -14,6 +14,7 @@ export interface ResolvedAgentConfig {
   baseUrl: string;
   apiKey: string;
   modelId: string;
+  thinkingEnabled: boolean;
 }
 
 /** How long a connectivity probe may take before we give up. */
@@ -50,6 +51,7 @@ export class AgentConfigService {
         baseUrl: normalizeBaseUrl(config.baseUrl),
         apiKey,
         modelId: config.modelId,
+        thinkingEnabled: config.thinkingEnabled,
       };
     } catch {
       // Corrupted envelope or rotated master key: treat as unconfigured.
@@ -63,6 +65,7 @@ export class AgentConfigService {
       baseUrl?: string | null;
       modelId?: string | null;
       apiKeyEncrypted?: string | null;
+      thinkingEnabled?: boolean;
     } = {};
 
     if (dto.provider !== undefined) {
@@ -73,6 +76,7 @@ export class AgentConfigService {
     }
     if (dto.baseUrl !== undefined) data.baseUrl = dto.baseUrl.trim() || null;
     if (dto.modelId !== undefined) data.modelId = dto.modelId.trim() || null;
+    if (dto.thinkingEnabled !== undefined) data.thinkingEnabled = dto.thinkingEnabled;
     if (dto.apiKey !== undefined) {
       const trimmed = dto.apiKey.trim();
       data.apiKeyEncrypted = trimmed ? encryptSecret(trimmed, requireMasterKey()) : null;
@@ -172,6 +176,7 @@ export class AgentConfigService {
       baseUrl,
       modelId,
       apiKeyMasked,
+      thinkingEnabled: config?.thinkingEnabled ?? false,
     };
   }
 }

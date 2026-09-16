@@ -3,9 +3,11 @@ import { useQueryClient } from '@tanstack/react-query';
 
 import { agentKeys, subscribeAgentEvents } from '@taskora/api';
 import type { AgentMessageJson, ConversationMessageDto } from '@taskora/shared';
-import { textOf } from './buildChatItems';
+import { textOf, thinkingOf } from './buildChatItems';
 
 export interface AgentStreamState {
+  /** Partial assistant thinking of the current run (reasoning models). */
+  streamingThinking: string | null;
   /** Partial assistant text of the current run (typing effect). */
   streamingText: string | null;
   /** toolCallIds currently executing. */
@@ -24,6 +26,7 @@ export interface AgentStreamState {
  */
 export function useAgentStream(conversationId: string | null): AgentStreamState {
   const queryClient = useQueryClient();
+  const [streamingThinking, setStreamingThinking] = useState<string | null>(null);
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [runningToolCallIds, setRunningToolCallIds] = useState<ReadonlySet<string>>(new Set());
   const [agentActive, setAgentActive] = useState(false);
@@ -60,6 +63,7 @@ export function useAgentStream(conversationId: string | null): AgentStreamState 
   useEffect(() => {
     if (!conversationId) return;
     setConnected(false);
+    setStreamingThinking(null);
     setStreamingText(null);
     setRunningToolCallIds(new Set());
     setAgentActive(false);
@@ -69,16 +73,28 @@ export function useAgentStream(conversationId: string | null): AgentStreamState 
       (event) => {
         switch (event.type) {
           case 'message_start':
-            if (event.message.role === 'assistant') setStreamingText('');
+            if (event.message.role === 'assistant') {
+              setStreamingThinking(null);
+              setStreamingText('');
+            }
             break;
           case 'message_update':
             if (event.message.role === 'assistant') {
-              setStreamingText(textOf(event.message.content));
+              // Thinking deltas arrive before text deltas; keep both alive
+              // independently so a finished thinking block stays visible while
+              // the answer streams in below it.
+              const thinking = thinkingOf(event.message.content);
+              if (thinking) setStreamingThinking(thinking);
+              const text = textOf(event.message.content);
+              if (text) setStreamingText(text);
             }
             break;
           case 'message_end':
             appendMessage(event.message, event.message.role === 'user');
-            if (event.message.role === 'assistant') setStreamingText(null);
+            if (event.message.role === 'assistant') {
+              setStreamingThinking(null);
+              setStreamingText(null);
+            }
             break;
           case 'tool_execution_start':
             setRunningToolCallIds((prev) => new Set(prev).add(event.toolCallId));
@@ -95,6 +111,7 @@ export function useAgentStream(conversationId: string | null): AgentStreamState 
             break;
           case 'agent_end':
             setAgentActive(false);
+            setStreamingThinking(null);
             setStreamingText(null);
             setRunningToolCallIds(new Set());
             // Reconcile with the durable store (seq, ordering, title).
@@ -122,5 +139,12 @@ export function useAgentStream(conversationId: string | null): AgentStreamState 
     return dispose;
   }, [conversationId, appendMessage, queryClient]);
 
-  return { streamingText, runningToolCallIds, agentActive, connected, lastError };
+  return {
+    streamingThinking,
+    streamingText,
+    runningToolCallIds,
+    agentActive,
+    connected,
+    lastError,
+  };
 }
