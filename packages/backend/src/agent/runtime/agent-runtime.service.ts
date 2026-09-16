@@ -172,9 +172,13 @@ export class AgentRuntimeService implements OnModuleDestroy {
     };
     this.entries.set(conversationId, entry);
 
-    agent.subscribe((event) => {
-      void this.handleAgentEvent(entry, event);
-    });
+    // Returning the promise is load-bearing: pi-agent-core awaits each
+    // listener before emitting the next event, which serializes message
+    // persistence. Discarding it (`void ...`) lets the next message_end read
+    // a stale `nextSeq` while the previous insert is still in flight — two
+    // rows then race for the same (conversationId, seq) and the losing
+    // toolResult is dropped with a unique-constraint error.
+    agent.subscribe((event) => this.handleAgentEvent(entry, event));
 
     return entry;
   }
