@@ -17,3 +17,9 @@ Status: done
 - 任意工具调用均无法触达其他用户数据（含构造恶意参数）。
 
 ## Comments
+
+### 2026-09-16: 新增排序（reorder）工具
+
+- `reorder_tasks` / `reorder_projects` / `reorder_areas` / `reorder_subtasks`:纯 sortOrder 变更，非 destructive,复用既有 service `reorder`。
+- `reorder_project_layout`:整体重排 project 内 headings 与任务分组(复用 `ProjectHeadingsService.reorder`,要求精确全集 id),标记 `destructive`。
+- 单测见 `packages/backend/test/agent/agent-tools.spec.ts`。
