@@ -4,8 +4,11 @@ import type { AgentConfig } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import {
   AGENT_PROVIDER_PRESETS,
+  AGENT_THINKING_LEVELS,
   type AgentConfigResponseDto,
   type AgentConfigTestResultDto,
+  type AgentModelsResponseDto,
+  type AgentThinkingLevel,
   type UpdateAgentConfigDto,
 } from '@taskora/shared';
 import { decryptSecret, encryptSecret, maskApiKey, requireMasterKey } from './encryption';
@@ -14,7 +17,7 @@ export interface ResolvedAgentConfig {
   baseUrl: string;
   apiKey: string;
   modelId: string;
-  thinkingEnabled: boolean;
+  thinkingLevel: AgentThinkingLevel;
 }
 
 /** How long a connectivity probe may take before we give up. */
@@ -51,7 +54,7 @@ export class AgentConfigService {
         baseUrl: normalizeBaseUrl(config.baseUrl),
         apiKey,
         modelId: config.modelId,
-        thinkingEnabled: config.thinkingEnabled,
+        thinkingLevel: isThinkingLevel(config.thinkingLevel) ? config.thinkingLevel : 'off',
       };
     } catch {
       // Corrupted envelope or rotated master key: treat as unconfigured.
@@ -65,7 +68,7 @@ export class AgentConfigService {
       baseUrl?: string | null;
       modelId?: string | null;
       apiKeyEncrypted?: string | null;
-      thinkingEnabled?: boolean;
+      thinkingLevel?: AgentThinkingLevel;
     } = {};
 
     if (dto.provider !== undefined) {
@@ -76,7 +79,7 @@ export class AgentConfigService {
     }
     if (dto.baseUrl !== undefined) data.baseUrl = dto.baseUrl.trim() || null;
     if (dto.modelId !== undefined) data.modelId = dto.modelId.trim() || null;
-    if (dto.thinkingEnabled !== undefined) data.thinkingEnabled = dto.thinkingEnabled;
+    if (dto.thinkingLevel !== undefined) data.thinkingLevel = dto.thinkingLevel;
     if (dto.apiKey !== undefined) {
       const trimmed = dto.apiKey.trim();
       data.apiKeyEncrypted = trimmed ? encryptSecret(trimmed, requireMasterKey()) : null;
@@ -117,45 +120,57 @@ export class AgentConfigService {
 
     baseUrl = normalizeBaseUrl(baseUrl);
     try {
-      const url = new URL(`${baseUrl}/models`);
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TEST_TIMEOUT_MS);
-      try {
-        const res = await fetch(url, {
-          headers: { Authorization: `Bearer ${apiKey}` },
-          signal: controller.signal,
-        });
-        if (!res.ok) {
-          return {
-            ok: false,
-            message: `Endpoint responded with HTTP ${res.status}`,
-            models: [],
-          };
-        }
-        const payload = (await res.json()) as { data?: Array<{ id?: string }> };
-        const models = Array.isArray(payload.data)
-          ? payload.data
-              .map((m) => m.id)
-              .filter((id): id is string => typeof id === 'string')
-              .slice(0, TEST_MAX_MODELS)
-          : [];
-        const modelKnown = !modelId || models.length === 0 || models.includes(modelId);
-        return {
-          ok: modelKnown,
-          message: modelKnown
-            ? `Endpoint reachable (${models.length} models listed).`
-            : `Endpoint reachable, but model "${modelId}" was not found in its model list.`,
-          models,
-        };
-      } finally {
-        clearTimeout(timer);
-      }
+      const models = await this.fetchModelList(baseUrl, apiKey);
+      const modelKnown = !modelId || models.length === 0 || models.includes(modelId);
+      return {
+        ok: modelKnown,
+        message: modelKnown
+          ? `Endpoint reachable (${models.length} models listed).`
+          : `Endpoint reachable, but model "${modelId}" was not found in its model list.`,
+        models,
+      };
     } catch (error) {
       return {
         ok: false,
         message: `Could not reach endpoint: ${(error as Error).message}`,
         models: [],
       };
+    }
+  }
+
+  /** List model ids on the configured endpoint (composer model picker). */
+  async listModels(userId: string): Promise<AgentModelsResponseDto> {
+    const stored = await this.resolveRuntimeConfig(userId);
+    if (!stored) {
+      throw new BadRequestException(
+        'No complete configuration. Fill in base URL, API key and model ID first.',
+      );
+    }
+    return { models: await this.fetchModelList(stored.baseUrl, stored.apiKey) };
+  }
+
+  /** Fetch `${baseUrl}/models` with a timeout; throws on HTTP/network errors. */
+  private async fetchModelList(baseUrl: string, apiKey: string): Promise<string[]> {
+    const url = new URL(`${baseUrl}/models`);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), TEST_TIMEOUT_MS);
+    try {
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${apiKey}` },
+        signal: controller.signal,
+      });
+      if (!res.ok) {
+        throw new Error(`Endpoint responded with HTTP ${res.status}`);
+      }
+      const payload = (await res.json()) as { data?: Array<{ id?: string }> };
+      return Array.isArray(payload.data)
+        ? payload.data
+            .map((m) => m.id)
+            .filter((id): id is string => typeof id === 'string')
+            .slice(0, TEST_MAX_MODELS)
+        : [];
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -176,9 +191,13 @@ export class AgentConfigService {
       baseUrl,
       modelId,
       apiKeyMasked,
-      thinkingEnabled: config?.thinkingEnabled ?? false,
+      thinkingLevel: isThinkingLevel(config?.thinkingLevel) ? config.thinkingLevel : 'off',
     };
   }
+}
+
+function isThinkingLevel(value: string | null | undefined): value is AgentThinkingLevel {
+  return (AGENT_THINKING_LEVELS as readonly string[]).includes(value ?? '');
 }
 
 /** Strip a trailing slash so `${baseUrl}/models` always joins cleanly. */

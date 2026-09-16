@@ -1,4 +1,5 @@
 import type { Model } from '@earendil-works/pi-ai';
+import { AGENT_THINKING_LEVELS } from '@taskora/shared';
 import type { ResolvedAgentConfig } from '../byok/agent-config.service';
 import { normalizeBaseUrl } from '../byok/agent-config.service';
 
@@ -54,7 +55,23 @@ export function resolveDevConfig(): ResolvedAgentConfig | null {
   const apiKey = process.env.AGENT_DEV_API_KEY?.trim();
   const modelId = process.env.AGENT_DEV_MODEL?.trim();
   if (!baseUrl || !apiKey || !modelId) return null;
-  return { baseUrl, apiKey, modelId, thinkingEnabled: process.env.AGENT_DEV_THINKING === '1' };
+  return {
+    baseUrl,
+    apiKey,
+    modelId,
+    // Legacy `AGENT_DEV_THINKING=1` maps to medium; the env var otherwise
+    // accepts a level name (off/low/medium/high/xhigh/max).
+    thinkingLevel:
+      process.env.AGENT_DEV_THINKING === '1'
+        ? 'medium'
+        : isThinkingLevel(process.env.AGENT_DEV_THINKING)
+          ? (process.env.AGENT_DEV_THINKING as ResolvedAgentConfig['thinkingLevel'])
+          : 'off',
+  };
+}
+
+function isThinkingLevel(value: string | undefined): boolean {
+  return (AGENT_THINKING_LEVELS as readonly string[]).includes(value ?? '');
 }
 
 /**

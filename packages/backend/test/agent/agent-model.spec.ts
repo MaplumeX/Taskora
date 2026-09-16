@@ -49,10 +49,14 @@ describe('agent-model helpers', () => {
       baseUrl: 'http://localhost:1234/v1',
       apiKey: 'k',
       modelId: 'm',
-      thinkingEnabled: false,
+      thinkingLevel: 'off',
     });
     process.env.AGENT_DEV_THINKING = '1';
-    expect(resolveDevConfig()?.thinkingEnabled).toBe(true);
+    expect(resolveDevConfig()?.thinkingLevel).toBe('medium');
+    process.env.AGENT_DEV_THINKING = 'high';
+    expect(resolveDevConfig()?.thinkingLevel).toBe('high');
+    process.env.AGENT_DEV_THINKING = 'nonsense';
+    expect(resolveDevConfig()?.thinkingLevel).toBe('off');
     Object.assign(process.env, prev);
   });
 });

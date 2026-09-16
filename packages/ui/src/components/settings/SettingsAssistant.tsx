@@ -5,8 +5,12 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Switch } from '@/components/ui/switch';
-import { AGENT_PROVIDER_PRESETS, type AgentConfigTestResultDto } from '@taskora/shared';
+import {
+  AGENT_PROVIDER_PRESETS,
+  AGENT_THINKING_LEVELS,
+  type AgentConfigTestResultDto,
+  type AgentThinkingLevel,
+} from '@taskora/shared';
 import { useAgentConfig, useTestAgentConfig, useUpdateAgentConfig } from '@taskora/api';
 
 /**
@@ -24,7 +28,7 @@ export default function SettingsAssistant() {
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [modelId, setModelId] = useState('');
-  const [thinkingEnabled, setThinkingEnabled] = useState(false);
+  const [thinkingLevel, setThinkingLevel] = useState<AgentThinkingLevel>('off');
   const [testResult, setTestResult] = useState<AgentConfigTestResultDto | null>(null);
 
   useEffect(() => {
@@ -32,7 +36,7 @@ export default function SettingsAssistant() {
       setProvider(config.provider);
       setBaseUrl(config.baseUrl ?? '');
       setModelId(config.modelId ?? '');
-      setThinkingEnabled(config.thinkingEnabled);
+      setThinkingLevel(config.thinkingLevel);
     }
   }, [config]);
 
@@ -52,7 +56,7 @@ export default function SettingsAssistant() {
         provider,
         baseUrl: baseUrl.trim(),
         modelId: modelId.trim(),
-        thinkingEnabled,
+        thinkingLevel,
         // Omit the key entirely when untouched so the stored one is kept.
         ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
       },
@@ -166,11 +170,28 @@ export default function SettingsAssistant() {
           <Label htmlFor="agent-thinking">{t('settings:assistantThinking')}</Label>
           <p className="text-xs text-muted-foreground">{t('settings:assistantThinkingHint')}</p>
         </div>
-        <Switch
-          id="agent-thinking"
-          checked={thinkingEnabled}
-          onCheckedChange={setThinkingEnabled}
-        />
+        <div
+          role="radiogroup"
+          aria-label={t('settings:assistantThinking')}
+          className="flex shrink-0 gap-1 rounded-full border border-border bg-background p-1"
+        >
+          {AGENT_THINKING_LEVELS.map((level) => (
+            <button
+              key={level}
+              type="button"
+              role="radio"
+              aria-checked={thinkingLevel === level}
+              onClick={() => setThinkingLevel(level)}
+              className={
+                thinkingLevel === level
+                  ? 'rounded-full bg-primary px-3 py-1 text-xs font-medium text-primary-foreground'
+                  : 'rounded-full px-3 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground'
+              }
+            >
+              {t(`agent:thinkingLevel_${level}`)}
+            </button>
+          ))}
+        </div>
       </section>
 
       <section className="flex flex-wrap items-center gap-2">

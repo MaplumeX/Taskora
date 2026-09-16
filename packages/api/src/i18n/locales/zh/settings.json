@@ -56,5 +56,5 @@
   "assistantSaveFailed": "保存失败",
   "providerPlaceholder": "选择服务商",
   "assistantThinking": "思考模式",
-  "assistantThinkingHint": "启用后，支持推理的模型（如 deepseek-reasoner、qwen3）会在回答前展示思考过程。"
+  "assistantThinkingHint": "支持推理的模型（如 deepseek-reasoner、qwen3）会按所选强度在回答前思考。"
 }

@@ -5,6 +5,7 @@ import {
   createConversation,
   deleteConversation,
   getAgentConfig,
+  listAgentModels,
   listConversationMessages,
   listConversations,
   listPendingApprovals,
@@ -31,6 +32,7 @@ import { taskKeys } from './useTasks';
 
 export const agentKeys = {
   config: ['agent', 'config'] as const,
+  models: ['agent', 'config', 'models'] as const,
   conversations: ['agent', 'conversations'] as const,
   messages: (conversationId: string) =>
     ['agent', 'conversations', conversationId, 'messages'] as const,
@@ -90,6 +92,16 @@ export function useUpdateAgentConfig() {
 export function useTestAgentConfig() {
   return useMutation({
     mutationFn: (data: TestAgentConfigDto) => testAgentConfig(data),
+  });
+}
+
+/** Model ids available on the configured endpoint (composer picker). */
+export function useAgentModels(enabled: boolean) {
+  return useQuery({
+    queryKey: agentKeys.models,
+    queryFn: listAgentModels,
+    enabled,
+    staleTime: 5 * 60_000,
   });
 }
 

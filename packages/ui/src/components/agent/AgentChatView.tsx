@@ -19,6 +19,7 @@ import type { AgentMessageJson, ApprovalDecision, ConversationMessageDto } from 
 
 import { buildChatItems, type ChatItem } from './buildChatItems';
 import { ApprovalCard } from './ApprovalCard';
+import { ComposerControls } from './ComposerControls';
 import {
   AssistantBubble,
   ErrorBubble,
@@ -195,7 +196,7 @@ export function AgentChatView({ conversationId }: { conversationId: string }) {
               {t('agent:connectionLost')}
             </div>
           ) : null}
-          <div className="flex items-end gap-2 rounded-3xl border border-border bg-background px-3 py-2 shadow-lg shadow-black/5">
+          <div className="rounded-3xl border border-border bg-background px-3 pb-1.5 pt-2 shadow-lg shadow-black/5">
             <Textarea
               value={input}
               onChange={(e) => setInput(e.target.value)}
@@ -209,15 +210,29 @@ export function AgentChatView({ conversationId }: { conversationId: string }) {
               rows={Math.min(6, Math.max(1, input.split('\n').length))}
               className="max-h-36 min-h-[2.25rem] resize-none border-0 bg-transparent p-2 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
             />
-            <Button
-              size="icon"
-              onClick={handleSend}
-              disabled={!input.trim() || busy}
-              aria-label={t('agent:send')}
-              className="mb-1 h-8 w-8 shrink-0 rounded-full"
-            >
-              <ArrowUp className="h-4 w-4" />
-            </Button>
+            {/* 底部一行：左侧模型/思考快捷切换，右侧发送（ChatGPT/Claude 式布局） */}
+            <div className="flex items-center justify-between gap-2">
+              {config?.configured ? (
+                <ComposerControls
+                  modelId={config.modelId ?? ''}
+                  thinkingLevel={config.thinkingLevel}
+                  // Config changes reset the runtime and abort the active run,
+                  // so lock the switchers while the agent is streaming.
+                  disabled={busy}
+                />
+              ) : (
+                <div className="h-8" />
+              )}
+              <Button
+                size="icon"
+                onClick={handleSend}
+                disabled={!input.trim() || busy}
+                aria-label={t('agent:send')}
+                className="mb-0.5 h-8 w-8 shrink-0 rounded-full"
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         </div>
       </div>

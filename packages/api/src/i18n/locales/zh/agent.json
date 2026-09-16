@@ -32,5 +32,16 @@
   "error": "出现了一些问题",
   "emptyState": "关于任务的任何问题都可以问我——我可以帮你创建、安排、搜索和清理任务。",
   "connectionLost": "连接已断开，正在重连…",
-  "you": "你"
+  "you": "你",
+  "modelLabel": "模型",
+  "searchModelPlaceholder": "搜索模型…",
+  "modelListUnavailable": "无法获取模型列表，请检查服务商配置",
+  "modelListEmpty": "端点未返回任何模型",
+  "thinkingLevelLabel": "思考",
+  "thinkingLevel_off": "关闭",
+  "thinkingLevel_low": "低",
+  "thinkingLevel_medium": "中",
+  "thinkingLevel_high": "高",
+  "thinkingLevel_xhigh": "超高",
+  "thinkingLevel_max": "最大"
 }

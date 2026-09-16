@@ -56,5 +56,5 @@
   "assistantSaveFailed": "Failed to save",
   "providerPlaceholder": "Select a provider",
   "assistantThinking": "Thinking mode",
-  "assistantThinkingHint": "When enabled, reasoning models (e.g. deepseek-reasoner, qwen3) show their thought process before answering."
+  "assistantThinkingHint": "Reasoning models (e.g. deepseek-reasoner, qwen3) think before answering at the selected effort."
 }

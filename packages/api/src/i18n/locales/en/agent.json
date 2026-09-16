@@ -32,5 +32,16 @@
   "error": "Something went wrong",
   "emptyState": "Ask me anything about your tasks — I can create, schedule, search and clean up for you.",
   "connectionLost": "Connection lost, reconnecting…",
-  "you": "You"
+  "you": "You",
+  "modelLabel": "Model",
+  "searchModelPlaceholder": "Search models…",
+  "modelListUnavailable": "Couldn't load the model list. Check your provider settings.",
+  "modelListEmpty": "The endpoint returned no models",
+  "thinkingLevelLabel": "Thinking",
+  "thinkingLevel_off": "Off",
+  "thinkingLevel_low": "Low",
+  "thinkingLevel_medium": "Medium",
+  "thinkingLevel_high": "High",
+  "thinkingLevel_xhigh": "X-high",
+  "thinkingLevel_max": "Max"
 }

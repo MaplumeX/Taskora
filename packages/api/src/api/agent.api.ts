@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import type {
   AgentConfigResponseDto,
+  AgentModelsResponseDto,
   ApprovalDecision,
   AgentConfigTestResultDto,
   AgentApprovalDto,
@@ -22,6 +23,10 @@ export function updateAgentConfig(data: UpdateAgentConfigDto): Promise<AgentConf
 
 export function testAgentConfig(data: TestAgentConfigDto): Promise<AgentConfigTestResultDto> {
   return apiClient.post<AgentConfigTestResultDto>('/agent/config/test', data).then((r) => r.data);
+}
+
+export function listAgentModels(): Promise<AgentModelsResponseDto> {
+  return apiClient.get<AgentModelsResponseDto>('/agent/config/models').then((r) => r.data);
 }
 
 // ------------------------------------------------------------ conversations

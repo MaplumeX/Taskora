@@ -46,6 +46,18 @@ export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
   { id: 'custom', label: 'Custom', baseUrl: '', suggestedModelId: '' },
 ];
 
+/** Thinking effort levels the Assistant supports (UI + persisted config). */
+export type AgentThinkingLevel = 'off' | 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
+export const AGENT_THINKING_LEVELS: readonly AgentThinkingLevel[] = [
+  'off',
+  'low',
+  'medium',
+  'high',
+  'xhigh',
+  'max',
+];
+
 /** GET /agent/config response. The API key is never returned in full. */
 export interface AgentConfigResponseDto {
   /** True when baseUrl + apiKey + modelId are all usable. */
@@ -55,8 +67,8 @@ export interface AgentConfigResponseDto {
   modelId: string | null;
   /** Masked key like `••••ab12`; null when no key is stored. */
   apiKeyMasked: string | null;
-  /** True when reasoning/thinking output is requested from the model. */
-  thinkingEnabled: boolean;
+  /** Current thinking effort requested from the model. */
+  thinkingLevel: AgentThinkingLevel;
 }
 
 export interface UpdateAgentConfigDto {
@@ -66,7 +78,12 @@ export interface UpdateAgentConfigDto {
   /** Write-only: stored encrypted (AES-256-GCM). Never returned. */
   apiKey?: string;
   modelId?: string;
-  thinkingEnabled?: boolean;
+  thinkingLevel?: AgentThinkingLevel;
+}
+
+/** GET /agent/config/models response: model ids discovered on the endpoint. */
+export interface AgentModelsResponseDto {
+  models: string[];
 }
 
 /** Connectivity test can probe the stored config or an unsaved draft. */

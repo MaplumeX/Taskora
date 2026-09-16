@@ -270,8 +270,8 @@ model AgentConfig {
   baseUrl         String?
   apiKeyEncrypted String?
   modelId         String?
-  /// Request reasoning/thinking output from the model when true.
-  thinkingEnabled Boolean  @default(false)
+  /// Thinking effort requested from the model: off / low / medium / high.
+  thinkingLevel   String   @default("off")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 }

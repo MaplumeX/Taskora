@@ -57,13 +57,26 @@ describe('AgentConfigService', () => {
       baseUrl: 'https://api.deepseek.com/v1/',
       modelId: 'deepseek-chat',
       apiKeyEncrypted: encryptSecret('sk-real-key-9876', MASTER_KEY),
+      thinkingLevel: 'high',
     });
     const resolved = await ctx.service.resolveRuntimeConfig('user-1');
     expect(resolved).toEqual({
       baseUrl: 'https://api.deepseek.com/v1',
       apiKey: 'sk-real-key-9876',
       modelId: 'deepseek-chat',
+      thinkingLevel: 'high',
     });
+  });
+
+  it('resolveRuntimeConfig falls back to off for an unknown thinking level', async () => {
+    ctx.prisma.agentConfig.findUnique.mockResolvedValue({
+      baseUrl: 'https://x',
+      modelId: 'm',
+      apiKeyEncrypted: encryptSecret('k', MASTER_KEY),
+      thinkingLevel: 'ultra',
+    });
+    const resolved = await ctx.service.resolveRuntimeConfig('user-1');
+    expect(resolved?.thinkingLevel).toBe('off');
   });
 
   it('resolveRuntimeConfig degrades to null on a corrupted envelope', async () => {
@@ -132,5 +145,29 @@ describe('AgentConfigService', () => {
     } finally {
       globalThis.fetch = realFetch;
     }
+  });
+
+  it('listModels returns the stored endpoint model list', async () => {
+    ctx.prisma.agentConfig.findUnique.mockResolvedValue({
+      baseUrl: 'https://api.example.com/v1/',
+      modelId: 'model-a',
+      apiKeyEncrypted: encryptSecret('k', MASTER_KEY),
+      thinkingLevel: 'off',
+    });
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = vi.fn(async () =>
+      Response.json({ data: [{ id: 'model-a' }, { id: 'model-b' }] }),
+    );
+    try {
+      const result = await ctx.service.listModels('user-1');
+      expect(result).toEqual({ models: ['model-a', 'model-b'] });
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
+  it('listModels rejects when not configured', async () => {
+    ctx.prisma.agentConfig.findUnique.mockResolvedValue(null);
+    await expect(ctx.service.listModels('user-1')).rejects.toBeInstanceOf(BadRequestException);
   });
 });

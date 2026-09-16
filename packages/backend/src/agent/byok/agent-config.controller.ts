@@ -29,6 +29,11 @@ export class AgentConfigController {
     return config;
   }
 
+  @Get('models')
+  listModels(@Request() req: { user: { id: string } }) {
+    return this.agentConfigService.listModels(req.user.id);
+  }
+
   @Post('test')
   testConnection(@Request() req: { user: { id: string } }, @Body() body: TestAgentConfigBody) {
     return this.agentConfigService.testConnection(req.user.id, body);

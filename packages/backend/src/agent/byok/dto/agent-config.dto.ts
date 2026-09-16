@@ -1,5 +1,6 @@
-import { IsBoolean, IsOptional, IsString, MaxLength } from 'class-validator';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 
+import { AGENT_THINKING_LEVELS } from '@taskora/shared';
 import type { TestAgentConfigDto, UpdateAgentConfigDto } from '@taskora/shared';
 
 export class UpdateAgentConfigBody implements UpdateAgentConfigDto {
@@ -24,8 +25,8 @@ export class UpdateAgentConfigBody implements UpdateAgentConfigDto {
   modelId?: string;
 
   @IsOptional()
-  @IsBoolean()
-  thinkingEnabled?: boolean;
+  @IsIn([...AGENT_THINKING_LEVELS])
+  thinkingLevel?: UpdateAgentConfigDto['thinkingLevel'];
 }
 
 export class TestAgentConfigBody implements TestAgentConfigDto {
