@@ -54,6 +54,27 @@ export default function Upcoming() {
     else completeTask.mutate(item.id, { onError: () => toast.error(t('common:operationFailed')) });
   };
 
+  const renderItem = (item: FeedItem) => {
+    const isTask = item.type === 'task';
+    const taskItem = item as { projectId: string | null; areaId: string | null };
+    const selectionState =
+      isTask
+        ? expandedId === item.id ? 'expanded' : selectedId === item.id ? 'selected' : 'idle'
+        : 'idle';
+    return (
+      <FeedItemRow
+        key={item.id}
+        item={item}
+        projectTitle={isTask && taskItem.projectId ? projectMap[taskItem.projectId] : undefined}
+        areaTitle={isTask && taskItem.areaId ? areaMap[taskItem.areaId] : undefined}
+        selectionState={selectionState}
+        onToggleComplete={() => toggleComplete(item)}
+        onRowClick={isTask ? () => handleRowClick(item.id) : undefined}
+        showScheduledBadge={false}
+      />
+    );
+  };
+
   const renderDay = (day: UpcomingDay) => {
     const label = day.isTomorrow
       ? t('common:tomorrow')
@@ -71,26 +92,7 @@ export default function Upcoming() {
           <div className="min-w-4 flex-1 border-t border-border" aria-hidden="true" />
         </div>
         <div className="flex min-h-12 flex-col gap-1">
-          {day.items.map((item) => {
-            const isTask = item.type === 'task';
-            const taskItem = item as { projectId: string | null; areaId: string | null };
-            const selectionState =
-              isTask
-                ? expandedId === item.id ? 'expanded' : selectedId === item.id ? 'selected' : 'idle'
-                : 'idle';
-            return (
-              <FeedItemRow
-                key={item.id}
-                item={item}
-                projectTitle={isTask && taskItem.projectId ? projectMap[taskItem.projectId] : undefined}
-                areaTitle={isTask && taskItem.areaId ? areaMap[taskItem.areaId] : undefined}
-                selectionState={selectionState}
-                onToggleComplete={() => toggleComplete(item)}
-                onRowClick={isTask ? () => handleRowClick(item.id) : undefined}
-                showScheduledBadge={false}
-              />
-            );
-          })}
+          {day.items.map(renderItem)}
         </div>
       </div>
     );
@@ -105,7 +107,7 @@ export default function Upcoming() {
         <div className="flex flex-col gap-6">
           {layout.week.map(renderDay)}
           {layout.later.map((month) => (
-            <div key={`${month.year}-${month.month}`} className="flex flex-col gap-6">
+            <div key={`${month.year}-${month.month}`} className="flex flex-col gap-1">
               <h2 className="pt-4 font-display text-lg font-semibold tracking-tight">
                 {month.headingKind === 'range'
                   ? `${month.month}/${month.rangeStartDay}-${month.month}/${month.rangeEndDay}`
@@ -116,8 +118,8 @@ export default function Upcoming() {
                         : { month: 'long' },
                     ).format(new Date(month.year, month.month - 1, 1))}
               </h2>
-              <div className="flex min-h-12 flex-col gap-6">
-                {month.days.map(renderDay)}
+              <div className="flex min-h-12 flex-col gap-1">
+                {month.days.flatMap((day) => day.items).map(renderItem)}
               </div>
             </div>
           ))}
