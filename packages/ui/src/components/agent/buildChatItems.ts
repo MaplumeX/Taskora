@@ -71,10 +71,17 @@ function toolCallsOf(content: unknown): ToolCallBlock[] {
  *   (matched by toolCallId) decides done/error and carries the result text
  * - orphan toolResult messages (no matching call, e.g. blocked before the
  *   assistant message was persisted) render as inline error text
+ * - `agentActive` keeps not-yet-resulted tool cards in the running state:
+ *   SSE delivery order (message_end → tool_execution_start → … →
+ *   tool_execution_end → toolResult message_end) leaves gaps where the call
+ *   has neither a result nor a running marker; those are in-flight, not
+ *   failed. Only a run that already ended without persisting a result is an
+ *   interrupted run and renders as error.
  */
 export function buildChatItems(
   messages: AgentMessageJson[],
   runningToolCallIds: ReadonlySet<string> = new Set(),
+  agentActive = false,
 ): ChatItem[] {
   const items: ChatItem[] = [];
   const results = new Map<string, { isError: boolean; text: string }>();
@@ -111,9 +118,9 @@ export function buildChatItems(
           ? result.isError
             ? 'error'
             : 'done'
-          : runningToolCallIds.has(call.id)
+          : runningToolCallIds.has(call.id) || agentActive
             ? 'running'
-            : 'error'; // interrupted before the result was persisted
+            : 'error'; // the run already ended without persisting a result
         items.push({
           kind: 'tool',
           id: `${id}-c-${call.id}`,

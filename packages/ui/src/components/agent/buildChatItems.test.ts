@@ -118,6 +118,22 @@ describe('buildChatItems', () => {
     expect(buildChatItems(messages, new Set())[0]).toMatchObject({ status: 'error' });
   });
 
+  it('treats a result-less tool call as running while the agent is streaming', () => {
+    // SSE delivery order leaves gaps where the tool card exists in the cache
+    // but neither its tool_execution_start nor its toolResult message has
+    // arrived yet (and a gap between tool_execution_end and the toolResult
+    // message_end). While agentActive, those must render as running, not error.
+    const messages: AgentMessageJson[] = [
+      {
+        role: 'assistant',
+        content: [{ type: 'toolCall', id: 'c4', name: 'list_tags', arguments: {} }],
+      },
+    ];
+    expect(buildChatItems(messages, new Set(), true)[0]).toMatchObject({
+      status: 'running',
+    });
+  });
+
   it('surfaces orphan tool results as inline errors', () => {
     const items = buildChatItems([
       {
