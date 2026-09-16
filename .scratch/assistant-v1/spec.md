@@ -7,7 +7,7 @@ Taskora 对话式助手 V1。架构决策见 `docs/adr/0003-backend-agent-with-p
 - **运行时**：`@earendil-works/pi-agent-core` + `@earendil-works/pi-ai`，Agent 实例跑在 NestJS 新增 `agent` 模块内。
 - **工具权限**：全量读写用户数据，工具直接调用现有 service（areas / projects / tasks / subtasks / tags / tag-groups / project-headings / feed），以请求用户 `userId` 隔离。
 - **破坏性操作确认**：删除、清空 Trash、Area/Project 结构变更类工具调用经 `beforeToolCall` 拦截，前端展示批准卡片（工具名 + 参数 + 批准/拒绝），批准后放行续跑。
-- **BYOK**：设置页配置 [OI] 兼容端点三件套（Base URL + API Key + Model ID），附 provider 预设（[OI] / DeepSeek / OpenRouter / Ollama / 自定义）填充默认值。API Key 以 AES-256-GCM 加密存 Postgres，主密钥来自环境变量 `AGENT_ENCRYPTION_KEY`。
+- **BYOK**：设置页配置 OpenAI 兼容端点三件套（Base URL + API Key + Model ID），附 provider 预设（OpenAI / DeepSeek / OpenRouter / Ollama / 自定义）填充默认值。API Key 以 AES-256-GCM 加密存 Postgres，主密钥来自环境变量 `AGENT_ENCRYPTION_KEY`。
 - **会话**：多 Conversation（ChatGPT 式列表 + 切换），消息历史持久化，服务重启可恢复上下文；标题由 LLM 自动生成，失败降级为首条用户消息截断。
 - **流式传输**：SSE 推送 pi-agent-core 事件（`message_update` 文本增量、`tool_execution_*`）；用户输入走普通 POST。
 - **UI**：`packages/ui` 新增独立聊天视图（路由 `/agent`），web 与 desktop 同时接入；系统提示词要求回复语言跟随用户消息语言。

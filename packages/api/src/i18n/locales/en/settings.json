@@ -39,7 +39,7 @@
   "assistantSettings": "Assistant Settings",
   "assistantProvider": "Provider",
   "assistantBaseUrl": "Base URL",
-  "assistantBaseUrlHint": "[OI]-compatible API endpoint, e.g. https://api.deepseek.com/v1",
+  "assistantBaseUrlHint": "OpenAI-compatible API endpoint, e.g. https://api.deepseek.com/v1",
   "assistantApiKey": "API Key",
   "assistantApiKeyHint": "Stored encrypted (AES-256-GCM). Leave empty to keep the saved key.",
   "assistantModelId": "Model ID",

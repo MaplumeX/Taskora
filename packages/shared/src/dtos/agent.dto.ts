@@ -15,13 +15,13 @@ export interface AgentProviderPreset {
 }
 
 /**
- * Presets for [OI]-compatible endpoints. `custom` has no defaults — the user
+ * Presets for OpenAI-compatible endpoints. `custom` has no defaults — the user
  * fills all three fields manually.
  */
 export const AGENT_PROVIDER_PRESETS: AgentProviderPreset[] = [
   {
     id: 'openai',
-    label: '[OI]',
+    label: 'OpenAI',
     baseUrl: 'https://api.openai.com/v1',
     suggestedModelId: 'gpt-4o-mini',
   },

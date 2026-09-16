@@ -39,7 +39,7 @@
   "assistantSettings": "助手设置",
   "assistantProvider": "服务商",
   "assistantBaseUrl": "Base URL",
-  "assistantBaseUrlHint": "[OI] 兼容的 API 端点，例如 https://api.deepseek.com/v1",
+  "assistantBaseUrlHint": "OpenAI 兼容的 API 端点，例如 https://api.deepseek.com/v1",
   "assistantApiKey": "API Key",
   "assistantApiKeyHint": "以 AES-256-GCM 加密存储。留空表示保留已保存的密钥。",
   "assistantModelId": "模型 ID",

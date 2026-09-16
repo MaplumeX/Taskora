@@ -94,7 +94,7 @@ export class AgentConfigService {
   }
 
   /**
-   * Probe an [OI]-compatible endpoint. Probes the stored config unless the
+   * Probe an OpenAI-compatible endpoint. Probes the stored config unless the
    * request carries draft values (so the settings page can test before save).
    */
   async testConnection(

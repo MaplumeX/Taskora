@@ -7,7 +7,7 @@
  *   2. the transcript is persisted (restart-safe),
  *   3. the agent rebuilds state from the persisted messages.
  *
- * Requires a reachable [OI]-compatible endpoint via env:
+ * Requires a reachable OpenAI-compatible endpoint via env:
  *   AGENT_DEV_BASE_URL, AGENT_DEV_API_KEY, AGENT_DEV_MODEL
  * plus DATABASE_URL and AGENT_ENCRYPTION_KEY.
  *

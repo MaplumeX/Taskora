@@ -5,7 +5,7 @@ import { normalizeBaseUrl } from '../byok/agent-config.service';
 
 /**
  * Build a custom `Model<'openai-completions'>` that talks to an
- * [OI]-compatible endpoint configured by the user (BYOK). The provider id is
+ * OpenAI-compatible endpoint configured by the user (BYOK). The provider id is
  * a synthetic string — pi-ai treats unknown providers generically as long as
  * `baseUrl` and `api: 'openai-completions'` are set.
  *
