@@ -22,8 +22,14 @@ import { cn } from '@/lib/utils';
 import type { ConversationDto } from '@taskora/shared';
 import { useCreateConversation, useDeleteConversation, useRenameConversation } from '@taskora/api';
 
-/** Left-hand conversation list (ChatGPT-style): create / switch / rename / delete. */
-export function ConversationSidebar({
+/**
+ * Conversation list: create / switch / rename / delete.
+ *
+ * Rendered inside a slide-in drawer (ChatGPT-style): the list stays hidden
+ * until the user summons it, so it never occupies a permanent column.
+ * `onSelect` closes the drawer after a switch.
+ */
+export function ConversationList({
   conversations,
   activeId,
   onSelect,
@@ -41,7 +47,7 @@ export function ConversationSidebar({
   const [deleting, setDeleting] = useState<ConversationDto | null>(null);
 
   return (
-    <div className="flex h-full w-64 shrink-0 flex-col border-r border-border bg-muted/30">
+    <div className="flex h-full min-h-0 flex-col">
       <div className="p-3">
         <Button
           className="w-full justify-start gap-2"
