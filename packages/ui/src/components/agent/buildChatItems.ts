@@ -21,7 +21,8 @@ interface ToolCallBlock {
   arguments: Record<string, unknown>;
 }
 
-function textOf(content: unknown): string {
+/** Concatenate text blocks (or a plain string) of a message content payload. */
+export function textOf(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     return content
@@ -30,6 +31,14 @@ function textOf(content: unknown): string {
       .join('');
   }
   return '';
+}
+
+/** One-line "k: v, k2: v2" summary of tool-call arguments (null/empty skipped). */
+export function summarizeArgs(args: Record<string, unknown>): string {
+  return Object.entries(args)
+    .filter(([, v]) => v !== null && v !== undefined && v !== '')
+    .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
+    .join(', ');
 }
 
 function toolCallsOf(content: unknown): ToolCallBlock[] {

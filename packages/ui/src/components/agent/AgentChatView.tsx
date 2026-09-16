@@ -23,17 +23,6 @@ import { ApprovalCard } from './ApprovalCard';
 import { AssistantBubble, ErrorBubble, ToolCallCard, TypingIndicator, UserBubble } from './bubbles';
 import { useAgentStream } from './useAgentStream';
 
-function textOf(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content
-      .filter((c): c is { type: string; text?: string } => c?.type === 'text')
-      .map((c) => c.text ?? '')
-      .join('');
-  }
-  return '';
-}
-
 /**
  * Right-hand side of the Assistant page: message stream + tool cards +
  * approval cards + composer for one conversation.
@@ -185,5 +174,3 @@ export function AgentChatView({ conversationId }: { conversationId: string }) {
     </div>
   );
 }
-
-export { textOf };

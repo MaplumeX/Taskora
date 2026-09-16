@@ -1,6 +1,7 @@
 {
   "assistant": "Assistant",
   "conversations": "Conversations",
+  "noConversations": "No conversations yet",
   "newConversation": "New conversation",
   "renameConversation": "Rename",
   "deleteConversation": "Delete",

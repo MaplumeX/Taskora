@@ -13,7 +13,7 @@ import {
   testAgentConfig,
   updateAgentConfig,
 } from '@/api/agent.api';
-import type { TestAgentConfigDto, UpdateAgentConfigDto } from '@taskora/shared';
+import type { ApprovalDecision, TestAgentConfigDto, UpdateAgentConfigDto } from '@taskora/shared';
 
 export const agentKeys = {
   config: ['agent', 'config'] as const,
@@ -120,7 +120,7 @@ export function useResolveApproval(conversationId: string) {
       decision,
     }: {
       approvalId: string;
-      decision: 'approve' | 'reject';
+      decision: ApprovalDecision;
     }) => resolveApproval(conversationId, approvalId, decision),
     onSuccess: (approval) => {
       void queryClient.setQueryData<import('@taskora/shared').AgentApprovalDto[]>(

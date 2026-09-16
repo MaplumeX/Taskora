@@ -1,6 +1,7 @@
 import { apiClient } from './client';
 import type {
   AgentConfigResponseDto,
+  ApprovalDecision,
   AgentConfigTestResultDto,
   AgentApprovalDto,
   ConversationDto,
@@ -68,7 +69,7 @@ export function listPendingApprovals(conversationId: string): Promise<AgentAppro
 export function resolveApproval(
   conversationId: string,
   approvalId: string,
-  decision: 'approve' | 'reject',
+  decision: ApprovalDecision,
 ): Promise<AgentApprovalDto> {
   return apiClient
     .post<AgentApprovalDto>(`/agent/conversations/${conversationId}/approvals/${approvalId}`, {

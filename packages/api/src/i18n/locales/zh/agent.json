@@ -1,6 +1,7 @@
 {
   "assistant": "助手",
   "conversations": "会话",
+  "noConversations": "还没有会话",
   "newConversation": "新建会话",
   "renameConversation": "重命名",
   "deleteConversation": "删除",

@@ -23,6 +23,8 @@ interface RuntimeEntry {
   agent: Agent;
   userId: string;
   conversationId: string;
+  /** Decrypted BYOK key, needed for the one-shot title LLM call. */
+  apiKey: string;
   toolMap: Map<string, TaskoraAgentTool>;
   /** Next ConversationMessage.seq to persist. */
   nextSeq: number;
@@ -69,8 +71,22 @@ export class AgentRuntimeService implements OnModuleDestroy {
 
   /** True while the conversation's agent is streaming (or waiting on approval). */
   async isActive(userId: string, conversationId: string): Promise<boolean> {
-    const entry = await this.findOwnedEntry(userId, conversationId);
-    return entry?.agent.state.isStreaming ?? false;
+    const entry = this.entries.get(conversationId);
+    return entry?.userId === userId ? entry.agent.state.isStreaming : false;
+  }
+
+  /** Drop every runtime entry of a user so fresh BYOK config takes effect. */
+  resetForUser(userId: string): void {
+    for (const [conversationId, entry] of this.entries) {
+      if (entry.userId !== userId) continue;
+      try {
+        entry.agent.abort();
+      } catch {
+        // aborting an idle agent is a no-op that may throw; ignore.
+      }
+      this.entries.delete(conversationId);
+      void this.approvals.rejectAllPending(conversationId).catch(() => undefined);
+    }
   }
 
   /** Tear down the runtime for a conversation (delete/abandon). */
@@ -100,10 +116,7 @@ export class AgentRuntimeService implements OnModuleDestroy {
     }
   }
 
-  private async findOwnedEntry(
-    userId: string,
-    conversationId: string,
-  ): Promise<RuntimeEntry | undefined> {
+  private findOwnedEntry(userId: string, conversationId: string): RuntimeEntry | undefined {
     const entry = this.entries.get(conversationId);
     return entry && entry.userId === userId ? entry : undefined;
   }
@@ -150,6 +163,7 @@ export class AgentRuntimeService implements OnModuleDestroy {
       agent,
       userId,
       conversationId,
+      apiKey: config.apiKey,
       toolMap,
       nextSeq,
       queue: Promise.resolve(),
@@ -284,10 +298,16 @@ export class AgentRuntimeService implements OnModuleDestroy {
     try {
       const streamFn = await loadCompletionsStreamFn();
       const model = entry.agent.state.model as Model<'openai-completions'>;
-      const stream = streamFn(model, {
-        systemPrompt: TITLE_SYSTEM_PROMPT,
-        messages: [{ role: 'user', content: userText, timestamp: Date.now() }],
-      });
+      const stream = streamFn(
+        model,
+        {
+          systemPrompt: TITLE_SYSTEM_PROMPT,
+          messages: [{ role: 'user', content: userText, timestamp: Date.now() }],
+        },
+        // The synthetic provider has no ambient key: pass the BYOK key or
+        // streamSimple throws synchronously.
+        { apiKey: entry.apiKey },
+      );
       const message = await stream.result();
       const text = message.content
         .filter((c): c is { type: 'text'; text: string } => c.type === 'text')

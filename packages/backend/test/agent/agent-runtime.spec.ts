@@ -263,6 +263,28 @@ describe('AgentRuntimeService', () => {
     });
   });
 
+  it('passes the BYOK api key to the title-generation LLM call', async () => {
+    const calls: unknown[] = [];
+    const message = makeAssistantMessage();
+    const recorder = (_model: unknown, _context: unknown, options?: unknown) => {
+      calls.push(options);
+      return scriptedStream(message)() as never;
+    };
+    setFakeStream(recorder as never);
+    harness = createHarness({});
+
+    await harness.runtime.sendMessage(USER, CONV, 'Hello');
+    await vi.waitFor(() => {
+      expect(harness.stored.title).toBeTruthy();
+    });
+
+    // Chat call + title call; both must carry the BYOK key (the synthetic
+    // provider resolves keys only through explicit options).
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+    const titleCall = calls[calls.length - 1] as { apiKey?: string };
+    expect(titleCall.apiKey).toBe('sk-test');
+  });
+
   it('rebuilds agent state from persisted messages', async () => {
     const history: AgentMessage[] = [
       { role: 'user', content: 'previous question', timestamp: 1 },

@@ -107,7 +107,7 @@ export function ConversationSidebar({
         ))}
         {conversations.length === 0 ? (
           <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-            {t('agent:untitled')}
+            {t('agent:noConversations')}
           </p>
         ) : null}
       </nav>

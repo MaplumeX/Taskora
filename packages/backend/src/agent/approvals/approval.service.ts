@@ -99,7 +99,24 @@ export class AgentApprovalService {
       where: { conversationId, conversation: { userId }, status: 'pending' },
       orderBy: { createdAt: 'asc' },
     });
-    return rows.map((row) => this.toDto(row));
+    const fresh: AgentApproval[] = [];
+    const deadline = Date.now() - APPROVAL_TIMEOUT_MS;
+    for (const row of rows) {
+      // Rows left pending by a restart (no waiter to expire them) go stale:
+      // expire them here so the UI never shows an actionable dead card.
+      if (row.createdAt.getTime() < deadline) {
+        await this.finalize(row.id, 'expired').catch(() => undefined);
+        continue;
+      }
+      // Skip rows whose waiter died with a restart — nothing can act on them
+      // anymore, so surface only approvals that can still be resolved.
+      if (!this.waiters.has(row.id)) {
+        await this.finalize(row.id, 'expired').catch(() => undefined);
+        continue;
+      }
+      fresh.push(row);
+    }
+    return fresh.map((row) => this.toDto(row));
   }
 
   /**

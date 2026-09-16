@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { AlertTriangle, Check, Loader2, X } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
-import type { AgentApprovalDto } from '@taskora/shared';
+import type { AgentApprovalDto, ApprovalDecision } from '@taskora/shared';
 
 /**
  * Approval card for a destructive tool call (issue 04): tool name + argument
@@ -15,7 +15,7 @@ export function ApprovalCard({
   pending,
 }: {
   approval: AgentApprovalDto;
-  onResolve: (decision: 'approve' | 'reject') => void;
+  onResolve: (decision: ApprovalDecision) => void;
   pending: boolean;
 }) {
   const { t } = useTranslation(['agent']);

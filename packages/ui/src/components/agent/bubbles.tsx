@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next';
 import { Check, Loader2, Wrench, X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import type { ChatItem } from './buildChatItems';
+import { summarizeArgs, type ChatItem } from './buildChatItems';
 
 export function UserBubble({ text }: { text: string }) {
   const { t } = useTranslation(['agent']);
@@ -40,10 +40,7 @@ export function ErrorBubble({ text }: { text: string }) {
 
 export function ToolCallCard({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
   const { t } = useTranslation(['agent']);
-  const argSummary = Object.entries(item.args)
-    .filter(([, v]) => v !== null && v !== undefined && v !== '')
-    .map(([k, v]) => `${k}: ${typeof v === 'object' ? JSON.stringify(v) : String(v)}`)
-    .join(', ');
+  const argSummary = summarizeArgs(item.args);
 
   return (
     <div className="flex justify-start">

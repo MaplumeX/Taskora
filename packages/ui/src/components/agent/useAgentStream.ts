@@ -1,19 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
 import { agentKeys, subscribeAgentEvents } from '@taskora/api';
 import type { AgentMessageJson, ConversationMessageDto } from '@taskora/shared';
-
-function textOf(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (Array.isArray(content)) {
-    return content
-      .filter((c): c is { type: string; text?: string } => c?.type === 'text')
-      .map((c) => c.text ?? '')
-      .join('');
-  }
-  return '';
-}
+import { textOf } from './buildChatItems';
 
 export interface AgentStreamState {
   /** Partial assistant text of the current run (typing effect). */
@@ -131,16 +121,6 @@ export function useAgentStream(conversationId: string | null): AgentStreamState 
 
     return dispose;
   }, [conversationId, appendMessage, queryClient]);
-
-  // Keep track of the latest connection attempt to avoid stale setState
-  // after switching conversations.
-  const mountedRef = useRef(true);
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-    };
-  }, []);
 
   return { streamingText, runningToolCallIds, agentActive, connected, lastError };
 }
