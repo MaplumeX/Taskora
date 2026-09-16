@@ -14,7 +14,12 @@ import {
   testAgentConfig,
   updateAgentConfig,
 } from '@/api/agent.api';
-import type { ApprovalDecision, TestAgentConfigDto, UpdateAgentConfigDto } from '@taskora/shared';
+import type {
+  ApprovalDecision,
+  ConversationDto,
+  TestAgentConfigDto,
+  UpdateAgentConfigDto,
+} from '@taskora/shared';
 
 import { areaKeys } from './useAreas';
 import { feedKeys } from './useFeed';
@@ -102,6 +107,14 @@ export function useCreateConversation() {
   return useMutation({
     mutationFn: (title?: string) => createConversation(title),
     onSuccess: (conversation) => {
+      // Optimistically prepend before invalidating: callers switch to the new
+      // conversation on success, and the fallback "select most recent" effect
+      // would otherwise see a stale list (refetch still in flight) and switch
+      // back to the previous conversation.
+      queryClient.setQueryData<ConversationDto[]>(
+        agentKeys.conversations,
+        (current) => [conversation, ...(current ?? [])],
+      );
       void queryClient.invalidateQueries({ queryKey: agentKeys.conversations });
       return conversation;
     },
