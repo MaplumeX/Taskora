@@ -499,9 +499,99 @@ export class AgentToolsService {
         },
       }),
 
+      // -------------------------------------------------------------- reorder
+      defineTool({
+        name: 'reorder_tasks',
+        label: 'Reorder tasks',
+        description:
+          'Set the manual sort order of tasks by passing their ids in the desired order (first id becomes the topmost task). Only changes ordering; titles, dates and assignments stay untouched. Fetch ids first with list_tasks.',
+        parameters: Type.Object({
+          orderedIds: Type.Array(Type.String(), { description: 'Task ids in the new order' }),
+        }),
+        execute: async (_id, params) => {
+          await this.tasks.reorder(userId, params.orderedIds);
+          return textResult({ reordered: params.orderedIds.length });
+        },
+      }),
+      defineTool({
+        name: 'reorder_projects',
+        label: 'Reorder projects',
+        description:
+          'Set the manual sort order of projects by passing their ids in the desired order (first id becomes the topmost project). Fetch ids first with list_projects.',
+        parameters: Type.Object({
+          orderedIds: Type.Array(Type.String(), { description: 'Project ids in the new order' }),
+        }),
+        execute: async (_id, params) => {
+          await this.projects.reorder(userId, params.orderedIds);
+          return textResult({ reordered: params.orderedIds.length });
+        },
+      }),
+      defineTool({
+        name: 'reorder_areas',
+        label: 'Reorder areas',
+        description:
+          'Set the manual sort order of areas by passing their ids in the desired order (first id becomes the topmost area). Fetch ids first with list_areas.',
+        parameters: Type.Object({
+          orderedIds: Type.Array(Type.String(), { description: 'Area ids in the new order' }),
+        }),
+        execute: async (_id, params) => {
+          await this.areas.reorder(userId, params.orderedIds);
+          return textResult({ reordered: params.orderedIds.length });
+        },
+      }),
+      defineTool({
+        name: 'reorder_subtasks',
+        label: 'Reorder subtasks',
+        description:
+          'Set the order of all subtasks of one task by passing the subtask ids in the desired order. Fetch ids first with get_task.',
+        parameters: Type.Object({
+          taskId: Type.String(),
+          orderedIds: Type.Array(Type.String(), { description: 'Subtask ids in the new order' }),
+        }),
+        execute: async (_id, params) => {
+          await this.subtasks.reorder(userId, params.taskId, params.orderedIds);
+          return textResult({ taskId: params.taskId, reordered: params.orderedIds.length });
+        },
+      }),
+      defineTool({
+        name: 'reorder_project_layout',
+        label: 'Reorder project layout',
+        description:
+          'Reorder a project: sets the order of its headings and which tasks sit under which heading. The payload must cover the project EXACTLY: every active heading appears once as a group (group order = heading order) and every visible task (active, not trashed) appears exactly once either in a group or in ungroupedTaskIds. Fetch the current ids with get_project first; the call fails if any id is missing, unknown or duplicated. Nothing is deleted and the order can be changed again at any time.',
+        parameters: Type.Object({
+          projectId: Type.String(),
+          ungroupedTaskIds: Type.Array(Type.String(), {
+            description: 'Visible task ids placed directly under the project, in order',
+          }),
+          groups: Type.Array(
+            Type.Object({
+              headingId: Type.String(),
+              taskIds: Type.Array(Type.String(), {
+                description: 'Visible task ids under this heading, in order',
+              }),
+            }),
+            { description: 'Headings in the new order, each with its ordered tasks' },
+          ),
+        }),
+        execute: async (_id, params) => {
+          await this.projectHeadings.reorder(userId, {
+            projectId: params.projectId,
+            ungroupedTaskIds: params.ungroupedTaskIds,
+            groups: params.groups,
+          });
+          return textResult({
+            projectId: params.projectId,
+            headings: params.groups.length,
+            ungroupedTasks: params.ungroupedTaskIds.length,
+            groupedTasks: params.groups.reduce((sum, group) => sum + group.taskIds.length, 0),
+          });
+        },
+      }),
+
       // ---------------------------------------------------------- dangerous
       // Only irreversible operations land here; everything above is either
-      // read-only or reversible (soft delete / re-editable structure).
+      // read-only or reversible (soft delete / re-editable structure /
+      // reorder).
       defineTool({
         name: 'delete_task',
         label: 'Delete task (to trash)',

@@ -19,6 +19,7 @@ function createService() {
       uncomplete: vi.fn().mockResolvedValue({ id: 't1' }),
       remove: vi.fn().mockResolvedValue({ id: 't1', trashedAt: new Date() }),
       restore: vi.fn().mockResolvedValue({ id: 't1' }),
+      reorder: vi.fn().mockResolvedValue(undefined),
     },
     projects: {
       findAll: vi.fn().mockResolvedValue([]),
@@ -29,6 +30,7 @@ function createService() {
       uncomplete: vi.fn().mockResolvedValue({ id: 'p1', status: 'ACTIVE' }),
       remove: vi.fn().mockResolvedValue({ id: 'p1', trashedAt: new Date() }),
       restore: vi.fn().mockResolvedValue({ id: 'p1' }),
+      reorder: vi.fn().mockResolvedValue(undefined),
     },
     areas: {
       findAll: vi.fn().mockResolvedValue([]),
@@ -36,6 +38,7 @@ function createService() {
       create: vi.fn().mockResolvedValue({ id: 'a1', title: 'Area' }),
       update: vi.fn().mockResolvedValue({ id: 'a1', title: 'Renamed' }),
       remove: vi.fn().mockResolvedValue({}),
+      reorder: vi.fn().mockResolvedValue(undefined),
     },
     tags: {
       findAll: vi.fn().mockResolvedValue([]),
@@ -46,6 +49,7 @@ function createService() {
     subtasks: {
       create: vi.fn().mockResolvedValue({ id: 's1', title: 'Step', taskId: 't1' }),
       update: vi.fn().mockResolvedValue({ id: 's1', title: 'Step', status: 'COMPLETED' }),
+      reorder: vi.fn().mockResolvedValue(undefined),
     },
     projectHeadings: {
       findAll: vi.fn().mockResolvedValue([]),
@@ -53,6 +57,7 @@ function createService() {
       create: vi.fn().mockResolvedValue({ id: 'h1', title: 'Heading' }),
       update: vi.fn().mockResolvedValue({ id: 'h1', title: 'Renamed' }),
       remove: vi.fn().mockResolvedValue({}),
+      reorder: vi.fn().mockResolvedValue(undefined),
     },
     feed: {
       findAll: vi.fn().mockResolvedValue([]),
@@ -106,6 +111,11 @@ describe('AgentToolsService', () => {
       'create_subtask',
       'create_tag',
       'restore_task',
+      'reorder_tasks',
+      'reorder_projects',
+      'reorder_areas',
+      'reorder_subtasks',
+      'reorder_project_layout',
     ]) {
       expect(names).toContain(expected);
     }
@@ -117,8 +127,10 @@ describe('AgentToolsService', () => {
       expect(tool(name).destructive, `${name} should be destructive`).toBe(true);
     }
     // Everything else — including restorable soft deletes (delete_task /
-    // delete_project) and re-editable structure changes — must run without
-    // an approval card so the approval signal stays meaningful.
+    // delete_project), re-editable structure changes and reorder tools
+    // (reorder_project_layout requires an exact id set, so nothing can be
+    // lost) — must run without an approval card so the approval signal
+    // stays meaningful.
     for (const name of tools.map((t) => t.name)) {
       if (['empty_trash', 'delete_area', 'delete_project_heading'].includes(name)) continue;
       expect(tool(name).destructive, `${name} should not be destructive`).toBeFalsy();
@@ -229,6 +241,37 @@ describe('AgentToolsService', () => {
       properties: { view: { anyOf?: unknown } };
     };
     expect(schema.properties.view.anyOf).toBeTruthy();
+  });
+
+  it('reorder tools forward ordered ids scoped to the user', async () => {
+    await tool('reorder_tasks').execute('call-1', { orderedIds: ['t2', 't1'] } as never);
+    expect(service.tasks.reorder).toHaveBeenCalledWith('user-1', ['t2', 't1']);
+
+    await tool('reorder_projects').execute('call-2', { orderedIds: ['p2', 'p1'] } as never);
+    expect(service.projects.reorder).toHaveBeenCalledWith('user-1', ['p2', 'p1']);
+
+    await tool('reorder_areas').execute('call-3', { orderedIds: ['a1'] } as never);
+    expect(service.areas.reorder).toHaveBeenCalledWith('user-1', ['a1']);
+
+    await tool('reorder_subtasks').execute('call-4', {
+      taskId: 't1',
+      orderedIds: ['s2', 's1'],
+    } as never);
+    expect(service.subtasks.reorder).toHaveBeenCalledWith('user-1', 't1', ['s2', 's1']);
+  });
+
+  it('reorder_project_layout forwards the full layout payload', async () => {
+    const result = await tool('reorder_project_layout').execute('call-1', {
+      projectId: 'p1',
+      ungroupedTaskIds: ['t1'],
+      groups: [{ headingId: 'h1', taskIds: ['t2', 't3'] }],
+    } as never);
+    expect(service.projectHeadings.reorder).toHaveBeenCalledWith('user-1', {
+      projectId: 'p1',
+      ungroupedTaskIds: ['t1'],
+      groups: [{ headingId: 'h1', taskIds: ['t2', 't3'] }],
+    });
+    expect((result.content[0] as { text: string }).text).toContain('"groupedTasks": 2');
   });
 
   it('errors propagate as thrown exceptions, not error text', async () => {

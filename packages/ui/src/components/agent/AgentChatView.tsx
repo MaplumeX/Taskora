@@ -57,8 +57,9 @@ export function AgentChatView({ conversationId }: { conversationId: string }) {
       buildChatItems(
         messages.map((m) => m.message),
         stream.runningToolCallIds,
+        stream.agentActive,
       ),
-    [messages, stream.runningToolCallIds],
+    [messages, stream.runningToolCallIds, stream.agentActive],
   );
 
   const handleScroll = () => {
