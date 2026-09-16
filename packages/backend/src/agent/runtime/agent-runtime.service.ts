@@ -5,7 +5,7 @@ import type { Model } from '@earendil-works/pi-ai';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AgentSseEvent, AgentMessageJson } from '@taskora/shared';
 import { AgentConfigService } from '../byok/agent-config.service';
-import { AgentToolsService } from '../tools/agent-tools';
+import { AgentToolsService, isReadOnlyToolName } from '../tools/agent-tools';
 import type { TaskoraAgentTool } from '../tools/taskora-tool';
 import { AgentApprovalService } from '../approvals/approval.service';
 import { ConversationsService } from '../conversations.service';
@@ -266,6 +266,12 @@ export class AgentRuntimeService implements OnModuleDestroy {
           toolName: event.toolName,
           isError: event.isError,
         });
+        // Mutating tools bypass every REST mutation hook, so the client's
+        // domain caches (projects/tasks/…) would stay stale until a manual
+        // reload. Tell it to refetch right away.
+        if (!event.isError && !isReadOnlyToolName(event.toolName)) {
+          emit({ type: 'data_changed', toolName: event.toolName });
+        }
         break;
       default:
         break;

@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { QueryClient } from '@tanstack/react-query';
 
 import {
   createConversation,
@@ -15,6 +16,14 @@ import {
 } from '@/api/agent.api';
 import type { ApprovalDecision, TestAgentConfigDto, UpdateAgentConfigDto } from '@taskora/shared';
 
+import { areaKeys } from './useAreas';
+import { feedKeys } from './useFeed';
+import { projectHeadingKeys } from './useProjectHeadings';
+import { projectKeys } from './useProjects';
+import { tagGroupKeys } from './useTagGroups';
+import { tagKeys } from './useTags';
+import { taskKeys } from './useTasks';
+
 export const agentKeys = {
   config: ['agent', 'config'] as const,
   conversations: ['agent', 'conversations'] as const,
@@ -23,6 +32,39 @@ export const agentKeys = {
   approvals: (conversationId: string) =>
     ['agent', 'conversations', conversationId, 'approvals'] as const,
 };
+
+/**
+ * Domain query families a mutating Assistant tool can dirty. Lists use the
+ * plural key objects, detail queries the singular prefixes (`['project', id]`,
+ * …). The agent writes through backend services directly, bypassing every
+ * REST mutation hook, so these caches only stay fresh via explicit
+ * invalidation.
+ */
+const domainQueryKeys: readonly (readonly unknown[])[] = [
+  areaKeys.all,
+  ['area'],
+  projectKeys.all,
+  ['project'],
+  taskKeys.all,
+  ['task'],
+  tagKeys.all,
+  ['tag'],
+  tagGroupKeys.all,
+  ['tag-group'],
+  projectHeadingKeys.all,
+  feedKeys.all,
+];
+
+/**
+ * Invalidate all domain caches after the Assistant changed data (SSE
+ * `data_changed`). Refetches what is mounted; the rest is marked stale for
+ * the next mount.
+ */
+export function invalidateDomainData(queryClient: QueryClient): void {
+  for (const queryKey of domainQueryKeys) {
+    void queryClient.invalidateQueries({ queryKey: [...queryKey] });
+  }
+}
 
 // ------------------------------------------------------------------- config
 

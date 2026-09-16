@@ -151,6 +151,8 @@ export type AgentSseEvent =
     }
   | { type: 'agent_start' }
   | { type: 'agent_end' }
+  /** A mutating tool just changed the user's data; refetch domain caches. */
+  | { type: 'data_changed'; toolName: string }
   | { type: 'approval_request'; approval: AgentApprovalDto }
   | { type: 'approval_resolved'; approval: AgentApprovalDto }
   | { type: 'conversation_updated'; conversation: ConversationDto }

@@ -50,6 +50,17 @@ const scheduledTypeSchema = Type.Union([
 // eslint-disable-next-line @typescript-eslint/no-explicit-any -- tools are a heterogeneous set by design
 export type AnyAgentTool = TaskoraAgentTool<any>;
 
+/**
+ * Read-only tools are named `list_*` / `get_*` / `search_*`; every other
+ * tool mutates the user's data. The runtime uses this to emit `data_changed`
+ * SSE events so clients can refetch their domain caches.
+ */
+const READ_ONLY_TOOL_NAME = /^(list_|get_|search_)/;
+
+export function isReadOnlyToolName(name: string): boolean {
+  return READ_ONLY_TOOL_NAME.test(name);
+}
+
 @Injectable()
 export class AgentToolsService {
   constructor(

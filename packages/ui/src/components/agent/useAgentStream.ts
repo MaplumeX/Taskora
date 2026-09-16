@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 
-import { agentKeys, subscribeAgentEvents } from '@taskora/api';
+import { agentKeys, invalidateDomainData, subscribeAgentEvents } from '@taskora/api';
 import type { AgentMessageJson, ConversationMessageDto } from '@taskora/shared';
 import { textOf, thinkingOf } from './buildChatItems';
 
@@ -117,6 +117,11 @@ export function useAgentStream(conversationId: string | null): AgentStreamState 
             // Reconcile with the durable store (seq, ordering, title).
             void queryClient.invalidateQueries({ queryKey: agentKeys.messages(conversationId) });
             void queryClient.invalidateQueries({ queryKey: agentKeys.conversations });
+            break;
+          case 'data_changed':
+            // A mutating tool wrote through the backend services; refresh
+            // the domain caches (sidebar, buckets, detail pages) live.
+            invalidateDomainData(queryClient);
             break;
           case 'approval_request':
           case 'approval_resolved':
