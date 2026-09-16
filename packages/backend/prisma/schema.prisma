@@ -8,21 +8,23 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
-  passwordHash String
-  displayName  String?
-  avatarUrl    String?
-  preferences  Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-  tasks         Task[]
-  projects      Project[]
-  areas         Area[]
-  tags          Tag[]
-  tagGroups     TagGroup[]
+  id              String           @id @default(uuid())
+  email           String           @unique
+  passwordHash    String
+  displayName     String?
+  avatarUrl       String?
+  preferences     Json?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  tasks           Task[]
+  projects        Project[]
+  areas           Area[]
+  tags            Tag[]
+  tagGroups       TagGroup[]
   projectHeadings ProjectHeading[]
-  refreshTokens RefreshToken[]
+  refreshTokens   RefreshToken[]
+  agentConfig     AgentConfig?
+  conversations   Conversation[]
 }
 
 model RefreshToken {
@@ -40,13 +42,13 @@ model RefreshToken {
 }
 
 model Area {
-  id        String   @id @default(uuid())
+  id        String    @id @default(uuid())
   title     String
   notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   projects  Project[]
   tasks     Task[]
   tags      AreaTag[]
@@ -68,23 +70,23 @@ enum ProjectBucket {
 }
 
 model Project {
-  id        String   @id @default(uuid())
+  id        String           @id @default(uuid())
   title     String
   notes     String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
   userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   areaId    String?
-  area      Area?    @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  area      Area?            @relation(fields: [areaId], references: [id], onDelete: SetNull)
   tasks     Task[]
   headings  ProjectHeading[]
 
   sortOrder Int @default(0)
 
-  status        ProjectStatus  @default(ACTIVE)
-  bucket        ProjectBucket  @default(INBOX)
-  scheduledType ScheduledType  @default(NONE)
+  status        ProjectStatus @default(ACTIVE)
+  bucket        ProjectBucket @default(INBOX)
+  scheduledType ScheduledType @default(NONE)
   scheduledDate DateTime?
   dueDate       DateTime?
   completedAt   DateTime?
@@ -112,9 +114,9 @@ model AreaTag {
 model ProjectTag {
   id        String   @id @default(uuid())
   projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   tagId     String
-  tag       Tag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+  tag       Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
   createdAt DateTime @default(now())
 
   @@unique([projectId, tagId])
@@ -158,19 +160,19 @@ model TagGroup {
 }
 
 model Tag {
-  id         String    @id @default(uuid())
+  id         String       @id @default(uuid())
   title      String
-  color      String    @default("#3B82F6")
-  sortOrder  Int       @default(0)
+  color      String       @default("#3B82F6")
+  sortOrder  Int          @default(0)
   tagGroupId String?
-  tagGroup   TagGroup? @relation(fields: [tagGroupId], references: [id], onDelete: SetNull)
+  tagGroup   TagGroup?    @relation(fields: [tagGroupId], references: [id], onDelete: SetNull)
   userId     String
-  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks      TaskTag[]
   projects   ProjectTag[]
   areas      AreaTag[]
-  createdAt  DateTime  @default(now())
-  updatedAt  DateTime  @updatedAt
+  createdAt  DateTime     @default(now())
+  updatedAt  DateTime     @updatedAt
 
   @@index([userId])
   @@index([tagGroupId])
@@ -190,24 +192,24 @@ model TaskTag {
 }
 
 model Task {
-  id          String      @id @default(uuid())
-  title       String
-  notes       String?
+  id            String        @id @default(uuid())
+  title         String
+  notes         String?
   scheduledDate DateTime?
   dueDate       DateTime?
-  bucket       TaskBucket   @default(INBOX)
+  bucket        TaskBucket    @default(INBOX)
   scheduledType ScheduledType @default(NONE)
-  status       TaskStatus   @default(ACTIVE)
-  completedAt DateTime?
-  trashedAt   DateTime?
-  sortOrder   Int         @default(0)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  status        TaskStatus    @default(ACTIVE)
+  completedAt   DateTime?
+  trashedAt     DateTime?
+  sortOrder     Int           @default(0)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
 
-  userId   String
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  subtasks  Subtask[]
+  subtasks Subtask[]
 
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id])
@@ -216,7 +218,7 @@ model Task {
   heading   ProjectHeading? @relation(fields: [headingId], references: [id], onDelete: SetNull)
 
   areaId String?
-  area   Area? @relation(fields: [areaId], references: [id], onDelete: SetNull)
+  area   Area?   @relation(fields: [areaId], references: [id], onDelete: SetNull)
 
   tags TaskTag[]
 
@@ -227,15 +229,15 @@ model Task {
 }
 
 model Subtask {
-  id          String      @id @default(uuid())
+  id          String     @id @default(uuid())
   title       String
-  status      TaskStatus  @default(ACTIVE)
+  status      TaskStatus @default(ACTIVE)
   completedAt DateTime?
-  sortOrder   Int         @default(0)
+  sortOrder   Int        @default(0)
   taskId      String
-  task        Task        @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  task        Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
 
   @@index([taskId])
 }
@@ -256,4 +258,63 @@ model ProjectHeading {
 
   @@index([userId])
   @@index([projectId])
+}
+
+/// BYOK configuration for the conversational Assistant (see ADR 0003).
+/// One row per user; the API key is AES-256-GCM encrypted at rest.
+model AgentConfig {
+  id              String   @id @default(uuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  provider        String   @default("custom")
+  baseUrl         String?
+  apiKeyEncrypted String?
+  modelId         String?
+  /// Thinking effort requested from the model: off / low / medium / high.
+  thinkingLevel   String   @default("off")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}
+
+/// A persisted conversation between the user and the Assistant.
+model Conversation {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  messages  ConversationMessage[]
+  approvals AgentApproval[]
+
+  @@index([userId])
+}
+
+/// One serialized pi-agent-core AgentMessage, in order (seq).
+model ConversationMessage {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  seq            Int
+  message        Json
+  createdAt      DateTime     @default(now())
+
+  @@unique([conversationId, seq])
+}
+
+/// A destructive tool call intercepted by beforeToolCall, pending user decision.
+model AgentApproval {
+  id             String       @id @default(uuid())
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  toolCallId     String
+  toolName       String
+  args           Json
+  status         String       @default("pending") // pending | approved | rejected | expired
+  createdAt      DateTime     @default(now())
+  resolvedAt     DateTime?
+
+  @@unique([toolCallId])
+  @@index([conversationId])
 }

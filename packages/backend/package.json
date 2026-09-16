@@ -12,12 +12,15 @@
     "prisma:seed": "prisma db seed",
     "prisma:generate": "prisma generate",
     "pretest": "pnpm --filter @taskora/shared build && prisma generate",
-    "test": "vitest run"
+    "test": "vitest run",
+    "agent:smoke": "tsx scripts/agent-smoke.ts"
   },
   "prisma": {
     "seed": "npx tsx prisma/seed.ts"
   },
   "dependencies": {
+    "@earendil-works/pi-agent-core": "^0.85.1",
+    "@earendil-works/pi-ai": "^0.85.1",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/jwt": "^11.0.0",
@@ -32,7 +35,8 @@
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
-    "rxjs": "^7.8.1"
+    "rxjs": "^7.8.1",
+    "typebox": "1.3.7"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",

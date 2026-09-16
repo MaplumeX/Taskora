@@ -13,5 +13,6 @@
   "expand": "Expand {{label}}",
   "emptyTags": "No tags",
   "mainNavigation": "Main navigation",
-  "moreNavigation": "More navigation"
+  "moreNavigation": "More navigation",
+  "assistant": "Assistant"
 }

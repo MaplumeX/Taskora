@@ -12,6 +12,7 @@ function PageFallback() {
   );
 }
 
+const AgentPage = lazy(() => import('@taskora/ui/pages/Agent'));
 const Anytime = lazy(() => import('@taskora/ui/pages/Anytime'));
 const AreaDetail = lazy(() => import('@taskora/ui/pages/AreaDetail'));
 const Calendar = lazy(() => import('@taskora/ui/pages/Calendar'));
@@ -63,6 +64,7 @@ export const router = createBrowserRouter([
           { path: '/tags', element: <Tags /> },
           { path: '/tags/:tagId', element: <TagDetail /> },
           { path: '/trash', element: <Trash /> },
+          { path: '/agent', element: <AgentPage /> },
         ],
       },
     ],

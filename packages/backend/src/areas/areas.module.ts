@@ -5,5 +5,6 @@ import { AreasService } from './areas.service';
 @Module({
   controllers: [AreasController],
   providers: [AreasService],
+  exports: [AreasService],
 })
 export class AreasModule {}
