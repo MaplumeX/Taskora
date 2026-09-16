@@ -5,6 +5,36 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-09-16
+
+### Features
+
+- **agent**: Conversational Assistant V1 (#22). A backend `agent` module runs
+  @earendil-works/pi-agent-core with @earendil-works/pi-ai: per-conversation
+  agent pool rebuilt from persisted messages, BYOK provider config
+  (AES-256-GCM encrypted, connectivity test endpoint), tools wrapping
+  existing services scoped by user, and a beforeToolCall approval flow with
+  10-minute expiry. Conversations and messages persist across restarts; an
+  SSE endpoint streams message updates, tool executions and approvals.
+- **ui**: `/agent` chat view shared by web and desktop — conversation list,
+  streaming message bubbles, tool and approval cards — plus an Assistant
+  settings tab with provider presets ([OI]/DeepSeek/OpenRouter/Ollama/custom).
+  Requires the `AGENT_ENCRYPTION_KEY` env var on the backend.
+
+### Fixes
+
+- **frontend**: Restore the user after a full page reload (#21). Startup now
+  fetches `/auth/me` when only the token survived the reload, and
+  ProtectedRoute waits during recovery instead of flashing an unauthenticated
+  UI.
+
+### Refactors
+
+- **ui**: Group logbook and trash between the main navigation and areas in
+  the sidebar (#20).
+
+---
+
 ## Desktop [0.1.2] - 2026-09-15
 
 ### Fixes
