@@ -9,11 +9,11 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
-## [Unreleased]
+## [0.3.1] - 2026-09-17
 
 ### Changed
 
-- **release**: 统一桌面端与 Web/后端的版本号（desktop 0.2.0 → 0.3.0 对齐），
+- **release**: 统一桌面端与 Web/后端的版本号（desktop 0.2.0 → 0.3.1 对齐），
   双轨制改为单轨：`pnpm release <x.y.z>` 一次 bump 全部包与 Tauri 三件套，
   `v*` tag 同时触发镜像发布（`release.yml`）与三平台桌面打包
   （`desktop-release.yml`），不再使用 `desktop-v*` tag。历史双轨小节保留。
