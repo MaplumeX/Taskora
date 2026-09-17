@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Folder, Trash2 } from 'lucide-react';
@@ -15,11 +15,12 @@ import {
 import { TaskCheckbox } from '@/components/task/TaskCheckbox';
 import { TaskContextMenu } from '@/components/task/TaskContextMenu';
 import { TaskDateBadge } from '@/components/task/TaskDateBadge';
-import { useEmptyTrash, useFeedQuery } from '@taskora/api';
+import { useEmptyTrash, useFeedQuery, useSelectionScope, useTaskRowSelection } from '@taskora/api';
 import { useRestoreProject } from '@taskora/api';
 import { toast } from 'sonner';
 
 import type { FeedItem, TaskResponseDto } from '@taskora/shared';
+import { cn } from '@/lib/utils';
 
 export default function Trash() {
   const { t } = useTranslation();
@@ -28,6 +29,19 @@ export default function Trash() {
   const restoreProject = useRestoreProject();
   const emptyTrashMutation = useEmptyTrash();
   const [confirmOpen, setConfirmOpen] = useState(false);
+  const { selectedIds, handleRowClick, handleBlankClick } = useTaskRowSelection();
+  // 注册可遍历行：任务行 + 项目行（Project 行仅作遍历停留点，⌫ 对其
+  // 无效——恢复仍走行内「恢复」按钮；⌫ 对任务行遵循本页恢复约定）。
+  const rows = useMemo(
+    () =>
+      items.map((item) => ({
+        id: item.id,
+        kind: item.type === 'task' ? ('task' as const) : ('project' as const),
+        completed: false,
+      })),
+    [items],
+  );
+  useSelectionScope(rows);
 
   return (
     <div className="flex flex-col gap-4">
@@ -51,10 +65,15 @@ export default function Trash() {
           {t('task:trashEmpty')}
         </p>
       ) : (
-        <div className="flex flex-col">
+        <div className="flex flex-col" onClick={handleBlankClick}>
           {items.map((item) =>
             item.type === 'task' ? (
-              <TrashTaskRow key={item.id} item={item} />
+              <TrashTaskRow
+                key={item.id}
+                item={item}
+                selected={selectedIds.includes(item.id)}
+                onRowClick={() => handleRowClick(item.id)}
+              />
             ) : (
               <TrashProjectRow
                 key={item.id}
@@ -106,12 +125,33 @@ export default function Trash() {
   );
 }
 
-function TrashTaskRow({ item }: { item: FeedItem }) {
+function TrashTaskRow({
+  item,
+  selected,
+  onRowClick,
+}: {
+  item: FeedItem;
+  selected?: boolean;
+  onRowClick?: () => void;
+}) {
   const task = { ...item, subtasks: [] } as TaskResponseDto;
   return (
-    <div data-task-item className="group flex flex-col transition-colors">
+    <div
+      data-task-item
+      aria-selected={selected || undefined}
+      className={cn('group flex flex-col transition-colors', selected && 'bg-accent rounded-lg')}
+    >
       <TaskContextMenu task={task} current={task} variant="trash">
-        <div className="flex h-12 cursor-pointer items-center gap-3 px-2 text-sm text-muted-foreground">
+        <div
+          role={onRowClick ? 'button' : undefined}
+          tabIndex={onRowClick ? 0 : undefined}
+          onClick={(e) => {
+            if (!onRowClick) return;
+            e.stopPropagation();
+            onRowClick();
+          }}
+          className="flex h-12 cursor-pointer items-center gap-3 px-2 text-sm text-muted-foreground"
+        >
           <TaskCheckbox checked={false} onToggle={() => {}} disabled />
           <span className="flex-1 truncate line-through">{item.title}</span>
           <TaskDateBadge scheduledDate={item.scheduledDate} />

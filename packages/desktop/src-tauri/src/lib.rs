@@ -2,8 +2,10 @@ mod session;
 use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::ShortcutState;
 
-/// Global quick-add shortcut (Things-style): Cmd/Ctrl + Space.
-const QUICK_ADD_SHORTCUT: &str = "CmdOrCtrl+Space";
+/// Global quick-add shortcut (Things-style): Cmd/Ctrl + Shift + Space.
+/// (Plain Cmd/Ctrl+Space was dropped: Ctrl+Space is the IME toggle on
+/// Windows and Cmd+Space is Spotlight on macOS — see ADR-0004.)
+const QUICK_ADD_SHORTCUT: &str = "CmdOrCtrl+Shift+Space";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {

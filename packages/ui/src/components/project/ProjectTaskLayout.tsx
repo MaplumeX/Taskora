@@ -33,6 +33,7 @@ import { toast } from 'sonner';
 
 import { TaskItem } from '@/components/task/TaskItem';
 import { useCompleteTask, useUncompleteTask } from '@taskora/api';
+import { useSelectionScope } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
 import { useReorderProjectHeadingLayout } from '@taskora/api';
 import { ProjectHeadingRow } from './ProjectHeadingRow';
@@ -284,7 +285,7 @@ interface TaskContainerProps {
   taskIds: string[];
   taskMap: Map<string, TaskResponseDto>;
   activeTaskId: string | null;
-  selectedId: string | null;
+  selectedIds: string[];
   expandedId: string | null;
   onRowClick: (id: string) => void;
   onToggleComplete: (task: TaskResponseDto) => void;
@@ -295,7 +296,7 @@ function TaskContainer({
   taskIds,
   taskMap,
   activeTaskId,
-  selectedId,
+  selectedIds,
   expandedId,
   onRowClick,
   onToggleComplete,
@@ -312,7 +313,7 @@ function TaskContainer({
               key={id}
               task={task}
               placeholder={activeTaskId === id}
-              selected={selectedId === id}
+              selected={selectedIds.includes(id)}
               expanded={expandedId === id}
               onRowClick={() => onRowClick(id)}
               onToggleComplete={() => onToggleComplete(task)}
@@ -347,7 +348,11 @@ function SortableHeadingBlock({
       }}
       className="mt-3"
     >
-      <ProjectHeadingRow heading={heading} dragHandleProps={{ ...attributes, ...listeners }} />
+      <ProjectHeadingRow
+        heading={heading}
+        selected={taskContainerProps.selectedIds.includes(heading.id)}
+        dragHandleProps={{ ...attributes, ...listeners }}
+      />
       <TaskContainer {...taskContainerProps} id={heading.id} taskIds={taskIds} />
     </section>
   );
@@ -374,10 +379,31 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
     () => new Map(headings.map((heading) => [heading.id, heading])),
     [headings],
   );
-  const { selectedId, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
+  const { selectedIds, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const saveLayout = useReorderProjectHeadingLayout();
+  // 注册可遍历行：ungrouped 任务 → 每个 Heading 后跟其分组任务。
+  const selectionRows = React.useMemo(() => {
+    const rows: Array<{ id: string; kind: 'task' | 'heading'; completed?: boolean }> =
+      (layout.containers[UNGROUPED] ?? []).map((id) => ({
+        id,
+        kind: 'task' as const,
+        completed: taskMap.get(id)?.status === 'COMPLETED',
+      }));
+    for (const hid of layout.headingIds) {
+      rows.push({ id: hid, kind: 'heading' });
+      for (const id of layout.containers[hid] ?? []) {
+        rows.push({
+          id,
+          kind: 'task' as const,
+          completed: taskMap.get(id)?.status === 'COMPLETED',
+        });
+      }
+    }
+    return rows;
+  }, [layout, taskMap]);
+  useSelectionScope(selectionRows);
   const keyboardCoordinates = React.useCallback<KeyboardCoordinateGetter>((event, args) => {
     if (event.code === 'ArrowDown' || event.code === 'ArrowRight') {
       keyboardTaskEdgeRef.current = 'after';
@@ -578,7 +604,7 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
   const commonContainerProps = {
     taskMap,
     activeTaskId: activeTask?.id ?? null,
-    selectedId,
+    selectedIds,
     expandedId,
     onRowClick: handleRowClick,
     onToggleComplete: toggleComplete,

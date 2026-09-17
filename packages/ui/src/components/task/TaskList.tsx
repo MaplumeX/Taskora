@@ -18,7 +18,7 @@ import { CSS } from '@dnd-kit/utilities';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { TaskItem } from './TaskItem';
-import type { SelectionState } from '@taskora/api';
+import { selectionStateOf, type SelectionState } from '@taskora/api';
 
 interface ProjectLookup {
   [projectId: string]: string;
@@ -31,7 +31,8 @@ interface Props {
   tasks: TaskResponseDto[];
   projects?: ProjectLookup;
   areas?: AreaLookup;
-  selectedId?: string | null;
+  /** 键盘 Selection（含 ⌘A 批量）选中的行 id；单选时也包含在内。 */
+  selectedIds?: string[];
   expandedId?: string | null;
   onRowClick?: (id: string) => void;
   onToggleComplete: (task: TaskResponseDto) => void;
@@ -87,7 +88,7 @@ export function TaskList({
   tasks,
   projects = {},
   areas = {},
-  selectedId,
+  selectedIds = [],
   expandedId,
   onRowClick,
   onToggleComplete,
@@ -128,8 +129,11 @@ onReorder,
 
   const renderItems = () =>
     topTasks.map((task) => {
-      const selectionState: SelectionState =
-        expandedId === task.id ? 'expanded' : selectedId === task.id ? 'selected' : 'idle';
+      const selectionState: SelectionState = selectionStateOf(
+        selectedIds,
+        expandedId ?? null,
+        task.id,
+      );
       const itemProps = {
         task,
         projectTitle: task.projectId ? projects[task.projectId] : undefined,

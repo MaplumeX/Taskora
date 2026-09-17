@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { Sidebar } from './Sidebar';
 import { MainContent } from './MainContent';
 import { ContentBottomBar } from '@/components/layout/ContentBottomBar';
+import { KeyboardShortcuts } from '@/components/keyboard/KeyboardShortcuts';
 import { MobileTabBar } from '@/components/layout/MobileTabBar';
 import { MobileNavDrawer } from '@/components/layout/MobileNavDrawer';
 import { MobileTopBar } from '@/components/layout/MobileTopBar';
@@ -27,6 +28,7 @@ export function AppShell() {
       <MobileNavDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
       <MobileFab />
       <SettingsModal />
+      <KeyboardShortcuts />
     </div>
   );
 }

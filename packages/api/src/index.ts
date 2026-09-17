@@ -71,10 +71,17 @@ export * from './hooks/useAgent';
 export * from './hooks/useContentBottomActions';
 export * from './hooks/useContentBottomActionsRoute';
 export * from './hooks/useTaskRowSelection';
+export * from './hooks/useSelectionScope';
 export * from './hooks/usePageTaskContext';
 
 // UI-agnostic UI state stores
 export { useUiInteractionStore, type SettingsTab } from './stores/uiInteraction.store';
+export {
+  useSelectionStore,
+  flattenSelectionRows,
+  type SelectionRow,
+  type SelectionRowKind,
+} from './stores/selection.store';
 export { useProjectUiPrefsStore } from './stores/projectUiPrefs.store';
 
 // Preferences (theme / language / week start)
