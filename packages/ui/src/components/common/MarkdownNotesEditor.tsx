@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { EditorContent, useEditor, useEditorState } from '@tiptap/react';
+import { useEffect, useRef, useState } from 'react';
+import { EditorContent, useEditor } from '@tiptap/react';
 import { StarterKit } from '@tiptap/starter-kit';
 import { Markdown } from '@tiptap/markdown';
 
@@ -88,10 +88,25 @@ export function MarkdownNotesEditor({
   // renders `.ProseMirror > <p><br/></p>` for an empty document, so the
   // wrapper is never `:empty`; we drive the placeholder via `data-empty`,
   // which the CSS combines with the `.ProseMirror[data-placeholder]` rule.
-  const isEmpty = useEditorState({
-    editor,
-    selector: (ctx) => (ctx.editor ? ctx.editor.isEmpty : true),
-  });
+  //
+  // We intentionally do NOT use `useEditorState` here: with
+  // `immediatelyRender: false`, its internal snapshot is created with
+  // `editor: null` and is only refreshed after the first transaction event.
+  // An editor created with initial content never dispatches a transaction,
+  // so the selector would keep reporting `isEmpty === true` and the
+  // placeholder would render on top of existing notes. Subscribing manually
+  // and reading `editor.isEmpty` when the instance becomes available avoids
+  // that stale-snapshot trap.
+  const [isEmpty, setIsEmpty] = useState(true);
+  useEffect(() => {
+    if (!editor || editor.isDestroyed) return;
+    const syncEmpty = () => setIsEmpty(editor.isEmpty);
+    syncEmpty();
+    editor.on('update', syncEmpty);
+    return () => {
+      editor.off('update', syncEmpty);
+    };
+  }, [editor]);
 
   return (
     <EditorContent
