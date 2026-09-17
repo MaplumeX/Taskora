@@ -15,6 +15,9 @@ interface CalendarDayCellProps {
   maxRows?: number;
   outOfMonth?: boolean;
   onToggleComplete: (task: TaskResponseDto) => void;
+  /** 键盘 Selection 当前选中的行 id（跨格共享）。 */
+  selectedIds?: string[];
+  onRowClick?: (taskId: string) => void;
 }
 
 export function CalendarDayCell({
@@ -23,6 +26,8 @@ export function CalendarDayCell({
   maxRows,
   outOfMonth = false,
   onToggleComplete,
+  selectedIds = [],
+  onRowClick,
 }: CalendarDayCellProps) {
   const { t } = useTranslation();
 
@@ -57,7 +62,13 @@ export function CalendarDayCell({
       </div>
 
       {visibleTasks.map((task) => (
-        <CalendarTaskRow key={task.id} task={task} onToggleComplete={onToggleComplete} />
+        <CalendarTaskRow
+          key={task.id}
+          task={task}
+          onToggleComplete={onToggleComplete}
+          selected={selectedIds.includes(task.id)}
+          onRowClick={onRowClick ? () => onRowClick(task.id) : undefined}
+        />
       ))}
 
       {overflowCount > 0 && (
@@ -80,6 +91,8 @@ export function CalendarDayCell({
                   key={task.id}
                   task={task}
                   onToggleComplete={onToggleComplete}
+                  selected={selectedIds.includes(task.id)}
+                  onRowClick={onRowClick ? () => onRowClick(task.id) : undefined}
                 />
               ))}
             </div>

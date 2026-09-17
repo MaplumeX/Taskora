@@ -6,7 +6,9 @@ import type { FeedItem } from '@taskora/shared';
 import { FeedItemRow } from '@/components/feed/FeedItemRow';
 import { useFeedQuery } from '@taskora/api';
 import {
+  selectionStateOf,
   useCompleteTask,
+  useSelectionScope,
   useUncompleteTask,
 } from '@taskora/api';
 import { useProjectsQuery } from '@taskora/api';
@@ -23,7 +25,7 @@ export default function Logbook() {
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const {
-    selectedId,
+    selectedIds,
     expandedId,
     handleRowClick,
     handleBlankClick,
@@ -52,6 +54,16 @@ export default function Logbook() {
     return { today, yesterday, earlier };
   }, [items]);
 
+  // 注册可遍历行（Logbook 全部为已完成任务行）。
+  const rows = useMemo(
+    () =>
+      items
+        .filter((item) => item.type === 'task')
+        .map((item) => ({ id: item.id, kind: 'task' as const, completed: true })),
+    [items],
+  );
+  useSelectionScope(rows);
+
   const toggleComplete = (item: FeedItem) => {
     if (item.type !== 'task') return;
     if (item.status === 'COMPLETED') uncompleteTask.mutate(item.id);
@@ -68,10 +80,9 @@ export default function Logbook() {
         {group.map((item) => {
           const isTask = item.type === 'task';
           const taskItem = item as { projectId: string | null; areaId: string | null };
-          const selectionState =
-            isTask
-              ? expandedId === item.id ? 'expanded' : selectedId === item.id ? 'selected' : 'idle'
-              : 'idle';
+          const selectionState = isTask
+            ? selectionStateOf(selectedIds, expandedId, item.id)
+            : 'idle';
           return (
             <FeedItemRow
               key={item.id}

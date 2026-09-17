@@ -8,7 +8,7 @@ import type { TaskResponseDto } from '@taskora/shared';
 import { CalendarMonthGrid } from '@/components/calendar/CalendarMonthGrid';
 import { Button } from '@/components/ui/button';
 import { useScheduledTasksQuery } from '@taskora/api';
-import { useCompleteTask, useUncompleteTask } from '@taskora/api';
+import { useCompleteTask, useSelectionScope, useTaskRowSelection, useUncompleteTask } from '@taskora/api';
 import { usePreferencesStore } from '@taskora/api';
 import { addMonths, groupByScheduledDate } from '@taskora/api';
 import { i18n } from '@taskora/api';
@@ -23,6 +23,14 @@ export default function Calendar() {
   const [anchor, setAnchor] = useState(() => new Date());
 
   const tasksByDate = useMemo(() => groupByScheduledDate(tasks), [tasks]);
+
+  // 注册可遍历行（按当前月网格顺序；键盘动作经全局 keymap 生效）。
+  const { selectedIds, handleRowClick } = useTaskRowSelection();
+  const rows = useMemo(
+    () => tasks.map((t) => ({ id: t.id, kind: 'task' as const, completed: t.status === 'COMPLETED' })),
+    [tasks],
+  );
+  useSelectionScope(rows);
 
   const handleToggleComplete = (task: TaskResponseDto) => {
     if (task.status === 'COMPLETED') {
@@ -88,6 +96,8 @@ export default function Calendar() {
           weekStartsOn={weekStartsOn}
           locale={i18n.language}
           onToggleComplete={handleToggleComplete}
+          selectedIds={selectedIds}
+          onRowClick={handleRowClick}
         />
       )}
     </div>

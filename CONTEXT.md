@@ -36,6 +36,12 @@ _Avoid_: 列表、filter
 **Trash**:
 软删除的暂存处，可恢复；清空后不可恢复。
 
+### 界面交互
+
+**Selection**:
+键盘导航下当前被高亮、并作为键盘动作（完成、删除、新建于下方等）作用对象的 Task / Project / Project Heading；区别于 focus（DOM 焦点）与完成态。
+_Avoid_: 高亮、hover、焦点
+
 ### 助手（Agent）
 
 **Assistant**:

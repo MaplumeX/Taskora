@@ -14,6 +14,8 @@ interface CalendarMonthGridProps {
   weekStartsOn: WeekStartsOn;
   locale: string;
   onToggleComplete: (task: TaskResponseDto) => void;
+  selectedIds?: string[];
+  onRowClick?: (taskId: string) => void;
 }
 
 export function CalendarMonthGrid({
@@ -22,6 +24,8 @@ export function CalendarMonthGrid({
   weekStartsOn,
   locale,
   onToggleComplete,
+  selectedIds = [],
+  onRowClick,
 }: CalendarMonthGridProps) {
   const { t } = useTranslation();
   const cells = useMemo(() => buildMonthCells(anchor, weekStartsOn), [anchor, weekStartsOn]);
@@ -56,6 +60,8 @@ export function CalendarMonthGrid({
             maxRows={3}
             outOfMonth={date.getMonth() !== anchor.getMonth()}
             onToggleComplete={onToggleComplete}
+            selectedIds={selectedIds}
+            onRowClick={onRowClick}
           />
         ))}
       </div>

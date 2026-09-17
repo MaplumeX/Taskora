@@ -19,10 +19,11 @@ import { CSS } from '@dnd-kit/utilities';
 import type { FeedItem } from '@taskora/shared';
 
 import { FeedItemRow } from './FeedItemRow';
-import type { SelectionState } from '@taskora/api';
+import { selectionStateOf, type SelectionState } from '@taskora/api';
 import { useCompleteTask, useReorderTasks, useUncompleteTask } from '@taskora/api';
 import { useProjectsQuery } from '@taskora/api';
 import { useAreasQuery } from '@taskora/api';
+import { useSelectionScope } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
 import { toast } from 'sonner';
 
@@ -77,8 +78,20 @@ function SortableFeedItemRow({
 
 export function FeedListView({ items, emptyHint, sortable }: Props) {
   const { t } = useTranslation();
-  const { handleRowClick, handleBlankClick, selectedId, expandedId } =
+  const { handleRowClick, handleBlankClick, selectedIds, expandedId } =
     useTaskRowSelection();
+  // 注册当前可见行（task + project 行均可被键盘遍历停留；动作仅对
+  // task 行生效，见 ADR-0004）。
+  const rows = useMemo(
+    () =>
+      items.map((item) => ({
+        id: item.id,
+        kind: item.type === 'task' ? ('task' as const) : ('project' as const),
+        completed: item.type === 'task' ? item.status === 'COMPLETED' : false,
+      })),
+    [items],
+  );
+  useSelectionScope(rows);
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const reorderTasks = useReorderTasks();
@@ -138,8 +151,7 @@ export function FeedListView({ items, emptyHint, sortable }: Props) {
 
   const renderItems = () =>
     topItems.map((item) => {
-      const selectionState: SelectionState =
-        expandedId === item.id ? 'expanded' : selectedId === item.id ? 'selected' : 'idle';
+      const selectionState: SelectionState = selectionStateOf(selectedIds, expandedId, item.id);
       const isTask = item.type === 'task';
       const taskItem = item as { projectId: string | null; areaId: string | null };
       const props = {
