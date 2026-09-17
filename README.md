@@ -128,7 +128,7 @@ Backend-specific (run with `pnpm --filter @taskora/backend exec ...`):
 
 ## Desktop Client
 
-Prebuilt desktop installers are published on the [GitHub Releases page](https://github.com/maplumex/taskora/releases) under tags matching `desktop-v*`:
+Prebuilt desktop installers are published on the [GitHub Releases page](https://github.com/maplumex/taskora/releases) under tags matching `v*` (the same tag that releases the server images):
 
 | Platform | Artifact |
 | --- | --- |
@@ -189,7 +189,7 @@ GitHub Actions workflows live in `.github/workflows/`:
 - **Release** (`release.yml`) — on git tags matching `v*`: builds and pushes images to GHCR.
   - `ghcr.io/maplumex/taskora-backend:vX.Y.Z` / `:latest`
   - `ghcr.io/maplumex/taskora-frontend:vX.Y.Z` / `:latest`
-- **Desktop Release** (`desktop-release.yml`) — on git tags matching `desktop-v*`: builds the three-platform desktop installers (dmg / NSIS exe / AppImage) and uploads them to a GitHub Release. V1 builds are unsigned and have no auto-update.
+- **Desktop Release** (`desktop-release.yml`) — on the same `v*` git tags: builds the three-platform desktop installers (dmg / NSIS exe / AppImage) and uploads them to a GitHub Release. The desktop version number is unified with the rest of the monorepo. V1 builds are unsigned and have no auto-update.
 
 See [docs/versioning-and-deployment.md](docs/versioning-and-deployment.md) for the full versioning, branching, and multi-client rollout strategy.
 

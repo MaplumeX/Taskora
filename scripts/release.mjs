@@ -1,22 +1,24 @@
 #!/usr/bin/env node
 /**
- * Taskora 发版脚本：按轨道 bump package.json 版本号。
+ * Taskora 发版脚本：统一 bump 全部包的版本号。
  *
  * 用法:
- *   node scripts/release.mjs main <x.y.z>      # 主轨：根 + backend/frontend/api/ui/shared
- *   node scripts/release.mjs desktop <x.y.z>    # 桌面轨：desktop package.json + Tauri 三件套
+ *   node scripts/release.mjs <x.y.z>
  *
  * 发版流程（脚本只负责第 1 步）:
- *   1. pnpm release <track> <version>
- *   2. 编辑 CHANGELOG.md（Keep a Changelog 格式，桌面轨加 ## Desktop 小节）
- *   3. git commit -am "release: <tag>"
- *   4. git tag <tag> && git push origin main --tags
- *      主轨 tag: v<x.y.z>（触发 release.yml 推双镜像）
- *      桌面轨 tag: desktop-v<x.y.z>（触发 desktop-release.yml 三平台打包）
+ *   1. pnpm release <version>
+ *   2. 编辑 CHANGELOG.md（Keep a Changelog 格式，桌面专属改动标注 (desktop)）
+ *   3. git commit -am "release: v<x.y.z>"
+ *   4. git tag v<x.y.z> && git push origin main --tags
+ *      tag v<x.y.z> 同时触发 release.yml（推双镜像）和
+ *      desktop-release.yml（三平台桌面打包）。
  *
- * 注意：Tauri 打包读的是 src-tauri/tauri.conf.json 与 Cargo.toml 的版本号，
- * 不是 packages/desktop/package.json —— 桌面轨三处都要 bump，否则打出来的
- * 安装包版本号会滞后（Cargo.lock 由 cargo update 同步，保证 --locked 构建可用）。
+ * 版本载体：
+ *   - 根 package.json + 全部子包 package.json（含 desktop）
+ *   - packages/desktop/src-tauri/tauri.conf.json 与 Cargo.toml
+ *     （Tauri 打包读的是这两处，不是 packages/desktop/package.json，
+ *     三处都要 bump，否则打出来的安装包版本号会滞后；
+ *     Cargo.lock 由 cargo update 同步，保证 --locked 构建可用）
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -24,20 +26,17 @@ import path from 'node:path';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-/** 主轨包：共享根版本号，随 v* tag 发版。desktop 独立于主轨。 */
-const MAIN_TRACK = ['backend', 'frontend', 'api', 'ui', 'shared'];
+/** 全部子包：共享统一版本号，随 v* tag 发版。 */
+const PACKAGES = ['backend', 'frontend', 'api', 'ui', 'shared', 'desktop'];
 
-const USAGE = 'usage: node scripts/release.mjs <main|desktop> <x.y.z>';
+const TAURI_DIR = path.join(ROOT, 'packages/desktop/src-tauri');
 
-const [track, version] = process.argv.slice(2);
+const USAGE = 'usage: node scripts/release.mjs <x.y.z>';
 
-if (!track || !version) {
+const [version] = process.argv.slice(2);
+
+if (!version) {
   console.error(USAGE);
-  process.exit(1);
-}
-
-if (track !== 'main' && track !== 'desktop') {
-  console.error(`未知轨道: ${track}\n${USAGE}`);
   process.exit(1);
 }
 
@@ -54,25 +53,10 @@ if (dirty) {
   process.exit(1);
 }
 
-// 防呆：禁止降级（不小于当前轨道任一包的版本）。
+// 防呆：禁止降级（不小于任何版本载体的当前版本）。
 function parseSemVer(v) {
   const [core, pre] = v.split('-');
   return { core: core.split('.').map(Number), pre: pre ?? '' };
-}
-
-const TAURI_DIR = path.join(ROOT, 'packages/desktop/src-tauri');
-
-/** 桌面轨的全部版本载体：package.json + tauri.conf.json + Cargo.toml。 */
-function readDesktopVersions() {
-  const pkgJson = JSON.parse(readFileSync(path.join(ROOT, 'packages/desktop/package.json'), 'utf8'));
-  const tauriConf = JSON.parse(readFileSync(path.join(TAURI_DIR, 'tauri.conf.json'), 'utf8'));
-  const cargoToml = readFileSync(path.join(TAURI_DIR, 'Cargo.toml'), 'utf8');
-  const cargoVersion = /^version\s*=\s*"(.+)"$/m.exec(cargoToml)?.[1];
-  return {
-    'packages/desktop/package.json': pkgJson.version,
-    'packages/desktop/src-tauri/tauri.conf.json': tauriConf.version,
-    'packages/desktop/src-tauri/Cargo.toml': cargoVersion,
-  };
 }
 
 function cmpSemVer(a, b) {
@@ -88,21 +72,20 @@ function cmpSemVer(a, b) {
   return pa.pre < pb.pre ? -1 : 1;
 }
 
-const targets = track === 'desktop' ? ['desktop'] : ['.root', ...MAIN_TRACK];
-const tag = track === 'desktop' ? `desktop-v${version}` : `v${version}`;
+const tag = `v${version}`;
+console.log(`版本 ${version}，tag: ${tag}\n`);
 
-console.log(`轨道: ${track} → 版本 ${version}，tag: ${tag}\n`);
-
-// 版本检查：主轨查各 package.json；桌面轨查全部三处版本载体。
-const currentVersions =
-  track === 'desktop'
-    ? readDesktopVersions()
-    : Object.fromEntries(
-        ['.root', ...MAIN_TRACK].map((t) => {
-          const file = t === '.root' ? 'package.json' : `packages/${t}/package.json`;
-          return [file, JSON.parse(readFileSync(path.join(ROOT, file), 'utf8')).version];
-        }),
-      );
+// 版本检查：全部 package.json + Tauri 两处版本载体。
+const pkgJsonFiles = ['package.json', ...PACKAGES.map((p) => `packages/${p}/package.json`)];
+const currentVersions = Object.fromEntries(
+  pkgJsonFiles.map((file) => [file, JSON.parse(readFileSync(path.join(ROOT, file), 'utf8')).version]),
+);
+const tauriConf = JSON.parse(readFileSync(path.join(TAURI_DIR, 'tauri.conf.json'), 'utf8'));
+currentVersions['packages/desktop/src-tauri/tauri.conf.json'] = tauriConf.version;
+const cargoVersion = /^version\s*=\s*"(.+)"$/m.exec(
+  readFileSync(path.join(TAURI_DIR, 'Cargo.toml'), 'utf8'),
+)?.[1];
+currentVersions['packages/desktop/src-tauri/Cargo.toml'] = cargoVersion;
 
 for (const [file, current] of Object.entries(currentVersions)) {
   if (!current) {
@@ -115,48 +98,41 @@ for (const [file, current] of Object.entries(currentVersions)) {
   }
 }
 
-if (track === 'main') {
-  for (const t of targets) {
-    const file = t === '.root' ? 'package.json' : `packages/${t}/package.json`;
-    const abs = path.join(ROOT, file);
-    const pkg = JSON.parse(readFileSync(abs, 'utf8'));
-    pkg.version = version;
-    writeFileSync(abs, JSON.stringify(pkg, null, 2) + '\n');
-    console.log(`  bumped ${file} → ${version}`);
-  }
-} else {
-  // 桌面轨：三处版本载体 + Cargo.lock 同步。
-  const pkgJsonPath = path.join(ROOT, 'packages/desktop/package.json');
-  const pkg = JSON.parse(readFileSync(pkgJsonPath, 'utf8'));
+// bump 全部 package.json。
+for (const file of pkgJsonFiles) {
+  const abs = path.join(ROOT, file);
+  const pkg = JSON.parse(readFileSync(abs, 'utf8'));
   pkg.version = version;
-  writeFileSync(pkgJsonPath, JSON.stringify(pkg, null, 2) + '\n');
-  console.log(`  bumped packages/desktop/package.json → ${version}`);
-
-  const tauriConfPath = path.join(TAURI_DIR, 'tauri.conf.json');
-  const tauriConf = readFileSync(tauriConfPath, 'utf8');
-  // 只替换 "version" 行，避免 JSON.stringify 重排原有格式。
-  writeFileSync(
-    tauriConfPath,
-    tauriConf.replace(/^(\s*"version"\s*:\s*").*(",?)$/m, `$1${version}$2`),
-  );
-  console.log(`  bumped packages/desktop/src-tauri/tauri.conf.json → ${version}`);
-
-  const cargoTomlPath = path.join(TAURI_DIR, 'Cargo.toml');
-  const cargoToml = readFileSync(cargoTomlPath, 'utf8');
-  writeFileSync(cargoTomlPath, cargoToml.replace(/^version\s*=\s*".*"$/m, `version = "${version}"`));
-  console.log(`  bumped packages/desktop/src-tauri/Cargo.toml → ${version}`);
-
-  // 同步 Cargo.lock（desktop-release.yml 的 cargo test 用了 --locked，lock 不同步会挂）。
-  execSync(`cargo update -p taskora-desktop --manifest-path "${cargoTomlPath}"`, {
-    cwd: ROOT,
-    stdio: 'inherit',
-  });
-  console.log(`  synced packages/desktop/src-tauri/Cargo.lock → ${version}`);
+  writeFileSync(abs, JSON.stringify(pkg, null, 2) + '\n');
+  console.log(`  bumped ${file} → ${version}`);
 }
 
-console.log(`\n下一步:`);
-console.log(
-  `  1. 编辑 CHANGELOG.md${track === 'desktop' ? '（加 "## Desktop [x.y.z]" 小节）' : ''}`,
+// bump Tauri 版本载体，只替换 "version" 行，避免重排原有格式。
+const tauriConfPath = path.join(TAURI_DIR, 'tauri.conf.json');
+writeFileSync(
+  tauriConfPath,
+  readFileSync(tauriConfPath, 'utf8').replace(
+    /^(\s*"version"\s*:\s*").*(",?)$/m,
+    `$1${version}$2`,
+  ),
 );
+console.log(`  bumped packages/desktop/src-tauri/tauri.conf.json → ${version}`);
+
+const cargoTomlPath = path.join(TAURI_DIR, 'Cargo.toml');
+writeFileSync(
+  cargoTomlPath,
+  readFileSync(cargoTomlPath, 'utf8').replace(/^version\s*=\s*".*"$/m, `version = "${version}"`),
+);
+console.log(`  bumped packages/desktop/src-tauri/Cargo.toml → ${version}`);
+
+// 同步 Cargo.lock（desktop-release.yml 的 cargo test 用了 --locked，lock 不同步会挂）。
+execSync(`cargo update -p taskora-desktop --manifest-path "${cargoTomlPath}"`, {
+  cwd: ROOT,
+  stdio: 'inherit',
+});
+console.log(`  synced packages/desktop/src-tauri/Cargo.lock → ${version}`);
+
+console.log(`\n下一步:`);
+console.log(`  1. 编辑 CHANGELOG.md（桌面专属改动标注 (desktop)）`);
 console.log(`  2. git commit -am "release: ${tag}"`);
 console.log(`  3. git tag ${tag} && git push origin main --tags`);

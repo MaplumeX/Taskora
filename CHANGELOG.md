@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/), and this
 project adheres to [Semantic Versioning](https://semver.org/).
 
+> **注**：自 v0.3.0 起桌面端与仓库其余包统一版本号、随 `v*` tag 同步发版，
+> CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
+> 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
+
+## [Unreleased]
+
+### Changed
+
+- **release**: 统一桌面端与 Web/后端的版本号（desktop 0.2.0 → 0.3.0 对齐），
+  双轨制改为单轨：`pnpm release <x.y.z>` 一次 bump 全部包与 Tauri 三件套，
+  `v*` tag 同时触发镜像发布（`release.yml`）与三平台桌面打包
+  （`desktop-release.yml`），不再使用 `desktop-v*` tag。历史双轨小节保留。
+
 ## [0.3.0] - 2026-09-16
 
 ### Features
