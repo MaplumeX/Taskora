@@ -128,7 +128,7 @@ pnpm dev
 
 ## 桌面客户端
 
-预编译的桌面安装包发布在 [GitHub Releases](https://github.com/maplumex/taskora/releases)，对应 `desktop-v*` tag：
+预编译的桌面安装包发布在 [GitHub Releases](https://github.com/maplumex/taskora/releases)，对应 `v*` tag（与镜像发版同一 tag）：
 
 | 平台 | 产物 |
 | --- | --- |
@@ -189,7 +189,7 @@ GitHub Actions 工作流位于 `.github/workflows/`：
 - **Release**（`release.yml`）—— 匹配 `v*` 的 git tag 触发：构建并推送镜像到 GHCR。
   - `ghcr.io/maplumex/taskora-backend:vX.Y.Z` / `:latest`
   - `ghcr.io/maplumex/taskora-frontend:vX.Y.Z` / `:latest`
-- **桌面端 Release**（`desktop-release.yml`）—— 匹配 `desktop-v*` 的 git tag 触发：三平台安装包（dmg / NSIS exe / AppImage）构建并上传到 GitHub Release。V1 不签名、无自动更新。
+- **桌面端 Release**（`desktop-release.yml`）—— 同样由 `v*` tag 触发：三平台安装包（dmg / NSIS exe / AppImage）构建并上传到 GitHub Release。桌面端版本号与仓库其余包统一。V1 不签名、无自动更新。
 
 完整的版本管理、分支策略与多客户端演进计划详见 [docs/versioning-and-deployment.md](docs/versioning-and-deployment.md)。
 

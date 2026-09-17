@@ -27,38 +27,41 @@ packages/
 
 ## 二、版本号策略
 
-**双轨制版本（当前已生效）：**
+**统一版本号（当前已生效）：**
 
-| 轨道       | 包                                                       | 版本号                                             | Tag              |
-| ---------- | -------------------------------------------------------- | -------------------------------------------------- | ---------------- |
-| **主轨**   | 根 package.json + backend / frontend / api / ui / shared | 统一版本号，写在根 `package.json` 并同步到五个子包 | `v0.2.0`         |
-| **桌面轨** | desktop                                                  | 独立版本号                                         | `desktop-v0.1.1` |
+| 包                                                                 | 版本号                                             | Tag      |
+| ------------------------------------------------------------------ | -------------------------------------------------- | -------- |
+| 根 package.json + 全部子包（backend / frontend / api / ui / shared / desktop） | 统一版本号，写在根 `package.json` 并同步到全部子包与 Tauri 三件套 | `v0.3.0` |
 
-- 主轨所有子包共享同一版本号，不单独漂移。
-- desktop 独立发版（桌面端发版节奏由 UI 迭代决定，与后端无关），见二·五节。
+- 所有子包共享同一版本号，不单独漂移（含桌面端）。
+- 历史：v0.3.0 之前桌面端独立版本号（`desktop-v*` tag）。因两端事实上总是同
+  步发版、功能一致，双轨版本号只剩成本没有信息量，于 v0.3.0 起合并为单轨。
+- 若未来桌面端出现独立的发版节奏（如纯 Web 热修不出桌面包、或平台专属功能），
+  再拆出独立的桌面轨道。
 
 **发版命令（已落地）：**
 
 ```bash
-pnpm release main 0.2.1      # bump 根 + 五个主轨子包 → tag v0.2.1
-pnpm release desktop 0.2.0   # 仅 bump packages/desktop → tag desktop-v0.2.0
+pnpm release 0.4.0    # bump 根 + 全部子包 + Tauri 三件套 → tag v0.4.0
 ```
 
 脚本（`scripts/release.mjs`）负责：写版本号、拦截降级、检查工作区干净。
-发版流程：`pnpm release <track> <version>` → 编辑 `CHANGELOG.md` →
-`git commit -am "release: <tag>"` → `git tag <tag> && git push origin main --tags`。
-CI 按 tag 前缀自动接管（`release.yml` / `desktop-release.yml`）。
+发版流程：`pnpm release <version>` → 编辑 `CHANGELOG.md` →
+`git commit -am "release: v<x.y.z>"` →
+`git tag v<x.y.z> && git push origin main --tags`。
+CI 按 tag 自动接管：`v*` 同时触发 `release.yml`（推双镜像）和
+`desktop-release.yml`（三平台桌面打包）。
 
 **不引入 changesets**，理由：
 
 - `shared` 不发包 → 无跨包版本联动需求。
-- 主轨只有一条发版线，桌面轨独立；版本协调由 release 脚本 + tag 前缀解决。
+- 只有一条发版线；版本协调由 release 脚本 + tag 解决。
 
 ## 二·五、桌面端发布（已定）
 
 - **平台**：三平台出包，主力开发平台为 Linux，Linux 构建质量优先保证。
 - **安装包格式**：macOS `.dmg`、Windows NSIS `.exe`、Linux AppImage。`.deb` 等后续有需求再加。
-- **CI 策略**：PR / main CI 运行 desktop 的 typecheck、单测、Linux Rust 编译检查和 Windows 原生会话测试；三平台安装包仅在 tag `desktop-v*` 时构建发布。
+- **CI 策略**：PR / main CI 运行 desktop 的 typecheck、单测、Linux Rust 编译检查和 Windows 原生会话测试；三平台安装包仅在 tag `v*` 时构建发布（与镜像发布同一 tag 触发，两条流水线各自独立）。
 - **V1 无自动更新**：用户手动从 GitHub Releases 下载新版；后续再上 `tauri-plugin-updater`（需 updater 签名密钥）。
 - **V1 不签名**：macOS 需右键打开绕过 Gatekeeper，Windows 会触发 SmartScreen 警告；README 需写清绕过方法。待有真实用户后购证书。
 - **Token 存储**：Windows 使用当前用户 DPAPI 加密的本地 `session.dpapi` 文件；macOS Keychain / Linux Secret Service 保存完整会话条目。不用 WebView localStorage 保存令牌。旧凭据自动迁移，详见 [ADR-0002](adr/0002-windows-dpapi-session-file.md)。
@@ -183,13 +186,17 @@ LABEL org.opencontainers.image.revision="${GIT_SHA}"
 
 - checkout → docker build → 推送到 registry → 触发生产部署。
 
+**3. `desktop-release.yml`（git tag `v*` 触发）**
+
+- 三平台 Tauri 打包上传 GitHub Releases，与 `release.yml` 同 tag、独立运行。
+
 ### 未来阶段（多客户端）
 
 三条独立 pipeline，互不干扰：
 
 1. `ci-backend.yml` — PR 触发测试 + migration 检查
 2. `ci-web.yml` — PR 触发构建 + 类型检查
-3. `ci-clients.yml` — 仅在对应 tag（`mobile-v*` / `desktop-v*`）推送时触发打包上传
+3. `ci-clients.yml` — 仅在对应 tag（`mobile-v*` / 桌面恢复 `desktop-v*`）推送时触发打包上传
 
 这样各客户端可以各自发版，不会因为一个客户端的改动启动其他平台构建。
 
@@ -203,12 +210,13 @@ LABEL org.opencontainers.image.revision="${GIT_SHA}"
 4. 写 `docker-compose.yml`（本地开发用，跑 postgres + backend + frontend）
 5. ~~给 NestJS 加 `/api/v1` 前缀（`app.setGlobalPrefix('api/v1')`）~~ ✅ 已完成（`backend/src/main.ts`）
 6. ~~CI 加 `typecheck + test + docker build` 步骤（验证可构建）~~ ✅ 已完成（`ci.yml`）
-7. ~~发版脚本：`pnpm release main|desktop <version>`~~ ✅ 已完成（`scripts/release.mjs`）
+7. ~~发版脚本：`pnpm release <version>`（统一单轨，v0.3.0 起含桌面端）~~ ✅ 已完成（`scripts/release.mjs`）
 
 **未来要做（多客户端阶段，加法，不推翻现在决策）：**
 
-1. 加 mobile 后新增 `mobile-v*` tag 前缀（现有 `v*` 保持主轨不变，无需迁移）
+1. 加 mobile 后新增 `mobile-v*` tag 前缀（现有 `v*` 保持不变，无需迁移）
 2. 拆分 CI pipeline 为每客户端一条
 3. 设计增量同步协议（`updated_at` + `deleted_at` + 客户端 ID）
 4. 移动端 EAS Update / Submit 管道对接 git tag
 5. 桌面端自更新通道
+6. 桌面端需要独立发版节奏时，恢复桌面轨版本号与 `desktop-v*` tag（发版脚本需扩展回双轨）

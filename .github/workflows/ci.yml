@@ -38,7 +38,7 @@ jobs:
         run: docker build -f packages/frontend/Dockerfile -t taskora-frontend:ci .
 
   # Linux 编译检查；Windows 会话测试验证真实 DPAPI。三平台安装包仍由
-  # desktop-v* tag 的 desktop-release.yml 构建。
+  # v* tag 的 desktop-release.yml 构建。
   desktop-rust-check:
     runs-on: ubuntu-22.04
     steps:
