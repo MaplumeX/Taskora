@@ -3,8 +3,8 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useContentBottomActions } from './useContentBottomActions';
 import { usePageTaskContext } from './usePageTaskContext';
 
-/** Logical view id for a pathname (segment before any route param). */
-function viewOf(pathname: string): string {
+/** 当前 pathname 的逻辑视图。 */
+export function viewOf(pathname: string): string {
   if (pathname === '/') return 'today';
   const segment = pathname.split('/').filter(Boolean)[0] ?? 'today';
   return segment;

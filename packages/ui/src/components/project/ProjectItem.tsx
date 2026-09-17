@@ -18,9 +18,11 @@ interface Props {
   project: ProjectResponseDto;
   taskCount?: number;
   showChevron?: boolean;
+  /** 键盘 Selection 停留在该行时高亮（Project 行仅是遍历停留点）。 */
+  selected?: boolean;
 }
 
-export function ProjectItem({ project, taskCount, showChevron = true }: Props) {
+export function ProjectItem({ project, taskCount, showChevron = true, selected = false }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const completeProject = useCompleteProject();
@@ -39,6 +41,7 @@ export function ProjectItem({ project, taskCount, showChevron = true }: Props) {
       <div
         role="button"
         tabIndex={0}
+        aria-selected={selected || undefined}
         onClick={() => navigate(`/projects/${project.id}`)}
         onKeyDown={(e) => {
           // Ignore keys coming from the nested progress ring button.
@@ -47,7 +50,10 @@ export function ProjectItem({ project, taskCount, showChevron = true }: Props) {
           e.preventDefault();
           navigate(`/projects/${project.id}`);
         }}
-        className="flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-1.5 text-left hover-instant hover:bg-accent max-md:py-2.5"
+        className={cn(
+          'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-1.5 text-left hover-instant hover:bg-accent max-md:py-2.5',
+          selected && 'bg-accent',
+        )}
       >
         <ProjectProgressRing
           total={project.taskTotalCount}

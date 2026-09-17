@@ -7,14 +7,23 @@ import type { TaskResponseDto } from '@taskora/shared';
 interface CalendarTaskRowProps {
   task: TaskResponseDto;
   onToggleComplete: (task: TaskResponseDto) => void;
+  /** 键盘 Selection 停留时高亮（aria-selected）。 */
+  selected?: boolean;
+  onRowClick?: () => void;
 }
 
-export function CalendarTaskRow({ task, onToggleComplete }: CalendarTaskRowProps) {
+export function CalendarTaskRow({ task, onToggleComplete, selected = false, onRowClick }: CalendarTaskRowProps) {
   const { t } = useTranslation();
   const completed = task.status === 'COMPLETED';
 
   return (
-    <div className="group/taskrow flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-accent/60">
+    <div
+      aria-selected={selected || undefined}
+      className={cn(
+        'group/taskrow flex items-center gap-1 rounded-md px-1 py-0.5 hover:bg-accent/60',
+        selected && 'bg-accent',
+      )}
+    >
       <TaskCheckbox
         checked={completed}
         onToggle={() => onToggleComplete(task)}
@@ -22,7 +31,10 @@ export function CalendarTaskRow({ task, onToggleComplete }: CalendarTaskRowProps
       />
       <button
         type="button"
-        onClick={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onRowClick?.();
+        }}
         className={cn(
           'min-w-0 flex-1 truncate text-left text-xs leading-4 text-foreground',
           completed && 'text-muted-foreground line-through',

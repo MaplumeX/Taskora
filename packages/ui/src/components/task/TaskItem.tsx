@@ -96,6 +96,7 @@ export function TaskItem({
   return (
     <div
       data-task-item
+      aria-selected={selectionState === 'selected' || selectionState === 'expanded' ? true : undefined}
       className={cn(
         'group flex flex-col transition-colors',
         selectionState === 'selected' && 'bg-accent rounded-lg',
@@ -105,8 +106,7 @@ export function TaskItem({
       onKeyDown={(e) => {
         if (!expanded || e.key !== 'Escape' || !onRowClick) return;
         const target = e.target as HTMLElement;
-        const tag = target.tagName;
-        if (tag === 'INPUT' || tag === 'TEXTAREA') {
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
           e.preventDefault();
           onRowClick();
         }
@@ -139,7 +139,14 @@ export function TaskItem({
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.stopPropagation();
-                e.currentTarget.blur();
+                // ⌘Enter/Ctrl+Enter：保存（先 blur 触发提交）并收起。
+                if (e.metaKey || e.ctrlKey) {
+                  e.preventDefault();
+                  e.currentTarget.blur();
+                  onRowClick?.();
+                } else {
+                  e.currentTarget.blur();
+                }
               } else if (e.key === ' ') {
                 e.stopPropagation();
               } else if (e.key === 'Escape') {

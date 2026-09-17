@@ -6,7 +6,9 @@ import type { FeedItem } from '@taskora/shared';
 import { FeedItemRow } from '@/components/feed/FeedItemRow';
 import { useFeedQuery } from '@taskora/api';
 import {
+  selectionStateOf,
   useCompleteTask,
+  useSelectionScope,
   useUncompleteTask,
 } from '@taskora/api';
 import { useProjectsQuery } from '@taskora/api';
@@ -28,7 +30,7 @@ export default function Upcoming() {
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const {
-    selectedId,
+    selectedIds,
     expandedId,
     handleRowClick,
     handleBlankClick,
@@ -48,6 +50,18 @@ export default function Upcoming() {
     [items],
   );
 
+  // 注册可遍历行（按渲染顺序：本周每天，之后各月）。
+  const rows = useMemo(
+    () =>
+      items.map((item) => ({
+        id: item.id,
+        kind: item.type === 'task' ? ('task' as const) : ('project' as const),
+        completed: item.type === 'task' ? item.status === 'COMPLETED' : false,
+      })),
+    [items],
+  );
+  useSelectionScope(rows);
+
   const toggleComplete = (item: FeedItem) => {
     if (item.type !== 'task') return;
     if (item.status === 'COMPLETED') uncompleteTask.mutate(item.id);
@@ -57,10 +71,9 @@ export default function Upcoming() {
   const renderItem = (item: FeedItem) => {
     const isTask = item.type === 'task';
     const taskItem = item as { projectId: string | null; areaId: string | null };
-    const selectionState =
-      isTask
-        ? expandedId === item.id ? 'expanded' : selectedId === item.id ? 'selected' : 'idle'
-        : 'idle';
+    const selectionState = isTask
+      ? selectionStateOf(selectedIds, expandedId, item.id)
+      : 'idle';
     return (
       <FeedItemRow
         key={item.id}

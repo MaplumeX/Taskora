@@ -1,16 +1,18 @@
-import { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { FolderPlus, Heading, Plus, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { SearchModal } from '@/components/search/SearchModal';
-import { useContentBottomActionsForRoute } from '@taskora/api';
+import { useContentBottomActionsForRoute, useUiInteractionStore } from '@taskora/api';
 
 export function ContentBottomBar() {
   const { t } = useTranslation();
   const { pathname } = useLocation();
-  const [searchOpen, setSearchOpen] = useState(false);
+  // 搜索入口由全局 keymap registry（⌘F/Ctrl+F）驱动，状态提升到
+  // uiInteraction store；本组件只负责挂载 SearchModal。
+  const searchOpen = useUiInteractionStore((s) => s.searchOpen);
+  const setSearchOpen = useUiInteractionStore((s) => s.setSearchOpen);
   const {
     showAddTask,
     showAddProject,
@@ -22,18 +24,6 @@ export function ContentBottomBar() {
     addProjectPending,
     addHeadingPending,
   } = useContentBottomActionsForRoute();
-
-  // Cmd/Ctrl+K → open search modal
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setSearchOpen(true);
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, []);
 
   // 助手页有自己的输入框与搜索能力，隐藏任务管理的底部动作条
   if (pathname.startsWith('/agent')) return null;

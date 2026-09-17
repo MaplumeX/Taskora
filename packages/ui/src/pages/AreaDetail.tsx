@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
@@ -20,7 +20,7 @@ import { CSS } from '@dnd-kit/utilities';
 
 import type { ProjectResponseDto } from '@taskora/shared';
 
-import { useAreasQuery, useUpdateArea } from '@taskora/api';
+import { useAreasQuery, useSelectionScope, useTaskRowSelection, useUpdateArea } from '@taskora/api';
 import { useProjectsQuery, useReorderProjects } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
 import { useTasksQuery } from '@taskora/api';
@@ -31,7 +31,13 @@ import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { AreaMoreMenu } from '@/components/area/AreaMoreMenu';
 import { toast } from 'sonner';
 
-function SortableProjectItem({ project }: { project: ProjectResponseDto }) {
+function SortableProjectItem({
+  project,
+  selected,
+}: {
+  project: ProjectResponseDto;
+  selected: boolean;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: project.id });
 
@@ -46,7 +52,7 @@ function SortableProjectItem({ project }: { project: ProjectResponseDto }) {
       {...attributes}
       {...listeners}
     >
-      <ProjectItem project={project} />
+      <ProjectItem project={project} selected={selected} />
     </div>
   );
 }
@@ -67,6 +73,7 @@ export default function AreaDetail() {
   const reorderProjects = useReorderProjects();
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ areaId: id });
   const updateArea = useUpdateArea();
+  const { selectedIds } = useTaskRowSelection();
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
@@ -79,6 +86,13 @@ export default function AreaDetail() {
     const reordered = arrayMove(ids, ids.indexOf(active.id as string), ids.indexOf(over.id as string));
     reorderProjects.mutate(reordered);
   };
+
+  // 注册项目段可遍历行（Project 行仅作遍历停留点，⌘K/⌫ 对其无效）。
+  const projectRows = useMemo(
+    () => projects.map((p) => ({ id: p.id, kind: 'project' as const, completed: false })),
+    [projects],
+  );
+  useSelectionScope(projectRows);
 
   return (
     <div className="flex flex-col gap-4">
@@ -114,7 +128,7 @@ export default function AreaDetail() {
           <SortableContext items={projects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
             <div className="flex flex-col">
               {projects.map((p) => (
-                <SortableProjectItem key={p.id} project={p} />
+                <SortableProjectItem key={p.id} project={p} selected={selectedIds.includes(p.id)} />
               ))}
             </div>
           </SortableContext>

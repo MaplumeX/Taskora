@@ -28,13 +28,16 @@ import {
   useUpdateProjectHeading,
 } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
+import { cn } from '@/lib/utils';
 
 interface Props {
   heading: ProjectHeadingResponseDto;
+  /** 键盘 Selection 停留在该 Heading 行时高亮（⌘K/⌫ 对其无效）。 */
+  selected?: boolean;
   dragHandleProps?: React.ButtonHTMLAttributes<HTMLButtonElement>;
 }
 
-export function ProjectHeadingRow({ heading, dragHandleProps }: Props) {
+export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }: Props) {
   const { t } = useTranslation();
   const pendingAutoEditId = useUiInteractionStore((state) => state.pendingAutoEditId);
   const clearPendingAutoEditId = useUiInteractionStore((state) => state.clearPendingAutoEditId);
@@ -86,7 +89,13 @@ export function ProjectHeadingRow({ heading, dragHandleProps }: Props) {
 
   return (
     <>
-      <div className="group flex h-10 items-center gap-1.5 border-b border-border pt-2">
+      <div
+        aria-selected={selected || undefined}
+        className={cn(
+          'group flex h-10 items-center gap-1.5 border-b border-border pt-2',
+          selected && 'rounded-lg bg-accent',
+        )}
+      >
         {!archived && (
           <button
             type="button"

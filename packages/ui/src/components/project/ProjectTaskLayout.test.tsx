@@ -114,10 +114,19 @@ vi.mock('@/components/task/TaskItem', async () => {
 vi.mock('./ProjectHeadingRow', async () => {
   const ReactModule = await import('react');
   return {
-    ProjectHeadingRow: ({ heading: currentHeading }: { heading: ProjectHeadingResponseDto }) =>
+    ProjectHeadingRow: ({
+      heading: currentHeading,
+      selected,
+    }: {
+      heading: ProjectHeadingResponseDto;
+      selected?: boolean;
+    }) =>
       ReactModule.createElement(
         'div',
-        { 'data-heading-row': currentHeading.id },
+        {
+          'data-heading-row': currentHeading.id,
+          'data-heading-selected': selected ? 'true' : 'false',
+        },
         currentHeading.title,
       ),
   };
@@ -143,6 +152,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
       const [expandedId, setExpandedId] = ReactModule.useState(harness.initialExpandedId);
       return {
         selectedId,
+        selectedIds: selectedId ? [selectedId] : [],
         expandedId,
         handleRowClick: (id: string) => setSelectedId(id),
         handleBlankClick: () => {
