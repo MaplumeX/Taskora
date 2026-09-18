@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { zhCN, enUS } from 'react-day-picker/locale';
 
-import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
+import type { ScheduledFieldCurrent, ScheduledFieldPatch } from './fieldProps';
 import { ScheduledType } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
@@ -10,8 +10,8 @@ import { startOfToday } from '@taskora/api';
 import { usePreferencesStore } from '@taskora/api';
 
 interface FieldProps {
-  current: TaskResponseDto;
-  onPatch: (data: UpdateTaskDto) => void;
+  current: ScheduledFieldCurrent;
+  onPatch: (data: ScheduledFieldPatch) => void;
   onClose?: () => void;
 }
 

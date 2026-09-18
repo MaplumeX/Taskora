@@ -158,17 +158,13 @@ function PickerContent({
   patch: (data: UpdateProjectDto) => void;
   onClose: () => void;
 }) {
-  const fieldCurrent = current as unknown as Parameters<typeof ScheduledDateField>[0]['current'];
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fieldPatch = patch as any;
-
   if (kind === 'scheduled') {
-    return <ScheduledDateField current={fieldCurrent} onPatch={fieldPatch} onClose={onClose} />;
+    return <ScheduledDateField current={current} onPatch={patch} onClose={onClose} />;
   }
   if (kind === 'due') {
-    return <DueDateField current={fieldCurrent} onPatch={fieldPatch} />;
+    return <DueDateField current={current} onPatch={patch} />;
   }
-  return <TagsField current={fieldCurrent} onPatch={fieldPatch} />;
+  return <TagsField current={current} onPatch={patch} />;
 }
 
 interface ProjectContextMenuProps extends ProjectMenuProps {

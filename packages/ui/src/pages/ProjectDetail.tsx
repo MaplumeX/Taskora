@@ -7,6 +7,7 @@ import { useUiInteractionStore } from '@taskora/api';
 import { useTasksQuery } from '@taskora/api';
 import { useProjectHeadingsQuery } from '@taskora/api';
 import { ProjectTaskLayout } from '@/components/project/ProjectTaskLayout';
+import { ProjectMetaRow } from '@/components/project/ProjectMetaRow';
 import { ProjectCompletedTasks } from '@/components/project/ProjectCompletedTasks';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
@@ -99,6 +100,8 @@ export default function ProjectDetail() {
           />
         )}
       </div>
+
+      {project ? <ProjectMetaRow project={project} /> : null}
 
       {project ? (
         <MarkdownNotesEditor
