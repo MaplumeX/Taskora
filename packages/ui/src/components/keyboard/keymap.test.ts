@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveAction, type KeyEventLike } from './keymap';
+import { resolveAction, shortcutLabel, type KeyEventLike } from './keymap';
 
 /** 快捷构造事件（默认无修饰键）。 */
 function key(key: string, mods: Partial<KeyEventLike> = {}): KeyEventLike {
@@ -153,5 +153,25 @@ describe('resolveAction — 通用', () => {
 
   it.each(['mac', 'windows', 'web'] as const)('%s: Shift+Enter 不展开（保留扩展语义）', (platform) => {
     expect(resolveAction(key('Enter', { shiftKey: true }), platform)).toBeNull();
+  });
+});
+
+// shortcutLabel 的期望值以 docs/keyboard-shortcuts.md 的 P0 键位表为
+// 独立真值来源（⌘N / Ctrl+N / Alt+N 三平台矩阵）。
+describe('shortcutLabel — 按钮 hint 键位文案', () => {
+  it.each([
+    ['search', { mac: '⌘F', windows: 'Ctrl+F', web: 'Ctrl+F' }],
+    ['newTask', { mac: '⌘N', windows: 'Ctrl+N', web: 'Alt+N' }],
+    ['newProject', { mac: '⌥⌘N', windows: 'Ctrl+Alt+N', web: 'Alt+Shift+N' }],
+    ['newHeading', { mac: '⇧⌘N', windows: 'Ctrl+Shift+N', web: 'Alt+H' }],
+  ] as const)('%s 三平台文案与键位表一致', (action, labels) => {
+    expect(shortcutLabel(action, 'mac')).toBe(labels.mac);
+    expect(shortcutLabel(action, 'windows')).toBe(labels.windows);
+    expect(shortcutLabel(action, 'web')).toBe(labels.web);
+  });
+
+  it('与 resolveAction 的解析键位一一对应（抽查 mac 搜索 / web 新任务）', () => {
+    expect(resolveAction(key('f', { metaKey: true }), 'mac')?.type).toBe('search');
+    expect(resolveAction(key('n', { altKey: true }), 'web')?.type).toBe('newTask');
   });
 });

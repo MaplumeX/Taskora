@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Menu, MessageSquare, Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer';
 import {
   useAgentConfig,
@@ -54,16 +55,18 @@ export default function AgentPage() {
           </span>
         </Button>
         <div className="flex-1" />
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8"
-          aria-label={t('agent:newConversation')}
-          disabled={create.isPending}
-          onClick={newConversation}
-        >
-          <Plus className="h-4 w-4" />
-        </Button>
+        <Hint label={t('agent:newConversation')}>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8"
+            aria-label={t('agent:newConversation')}
+            disabled={create.isPending}
+            onClick={newConversation}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </Hint>
       </header>
 
       <div className="flex min-h-0 flex-1 flex-col">
