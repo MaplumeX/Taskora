@@ -29,7 +29,13 @@ export function FeedItemRow({
   showScheduledBadge,
 }: Props) {
   if (!isTaskFeedItem(item)) {
-    return <ProjectFeedRow item={item} showScheduledBadge={showScheduledBadge} />;
+    return (
+      <ProjectFeedRow
+        item={item}
+        showScheduledBadge={showScheduledBadge}
+        selectionState={selectionState}
+      />
+    );
   }
 
   // TaskFeedItem is a subset of TaskResponseDto (missing `subtasks`).

@@ -20,9 +20,19 @@ interface Props {
   showChevron?: boolean;
   /** 键盘 Selection 停留在该行时高亮（Project 行仅是遍历停留点）。 */
   selected?: boolean;
+  /** 列表页使用（Area 详情）：纳入 roving focus（data-selection-row +
+   * 选中行作为唯一 tab 停靠点）。侧边栏不传，保持普通 tabIndex={0}
+   * 行为，避免与列表页同名行冲突。 */
+  selectionRow?: boolean;
 }
 
-export function ProjectItem({ project, taskCount, showChevron = true, selected = false }: Props) {
+export function ProjectItem({
+  project,
+  taskCount,
+  showChevron = true,
+  selected = false,
+  selectionRow = false,
+}: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const completeProject = useCompleteProject();
@@ -40,7 +50,8 @@ export function ProjectItem({ project, taskCount, showChevron = true, selected =
     <ProjectContextMenu project={project} current={project}>
       <div
         role="button"
-        tabIndex={0}
+        data-selection-row={selectionRow ? project.id : undefined}
+        tabIndex={selectionRow ? (selected ? 0 : -1) : 0}
         aria-selected={selected || undefined}
         onClick={() => navigate(`/projects/${project.id}`)}
         onKeyDown={(e) => {
@@ -52,7 +63,8 @@ export function ProjectItem({ project, taskCount, showChevron = true, selected =
         }}
         className={cn(
           'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-1.5 text-left hover-instant hover:bg-accent max-md:py-2.5',
-          selected && 'bg-accent',
+          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
+          selected && 'bg-accent focus-visible:ring-0',
         )}
       >
         <ProjectProgressRing
