@@ -180,6 +180,12 @@
     float: left;
     height: 0;
   }
+  .notes-prose .ProseMirror {
+    /* The wrapper div carries min-h-[60px]; the editable element itself must
+       fill it, otherwise the empty area below the first line shows the default
+       cursor and clicks there never reach the contenteditable. */
+    min-height: inherit;
+  }
   .notes-prose .ProseMirror:focus {
     outline: none;
   }
