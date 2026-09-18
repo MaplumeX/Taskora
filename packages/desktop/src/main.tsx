@@ -6,6 +6,7 @@ import pkg from '../package.json';
 import '@taskora/api';
 import { setAppVersion } from '@taskora/api';
 import { App } from './App';
+import { TitleBar } from './TitleBar';
 import { QuickAddApp } from './QuickAddApp';
 import { bootQuickAdd } from './quickAddBoot';
 import './index.css';
@@ -24,6 +25,8 @@ async function mount() {
   }
 
   const kind = new URLSearchParams(window.location.search).get('window');
+  // 窗口标记供 CSS 区分主窗口（自绘标题栏扣高）与 quick-add 弹窗。
+  document.documentElement.dataset.window = kind ?? 'main';
 
   if (kind === 'quick-add') {
     await bootQuickAdd().catch(() => undefined);
@@ -62,6 +65,7 @@ async function mount() {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
+        <TitleBar />
         <App />
         <Toaster richColors position="top-center" />
       </QueryClientProvider>
