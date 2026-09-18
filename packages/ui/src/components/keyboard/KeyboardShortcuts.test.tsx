@@ -256,11 +256,27 @@ describe('KeyboardShortcuts — 完成与删除', () => {
 });
 
 describe('KeyboardShortcuts — 展开与新建', () => {
-  it('Enter 行内展开选中任务（expandedId 置位）', () => {
+  it('Enter 行内展开选中任务，再按 Enter 收起（toggle，与点击循环对齐）', () => {
     renderAt('/today', tasks);
     press('ArrowDown');
     press('Enter');
     expect(useUiInteractionStore.getState().expandedId).toBe('t1');
+    // 焦点已不在编辑元素内（blur 后落到 body）：Enter 应收起而非 no-op。
+    press('Enter');
+    expect(useUiInteractionStore.getState().expandedId).toBeNull();
+    // 收起回 selected，再次 Enter 可重新展开。
+    press('Enter');
+    expect(useUiInteractionStore.getState().expandedId).toBe('t1');
+  });
+
+  it('展开另一行时收起原展开行', () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press('Enter');
+    expect(useUiInteractionStore.getState().expandedId).toBe('t1');
+    press('ArrowDown');
+    press('Enter');
+    expect(useUiInteractionStore.getState().expandedId).toBe('t2');
   });
 
   it('Space 在选中项下方新建并重排序', () => {
@@ -273,6 +289,8 @@ describe('KeyboardShortcuts — 展开与新建', () => {
     );
     expect(harness.reorderMutate).toHaveBeenCalledWith(['t1', 't2', 'created-task', 't3']);
     expect(useUiInteractionStore.getState().expandedId).toBe('created-task');
+    // 展开行同时被选中，后续 ⌫/⌘K 等作用于 selectedIds 的动作可用。
+    expect(useSelectionStore.getState().selectedIds).toContain('created-task');
   });
 
   it('⌘N 新建任务（复用底部动作）', () => {
@@ -297,7 +315,7 @@ describe('KeyboardShortcuts — 搜索与让路', () => {
     expect(useUiInteractionStore.getState().searchOpen).toBe(false);
   });
 
-  it('按钮聚焦时 Enter/Space 让路（原生 aria 路径，避免双重触发）', () => {
+  it('按钮聚焦时 Enter/Space 让路（原生激活路径，避免双重触发）', () => {
     renderAt('/today', tasks);
     press('ArrowDown');
     const button = document.createElement('button');
@@ -311,6 +329,23 @@ describe('KeyboardShortcuts — 搜索与让路', () => {
     });
     expect(useUiInteractionStore.getState().expandedId).toBeNull();
     button.remove();
+  });
+
+  it('Tab 聚焦 role=button 的行 div 后按 Enter 仍展开（无原生激活语义，不让路）', () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    const rowButton = document.createElement('div');
+    rowButton.setAttribute('role', 'button');
+    rowButton.setAttribute('tabindex', '0');
+    document.body.appendChild(rowButton);
+    rowButton.focus();
+    act(() => {
+      rowButton.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }),
+      );
+    });
+    expect(useUiInteractionStore.getState().expandedId).toBe('t1');
+    rowButton.remove();
   });
 
   it('行内编辑聚焦时快捷键让路', () => {

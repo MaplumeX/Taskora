@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import {
   ChevronDown,
   Tags as TagsIcon,
@@ -139,6 +139,7 @@ function CollapsibleSection({
 
 export function Sidebar() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   const user = useAuthStore((s) => s.user);
   const logout = useLogout();
   const openSettings = useUiInteractionStore((s) => s.openSettings);
@@ -176,7 +177,13 @@ export function Sidebar() {
               <Settings className="mr-2 h-4 w-4" />
               {t('auth:accountSettings')}
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={logout}>{t('common:logout')}</DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() => {
+                void logout().then(() => navigate('/login', { replace: true }));
+              }}
+            >
+              {t('common:logout')}
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

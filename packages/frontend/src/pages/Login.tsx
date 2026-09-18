@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@taskora/ui/components/ui/button';
 import { Input } from '@taskora/ui/components/ui/input';
 import { Label } from '@taskora/ui/components/ui/label';
-import { useLogin } from '@taskora/api';
+import { useLogin } from '@/lib/hooks/useAuth';
 
 export default function Login() {
   const { t } = useTranslation();

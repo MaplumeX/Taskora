@@ -17,6 +17,8 @@ import {
 } from '@taskora/api';
 import { router } from '@/router';
 import { tryRecoverSession } from '@/lib/sessionRecovery';
+// 登录/注册/登出后的导航回调在此注册（副作用 import，必须先于页面加载）。
+import '@/lib/hooks/useAuth';
 import '@/index.css';
 
 // Apply theme synchronously before React renders to prevent FOUC

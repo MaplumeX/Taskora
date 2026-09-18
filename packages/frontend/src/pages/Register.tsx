@@ -5,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@taskora/ui/components/ui/button';
 import { Input } from '@taskora/ui/components/ui/input';
 import { Label } from '@taskora/ui/components/ui/label';
-import { useRegister } from '@taskora/api';
+import { useRegister } from '@/lib/hooks/useAuth';
 
 export default function Register() {
   const { t } = useTranslation();
