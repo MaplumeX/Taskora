@@ -59,6 +59,16 @@ export class UsersService {
       data: { passwordHash: hash },
     });
 
+    // A password change must end every other session: otherwise devices
+    // (and any stolen refresh tokens) stay signed in for up to 30 days —
+    // exactly the "I think my account is compromised" scenario where
+    // revocation matters most. The controller re-issues one fresh token
+    // for the session that performed the change.
+    await this.prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+
     return { ok: true };
   }
 
