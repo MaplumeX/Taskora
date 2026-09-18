@@ -134,5 +134,16 @@ describe('AuthController — refresh token transports', () => {
 
       expect(authService.revokeRefreshToken).toHaveBeenCalledWith('rt-1');
     });
+
+    it('works without an access token and stays idempotent with no RT at all', async () => {
+      // No JwtAuthGuard: an expired access token must not break logout.
+      const res = { clearCookie: vi.fn() } as never;
+
+      const body = await controller.logout(makeReq(), {}, res);
+
+      expect(authService.revokeRefreshToken).toHaveBeenCalledWith(undefined);
+      expect(body).toEqual({ ok: true });
+      expect(res.clearCookie).toHaveBeenCalled();
+    });
   });
 });

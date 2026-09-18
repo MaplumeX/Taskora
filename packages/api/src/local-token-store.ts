@@ -62,6 +62,13 @@ export const useLocalTokenStore = create<LocalTokenStoreState>()(
 /**
  * TokenStore implementation backed by localStorage.
  * Falls back to in-memory until first `get()` rehydrates it.
+ *
+ * `withSessionLock` uses the Web Locks API to serialize refresh/login/
+ * logout across tabs of the same origin. Without it, two tabs hitting 401
+ * at the same time both POST /auth/refresh with the same HttpOnly cookie;
+ * the slower response trips the server's refresh-token reuse detection and
+ * revokes the whole family, logging every tab out. Under the lock, the
+ * second tab runs after the first has already rotated the cookie.
  */
 export function createLocalTokenStore() {
   let cached: string | null | undefined;
@@ -74,6 +81,19 @@ export function createLocalTokenStore() {
       cached = token;
       writeToken(token);
       useLocalTokenStore.getState().setToken(token);
+    },
+    withSessionLock<T>(operation: () => Promise<T>): Promise<T> {
+      // Same lock name as the desktop store (different origins never share
+      // locks, so the reuse is safe). Older browsers without Web Locks
+      // degrade to per-tab serialization (the pre-fix behavior).
+      if (typeof navigator !== 'undefined' && navigator.locks) {
+        // lib.dom types the granted callback as returning T (not
+        // Promise<T>), so the awaited result needs a flattening cast.
+        return navigator.locks
+          .request('taskora-session', () => operation())
+          .then((result) => result as T);
+      }
+      return operation();
     },
   };
 }

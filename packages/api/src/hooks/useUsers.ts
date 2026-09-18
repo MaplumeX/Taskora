@@ -8,6 +8,7 @@ import {
   exportData,
 } from '@/api/users.api';
 import { useAuthStore } from '@/stores/auth.store';
+import { writeRefreshToken } from '@/token-store';
 import { authKeys } from '@/hooks/useAuth';
 import type {
   UpdateProfileDto,
@@ -36,8 +37,25 @@ export function useUpdateProfile() {
 }
 
 export function useUpdatePassword() {
+  const setToken = useAuthStore((s) => s.setToken);
   return useMutation({
     mutationFn: (data: UpdatePasswordDto) => updatePassword(data),
+    onSuccess: async (result) => {
+      // The password change revoked every refresh token server-side and
+      // issued a fresh one for this session (cookie on web, body on
+      // desktop). Persist it before the current access token expires,
+      // otherwise the next refresh uses the revoked token and signs out.
+      if (result.refreshToken) {
+        const token = useAuthStore.getState().token;
+        if (token) {
+          await setToken(token, result.refreshToken);
+        } else {
+          // Token-less edge (should not happen while signed in): at least
+          // persist the refresh token so the next boot can recover.
+          await writeRefreshToken(result.refreshToken);
+        }
+      }
+    },
   });
 }
 

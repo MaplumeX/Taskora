@@ -13,11 +13,26 @@ export default function Register() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
+  const [error, setError] = useState<string | null>(null);
+
+  const tooShort = password.length > 0 && password.length < 8;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (password !== confirm) return;
-    register.mutate({ email, password });
+    if (password !== confirm || tooShort) return;
+    setError(null);
+    register.mutate({ email, password }, {
+      onError: (err) => {
+        const status = (err as { response?: { status?: number } })?.response?.status;
+        setError(
+          status === 409
+            ? t('auth:registerFailedHint')
+            : status === 400
+              ? t('auth:passwordTooShort')
+              : t('auth:registerFailed'),
+        );
+      },
+    });
   };
 
   const mismatch = confirm.length > 0 && password !== confirm;
@@ -50,10 +65,17 @@ export default function Register() {
               type="password"
               placeholder="••••••••"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                setError(null);
+              }}
               required
+              minLength={8}
               autoComplete="new-password"
             />
+            {tooShort && (
+              <p className="text-xs text-destructive">{t('auth:passwordTooShort')}</p>
+            )}
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor="confirm">{t('auth:confirmPassword')}</Label>
@@ -70,7 +92,8 @@ export default function Register() {
               <p className="text-xs text-destructive">{t('auth:passwordMismatch')}</p>
             )}
           </div>
-          <Button type="submit" disabled={register.isPending || mismatch}>
+          {error && <p className="text-sm text-destructive">{error}</p>}
+          <Button type="submit" disabled={register.isPending || mismatch || tooShort}>
             {register.isPending ? t('auth:registering') : t('auth:register')}
           </Button>
         </form>

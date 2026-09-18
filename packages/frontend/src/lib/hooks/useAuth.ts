@@ -12,9 +12,21 @@ import {
   useLogout as useLogoutBase,
 } from '@taskora/api';
 
+/** sessionStorage flag set right before the post-register redirect. */
+export const REGISTERED_FLAG = 'taskora-registered';
+
 setAuthFlowNavigation({
   afterLogin: () => window.location.assign('/today'),
-  afterRegister: () => window.location.assign('/login'),
+  afterRegister: () => {
+    // Full-page navigation follows, so a toast would be torn down before
+    // painting. Leave a flag for the login page to show the success message.
+    try {
+      window.sessionStorage.setItem(REGISTERED_FLAG, '1');
+    } catch {
+      // storage unavailable — skip the notice, the redirect still works
+    }
+    window.location.assign('/login');
+  },
   onLoggedOut: () => {
     if (window.location.pathname !== '/login') {
       window.location.assign('/login');
