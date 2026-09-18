@@ -36,28 +36,28 @@ export function Calendar({
         months: 'flex flex-col sm:flex-row gap-2',
         month: 'flex flex-col gap-4',
         month_caption: 'flex justify-center items-center h-8',
-        caption_label: 'text-sm font-medium',
+        caption_label: 'text-sm font-semibold tracking-wide',
         nav: 'flex items-center justify-between absolute inset-x-1 top-3',
         button_previous:
           'inline-flex items-center justify-center rounded-md size-7 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:pointer-events-none max-md:size-11 max-md:rounded-full',
         button_next:
           'inline-flex items-center justify-center rounded-md size-7 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:pointer-events-none max-md:size-11 max-md:rounded-full',
         month_grid: 'w-full border-collapse',
-        weekdays: 'flex',
+        weekdays: 'flex pb-1',
         weekday:
-          'flex-1 text-muted-foreground rounded-md w-9 text-[0.8rem] font-normal',
+          'flex-1 text-muted-foreground rounded-md w-9 text-xs font-medium uppercase tracking-wide',
         week: 'flex w-full mt-2',
         day: cn(
           'flex-1 p-0 text-center text-sm',
           'rdp-day relative',
         ),
         day_button:
-          'inline-flex items-center justify-center rounded-full size-9 text-sm tabular-nums transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30 disabled:pointer-events-none max-md:size-10',
+          'inline-flex items-center justify-center rounded-full size-9 text-sm font-normal tabular-nums transition-colors cursor-default select-none hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30 disabled:pointer-events-none max-md:size-10 max-md:font-medium',
         outside: 'text-muted-foreground/50',
         today:
-          'after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:size-1 after:rounded-full after:bg-primary after:content-[""]',
+          'after:absolute after:bottom-1 after:left-1/2 after:-translate-x-1/2 after:size-1 after:rounded-full after:bg-primary after:content-[""] font-semibold',
         selected:
-          'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus-visible:ring-ring font-medium',
+          'rounded-full bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground focus-visible:ring-ring font-semibold shadow-sm',
         disabled: 'text-muted-foreground/40',
         hidden: 'invisible',
       }}

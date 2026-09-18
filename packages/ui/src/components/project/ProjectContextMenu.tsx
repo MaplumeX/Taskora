@@ -166,7 +166,7 @@ function PickerContent({
     return <ScheduledDateField current={fieldCurrent} onPatch={fieldPatch} onClose={onClose} />;
   }
   if (kind === 'due') {
-    return <DueDateField current={fieldCurrent} onPatch={fieldPatch} />;
+    return <DueDateField current={fieldCurrent} onPatch={fieldPatch} onClose={onClose} />;
   }
   return <TagsField current={fieldCurrent} onPatch={fieldPatch} />;
 }
