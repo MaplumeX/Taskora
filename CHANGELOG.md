@@ -9,6 +9,34 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.3.3] - 2026-09-18
+
+### Features
+
+- **ui**: Icon-only buttons now reveal a Things-style hint tooltip on
+  hover and keyboard focus (#34): the action label plus the
+  platform-aware shortcut (⌘N / Ctrl+N / Alt+N) sourced from the keymap
+  registry, so displayed keys always match the actual key bindings
+  (ADR-0004). Adds a Radix-based Tooltip primitive and a `<Hint>`
+  component; wired into ContentBottomBar, SidebarBottomBar settings,
+  Calendar prev/next, Agent new-conversation/chat send, and
+  TaskRowExpanded add/delete-subtask buttons (menu triggers skipped to
+  avoid tooltip/menu visual collision).
+
+### Fixes
+
+- **keyboard**: Make DOM focus follow selection with roving tabindex
+  (#33): keyboard navigation previously moved the highlight but left DOM
+  focus on the originally clicked row, showing a stray native
+  :focus-visible outline. Only the selected row is a tab stop;
+  KeyboardShortcuts moves DOM focus after every selection change;
+  sidebar project rows keep plain tab order; creating a task/heading
+  moves focus to the new row.
+- **ui**: Notes editor shows a text cursor and accepts clicks across its
+  full height (#32) — the min-height now sits on the editable
+  `.ProseMirror` element, so the blank area below the first line is
+  clickable (frontend and desktop stylesheets).
+
 ## [0.3.2] - 2026-09-18
 
 ### Features
