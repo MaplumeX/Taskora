@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectResponseDto, TagResponseDto } from '@taskora/shared';
@@ -124,17 +124,15 @@ describe('ProjectMetaRow', () => {
     const dateTriggers = screen.getAllByRole('button');
     await user.click(dateTriggers[1]);
 
-    const input = document.querySelector(
-      'input[type="date"]',
-    ) as HTMLInputElement;
-    expect(input).not.toBeNull();
-    fireEvent.change(input, { target: { value: '2999-01-05' } });
+    // 到期弹层现在是共享的日历组件：点 Today 快捷按钮即提交并关闭。
+    const todayButton = await screen.findByRole('button', { name: 'Today' });
+    await user.click(todayButton);
 
     await waitFor(() => {
       expect(mutationMocks.update).toHaveBeenCalledWith(
         {
           id: 'project-1',
-          data: { dueDate: expect.stringMatching(/^2999-01-0\dT/) },
+          data: { dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) },
         },
         expect.anything(),
       );

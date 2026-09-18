@@ -171,7 +171,9 @@ export function TaskRowExpanded({ task, current }: Props) {
           icon={<Clock className="h-4 w-4" />}
           active={!!current.dueDate}
         >
-          <DueDateField current={current} onPatch={patch} />
+          {(close) => (
+            <DueDateField current={current} onPatch={patch} onClose={close} />
+          )}
         </IconPopover>
 
         <IconPopover
