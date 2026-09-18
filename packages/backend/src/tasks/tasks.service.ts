@@ -1,8 +1,11 @@
+import { Injectable, NotFoundException } from '@nestjs/common';
 import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { TaskBucket, ProjectBucket, TaskStatus, ProjectStatus, ScheduledType } from '@taskora/shared';
+  TaskBucket,
+  ProjectBucket,
+  TaskStatus,
+  ProjectStatus,
+  ScheduledType,
+} from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
 import { Prisma } from '@prisma/client';
@@ -39,12 +42,7 @@ export class TasksService {
       scheduledDate = new Date(dto.scheduledDate);
     }
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
-    const bucket = this.resolveBucket(
-      dto.bucket,
-      scheduledType,
-      dto.projectId,
-      dto.areaId,
-    );
+    const bucket = this.resolveBucket(dto.bucket, scheduledType, dto.projectId, dto.areaId);
 
     const created = await this.prisma.task.create({
       data: {
@@ -57,9 +55,7 @@ export class TasksService {
         userId,
         projectId: dto.projectId,
         areaId: dto.areaId,
-        ...(dto.tagIds?.length
-          ? { tags: { create: dto.tagIds.map((tagId) => ({ tagId })) } }
-          : {}),
+        ...(dto.tagIds?.length ? { tags: { create: dto.tagIds.map((tagId) => ({ tagId })) } } : {}),
       },
       include: { tags: { include: { tag: true } } },
     });
@@ -159,10 +155,8 @@ export class TasksService {
 
     // Resolve bucket if scheduledType, scheduledDate, project/area, or bucket changed
     let bucket = existing.bucket;
-    const newProjectId =
-      dto.projectId !== undefined ? dto.projectId : existing.projectId;
-    const newAreaId =
-      dto.areaId !== undefined ? dto.areaId : existing.areaId;
+    const newProjectId = dto.projectId !== undefined ? dto.projectId : existing.projectId;
+    const newAreaId = dto.areaId !== undefined ? dto.areaId : existing.areaId;
 
     if (
       dto.scheduledType !== undefined ||
@@ -193,19 +187,13 @@ export class TasksService {
     }
     data.bucket = bucket;
     if (dto.projectId !== undefined) {
-      data.project = dto.projectId
-        ? { connect: { id: dto.projectId } }
-        : { disconnect: true };
+      data.project = dto.projectId ? { connect: { id: dto.projectId } } : { disconnect: true };
     }
-    if (
-      dto.projectId !== undefined && dto.projectId !== existing.projectId
-    ) {
+    if (dto.projectId !== undefined && dto.projectId !== existing.projectId) {
       data.heading = { disconnect: true };
     }
     if (dto.areaId !== undefined) {
-      data.area = dto.areaId
-        ? { connect: { id: dto.areaId } }
-        : { disconnect: true };
+      data.area = dto.areaId ? { connect: { id: dto.areaId } } : { disconnect: true };
     }
 
     // 全量 set 语义：tagIds 传 undefined 不动；传数组则先删旧关联再建新关联
@@ -274,8 +262,7 @@ export class TasksService {
       if (!existing) {
         throw new NotFoundException('Task not found');
       }
-      const effectiveAreaId =
-        existing.areaId ?? existing.project?.areaId ?? null;
+      const effectiveAreaId = existing.areaId ?? existing.project?.areaId ?? null;
 
       // Step 2: compute next sortOrder for the new project
       const maxSort = await tx.project.aggregate({
@@ -309,10 +296,12 @@ export class TasksService {
         include: { tags: { include: { tag: true } } },
       });
 
-      // Step 4: promote subtasks to full Tasks under the new project
-      if (existing.subtasks.length > 0) {
-        await tx.task.createMany({
-          data: existing.subtasks.map((st) => ({
+      // Step 4: promote subtasks to full Tasks under the new project.
+      // Per-row creates (not createMany) so the Change Event interceptor
+      // can emit a created event per task — createMany returns no ids.
+      for (const st of existing.subtasks) {
+        await tx.task.create({
+          data: {
             title: st.title,
             status: st.status,
             completedAt: st.completedAt,
@@ -320,7 +309,7 @@ export class TasksService {
             userId,
             bucket: TaskBucket.INBOX,
             scheduledType: ScheduledType.NONE,
-          })),
+          },
         });
       }
 

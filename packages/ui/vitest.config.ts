@@ -12,7 +12,7 @@ export default defineConfig({
   },
   resolve: {
     alias: [
-      { find: /^@\/(api|hooks|stores|utils|i18n)\//, replacement: path.resolve(__dirname, '../api/src') + '/$1/' },
+      { find: /^@\/(api|hooks|stores|utils|i18n|events)\//, replacement: path.resolve(__dirname, '../api/src') + '/$1/' },
       { find: '@/token-store', replacement: path.resolve(__dirname, '../api/src/token-store') },
       { find: '@taskora/api', replacement: path.resolve(__dirname, '../api/src') },
       { find: '@taskora/shared', replacement: path.resolve(__dirname, '../shared/src') },
