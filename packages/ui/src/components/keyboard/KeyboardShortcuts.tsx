@@ -27,7 +27,10 @@ import {
   useUncompleteTask,
   useUiInteractionStore,
 } from '@taskora/api';
-import { BUCKET_ROUTES, resolveAction, type KeyPlatform } from './keymap';
+import { BUCKET_ROUTES, detectKeyPlatform, resolveAction, type KeyPlatform } from './keymap';
+
+export { detectKeyPlatform };
+export type { KeyPlatform };
 
 /** Tauri v2 注入的内部对象（类型与 desktop 的全局声明保持一致）。 */
 declare global {
@@ -37,14 +40,6 @@ declare global {
     };
     __TAURI__?: unknown;
   }
-}
-
-export function detectKeyPlatform(): KeyPlatform {
-  if (typeof window === 'undefined') return 'web';
-  const isTauri = '__TAURI_INTERNALS__' in window || '__TAURI__' in window;
-  if (!isTauri) return 'web';
-  const ua = navigator.userAgent;
-  return /Mac|iPhone|iPad/.test(ua) ? 'mac' : 'windows';
 }
 
 /** 行内编辑（输入框、textarea、tiptap contenteditable）聚焦时快捷键全部让路。 */

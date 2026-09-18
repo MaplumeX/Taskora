@@ -16,6 +16,7 @@ import type { SubtaskResponseDto, TaskResponseDto, UpdateTaskDto } from '@taskor
 import { ScheduledType } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { Input } from '@/components/ui/input';
 import { MarkdownNotesEditor } from '@/components/common/MarkdownNotesEditor';
 import { Separator } from '@/components/ui/separator';
@@ -258,18 +259,20 @@ export function TaskRowExpanded({ task, current }: Props) {
         </IconPopover>
 
         {subtasks.length === 0 && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground max-md:h-11 max-md:w-11"
-            aria-label={t('task:addSubtask')}
-            onClick={(e) => {
-              e.stopPropagation();
-              openSubtasks();
-            }}
-          >
-            <ListPlus className="h-4 w-4" />
-          </Button>
+          <Hint label={t('task:addSubtask')}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground max-md:h-11 max-md:w-11"
+              aria-label={t('task:addSubtask')}
+              onClick={(e) => {
+                e.stopPropagation();
+                openSubtasks();
+              }}
+            >
+              <ListPlus className="h-4 w-4" />
+            </Button>
+          </Hint>
         )}
       </div>
     </div>
@@ -381,21 +384,23 @@ function SubtaskRow({
           {subtask.title}
         </button>
       )}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="ml-auto h-8 w-8 text-muted-foreground hover:text-destructive max-md:h-11 max-md:w-11"
-        aria-label={t('common:delete')}
-        onClick={(e) => {
-          e.stopPropagation();
-          deleteSubtask.mutate(
-            { id: subtask.id, taskId },
-            { onSuccess: onMutated },
-          );
-        }}
-      >
-        <Trash2 className="h-3.5 w-3.5" />
-      </Button>
+      <Hint label={t('common:delete')}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="ml-auto h-8 w-8 text-muted-foreground hover:text-destructive max-md:h-11 max-md:w-11"
+          aria-label={t('common:delete')}
+          onClick={(e) => {
+            e.stopPropagation();
+            deleteSubtask.mutate(
+              { id: subtask.id, taskId },
+              { onSuccess: onMutated },
+            );
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </Hint>
     </li>
   );
 }

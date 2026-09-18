@@ -4,6 +4,7 @@ import { Plus, Settings, FolderPlus, Layers } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -78,15 +79,17 @@ export function SidebarBottomBar() {
       </DropdownMenu>
 
       {/* 设置按钮 */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 text-muted-foreground"
-        aria-label={t('common:settings')}
-        onClick={() => openSettings('appearance')}
-      >
-        <Settings className="h-4 w-4" />
-      </Button>
+      <Hint label={t('common:settings')}>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 text-muted-foreground"
+          aria-label={t('common:settings')}
+          onClick={() => openSettings('appearance')}
+        >
+          <Settings className="h-4 w-4" />
+        </Button>
+      </Hint>
     </div>
   );
 }

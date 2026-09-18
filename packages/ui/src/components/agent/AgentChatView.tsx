@@ -5,6 +5,7 @@ import { ArrowUp, WifiOff } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { Textarea } from '@/components/ui/textarea';
 import {
   agentKeys,
@@ -224,15 +225,17 @@ export function AgentChatView({ conversationId }: { conversationId: string }) {
               ) : (
                 <div className="h-8" />
               )}
-              <Button
-                size="icon"
-                onClick={handleSend}
-                disabled={!input.trim() || busy}
-                aria-label={t('agent:send')}
-                className="mb-0.5 h-8 w-8 shrink-0 rounded-full"
-              >
-                <ArrowUp className="h-4 w-4" />
-              </Button>
+              <Hint label={t('agent:send')}>
+                <Button
+                  size="icon"
+                  onClick={handleSend}
+                  disabled={!input.trim() || busy}
+                  aria-label={t('agent:send')}
+                  className="mb-0.5 h-8 w-8 shrink-0 rounded-full"
+                >
+                  <ArrowUp className="h-4 w-4" />
+                </Button>
+              </Hint>
             </div>
           </div>
         </div>
