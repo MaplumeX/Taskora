@@ -52,7 +52,7 @@ function SortableProjectItem({
       {...attributes}
       {...listeners}
     >
-      <ProjectItem project={project} selected={selected} />
+      <ProjectItem project={project} selected={selected} selectionRow />
     </div>
   );
 }

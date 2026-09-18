@@ -45,6 +45,7 @@ export function TaskItem({
   const updateTask = useUpdateTask();
   const [title, setTitle] = React.useState(current.title);
   const titleInputRef = React.useRef<HTMLInputElement>(null);
+  const rowRef = React.useRef<HTMLDivElement>(null);
 
   // Keep local title in sync with the server value when it changes externally.
   React.useEffect(() => {
@@ -108,14 +109,23 @@ export function TaskItem({
         const target = e.target as HTMLElement;
         if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
           e.preventDefault();
+          // 收起前先把焦点还给行本身，避免输入框卸载后焦点落到 body。
+          rowRef.current?.focus();
           onRowClick();
         }
       }}
     >
       <TaskContextMenu task={task} current={current}>
         <div
+          ref={rowRef}
+          data-selection-row={task.id}
+          tabIndex={onRowClick ? (selectionState !== 'idle' ? 0 : -1) : undefined}
           className={cn(
             'flex h-10 min-w-0 items-center gap-3 rounded-lg px-2 transition-[opacity,background-color] max-md:h-11',
+            // 选中态已有 bg-accent 指示，抑制原生 outline；
+            // 仅聚焦但未选中（如 Tab 聚焦）时显示细 ring 保持键盘可访问性。
+            'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
+            selectionState !== 'idle' && 'focus-visible:ring-0',
             !expanded && 'hover:bg-accent/50',
             exiting && 'task-complete-anim',
           )}
@@ -125,7 +135,6 @@ export function TaskItem({
             onRowClick();
           }}
           role={onRowClick ? 'button' : undefined}
-          tabIndex={onRowClick ? 0 : undefined}
         >
         <TaskCheckbox checked={completed} onToggle={handleToggle} />
 
@@ -143,6 +152,7 @@ export function TaskItem({
                 if (e.metaKey || e.ctrlKey) {
                   e.preventDefault();
                   e.currentTarget.blur();
+                  rowRef.current?.focus();
                   onRowClick?.();
                 } else {
                   e.currentTarget.blur();

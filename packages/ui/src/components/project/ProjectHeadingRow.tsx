@@ -91,9 +91,12 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
     <>
       <div
         aria-selected={selected || undefined}
+        data-selection-row={heading.id}
+        tabIndex={selected ? 0 : -1}
         className={cn(
-          'group flex h-10 items-center gap-1.5 border-b border-border pt-2',
-          selected && 'rounded-lg bg-accent',
+          'group flex h-10 items-center gap-1.5 rounded-lg border-b border-border pt-2',
+          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
+          selected && 'bg-accent focus-visible:ring-0',
         )}
       >
         {!archived && (

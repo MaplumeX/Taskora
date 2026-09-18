@@ -8,6 +8,7 @@ import { useCreateProject, useProjectsQuery } from '@/hooks/useProjects';
 import { useCreateTask } from '@/hooks/useTasks';
 import { useCreateProjectHeading } from '@/hooks/useProjectHeadings';
 import { useUiInteractionStore } from '@/stores/uiInteraction.store';
+import { useSelectionStore } from '@/stores/selection.store';
 import { useAreasQuery } from '@/hooks/useAreas';
 
 /** Views where the "add task" action must not appear. */
@@ -60,6 +61,9 @@ export function useContentBottomActions(route: BottomActionsRouteContext) {
     createTask.mutate(payload, {
       onSuccess: (created) => {
         setExpandedId(created.id);
+        // 新建后自动展开，同时把 Selection 移到新行（与展开路径一致），
+        // 否则后续 ⌫/⌘K 等动作仍作用于旧行，且旧行残留选中/焦点观感。
+        useSelectionStore.getState().setSelection([created.id]);
       },
       onError: () => toast.error(t('common:createFailed')),
     });
@@ -84,7 +88,11 @@ export function useContentBottomActions(route: BottomActionsRouteContext) {
     createHeading.mutate(
       { projectId: routeId, title: '' },
       {
-        onSuccess: (heading) => setPendingAutoEditId(heading.id),
+        onSuccess: (heading) => {
+          setPendingAutoEditId(heading.id);
+          // 与新建任务一致：Selection 移到新 heading 行，释放旧行焦点。
+          useSelectionStore.getState().setSelection([heading.id]);
+        },
         onError: () => toast.error(t('project:createHeadingFailed')),
       },
     );

@@ -128,6 +128,48 @@ export function KeyboardShortcuts({ platform }: Props) {
       if (!action) return;
       e.preventDefault();
 
+      // focus 跟随 selection（roving tabindex）：键盘移动选中后把 DOM 焦点
+      // 一并移到目标行，避免旧行残留 :focus-visible outline（黑色边框），
+      // 也保证后续键盘事件从当前行出发。rAF 等待 React 重渲染后再聚焦。
+      const focusSelectionRow = (id: string) => {
+        requestAnimationFrame(() => {
+          document
+            .querySelector<HTMLElement>(`[data-selection-row="${id}"]`)
+            ?.focus({ preventScroll: true });
+        });
+      };
+
+      /** 创建新行（任务/标题）后确保焦点离开旧行、交给新行的编辑入口。
+       *
+       * 新行挂载后自带自动聚焦（TaskItem 展开 → 标题输入框；
+       * pendingAutoEditId → 标题输入框），但旧行可能仍持有 DOM 焦点
+       * （且丢失选中后显示紫色 focus 环）。这里在两帧后检查：若焦点
+       * 已落到新行内部则无需处理；否则释放旧行焦点，避免残留。 */
+      const yieldFocusToNewRow = (id: string) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            const newRow = document.querySelector<HTMLElement>(
+              `[data-selection-row="${id}"]`,
+            );
+            if (
+              newRow &&
+              document.activeElement instanceof Node &&
+              newRow.contains(document.activeElement)
+            ) {
+              return;
+            }
+            const active = document.activeElement;
+            if (
+              active instanceof HTMLElement &&
+              active.closest('[data-task-item], [data-selection-row]') &&
+              !newRow?.contains(active)
+            ) {
+              active.blur();
+            }
+          });
+        });
+      };
+
       const selection = useSelectionStore.getState();
       const rows = flattenSelectionRows(selection);
       const taskRows = rows.filter((r) => r.kind === 'task');
@@ -153,6 +195,7 @@ export function KeyboardShortcuts({ platform }: Props) {
           index = Math.max(0, Math.min(rows.length - 1, index + delta));
           useSelectionStore.getState().setSelection([rows[index].id]);
           useUiInteractionStore.getState().setExpandedId(null);
+          focusSelectionRow(rows[index].id);
           return;
         }
         case 'moveFirst':
@@ -161,6 +204,7 @@ export function KeyboardShortcuts({ platform }: Props) {
           const row = action.type === 'moveFirst' ? rows[0] : rows[rows.length - 1];
           useSelectionStore.getState().setSelection([row.id]);
           useUiInteractionStore.getState().setExpandedId(null);
+          focusSelectionRow(row.id);
           return;
         }
         case 'selectAll': {
@@ -185,6 +229,7 @@ export function KeyboardShortcuts({ platform }: Props) {
             }
           }
           useSelectionStore.getState().setSelection(neighbor ? [neighbor.id] : []);
+          if (neighbor) focusSelectionRow(neighbor.id);
           return;
         }
         case 'delete': {
@@ -200,6 +245,7 @@ export function KeyboardShortcuts({ platform }: Props) {
             for (const row of targets) deleteTask.mutate(row.id);
           }
           useSelectionStore.getState().setSelection(neighbor ? [neighbor.id] : []);
+          if (neighbor) focusSelectionRow(neighbor.id);
           return;
         }
         case 'expand': {
@@ -210,7 +256,10 @@ export function KeyboardShortcuts({ platform }: Props) {
           // 已展开时再按 Enter 收起；展开后 TaskItem 自行聚焦标题编辑
           // （编辑态让路，Enter 在 input 内只 blur 不收起）。
           const ui = useUiInteractionStore.getState();
-          ui.setExpandedId(ui.expandedId === id ? null : id);
+          const collapsing = ui.expandedId === id;
+          ui.setExpandedId(collapsing ? null : id);
+          // 收起时焦点从标题输入框归还行本身。
+          if (collapsing) focusSelectionRow(id);
           return;
         }
         case 'newTaskBelow': {
@@ -235,6 +284,7 @@ export function KeyboardShortcuts({ platform }: Props) {
                 if (orderedBefore.length + orderedAfter.length > 0) {
                   reorderTasks.mutate([...orderedBefore, created.id, ...orderedAfter]);
                 }
+                yieldFocusToNewRow(created.id);
               },
               onError: () => toast.error(t('common:createFailed')),
             });
