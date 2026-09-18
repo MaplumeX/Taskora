@@ -86,7 +86,6 @@ export class AuthController {
     }
   }
 
-  @UseGuards(JwtAuthGuard)
   @Post('logout')
   @HttpCode(200)
   async logout(
@@ -94,8 +93,12 @@ export class AuthController {
     @Body() dto: RefreshRequestDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    // Desktop clients pass their keychain refresh token in the body; web
-    // relies on the HttpOnly cookie.
+    // Logout must work even when the access token has expired: the
+    // JWT guard would turn an expired session into a failed logout, and
+    // the web client cannot clear an HttpOnly cookie itself, leaving the
+    // refresh token valid server-side for up to 30 days. Possession of the
+    // refresh token (body on desktop, cookie on web) is sufficient proof
+    // to revoke it, so no access-token auth is required here.
     const rt = dto?.refreshToken ?? req.cookies?.[RT_COOKIE_NAME];
     await this.authService.revokeRefreshToken(rt);
     res.clearCookie(RT_COOKIE_NAME, { path: '/api/v1/auth' });
