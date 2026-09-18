@@ -175,7 +175,7 @@ export function MobileNavDrawer({ open, onOpenChange }: Props) {
               className={DRAWER_ROW_CLASS}
               onClick={() => {
                 close();
-                logout();
+                void logout().then(() => navigate('/login', { replace: true }));
               }}
             >
               <LogOut className="h-4 w-4" />
