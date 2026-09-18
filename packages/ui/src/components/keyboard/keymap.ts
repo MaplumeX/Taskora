@@ -44,6 +44,15 @@ export interface KeyEventLike {
   shiftKey: boolean;
 }
 
+/** 运行时平台检测：Tauri 注入对象 + UA 判定；非 Tauri 一律视为 web。 */
+export function detectKeyPlatform(): KeyPlatform {
+  if (typeof window === 'undefined') return 'web';
+  const isTauri = '__TAURI_INTERNALS__' in window || '__TAURI__' in window;
+  if (!isTauri) return 'web';
+  const ua = navigator.userAgent;
+  return /Mac|iPhone|iPad/.test(ua) ? 'mac' : 'windows';
+}
+
 /** ⌘1..⌘6 跳转的 Bucket 路由（顺序见 docs/keyboard-shortcuts.md）。 */
 export const BUCKET_ROUTES = [
   '/inbox',
@@ -133,4 +142,22 @@ export function resolveAction(e: KeyEventLike, platform: KeyPlatform): KeyAction
   }
 
   return null;
+}
+
+/** 按钮上可展示 hint 快捷键的动作（与 docs/keyboard-shortcuts.md 的 P0 键位表一致）。 */
+export type HintableAction = 'search' | 'newTask' | 'newProject' | 'newHeading';
+
+/**
+ * 动作 → 平台对应键位的展示文案（⌘⇧⌥ 符号 / Ctrl、Alt 文字）。
+ * 与 resolveAction 的键位矩阵同源维护；无对应键位时返回 null（hint 只显示文案）。
+ */
+const SHORTCUT_LABELS: Record<HintableAction, Record<KeyPlatform, string>> = {
+  search: { mac: '⌘F', windows: 'Ctrl+F', web: 'Ctrl+F' },
+  newTask: { mac: '⌘N', windows: 'Ctrl+N', web: 'Alt+N' },
+  newProject: { mac: '⌥⌘N', windows: 'Ctrl+Alt+N', web: 'Alt+Shift+N' },
+  newHeading: { mac: '⇧⌘N', windows: 'Ctrl+Shift+N', web: 'Alt+H' },
+};
+
+export function shortcutLabel(action: HintableAction, platform: KeyPlatform): string {
+  return SHORTCUT_LABELS[action][platform];
 }

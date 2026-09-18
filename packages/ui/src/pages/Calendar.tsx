@@ -7,6 +7,7 @@ import type { TaskResponseDto } from '@taskora/shared';
 
 import { CalendarMonthGrid } from '@/components/calendar/CalendarMonthGrid';
 import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { useScheduledTasksQuery } from '@taskora/api';
 import { useCompleteTask, useSelectionScope, useTaskRowSelection, useUncompleteTask } from '@taskora/api';
 import { usePreferencesStore } from '@taskora/api';
@@ -66,12 +67,16 @@ export default function Calendar() {
 
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" aria-label={t('calendar:previous')} onClick={() => step(-1)}>
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <Button variant="ghost" size="icon" aria-label={t('calendar:next')} onClick={() => step(1)}>
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <Hint label={t('calendar:previous')}>
+            <Button variant="ghost" size="icon" aria-label={t('calendar:previous')} onClick={() => step(-1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          </Hint>
+          <Hint label={t('calendar:next')}>
+            <Button variant="ghost" size="icon" aria-label={t('calendar:next')} onClick={() => step(1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </Hint>
           <Button
             variant="ghost"
             size="sm"
