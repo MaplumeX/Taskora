@@ -69,6 +69,14 @@
 }
 
 @layer base {
+  :root {
+    /* 自绘标题栏高度：仅主窗口扣高，quick-add 等弹窗为 0 */
+    --titlebar-h: 0px;
+  }
+  html[data-window='main'] {
+    --titlebar-h: 38px;
+  }
+
   * {
     @apply border-border;
   }
@@ -83,6 +91,19 @@
 }
 
 @layer utilities {
+  /*
+   * 自绘标题栏（主窗口）：共享布局用 .h-dvh/.h-screen 铺满视口，
+   * 桌面主窗口需要从视口高中扣除标题栏高度，避免整页溢出。
+   * 选择器特异性高于 tailwind 原类，且仅 [data-window='main'] 生效
+   * （quick-add 弹窗同用 .h-screen，不能扣）。
+   */
+  html[data-window='main'] .h-dvh {
+    height: calc(100dvh - var(--titlebar-h));
+  }
+  html[data-window='main'] .h-screen {
+    height: calc(100dvh - var(--titlebar-h));
+  }
+
   /* Apply tabular figures to data-dense areas */
   .tabular-nums {
     font-variant-numeric: tabular-nums;
