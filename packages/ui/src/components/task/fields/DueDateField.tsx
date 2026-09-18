@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
+import type { DueDateFieldCurrent, DueDateFieldPatch } from './fieldProps';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -10,8 +10,8 @@ import { usePreferencesStore } from '@taskora/api';
 import { getCalendarLocale, startOfLocalDay } from './calendarFieldUtils';
 
 interface FieldProps {
-  current: TaskResponseDto;
-  onPatch: (data: UpdateTaskDto) => void;
+  current: DueDateFieldCurrent;
+  onPatch: (data: DueDateFieldPatch) => void;
   onClose?: () => void;
 }
 
