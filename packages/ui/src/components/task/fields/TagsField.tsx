@@ -1,14 +1,14 @@
 import { useTranslation } from 'react-i18next';
 import { Check } from 'lucide-react';
 
-import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
+import type { TagsFieldCurrent, TagsFieldPatch } from './fieldProps';
 
 import { cn } from '@/lib/utils';
 import { useTagsQuery } from '@taskora/api';
 
 interface FieldProps {
-  current: TaskResponseDto;
-  onPatch: (data: UpdateTaskDto) => void;
+  current: TagsFieldCurrent;
+  onPatch: (data: TagsFieldPatch) => void;
 }
 
 export function TagsField({ current, onPatch }: FieldProps) {

@@ -1,10 +1,10 @@
-import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
+import type { DueDateFieldCurrent, DueDateFieldPatch } from './fieldProps';
 
 import { toInputDateValue, fromInputDateValue } from '@taskora/api';
 
 interface FieldProps {
-  current: TaskResponseDto;
-  onPatch: (data: UpdateTaskDto) => void;
+  current: DueDateFieldCurrent;
+  onPatch: (data: DueDateFieldPatch) => void;
 }
 
 export function DueDateField({ current, onPatch }: FieldProps) {
