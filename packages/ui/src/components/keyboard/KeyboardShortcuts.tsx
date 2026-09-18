@@ -111,13 +111,15 @@ export function KeyboardShortcuts({ platform }: Props) {
     const on_keydown = (e: KeyboardEvent) => {
       // 编辑态让路（story 22）：行内编辑聚焦时快捷键全部让路。
       if (isEditableTarget(e.target)) return;
-      // Space/Enter 走按钮的原生 aria 路径（如 Tab 聚焦 checkbox 后按
-      // Space 勾选、Enter 激活），避免与展开动作双重触发。
+      // Space/Enter 走原生 button 的激活路径（如 Tab 聚焦 checkbox 后按
+      // Space 勾选），避免与展开动作双重触发。注意只让路真实 <button>：
+      // role="button" 的行 div 没有原生 Enter/Space 激活语义，若一并让路
+      // 会导致 Tab 聚焦行后按 Enter/Space 完全无响应。
       const targetEl = e.target as HTMLElement | null;
       const onNativeButton =
         !!targetEl &&
         typeof targetEl.closest === 'function' &&
-        !!targetEl.closest('button, [role="button"], [role="checkbox"]');
+        !!targetEl.closest('button, input[type="checkbox"], [role="checkbox"]');
       if ((e.key === ' ' || e.key === 'Enter') && onNativeButton) return;
       // Radix 浮层打开时让路（Esc 等由浮层自行处理）。
       if (hasOpenOverlay()) return;
@@ -204,8 +206,11 @@ export function KeyboardShortcuts({ platform }: Props) {
           const id = selection.selectedIds.at(-1);
           if (!id) return;
           if (rowById.get(id)?.kind !== 'task') return;
-          // 展开后 TaskItem 自行聚焦标题编辑（Enter 再次按下时编辑态让路）。
-          useUiInteractionStore.getState().setExpandedId(id);
+          // 与点击循环对齐（idle → selected → expanded → selected）：
+          // 已展开时再按 Enter 收起；展开后 TaskItem 自行聚焦标题编辑
+          // （编辑态让路，Enter 在 input 内只 blur 不收起）。
+          const ui = useUiInteractionStore.getState();
+          ui.setExpandedId(ui.expandedId === id ? null : id);
           return;
         }
         case 'newTaskBelow': {
@@ -224,6 +229,9 @@ export function KeyboardShortcuts({ platform }: Props) {
             createTask.mutate(payload, {
               onSuccess: (created) => {
                 useUiInteractionStore.getState().setExpandedId(created.id);
+                // 展开行同时置为选中（与点击展开路径一致），否则 ⌫/⌘K
+                // 等针对 selectedIds 的动作不作用于当前展开行。
+                useSelectionStore.getState().setSelection([created.id]);
                 if (orderedBefore.length + orderedAfter.length > 0) {
                   reorderTasks.mutate([...orderedBefore, created.id, ...orderedAfter]);
                 }
