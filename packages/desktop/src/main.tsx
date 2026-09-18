@@ -27,6 +27,11 @@ async function mount() {
 
   if (kind === 'quick-add') {
     await bootQuickAdd().catch(() => undefined);
+    // The Quick Add window is its own webview with its own cache and its
+    // own Event Stream connection (ADR 0005).
+    const { QueryClient } = await import('@tanstack/react-query');
+    const { initEventStream } = await import('@taskora/api');
+    initEventStream(new QueryClient());
     ReactDOM.createRoot(document.getElementById('root')!).render(
       <React.StrictMode>
         <QuickAddApp />
@@ -51,13 +56,17 @@ async function mount() {
     defaultOptions: {
       queries: {
         staleTime: 30_000,
-        // Tauri webview focus events differ from browser tabs; keep
-        // refetch-on-focus (maps to window focus) like the web client.
-        refetchOnWindowFocus: true,
+        // The Event Stream keeps caches fresh via push (ADR 0005); focus
+        // refetch is superseded by reconnect + gap-triggered refetch.
+        refetchOnWindowFocus: false,
         retry: 1,
       },
     },
   });
+
+  // Event Stream singleton: connects after login, disconnects on logout.
+  const { initEventStream } = await import('@taskora/api');
+  initEventStream(queryClient);
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
