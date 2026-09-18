@@ -14,13 +14,15 @@ import {
   useCompleteProject,
   useUncompleteProject,
 } from '@taskora/api';
+import type { SelectionState } from '@taskora/api';
 
 interface Props {
   item: ProjectFeedItem;
   showScheduledBadge?: boolean;
+  selectionState?: SelectionState;
 }
 
-export function ProjectFeedRow({ item, showScheduledBadge = true }: Props) {
+export function ProjectFeedRow({ item, showScheduledBadge = true, selectionState = 'idle' }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const completeProject = useCompleteProject();
@@ -44,7 +46,14 @@ export function ProjectFeedRow({ item, showScheduledBadge = true }: Props) {
     >
       <div
         data-task-item
-        className="group flex h-10 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-accent/40 cursor-pointer"
+        data-selection-row={item.id}
+        tabIndex={selectionState !== 'idle' ? 0 : -1}
+        aria-selected={selectionState !== 'idle' || undefined}
+        className={cn(
+          'group flex h-10 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-accent/40 cursor-pointer',
+          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
+          selectionState !== 'idle' && 'bg-accent focus-visible:ring-0 hover:bg-accent',
+        )}
         onClick={(e) => {
           e.stopPropagation();
           navigate(`/projects/${item.id}`);
@@ -57,7 +66,6 @@ export function ProjectFeedRow({ item, showScheduledBadge = true }: Props) {
           navigate(`/projects/${item.id}`);
         }}
         role="button"
-        tabIndex={0}
       >
         <ProjectProgressRing
           total={item.taskTotalCount}
