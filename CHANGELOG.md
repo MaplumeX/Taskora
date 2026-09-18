@@ -9,6 +9,44 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.3.2] - 2026-09-18
+
+### Features
+
+- **keyboard**: Things3-aligned keyboard shortcuts P0 (#28): a global
+  keymap registry (ADR-0004) with a single window-level keydown listener,
+  a cross-page selection model covering the 8 bucket pages plus
+  project/area/tag detail pages, Cmd/Ctrl/Alt+1..6 bucket jumps, arrow-key
+  navigation, Cmd/Ctrl+A select-all with batch complete/delete,
+  Cmd/Ctrl+K complete, Backspace/Delete trash (restore in Trash),
+  Space/Enter/Esc inline expand-edit, Space new task below selection,
+  Cmd/Ctrl+F search and new-task/new-project/new-heading shortcuts.
+  Quick Add is now Cmd/Ctrl+Shift+Space to avoid IME and Spotlight
+  conflicts.
+
+### Fixes
+
+- **auth**: Harden the token lifecycle (#31): revoke all refresh tokens on
+  password change (re-issuing one fresh token for the current session),
+  revoke the refresh token on logout even when the access token has
+  expired, and serialize web refresh across tabs with Web Locks so two
+  tabs hitting 401 simultaneously no longer trip refresh-token reuse
+  detection and log every tab out.
+- **auth**: Show error feedback on web login/register failures (401/409/400
+  inline messages, client-side 8-char minimum) and a success notice after
+  redirecting to login post-register (#31).
+- **auth,keyboard**: Wire the web auth-flow navigation adapters in
+  main.tsx so afterLogin/afterRegister/onLoggedOut redirects actually
+  happen; logout now navigates to /login (#30).
+- **keyboard**: Enter expand now toggles (matching the click cycle), the
+  native-button escape-hatch no longer swallows Enter/Space on
+  role="button" rows, and the task created below a selection is selected
+  so delete/complete act on it (#30).
+- **ui**: Stop the "Note…" placeholder from overlaying existing notes —
+  with `immediatelyRender: false` the editor-state selector kept reporting
+  `isEmpty` before the first transaction; affects task and project notes
+  (#29).
+
 ## [0.3.1] - 2026-09-17
 
 ### Changed
