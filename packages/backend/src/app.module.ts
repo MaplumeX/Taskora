@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { PrismaModule } from './prisma/prisma.module';
+import { EventsModule } from './events/events.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
 import { TasksModule } from './tasks/tasks.module';
@@ -14,7 +15,21 @@ import { AgentModule } from './agent/agent.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule, TasksModule, ProjectsModule, AreasModule, TagsModule, TagGroupsModule, FeedModule, ProjectHeadingsModule, SubtasksModule, AgentModule],
+  imports: [
+    PrismaModule,
+    EventsModule,
+    AuthModule,
+    UsersModule,
+    TasksModule,
+    ProjectsModule,
+    AreasModule,
+    TagsModule,
+    TagGroupsModule,
+    FeedModule,
+    ProjectHeadingsModule,
+    SubtasksModule,
+    AgentModule,
+  ],
   controllers: [HealthController],
 })
 export class AppModule {}

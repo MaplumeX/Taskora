@@ -1,11 +1,7 @@
 import { NotFoundException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import {
-  TaskBucket,
-  TaskStatus,
-  ScheduledType,
-} from '@taskora/shared';
+import { TaskBucket, TaskStatus, ScheduledType } from '@taskora/shared';
 
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TasksService } from '../src/tasks/tasks.service';
@@ -44,15 +40,13 @@ describe('TasksService — convertToProject (subtask promotion)', () => {
       task: {
         findFirst: vi.fn(),
         delete: vi.fn(),
-        createMany: vi.fn(),
+        create: vi.fn(),
       },
       project: {
         aggregate: vi.fn(),
         create: vi.fn(),
       },
-      $transaction: vi.fn(
-        async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma),
-      ),
+      $transaction: vi.fn(async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),
     } as unknown as InstanceType<typeof PrismaService>;
 
     service = new TasksService(mockPrisma);
@@ -101,7 +95,10 @@ describe('TasksService — convertToProject (subtask promotion)', () => {
       tags: [],
     };
     mockPrisma.project.create.mockResolvedValue(newProject);
-    mockPrisma.task.createMany.mockResolvedValue({ count: 2 });
+    mockPrisma.task.create.mockImplementation(async ({ data }: { data: { title: string } }) => ({
+      id: `promoted-${data.title}`,
+      ...data,
+    }));
     mockPrisma.task.delete.mockResolvedValue(existingTask);
 
     const result = await service.convertToProject(userId, taskId);
@@ -117,25 +114,27 @@ describe('TasksService — convertToProject (subtask promotion)', () => {
       }),
     );
 
-    // Subtasks promoted to tasks under the new project
-    expect(mockPrisma.task.createMany).toHaveBeenCalledWith({
-      data: [
-        expect.objectContaining({
-          title: 'Subtask A',
-          status: TaskStatus.ACTIVE,
-          completedAt: null,
-          projectId: 'proj-new',
-          bucket: TaskBucket.INBOX,
-          scheduledType: ScheduledType.NONE,
-        }),
-        expect.objectContaining({
-          title: 'Subtask B',
-          status: TaskStatus.COMPLETED,
-          projectId: 'proj-new',
-          bucket: TaskBucket.INBOX,
-          scheduledType: ScheduledType.NONE,
-        }),
-      ],
+    // Subtasks promoted to tasks under the new project (one create per
+    // subtask so each emits its own Change Event — createMany returns no ids)
+    expect(mockPrisma.task.create).toHaveBeenCalledTimes(2);
+    expect(mockPrisma.task.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        title: 'Subtask A',
+        status: TaskStatus.ACTIVE,
+        completedAt: null,
+        projectId: 'proj-new',
+        bucket: TaskBucket.INBOX,
+        scheduledType: ScheduledType.NONE,
+      }),
+    });
+    expect(mockPrisma.task.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        title: 'Subtask B',
+        status: TaskStatus.COMPLETED,
+        projectId: 'proj-new',
+        bucket: TaskBucket.INBOX,
+        scheduledType: ScheduledType.NONE,
+      }),
     });
 
     // Original task hard-deleted (triggers Subtask CASCADE)
@@ -146,7 +145,7 @@ describe('TasksService — convertToProject (subtask promotion)', () => {
     expect(result.tags).toEqual([]);
   });
 
-  it('does not call createMany when task has no subtasks', async () => {
+  it('does not create promoted tasks when task has no subtasks', async () => {
     mockPrisma.task.findFirst.mockResolvedValue({
       ...existingTask,
       subtasks: [],
@@ -161,7 +160,7 @@ describe('TasksService — convertToProject (subtask promotion)', () => {
 
     await service.convertToProject(userId, taskId);
 
-    expect(mockPrisma.task.createMany).not.toHaveBeenCalled();
+    expect(mockPrisma.task.create).not.toHaveBeenCalled();
     expect(mockPrisma.task.delete).toHaveBeenCalledWith({ where: { id: taskId } });
   });
 });

@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: [
-      { find: /^@\/(api|hooks|stores|utils|i18n)\//, replacement: path.resolve(__dirname, '../api/src') + '/$1/' },
+      { find: /^@\/(api|hooks|stores|utils|i18n|events)\//, replacement: path.resolve(__dirname, '../api/src') + '/$1/' },
       { find: '@/token-store', replacement: path.resolve(__dirname, '../api/src/token-store') },
       { find: /^@\/components\//, replacement: path.resolve(__dirname, '../ui/src/components') + '/' },
       { find: '@/lib/utils', replacement: path.resolve(__dirname, '../ui/src/lib/utils') },

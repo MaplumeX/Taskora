@@ -41,6 +41,7 @@
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
     "@nestjs/testing": "^11.1.28",
+    "@swc/core": "^1.16.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/cookie-parser": "^1.4.10",
     "@types/express": "^5.0.0",
@@ -50,6 +51,7 @@
     "prisma": "^6.0.0",
     "supertest": "^7.2.2",
     "tsx": "^4.19.0",
+    "unplugin-swc": "^1.6.0",
     "vitest": "^2.1.0"
   }
 }

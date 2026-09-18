@@ -11,6 +11,7 @@ import {
   configureTokenStore,
   createLocalTokenStore,
   hydrateAuthSnapshot,
+  initEventStream,
   readLegacyAuthSnapshot,
   setAppVersion,
   setUnauthorizedHandler,
@@ -31,11 +32,17 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 30_000,
-      refetchOnWindowFocus: true,
+      // The Event Stream keeps caches fresh via push (ADR 0005);
+      // reconnect + gap-triggered refetch is the only backstop needed.
+      refetchOnWindowFocus: false,
       retry: 1,
     },
   },
 });
+
+// Event Stream singleton: connects after login, disconnects on logout,
+// applies Change Events straight onto the query cache.
+initEventStream(queryClient);
 
 // Web wiring: localStorage-backed token store + API base URL from env.
 configureTokenStore(createLocalTokenStore());

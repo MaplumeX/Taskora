@@ -21,6 +21,7 @@
       "@taskora/ui": ["../ui/src/index.ts"],
       "@taskora/ui/*": ["../ui/src/*"],
       "@/api/*": ["../api/src/api/*"],
+      "@/events/*": ["../api/src/events/*"],
       "@/hooks/*": ["../api/src/hooks/*"],
       "@/stores/*": ["../api/src/stores/*"],
       "@/utils/*": ["../api/src/utils/*"],

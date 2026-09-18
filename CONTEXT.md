@@ -42,6 +42,16 @@ _Avoid_: 列表、filter
 键盘导航下当前被高亮、并作为键盘动作（完成、删除、新建于下方等）作用对象的 Task / Project / Project Heading；区别于 focus（DOM 焦点）与完成态。
 _Avoid_: 高亮、hover、焦点
 
+### 同步
+
+**Change Event**:
+后端在数据变更时主动下发的通知，携带实体类型与动作；除删除外携带完整实体。
+_Avoid_: 消息、推送、payload
+
+**Event Stream**:
+每用户一条的常驻推送通道，按单调递增的序号分发 Change Event。
+_Avoid_: WebSocket、订阅、频道
+
 ### 助手（Agent）
 
 **Assistant**:
