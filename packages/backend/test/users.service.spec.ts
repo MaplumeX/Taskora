@@ -42,6 +42,7 @@ describe('UsersService', () => {
       tag: { findMany: vi.fn() },
       tagGroup: { findMany: vi.fn() },
       projectHeading: { findMany: vi.fn() },
+      refreshToken: { updateMany: vi.fn() },
     } as unknown as InstanceType<typeof PrismaService>;
 
     service = new UsersService(mockPrisma);
@@ -130,6 +131,12 @@ describe('UsersService', () => {
       const storedHash = updateCall.data.passwordHash;
       expect(await bcrypt.compare('newpassword123', storedHash)).toBe(true);
       expect(await bcrypt.compare('old-password', storedHash)).toBe(false);
+
+      // Every live refresh token is revoked so other devices sign out.
+      expect(mockPrisma.refreshToken.updateMany).toHaveBeenCalledWith({
+        where: { userId, revokedAt: null },
+        data: { revokedAt: expect.any(Date) },
+      });
     });
   });
 
