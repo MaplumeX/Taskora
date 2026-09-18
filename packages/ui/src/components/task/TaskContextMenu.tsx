@@ -207,7 +207,11 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
             />
           )}
           {activePicker === 'due' && (
-            <DueDateField current={current} onPatch={patch} />
+            <DueDateField
+              current={current}
+              onPatch={patch}
+              onClose={() => setActivePicker(null)}
+            />
           )}
           {activePicker === 'tags' && (
             <TagsField current={current} onPatch={patch} />

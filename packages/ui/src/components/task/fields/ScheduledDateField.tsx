@@ -1,5 +1,4 @@
 import { useTranslation } from 'react-i18next';
-import { zhCN, enUS } from 'react-day-picker/locale';
 
 import type { ScheduledFieldCurrent, ScheduledFieldPatch } from './fieldProps';
 import { ScheduledType } from '@taskora/shared';
@@ -9,16 +8,13 @@ import { Calendar } from '@/components/ui/calendar';
 import { startOfToday } from '@taskora/api';
 import { usePreferencesStore } from '@taskora/api';
 
+import { getCalendarLocale, startOfLocalDay } from './calendarFieldUtils';
+
 interface FieldProps {
   current: ScheduledFieldCurrent;
   onPatch: (data: ScheduledFieldPatch) => void;
   onClose?: () => void;
 }
-
-const LOCALE_BY_LANG: Record<string, typeof zhCN> = {
-  zh: zhCN,
-  en: enUS,
-};
 
 export function ScheduledDateField({ current, onPatch, onClose }: FieldProps) {
   const { t, i18n } = useTranslation();
@@ -30,13 +26,13 @@ export function ScheduledDateField({ current, onPatch, onClose }: FieldProps) {
       ? new Date(current.scheduledDate)
       : undefined;
 
-  const locale = LOCALE_BY_LANG[i18n.language] ?? enUS;
+  const locale = getCalendarLocale(i18n.language);
 
   const handleDaySelect = (date: Date | undefined) => {
     if (!date) return;
     onPatch({
       scheduledType: ScheduledType.DATE,
-      scheduledDate: startOfTodayOrDate(date).toISOString(),
+      scheduledDate: startOfLocalDay(date).toISOString(),
     });
     onClose?.();
   };
@@ -92,9 +88,3 @@ export function ScheduledDateField({ current, onPatch, onClose }: FieldProps) {
   );
 }
 
-/** Normalize a picked date to local midnight to avoid off-by-one ISO shifts. */
-function startOfTodayOrDate(date: Date): Date {
-  const d = new Date(date);
-  d.setHours(0, 0, 0, 0);
-  return d;
-}
