@@ -83,6 +83,22 @@ export class TasksController {
     return this.tasksService.uncomplete(req.user.id, id);
   }
 
+  @Post(':id/cancel')
+  cancel(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.tasksService.cancel(req.user.id, id);
+  }
+
+  @Post(':id/uncancel')
+  uncancel(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.tasksService.uncancel(req.user.id, id);
+  }
+
   @Post(':id/convert-to-project')
   convertToProject(
     @Request() req: { user: { id: string } },

@@ -36,12 +36,15 @@
 | 新项目 | ⌥⌘N | Ctrl+Alt+N | Alt+Shift+N |
 | 新 Heading | ⇧⌘N | Ctrl+Shift+N | Alt+H |
 
-### 完成 / 删除
+### 完成 / 删除 / 取消
 
-| 动作 | 全平台 |
-|---|---|
-| 完成选中 | ⌘K / Ctrl+K（⚠️ Web 端原为搜索，已改） |
-| 删除到 Trash | ⌫ / Delete |
+| 动作 | macOS 桌面 | Windows 桌面 | Web |
+|---|---|---|---|
+| 完成选中 | ⌘K | Ctrl+K | Ctrl+K（⚠️ Web 端原为搜索，已改） |
+| 取消选中（撤销取消） | ⌥⌘K | Ctrl+Alt+K | Alt+Shift+K |
+| 删除到 Trash | ⌫ / Delete | ⌫ / Delete | ⌫ / Delete |
+
+取消与完成同型：Logbook 中 ⌘K 撤销了结（已完成的撤销完成，已取消的撤销取消）。
 
 ### 打开 / 编辑
 
@@ -87,7 +90,6 @@ Quick Add 从 `Cmd/Ctrl+Space` 改为 `Cmd/Ctrl+Shift+Space`：Windows 上 Ctrl+
 
 | 动作 | Things 键位 | 缺失项 |
 |---|---|---|
-| 取消任务 | ⌥⌘K | TaskStatus 无 CANCELLED |
 | This Evening | ⌘E | 无 evening 概念 |
 | 重复规则 | ⇧⌘R | 无重复模型 |
 | 复制任务 | ⌘D | 无 duplicate API |

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { buildTaskViewWhere, type TaskView } from '../tasks/views';
+import { buildTaskViewWhere, SETTLED_STATUSES, type TaskView } from '../tasks/views';
 import { buildProjectViewWhere, type ProjectView } from '../projects/views';
 import { ScheduledType, TaskStatus, TaskBucket, ProjectStatus, ProjectBucket } from '@taskora/shared';
 import type { FeedItem, FeedView, TaskFeedItem, ProjectFeedItem, TagResponseDto } from '@taskora/shared';
@@ -84,7 +84,7 @@ export class FeedService {
         where: { userId, ...buildTaskViewWhere(view as TaskView) },
         orderBy:
           view === 'logbook'
-            ? [{ completedAt: 'desc' as const }]
+            ? [{ settledAt: 'desc' as const }]
             : [{ sortOrder: 'asc' as const }, { createdAt: 'desc' as const }],
         include: { tags: { include: { tag: true } } },
       }),
@@ -110,7 +110,8 @@ export class FeedService {
       dueDate: t.dueDate ? t.dueDate.toISOString() : null,
       status: t.status as TaskStatus,
       bucket: t.bucket as TaskBucket,
-      completedAt: t.completedAt ? t.completedAt.toISOString() : null,
+      // DTO 字段名保持 completedAt，承载 Settled At 语义（ADR 0006）。
+      completedAt: t.settledAt ? t.settledAt.toISOString() : null,
       trashedAt: t.trashedAt ? t.trashedAt.toISOString() : null,
       sortOrder: t.sortOrder,
       projectId: t.projectId,
@@ -136,7 +137,9 @@ export class FeedService {
           userId,
           projectId: { in: projectIds },
           trashedAt: null,
-          status: TaskStatus.COMPLETED,
+          // 项目统计口径：completed 计数 = 已了结（完成 + 取消），
+          // 与 Logbook Entry 口径一致（ADR 0006）。
+          status: { in: [...SETTLED_STATUSES] },
         },
         _count: { _all: true },
       }),

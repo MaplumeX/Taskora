@@ -15,6 +15,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const harness = vi.hoisted(() => ({
   completeMutate: vi.fn(),
   uncompleteMutate: vi.fn(),
+  cancelMutate: vi.fn(),
+  uncancelMutate: vi.fn(),
   deleteMutate: vi.fn(),
   restoreMutate: vi.fn(),
   reorderMutate: vi.fn(),
@@ -33,6 +35,8 @@ vi.mock('@taskora/api', async (importOriginal) => {
     ...actual,
     useCompleteTask: () => ({ mutate: harness.completeMutate }),
     useUncompleteTask: () => ({ mutate: harness.uncompleteMutate }),
+    useCancelTask: () => ({ mutate: harness.cancelMutate }),
+    useUncancelTask: () => ({ mutate: harness.uncancelMutate }),
     useDeleteTask: () => ({ mutate: harness.deleteMutate }),
     useRestoreTask: () => ({ mutate: harness.restoreMutate }),
     useReorderTasks: () => ({ mutate: harness.reorderMutate }),
@@ -71,7 +75,13 @@ import { useSelectionScope } from '@taskora/api';
 /** 测试页：渲染任务行（aria-selected + 点击选中）并注册 selection scope。 */
 function ListPage({ tasks }: { tasks: TaskResponseDto[] }) {
   const rows = React.useMemo(
-    () => tasks.map((t) => ({ id: t.id, kind: 'task' as const, completed: t.status === 'COMPLETED' })),
+    () =>
+      tasks.map((t) => ({
+        id: t.id,
+        kind: 'task' as const,
+        completed: t.status === 'COMPLETED',
+        cancelled: t.status === 'CANCELLED',
+      })),
     [tasks],
   );
   useSelectionScope(rows);
@@ -119,6 +129,14 @@ function task(id: string, completed = false): TaskResponseDto {
   };
 }
 
+function cancelledTask(id: string): TaskResponseDto {
+  return {
+    ...task(id),
+    status: TaskStatus.CANCELLED,
+    completedAt: '2026-08-01T00:00:00.000Z',
+  };
+}
+
 function press(key: string, mods: KeyboardEventInit = {}) {
   act(() => {
     window.dispatchEvent(
@@ -155,6 +173,8 @@ const tasks = [task('t1'), task('t2'), task('t3')];
 beforeEach(() => {
   harness.completeMutate.mockReset();
   harness.uncompleteMutate.mockReset();
+  harness.cancelMutate.mockReset();
+  harness.uncancelMutate.mockReset();
   harness.deleteMutate.mockReset();
   harness.restoreMutate.mockReset();
   harness.reorderMutate.mockReset();
@@ -252,6 +272,51 @@ describe('KeyboardShortcuts — 完成与删除', () => {
     press('Delete');
     expect(harness.restoreMutate).toHaveBeenCalledWith('t1');
     expect(harness.deleteMutate).not.toHaveBeenCalled();
+  });
+});
+
+describe('KeyboardShortcuts — 取消（spec: task-cancelled）', () => {
+  it('⌥⌘K 取消选中任务，Selection 移到相邻行（与 ⌘K 同型）', () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press('k', { metaKey: true, altKey: true });
+    expect(harness.cancelMutate).toHaveBeenCalledWith('t1');
+    expect(screen.getByTestId('row-t2')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('Windows 桌面 Ctrl+Alt+K 取消；Web Alt+Shift+K 取消', () => {
+    renderAt('/today', tasks, 'windows');
+    press('ArrowDown');
+    press('k', { ctrlKey: true, altKey: true });
+    expect(harness.cancelMutate).toHaveBeenCalledWith('t1');
+
+    renderAt('/today', tasks, 'web');
+    press('ArrowDown');
+    press('k', { altKey: true, shiftKey: true });
+    expect(harness.cancelMutate).toHaveBeenCalledWith('t1');
+  });
+
+  it('⌘A 后 ⌥⌘K 批量取消全部', () => {
+    renderAt('/today', tasks);
+    press('a', { metaKey: true });
+    press('k', { metaKey: true, altKey: true });
+    expect(harness.cancelMutate).toHaveBeenCalledTimes(3);
+  });
+
+  it('Logbook 中 ⌥⌘K 对已取消行撤销取消，对已完成行不动作', () => {
+    renderAt('/logbook', [cancelledTask('t1'), task('t2', true)]);
+    press('ArrowDown');
+    press('k', { metaKey: true, altKey: true });
+    expect(harness.uncancelMutate).toHaveBeenCalledWith('t1');
+    expect(harness.cancelMutate).not.toHaveBeenCalled();
+  });
+
+  it('Logbook 中 ⌘K 对已取消行撤销取消（与撤销完成同键）', () => {
+    renderAt('/logbook', [cancelledTask('t1')]);
+    press('ArrowDown');
+    press('k', { metaKey: true });
+    expect(harness.uncancelMutate).toHaveBeenCalledWith('t1');
+    expect(harness.uncompleteMutate).not.toHaveBeenCalled();
   });
 });
 

@@ -39,6 +39,9 @@ export function TaskItem({
   const { data: liveTask } = useTaskQuery(task.id);
   const current = liveTask ?? task;
   const completed = current.status === 'COMPLETED';
+  const cancelled = current.status === 'CANCELLED';
+  // 已了结（完成或取消）：标题删除线 + 弱化（ADR 0006）。
+  const settled = completed || cancelled;
   const [exiting, setExiting] = React.useState(false);
   const expanded = selectionState === 'expanded';
 
@@ -84,7 +87,7 @@ export function TaskItem({
   };
 
   const handleToggle = () => {
-    if (!completed) {
+    if (!settled) {
       setExiting(true);
       window.setTimeout(onToggleComplete, 350);
     } else {
@@ -136,7 +139,7 @@ export function TaskItem({
           }}
           role={onRowClick ? 'button' : undefined}
         >
-        <TaskCheckbox checked={completed} onToggle={handleToggle} />
+        <TaskCheckbox checked={completed} cancelled={cancelled} onToggle={handleToggle} />
 
         {expanded ? (
           <Input
@@ -167,14 +170,14 @@ export function TaskItem({
             onClick={(e) => e.stopPropagation()}
             className={cn(
               'flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
-              completed && 'text-muted-foreground line-through',
+              settled && 'text-muted-foreground line-through',
             )}
           />
         ) : (
           <span
             className={cn(
               'flex-1 truncate text-left text-sm transition-colors',
-              completed
+              settled
                 ? 'text-muted-foreground line-through'
                 : current.title
                   ? 'text-foreground'

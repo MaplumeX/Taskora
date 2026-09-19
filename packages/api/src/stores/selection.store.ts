@@ -17,6 +17,8 @@ export interface SelectionRow {
   kind: SelectionRowKind;
   /** 行数据的完成态（仅 task 行有意义），用于批量完成时跳过已完成项。 */
   completed?: boolean;
+  /** 行数据的取消态（仅 task 行有意义），用于批量取消时跳过已取消项。 */
+  cancelled?: boolean;
 }
 
 interface SelectionState {

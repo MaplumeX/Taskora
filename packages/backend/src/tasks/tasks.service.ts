@@ -9,7 +9,8 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
 import { Prisma } from '@prisma/client';
-import { buildTaskViewWhere } from './views';
+import { buildTaskViewWhere, WITH_SETTLED_STATUSES } from './views';
+import { settledToCompletedAt } from './task-dto.mapper';
 
 @Injectable()
 export class TasksService {
@@ -59,7 +60,10 @@ export class TasksService {
       },
       include: { tags: { include: { tag: true } } },
     });
-    return { ...created, tags: created.tags.map((tt) => tt.tag) };
+    return settledToCompletedAt({
+      ...created,
+      tags: created.tags.map((tt) => tt.tag),
+    });
   }
 
   async findAll(userId: string, query: TaskQueryDto) {
@@ -85,9 +89,10 @@ export class TasksService {
         where.scheduledDate = { not: null };
       }
       if (query.q) {
-        // q mode: default ACTIVE, completed=true → [ACTIVE, COMPLETED]
+        // q mode: default ACTIVE; completed=true → 已了结三值白名单
+        // （ACTIVE / COMPLETED / CANCELLED，见 ADR 0006）。
         where.status = query.completed
-          ? { in: [TaskStatus.ACTIVE, TaskStatus.COMPLETED] }
+          ? { in: [...WITH_SETTLED_STATUSES] }
           : TaskStatus.ACTIVE;
         where.trashedAt = null;
       } else if (!query.completed) {
@@ -101,7 +106,7 @@ export class TasksService {
 
     const orderBy =
       query.view === 'logbook'
-        ? [{ completedAt: 'desc' as const }]
+        ? [{ settledAt: 'desc' as const }]
         : [{ sortOrder: 'asc' as const }, { createdAt: 'desc' as const }];
 
     const tasks = await this.prisma.task.findMany({
@@ -109,7 +114,9 @@ export class TasksService {
       orderBy,
       include: { tags: { include: { tag: true } } },
     });
-    return tasks.map((t) => ({ ...t, tags: t.tags.map((tt) => tt.tag) }));
+    return tasks.map((t) =>
+      settledToCompletedAt({ ...t, tags: t.tags.map((tt) => tt.tag) }),
+    );
   }
 
   async findOne(userId: string, id: string) {
@@ -123,8 +130,12 @@ export class TasksService {
     if (!task) {
       throw new NotFoundException('Task not found');
     }
-    const { tags: taskTags, ...rest } = task;
-    return { ...rest, tags: taskTags.map((tt) => tt.tag) };
+    const { tags: taskTags, subtasks, ...rest } = task;
+    return settledToCompletedAt({
+      ...rest,
+      tags: taskTags.map((tt) => tt.tag),
+      subtasks: subtasks.map(settledToCompletedAt),
+    });
   }
 
   async update(userId: string, id: string, dto: UpdateTaskDto) {
@@ -216,7 +227,10 @@ export class TasksService {
       data,
       include: { tags: { include: { tag: true } } },
     });
-    return { ...updated, tags: updated.tags.map((tt) => tt.tag) };
+    return settledToCompletedAt({
+      ...updated,
+      tags: updated.tags.map((tt) => tt.tag),
+    });
   }
 
   async remove(userId: string, id: string) {
@@ -246,7 +260,9 @@ export class TasksService {
 
     await this.prisma.task.updateMany({
       where: { id, userId },
-      data: { trashedAt: null },
+      // "从垃圾桶捡回"语义始终是"未了结"（spec: task-cancelled story 19）：
+      // 恢复一律回 ACTIVE 并清空了结时间，与终态正交。
+      data: { trashedAt: null, status: TaskStatus.ACTIVE, settledAt: null },
     });
 
     return { id, trashedAt: null };
@@ -283,7 +299,9 @@ export class TasksService {
             existing.status === TaskStatus.COMPLETED
               ? ProjectStatus.COMPLETED
               : ProjectStatus.ACTIVE,
-          completedAt: existing.completedAt,
+          // Project 无 CANCELLED 终态（out of scope）：仅完成任务携带了结时间。
+          completedAt:
+            existing.status === TaskStatus.COMPLETED ? existing.settledAt : null,
           trashedAt: existing.trashedAt,
           areaId: effectiveAreaId,
           bucket: existing.bucket as ProjectBucket,
@@ -304,7 +322,7 @@ export class TasksService {
           data: {
             title: st.title,
             status: st.status,
-            completedAt: st.completedAt,
+            settledAt: st.settledAt,
             projectId: newProject.id,
             userId,
             bucket: TaskBucket.INBOX,
@@ -332,13 +350,15 @@ export class TasksService {
       throw new NotFoundException('Task not found');
     }
 
-    return this.prisma.task.update({
+    // 终态可直接改写（ADR 0006）：COMPLETED ↔ CANCELLED 切换时刷新 settledAt。
+    const updated = await this.prisma.task.update({
       where: { id },
       data: {
         status: TaskStatus.COMPLETED,
-        completedAt: new Date(),
+        settledAt: new Date(),
       },
     });
+    return settledToCompletedAt(updated);
   }
 
   async uncomplete(userId: string, id: string) {
@@ -349,13 +369,51 @@ export class TasksService {
       throw new NotFoundException('Task not found');
     }
 
-    return this.prisma.task.update({
+    const updated = await this.prisma.task.update({
       where: { id },
       data: {
         status: TaskStatus.ACTIVE,
-        completedAt: null,
+        settledAt: null,
       },
     });
+    return settledToCompletedAt(updated);
+  }
+
+  async cancel(userId: string, id: string) {
+    const existing = await this.prisma.task.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Task not found');
+    }
+
+    // 取消父 Task 不改动其 Subtasks（与 complete 行为一致，见 CONTEXT.md）。
+    const updated = await this.prisma.task.update({
+      where: { id },
+      data: {
+        status: TaskStatus.CANCELLED,
+        settledAt: new Date(),
+      },
+    });
+    return settledToCompletedAt(updated);
+  }
+
+  async uncancel(userId: string, id: string) {
+    const existing = await this.prisma.task.findFirst({
+      where: { id, userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('Task not found');
+    }
+
+    const updated = await this.prisma.task.update({
+      where: { id },
+      data: {
+        status: TaskStatus.ACTIVE,
+        settledAt: null,
+      },
+    });
+    return settledToCompletedAt(updated);
   }
 
   async reorder(userId: string, orderedIds: string[]) {

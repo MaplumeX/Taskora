@@ -35,6 +35,7 @@ export interface TaskResponseDto {
   dueDate: string | null; // 通知日期（新增）
   bucket: TaskBucket;
   status: TaskStatus;
+  /** 了结时间（Settled At，ADR 0006）：status 为 COMPLETED/CANCELLED 时的了结时刻；字段名保留 completedAt 以兼容前端。 */
   completedAt: string | null;
   trashedAt: string | null;
   sortOrder: number;

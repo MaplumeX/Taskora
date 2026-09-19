@@ -100,20 +100,27 @@ describe('TasksService — trash/restore (no BFS cascade)', () => {
       expect(call.where.id).toBe('task-1');
       expect(call.where.userId).toBe(userId);
       expect(call.data.trashedAt).toBeNull();
-      // status should NOT be in the data
-      expect(call.data).not.toHaveProperty('status');
     });
 
-    it('restores COMPLETED task without changing status', async () => {
-      const completedTask = { ...existingTask, status: TaskStatus.COMPLETED, id: 'task-c' };
-      mockPrisma.task.findFirst.mockResolvedValue(completedTask);
+    it('restore 一律回 ACTIVE 并清空了结时间（spec: task-cancelled story 19）', async () => {
+      // 已取消的任务从 Trash 捡回 → 未了结
+      const cancelledTask = {
+        ...existingTask,
+        status: TaskStatus.CANCELLED,
+        settledAt: new Date(),
+        id: 'task-x',
+      };
+      mockPrisma.task.findFirst.mockResolvedValue(cancelledTask);
       mockPrisma.task.updateMany.mockResolvedValue({ count: 1 });
 
-      await service.restore(userId, 'task-c');
+      await service.restore(userId, 'task-x');
 
       const call = mockPrisma.task.updateMany.mock.calls[0][0];
-      expect(call.data).toEqual({ trashedAt: null });
-      expect(call.data).not.toHaveProperty('status');
+      expect(call.data).toEqual({
+        trashedAt: null,
+        status: TaskStatus.ACTIVE,
+        settledAt: null,
+      });
     });
   });
 });

@@ -63,6 +63,18 @@ export function uncompleteTask(id: string): Promise<TaskResponseDto> {
     .then((res) => res.data);
 }
 
+export function cancelTask(id: string): Promise<TaskResponseDto> {
+  return apiClient
+    .post<TaskResponseDto>(`/tasks/${id}/cancel`)
+    .then((res) => res.data);
+}
+
+export function uncancelTask(id: string): Promise<TaskResponseDto> {
+  return apiClient
+    .post<TaskResponseDto>(`/tasks/${id}/uncancel`)
+    .then((res) => res.data);
+}
+
 export function reorderTasks(orderedIds: string[]): Promise<void> {
   return apiClient.post('/tasks/reorder', { orderedIds }).then(() => undefined);
 }
@@ -104,6 +116,18 @@ export function completeSubtask(id: string): Promise<SubtaskResponseDto> {
 export function uncompleteSubtask(id: string): Promise<SubtaskResponseDto> {
   return apiClient
     .post<SubtaskResponseDto>(`/subtasks/${id}/uncomplete`)
+    .then((res) => res.data);
+}
+
+export function cancelSubtask(id: string): Promise<SubtaskResponseDto> {
+  return apiClient
+    .post<SubtaskResponseDto>(`/subtasks/${id}/cancel`)
+    .then((res) => res.data);
+}
+
+export function uncancelSubtask(id: string): Promise<SubtaskResponseDto> {
+  return apiClient
+    .post<SubtaskResponseDto>(`/subtasks/${id}/uncancel`)
     .then((res) => res.data);
 }
 
