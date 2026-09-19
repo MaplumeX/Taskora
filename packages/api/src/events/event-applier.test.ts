@@ -247,7 +247,7 @@ describe('applyChangeEvents', () => {
       sortOrder: 0,
       areaId: null,
       status: ProjectStatus.ACTIVE,
-      bucket: ProjectBucket.INBOX,
+      bucket: ProjectBucket.ANYTIME,
       taskTotalCount: 0,
       taskCompletedCount: 0,
       scheduledType: ScheduledType.NONE,
