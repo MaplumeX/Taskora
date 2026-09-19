@@ -74,9 +74,15 @@ async function mount() {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
-        <TitleBar />
-        <App />
-        <Toaster richColors position="top-center" />
+        {/* 流式壳（VS Code 式）：标题栏占据布局流首行，应用内容从它
+            下方开始，天然不会重叠；h-dvh 壳内 App 区用 flex-1 铺满剩余高度。 */}
+        <div className="flex h-dvh flex-col">
+          <TitleBar />
+          <div className="min-h-0 flex-1 overflow-hidden">
+            <App />
+          </div>
+        </div>
+        <Toaster richColors position="top-center" offset={44} />
       </QueryClientProvider>
     </React.StrictMode>,
   );
