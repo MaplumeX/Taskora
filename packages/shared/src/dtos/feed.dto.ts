@@ -23,6 +23,7 @@ export interface FeedItemBase {
   dueDate: string | null;
   status: TaskStatus | ProjectStatus;
   bucket: TaskBucket | ProjectBucket;
+  /** 了结时间（Settled At，ADR 0006）：task 的 COMPLETED/CANCELLED 与 project 的 COMPLETED 共用此字段；名称保留 completedAt 以兼容前端。 */
   completedAt: string | null;
   trashedAt: string | null;
   sortOrder: number;

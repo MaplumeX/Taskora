@@ -1,13 +1,13 @@
-import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { ScheduledType, TaskBucket, TaskStatus, SETTLED_TASK_STATUSES } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import type { TaskQuery } from '@/api/tasks.api';
 
-/** 已了结（Settled）状态白名单：Logbook Entry 口径（ADR 0006）。 */
-const SETTLED_STATUSES = [TaskStatus.COMPLETED, TaskStatus.CANCELLED] as const;
+/** 已了结（Settled）状态白名单：与后端共用 @taskora/shared 的单一来源（ADR 0006）。 */
+const SETTLED_STATUSES = SETTLED_TASK_STATUSES;
 
 function isSettled(status: TaskStatus): boolean {
-  return (SETTLED_STATUSES as readonly TaskStatus[]).includes(status);
+  return SETTLED_STATUSES.includes(status);
 }
 
 /**

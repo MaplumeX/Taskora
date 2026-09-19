@@ -1,4 +1,4 @@
-import { TaskBucket, TaskStatus, ScheduledType } from '@taskora/shared';
+import { TaskBucket, TaskStatus, ScheduledType, SETTLED_TASK_STATUSES, WITH_SETTLED_TASK_STATUSES } from '@taskora/shared';
 import { Prisma } from '@prisma/client';
 
 export type TaskView =
@@ -10,15 +10,11 @@ export type TaskView =
   | 'trash'
   | 'logbook';
 
-/** 已了结（Settled）状态白名单：Logbook Entry 口径（ADR 0006）。 */
-export const SETTLED_STATUSES = [TaskStatus.COMPLETED, TaskStatus.CANCELLED] as const;
+/** 已了结（Settled）状态白名单（ADR 0006）：单一来源在 @taskora/shared，前后端共用。 */
+export const SETTLED_STATUSES = SETTLED_TASK_STATUSES;
 
-/** 含已了结项的查询白名单（搜索 / Agent list_tasks 等含 completed=true 语义的路径）。 */
-export const WITH_SETTLED_STATUSES = [
-  TaskStatus.ACTIVE,
-  TaskStatus.COMPLETED,
-  TaskStatus.CANCELLED,
-] as const;
+/** 含已了结项的查询白名单：搜索 / Agent list_tasks 等含 completed=true 语义的路径。 */
+export const WITH_SETTLED_STATUSES = WITH_SETTLED_TASK_STATUSES;
 
 /**
  * Build the Prisma `where` clause for a given view.
