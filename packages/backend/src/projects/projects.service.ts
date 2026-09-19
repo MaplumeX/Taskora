@@ -21,7 +21,6 @@ export class ProjectsService {
   private resolveBucket(
     bucket: ProjectBucket | undefined,
     scheduledType: ScheduledType | undefined,
-    areaId: string | null | undefined,
   ): ProjectBucket {
     if (scheduledType === ScheduledType.DATE) return ProjectBucket.SCHEDULED;
     if (scheduledType === ScheduledType.SOMEDAY) return ProjectBucket.SCHEDULED;
@@ -44,7 +43,7 @@ export class ProjectsService {
       scheduledDate = new Date(dto.scheduledDate);
     }
     const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
-    const bucket = this.resolveBucket(dto.bucket, scheduledType, dto.areaId);
+    const bucket = this.resolveBucket(dto.bucket, scheduledType);
 
     const created = await this.prisma.project.create({
       data: {
@@ -189,10 +188,8 @@ export class ProjectsService {
       }
     }
 
-    // Resolve bucket if scheduledType, scheduledDate, area, or bucket changed
+    // Resolve bucket if scheduledType, scheduledDate, or bucket changed
     let bucket = existing.bucket;
-    const newAreaId =
-      dto.areaId !== undefined ? dto.areaId : existing.areaId;
 
     if (
       dto.scheduledType !== undefined ||
@@ -203,7 +200,6 @@ export class ProjectsService {
       bucket = this.resolveBucket(
         (dto.bucket ?? existing.bucket) as ProjectBucket,
         newScheduledType as ScheduledType,
-        newAreaId,
       );
     }
 
