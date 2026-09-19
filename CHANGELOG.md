@@ -9,6 +9,22 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.3.5] - 2026-09-19
+
+### Fixes
+
+- **desktop**: Rework the custom title bar into an in-flow shell layout
+  (#43): the title bar was a fixed overlay (top-0 z-50) while the shared
+  AppShell still laid out from y=0, so the first 38px of the main view sat
+  under the bar, blurred by the backdrop with clicks swallowed by the drag
+  region; the old CSS calc(100dvh - titlebar) compensation never pushed
+  content down. The desktop entry now wraps TitleBar + App in a flex
+  column (h-dvh + flex-1), the bar becomes a normal flow header, shared
+  layouts fill their parent (height: 100%) instead of the raw viewport,
+  and Toaster gets a top offset so toasts drop below the bar. macOS
+  (Overlay style + 78px traffic-light inset) and the quick-add window are
+  unchanged.
+
 ## [0.3.4] - 2026-09-19
 
 ### Features
