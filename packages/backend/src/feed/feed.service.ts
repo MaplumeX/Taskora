@@ -68,6 +68,17 @@ export class FeedService {
   }
 
   async findAll(userId: string, view: FeedView): Promise<FeedItem[]> {
+    // Projects never appear in the inbox or anytime feeds —
+    // they only surface in schedule/terminal views (today, upcoming,
+    // someday, logbook, trash).
+    const includeProjects = [
+      'today',
+      'upcoming',
+      'someday',
+      'logbook',
+      'trash',
+    ].includes(view);
+
     const [tasks, projects] = await Promise.all([
       this.prisma.task.findMany({
         where: { userId, ...buildTaskViewWhere(view as TaskView) },
@@ -77,14 +88,16 @@ export class FeedService {
             : [{ sortOrder: 'asc' as const }, { createdAt: 'desc' as const }],
         include: { tags: { include: { tag: true } } },
       }),
-      this.prisma.project.findMany({
-        where: { userId, ...buildProjectViewWhere(view as ProjectView) },
-        orderBy:
-          view === 'logbook'
-            ? [{ completedAt: 'desc' as const }]
-            : [{ sortOrder: 'asc' as const }, { createdAt: 'desc' as const }],
-        include: { tags: { include: { tag: true } } },
-      }),
+      includeProjects
+        ? this.prisma.project.findMany({
+            where: { userId, ...buildProjectViewWhere(view as ProjectView) },
+            orderBy:
+              view === 'logbook'
+                ? [{ completedAt: 'desc' as const }]
+                : [{ sortOrder: 'asc' as const }, { createdAt: 'desc' as const }],
+            include: { tags: { include: { tag: true } } },
+          })
+        : Promise.resolve([]),
     ]);
 
     const taskItems: TaskFeedItem[] = tasks.map((t) => ({

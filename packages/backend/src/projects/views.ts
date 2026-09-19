@@ -1,4 +1,4 @@
-import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
+import { ProjectStatus, ScheduledType } from '@taskora/shared';
 import { Prisma } from '@prisma/client';
 
 export type ProjectView =
@@ -22,10 +22,10 @@ export function buildProjectViewWhere(
   const where: Prisma.ProjectWhereInput = {};
   switch (view) {
     case 'inbox':
-      where.bucket = ProjectBucket.INBOX;
-      where.status = ProjectStatus.ACTIVE;
-      where.scheduledType = ScheduledType.NONE;
-      where.trashedAt = null;
+    case 'anytime':
+      // Projects never appear in the inbox or anytime feeds.
+      // id < '' never matches — defensive guard against accidental reuse.
+      where.id = { lt: '' };
       break;
     case 'today':
       where.status = ProjectStatus.ACTIVE;
@@ -37,12 +37,6 @@ export function buildProjectViewWhere(
       where.status = ProjectStatus.ACTIVE;
       where.scheduledType = ScheduledType.DATE;
       where.scheduledDate = { gt: new Date() };
-      where.trashedAt = null;
-      break;
-    case 'anytime':
-      where.bucket = ProjectBucket.ANYTIME;
-      where.status = ProjectStatus.ACTIVE;
-      where.scheduledType = ScheduledType.NONE;
       where.trashedAt = null;
       break;
     case 'someday':

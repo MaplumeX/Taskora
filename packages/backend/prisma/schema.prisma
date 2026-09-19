@@ -85,7 +85,7 @@ model Project {
   sortOrder Int @default(0)
 
   status        ProjectStatus @default(ACTIVE)
-  bucket        ProjectBucket @default(INBOX)
+  bucket        ProjectBucket @default(ANYTIME)
   scheduledType ScheduledType @default(NONE)
   scheduledDate DateTime?
   dueDate       DateTime?

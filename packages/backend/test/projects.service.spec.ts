@@ -96,7 +96,7 @@ describe('ProjectsService', () => {
         sortOrder: 0,
         userId,
         status: ProjectStatus.ACTIVE,
-        bucket: ProjectBucket.INBOX,
+        bucket: ProjectBucket.ANYTIME,
         scheduledType: ScheduledType.NONE,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -119,7 +119,7 @@ describe('ProjectsService', () => {
           scheduledType: ScheduledType.NONE,
           scheduledDate: null,
           dueDate: null,
-          bucket: ProjectBucket.INBOX,
+          bucket: ProjectBucket.ANYTIME,
         },
         include: { tags: { include: { tag: true } } },
       });
