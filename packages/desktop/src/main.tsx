@@ -58,7 +58,11 @@ async function mount() {
         staleTime: 30_000,
         // The Event Stream keeps caches fresh via push (ADR 0005); focus
         // refetch is superseded by reconnect + gap-triggered refetch.
+        // refetchOnReconnect likewise: the WebView fires `online` when it
+        // resumes after being backgrounded, which would refetch every
+        // stale query and reintroduce the foreground flash.
         refetchOnWindowFocus: false,
+        refetchOnReconnect: false,
         retry: 1,
       },
     },
