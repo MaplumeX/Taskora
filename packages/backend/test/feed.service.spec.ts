@@ -22,6 +22,7 @@ describe('FeedService', () => {
       project: {
         findMany: vi.fn(),
         deleteMany: vi.fn(),
+        groupBy: vi.fn(),
       },
       $transaction: vi.fn(async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),
     } as unknown as InstanceType<typeof PrismaService>;
@@ -131,6 +132,33 @@ describe('FeedService', () => {
     });
   });
 
+  describe('findAll — project 排除（origin/main #41）', () => {
+    const userId = 'user-1';
+
+    it('anytime 视图不查询 projects（项目不出现在 Anytime）', async () => {
+      mockPrisma.task.findMany.mockResolvedValue([]);
+      mockPrisma.task.groupBy.mockResolvedValue([]);
+      await service.findAll(userId, 'anytime');
+      expect(mockPrisma.project.findMany).not.toHaveBeenCalled();
+    });
+
+    it('inbox 视图不查询 projects（项目不出现在收件箱）', async () => {
+      mockPrisma.task.findMany.mockResolvedValue([]);
+      mockPrisma.task.groupBy.mockResolvedValue([]);
+      await service.findAll(userId, 'inbox');
+      expect(mockPrisma.project.findMany).not.toHaveBeenCalled();
+    });
+
+    it('today 视图仍查询 projects', async () => {
+      mockPrisma.task.findMany.mockResolvedValue([]);
+      mockPrisma.project.findMany.mockResolvedValue([]);
+      mockPrisma.task.groupBy.mockResolvedValue([]);
+      mockPrisma.project.groupBy.mockResolvedValue([]);
+      await service.findAll(userId, 'today');
+      expect(mockPrisma.project.findMany).toHaveBeenCalledTimes(1);
+    });
+  });
+
   describe('findAll — logbook view（spec: task-cancelled）', () => {
     const userId = 'user-1';
 
@@ -228,7 +256,7 @@ describe('FeedService', () => {
         .mockResolvedValueOnce([{ projectId: 'p1', _count: { _all: 3 } }])
         .mockResolvedValueOnce([{ projectId: 'p1', _count: { _all: 2 } }]);
 
-      const result = await service.findAll(userId, 'anytime');
+      const result = await service.findAll(userId, 'today');
 
       const completedCall = mockPrisma.task.groupBy.mock.calls[1][0];
       expect(completedCall.where.status).toEqual({

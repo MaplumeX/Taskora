@@ -21,6 +21,7 @@ import { ProjectStatus } from '@taskora/shared';
 import { SidebarBottomBar } from '@/components/layout/SidebarBottomBar';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
 import { mainNav, type NavItem } from '@/components/layout/navItems';
+import { useBucketCounts } from '@/components/layout/useBucketCounts';
 
 /** 侧边栏主导航（日志移至与废纸篓同一分组） */
 const SIDEBAR_MAIN_NAV = mainNav.filter((item) => item.to !== '/logbook');
@@ -50,7 +51,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const NavRow = ({ item }: { item: NavItem }) => {
+const NavRow = ({ item, count }: { item: NavItem; count?: number }) => {
   const { t } = useTranslation();
   const Icon = item.icon;
   return (
@@ -65,6 +66,11 @@ const NavRow = ({ item }: { item: NavItem }) => {
     >
       <Icon className="h-4 w-4" />
       {t(item.labelKey)}
+      {count !== undefined && count > 0 && (
+        <span className="ml-auto pl-1 text-xs tabular-nums text-muted-foreground/70">
+          {count > 99 ? '99+' : count}
+        </span>
+      )}
     </NavLink>
   );
 };
@@ -146,6 +152,11 @@ export function Sidebar() {
   const { data: allProjects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const { data: tags = [] } = useTagsQuery();
+  const { inboxCount, todayCount } = useBucketCounts();
+  const countByRoute: Record<string, number> = {
+    '/inbox': inboxCount,
+    '/today': todayCount,
+  };
 
   // 侧边栏仅展示 ACTIVE 项目，已完成项目不参与侧边栏导航树
   const projects = allProjects.filter((p) => p.status !== ProjectStatus.COMPLETED);
@@ -202,7 +213,7 @@ export function Sidebar() {
 
         <div className="flex flex-col gap-0.5">
           {SIDEBAR_MAIN_NAV.map((item) => (
-            <NavRow key={item.to} item={item} />
+            <NavRow key={item.to} item={item} count={countByRoute[item.to]} />
           ))}
         </div>
 

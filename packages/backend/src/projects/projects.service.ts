@@ -14,8 +14,9 @@ export class ProjectsService {
 
   /**
    * Resolve bucket based on scheduledType (Project version — no parentId/projectId).
+   * Projects never go to the inbox: unscheduled projects default to ANYTIME.
    * - DATE/SOMEDAY → SCHEDULED
-   * - NONE → keep non-SCHEDULED bucket, or derive from area, or INBOX
+   * - NONE → keep non-SCHEDULED bucket, or derive from area, or ANYTIME
    */
   private resolveBucket(
     bucket: ProjectBucket | undefined,
@@ -25,9 +26,11 @@ export class ProjectsService {
     if (scheduledType === ScheduledType.DATE) return ProjectBucket.SCHEDULED;
     if (scheduledType === ScheduledType.SOMEDAY) return ProjectBucket.SCHEDULED;
     // scheduledType === NONE (or undefined → defaults to NONE)
-    if (bucket && bucket !== ProjectBucket.SCHEDULED) return bucket;
-    if (areaId) return ProjectBucket.ANYTIME;
-    return ProjectBucket.INBOX;
+    // INBOX is treated as unspecified: projects never rest in the inbox.
+    if (bucket && bucket !== ProjectBucket.SCHEDULED && bucket !== ProjectBucket.INBOX) {
+      return bucket;
+    }
+    return ProjectBucket.ANYTIME;
   }
 
   async create(userId: string, dto: CreateProjectDto) {
