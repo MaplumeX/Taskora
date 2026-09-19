@@ -69,14 +69,6 @@
 }
 
 @layer base {
-  :root {
-    /* 自绘标题栏高度：仅主窗口使用，quick-add 等弹窗为 0 */
-    --titlebar-h: 0px;
-  }
-  html[data-window='main'] {
-    --titlebar-h: 38px;
-  }
-
   * {
     @apply border-border;
   }
@@ -124,21 +116,6 @@
 }
 
 @layer utilities {
-  /*
-   * 自绘标题栏（主窗口）位于布局流顶部，应用内容排在它下方的
-   * flex-1 区域内（见 main.tsx 的流式壳）。共享布局组件（AppShell /
-   * Sidebar / Login 等）用 .h-dvh/.h-screen 铺满"视口"，但在主窗口里
-   * 它们的真正可用高度是壳的剩余空间，因此覆盖为 height: 100%
-   * （父级是高度确定的 flex-1 区域，百分比可解析）。
-   * quick-add 弹窗同用 .h-screen，不受影响。
-   */
-  html[data-window='main'] .h-dvh {
-    height: 100%;
-  }
-  html[data-window='main'] .h-screen {
-    height: 100%;
-  }
-
   /* Apply tabular figures to data-dense areas */
   .tabular-nums {
     font-variant-numeric: tabular-nums;

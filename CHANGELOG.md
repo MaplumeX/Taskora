@@ -9,6 +9,21 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [Unreleased]
+
+### Changed
+
+- **desktop**: Drop the custom-drawn title bar and return to native
+  window decorations. Removes `TitleBar.tsx` (drag region +
+  Windows/Linux min/max/close buttons + macOS traffic-light inset),
+  the in-flow shell wrapper and its `--titlebar-h` / `height: 100%`
+  CSS compensations, and the `titleBarStyle: Overlay` +
+  `set_decorations(false)` setup; the main window now shows the
+  platform-native title bar and the shared `h-dvh` layout works
+  unmodified, same as the web app. Quick-add remains a borderless
+  popup, and the window capability list is trimmed to what the
+  frontend still invokes.
+
 ## [0.3.5] - 2026-09-19
 
 ### Fixes

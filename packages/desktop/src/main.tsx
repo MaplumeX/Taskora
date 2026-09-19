@@ -6,7 +6,6 @@ import pkg from '../package.json';
 import '@taskora/api';
 import { setAppVersion } from '@taskora/api';
 import { App } from './App';
-import { TitleBar } from './TitleBar';
 import { QuickAddApp } from './QuickAddApp';
 import { bootQuickAdd } from './quickAddBoot';
 import './index.css';
@@ -25,8 +24,6 @@ async function mount() {
   }
 
   const kind = new URLSearchParams(window.location.search).get('window');
-  // 窗口标记供 CSS 区分主窗口（自绘标题栏扣高）与 quick-add 弹窗。
-  document.documentElement.dataset.window = kind ?? 'main';
 
   if (kind === 'quick-add') {
     await bootQuickAdd().catch(() => undefined);
@@ -74,15 +71,9 @@ async function mount() {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
-        {/* 流式壳（VS Code 式）：标题栏占据布局流首行，应用内容从它
-            下方开始，天然不会重叠；h-dvh 壳内 App 区用 flex-1 铺满剩余高度。 */}
-        <div className="flex h-dvh flex-col">
-          <TitleBar />
-          <div className="min-h-0 flex-1 overflow-hidden">
-            <App />
-          </div>
-        </div>
-        <Toaster richColors position="top-center" offset={44} />
+        {/* 原生窗口装饰：App 直接铺满视口（h-dvh），与 web 端一致。 */}
+        <App />
+        <Toaster richColors position="top-center" />
       </QueryClientProvider>
     </React.StrictMode>,
   );

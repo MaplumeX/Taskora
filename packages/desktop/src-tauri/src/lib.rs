@@ -11,21 +11,6 @@ const QUICK_ADD_SHORTCUT: &str = "CmdOrCtrl+Shift+Space";
 pub fn run() {
     tauri::Builder::default()
         .manage(session::SessionLock::default())
-        .setup(|app| {
-            use tauri::Manager;
-
-            // 窗口装饰分平台处理（配置里 visible=false，避免闪现原生框架）：
-            // - macOS：保留原生红绿灯（titleBarStyle: Overlay + hiddenTitle），
-            //   标题栏区域透明、内容延伸到顶；
-            // - Windows/Linux：关闭原生装饰，前端自绘 TitleBar。
-            if let Some(window) = app.get_webview_window("main") {
-                #[cfg(not(target_os = "macos"))]
-                let _ = window.set_decorations(false);
-
-                let _ = window.show();
-            }
-            Ok(())
-        })
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // Second instance launched: bring the existing window to front.
             if let Some(window) = app.get_webview_window("main") {
