@@ -13,12 +13,13 @@ function isMacPlatform(): boolean {
 /**
  * 自绘窗口标题栏（主窗口专用；quick-add 是无边框弹窗，无需标题栏）。
  *
+ * - 位于应用布局流顶部（VS Code 式壳）：main.tsx 里作为外层
+ *   flex 列的首个子元素渲染，内容区永远排在它下方，不会重叠；
  * - 整条为拖拽区（data-tauri-drag-region），双击切换最大化；
  * - Windows/Linux：右侧 min / max / close 自绘按钮；
  * - macOS：原生红绿灯（lib.rs 里 titleBarStyle Overlay），只保留
  *   拖拽条，左侧留出红绿灯宽度避让，不渲染按钮与标题文字；
- * - 高度由 CSS 变量 --titlebar-h 控制，布局侧通过覆盖 .h-dvh/.h-screen
- *   从视口扣除（见 index.css，仅 [data-window='main'] 生效）。
+ * - 高度由 CSS 变量 --titlebar-h 控制（见 index.css）。
  */
 export function TitleBar() {
   const isMac = useMemo(isMacPlatform, []);
@@ -57,7 +58,7 @@ export function TitleBar() {
     <header
       data-tauri-drag-region
       onDoubleClick={() => void getCurrentWindow().toggleMaximize()}
-      className="fixed inset-x-0 top-0 z-50 flex h-[var(--titlebar-h,38px)] items-stretch border-b bg-secondary/60 backdrop-blur-sm select-none"
+      className="flex h-[var(--titlebar-h,38px)] shrink-0 items-stretch border-b bg-secondary/60 backdrop-blur-sm select-none"
     >
       {/* 标题：子元素需 pointer-events-none，否则 mousedown 命中子元素时拖拽失效。
           macOS 下原生红绿灯占位约 78px，用 padding 避让且不再渲染文字。 */}
