@@ -210,7 +210,9 @@ export class AgentToolsService {
           areaId: Type.Optional(Type.String()),
           q: Type.Optional(Type.String({ description: 'Free-text search in title and notes' })),
           includeCompleted: Type.Optional(
-            Type.Boolean({ description: 'Also return completed tasks (default false)' }),
+            Type.Boolean({
+              description: 'Also return completed and cancelled tasks (default false)',
+            }),
           ),
         }),
         execute: async (_id, params) => {
@@ -287,7 +289,7 @@ export class AgentToolsService {
         name: 'list_feed',
         label: 'List feed view',
         description:
-          'List a combined feed of tasks and projects for a view: today, upcoming, anytime, someday, inbox, logbook (completed) or trash (soft-deleted, restorable).',
+          'List a combined feed of tasks and projects for a view: today, upcoming, anytime, someday, inbox, logbook (completed and cancelled) or trash (soft-deleted, restorable).',
         parameters: Type.Object({
           view: Type.Union([
             Type.Literal('today'),
@@ -318,7 +320,7 @@ export class AgentToolsService {
         name: 'search',
         label: 'Search tasks and projects',
         description:
-          'Full-text search across task titles/notes and project titles/notes. Returns matching non-trashed tasks (both active and completed) and projects (including completed). Trashed items are not searchable; use list_tasks with view=trash instead.',
+          'Full-text search across task titles/notes and project titles/notes. Returns matching non-trashed tasks (active, completed and cancelled) and projects (including completed). Trashed items are not searchable; use list_tasks with view=trash instead.',
         parameters: Type.Object({ q: Type.String({ description: 'Search query' }) }),
         execute: async (_id, params) => {
           const [taskResults, projects] = await Promise.all([
@@ -379,7 +381,7 @@ export class AgentToolsService {
         name: 'update_task',
         label: 'Update task',
         description:
-          'Update a task: rename, edit notes, change dates (scheduledDate/dueDate), move it to another project or area (null clears), complete/reopen, or set its tags (tagIds replaces all tags).',
+          'Update a task: rename, edit notes, change dates (scheduledDate/dueDate), move it to another project or area (null clears), complete/reopen, cancel/uncancel, or set its tags (tagIds replaces all tags).',
         parameters: Type.Object({
           id: Type.String(),
           title: Type.Optional(Type.String()),
@@ -400,6 +402,11 @@ export class AgentToolsService {
           completed: Type.Optional(
             Type.Boolean({ description: 'true completes the task, false reopens it' }),
           ),
+          cancelled: Type.Optional(
+            Type.Boolean({
+              description: 'true cancels the task (gives up on it, reversible), false uncancels it',
+            }),
+          ),
           tagIds: Type.Optional(
             Type.Array(Type.String(), { description: 'Replaces all task tags' }),
           ),
@@ -410,6 +417,13 @@ export class AgentToolsService {
               await this.tasks.complete(userId, params.id);
             } else {
               await this.tasks.uncomplete(userId, params.id);
+            }
+          }
+          if (params.cancelled !== undefined) {
+            if (params.cancelled) {
+              await this.tasks.cancel(userId, params.id);
+            } else {
+              await this.tasks.uncancel(userId, params.id);
             }
           }
           const task = await this.tasks.update(userId, params.id, {
@@ -445,15 +459,30 @@ export class AgentToolsService {
       defineTool({
         name: 'complete_subtask',
         label: 'Complete subtask',
-        description: 'Mark a subtask as completed, or reopen it with completed=false.',
+        description:
+          'Mark a subtask as completed, cancel it (gives up on it, reversible), or reopen it with completed=false / cancelled=false.',
         parameters: Type.Object({
           id: Type.String(),
-          completed: Type.Optional(Type.Boolean()),
+          completed: Type.Optional(
+            Type.Boolean({ description: 'true completes the subtask, false reopens it' }),
+          ),
+          cancelled: Type.Optional(
+            Type.Boolean({
+              description: 'true cancels the subtask (gives up on it, reversible), false uncancels it',
+            }),
+          ),
         }),
         execute: async (_id, params) => {
-          const subtask = await this.subtasks.update(userId, params.id, {
-            status: (params.completed ?? true) ? TaskStatus.COMPLETED : TaskStatus.ACTIVE,
-          });
+          let subtask: Awaited<ReturnType<SubtasksService['complete']>>;
+          if (params.cancelled !== undefined) {
+            subtask = params.cancelled
+              ? await this.subtasks.cancel(userId, params.id)
+              : await this.subtasks.uncancel(userId, params.id);
+          } else {
+            subtask = await this.subtasks.update(userId, params.id, {
+              status: (params.completed ?? true) ? TaskStatus.COMPLETED : TaskStatus.ACTIVE,
+            });
+          }
           return textResult(
             compact({ id: subtask.id, title: subtask.title, status: subtask.status }),
           );

@@ -106,7 +106,7 @@ describe('ProjectHeadingsService — archive / unarchive', () => {
       },
       data: {
         status: 'COMPLETED',
-        completedAt: expect.any(Date),
+        settledAt: expect.any(Date),
       },
     });
 

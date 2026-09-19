@@ -3,6 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { ChangeAction, ChangeEntity } from '@taskora/shared';
 
 import { ChangeEventHub } from './change-event-hub.service';
+import { settledToCompletedAt } from '../tasks/task-dto.mapper';
 
 /**
  * Collects write descriptors from the Prisma extension and publishes Change
@@ -396,13 +397,23 @@ export class ChangeEventCollector {
     const userId = await this.resolveUserId(entity, row);
     if (!userId) return null;
 
-    if (!withTags) {
-      return { userId, data: row };
-    }
-    const tags = Array.isArray(row.tags)
-      ? row.tags.map((tt) => (tt as Record<string, unknown>).tag)
-      : [];
-    return { userId, data: { ...row, tags } };
+    // task / project / area embed their tags in the list DTO; Task / Subtask
+    // rows carry the physical settledAt column, which the list-DTO shape
+    // exposes as completedAt (Settled At 语义，ADR 0006)。
+    const tags =
+      withTags && Array.isArray(row.tags)
+        ? row.tags.map((tt) => (tt as Record<string, unknown>).tag)
+        : [];
+    const settledRow = row as { settledAt: Date | null } & Record<string, unknown>;
+    const data: Record<string, unknown> =
+      entity === 'task'
+        ? settledToCompletedAt({ ...settledRow, tags })
+        : entity === 'subtask'
+          ? settledToCompletedAt(settledRow)
+          : withTags
+            ? { ...row, tags }
+            : row;
+    return { userId, data };
   }
 }
 

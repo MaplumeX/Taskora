@@ -3,7 +3,7 @@
   "placeholder": "搜索任务…",
   "inputPlaceholder": "输入关键词搜索…",
   "clearSearch": "清空搜索",
-  "includeCompleted": "包含已完成",
+  "includeCompleted": "包含已了结项",
   "searching": "搜索中…",
   "searchFailed": "搜索失败，请重试。",
   "noResults": "未找到匹配的任务",

@@ -46,14 +46,14 @@ describe('TasksService — search (q param)', () => {
     expect(call.where.trashedAt).toBeNull();
   });
 
-  it('sets status to [ACTIVE, COMPLETED] when q + completed=true', async () => {
+  it('sets status to [ACTIVE, COMPLETED, CANCELLED] (settled whitelist) when q + completed=true', async () => {
     mockPrisma.task.findMany.mockResolvedValue([]);
 
     await service.findAll('user-1', { q: 'task', completed: true });
 
     const call = mockPrisma.task.findMany.mock.calls[0][0];
     expect(call.where.status).toEqual({
-      in: [TaskStatus.ACTIVE, TaskStatus.COMPLETED],
+      in: [TaskStatus.ACTIVE, TaskStatus.COMPLETED, TaskStatus.CANCELLED],
     });
   });
 

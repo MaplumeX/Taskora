@@ -161,7 +161,7 @@ export class ProjectHeadingsService {
           status: TaskStatus.ACTIVE,
           trashedAt: null,
         },
-        data: { status: TaskStatus.COMPLETED, completedAt: now },
+        data: { status: TaskStatus.COMPLETED, settledAt: now },
       });
 
       // Mark the heading itself as COMPLETED.

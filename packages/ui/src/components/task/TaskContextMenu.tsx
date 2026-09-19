@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Check, Circle, CalendarClock, CalendarDays, Tag, FolderInput, Trash2, RotateCcw } from 'lucide-react';
+import { Check, Circle, CircleSlash, CalendarClock, CalendarDays, Tag, FolderInput, Trash2, RotateCcw } from 'lucide-react';
 
 import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
 
@@ -14,10 +14,12 @@ import {
 import { MenuRow } from '@/components/common/MenuRow';
 import {
   taskKeys,
+  useCancelTask,
   useCompleteTask,
   useConvertTaskToProject,
   useDeleteTask,
   useRestoreTask,
+  useUncancelTask,
   useUncompleteTask,
   useUpdateTask,
 } from '@taskora/api';
@@ -42,6 +44,8 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const updateTask = useUpdateTask();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
+  const cancelTask = useCancelTask();
+  const uncancelTask = useUncancelTask();
   const deleteTask = useDeleteTask();
   const restoreTask = useRestoreTask();
   const convertToProjectTask = useConvertTaskToProject();
@@ -56,6 +60,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   >(null);
 
   const completed = current.status === 'COMPLETED';
+  const cancelled = current.status === 'CANCELLED';
 
   const patch = (data: UpdateTaskDto) =>
     updateTask.mutate(
@@ -74,6 +79,18 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const handleToggleComplete = () => {
     closeMenu();
     (completed ? uncompleteTask : completeTask).mutate(task.id, {
+      onSuccess: () => {
+        void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
+        void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      },
+      onError: () => toast.error(tc('saveFailed')),
+    });
+  };
+
+  // 取消与完成对称：终态可直接改写（ADR 0006），随当前状态切换文案。
+  const handleToggleCancel = () => {
+    closeMenu();
+    (cancelled ? uncancelTask : cancelTask).mutate(task.id, {
       onSuccess: () => {
         void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
         void queryClient.invalidateQueries({ queryKey: ['tasks'] });
@@ -162,6 +179,9 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
             onClick={handleToggleComplete}
           >
             {completed ? t('markIncomplete') : t('markComplete')}
+          </MenuRow>
+          <MenuRow icon={CircleSlash} onClick={handleToggleCancel}>
+            {cancelled ? t('markUncancelled') : t('markCancelled')}
           </MenuRow>
           <div className="-mx-1 my-1 h-px bg-muted" />
           <MenuRow icon={CalendarClock} onClick={() => openPicker('scheduled')}>

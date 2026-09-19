@@ -73,4 +73,22 @@ export class SubtasksController {
   ) {
     return this.subtasksService.uncomplete(req.user.id, id);
   }
+
+  // POST /subtasks/:id/cancel
+  @Post('subtasks/:id/cancel')
+  cancel(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.subtasksService.cancel(req.user.id, id);
+  }
+
+  // POST /subtasks/:id/uncancel
+  @Post('subtasks/:id/uncancel')
+  uncancel(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.subtasksService.uncancel(req.user.id, id);
+  }
 }

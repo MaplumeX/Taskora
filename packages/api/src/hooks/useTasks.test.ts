@@ -16,6 +16,8 @@ vi.mock('@/api/tasks.api', () => ({
   restoreTask: vi.fn(),
   completeTask: vi.fn(),
   uncompleteTask: vi.fn(),
+  cancelTask: vi.fn(),
+  uncancelTask: vi.fn(),
   reorderTasks: vi.fn(),
   convertTaskToProject: vi.fn(),
   createSubtask: vi.fn(),
@@ -23,17 +25,21 @@ vi.mock('@/api/tasks.api', () => ({
   deleteSubtask: vi.fn(),
   completeSubtask: vi.fn(),
   uncompleteSubtask: vi.fn(),
+  cancelSubtask: vi.fn(),
+  uncancelSubtask: vi.fn(),
   reorderSubtasks: vi.fn(),
 }));
 
 import {
+  cancelTask,
   completeTask,
   createTask,
   deleteTask,
+  uncancelTask,
   uncompleteTask,
   updateTask,
 } from '@/api/tasks.api';
-import { taskKeys, useCompleteTask, useCreateTask, useDeleteTask, useUncompleteTask, useUpdateTask } from './useTasks';
+import { taskKeys, useCancelTask, useCompleteTask, useCreateTask, useDeleteTask, useUncancelTask, useUncompleteTask, useUpdateTask } from './useTasks';
 
 const baseTask: TaskResponseDto = {
   id: 'task-1',
@@ -178,6 +184,93 @@ describe('useUncompleteTask (optimistic)', () => {
     );
     expect(listData?.[0].status).toBe(TaskStatus.COMPLETED);
     expect(listData?.[0].completedAt).toBe('2024-06-01T00:00:00.000Z');
+  });
+});
+
+describe('useCancelTask (optimistic, spec: task-cancelled)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('optimistically sets status to CANCELLED and settled completedAt in list and detail', async () => {
+    vi.mocked(cancelTask).mockResolvedValue({
+      ...baseTask,
+      status: TaskStatus.CANCELLED,
+      completedAt: '2026-09-19T00:00:00.000Z',
+    });
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(taskKeys.list({ view: 'today' }), [baseTask]);
+    queryClient.setQueryData(taskKeys.detail('task-1'), baseTask);
+
+    const { result } = renderHook(() => useCancelTask(), { wrapper });
+
+    result.current.mutate('task-1');
+
+    await waitFor(() => {
+      const listData = queryClient.getQueryData<TaskResponseDto[]>(
+        taskKeys.list({ view: 'today' }),
+      );
+      expect(listData?.[0].status).toBe(TaskStatus.CANCELLED);
+      expect(listData?.[0].completedAt).not.toBeNull();
+    });
+
+    const detailData = queryClient.getQueryData<TaskResponseDto>(
+      taskKeys.detail('task-1'),
+    );
+    expect(detailData?.status).toBe(TaskStatus.CANCELLED);
+    expect(detailData?.completedAt).not.toBeNull();
+  });
+
+  it('rolls back on error', async () => {
+    vi.mocked(cancelTask).mockRejectedValue(new Error('network'));
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(taskKeys.list({ view: 'today' }), [baseTask]);
+    queryClient.setQueryData(taskKeys.detail('task-1'), baseTask);
+
+    const { result } = renderHook(() => useCancelTask(), { wrapper });
+
+    await expect(result.current.mutateAsync('task-1')).rejects.toThrow('network');
+
+    const listData = queryClient.getQueryData<TaskResponseDto[]>(
+      taskKeys.list({ view: 'today' }),
+    );
+    expect(listData?.[0].status).toBe(TaskStatus.ACTIVE);
+    expect(listData?.[0].completedAt).toBeNull();
+  });
+});
+
+describe('useUncancelTask (optimistic, spec: task-cancelled)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('optimistically sets status to ACTIVE and completedAt=null', async () => {
+    const cancelledTask: TaskResponseDto = {
+      ...baseTask,
+      status: TaskStatus.CANCELLED,
+      completedAt: '2026-09-19T00:00:00.000Z',
+    };
+    vi.mocked(uncancelTask).mockResolvedValue({
+      ...baseTask,
+      status: TaskStatus.ACTIVE,
+      completedAt: null,
+    });
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(taskKeys.list({ view: 'logbook' }), [cancelledTask]);
+    queryClient.setQueryData(taskKeys.detail('task-1'), cancelledTask);
+
+    const { result } = renderHook(() => useUncancelTask(), { wrapper });
+
+    result.current.mutate('task-1');
+
+    await waitFor(() => {
+      const listData = queryClient.getQueryData<TaskResponseDto[]>(
+        taskKeys.list({ view: 'logbook' }),
+      );
+      expect(listData?.[0].status).toBe(TaskStatus.ACTIVE);
+    });
+
+    const detailData = queryClient.getQueryData<TaskResponseDto>(
+      taskKeys.detail('task-1'),
+    );
+    expect(detailData?.status).toBe(TaskStatus.ACTIVE);
+    expect(detailData?.completedAt).toBeNull();
   });
 });
 

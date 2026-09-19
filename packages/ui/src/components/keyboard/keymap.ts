@@ -23,6 +23,8 @@ export type KeyAction =
   | { type: 'selectAll' }
   /** ⌘K/Ctrl+K：完成选中；Logbook 中撤销完成。 */
   | { type: 'complete' }
+  /** ⌥⌘K / Ctrl+Alt+K / Alt+Shift+K：取消选中；Logbook 中撤销取消。 */
+  | { type: 'cancel' }
   /** ⌫/Delete：移入 Trash；Trash 页遵循该页约定（恢复）。 */
   | { type: 'delete' }
   /** Enter：行内展开选中任务。 */
@@ -106,6 +108,16 @@ export function resolveAction(e: KeyEventLike, platform: KeyPlatform): KeyAction
     if (key === 'k' || key === 'K') return { type: 'complete' };
     if (key === 'a' || key === 'A') return { type: 'selectAll' };
     if (key === 'f' || key === 'F') return { type: 'search' };
+  }
+
+  // --- 取消：mac ⌥⌘K；Windows 桌面 Ctrl+Alt+K；Web Alt+Shift+K
+  //     （Web 的 Ctrl+Alt 系被浏览器/输入法占用，降级为 Alt+Shift）。 ---
+  if (key === 'k' || key === 'K') {
+    if (platform === 'web') {
+      if (e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey) return { type: 'cancel' };
+    } else if (cmd && e.altKey && !e.shiftKey) {
+      return { type: 'cancel' };
+    }
   }
 
   // --- 删除（⌫/Delete，全平台无修饰） ---

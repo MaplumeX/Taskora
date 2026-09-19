@@ -28,7 +28,13 @@ export default function Calendar() {
   // 注册可遍历行（按当前月网格顺序；键盘动作经全局 keymap 生效）。
   const { selectedIds, handleRowClick } = useTaskRowSelection();
   const rows = useMemo(
-    () => tasks.map((t) => ({ id: t.id, kind: 'task' as const, completed: t.status === 'COMPLETED' })),
+    () =>
+      tasks.map((t) => ({
+        id: t.id,
+        kind: 'task' as const,
+        completed: t.status === 'COMPLETED',
+        cancelled: t.status === 'CANCELLED',
+      })),
     [tasks],
   );
   useSelectionScope(rows);

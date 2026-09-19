@@ -5,6 +5,7 @@ import {
 import { TaskStatus } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateSubtaskDto, UpdateSubtaskDto } from './dto/subtasks.dto';
+import { settledToCompletedAt } from '../tasks/task-dto.mapper';
 
 @Injectable()
 export class SubtasksService {
@@ -27,13 +28,14 @@ export class SubtasksService {
     });
     const sortOrder = (max._max.sortOrder ?? -1) + 1;
 
-    return this.prisma.subtask.create({
+    const created = await this.prisma.subtask.create({
       data: {
         title: dto.title,
         taskId,
         sortOrder,
       },
     });
+    return settledToCompletedAt(created);
   }
 
   async update(userId: string, id: string, dto: UpdateSubtaskDto) {
@@ -48,22 +50,23 @@ export class SubtasksService {
     const data: {
       title?: string;
       status?: TaskStatus;
-      completedAt?: Date | null;
+      settledAt?: Date | null;
     } = {};
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.status !== undefined) {
       data.status = dto.status;
-      if (dto.status === TaskStatus.COMPLETED) {
-        data.completedAt = new Date();
+      if (dto.status === TaskStatus.COMPLETED || dto.status === TaskStatus.CANCELLED) {
+        data.settledAt = new Date();
       } else {
-        data.completedAt = null;
+        data.settledAt = null;
       }
     }
 
-    return this.prisma.subtask.update({
+    const updated = await this.prisma.subtask.update({
       where: { id },
       data,
     });
+    return settledToCompletedAt(updated);
   }
 
   async remove(userId: string, id: string) {
@@ -87,13 +90,14 @@ export class SubtasksService {
       throw new NotFoundException('Subtask not found');
     }
 
-    return this.prisma.subtask.update({
+    const updated = await this.prisma.subtask.update({
       where: { id },
       data: {
         status: TaskStatus.COMPLETED,
-        completedAt: new Date(),
+        settledAt: new Date(),
       },
     });
+    return settledToCompletedAt(updated);
   }
 
   async uncomplete(userId: string, id: string) {
@@ -105,13 +109,52 @@ export class SubtasksService {
       throw new NotFoundException('Subtask not found');
     }
 
-    return this.prisma.subtask.update({
+    const updated = await this.prisma.subtask.update({
       where: { id },
       data: {
         status: TaskStatus.ACTIVE,
-        completedAt: null,
+        settledAt: null,
       },
     });
+    return settledToCompletedAt(updated);
+  }
+
+  async cancel(userId: string, id: string) {
+    const subtask = await this.prisma.subtask.findFirst({
+      where: { id },
+      include: { task: { select: { userId: true } } },
+    });
+    if (!subtask || subtask.task.userId !== userId) {
+      throw new NotFoundException('Subtask not found');
+    }
+
+    const updated = await this.prisma.subtask.update({
+      where: { id },
+      data: {
+        status: TaskStatus.CANCELLED,
+        settledAt: new Date(),
+      },
+    });
+    return settledToCompletedAt(updated);
+  }
+
+  async uncancel(userId: string, id: string) {
+    const subtask = await this.prisma.subtask.findFirst({
+      where: { id },
+      include: { task: { select: { userId: true } } },
+    });
+    if (!subtask || subtask.task.userId !== userId) {
+      throw new NotFoundException('Subtask not found');
+    }
+
+    const updated = await this.prisma.subtask.update({
+      where: { id },
+      data: {
+        status: TaskStatus.ACTIVE,
+        settledAt: null,
+      },
+    });
+    return settledToCompletedAt(updated);
   }
 
   async reorder(userId: string, taskId: string, orderedIds: string[]) {

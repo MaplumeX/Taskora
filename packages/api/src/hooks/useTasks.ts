@@ -14,6 +14,8 @@ import type {
 } from '@taskora/shared';
 
 import {
+  cancelSubtask,
+  cancelTask,
   completeSubtask,
   completeTask,
   convertTaskToProject,
@@ -27,6 +29,8 @@ import {
   reorderTasks,
   restoreTask,
   type TaskQuery,
+  uncancelSubtask,
+  uncancelTask,
   uncompleteSubtask,
   uncompleteTask,
   updateSubtask,
@@ -313,6 +317,93 @@ export function useUncompleteTask() {
   });
 }
 
+export function useCancelTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => cancelTask(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: taskKeys.all });
+      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
+        queryKey: taskKeys.all,
+      });
+      const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(
+        taskKeys.detail(id),
+      );
+      const now = new Date().toISOString();
+      queryClient.setQueriesData<TaskResponseDto[]>(
+        { queryKey: taskKeys.all },
+        (old) =>
+          applyToTaskInList(old, id, (task) => ({
+            ...task,
+            status: TaskStatus.CANCELLED,
+            completedAt: now,
+          })),
+      );
+      queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
+        old ? { ...old, status: TaskStatus.CANCELLED, completedAt: now } : old,
+      );
+      return { snapshot, detailSnapshot, id };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.snapshot) {
+        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+      }
+      if (ctx?.detailSnapshot !== undefined) {
+        queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
+      }
+    },
+    onSettled: (_data, _error, id) => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+}
+
+export function useUncancelTask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => uncancelTask(id),
+    onMutate: async (id) => {
+      await queryClient.cancelQueries({ queryKey: taskKeys.all });
+      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
+        queryKey: taskKeys.all,
+      });
+      const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(
+        taskKeys.detail(id),
+      );
+      queryClient.setQueriesData<TaskResponseDto[]>(
+        { queryKey: taskKeys.all },
+        (old) =>
+          applyToTaskInList(old, id, (task) => ({
+            ...task,
+            status: TaskStatus.ACTIVE,
+            completedAt: null,
+          })),
+      );
+      queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
+        old ? { ...old, status: TaskStatus.ACTIVE, completedAt: null } : old,
+      );
+      return { snapshot, detailSnapshot, id };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.snapshot) {
+        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+      }
+      if (ctx?.detailSnapshot !== undefined) {
+        queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
+      }
+    },
+    onSettled: (_data, _error, id) => {
+      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+    },
+  });
+}
+
 export function useReorderTasks() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -361,10 +452,15 @@ export function useRestoreTask() {
           applyToTaskInList(old, id, (task) => ({
             ...task,
             trashedAt: null,
+            // "从垃圾桶捡回"始终是未了结（spec: task-cancelled story 19）。
+            status: TaskStatus.ACTIVE,
+            completedAt: null,
           })),
       );
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
-        old ? { ...old, trashedAt: null } : old,
+        old
+          ? { ...old, trashedAt: null, status: TaskStatus.ACTIVE, completedAt: null }
+          : old,
       );
       return { snapshot, detailSnapshot, id };
     },
@@ -623,6 +719,116 @@ export function useUncompleteSubtask() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => uncompleteSubtask(id),
+    onMutate: async (id) => {
+      // Find taskId from detail caches
+      const detailQueries = queryClient.getQueriesData<TaskResponseDto>({
+        queryKey: ['task'],
+      });
+      let taskId: string | undefined;
+      for (const [, taskData] of detailQueries) {
+        if (taskData?.subtasks?.some((s) => s.id === id)) {
+          taskId = taskData.id;
+          break;
+        }
+      }
+      if (!taskId) return { taskId: undefined };
+      await queryClient.cancelQueries({ queryKey: taskKeys.detail(taskId) });
+      const snapshot = queryClient.getQueryData<TaskResponseDto>(
+        taskKeys.detail(taskId),
+      );
+      const now = new Date().toISOString();
+      queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(taskId), (old) =>
+        applyToSubtasks(old, (subtasks) =>
+          applyToSubtaskInArray(subtasks, id, (s) => ({
+            ...s,
+            status: TaskStatus.ACTIVE,
+            completedAt: null,
+            updatedAt: now,
+          })),
+        ),
+      );
+      return { taskId, snapshot };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.taskId && ctx?.snapshot !== undefined) {
+        queryClient.setQueryData(taskKeys.detail(ctx.taskId), ctx.snapshot);
+      }
+    },
+    onSettled: (subtask, _error, _id, ctx) => {
+      if (ctx?.taskId) {
+        void queryClient.invalidateQueries({
+          queryKey: taskKeys.detail(ctx.taskId),
+        });
+      } else if (subtask?.taskId) {
+        void queryClient.invalidateQueries({
+          queryKey: taskKeys.detail(subtask.taskId),
+        });
+      }
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+export function useCancelSubtask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => cancelSubtask(id),
+    onMutate: async (id) => {
+      // Find taskId from detail caches
+      const detailQueries = queryClient.getQueriesData<TaskResponseDto>({
+        queryKey: ['task'],
+      });
+      let taskId: string | undefined;
+      for (const [, taskData] of detailQueries) {
+        if (taskData?.subtasks?.some((s) => s.id === id)) {
+          taskId = taskData.id;
+          break;
+        }
+      }
+      if (!taskId) return { taskId: undefined };
+      await queryClient.cancelQueries({ queryKey: taskKeys.detail(taskId) });
+      const snapshot = queryClient.getQueryData<TaskResponseDto>(
+        taskKeys.detail(taskId),
+      );
+      const now = new Date().toISOString();
+      queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(taskId), (old) =>
+        applyToSubtasks(old, (subtasks) =>
+          applyToSubtaskInArray(subtasks, id, (s) => ({
+            ...s,
+            status: TaskStatus.CANCELLED,
+            completedAt: now,
+            updatedAt: now,
+          })),
+        ),
+      );
+      return { taskId, snapshot };
+    },
+    onError: (_err, _id, ctx) => {
+      if (ctx?.taskId && ctx?.snapshot !== undefined) {
+        queryClient.setQueryData(taskKeys.detail(ctx.taskId), ctx.snapshot);
+      }
+    },
+    onSettled: (subtask, _error, _id, ctx) => {
+      if (ctx?.taskId) {
+        void queryClient.invalidateQueries({
+          queryKey: taskKeys.detail(ctx.taskId),
+        });
+      } else if (subtask?.taskId) {
+        void queryClient.invalidateQueries({
+          queryKey: taskKeys.detail(subtask.taskId),
+        });
+      }
+      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+    },
+  });
+}
+
+export function useUncancelSubtask() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => uncancelSubtask(id),
     onMutate: async (id) => {
       // Find taskId from detail caches
       const detailQueries = queryClient.getQueriesData<TaskResponseDto>({

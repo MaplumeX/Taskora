@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 
 import type { CreateTaskDto } from '@taskora/shared';
 import {
+  useCancelTask,
   useCompleteTask,
   useContentBottomActionsForRoute,
   viewOf,
@@ -24,6 +25,7 @@ import {
   usePageTaskContext,
   useReorderTasks,
   useRestoreTask,
+  useUncancelTask,
   useUncompleteTask,
   useUiInteractionStore,
 } from '@taskora/api';
@@ -88,6 +90,8 @@ export function KeyboardShortcuts({ platform }: Props) {
   } = useContentBottomActionsForRoute();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
+  const cancelTask = useCancelTask();
+  const uncancelTask = useUncancelTask();
   const deleteTask = useDeleteTask();
   const restoreTask = useRestoreTask();
   const reorderTasks = useReorderTasks();
@@ -216,11 +220,34 @@ export function KeyboardShortcuts({ platform }: Props) {
           const neighbor = neighborAfter(rows, selection.selectedIds);
           const isLogbook = view === 'logbook';
           for (const row of targets) {
-            // Logbook 中 ⌘K 撤销完成（story 26）；其他视图跳过已完成项。
+            // Logbook 中 ⌘K 撤销了结（story 26）：已完成的撤销完成，
+            // 已取消的撤销取消（同一个键，两种了结都可反悔）；
+            // 其他视图跳过已完成项。
             if (isLogbook) {
-              uncompleteTask.mutate(row.id);
+              if (row.cancelled) uncancelTask.mutate(row.id);
+              else uncompleteTask.mutate(row.id);
             } else if (!row.completed) {
               completeTask.mutate(row.id);
+            }
+          }
+          useSelectionStore.getState().setSelection(neighbor ? [neighbor.id] : []);
+          if (neighbor) focusSelectionRow(neighbor.id);
+          return;
+        }
+        case 'cancel': {
+          // 取消与 complete 同型派发（story 9）：Selection 移动行为一致。
+          const targets = selection.selectedIds
+            .map((id) => rowById.get(id))
+            .filter((r): r is SelectionRow => !!r && r.kind === 'task');
+          if (targets.length === 0) return;
+          const neighbor = neighborAfter(rows, selection.selectedIds);
+          const isLogbook = view === 'logbook';
+          for (const row of targets) {
+            if (isLogbook) {
+              // Logbook 中取消键只作用于已取消行（撤销取消）。
+              if (row.cancelled) uncancelTask.mutate(row.id);
+            } else if (!row.completed && !row.cancelled) {
+              cancelTask.mutate(row.id);
             }
           }
           useSelectionStore.getState().setSelection(neighbor ? [neighbor.id] : []);
@@ -321,6 +348,8 @@ export function KeyboardShortcuts({ platform }: Props) {
     handleAddHeading,
     completeTask,
     uncompleteTask,
+    cancelTask,
+    uncancelTask,
     deleteTask,
     restoreTask,
     reorderTasks,

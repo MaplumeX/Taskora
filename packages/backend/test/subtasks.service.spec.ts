@@ -17,7 +17,7 @@ describe('SubtasksService', () => {
     id: 'subtask-1',
     title: 'Subtask',
     status: TaskStatus.ACTIVE,
-    completedAt: null,
+    settledAt: null,
     sortOrder: 0,
     taskId,
     createdAt: new Date(),
@@ -126,7 +126,7 @@ describe('SubtasksService', () => {
       expect(result.title).toBe('Updated');
     });
 
-    it('sets status COMPLETED and completedAt when status changed to COMPLETED', async () => {
+    it('sets status COMPLETED and settledAt when status changed to COMPLETED', async () => {
       mockPrisma.subtask.findFirst.mockResolvedValue({
         ...baseSubtask,
         task: { userId },
@@ -134,7 +134,7 @@ describe('SubtasksService', () => {
       mockPrisma.subtask.update.mockResolvedValue({
         ...baseSubtask,
         status: TaskStatus.COMPLETED,
-        completedAt: new Date(),
+        settledAt: new Date(),
       });
 
       await service.update(userId, baseSubtask.id, {
@@ -143,10 +143,10 @@ describe('SubtasksService', () => {
 
       const call = mockPrisma.subtask.update.mock.calls[0][0];
       expect(call.data.status).toBe(TaskStatus.COMPLETED);
-      expect(call.data.completedAt).toBeInstanceOf(Date);
+      expect(call.data.settledAt).toBeInstanceOf(Date);
     });
 
-    it('sets status ACTIVE and clears completedAt when status changed to ACTIVE', async () => {
+    it('sets status ACTIVE and clears settledAt when status changed to ACTIVE', async () => {
       mockPrisma.subtask.findFirst.mockResolvedValue({
         ...baseSubtask,
         task: { userId },
@@ -154,7 +154,7 @@ describe('SubtasksService', () => {
       mockPrisma.subtask.update.mockResolvedValue({
         ...baseSubtask,
         status: TaskStatus.ACTIVE,
-        completedAt: null,
+        settledAt: null,
       });
 
       await service.update(userId, baseSubtask.id, {
@@ -163,7 +163,7 @@ describe('SubtasksService', () => {
 
       const call = mockPrisma.subtask.update.mock.calls[0][0];
       expect(call.data.status).toBe(TaskStatus.ACTIVE);
-      expect(call.data.completedAt).toBeNull();
+      expect(call.data.settledAt).toBeNull();
     });
   });
 
@@ -211,7 +211,7 @@ describe('SubtasksService', () => {
       );
     });
 
-    it('sets status COMPLETED and completedAt', async () => {
+    it('sets status COMPLETED and settledAt', async () => {
       mockPrisma.subtask.findFirst.mockResolvedValue({
         ...baseSubtask,
         task: { userId },
@@ -219,14 +219,14 @@ describe('SubtasksService', () => {
       mockPrisma.subtask.update.mockResolvedValue({
         ...baseSubtask,
         status: TaskStatus.COMPLETED,
-        completedAt: new Date(),
+        settledAt: new Date(),
       });
 
       const result = await service.complete(userId, baseSubtask.id);
 
       const call = mockPrisma.subtask.update.mock.calls[0][0];
       expect(call.data.status).toBe(TaskStatus.COMPLETED);
-      expect(call.data.completedAt).toBeInstanceOf(Date);
+      expect(call.data.settledAt).toBeInstanceOf(Date);
       expect(result.status).toBe(TaskStatus.COMPLETED);
     });
   });
@@ -240,25 +240,106 @@ describe('SubtasksService', () => {
       );
     });
 
-    it('sets status ACTIVE and clears completedAt', async () => {
+    it('sets status ACTIVE and clears settledAt', async () => {
       mockPrisma.subtask.findFirst.mockResolvedValue({
         ...baseSubtask,
         status: TaskStatus.COMPLETED,
-        completedAt: new Date(),
+        settledAt: new Date(),
         task: { userId },
       });
       mockPrisma.subtask.update.mockResolvedValue({
         ...baseSubtask,
         status: TaskStatus.ACTIVE,
-        completedAt: null,
+        settledAt: null,
       });
 
       const result = await service.uncomplete(userId, baseSubtask.id);
 
       const call = mockPrisma.subtask.update.mock.calls[0][0];
       expect(call.data.status).toBe(TaskStatus.ACTIVE);
-      expect(call.data.completedAt).toBeNull();
+      expect(call.data.settledAt).toBeNull();
       expect(result.status).toBe(TaskStatus.ACTIVE);
+    });
+  });
+
+
+  describe('cancel / uncancel (spec: task-cancelled)', () => {
+    it('throws NotFoundException when subtask not found', async () => {
+      mockPrisma.subtask.findFirst.mockResolvedValue(null);
+
+      await expect(service.cancel(userId, 'nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
+      await expect(service.uncancel(userId, 'nonexistent')).rejects.toThrow(
+        NotFoundException,
+      );
+    });
+
+    it('cancel sets status CANCELLED and settledAt', async () => {
+      mockPrisma.subtask.findFirst.mockResolvedValue({
+        ...baseSubtask,
+        task: { userId },
+      });
+      mockPrisma.subtask.update.mockResolvedValue({
+        ...baseSubtask,
+        status: TaskStatus.CANCELLED,
+        settledAt: new Date(),
+      });
+
+      const result = await service.cancel(userId, baseSubtask.id);
+
+      const call = mockPrisma.subtask.update.mock.calls[0][0];
+      expect(call.data.status).toBe(TaskStatus.CANCELLED);
+      expect(call.data.settledAt).toBeInstanceOf(Date);
+      expect(result.status).toBe(TaskStatus.CANCELLED);
+      // DTO 字段名保持 completedAt，承载 Settled At 语义（ADR 0006）。
+      expect(result.completedAt).toBeInstanceOf(Date);
+      expect('settledAt' in result).toBe(false);
+    });
+
+    it('cancel rewrites COMPLETED → CANCELLED directly (no reopen step) and refreshes settledAt', async () => {
+      mockPrisma.subtask.findFirst.mockResolvedValue({
+        ...baseSubtask,
+        status: TaskStatus.COMPLETED,
+        settledAt: new Date('2026-01-01T00:00:00Z'),
+        task: { userId },
+      });
+      mockPrisma.subtask.update.mockResolvedValue({
+        ...baseSubtask,
+        status: TaskStatus.CANCELLED,
+        settledAt: new Date(),
+      });
+
+      await service.cancel(userId, baseSubtask.id);
+
+      const call = mockPrisma.subtask.update.mock.calls[0][0];
+      expect(call.data.status).toBe(TaskStatus.CANCELLED);
+      expect(call.data.settledAt).toBeInstanceOf(Date);
+      // settledAt 被刷新（改写终态时重新记了结时间）
+      expect(call.data.settledAt.getTime()).toBeGreaterThan(
+        new Date('2026-01-01T00:00:00Z').getTime(),
+      );
+    });
+
+    it('uncancel returns to ACTIVE and clears settledAt', async () => {
+      mockPrisma.subtask.findFirst.mockResolvedValue({
+        ...baseSubtask,
+        status: TaskStatus.CANCELLED,
+        settledAt: new Date(),
+        task: { userId },
+      });
+      mockPrisma.subtask.update.mockResolvedValue({
+        ...baseSubtask,
+        status: TaskStatus.ACTIVE,
+        settledAt: null,
+      });
+
+      const result = await service.uncancel(userId, baseSubtask.id);
+
+      const call = mockPrisma.subtask.update.mock.calls[0][0];
+      expect(call.data.status).toBe(TaskStatus.ACTIVE);
+      expect(call.data.settledAt).toBeNull();
+      expect(result.completedAt).toBeNull();
     });
   });
 

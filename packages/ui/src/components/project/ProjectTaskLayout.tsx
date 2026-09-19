@@ -385,12 +385,17 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
   const saveLayout = useReorderProjectHeadingLayout();
   // 注册可遍历行：ungrouped 任务 → 每个 Heading 后跟其分组任务。
   const selectionRows = React.useMemo(() => {
-    const rows: Array<{ id: string; kind: 'task' | 'heading'; completed?: boolean }> =
-      (layout.containers[UNGROUPED] ?? []).map((id) => ({
-        id,
-        kind: 'task' as const,
-        completed: taskMap.get(id)?.status === 'COMPLETED',
-      }));
+    const rows: Array<{
+      id: string;
+      kind: 'task' | 'heading';
+      completed?: boolean;
+      cancelled?: boolean;
+    }> = (layout.containers[UNGROUPED] ?? []).map((id) => ({
+      id,
+      kind: 'task' as const,
+      completed: taskMap.get(id)?.status === 'COMPLETED',
+      cancelled: taskMap.get(id)?.status === 'CANCELLED',
+    }));
     for (const hid of layout.headingIds) {
       rows.push({ id: hid, kind: 'heading' });
       for (const id of layout.containers[hid] ?? []) {
@@ -398,6 +403,7 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
           id,
           kind: 'task' as const,
           completed: taskMap.get(id)?.status === 'COMPLETED',
+          cancelled: taskMap.get(id)?.status === 'CANCELLED',
         });
       }
     }

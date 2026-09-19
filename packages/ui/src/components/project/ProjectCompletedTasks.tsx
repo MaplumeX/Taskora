@@ -7,7 +7,7 @@ import { HeadingStatus, TaskStatus } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { TaskItem } from '@/components/task/TaskItem';
-import { useTasksQuery, useUncompleteTask } from '@taskora/api';
+import { useTasksQuery, useUncancelTask, useUncompleteTask } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
 import { useProjectHeadingsQuery } from '@taskora/api';
 import { useProjectUiPrefsStore } from '@taskora/api';
@@ -34,12 +34,19 @@ export function ProjectCompletedTasks({ projectId }: Props) {
     (s) => s.setCompletedPanelExpanded,
   );
   const uncompleteTask = useUncompleteTask();
+  const uncancelTask = useUncancelTask();
   const { selectedId, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
 
   // Keep server-returned order (sortOrder asc, createdAt desc) — do NOT re-sort
   // by completedAt. This preserves the pre-archive structural distribution.
-  const completedTasks = useMemo(
-    () => mixedTasks.filter((t) => t.status === TaskStatus.COMPLETED && t.trashedAt === null),
+  // 口径：已了结（完成 + 取消），与 taskCompletedCount 统计一致（ADR 0006）。
+  const settledTasks = useMemo(
+    () =>
+      mixedTasks.filter(
+        (t) =>
+          (t.status === TaskStatus.COMPLETED || t.status === TaskStatus.CANCELLED) &&
+          t.trashedAt === null,
+      ),
     [mixedTasks],
   );
 
@@ -54,7 +61,7 @@ export function ProjectCompletedTasks({ projectId }: Props) {
     const archivedHeadingIds = new Set(archivedHeadings.map((h) => h.id));
     const grouped: Record<string, TaskResponseDto[]> = {};
     const ungrouped: TaskResponseDto[] = [];
-    for (const task of completedTasks) {
+    for (const task of settledTasks) {
       if (task.headingId && archivedHeadingIds.has(task.headingId)) {
         if (!grouped[task.headingId]) grouped[task.headingId] = [];
         grouped[task.headingId].push(task);
@@ -63,21 +70,23 @@ export function ProjectCompletedTasks({ projectId }: Props) {
       }
     }
     return { ungroupedTasks: ungrouped, groupedTasks: grouped };
-  }, [completedTasks, archivedHeadings]);
+  }, [settledTasks, archivedHeadings]);
 
   // Loading or error: silently hide (don't block the active task area).
   if (isLoading || isError) return null;
 
-  // No completed tasks and no archived headings: hide the entire panel.
-  if (completedTasks.length === 0 && archivedHeadings.length === 0) return null;
+  // No settled tasks and no archived headings: hide the entire panel.
+  if (settledTasks.length === 0 && archivedHeadings.length === 0) return null;
 
   const handleToggle = (task: TaskResponseDto) => {
-    uncompleteTask.mutate(task.id, {
+    // 撤销了结：已完成 → 重开；已取消 → 撤销取消。
+    const mutation = task.status === TaskStatus.CANCELLED ? uncancelTask : uncompleteTask;
+    mutation.mutate(task.id, {
       onError: () => toast.error(t('common:operationFailed')),
     });
   };
 
-  const totalCount = completedTasks.length + archivedHeadings.length;
+  const totalCount = settledTasks.length + archivedHeadings.length;
 
   const renderTask = (task: TaskResponseDto) => (
     <TaskItem

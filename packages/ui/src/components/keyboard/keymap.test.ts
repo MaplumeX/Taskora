@@ -49,6 +49,16 @@ describe('resolveAction — mac 桌面（Things 原键位）', () => {
     expect(resolveAction(key(' '), platform)).toEqual({ type: 'newTaskBelow' });
   });
 
+  it('⌥⌘K 取消；与 ⌘K 完成不冲突', () => {
+    expect(resolveAction(key('k', { metaKey: true, altKey: true }), platform)).toEqual({
+      type: 'cancel',
+    });
+    // ⇧⌥⌘K 不触发（避免与其它修饰组合误触）
+    expect(
+      resolveAction(key('k', { metaKey: true, altKey: true, shiftKey: true }), platform),
+    ).toBeNull();
+  });
+
   it('⌘N 新任务、⇧⌘N Heading、⌥⌘N 项目', () => {
     expect(resolveAction(key('n', { metaKey: true }), platform)).toEqual({ type: 'newTask' });
     expect(
@@ -95,6 +105,13 @@ describe('resolveAction — Windows 桌面（Ctrl 自适应）', () => {
     expect(resolveAction(key('f', { ctrlKey: true }), platform)).toEqual({ type: 'search' });
     expect(resolveAction(key('ArrowUp', { altKey: true }), platform)).toEqual({ type: 'moveFirst' });
   });
+
+  it('Ctrl+Alt+K 取消；与 Ctrl+K 完成不冲突', () => {
+    expect(resolveAction(key('k', { ctrlKey: true, altKey: true }), platform)).toEqual({
+      type: 'cancel',
+    });
+    expect(resolveAction(key('k', { ctrlKey: true, altKey: true, shiftKey: true }), platform)).toBeNull();
+  });
 });
 
 describe('resolveAction — Web（Alt 系降级）', () => {
@@ -116,6 +133,12 @@ describe('resolveAction — Web（Alt 系降级）', () => {
   it('Ctrl+K 完成任务（原为搜索，破坏性改绑）；mac 浏览器 ⌘K 同效', () => {
     expect(resolveAction(key('k', { ctrlKey: true }), platform)).toEqual({ type: 'complete' });
     expect(resolveAction(key('k', { metaKey: true }), platform)).toEqual({ type: 'complete' });
+  });
+
+  it('Alt+Shift+K 取消（Ctrl+Alt 被浏览器占用时的降级键位）', () => {
+    expect(resolveAction(key('k', { altKey: true, shiftKey: true }), platform)).toEqual({
+      type: 'cancel',
+    });
   });
 
   it('Ctrl+F 搜索', () => {
