@@ -88,6 +88,39 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  /*
+   * 滚动条美化（Things3 风格）：细圆角、平时几乎隐身、悬停时加深。
+   * 颜色取自 --foreground（含透明度），亮/暗主题自动适配。
+   * - Firefox：scrollbar-width/scrollbar-color（不支持 thumb hover 变色）。
+   * - Chromium/WebKit：透明轨道 + padding-box 裁切出细 thumb。
+   */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--foreground) / 0.18) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--foreground) / 0.18);
+    border-radius: 9999px;
+    /* 透明描边 + padding-box 裁切：10px 槽位里视觉 thumb 只有 6px */
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--foreground) / 0.32);
+    border-width: 1px;
+  }
+  *::-webkit-scrollbar-thumb:active {
+    background-color: hsl(var(--foreground) / 0.4);
+  }
 }
 
 @layer utilities {
