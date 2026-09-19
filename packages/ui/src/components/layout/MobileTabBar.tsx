@@ -3,6 +3,7 @@ import { Calendar, Circle, Menu, Sun, Inbox } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/lib/utils';
+import { useBucketCounts } from './useBucketCounts';
 
 /** 底部标签栏中直接展示的 4 个主导航项 */
 const TAB_ITEMS = [
@@ -28,11 +29,30 @@ interface Props {
   onOpenDrawer: () => void;
 }
 
+/** 图标右上角的条目数角标；数字不参与链接的可访问名称 */
+function CountBadge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span
+      aria-hidden
+      data-testid="tab-count-badge"
+      className="absolute -right-2.5 -top-1.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-medium leading-none tabular-nums text-primary-foreground"
+    >
+      {count > 99 ? '99+' : count}
+    </span>
+  );
+}
+
 export function MobileTabBar({ onOpenDrawer }: Props) {
   const { t } = useTranslation();
   const { pathname } = useLocation();
+  const { inboxCount, todayCount } = useBucketCounts();
   // 「更多」在当前路由属于抽屉内入口时高亮
   const drawerActive = DRAWER_ROUTE_PREFIXES.some((p) => pathname.startsWith(p));
+  const countByRoute: Record<string, number> = {
+    '/inbox': inboxCount,
+    '/today': todayCount,
+  };
 
   return (
     <nav
@@ -55,7 +75,10 @@ export function MobileTabBar({ onOpenDrawer }: Props) {
           >
             {({ isActive }) => (
               <>
-                <Icon className={cn('h-5 w-5', isActive && 'text-primary')} />
+                <span className="relative">
+                  <Icon className={cn('h-5 w-5', isActive && 'text-primary')} />
+                  <CountBadge count={countByRoute[item.to] ?? 0} />
+                </span>
                 <span className="truncate">{t(item.labelKey)}</span>
               </>
             )}
