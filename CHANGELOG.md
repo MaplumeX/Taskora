@@ -9,6 +9,66 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.3.4] - 2026-09-19
+
+### Features
+
+- **tasks**: Add the CANCELLED terminal state with a single settledAt
+  column (#42, ADR 0006): the physical completedAt column is renamed to
+  settledAt (zero data migration) while the API field keeps the
+  completedAt name carrying Settled At semantics; symmetric
+  cancel/uncancel endpoints for tasks and subtasks; terminal states
+  rewrite each other directly and reopen returns to ACTIVE; Logbook
+  and the project completed panel list both endings; keyboard parity
+  with complete (Opt+Cmd+K / Ctrl+Alt+K / Alt+Shift+K) plus context-menu
+  entries and slashed-circle struck-through rendering for cancelled
+  rows; the settled-status whitelist lives in @taskora/shared so the
+  backend and frontend ports cannot drift; restore from trash always
+  returns a task to ACTIVE.
+- **sync**: Per-user Event Stream push sync (ADR 0005) (#38): a Prisma
+  interceptor collects change events per transaction and a per-user
+  ChangeEventHub (monotonic seq, 500-event replay ring) serves them over
+  GET /events SSE with ?since= replay, 25s heartbeat and a resync signal;
+  the client applies events directly onto the React Query cache through
+  a client-side port of the task view/filter semantics (detail merges,
+  derived-cache invalidation, ~50ms coalescing), reconnects with backoff
+  and gap detection, and refreshes on 401; refetchOnWindowFocus is off
+  in frontend and desktop, removing the foreground flash.
+- **backend**: Exclude projects from the inbox and anytime feeds (#41):
+  resolveBucket falls back to ANYTIME instead of INBOX, the schema
+  default changes to ANYTIME with a data migration, projects only
+  surface in today/upcoming/someday/logbook/trash, and the agent
+  update_project tool no longer accepts the INBOX bucket.
+- **ui**: Calendar-based due date picker with single-click selection
+  (#37): DueDateField now uses the shared Calendar (react-day-picker)
+  with Today/Clear quick actions, locale and weekStartsOn support,
+  auto-closing on apply at every call site; shared calendarFieldUtils
+  drops the duplication with ScheduledDateField and the Calendar
+  styling gets a pill-shaped selected day and clearer today marker.
+- **ui**: Show inbox and today item counts in navigation (#40): pill
+  badge on the mobile tab bar (capped at 99+) and Things-style count at
+  the end of the sidebar rows, derived from existing feed queries with
+  no extra requests.
+- **ui**: Project metadata badges in the project detail header (#36):
+  a ProjectMetaRow renders scheduled date, due date and tag badges
+  (destructive color when overdue/today) that open popovers reusing the
+  task field editors; field components move to structured prop types
+  shared between Task and Project.
+- **ui**: Custom scrollbars matching the Things3 theme (#39): thin
+  rounded thumbs that are nearly invisible at rest and darken on
+  hover/active, deriving colors from --foreground so themes adapt;
+  Firefox uses scrollbar-width/scrollbar-color, Chromium/WebKit use
+  ::-webkit-scrollbar with 6px visual thumbs.
+- **desktop**: Custom-drawn title bar replacing the native window
+  frame (#35): the main window starts hidden and is shown after
+  per-platform decoration handling so no native frame flashes; macOS
+  keeps the native traffic lights over an Overlay title bar with a
+  drag strip; Windows/Linux draw the title plus Windows-style
+  minimize/maximize/close controls in a full drag region with
+  double-click maximize; layout height rebases to
+  calc(100dvh - var(--titlebar-h)) in the desktop build only.
+- Replace the app icon with a new design across all platforms.
+
 ## [0.3.3] - 2026-09-18
 
 ### Features
