@@ -40,7 +40,7 @@ const baseProject: ProjectResponseDto = {
   areaId: null,
   sortOrder: 0,
   status: ProjectStatus.ACTIVE,
-  bucket: ProjectBucket.INBOX,
+  bucket: ProjectBucket.ANYTIME,
   scheduledType: ScheduledType.NONE,
   scheduledDate: null,
   dueDate: null,

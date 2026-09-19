@@ -719,7 +719,7 @@ export class AgentToolsService {
             Type.Union([Type.String({ description: 'ISO date' }), Type.Null()]),
           ),
           bucket: Type.Optional(
-            Type.Union([Type.Literal('INBOX'), Type.Literal('ANYTIME'), Type.Literal('SCHEDULED')]),
+            Type.Union([Type.Literal('ANYTIME'), Type.Literal('SCHEDULED')]),
           ),
         }),
         execute: async (_id, params) => {

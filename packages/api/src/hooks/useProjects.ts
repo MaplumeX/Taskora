@@ -93,7 +93,7 @@ export function useCreateProject() {
         areaId: data.areaId ?? null,
         sortOrder: 0,
         status: ProjectStatus.ACTIVE,
-        bucket: data.bucket ?? ProjectBucket.INBOX,
+        bucket: data.bucket ?? ProjectBucket.ANYTIME,
         scheduledType: data.scheduledType ?? ScheduledType.NONE,
         scheduledDate: data.scheduledDate ?? null,
         dueDate: data.dueDate ?? null,
