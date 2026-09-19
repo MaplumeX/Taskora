@@ -34,7 +34,10 @@ const queryClient = new QueryClient({
       staleTime: 30_000,
       // The Event Stream keeps caches fresh via push (ADR 0005);
       // reconnect + gap-triggered refetch is the only backstop needed.
+      // refetchOnReconnect too: it defaults to true and fires on the
+      // browser `online` event, refetching all stale queries.
       refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
       retry: 1,
     },
   },
