@@ -11,6 +11,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.6] - 2026-09-19
+
 ### Changed
 
 - **desktop**: Drop the custom-drawn title bar and return to native
