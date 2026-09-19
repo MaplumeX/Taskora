@@ -88,6 +88,7 @@ export function FeedListView({ items, emptyHint, sortable }: Props) {
         id: item.id,
         kind: item.type === 'task' ? ('task' as const) : ('project' as const),
         completed: item.type === 'task' ? item.status === 'COMPLETED' : false,
+        cancelled: item.type === 'task' ? item.status === 'CANCELLED' : false,
       })),
     [items],
   );

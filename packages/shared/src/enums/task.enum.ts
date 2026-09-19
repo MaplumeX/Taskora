@@ -13,4 +13,5 @@ export enum ScheduledType {
 export enum TaskStatus {
   ACTIVE = 'ACTIVE',
   COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
 }

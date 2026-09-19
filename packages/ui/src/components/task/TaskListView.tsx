@@ -28,6 +28,7 @@ export function TaskListView({ tasks, emptyHint, sortable }: Props) {
         id: task.id,
         kind: 'task' as const,
         completed: task.status === 'COMPLETED',
+        cancelled: task.status === 'CANCELLED',
       })),
     [tasks],
   );

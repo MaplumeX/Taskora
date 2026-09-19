@@ -90,9 +90,95 @@ describe('dedupeEvents', () => {
   });
 });
 
+describe('applyChangeEvents — CANCELLED 口径（spec: task-cancelled）', () => {
+  let queryClient: QueryClient;
+  beforeEach(() => {
+    queryClient = new QueryClient();
+  });
+
+  afterEach(() => {
+    queryClient.clear();
+  });
+
+  it('a cancelled task leaves every active view and lands in logbook', () => {
+    const todayTask = makeTask({
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2026-01-01T00:00:00.000Z',
+    });
+    queryClient.setQueryData(taskKeys.list({ view: 'today' }), [todayTask]);
+    queryClient.setQueryData(taskKeys.list({ view: 'inbox' }), []);
+    queryClient.setQueryData(taskKeys.list({ view: 'anytime' }), []);
+    queryClient.setQueryData(taskKeys.list({ view: 'someday' }), []);
+    queryClient.setQueryData(taskKeys.list({ view: 'logbook' }), []);
+
+    const cancelled = {
+      ...todayTask,
+      status: TaskStatus.CANCELLED,
+      completedAt: '2026-01-02T00:00:00.000Z',
+    };
+    applyChangeEvents(queryClient, [event('task', 'task-1', 'updated', cancelled)]);
+
+    expect(
+      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'today' })),
+    ).toEqual([]);
+    expect(
+      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'inbox' })),
+    ).toEqual([]);
+    expect(
+      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'anytime' })),
+    ).toEqual([]);
+    expect(
+      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'someday' })),
+    ).toEqual([]);
+    expect(
+      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'logbook' })),
+    ).toEqual([cancelled]);
+  });
+
+  it('a cancelled task matches the q + completed=true search list (settled whitelist)', () => {
+    const cancelled = makeTask({
+      status: TaskStatus.CANCELLED,
+      completedAt: '2026-01-02T00:00:00.000Z',
+      title: 'Learn Japanese',
+    });
+    queryClient.setQueryData(taskKeys.list({ q: 'japanese', completed: true }), []);
+    // default（completed 未传）只含 ACTIVE
+    queryClient.setQueryData(taskKeys.list({ q: 'japanese' }), []);
+
+    applyChangeEvents(queryClient, [event('task', 'task-1', 'updated', cancelled)]);
+
+    expect(
+      queryClient.getQueryData<TaskResponseDto[]>(
+        taskKeys.list({ q: 'japanese', completed: true }),
+      ),
+    ).toEqual([cancelled]);
+    expect(
+      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ q: 'japanese' })),
+    ).toEqual([]);
+  });
+
+  it('an uncancelled task leaves logbook and re-enters the active view', () => {
+    const cancelled = makeTask({
+      status: TaskStatus.CANCELLED,
+      completedAt: '2026-01-02T00:00:00.000Z',
+    });
+    queryClient.setQueryData(taskKeys.list({ view: 'logbook' }), [cancelled]);
+    queryClient.setQueryData(taskKeys.list({ view: 'inbox' }), []);
+
+    const active = makeTask({ status: TaskStatus.ACTIVE, completedAt: null });
+    applyChangeEvents(queryClient, [event('task', 'task-1', 'updated', active)]);
+
+    expect(
+      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'logbook' })),
+    ).toEqual([]);
+    expect(
+      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'inbox' })),
+    ).toEqual([active]);
+  });
+});
+
 describe('applyChangeEvents', () => {
   let queryClient: QueryClient;
-
   beforeEach(() => {
     queryClient = new QueryClient();
   });

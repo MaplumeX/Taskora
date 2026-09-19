@@ -9,6 +9,7 @@ import {
   selectionStateOf,
   useCompleteTask,
   useSelectionScope,
+  useUncancelTask,
   useUncompleteTask,
 } from '@taskora/api';
 import { useProjectsQuery } from '@taskora/api';
@@ -24,6 +25,7 @@ export default function Logbook() {
   const { data: areas = [] } = useAreasQuery();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
+  const uncancelTask = useUncancelTask();
   const {
     selectedIds,
     expandedId,
@@ -54,19 +56,26 @@ export default function Logbook() {
     return { today, yesterday, earlier };
   }, [items]);
 
-  // 注册可遍历行（Logbook 全部为已完成任务行）。
+  // 注册可遍历行（Logbook 为已了结任务行：完成或取消）。
   const rows = useMemo(
     () =>
       items
         .filter((item) => item.type === 'task')
-        .map((item) => ({ id: item.id, kind: 'task' as const, completed: true })),
+        .map((item) => ({
+          id: item.id,
+          kind: 'task' as const,
+          completed: item.status === 'COMPLETED',
+          cancelled: item.status === 'CANCELLED',
+        })),
     [items],
   );
   useSelectionScope(rows);
 
   const toggleComplete = (item: FeedItem) => {
     if (item.type !== 'task') return;
-    if (item.status === 'COMPLETED') uncompleteTask.mutate(item.id);
+    // 撤销了结：已完成 → 重开；已取消 → 撤销取消（story 15）。
+    if (item.status === 'CANCELLED') uncancelTask.mutate(item.id);
+    else if (item.status === 'COMPLETED') uncompleteTask.mutate(item.id);
     else completeTask.mutate(item.id, { onError: () => toast.error(t('common:operationFailed')) });
   };
 

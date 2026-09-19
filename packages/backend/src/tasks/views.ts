@@ -10,6 +10,16 @@ export type TaskView =
   | 'trash'
   | 'logbook';
 
+/** 已了结（Settled）状态白名单：Logbook Entry 口径（ADR 0006）。 */
+export const SETTLED_STATUSES = [TaskStatus.COMPLETED, TaskStatus.CANCELLED] as const;
+
+/** 含已了结项的查询白名单（搜索 / Agent list_tasks 等含 completed=true 语义的路径）。 */
+export const WITH_SETTLED_STATUSES = [
+  TaskStatus.ACTIVE,
+  TaskStatus.COMPLETED,
+  TaskStatus.CANCELLED,
+] as const;
+
 /**
  * Build the Prisma `where` clause for a given view.
  * Extracted from TasksService.findAll so FeedService can reuse the same logic.
@@ -54,7 +64,8 @@ export function buildTaskViewWhere(
       where.trashedAt = { not: null };
       break;
     case 'logbook':
-      where.status = TaskStatus.COMPLETED;
+      // Logbook = 已了结（完成 + 取消）任务的档案，按了结时间排序。
+      where.status = { in: [...SETTLED_STATUSES] };
       where.trashedAt = null;
       break;
   }

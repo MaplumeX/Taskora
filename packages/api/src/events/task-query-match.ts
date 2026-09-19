@@ -3,6 +3,13 @@ import type { TaskResponseDto } from '@taskora/shared';
 
 import type { TaskQuery } from '@/api/tasks.api';
 
+/** 已了结（Settled）状态白名单：Logbook Entry 口径（ADR 0006）。 */
+const SETTLED_STATUSES = [TaskStatus.COMPLETED, TaskStatus.CANCELLED] as const;
+
+function isSettled(status: TaskStatus): boolean {
+  return (SETTLED_STATUSES as readonly TaskStatus[]).includes(status);
+}
+
 /**
  * Client-side port of the backend task list semantics (TasksService.findAll
  * + buildTaskViewWhere) so the event applier can decide which cached task
@@ -34,7 +41,8 @@ export function taskMatchesQuery(
     const inTitle = task.title.toLowerCase().includes(q);
     const inNotes = task.notes?.toLowerCase().includes(q) ?? false;
     if (!inTitle && !inNotes) return false;
-    // q mode: default ACTIVE; completed=true widens to both statuses.
+    // q mode: default ACTIVE; completed=true widens to all three statuses
+    // （与后端 WITH_SETTLED_STATUSES 白名单逐一对齐）。
     if (!query.completed && task.status !== TaskStatus.ACTIVE) return false;
     return task.trashedAt === null;
   }
@@ -90,6 +98,8 @@ function taskMatchesView(
     case 'trash':
       return task.trashedAt !== null;
     case 'logbook':
-      return task.status === TaskStatus.COMPLETED && task.trashedAt === null;
+      // Logbook = 已了结（完成 + 取消）任务的档案，与后端
+      // buildTaskViewWhere 的 SETTLED_STATUSES 白名单一致。
+      return isSettled(task.status) && task.trashedAt === null;
   }
 }

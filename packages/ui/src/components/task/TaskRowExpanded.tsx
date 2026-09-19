@@ -2,6 +2,7 @@ import * as React from 'react';
 import {
   Calendar,
   Check,
+  CircleSlash,
   Clock,
   Folder,
   ListPlus,
@@ -22,17 +23,21 @@ import { MarkdownNotesEditor } from '@/components/common/MarkdownNotesEditor';
 import { Separator } from '@/components/ui/separator';
 import {
   Popover,
+  PopoverAnchor,
   PopoverContent,
   PopoverTrigger,
 } from '@/components/ui/popover';
+import { MenuRow } from '@/components/common/MenuRow';
 import { cn } from '@/lib/utils';
 import { useProjectsQuery } from '@taskora/api';
 import { useAreasQuery } from '@taskora/api';
 import {
   taskKeys,
+  useCancelSubtask,
   useCompleteSubtask,
   useCreateSubtask,
   useDeleteSubtask,
+  useUncancelSubtask,
   useUncompleteSubtask,
   useUpdateSubtask,
   useUpdateTask,
@@ -322,13 +327,51 @@ function SubtaskRow({
   onMutated: () => void;
 }) {
   const { t } = useTranslation();
+  const { t: tc } = useTranslation('common');
   const completeSubtask = useCompleteSubtask();
   const uncompleteSubtask = useUncompleteSubtask();
+  const cancelSubtask = useCancelSubtask();
+  const uncancelSubtask = useUncancelSubtask();
   const deleteSubtask = useDeleteSubtask();
   const updateSubtask = useUpdateSubtask();
   const completed = subtask.status === 'COMPLETED';
+  const cancelled = subtask.status === 'CANCELLED';
+  const settled = completed || cancelled;
   const [editing, setEditing] = React.useState(false);
   const [draft, setDraft] = React.useState(subtask.title);
+  // 右键菜单（取消/撤销取消）：勾选框仍只管完成/重开，取消只走菜单（story 22）。
+  const [menuOpen, setMenuOpen] = React.useState(false);
+  const virtualAnchorRef = React.useRef<
+    { getBoundingClientRect: () => ClientRect } | null
+  >(null);
+
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    const x = e.clientX;
+    const y = e.clientY;
+    virtualAnchorRef.current = {
+      getBoundingClientRect: () => ({
+        width: 0,
+        height: 0,
+        x,
+        y,
+        top: y,
+        right: x,
+        bottom: y,
+        left: x,
+        toJSON: () => ({}),
+      }) as ClientRect,
+    };
+    setMenuOpen(true);
+  };
+
+  const toggleCancel = () => {
+    setMenuOpen(false);
+    (cancelled ? uncancelSubtask : cancelSubtask).mutate(subtask.id, {
+      onSuccess: onMutated,
+      onError: () => toast.error(tc('saveFailed')),
+    });
+  };
 
   const commit = () => {
     const trimmed = draft.trim();
@@ -344,9 +387,10 @@ function SubtaskRow({
   };
 
   return (
-    <li className="flex items-center gap-2 text-sm">
+    <li className="flex items-center gap-2 text-sm" onContextMenu={onContextMenu}>
       <TaskCheckbox
         checked={completed}
+        cancelled={cancelled}
         onToggle={() =>
           (completed ? uncompleteSubtask : completeSubtask).mutate(subtask.id, {
             onSuccess: onMutated,
@@ -381,11 +425,25 @@ function SubtaskRow({
             setDraft(subtask.title);
             setEditing(true);
           }}
-          className={cn('flex-1 text-left', completed && 'text-muted-foreground line-through')}
+          className={cn('flex-1 text-left', settled && 'text-muted-foreground line-through')}
         >
           {subtask.title}
         </button>
       )}
+
+      {/* 右键菜单：取消 / 撤销取消（story 20）。 */}
+      <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+        <PopoverAnchor virtualRef={virtualAnchorRef} />
+        <PopoverContent
+          align="start"
+          className="w-44 p-1"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <MenuRow icon={CircleSlash} onClick={toggleCancel}>
+            {cancelled ? t('task:markUncancelled') : t('task:markCancelled')}
+          </MenuRow>
+        </PopoverContent>
+      </Popover>
       <Hint label={t('common:delete')}>
         <Button
           variant="ghost"

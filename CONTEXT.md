@@ -33,6 +33,22 @@ _Avoid_: Section
 按状态/时间过滤出的任务视图：Inbox、Anytime、Scheduled、Someday、Today、Upcoming、Logbook、Trash。不是存储位置。
 _Avoid_: 列表、filter
 
+**Logbook Entry**:
+已了结（完成或取消）任务的档案记录，按了结日期（今天/昨天/更早）分组展示。Logbook 即所有 Logbook Entry 的聚合视图。
+_Avoid_: 已完成列表（Logbook 不只含完成任务）
+
+**Cancelled**:
+任务被主动放弃的终态：留痕、可逆，记录于 Logbook。与 Completed（做完的了结）、Trashed（软删除暂存）三者互斥。取消已完成的任务会直接改写终态（不必先重开）。取消父 Task 不改动其 Subtasks。
+_Avoid_: 取消 = 删除、abandoned、丢弃
+
+**Settled / Settled At**:
+任务进入终态（Completed 或 Cancelled）这一事实的统称；了结时间记录何时发生，不区分是哪种了结（由 status 表达）。Logbook Entry 按了结时间分组。
+_Avoid_: completedAt 泛指取消任务的时间、完成时间（取消任务并未"完成"）
+
+**Task Terminal State**:
+任务的两种了结状态：Completed（做完）与 Cancelled（放弃）。皆留痕、可逆，记录于 Logbook；与 Trash（软删除）正交。取消父 Task 不改动其 Subtasks。
+_Avoid_: 把 Cancelled 当作 COMPLETED 的子集、把终态与删除混淆
+
 **Trash**:
 软删除的暂存处，可恢复；清空后不可恢复。
 

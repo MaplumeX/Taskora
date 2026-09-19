@@ -17,6 +17,8 @@ function createService() {
       update: vi.fn().mockResolvedValue({ id: 't1', title: 'Renamed', bucket: 'ANYTIME' }),
       complete: vi.fn().mockResolvedValue({ id: 't1' }),
       uncomplete: vi.fn().mockResolvedValue({ id: 't1' }),
+      cancel: vi.fn().mockResolvedValue({ id: 't1', status: 'CANCELLED' }),
+      uncancel: vi.fn().mockResolvedValue({ id: 't1', status: 'ACTIVE' }),
       remove: vi.fn().mockResolvedValue({ id: 't1', trashedAt: new Date() }),
       restore: vi.fn().mockResolvedValue({ id: 't1' }),
       reorder: vi.fn().mockResolvedValue(undefined),
@@ -49,6 +51,8 @@ function createService() {
     subtasks: {
       create: vi.fn().mockResolvedValue({ id: 's1', title: 'Step', taskId: 't1' }),
       update: vi.fn().mockResolvedValue({ id: 's1', title: 'Step', status: 'COMPLETED' }),
+      cancel: vi.fn().mockResolvedValue({ id: 's1', title: 'Step', status: 'CANCELLED' }),
+      uncancel: vi.fn().mockResolvedValue({ id: 's1', title: 'Step', status: 'ACTIVE' }),
       reorder: vi.fn().mockResolvedValue(undefined),
     },
     projectHeadings: {
@@ -215,6 +219,50 @@ describe('AgentToolsService', () => {
       't1',
       expect.objectContaining({ title: 'Renamed' }),
     );
+  });
+
+  it('update_task with cancelled=true cancels before updating (spec: task-cancelled)', async () => {
+    await tool('update_task').execute('call-1', {
+      id: 't1',
+      cancelled: true,
+    } as never);
+    expect(service.tasks.cancel).toHaveBeenCalledWith('user-1', 't1');
+    expect(service.tasks.update).toHaveBeenCalledWith('user-1', 't1', {});
+  });
+
+  it('update_task with cancelled=false uncancels', async () => {
+    await tool('update_task').execute('call-1', {
+      id: 't1',
+      cancelled: false,
+    } as never);
+    expect(service.tasks.uncancel).toHaveBeenCalledWith('user-1', 't1');
+  });
+
+  it('complete_subtask with cancelled=true routes to cancel (spec: task-cancelled)', async () => {
+    const result = await tool('complete_subtask').execute('call-1', {
+      id: 's1',
+      cancelled: true,
+    } as never);
+    expect(service.subtasks.cancel).toHaveBeenCalledWith('user-1', 's1');
+    expect(service.subtasks.update).not.toHaveBeenCalled();
+    const text = result.content[0] as { type: 'text'; text: string };
+    expect(JSON.parse(text.text).status).toBe('CANCELLED');
+  });
+
+  it('complete_subtask with cancelled=false routes to uncancel', async () => {
+    await tool('complete_subtask').execute('call-1', {
+      id: 's1',
+      cancelled: false,
+    } as never);
+    expect(service.subtasks.uncancel).toHaveBeenCalledWith('user-1', 's1');
+  });
+
+  it('includeCompleted description mentions cancelled tasks (schema compat)', () => {
+    const listTasks = tool('list_tasks');
+    const schema = listTasks.parameters as unknown as {
+      properties: { includeCompleted: { description: string } };
+    };
+    expect(schema.properties.includeCompleted.description).toContain('cancelled');
   });
 
   it('update_task can clear dates and project with null', async () => {
