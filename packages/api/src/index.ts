@@ -53,13 +53,19 @@ export * from './api/projects.api';
 export * from './api/tag-groups.api';
 export * from './api/tags.api';
 export * from './api/tasks.api';
+export { setTaskBackend, currentTaskBackend, type TaskBackend } from './api/task-backend';
+export { createEngineTaskBackend } from './engine/task-backend.engine';
 export * from './api/users.api';
 export * from './api/agent.api';
 export { subscribeAgentEvents } from './api/agent-sse';
 
 // Event Stream (Change Event push sync, ADR 0005)
 export { applyChangeEvents, dedupeEvents, EventStreamApplier } from './events/event-applier';
-export { initEventStream, destroyEventStream } from './events/event-stream-client';
+export {
+  initEventStream,
+  destroyEventStream,
+  onRemoteChangeEvent,
+} from './events/event-stream-client';
 export { taskMatchesQuery } from './events/task-query-match';
 
 // Query hooks

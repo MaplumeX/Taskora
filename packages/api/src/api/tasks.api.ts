@@ -1,142 +1,113 @@
-import type {
-  CreateSubtaskDto,
-  CreateTaskDto,
-  ProjectResponseDto,
-  ReorderSubtasksDto,
-  SubtaskResponseDto,
-  TaskResponseDto,
-  UpdateSubtaskDto,
-  UpdateTaskDto,
-} from '@taskora/shared';
+/**
+ * Task API — REST 实现的转发层。
+ *
+ * 真正的 HTTP 实现在 `tasks.api.rest.ts`；这里按当前注入的 TaskBackend
+ * （默认 REST，桌面端注入 Engine，见 `task-backend.ts`）转发。导出名与
+ * 签名保持不变，既有 import 无需改动。
+ */
 
-import { apiClient } from './client';
+import { currentTaskBackend } from './task-backend';
 
-export type TaskView = 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
+export type { TaskQuery, TaskView } from './tasks.api.rest';
 
-export interface TaskQuery {
-  q?: string;
-  view?: TaskView;
-  projectId?: string;
-  areaId?: string;
-  tagId?: string;
-  completed?: boolean;
-  hasScheduled?: boolean;
+export function getTasks(...args: Parameters<typeof import('./tasks.api.rest').getTasks>) {
+  return currentTaskBackend().getTasks(...args);
 }
 
-export function getTasks(params?: TaskQuery): Promise<TaskResponseDto[]> {
-  return apiClient
-    .get<TaskResponseDto[]>('/tasks', { params })
-    .then((res) => res.data);
+export function getTask(...args: Parameters<typeof import('./tasks.api.rest').getTask>) {
+  return currentTaskBackend().getTask(...args);
 }
 
-export function getTask(id: string): Promise<TaskResponseDto> {
-  return apiClient.get<TaskResponseDto>(`/tasks/${id}`).then((res) => res.data);
+export function createTask(...args: Parameters<typeof import('./tasks.api.rest').createTask>) {
+  return currentTaskBackend().createTask(...args);
 }
 
-export function createTask(data: CreateTaskDto): Promise<TaskResponseDto> {
-  return apiClient.post<TaskResponseDto>('/tasks', data).then((res) => res.data);
+export function updateTask(...args: Parameters<typeof import('./tasks.api.rest').updateTask>) {
+  return currentTaskBackend().updateTask(...args);
 }
 
-export function updateTask(id: string, data: UpdateTaskDto): Promise<TaskResponseDto> {
-  return apiClient.patch<TaskResponseDto>(`/tasks/${id}`, data).then((res) => res.data);
+export function deleteTask(...args: Parameters<typeof import('./tasks.api.rest').deleteTask>) {
+  return currentTaskBackend().deleteTask(...args);
 }
 
-export function deleteTask(id: string): Promise<void> {
-  return apiClient.delete(`/tasks/${id}`).then(() => undefined);
+export function restoreTask(...args: Parameters<typeof import('./tasks.api.rest').restoreTask>) {
+  return currentTaskBackend().restoreTask(...args);
 }
 
-export function restoreTask(id: string): Promise<TaskResponseDto> {
-  return apiClient
-    .post<TaskResponseDto>(`/tasks/${id}/restore`)
-    .then((res) => res.data);
+export function completeTask(...args: Parameters<typeof import('./tasks.api.rest').completeTask>) {
+  return currentTaskBackend().completeTask(...args);
 }
 
-export function completeTask(id: string): Promise<TaskResponseDto> {
-  return apiClient
-    .post<TaskResponseDto>(`/tasks/${id}/complete`)
-    .then((res) => res.data);
+export function uncompleteTask(
+  ...args: Parameters<typeof import('./tasks.api.rest').uncompleteTask>
+) {
+  return currentTaskBackend().uncompleteTask(...args);
 }
 
-export function uncompleteTask(id: string): Promise<TaskResponseDto> {
-  return apiClient
-    .post<TaskResponseDto>(`/tasks/${id}/uncomplete`)
-    .then((res) => res.data);
+export function cancelTask(...args: Parameters<typeof import('./tasks.api.rest').cancelTask>) {
+  return currentTaskBackend().cancelTask(...args);
 }
 
-export function cancelTask(id: string): Promise<TaskResponseDto> {
-  return apiClient
-    .post<TaskResponseDto>(`/tasks/${id}/cancel`)
-    .then((res) => res.data);
+export function uncancelTask(...args: Parameters<typeof import('./tasks.api.rest').uncancelTask>) {
+  return currentTaskBackend().uncancelTask(...args);
 }
 
-export function uncancelTask(id: string): Promise<TaskResponseDto> {
-  return apiClient
-    .post<TaskResponseDto>(`/tasks/${id}/uncancel`)
-    .then((res) => res.data);
+export function reorderTasks(
+  ...args: Parameters<typeof import('./tasks.api.rest').reorderTasks>
+) {
+  return currentTaskBackend().reorderTasks(...args);
 }
 
-export function reorderTasks(orderedIds: string[]): Promise<void> {
-  return apiClient.post('/tasks/reorder', { orderedIds }).then(() => undefined);
-}
-
-export function convertTaskToProject(id: string): Promise<ProjectResponseDto> {
-  return apiClient
-    .post<ProjectResponseDto>(`/tasks/${id}/convert-to-project`)
-    .then((res) => res.data);
+export function convertTaskToProject(
+  ...args: Parameters<typeof import('./tasks.api.rest').convertTaskToProject>
+) {
+  return currentTaskBackend().convertTaskToProject(...args);
 }
 
 export function createSubtask(
-  taskId: string,
-  data: CreateSubtaskDto,
-): Promise<SubtaskResponseDto> {
-  return apiClient
-    .post<SubtaskResponseDto>(`/tasks/${taskId}/subtasks`, data)
-    .then((res) => res.data);
+  ...args: Parameters<typeof import('./tasks.api.rest').createSubtask>
+) {
+  return currentTaskBackend().createSubtask(...args);
 }
 
 export function updateSubtask(
-  id: string,
-  data: UpdateSubtaskDto,
-): Promise<SubtaskResponseDto> {
-  return apiClient
-    .patch<SubtaskResponseDto>(`/subtasks/${id}`, data)
-    .then((res) => res.data);
+  ...args: Parameters<typeof import('./tasks.api.rest').updateSubtask>
+) {
+  return currentTaskBackend().updateSubtask(...args);
 }
 
-export function deleteSubtask(id: string): Promise<void> {
-  return apiClient.delete(`/subtasks/${id}`).then(() => undefined);
+export function deleteSubtask(
+  ...args: Parameters<typeof import('./tasks.api.rest').deleteSubtask>
+) {
+  return currentTaskBackend().deleteSubtask(...args);
 }
 
-export function completeSubtask(id: string): Promise<SubtaskResponseDto> {
-  return apiClient
-    .post<SubtaskResponseDto>(`/subtasks/${id}/complete`)
-    .then((res) => res.data);
+export function completeSubtask(
+  ...args: Parameters<typeof import('./tasks.api.rest').completeSubtask>
+) {
+  return currentTaskBackend().completeSubtask(...args);
 }
 
-export function uncompleteSubtask(id: string): Promise<SubtaskResponseDto> {
-  return apiClient
-    .post<SubtaskResponseDto>(`/subtasks/${id}/uncomplete`)
-    .then((res) => res.data);
+export function uncompleteSubtask(
+  ...args: Parameters<typeof import('./tasks.api.rest').uncompleteSubtask>
+) {
+  return currentTaskBackend().uncompleteSubtask(...args);
 }
 
-export function cancelSubtask(id: string): Promise<SubtaskResponseDto> {
-  return apiClient
-    .post<SubtaskResponseDto>(`/subtasks/${id}/cancel`)
-    .then((res) => res.data);
+export function cancelSubtask(
+  ...args: Parameters<typeof import('./tasks.api.rest').cancelSubtask>
+) {
+  return currentTaskBackend().cancelSubtask(...args);
 }
 
-export function uncancelSubtask(id: string): Promise<SubtaskResponseDto> {
-  return apiClient
-    .post<SubtaskResponseDto>(`/subtasks/${id}/uncancel`)
-    .then((res) => res.data);
+export function uncancelSubtask(
+  ...args: Parameters<typeof import('./tasks.api.rest').uncancelSubtask>
+) {
+  return currentTaskBackend().uncancelSubtask(...args);
 }
 
 export function reorderSubtasks(
-  taskId: string,
-  orderedIds: string[],
-): Promise<void> {
-  const body: ReorderSubtasksDto = { orderedIds };
-  return apiClient
-    .post(`/tasks/${taskId}/subtasks/reorder`, body)
-    .then(() => undefined);
+  ...args: Parameters<typeof import('./tasks.api.rest').reorderSubtasks>
+) {
+  return currentTaskBackend().reorderSubtasks(...args);
 }

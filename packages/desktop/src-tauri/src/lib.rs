@@ -1,4 +1,5 @@
 mod session;
+mod sqlite;
 use tauri::{Emitter, Manager};
 use tauri_plugin_global_shortcut::ShortcutState;
 
@@ -9,7 +10,7 @@ const QUICK_ADD_SHORTCUT: &str = "CmdOrCtrl+Shift+Space";
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .manage(session::SessionLock::default())
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // Second instance launched: bring the existing window to front.
@@ -72,7 +73,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             session::session_read,
             session::session_write
-        ])
+        ]);
+    // Local Replica 的原生存储（ADR-0007）：setup 打开 WAL 连接并注册
+    // sql_exec / sql_all / sql_run 三个 IPC 命令。
+    sqlite::install(builder)
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|_app, _event| {

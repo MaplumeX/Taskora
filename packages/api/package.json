@@ -12,7 +12,8 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "pretest": "pnpm --filter @taskora/shared build && pnpm --filter @taskora/engine build"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.0",
@@ -20,7 +21,8 @@
     "axios": "^1.7.7",
     "i18next": "^26.3.6",
     "react-i18next": "^17.0.11",
-    "zustand": "^5.0.1"
+    "zustand": "^5.0.1",
+    "@taskora/engine": "workspace:*"
   },
   "peerDependencies": {
     "clsx": "^2.1.1",

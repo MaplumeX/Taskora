@@ -25,6 +25,7 @@ model User {
   refreshTokens   RefreshToken[]
   agentConfig     AgentConfig?
   conversations   Conversation[]
+  devices         Device[]
 }
 
 model RefreshToken {
@@ -55,7 +56,11 @@ model Area {
 
   sortOrder Int @default(0)
 
-  @@index([userId])
+  @@index([userId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
+  fieldClocks Json?
+  /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
+  fieldDigests Json?
+
 }
 
 enum ProjectStatus {
@@ -95,7 +100,13 @@ model Project {
   tags ProjectTag[]
 
   @@index([userId])
-  @@index([areaId])
+  @@index([areaId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
+  fieldClocks Json?
+  /// Position：fractional indexing 排序位次（local-first，ADR-0007）；过渡期与 sortOrder 并存。
+  position String?
+  /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
+  fieldDigests Json?
+
 }
 
 model AreaTag {
@@ -157,7 +168,11 @@ model TagGroup {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  @@index([userId])
+  @@index([userId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
+  fieldClocks Json?
+  /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
+  fieldDigests Json?
+
 }
 
 model Tag {
@@ -176,7 +191,13 @@ model Tag {
   updatedAt  DateTime     @updatedAt
 
   @@index([userId])
-  @@index([tagGroupId])
+  @@index([tagGroupId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
+  fieldClocks Json?
+  /// Position：fractional indexing 排序位次（local-first，ADR-0007）；过渡期与 sortOrder 并存。
+  position String?
+  /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
+  fieldDigests Json?
+
 }
 
 model TaskTag {
@@ -226,7 +247,13 @@ model Task {
   @@index([userId])
   @@index([projectId])
   @@index([headingId])
-  @@index([areaId])
+  @@index([areaId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
+  fieldClocks Json?
+  /// Position：fractional indexing 排序位次（local-first，ADR-0007）；过渡期与 sortOrder 并存。
+  position String?
+  /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
+  fieldDigests Json?
+
 }
 
 model Subtask {
@@ -240,7 +267,11 @@ model Subtask {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
-  @@index([taskId])
+  @@index([taskId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
+  fieldClocks Json?
+  /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
+  fieldDigests Json?
+
 }
 
 model ProjectHeading {
@@ -258,7 +289,11 @@ model ProjectHeading {
   updatedAt   DateTime      @updatedAt
 
   @@index([userId])
-  @@index([projectId])
+  @@index([projectId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
+  fieldClocks Json?
+  /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
+  fieldDigests Json?
+
 }
 
 /// BYOK configuration for the conversational Assistant (see ADR 0003).
@@ -320,4 +355,19 @@ model AgentApproval {
 
   @@unique([toolCallId])
   @@index([conversationId])
+}
+
+/// 登录设备（ADR-0007）：device id 在登录时分配、持久保存于 Local Replica；
+/// 登出保留本地数据，重新登录分配新 device id。
+model Device {
+  id        String   @id @default(uuid())
+  deviceId  String
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label     String?
+  createdAt DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+
+  @@unique([userId, deviceId])
+  @@index([userId])
 }

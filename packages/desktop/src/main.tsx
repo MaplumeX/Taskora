@@ -72,6 +72,12 @@ async function mount() {
   const { initEventStream } = await import('@taskora/api');
   initEventStream(queryClient);
 
+  // Local-first Engine（切片一，ADR-0007）：登录后 Task/Feed 读写切换到
+  // 本地副本（Tauri 侧 SQLite），Event Stream 之外的同步走 /sync 推拉。
+  // 仅主窗口装配；quick-add 窗口维持 REST（变更经同步推流回流）。
+  const { initDesktopEngine } = await import('./engine/desktop-engine');
+  initDesktopEngine(queryClient);
+
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>

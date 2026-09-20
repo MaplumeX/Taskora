@@ -15,6 +15,8 @@ export default defineConfig({
       { find: /^@taskora\/api$/, replacement: path.resolve(__dirname, '../api/src/index.ts') },
       { find: /^@taskora\/api\//, replacement: path.resolve(__dirname, '../api/src') + '/' },
       { find: '@taskora/shared', replacement: path.resolve(__dirname, '../shared/src') },
+      { find: /^@taskora\/engine$/, replacement: path.resolve(__dirname, '../engine/src/index.ts') },
+      { find: /^@taskora\/engine\//, replacement: path.resolve(__dirname, '../engine/src') + '/' },
       { find: '@', replacement: path.resolve(__dirname, './src') },
     ],
   },

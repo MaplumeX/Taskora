@@ -1,5 +1,12 @@
 # Event Stream for data-change push (tier-1 sync)
 
+> **Status: superseded by [ADR-0007](0007-local-first-engine.md) (in slices).**
+> The Event Stream evolves from a server-to-client push channel into the
+> bidirectional transport layer of the local-first sync protocol: same
+> per-user monotonic seq (now the Sync Cursor), same Change Event unit (now
+> field-level with HLC metadata). Everything below describes the tier-1 design
+> as built and remains accurate for slices not yet migrated.
+
 The client has no push channel for domain data, so the desktop app relies on
 `refetchOnWindowFocus` to catch up after returning to the foreground, which
 causes a visible flash. We decided to add a per-user, always-on SSE event

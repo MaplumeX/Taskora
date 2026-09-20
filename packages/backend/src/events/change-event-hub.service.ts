@@ -20,6 +20,16 @@ export class ChangeEventHub {
     { nextSeq: number; buffer: ChangeEvent[]; listeners: Set<(frame: ChangeEvent) => void> }
   >();
 
+  /** 全局发布探针（同步推流用）：每次 publish 时回调，与 SSE 订阅者无关。 */
+  private readonly taps = new Set<(userId: string, event: ChangeEvent) => void>();
+
+  tap(listener: (userId: string, event: ChangeEvent) => void): () => void {
+    this.taps.add(listener);
+    return () => {
+      this.taps.delete(listener);
+    };
+  }
+
   /**
    * Subscribe to live events. Returns the initial frames to write before any
    * live event, computed atomically with the registration:
@@ -67,6 +77,13 @@ export class ChangeEventHub {
         listener(framed);
       } catch {
         // A broken SSE listener must never break a write path.
+      }
+    }
+    for (const tap of this.taps) {
+      try {
+        tap(userId, framed);
+      } catch {
+        // 探针异常不得破坏写路径
       }
     }
     return framed;

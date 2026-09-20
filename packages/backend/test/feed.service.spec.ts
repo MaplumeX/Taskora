@@ -27,7 +27,9 @@ describe('FeedService', () => {
       $transaction: vi.fn(async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),
     } as unknown as InstanceType<typeof PrismaService>;
 
-    service = new FeedService(mockPrisma);
+    // emptyTrash 现在还会下发 Subtask 级联的 Compact Event（ADR-0007）
+    mockPrisma.subtask = { findMany: vi.fn().mockResolvedValue([]) };
+    service = new FeedService(mockPrisma, { publishCompact: vi.fn() } as never);
   });
 
   describe('emptyTrash', () => {

@@ -7,14 +7,18 @@ WORKDIR /app
 
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
+COPY packages/engine/package.json packages/engine/
 COPY packages/api/package.json packages/api/
 COPY packages/ui/package.json packages/ui/
 COPY packages/frontend/package.json packages/frontend/
 
-RUN pnpm install --frozen-lockfile --filter @taskora/frontend --filter @taskora/shared --filter @taskora/api --filter @taskora/ui
+RUN pnpm install --frozen-lockfile --filter @taskora/frontend --filter @taskora/shared --filter @taskora/engine --filter @taskora/api --filter @taskora/ui
 
 COPY packages/shared packages/shared
 RUN pnpm --filter @taskora/shared build
+
+COPY packages/engine packages/engine
+RUN pnpm --filter @taskora/engine build
 
 COPY packages/api packages/api
 COPY packages/ui packages/ui

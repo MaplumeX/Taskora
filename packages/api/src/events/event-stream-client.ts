@@ -28,6 +28,21 @@ let connection: EventStreamConnection | null = null;
 let unsubscribeAuth: (() => void) | null = null;
 
 /** Install the singleton at the app entry point (idempotent). */
+/**
+ * 远端变更到达通知（ADR-0007）：SSE 的 Event Stream 作为同步协议的
+ * 传输层——任何 live change 帧都提示 hub 有新变更，桌面端可据此立即
+ * 拉取增量（秒级到达），而不等下一个周期同步。
+ */
+let remoteChangeListener: (() => void) | null = null;
+
+/** 注册「hub 有新变更」回调（桌面端接入 engine 同步）。返回退订函数。 */
+export function onRemoteChangeEvent(listener: () => void): () => void {
+  remoteChangeListener = listener;
+  return () => {
+    if (remoteChangeListener === listener) remoteChangeListener = null;
+  };
+}
+
 export function initEventStream(queryClient: QueryClient): void {
   if (connection) return;
   connection = new EventStreamConnection(queryClient);
@@ -170,6 +185,8 @@ class EventStreamConnection {
         }
         this.lastSeq = event.seq;
         this.applier.push(event as ChangeEvent);
+        // 同步传输层（ADR-0007）：live change 到达 → 通知 engine 立即 pull。
+        remoteChangeListener?.();
         break;
       }
       case 'resync':
