@@ -9,6 +9,26 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.4.2] - 2026-09-20
+
+### Fixes
+
+- **sync**: Reject nothing on sync push — repair `PushRequestDto`
+  validation (#49): the global ValidationPipe (whitelist +
+  forbidNonWhitelisted) rejected every legal `POST /sync/push` request
+  with 400 — `OutboxEventDto.fields` was mislabeled `@IsArray()` although
+  fields is a Record (field name → `{ value, hlc }`), and
+  `PushRequestDto`'s nested arrays lacked `@Type`, so class-validator
+  could not resolve the nested metatypes. The desktop client therefore
+  never managed to flush its Outbox, showing a permanent
+  "offline · N pending" status despite healthy network and server
+  (login/pull/bootstrap were unaffected). `fields` is now typed
+  `@IsObject()` reusing `OutboxEvent['fields']` from `@taskora/engine`
+  so DTO and protocol stay a single source of truth, nested arrays
+  carry `@Type(() => OutboxEventDto)` / `@Type(() => DeleteRequestDto)`,
+  and a regression test runs the real pipe config against a genuine
+  engine payload.
+
 ## [0.4.1] - 2026-09-20
 
 ### Fixes
