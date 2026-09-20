@@ -38,7 +38,7 @@ import {
   SETTLED_TASK_STATUSES as SETTLED_STATUSES,
   projectRowToDto,
   subtaskRowToDto,
-  tagRowToDto,
+  tagIndexFor,
   taskRowToDto,
 } from './mappers';
 
@@ -51,14 +51,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
 
   // ---------- 读 ----------
 
-  async function tagIndex(): Promise<Map<string, TagResponseDto>> {
-    const tags = await engine.list('tag');
-    const index = new Map<string, TagResponseDto>();
-    for (const row of tags) {
-      index.set(row.id, tagRowToDto(row));
-    }
-    return index;
-  }
+  const tagIndex = (): Promise<Map<string, TagResponseDto>> => tagIndexFor(engine);
 
   async function subtasksOf(taskId: string): Promise<SubtaskResponseDto[]> {
     const rows = await engine.list('subtask');

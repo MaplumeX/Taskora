@@ -30,6 +30,21 @@ export const SETTLED_TASK_STATUSES = new Set<TaskStatus>([
   TaskStatus.CANCELLED,
 ]);
 
+/**
+ * Tag index：engine.list('tag') → id → TagResponseDto（各域 Engine
+ * backend 共用；悬挂 id 的解析过滤由各 rowToDto 完成）。
+ */
+export async function tagIndexFor(engine: {
+  list(entity: 'tag'): Promise<ReplicaRow[]>;
+}): Promise<Map<string, TagResponseDto>> {
+  const tags = await engine.list('tag');
+  const index = new Map<string, TagResponseDto>();
+  for (const row of tags) {
+    index.set(row.id, tagRowToDto(row));
+  }
+  return index;
+}
+
 export function tagRowToDto(row: ReplicaRow): TagResponseDto {
   const f = row.fields;
   return {

@@ -15,7 +15,7 @@ import type {
 } from '@taskora/shared';
 
 import type { AreaBackend } from '../api/area-backend';
-import { areaRowToDto, tagRowToDto } from './mappers';
+import { areaRowToDto, tagIndexFor } from './mappers';
 
 export interface EngineAreaBackendOptions {
   engine: Engine;
@@ -24,14 +24,7 @@ export interface EngineAreaBackendOptions {
 export function createEngineAreaBackend(options: EngineAreaBackendOptions): AreaBackend {
   const { engine } = options;
 
-  async function tagIndex(): Promise<Map<string, TagResponseDto>> {
-    const tags = await engine.list('tag');
-    const index = new Map<string, TagResponseDto>();
-    for (const row of tags) {
-      index.set(row.id, tagRowToDto(row));
-    }
-    return index;
-  }
+  const tagIndex = (): Promise<Map<string, TagResponseDto>> => tagIndexFor(engine);
 
   async function areaDto(id: string): Promise<AreaResponseDto> {
     const row = await engine.get('area', id);

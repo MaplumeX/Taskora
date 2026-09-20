@@ -1,8 +1,9 @@
 /**
- * 桌面端 Engine 装配与同步调度 — local-first 切片一（ADR-0007）。
+ * 桌面端 Engine 装配与同步调度 — local-first 完全体（ADR-0007 / V2）。
  *
  * 登录后：注册 device id → 打开 Local Replica（Tauri 侧 SQLite 文件）→
- * 注入 EngineTaskBackend（Task/Feed 的全部 hooks 切换到本地副本）→
+ * 注入全部域的 Engine backends（Task/Feed/Subtask + Project + Area +
+ * Tag + TagGroup + ProjectHeading，hooks 零改动切到本地副本）→
  * bootstrap 拉全量快照 → 周期 + 聚焦 + 写后三种时机 flush/pull 收敛。
  * 登出：退回 REST 后端，本地数据保留（副本可丢弃但 Outbox 未推的编辑
  * 属于用户数据，登出不清除数据库文件）。

@@ -604,6 +604,43 @@ describe('Delete Request（ADR-0008：设备发起删除）', () => {
     await b.close();
   });
 
+  it('emptyTrash 的跨设备生效（主接缝）：trashed Task/Project 物理删除，B 同步后一致', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+
+    const keepId = await createTask(a, '留下的');
+    const trashedId = await createTask(a, '要删的');
+    const projectId = await a.create('project', {
+      title: '废弃项目',
+      status: 'ACTIVE',
+      bucket: 'ANYTIME',
+      scheduledType: 'NONE',
+    });
+    const orphanTaskId = await createTask(a, '项目内任务', { projectId });
+    await a.create('subtask', { title: '级联子步骤', taskId: orphanTaskId, status: 'ACTIVE' });
+    await a.update('task', trashedId, { trashedAt: '2026-01-01T00:00:00.000Z' });
+    await a.update('project', projectId, { trashedAt: '2026-01-01T00:00:00.000Z' });
+    await a.sync();
+    await b.sync();
+
+    // 设备侧 emptyTrash 语义：Trash 内 Task + trashed Project（含其下属
+    // Task）批量 Delete Request
+    await a.delete('task', [trashedId, orphanTaskId]);
+    await a.delete('project', [projectId]);
+    await a.sync();
+    await b.sync();
+
+    for (const engine of [a, b]) {
+      expect(await engine.get('task', trashedId)).toBeNull();
+      expect(await engine.get('project', projectId)).toBeNull();
+      expect(await engine.list('subtask')).toHaveLength(0);
+      expect((await engine.get('task', keepId))?.fields.title).toBe('留下的');
+    }
+    await a.close();
+    await b.close();
+  });
+
   it('convert 组合原语：字段写 + 删除混合批次后双端收敛（顺序不乱）', async () => {
     const h = await makeHarness();
     const a = await h.device('dev-a');

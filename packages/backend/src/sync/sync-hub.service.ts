@@ -203,7 +203,8 @@ export class SyncHubService implements OnModuleInit {
     // 级联删除的 Subtask 无 collector 事件可依赖：父 Task 在同一窗口内
     // 消失时 ownerTaskId 路由解析不到归属（与 emptyTrash 同惯例），
     // 因此显式登记 + 广播。重复 Compact 对副本幂等。
-    await this.registerCompacted(userId, request.entity, ids);
+    // 只登记归属校验通过的 id（story 6：越权 id 不进请求者的登记表）。
+    await this.registerCompacted(userId, request.entity, owned);
     if (cascadedSubtaskIds.length > 0) {
       await this.registerCompacted(userId, 'subtask', cascadedSubtaskIds);
       await this.publishCompact(userId, 'subtask', cascadedSubtaskIds);

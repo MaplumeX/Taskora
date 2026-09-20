@@ -17,7 +17,7 @@ import type {
 } from '@taskora/shared';
 
 import type { ProjectBackend } from '../api/project-backend';
-import { projectRowToDto, tagRowToDto, SETTLED_TASK_STATUSES } from './mappers';
+import { projectRowToDto, tagIndexFor, SETTLED_TASK_STATUSES } from './mappers';
 
 export interface EngineProjectBackendOptions {
   engine: Engine;
@@ -26,14 +26,7 @@ export interface EngineProjectBackendOptions {
 export function createEngineProjectBackend(options: EngineProjectBackendOptions): ProjectBackend {
   const { engine } = options;
 
-  async function tagIndex(): Promise<Map<string, TagResponseDto>> {
-    const tags = await engine.list('tag');
-    const index = new Map<string, TagResponseDto>();
-    for (const row of tags) {
-      index.set(row.id, tagRowToDto(row));
-    }
-    return index;
-  }
+  const tagIndex = (): Promise<Map<string, TagResponseDto>> => tagIndexFor(engine);
 
   /** 项目统计口径：非 trashed task 总数 / 已了结数（与 ProjectsService 一致）。 */
   async function projectCounts(projectId: string): Promise<{ total: number; completed: number }> {

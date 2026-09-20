@@ -110,17 +110,8 @@ export class InMemorySyncHub {
 
   /** hub GC 物理删除后下发 Compact Event。 */
   compact(userId: string, entity: SyncEntity, ids: string[]): void {
-    if (ids.length === 0) return;
     const state = this.stateFor(userId);
-    const removed: string[] = [];
-    for (const id of ids) {
-      const key = `${entity}:${id}`;
-      state.compacted.add(key);
-      if (state.entities.delete(key)) removed.push(id);
-    }
-    if (removed.length > 0) {
-      this.publish(state, { kind: 'compact', seq: 0, entity, ids: removed });
-    }
+    this.removeAndPublish(state, entity, ids);
   }
 
   /** hub 重启：保留合并态，清空缓冲、seq 重新播种（持旧 cursor 的设备将被推入 resync）。 */
@@ -199,18 +190,6 @@ export class InMemorySyncHub {
   private applyDeleteRequest(state: UserState, request: DeleteRequest): void {
     if (request.ids.length === 0) return;
     const cascade = DELETE_CASCADES[request.entity] ?? [];
-    const removeEntity = (entity: SyncEntity, ids: string[]): string[] => {
-      const removed: string[] = [];
-      for (const id of ids) {
-        const key = `${entity}:${id}`;
-        state.compacted.add(key);
-        if (state.entities.delete(key)) removed.push(id);
-      }
-      if (removed.length > 0) {
-        this.publish(state, { kind: 'compact', seq: 0, entity, ids: removed });
-      }
-      return removed;
-    };
     // 级联（对齐 NestJS hub 的 onDelete: Cascade）：Task → Subtask
     for (const rule of cascade) {
       const childIds: string[] = [];
@@ -220,9 +199,26 @@ export class InMemorySyncHub {
           childIds.push(key.slice(rule.entity.length + 1));
         }
       }
-      removeEntity(rule.entity, childIds);
+      this.removeAndPublish(state, rule.entity, childIds);
     }
-    removeEntity(request.entity, request.ids);
+    this.removeAndPublish(state, request.entity, request.ids);
+  }
+
+  /**
+   * 登记 compact + 删行 + 广播 Compact Event（仅实际移除的 id；
+   * 不存在的 id 幂等跳过，不产生新事件）。
+   */
+  private removeAndPublish(state: UserState, entity: SyncEntity, ids: string[]): void {
+    if (ids.length === 0) return;
+    const removed: string[] = [];
+    for (const id of ids) {
+      const key = `${entity}:${id}`;
+      state.compacted.add(key);
+      if (state.entities.delete(key)) removed.push(id);
+    }
+    if (removed.length > 0) {
+      this.publish(state, { kind: 'compact', seq: 0, entity, ids: removed });
+    }
   }
 
   private publish(state: UserState, change: HubChange): void {
