@@ -9,6 +9,23 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.4.1] - 2026-09-20
+
+### Fixes
+
+- **desktop**: Restore startup session recovery on v0.4.0: Tauri's
+  `Builder::setup` and `Builder::invoke_handler` have replace semantics,
+  so the `sqlite::install(builder)` call added in #48 silently discarded
+  the tray setup and the `session_read` / `session_write` command
+  registrations — `invoke('session_read')` rejected at startup and the
+  app showed "session restore failed" forever (both retry and clear hit
+  the same missing command, leaving session.dpapi untouched; the tray
+  was also lost, so a hidden main window was reachable only by
+  relaunching). Registration is now a single point: `sqlite.rs` gains
+  `manage_state(app)` called from lib.rs's single setup, and one
+  `invoke_handler` registers all six IPC commands. Linux CI compiled
+  fine because the override only manifests at runtime.
+
 ## [0.4.0] - 2026-09-20
 
 ### Added
