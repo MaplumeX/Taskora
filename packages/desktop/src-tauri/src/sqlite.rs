@@ -9,7 +9,8 @@
 //!
 //! 连接按用户惰性打开于应用数据目录的 `taskora-<user>.db`，WAL 模式
 //! （登录前不打开任何库；quick-add 不碰 db）。SQLite 文件即用户数据
-//! 的可导出载体（数据主权，ADR-0007）。
+//! 的可导出载体（数据主权，ADR-0007）。状态注册见 `manage_state`，
+//! IPC 命令统一在 `lib.rs` 注册。
 
 use rusqlite::types::Value as SqlValue;
 use rusqlite::{Connection, DatabaseName};
@@ -208,20 +209,19 @@ fn json_to_sql(value: Json) -> SqlValue {
     }
 }
 
-/// 在 builder 上注册 replica DB 与三个 SQL 命令。
-pub fn install(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
-    builder
-        .setup(|app| {
-            let dir = app
-                .path()
-                .app_data_dir()
-                .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
-            app.manage(ReplicaDb::new(dir));
-            Ok(())
-        })
-        .invoke_handler(tauri::generate_handler![
-            sql_exec, sql_all, sql_run, sql_use_db
-        ])
+/// 在 setup 阶段注册 ReplicaDb 状态。
+///
+/// 注意：`tauri::Builder::setup` 与 `invoke_handler` 都是「替换」语义，
+/// 逆置的注册会覆盖先前的 —— 因此本模块不再链 Builder，而是在
+/// `lib.rs` 的唯一 setup 中调用此函数；IPC 命令也在 `lib.rs` 的唯一
+/// `generate_handler!` 列表里注册（与 session 命令同处）。
+pub fn manage_state(app: &mut tauri::App) -> Result<(), Box<dyn std::error::Error>> {
+    let dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("failed to resolve app data dir: {e}"))?;
+    app.manage(ReplicaDb::new(dir));
+    Ok(())
 }
 
 #[cfg(test)]
