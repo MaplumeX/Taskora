@@ -88,6 +88,9 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get agentApproval() {
     return this.extended.agentApproval;
   }
+  get device() {
+    return this.extended.device;
+  }
 
   // Overridden in the constructor (wrapped with the collector's tx scope).
   declare $transaction: PrismaClient['$transaction'];

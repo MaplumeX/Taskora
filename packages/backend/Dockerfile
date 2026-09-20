@@ -8,15 +8,19 @@ WORKDIR /app
 # Copy workspace config + lockfile for deterministic install
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json tsconfig.base.json ./
 COPY packages/shared/package.json packages/shared/
+COPY packages/engine/package.json packages/engine/
 COPY packages/backend/package.json packages/backend/
 
-RUN pnpm install --frozen-lockfile --filter @taskora/backend --filter @taskora/shared
+RUN pnpm install --frozen-lockfile --filter @taskora/backend --filter @taskora/shared --filter @taskora/engine
 
 # ── Stage 2: build ─────────────────────────────────────────────
 FROM base AS build
 
 COPY packages/shared packages/shared
 RUN pnpm --filter @taskora/shared build
+
+COPY packages/engine packages/engine
+RUN pnpm --filter @taskora/engine build
 
 COPY packages/backend packages/backend
 RUN pnpm --filter @taskora/backend exec prisma generate
@@ -39,6 +43,8 @@ WORKDIR /app
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=build /app/packages/shared/package.json ./packages/shared/package.json
+COPY --from=build /app/packages/engine/dist ./packages/engine/dist
+COPY --from=build /app/packages/engine/package.json ./packages/engine/package.json
 COPY --from=build /app/packages/backend/node_modules ./packages/backend/node_modules
 COPY --from=build /app/packages/backend/dist ./packages/backend/dist
 COPY --from=build /app/packages/backend/prisma ./packages/backend/prisma

@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { SyncHubService } from '../sync/sync-hub.service';
 import { buildTaskViewWhere, SETTLED_STATUSES, type TaskView } from '../tasks/views';
 import { buildProjectViewWhere, type ProjectView } from '../projects/views';
 import { ScheduledType, TaskStatus, TaskBucket, ProjectStatus, ProjectBucket } from '@taskora/shared';
@@ -19,7 +20,10 @@ function mapTag(tag: { id: string; title: string; color: string; sortOrder: numb
 
 @Injectable()
 export class FeedService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly syncHub: SyncHubService,
+  ) {}
 
   async emptyTrash(userId: string): Promise<{ deletedTasks: number; deletedProjects: number }> {
     return this.prisma.$transaction(async (tx) => {
@@ -54,6 +58,17 @@ export class FeedService {
         ...projectOrphanIds,
       ]);
 
+      // 3b. DB 级联删除的 Subtask 不会产生 collector 事件，先收集其 id，
+      //     之后与 Task 一起下发 Compact Event（ADR-0007：GC 后压缩变更）。
+      const cascadedSubtaskIds = taskDeleteIds.size
+        ? (
+            await tx.subtask.findMany({
+              where: { taskId: { in: [...taskDeleteIds] } },
+              select: { id: true },
+            })
+          ).map((s) => s.id)
+        : [];
+
       // 4. 物理删除: TaskTag/ProjectTag/Subtask 关联走 onDelete: Cascade 自动清理
       //    where 再带一次 userId 作防御性约束(集合已来自本用户数据,纯双保险)
       const taskDelete = await tx.task.deleteMany({
@@ -62,6 +77,10 @@ export class FeedService {
       const projectDelete = await tx.project.deleteMany({
         where: { id: { in: [...trashedProjectIds] }, userId },
       });
+
+      // 5. Compact Event：Task/Project 由 collector tap 转 compact，
+      //    Subtask 级联无事件，显式下发。
+      this.syncHub.publishCompact(userId, 'subtask', cascadedSubtaskIds);
 
       return { deletedTasks: taskDelete.count, deletedProjects: projectDelete.count };
     });

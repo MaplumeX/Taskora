@@ -3,7 +3,7 @@
   "version": "0.3.6",
   "private": true,
   "scripts": {
-    "predev": "pnpm --filter @taskora/shared build",
+    "predev": "pnpm --filter @taskora/shared build && pnpm --filter @taskora/engine build",
     "dev": "nest start --watch",
     "build": "nest build",
     "lint": "eslint src --ext .ts",
@@ -11,7 +11,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
     "prisma:generate": "prisma generate",
-    "pretest": "pnpm --filter @taskora/shared build && prisma generate",
+    "pretest": "pnpm --filter @taskora/shared build && pnpm --filter @taskora/engine build && prisma generate",
     "test": "vitest run",
     "agent:smoke": "tsx scripts/agent-smoke.ts"
   },
@@ -36,7 +36,8 @@
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typebox": "1.3.7"
+    "typebox": "1.3.7",
+    "@taskora/engine": "workspace:*"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
