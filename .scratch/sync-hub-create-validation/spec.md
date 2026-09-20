@@ -44,6 +44,27 @@ Status: resolved
     `TEST_DATABASE_URL` 未设时 skip):固化「Today 全字段 create → 后续
     title 编辑 → pull 合并后仍在 Today」的完整往返。
 
+## Follow-up（同日第二项审查发现）
+
+Status: resolved
+
+### 症状
+
+`applyEvent`（设备字段写合并路径）缺少归属校验：任何持合法 JWT 的
+用户可通过 `POST /sync/push` 对其他用户的实体 id 推送字段写——
+- **越权改写**：hub 直接 update 他人行（Delete Request 有 story 6
+  归属校验，字段写没有）；
+- **数据泄露**：合并后的完整实体字段发布到**推送者自己**的增量流，
+  pull 即可读到他人实体的全部字段（含 notes）。
+
+### 修复
+
+- `sync-hub.service.ts`：`applyEvent` 在行存在时校验归属
+  （`ownsRow`：task 等查 `row.userId`，subtask 经父 Task 认领），
+  不属于推送者则静默丢弃（不写库、不发布）；
+- 回归测试：mock 单测 3 例（越权 task/subtask 被拒 + 自己的行不误伤）
+  + 真库 e2e 1 例（改写被拒 + 攻击者增量流无泄露）。
+
 ## Comments
 
 - 2026-09-20 复现与修复:用运行中的本地 Postgres 建独立库,以真实

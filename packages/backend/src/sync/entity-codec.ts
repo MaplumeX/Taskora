@@ -125,7 +125,7 @@ export function codecFor(entity: SyncEntity): EntityCodec {
 
 // ---------- Prisma 行读取 ----------
 
-type PrismaRow = Record<string, unknown>;
+export type PrismaRow = Record<string, unknown>;
 type PrismaDelegate = {
   findUnique(args: unknown): Promise<PrismaRow | null>;
   findMany(args: unknown): Promise<PrismaRow[]>;

@@ -170,4 +170,36 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     expect(row).not.toBeNull();
     expect(row!.tags.map((t) => t.tagId)).toEqual(['tag-1']);
   });
+
+  it('回归：越权字段写被拒——他人实体不可改写、不进自己的增量流', async () => {
+    const attacker = await testPrisma.user.create({
+      data: { email: 'attacker@test', passwordHash: 'x' },
+    });
+
+    // 受害者的任务（正常同步路径创建）
+    await hub.push(USER, [fullCreateEvent('task-victim-1')]);
+    const before = await testPrisma.task.findUnique({ where: { id: 'task-victim-1' } });
+    expect(before).not.toBeNull();
+
+    // 攻击者对该 id 推送字段写
+    const cursorBefore = buffer.currentSeq(attacker.id);
+    await hub.push(attacker.id, [
+      {
+        entity: 'task',
+        id: 'task-victim-1',
+        fields: {
+          title: { value: '篡改', hlc: stamp(90) },
+        },
+      },
+    ]);
+
+    // 数据未被改写
+    const after = await testPrisma.task.findUnique({ where: { id: 'task-victim-1' } });
+    expect(after!.title).toBe(before!.title);
+
+    // 攻击者的增量流里没有他人实体（无数据泄露）
+    const pulled = buffer.pull(attacker.id, cursorBefore);
+    expect(pulled.resync).toBe(false);
+    expect(pulled.changes).toHaveLength(0);
+  });
 });
