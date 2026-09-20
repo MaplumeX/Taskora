@@ -20,6 +20,7 @@ import {
   entityDef,
   schemaDdl,
   SYNC_ENTITIES,
+  type FieldDef,
   type SyncEntity,
   type WireRow,
 } from './entities';
@@ -31,6 +32,28 @@ import { inTransaction, type SqlStorage } from './storage';
 export interface ReplicaRow {
   id: string;
   fields: WireRow;
+}
+
+/**
+ * 变更通知载荷：来源 + 涉及实体。bootstrap 整表重建时 entities 缺省
+ * （表示全部）。UI 据此选择失效粒度，并区分「本地写需要防抖同步」
+ * 与「远端写应用后无需再拉」。
+ */
+export interface EngineChange {
+  origin: 'local' | 'remote' | 'bootstrap';
+  entities?: SyncEntity[];
+}
+
+/**
+ * 写入值归一化：与 hub 侧落库口径对齐——sortOrder 是 Prisma 不可空列
+ * （Int @default(0)），null 落库后变 0；tagIds 经关系表读回时排序。
+ * 设备本地值与 hub 合并态保持逐字段一致，自身回声在 LWW 平局
+ * （时钟持平、保留本地）下不会留下两端口径分叉。
+ */
+function normalizeWriteValue(field: FieldDef, value: unknown): unknown {
+  if (field.name === 'sortOrder' && value == null) return 0;
+  if (field.name === 'tagIds' && Array.isArray(value)) return [...value].sort();
+  return value;
 }
 
 /** Outbox 条目：普通字段写，或设备发起的 Delete Request（ADR-0008）。 */
@@ -48,7 +71,7 @@ export interface LocalReplicaOptions {
 export class LocalReplica {
   private readonly clock: HybridClock;
   private readonly generateId: () => string;
-  private listeners = new Set<() => void>();
+  private listeners = new Set<(change: EngineChange) => void>();
   private changeVersion = 0;
   /**
    * Compact 登记（ADR-0008，仅内存）：已被 compact 的实体 id。迟到的
@@ -108,7 +131,7 @@ export class LocalReplica {
   }
 
   /** 订阅数据变更；返回退订函数。 */
-  onChange(listener: () => void): () => void {
+  onChange(listener: (change: EngineChange) => void): () => void {
     this.listeners.add(listener);
     return () => {
       this.listeners.delete(listener);
@@ -126,11 +149,11 @@ export class LocalReplica {
     return run;
   }
 
-  private notifyChanged(): void {
+  private notifyChanged(change: EngineChange): void {
     this.changeVersion += 1;
     for (const listener of [...this.listeners]) {
       try {
-        listener();
+        listener(change);
       } catch {
         // 订阅者异常不得破坏写路径
       }
@@ -184,13 +207,13 @@ export class LocalReplica {
     for (const field of def.fields) {
       const provided = values[field.name];
       if (provided !== undefined) {
-        fields[field.name] = provided;
+        fields[field.name] = normalizeWriteValue(field, provided);
       } else if (field.json) {
         fields[field.name] = [];
       } else if (field.name === 'createdAt' || field.name === 'updatedAt') {
         fields[field.name] = nowIso;
       } else {
-        fields[field.name] = null;
+        fields[field.name] = normalizeWriteValue(field, null);
       }
     }
     const writes: Record<string, FieldWrite> = {};
@@ -204,7 +227,7 @@ export class LocalReplica {
       await this.writeRow(entity, id, fields, clocks, { insert: true });
       await this.appendOutbox(entity, id, writes);
     });
-    this.notifyChanged();
+    this.notifyChanged({ origin: 'local', entities: [entity] });
     return id;
   }
 
@@ -233,15 +256,15 @@ export class LocalReplica {
       const value = effective[field.name];
       if (value === undefined) continue;
       const hlc = this.stamp();
-      fields[field.name] = value;
+      fields[field.name] = normalizeWriteValue(field, value);
       clocks[field.name] = hlc;
-      writes[field.name] = { value, hlc };
+      writes[field.name] = { value: fields[field.name], hlc };
     }
     await inTransaction(this.storage, async () => {
       await this.writeRow(entity, id, fields, clocks, { insert: false });
       await this.appendOutbox(entity, id, writes);
     });
-    this.notifyChanged();
+    this.notifyChanged({ origin: 'local', entities: [entity] });
   }
 
   /**
@@ -259,7 +282,7 @@ export class LocalReplica {
     await inTransaction(this.storage, async () => {
       await this.removeRows(entity, ids, { enqueue: true });
     });
-    this.notifyChanged();
+    this.notifyChanged({ origin: 'local', entities: [entity] });
   }
 
   /**
@@ -342,7 +365,7 @@ export class LocalReplica {
         insert: current === null,
       });
     });
-    this.notifyChanged();
+    this.notifyChanged({ origin: 'remote', entities: [entity] });
     return true;
   }
 
@@ -358,7 +381,7 @@ export class LocalReplica {
       // 登记无论本地是否有行——compact 是 hub 的事实。
       removed = await this.removeRows(entity, ids, { enqueue: false });
     });
-    if (removed > 0) this.notifyChanged();
+    if (removed > 0) this.notifyChanged({ origin: 'remote', entities: [entity] });
     return removed > 0;
   }
 
@@ -424,7 +447,7 @@ export class LocalReplica {
         insert: current === null,
       });
     }
-    this.notifyChanged();
+    this.notifyChanged({ origin: 'bootstrap' });
   }
 
   // ---------- Outbox ----------

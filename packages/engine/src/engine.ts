@@ -2,7 +2,7 @@
  * Engine 门面 — UI 的唯一读写入口（CONTEXT.md「引擎与同步」）。
  *
  * 读：get/list/query 直接作用于 Local Replica，零网络往返；写后由订阅
- * 者（桌面端为 React Query invalidate）刷新视图。写：create/update 落库
+ * 者（桌面端为 React Query invalidate，按变更携带的实体粒度）刷新视图。写：create/update 落库
  * 同时进 Outbox（字段级 HLC + device id）；flush 把 Outbox 推给 Sync
  * Hub，pull 凭 Sync Cursor 拉全局增量。断网时全功能可用，恢复联网后
  * 自动收敛。
@@ -11,7 +11,7 @@
  * 由 onChange 通知驱动，UI 层自行选择失效策略。
  */
 
-import { LocalReplica, type ReplicaRow } from './replica';
+import { LocalReplica, type EngineChange, type ReplicaRow } from './replica';
 import { HybridClock } from './hlc';
 import { positionBetween, rebalancePositions } from './position';
 import type { SyncEntity, WireRow } from './entities';
@@ -56,8 +56,9 @@ export interface Engine {
   bootstrap(): Promise<void>;
   /** 当前 Sync Cursor。 */
   cursor(): Promise<number>;
-  /** 订阅数据变更（本地写 / 应用远端写后触发）。返回退订函数。 */
-  onChange(listener: () => void): () => void;
+  /** 订阅数据变更（本地写 / 应用远端写 / bootstrap 重建后触发，载荷
+   * 携带来源与涉及实体；UI 层自行选择失效策略）。返回退订函数。 */
+  onChange(listener: (change: EngineChange) => void): () => void;
   close(): Promise<void>;
 }
 

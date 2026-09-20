@@ -93,12 +93,17 @@ describe('SyncHubService（合并器集成）', () => {
     build();
   });
 
-  it('push 新实体：create 携带合并列 + fieldClocks + fieldDigests，updatedAt 不超过最大时钟', async () => {
-    mockPrisma.task.findUnique.mockResolvedValue(null);
-    mockPrisma.task.create.mockResolvedValue({
+  it('push 新实体：create 携带合并列 + fieldClocks，updatedAt 兑底不超过最大时钟；落库后按 wire 视图回填摘要', async () => {
+    const createdRow = {
       ...taskRow,
       title: '新任务',
       fieldClocks: { title: stamp(LATER_THAN_ROW, 0, 'dev-a') },
+    };
+    let created = false;
+    mockPrisma.task.findUnique.mockImplementation(async () => (created ? createdRow : null));
+    mockPrisma.task.create.mockImplementation(async () => {
+      created = true;
+      return createdRow;
     });
 
     const result = await service.push(USER, [
@@ -116,8 +121,25 @@ describe('SyncHubService（合并器集成）', () => {
     expect(createArgs.data.fieldClocks).toEqual({
       title: stamp(LATER_THAN_ROW, 0, 'dev-a'),
     });
-    expect(createArgs.data.fieldDigests).toMatchObject({ title: JSON.stringify('新任务') });
-    expect((createArgs.data.updatedAt as Date).getTime()).toBe(LATER_THAN_ROW + 1);
+    // 补丁未携带 updatedAt → 兑底为最大时钟墙钟（不加 1，保持回声平局下两端值一致）
+    expect((createArgs.data.updatedAt as Date).getTime()).toBe(LATER_THAN_ROW);
+
+    // 落库后按 wire 视图回填 fieldDigests（回声幂等关键）：不可空列取
+    // Prisma 默认值（sortOrder null → 0）、tagIds 排序，摘要与 serializeRow
+    // 的重算口径一致，时钟不再被摘要检测重置。
+    const backfillArgs = mockPrisma.task.update.mock.calls[0][0] as {
+      where: { id: string };
+      data: Record<string, unknown>;
+    };
+    expect(backfillArgs.where.id).toBe('task-1');
+    expect(backfillArgs.data.fieldDigests).toMatchObject({
+      title: JSON.stringify('新任务'),
+      sortOrder: JSON.stringify(0),
+    });
+    // 显式回写 updatedAt：防 @updatedAt 自动推到 now() 重新制造摘要不一致
+    expect((backfillArgs.data.updatedAt as Date).getTime()).toBe(
+      (createdRow.updatedAt as Date).getTime(),
+    );
   });
 
   it('push 到已有实体：字段级合并，只有胜出字段进 UPDATE', async () => {

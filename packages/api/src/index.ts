@@ -87,6 +87,7 @@ export {
   initEventStream,
   destroyEventStream,
   onRemoteChangeEvent,
+  setEventStreamCacheSurgery,
 } from './events/event-stream-client';
 export { taskMatchesQuery } from './events/task-query-match';
 

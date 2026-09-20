@@ -43,6 +43,20 @@ export function onRemoteChangeEvent(listener: () => void): () => void {
   };
 }
 
+/**
+ * 缓存手术开关（桌面端 local-first）：Engine 激活时关闭——SSE 仅作
+ * 「触发 engine pull」的提示通道（ADR-0007），缓存失效由 engine.onChange
+ * 驱动，避免同一事件的双重失效与 applier 的 sortOrder/createdAt 排序
+ * 与副本 Position 排序两个权威打架；退回 REST 后端时恢复。
+ */
+let cacheSurgeryEnabled = true;
+
+export function setEventStreamCacheSurgery(enabled: boolean): void {
+  cacheSurgeryEnabled = enabled;
+  // 关闭前排空队列：已入队的事件按原路径处理完，不留悬挂状态。
+  if (!enabled) connection?.flushApplier();
+}
+
 export function initEventStream(queryClient: QueryClient): void {
   if (connection) return;
   connection = new EventStreamConnection(queryClient);
@@ -87,6 +101,11 @@ class EventStreamConnection {
   connect(): void {
     if (this.controller) return;
     void this.run();
+  }
+
+  /** 排空已入队的缓存手术（Engine 接管前）。 */
+  flushApplier(): void {
+    this.applier.flush();
   }
 
   disconnect(): void {
@@ -184,7 +203,9 @@ class EventStreamConnection {
           void this.queryClient.invalidateQueries();
         }
         this.lastSeq = event.seq;
-        this.applier.push(event as ChangeEvent);
+        if (cacheSurgeryEnabled) {
+          this.applier.push(event as ChangeEvent);
+        }
         // 同步传输层（ADR-0007）：live change 到达 → 通知 engine 立即 pull。
         remoteChangeListener?.();
         break;

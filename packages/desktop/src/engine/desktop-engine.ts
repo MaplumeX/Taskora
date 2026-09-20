@@ -14,6 +14,7 @@ import type { QueryClient } from '@tanstack/react-query';
 import {
   useAuthStore,
   onRemoteChangeEvent,
+  setEventStreamCacheSurgery,
   setTaskBackend,
   createEngineTaskBackend,
   setProjectBackend,
@@ -28,13 +29,39 @@ import {
   createEngineProjectHeadingBackend,
   setSyncStatus,
 } from '@taskora/api';
-import { openEngine, type Engine } from '@taskora/engine';
+import { openEngine, type Engine, type SyncEntity } from '@taskora/engine';
 
 import { createHttpSyncTransport, registerDevice } from './http-transport';
 import { createTauriSqlStorage, isTauriRuntime, useUserReplicaDb } from './tauri-storage';
 
 const DEVICE_ID_KEY = 'taskora.deviceId';
 const SYNC_INTERVAL_MS = 30_000;
+
+/**
+ * 实体 → 需失效的 query root（失效面对齐 event-applier 的口径）：
+ * task/project/feed 互相嵌入计数，tag 嵌入一切带标签芯片的缓存。
+ */
+const INVALIDATION_BY_ENTITY: Record<SyncEntity, string[][]> = {
+  task: [['tasks'], ['task'], ['feed'], ['projects'], ['project']],
+  subtask: [['tasks'], ['task']],
+  project: [['projects'], ['project'], ['feed']],
+  'project-heading': [['project-headings']],
+  area: [['areas'], ['area'], ['feed']],
+  tag: [['tags'], ['tag'], ['tag-groups'], ['tasks'], ['projects'], ['areas'], ['feed']],
+  'tag-group': [['tag-groups'], ['tag-group']],
+};
+
+const ALL_QUERY_ROOTS = [...new Set(Object.values(INVALIDATION_BY_ENTITY).flat())];
+
+/** 按变更涉及的实体失效对应域；entities 缺省（bootstrap）时全量。 */
+function invalidateEntities(queryClient: QueryClient, entities?: SyncEntity[]): void {
+  const roots = entities
+    ? [...new Set(entities.flatMap((entity) => INVALIDATION_BY_ENTITY[entity] ?? []))]
+    : ALL_QUERY_ROOTS;
+  for (const root of roots) {
+    queryClient.invalidateQueries({ queryKey: root });
+  }
+}
 
 let engine: Engine | null = null;
 let unsubscribeRemoteChange: (() => void) | null = null;
@@ -90,21 +117,18 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     setTagGroupBackend(createEngineTagGroupBackend({ engine }));
     setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine }));
     registerDevice(deviceId).catch(() => undefined); // 注册失败不阻塞本地使用
+    // Engine 激活：SSE 只作「触发 engine pull」的提示通道（ADR-0007），
+    // 停用 EventStreamApplier 的缓存手术——失效由 engine.onChange 驱动，
+    // 避免回声/远端事件的双重失效与 sortOrder/position 双权威打架。
+    setEventStreamCacheSurgery(false);
 
-    // 副本变更 → UI 缓存失效（本地读，立即生效）
-    engine.onChange(() => {
-      queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      queryClient.invalidateQueries({ queryKey: ['feed'] });
-      queryClient.invalidateQueries({ queryKey: ['projects'] });
-      queryClient.invalidateQueries({ queryKey: ['project'] }); // detail
-      queryClient.invalidateQueries({ queryKey: ['project-headings'] });
-      queryClient.invalidateQueries({ queryKey: ['areas'] });
-      queryClient.invalidateQueries({ queryKey: ['area'] }); // detail
-      queryClient.invalidateQueries({ queryKey: ['tags'] });
-      queryClient.invalidateQueries({ queryKey: ['tag'] }); // detail
-      queryClient.invalidateQueries({ queryKey: ['tag-groups'] });
-      queryClient.invalidateQueries({ queryKey: ['tag-group'] }); // detail
-      scheduleSync(1_000);
+    // 副本变更 → UI 缓存失效（本地读，立即生效；按实体粒度），
+    // 仅本地写需要防抖调度同步——远端写应用后无新 Outbox，再拉是空转。
+    engine.onChange((change) => {
+      invalidateEntities(queryClient, change.entities);
+      if (change.origin === 'local') {
+        scheduleSync(1_000);
+      }
     });
 
     // Event Stream 作为同步传输层（ADR-0007）：SSE live change 到达即
@@ -121,6 +145,7 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
   } catch (error) {
     console.error('[desktop-engine] 装配失败，退回 REST 后端', error);
     resetBackends();
+    setEventStreamCacheSurgery(true);
     engine = null;
     setSyncStatus('idle');
   }
@@ -138,6 +163,8 @@ function resetBackends(): void {
 
 function stopEngine(): void {
   resetBackends();
+  // 退回 REST 后端：恢复 SSE 缓存手术（web 同款失效路径）
+  setEventStreamCacheSurgery(true);
   setSyncStatus('idle');
   if (syncTimer !== null) {
     clearInterval(syncTimer);

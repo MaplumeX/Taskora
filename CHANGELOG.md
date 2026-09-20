@@ -9,6 +9,44 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [Unreleased]
+
+### Fixes
+
+- **sync**: Make a device's own echo idempotent — no more UI flash
+  after "create task syncs": `SyncHubService.applyEvent` stored
+  `fieldDigests` computed from the _pushed_ wire values, while the
+  persisted columns diverge from them (`updatedAt` override,
+  non-nullable columns taking Prisma defaults such as `sortOrder`
+  null → 0, `tagIds` read back sorted from the relation table).
+  `serializeRow`'s digest check therefore misread the hub's own merge
+  write as a REST bypass and reset the field clocks to virtual device 0
+  at the row's `updatedAt` — the device then pulled its own echo back
+  with _newer_ clocks, applied it, fired `onChange`, and invalidated
+  every query root (the "refresh flash" ~1s after creating a task).
+  Digests are now backfilled from the row's wire view after the merge
+  write (with an explicit `updatedAt` so `@updatedAt` cannot bump it),
+  `updatedAt` is only synthesized when the patch omits it (device
+  values persist verbatim, so tied-clock echoes no longer diverge),
+  and the device replica normalizes `sortOrder`/`tagIds` writes to the
+  same persisted-column semantics. The in-memory test hub now models
+  the same normalization, with echo-idempotency regression tests at
+  both the harness and real-Postgres seams.
+- **desktop**: While the local-first Engine is active, the Event Stream
+  (SSE) is now purely a "something changed, pull now" trigger: the
+  legacy cache-surgery applier is disabled (it double-invalidated on
+  every echo and reordered lists by the REST-era `sortOrder`/
+  `createdAt` authority, fighting the replica's `Position` ordering);
+  it is re-enabled when the engine stops or fails to assemble (REST
+  fallback). Engine change notifications now carry origin + entities,
+  so the desktop invalidates only the affected query roots and only
+  local writes schedule the debounced sync (applying remote changes no
+  longer chains a pointless flush/pull).
+- **ui**: `useCreateTask` optimistic insert now prepends, matching both
+  backends' newest-first list semantics (REST: `createdAt desc`;
+  Engine: head `Position`) — the real task no longer jumps from the
+  bottom to the top of the list after refetch.
+
 ## [0.4.2] - 2026-09-20
 
 ### Fixes

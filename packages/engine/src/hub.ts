@@ -178,18 +178,44 @@ export class InMemorySyncHub {
       state.entities.set(key, { fields: outcome.fields, clocks: outcome.clocks });
       return;
     }
-    state.entities.set(key, { fields: outcome.fields, clocks: outcome.clocks });
     state.seenWallMs = Math.max(
       state.seenWallMs,
       ...Object.values(event.fields).map((write) => hlcWallMs(write.hlc)),
     );
+    // 落库值归一化（与 NestJS SyncHubService 同口径，回声幂等的关键）：
+    // 真实 hub 的列值 ≠ 设备推送值——tagIds 经关系表读回排序、不可空列
+    // 取 Prisma 默认值（sortOrder null → 0）；updatedAt 仅在补丁未携带
+    // 时兑底为最大时钟墙钟（携带时设备值原样落库）。时钟保持合并结果
+    // （摘要按落库值回填，见 sync-hub.service.applyEvent），因此设备
+    // pull 到自己的回声时逐字段时钟持平 → 零应用、零通知；值与本地
+    // 一致，不留下两端分叉。
+    const merged: EntityMergeState = {
+      fields: { ...outcome.fields },
+      clocks: outcome.clocks,
+    };
+    if (!('updatedAt' in merged.fields)) {
+      // 补丁未携带 updatedAt（如虚拟设备 0 部分写新建）：兑底为最大
+      // 时钟墙钟，与 hub 一致，不引入 hub 墙钟不确定性。
+      const maxWall = Math.max(
+        0,
+        ...Object.values(outcome.clocks).map((stamp) => hlcWallMs(stamp)),
+      );
+      merged.fields.updatedAt = new Date(maxWall).toISOString();
+    }
+    if (Array.isArray(merged.fields.tagIds)) {
+      merged.fields.tagIds = [...(merged.fields.tagIds as string[])].sort();
+    }
+    if ('sortOrder' in merged.fields && merged.fields.sortOrder === null) {
+      merged.fields.sortOrder = 0;
+    }
+    state.entities.set(key, merged);
     this.publish(state, {
       kind: 'entity',
       seq: 0,
       entity: event.entity,
       id: event.id,
-      fields: outcome.fields,
-      clocks: outcome.clocks,
+      fields: merged.fields,
+      clocks: merged.clocks,
     });
   }
 
