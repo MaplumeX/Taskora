@@ -88,7 +88,18 @@ export class InMemorySyncHub {
       const [entityName, id] = splitKey(key);
       snapshot.push({ entity: entityName, id, fields: entity.fields, clocks: entity.clocks });
     }
-    return { snapshot, cursor: state.nextSeq - 1 };
+    const compacted = new Map<SyncEntity, string[]>();
+    for (const key of state.compacted) {
+      const [entity, id] = splitKey(key);
+      const ids = compacted.get(entity) ?? [];
+      ids.push(id);
+      compacted.set(entity, ids);
+    }
+    return {
+      snapshot,
+      cursor: state.nextSeq - 1,
+      compacted: [...compacted].map(([entity, ids]) => ({ entity, ids })),
+    };
   }
 
   /** 给测试用的 transport 视图（单用户 harness）。 */

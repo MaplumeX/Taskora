@@ -35,8 +35,8 @@ export interface ReplicaRow {
 
 /** Outbox 条目：普通字段写，或设备发起的 Delete Request（ADR-0008）。 */
 export type OutboxEntry =
-  | { rowId: number; kind: 'write'; event: OutboxEvent }
-  | { rowId: number; kind: 'delete'; entity: SyncEntity; id: string };
+  | { rowId: number; revision: number; kind: 'write'; event: OutboxEvent }
+  | { rowId: number; revision: number; kind: 'delete'; entity: SyncEntity; id: string };
 
 export interface LocalReplicaOptions {
   deviceId: string;
@@ -83,6 +83,9 @@ export class LocalReplica {
     );
     if (columns.length > 0 && !columns.some((column) => column.name === 'kind')) {
       await this.storage.exec("ALTER TABLE _outbox ADD COLUMN kind TEXT NOT NULL DEFAULT 'write'");
+    }
+    if (columns.length > 0 && !columns.some((column) => column.name === 'revision')) {
+      await this.storage.exec('ALTER TABLE _outbox ADD COLUMN revision INTEGER NOT NULL DEFAULT 0');
     }
     await this.metaSet('deviceId', this.options.deviceId);
     const saved = await this.metaGet('hlc');
@@ -364,24 +367,39 @@ export class LocalReplica {
    * 之后照常 flush 推给 hub，时间戳新者胜，最终收敛。重建后立即把
    * Outbox 中的写重新落回本地，未同步编辑不会从 UI 上消失。
    */
-  async replaceAll(snapshot: SnapshotEntry[]): Promise<void> {
-    return this.serialized(() => this.replaceAllInternal(snapshot));
+  async replaceAll(
+    snapshot: SnapshotEntry[],
+    compacted: Array<{ entity: SyncEntity; ids: string[] }> = [],
+  ): Promise<void> {
+    return this.serialized(() => this.replaceAllInternal(snapshot, compacted));
   }
 
-  private async replaceAllInternal(snapshot: SnapshotEntry[]): Promise<void> {
+  private async replaceAllInternal(
+    snapshot: SnapshotEntry[],
+    compacted: Array<{ entity: SyncEntity; ids: string[] }>,
+  ): Promise<void> {
+    const snapshotKeys = new Set(snapshot.map((entry) => `${entry.entity}:${entry.id}`));
+    this.compacted.clear();
+    for (const request of compacted) {
+      for (const id of request.ids) {
+        const key = `${request.entity}:${id}`;
+        // Compact intent 可能先于一个最终回滚的删除登记；快照仍有行时以
+        // 快照为准。真正并发删除的 Compact Event 会在 cursor fence 后重放。
+        if (!snapshotKeys.has(key)) this.compacted.add(key);
+      }
+    }
     await inTransaction(this.storage, async () => {
       for (const entity of SYNC_ENTITIES) {
         await this.storage.exec(`DELETE FROM ${entityDef(entity).table}`);
       }
       for (const entry of snapshot) {
+        if (this.compacted.has(`${entry.entity}:${entry.id}`)) continue;
         await this.writeRow(entry.entity, entry.id, entry.fields, entry.clocks, {
           insert: true,
         });
         this.absorbRemoteClocks(entry.clocks);
       }
     });
-    // bootstrap 后 hub 快照即事实：清空本会话的 compact 登记
-    this.compacted.clear();
     // Outbox 回放：本地合并（不重新打时间戳，保留原 HLC）；Delete
     // Request 照常回放为本地删除（未同步的删除不因重建而丢捔）。
     const pending = await this.takeOutbox(Number.MAX_SAFE_INTEGER);
@@ -391,6 +409,7 @@ export class LocalReplica {
         continue;
       }
       const { event } = entry;
+      if (this.compacted.has(`${event.entity}:${event.id}`)) continue;
       const current = await this.get(event.entity, event.id);
       const remote: EntityMergeState = {
         fields: Object.fromEntries(
@@ -414,15 +433,20 @@ export class LocalReplica {
   async takeOutbox(limit = 500): Promise<OutboxEntry[]> {
     const rows = await this.storage.all<{
       id: number;
+      revision: number;
       kind: string;
       entity: string;
       entity_id: string;
       fields: string;
-    }>('SELECT id, kind, entity, entity_id, fields FROM _outbox ORDER BY id ASC LIMIT ?', [limit]);
+    }>(
+      'SELECT id, revision, kind, entity, entity_id, fields FROM _outbox ORDER BY id ASC LIMIT ?',
+      [limit],
+    );
     return rows.map((row) => {
       if (row.kind === 'delete') {
         return {
           rowId: row.id,
+          revision: row.revision,
           kind: 'delete' as const,
           entity: row.entity as SyncEntity,
           id: row.entity_id,
@@ -430,6 +454,7 @@ export class LocalReplica {
       }
       return {
         rowId: row.id,
+        revision: row.revision,
         kind: 'write' as const,
         event: {
           entity: row.entity as SyncEntity,
@@ -445,11 +470,21 @@ export class LocalReplica {
     return rows[0]?.count ?? 0;
   }
 
-  /** flush 成功后按行号删除（部分失败可重试）。 */
-  async deleteOutbox(rowIds: number[]): Promise<void> {
-    for (const rowId of rowIds) {
-      await this.storage.run('DELETE FROM _outbox WHERE id = ?', [rowId]);
-    }
+  /**
+   * flush 成功后仅删除发送时的确切 revision。请求飞行期间若本地编辑把
+   * 同一行推进了 revision，旧响应不得清掉新内容；flush 循环会再发送它。
+   */
+  async deleteOutbox(entries: Array<Pick<OutboxEntry, 'rowId' | 'revision'>>): Promise<void> {
+    return this.serialized(() =>
+      inTransaction(this.storage, async () => {
+        for (const entry of entries) {
+          await this.storage.run('DELETE FROM _outbox WHERE id = ? AND revision = ?', [
+            entry.rowId,
+            entry.revision,
+          ]);
+        }
+      }),
+    );
   }
 
   // ---------- 内部 ----------
@@ -561,10 +596,10 @@ export class LocalReplica {
         ...(JSON.parse(existing.fields) as Record<string, FieldWrite>),
         ...writes,
       };
-      await this.storage.run('UPDATE _outbox SET fields = ? WHERE id = ?', [
-        JSON.stringify(merged),
-        existing.id,
-      ]);
+      await this.storage.run(
+        'UPDATE _outbox SET fields = ?, revision = revision + 1 WHERE id = ?',
+        [JSON.stringify(merged), existing.id],
+      );
       return;
     }
     await this.storage.run(

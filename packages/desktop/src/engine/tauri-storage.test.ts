@@ -32,3 +32,12 @@ describe('useUserReplicaDb', () => {
     await expect(useUserReplicaDb('user-1')).rejects.toThrow('disk full');
   });
 });
+
+describe('createTauriSqlStorage', () => {
+  it('把 Rust sql_run 的裸变更数适配成 SqlStorage 结果', async () => {
+    const { createTauriSqlStorage } = await import('./tauri-storage');
+    invoke.mockResolvedValueOnce(3);
+
+    await expect(createTauriSqlStorage().run('DELETE FROM task')).resolves.toEqual({ changes: 3 });
+  });
+});

@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { registerCompacted } from '../sync/compact-registry';
 import { CreateAreaDto, UpdateAreaDto } from './dto/areas.dto';
 
 const TAG_INCLUDE = { tags: { include: { tag: true } } } as const;
@@ -19,9 +20,7 @@ export class AreasService {
         notes: dto.notes,
         sortOrder: (max._max.sortOrder ?? -1) + 1,
         userId,
-        ...(dto.tagIds?.length
-          ? { tags: { create: dto.tagIds.map((tagId) => ({ tagId })) } }
-          : {}),
+        ...(dto.tagIds?.length ? { tags: { create: dto.tagIds.map((tagId) => ({ tagId })) } } : {}),
       },
       include: TAG_INCLUDE,
     });
@@ -79,7 +78,10 @@ export class AreasService {
 
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
-    return this.prisma.area.delete({ where: { id } });
+    return this.prisma.$transaction(async (tx) => {
+      await registerCompacted(tx, userId, 'area', [id]);
+      return tx.area.delete({ where: { id } });
+    });
   }
 
   async reorder(userId: string, orderedIds: string[]) {

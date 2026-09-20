@@ -89,6 +89,48 @@ async function createTask(engine: Engine, title: string, extra: WireRow = {}): P
 }
 
 describe('Engine 端到端收敛（主接缝）', () => {
+  it('flush 飞行期间的新编辑留在 Outbox，并在下一批同步', async () => {
+    const hub = new InMemorySyncHub();
+    const inner = hub.transportFor(USER);
+    let releasePush!: () => void;
+    let markPushStarted!: () => void;
+    const pushGate = new Promise<void>((resolve) => {
+      releasePush = resolve;
+    });
+    const pushStarted = new Promise<void>((resolve) => {
+      markPushStarted = resolve;
+    });
+    let firstPush = true;
+    const transport: SyncTransport = {
+      async push(request) {
+        if (firstPush) {
+          firstPush = false;
+          markPushStarted();
+          await pushGate;
+        }
+        return inner.push(request);
+      },
+      pull: (request) => inner.pull(request),
+      bootstrap: () => inner.bootstrap(),
+    };
+    const engine = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'dev-race',
+      transport,
+    });
+    const id = await createTask(engine, '并发编辑');
+
+    const flushing = engine.flush();
+    await pushStarted;
+    await engine.update('task', id, { notes: '请求飞行期间写入' });
+    releasePush();
+    await flushing;
+
+    expect(await engine.pendingCount()).toBe(0);
+    expect(hub.entityState(USER, 'task', id)?.fields.notes).toBe('请求飞行期间写入');
+    await engine.close();
+  });
+
   it('离线可用：断网期间创建/编辑/完成任务全功能，get 即时可见', async () => {
     const h = await makeHarness();
     const a = await h.device('dev-a');
@@ -523,6 +565,28 @@ describe('Delete Request（ADR-0008：设备发起删除）', () => {
     await a.sync();
     await b.sync();
     expect(await b.get('task', id)).toBeNull();
+    await a.close();
+    await b.close();
+  });
+
+  it('bootstrap 不会用待同步字段写复活 hub 已 compact 的实体', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+
+    const id = await createTask(a, '不会复活');
+    await a.sync();
+    await b.sync();
+    await b.update('task', id, { title: '离线迟到编辑' });
+    await a.delete('task', [id]);
+    await a.sync();
+
+    await b.bootstrap();
+    expect(await b.get('task', id)).toBeNull();
+    await b.sync();
+    expect(await b.get('task', id)).toBeNull();
+    expect(h.hub.entityState(USER, 'task', id)).toBeNull();
+    expect(await b.pendingCount()).toBe(0);
     await a.close();
     await b.close();
   });

@@ -26,6 +26,7 @@ function createPrismaMock() {
       findMany: vi.fn().mockResolvedValue([{ id: 'task-1' }, { id: 'task-2' }]),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
+    compactedEntity: { createMany: vi.fn() },
     $transaction: vi.fn(),
   };
   prisma.$transaction.mockImplementation(async (callback) => callback(prisma));
@@ -204,6 +205,10 @@ describe('ProjectHeadingsService', () => {
 
     await service.remove('user-1', 'heading-1');
 
+    expect(prisma.compactedEntity.createMany).toHaveBeenCalledWith({
+      data: [{ userId: 'user-1', entity: 'project-heading', entityId: 'heading-1' }],
+      skipDuplicates: true,
+    });
     expect(prisma.task.updateMany).not.toHaveBeenCalled();
     expect(prisma.projectHeading.deleteMany).toHaveBeenCalledWith({
       where: {
@@ -220,10 +225,7 @@ describe('ProjectHeadingsService', () => {
       id: 'heading-1',
       projectId: 'project-1',
     });
-    prisma.task.findMany.mockResolvedValue([
-      { id: 'root' },
-      { id: 'child' },
-    ]);
+    prisma.task.findMany.mockResolvedValue([{ id: 'root' }, { id: 'child' }]);
     const service = new ProjectHeadingsService(prisma as unknown as PrismaService);
 
     await service.remove('user-1', 'heading-1');

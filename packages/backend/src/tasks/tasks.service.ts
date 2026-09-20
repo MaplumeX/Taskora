@@ -7,6 +7,7 @@ import {
   ScheduledType,
 } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { registerCompacted } from '../sync/compact-registry';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
 import { Prisma } from '@prisma/client';
 import { buildTaskViewWhere, WITH_SETTLED_STATUSES } from './views';
@@ -91,9 +92,7 @@ export class TasksService {
       if (query.q) {
         // q mode: default ACTIVE; completed=true → 已了结三值白名单
         // （ACTIVE / COMPLETED / CANCELLED，见 ADR 0006）。
-        where.status = query.completed
-          ? { in: [...WITH_SETTLED_STATUSES] }
-          : TaskStatus.ACTIVE;
+        where.status = query.completed ? { in: [...WITH_SETTLED_STATUSES] } : TaskStatus.ACTIVE;
         where.trashedAt = null;
       } else if (!query.completed) {
         where.status = TaskStatus.ACTIVE;
@@ -114,9 +113,7 @@ export class TasksService {
       orderBy,
       include: { tags: { include: { tag: true } } },
     });
-    return tasks.map((t) =>
-      settledToCompletedAt({ ...t, tags: t.tags.map((tt) => tt.tag) }),
-    );
+    return tasks.map((t) => settledToCompletedAt({ ...t, tags: t.tags.map((tt) => tt.tag) }));
   }
 
   async findOne(userId: string, id: string) {
@@ -300,8 +297,7 @@ export class TasksService {
               ? ProjectStatus.COMPLETED
               : ProjectStatus.ACTIVE,
           // Project 无 CANCELLED 终态（out of scope）：仅完成任务携带了结时间。
-          completedAt:
-            existing.status === TaskStatus.COMPLETED ? existing.settledAt : null,
+          completedAt: existing.status === TaskStatus.COMPLETED ? existing.settledAt : null,
           trashedAt: existing.trashedAt,
           areaId: effectiveAreaId,
           bucket: existing.bucket as ProjectBucket,
@@ -331,7 +327,15 @@ export class TasksService {
         });
       }
 
-      // Step 5: hard-delete the original task (Subtask + TaskTag cascade automatically)
+      // Step 5: Compact 登记与原 Task/Subtask 的物理删除同事务提交。
+      await registerCompacted(tx, userId, 'task', [id]);
+      await registerCompacted(
+        tx,
+        userId,
+        'subtask',
+        existing.subtasks.map((subtask) => subtask.id),
+      );
+      // Subtask + TaskTag 由数据库级联删除。
       await tx.task.delete({ where: { id } });
 
       // Step 6: return the new project with resolved tags

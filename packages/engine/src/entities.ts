@@ -209,7 +209,8 @@ export function schemaDdl(): string[] {
       kind TEXT NOT NULL DEFAULT 'write',
       entity TEXT NOT NULL,
       entity_id TEXT NOT NULL,
-      fields TEXT NOT NULL
+      fields TEXT NOT NULL,
+      revision INTEGER NOT NULL DEFAULT 0
     )`,
   );
   return statements;

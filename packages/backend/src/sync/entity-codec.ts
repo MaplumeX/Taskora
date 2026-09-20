@@ -130,6 +130,7 @@ type PrismaDelegate = {
   findUnique(args: unknown): Promise<PrismaRow | null>;
   findMany(args: unknown): Promise<PrismaRow[]>;
   create(args: unknown): Promise<PrismaRow>;
+  createMany(args: unknown): Promise<{ count: number }>;
   update(args: unknown): Promise<PrismaRow>;
   deleteMany(args: unknown): Promise<{ count: number }>;
 };

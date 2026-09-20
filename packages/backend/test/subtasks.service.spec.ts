@@ -37,7 +37,10 @@ describe('SubtasksService', () => {
         update: vi.fn(),
         delete: vi.fn(),
       },
-      $transaction: vi.fn((ops: unknown[]) => Promise.all(ops)),
+      compactedEntity: { createMany: vi.fn() },
+      $transaction: vi.fn((value: unknown) =>
+        typeof value === 'function' ? value(mockPrisma) : Promise.all(value as Promise<unknown>[]),
+      ),
     } as unknown as InstanceType<typeof PrismaService>;
 
     service = new SubtasksService(mockPrisma);
@@ -47,9 +50,9 @@ describe('SubtasksService', () => {
     it('throws NotFoundException when task does not exist or not owned', async () => {
       mockPrisma.task.findFirst.mockResolvedValue(null);
 
-      await expect(
-        service.create(userId, 'nonexistent', { title: 'Sub' }),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.create(userId, 'nonexistent', { title: 'Sub' })).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('computes sortOrder = max + 1 and creates subtask', async () => {
@@ -89,9 +92,9 @@ describe('SubtasksService', () => {
     it('throws NotFoundException when subtask not found', async () => {
       mockPrisma.subtask.findFirst.mockResolvedValue(null);
 
-      await expect(
-        service.update(userId, 'nonexistent', { title: 'X' }),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.update(userId, 'nonexistent', { title: 'X' })).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws NotFoundException when subtask belongs to another user', async () => {
@@ -100,9 +103,9 @@ describe('SubtasksService', () => {
         task: { userId: 'other-user' },
       });
 
-      await expect(
-        service.update(userId, baseSubtask.id, { title: 'X' }),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.update(userId, baseSubtask.id, { title: 'X' })).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('updates title only', async () => {
@@ -171,9 +174,7 @@ describe('SubtasksService', () => {
     it('throws NotFoundException when subtask not found', async () => {
       mockPrisma.subtask.findFirst.mockResolvedValue(null);
 
-      await expect(service.remove(userId, 'nonexistent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.remove(userId, 'nonexistent')).rejects.toThrow(NotFoundException);
     });
 
     it('throws NotFoundException when subtask belongs to another user', async () => {
@@ -182,9 +183,7 @@ describe('SubtasksService', () => {
         task: { userId: 'other-user' },
       });
 
-      await expect(service.remove(userId, baseSubtask.id)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.remove(userId, baseSubtask.id)).rejects.toThrow(NotFoundException);
     });
 
     it('deletes the subtask when ownership is verified', async () => {
@@ -196,6 +195,10 @@ describe('SubtasksService', () => {
 
       await service.remove(userId, baseSubtask.id);
 
+      expect(mockPrisma.compactedEntity.createMany).toHaveBeenCalledWith({
+        data: [{ userId, entity: 'subtask', entityId: baseSubtask.id }],
+        skipDuplicates: true,
+      });
       expect(mockPrisma.subtask.delete).toHaveBeenCalledWith({
         where: { id: baseSubtask.id },
       });
@@ -206,9 +209,7 @@ describe('SubtasksService', () => {
     it('throws NotFoundException when subtask not found', async () => {
       mockPrisma.subtask.findFirst.mockResolvedValue(null);
 
-      await expect(service.complete(userId, 'nonexistent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.complete(userId, 'nonexistent')).rejects.toThrow(NotFoundException);
     });
 
     it('sets status COMPLETED and settledAt', async () => {
@@ -235,9 +236,7 @@ describe('SubtasksService', () => {
     it('throws NotFoundException when subtask not found', async () => {
       mockPrisma.subtask.findFirst.mockResolvedValue(null);
 
-      await expect(service.uncomplete(userId, 'nonexistent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.uncomplete(userId, 'nonexistent')).rejects.toThrow(NotFoundException);
     });
 
     it('sets status ACTIVE and clears settledAt', async () => {
@@ -262,17 +261,12 @@ describe('SubtasksService', () => {
     });
   });
 
-
   describe('cancel / uncancel (spec: task-cancelled)', () => {
     it('throws NotFoundException when subtask not found', async () => {
       mockPrisma.subtask.findFirst.mockResolvedValue(null);
 
-      await expect(service.cancel(userId, 'nonexistent')).rejects.toThrow(
-        NotFoundException,
-      );
-      await expect(service.uncancel(userId, 'nonexistent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.cancel(userId, 'nonexistent')).rejects.toThrow(NotFoundException);
+      await expect(service.uncancel(userId, 'nonexistent')).rejects.toThrow(NotFoundException);
     });
 
     it('cancel sets status CANCELLED and settledAt', async () => {
@@ -347,29 +341,25 @@ describe('SubtasksService', () => {
     it('throws NotFoundException when task does not exist or not owned', async () => {
       mockPrisma.task.findFirst.mockResolvedValue(null);
 
-      await expect(
-        service.reorder(userId, 'nonexistent', ['s1', 's2']),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.reorder(userId, 'nonexistent', ['s1', 's2'])).rejects.toThrow(
+        NotFoundException,
+      );
     });
 
     it('throws NotFoundException when a subtask id does not belong to the task', async () => {
       mockPrisma.task.findFirst.mockResolvedValue({ id: taskId });
       mockPrisma.subtask.findMany.mockResolvedValue([{ id: 's1' }]);
 
-      await expect(
-        service.reorder(userId, taskId, ['s1', 'foreign']),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.reorder(userId, taskId, ['s1', 'foreign'])).rejects.toThrow(
+        NotFoundException,
+      );
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
     it('updates sortOrder for all subtasks in a transaction', async () => {
       const orderedIds = ['s1', 's2', 's3'];
       mockPrisma.task.findFirst.mockResolvedValue({ id: taskId });
-      mockPrisma.subtask.findMany.mockResolvedValue([
-        { id: 's1' },
-        { id: 's2' },
-        { id: 's3' },
-      ]);
+      mockPrisma.subtask.findMany.mockResolvedValue([{ id: 's1' }, { id: 's2' }, { id: 's3' }]);
       mockPrisma.subtask.update.mockResolvedValue(baseSubtask);
 
       await service.reorder(userId, taskId, orderedIds);
@@ -398,9 +388,9 @@ describe('SubtasksService', () => {
       mockPrisma.task.findFirst.mockResolvedValue({ id: taskId });
       mockPrisma.subtask.findMany.mockResolvedValue([{ id: 's1' }]);
 
-      await expect(
-        service.reorder(userId, taskId, ['s1', 's1']),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.reorder(userId, taskId, ['s1', 's1'])).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 });

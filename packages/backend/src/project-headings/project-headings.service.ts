@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { HeadingStatus, TaskStatus } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { registerCompacted } from '../sync/compact-registry';
 import {
   CreateProjectHeadingDto,
   ReorderProjectHeadingLayoutDto,
@@ -106,6 +107,7 @@ export class ProjectHeadingsService {
         data: { projectId: newProject.id, headingId: null },
       });
 
+      await registerCompacted(tx, userId, 'project-heading', [id]);
       const deleted = await tx.projectHeading.deleteMany({
         where: { id, userId, projectId: heading.projectId },
       });
@@ -320,6 +322,7 @@ export class ProjectHeadingsService {
           data: { trashedAt },
         });
       }
+      await registerCompacted(tx, userId, 'project-heading', [id]);
       const deleted = await tx.projectHeading.deleteMany({
         where: { id, userId, projectId: heading.projectId },
       });
