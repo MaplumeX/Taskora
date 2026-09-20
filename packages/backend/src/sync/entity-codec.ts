@@ -191,27 +191,15 @@ export function serializeRow(codec: EntityCodec, row: PrismaRow): SerializedStat
   const storedClocks = (row.fieldClocks ?? {}) as FieldClocks;
   const storedDigests = (row.fieldDigests ?? {}) as Record<string, string>;
 
-  const fields: Record<string, unknown> = {};
+  const fields = wireViewOfRow(codec, row);
   const clocks: FieldClocks = { ...storedClocks };
   const digests: Record<string, string> = { ...storedDigests };
 
   for (const field of codec.def.fields) {
-    const wireValue = wireValueOf(codec, row, field.name);
-    fields[field.name] = wireValue;
-    const digest = digestOf(wireValue);
+    const digest = digestOf(fields[field.name]);
     if (storedDigests[field.name] === digest) continue; // 时钟仍为此值背书
     clocks[field.name] = formatHlc({ wallMs: rowWall, counter: 0, deviceId: VIRTUAL_DEVICE_ID });
     digests[field.name] = digest;
-  }
-
-  // legacy 行（REST 创建、position 为 null）合成确定性 Position：
-  // 整数部分编码 sortOrder，分数部分按 createdAt 降序编码——与 REST
-  // 列表的 (sortOrder asc, createdAt desc) 排序完全一致。
-  if (codec.def.orderField === 'position' && fields.position == null) {
-    fields.position = synthPosition(
-      typeof row.sortOrder === 'number' ? row.sortOrder : 0,
-      row.createdAt as Date,
-    );
   }
 
   return { fields, clocks, digests };
@@ -224,6 +212,28 @@ function wireValueOf(codec: EntityCodec, row: PrismaRow, fieldName: string): unk
   }
   const value = row[fieldName];
   return codec.dateFields.has(fieldName) && value instanceof Date ? value.toISOString() : value;
+}
+
+/**
+ * Prisma 行的 wire 字段视图（serializeRow 的字段归一化：tagIds 排序、
+ * Date → ISO、legacy Position 合成）。合并写回填 fieldDigests 时必须
+ * 按这一视图计算，而非设备推送值——否则列值 ≠ 推送值的字段（updatedAt
+ * 覆盖、不可空列的 Prisma 默认值、tagIds 关系表排序）会被 serializeRow
+ * 的摘要检测误判为「REST 绕过合并器」而重置时钟，设备自身的回声不再
+ * 幂等。
+ */
+export function wireViewOfRow(codec: EntityCodec, row: PrismaRow): Record<string, unknown> {
+  const fields: Record<string, unknown> = {};
+  for (const field of codec.def.fields) {
+    fields[field.name] = wireValueOf(codec, row, field.name);
+  }
+  if (codec.def.orderField === 'position' && fields.position == null) {
+    fields.position = synthPosition(
+      typeof row.sortOrder === 'number' ? row.sortOrder : 0,
+      row.createdAt as Date,
+    );
+  }
+  return fields;
 }
 
 function digestOf(value: unknown): string {

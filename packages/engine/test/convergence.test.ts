@@ -309,6 +309,32 @@ describe('Engine 端到端收敛（主接缝）', () => {
     await a.close();
   });
 
+  it('回声幂等（真实 hub 序列化口径）：落库值归一化不触发设备应用，本地值不被改写', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    let notifications = 0;
+    const unsubscribe = a.onChange(() => {
+      notifications += 1;
+    });
+
+    await a.sync(); // 空副本首同步：resync → bootstrap（#1）
+    const id = await createTask(a, '回声值断言'); // 本地写（#2）
+    const before = await a.get('task', id);
+    expect(before).not.toBeNull();
+
+    await a.sync(); // 自己的回声：hub 侧列值被归一化（updatedAt =
+    // maxWall+1、sortOrder null → 0、tagIds 排序），但时钟保持合并
+    // 结果 → 逐字段持平 → 零应用、零通知、本地值不被改写。
+    expect(notifications).toBe(2);
+    const after = await a.get('task', id);
+    expect(after).not.toBeNull();
+    expect(after!.fields.updatedAt).toBe(before!.fields.updatedAt);
+    expect(after!.fields.sortOrder).toBe(before!.fields.sortOrder);
+
+    unsubscribe();
+    await a.close();
+  });
+
   it('Compact Event：hub GC 后其他设备的副本里实体消失', async () => {
     const h = await makeHarness();
     const a = await h.device('dev-a');
