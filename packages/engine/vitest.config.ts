@@ -11,6 +11,12 @@ export default defineConfig({
     globals: true,
     environment: 'node',
     include: ['src/**/*.test.ts', 'test/**/*.test.ts'],
+    server: {
+      deps: {
+        // node:sqlite 是内置模块，Vite 不应尝试解析/打包
+        external: [/^node:/],
+      },
+    },
   },
   resolve: {
     alias: [

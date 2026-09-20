@@ -33,7 +33,6 @@ export {
   positionAfter,
   type Engine,
   type EngineOptions,
-  type ReplicaReader,
 } from './engine';
 export type {
   BootstrapResponse,

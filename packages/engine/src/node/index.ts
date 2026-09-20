@@ -5,29 +5,33 @@
  * `node:sqlite` 仅在此动态加载。
  */
 
+import { createRequire } from 'node:module';
+
 import type { SqlRow, SqlStorage } from '../storage';
 
+// 不用 import.meta（CJS 构建产物不允许）：require 只用于内置模块，
+// 路径任意。打包器（Vite）不会静态解析 node:sqlite。
+const nodeRequire = createRequire(`${process.cwd()}/`);
+
 export async function createNodeSqliteStorage(path: string): Promise<SqlStorage> {
-  // 计算出的 specifier：打包器（Vite）不会试图静态解析 node:sqlite
-  const specifier = ['node', 'sqlite'].join(':');
-  const { DatabaseSync } = (await import(/* @vite-ignore */ specifier)) as typeof import('node:sqlite');
+  const { DatabaseSync } = nodeRequire('node:sqlite') as typeof import('node:sqlite');
   const db = new DatabaseSync(path);
   const bind = (params: unknown[]) => params as never[];
 
   return {
-    exec(sql: string) {
+    async exec(sql: string) {
       db.exec(sql);
     },
-    all<T extends SqlRow = SqlRow>(sql: string, params: unknown[] = []): T[] {
+    async all<T extends SqlRow = SqlRow>(sql: string, params: unknown[] = []): Promise<T[]> {
       const statement = db.prepare(sql);
       return statement.all(...bind(params)) as T[];
     },
-    run(sql: string, params: unknown[] = []) {
+    async run(sql: string, params: unknown[] = []) {
       const statement = db.prepare(sql);
       const result = statement.run(...bind(params)) as unknown as { changes: number };
       return { changes: result.changes ?? 0 };
     },
-    close() {
+    async close() {
       db.close();
     },
   };

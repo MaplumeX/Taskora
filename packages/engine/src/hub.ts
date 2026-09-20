@@ -11,8 +11,6 @@ import { mergeFieldWrites, type EntityMergeState } from './merger';
 import type { SyncEntity } from './entities';
 import type {
   BootstrapResponse,
-  CompactChange,
-  EntityChange,
   HubChange,
   OutboxEvent,
   PullRequest,

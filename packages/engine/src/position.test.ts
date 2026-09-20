@@ -17,7 +17,6 @@ describe('positionBetween', () => {
   });
 
   it('随机相邻对插入始终满足 a < key < b（性质测试）', () => {
-    let prev: string | null = null;
     const keys = [positionBetween(null, null)];
     for (let i = 0; i < 200; i++) {
       keys.push(positionBetween(keys[keys.length - 1], null));
@@ -57,7 +56,7 @@ describe('positionBetween', () => {
     expect(rebalancePositions(['a0', 'a1'])).toBeNull();
     // 反复在同一处插队制造超长键
     let a: string | null = 'a0';
-    let b: string | null = 'a1';
+    const b: string | null = 'a1';
     for (let i = 0; a!.length <= 30 && i < 500; i++) {
       a = positionBetween(a, b);
     }

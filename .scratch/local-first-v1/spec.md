@@ -1,6 +1,6 @@
 # Local-First Engine V1 Spec（第三档同步）
 
-Status: ready-for-agent
+Status: implemented (V1)
 
 Taskora 从 thin-client 架构转向 local-first：引入跨端共享的 Engine 包与本地副本，服务器转型为 Sync Hub，按字段级 LWW + HLC 合并多设备变更。架构决策见 `docs/adr/0007-local-first-engine.md`（含对 ADR-0005 的取代关系）；领域术语见根 `CONTEXT.md`「引擎与同步（local-first）」小节（Engine、Local Replica、Field-level LWW、HLC、Position、Outbox、Sync Cursor、Compact Event、Event Stream、Sync Hub）。
 
@@ -124,3 +124,24 @@ Taskora 的每一次读写都要经 API 往返 Postgres：断网时应用完全�
 - 本 spec 是三轮 grilling 的共识结晶（Q1–Q18 全部落定），决策依据全部收录在 ADR-0007 与 `CONTEXT.md` 的「引擎与同步（local-first）」术语节。实施时遇到与术语冲突的命名，以 CONTEXT.md 为准并当场修订。
 - 术语演变提醒：Change Event 已从「服务端推送通知」重定义为「同步协议中的变更单元」；Event Stream 已从「单向推送通道」重定义为「双向同步的传输层」。ADR-0005 已加 superseded 注记。写作与评审时不要沿用旧义。
 - 后续切片建议在各自开工前另立 spec（沿用本目录或新目录），本 spec 不假装覆盖到 web 端。
+
+
+## Comments
+
+### 2026-09-20 · V1 实现记录（切片一交付）
+
+按本 spec 完成 V1：
+
+- `packages/engine`：HLC / Position（fractional indexing）/ 字段级 LWW 合并器（纯函数，设备与 hub 共用）/ 实体注册表与自有 SQLite schema / Local Replica + Outbox（异步存储接口，Tauri IPC 可实现）/ 同步客户端（flush / pull / bootstrap / resync）/ 进程内 Sync Hub 测试替身。
+- 主接缝端到端 harness（`packages/engine/test/convergence.test.ts`）：断网写、字段级并发合并、同字段 HLC+设备 ID 决胜、Position 并发拖拽、回声幂等、Compact Event、快照重建（含未同步 Outbox 保留）、虚拟设备 0 写、hub 重启 resync。
+- 后端 Sync Hub：`fieldClocks`/`fieldDigests`/`position` 列 + `Device` 表（两笔迁移）；`POST /sync/devices`、`POST /sync/push`、`GET /sync/pull`、`GET /sync/bootstrap`；合并器复用 engine 纯函数；REST 写经 collector tap 以虚拟设备 0 基线进入同一推流（fieldDigests 保证只重置真正被改字段的时钟）；物理删除 → Compact Event；空 Trash 显式下发 Subtask 级联 compact。
+- 契约测试：Engine 注册表 ↔ Prisma DMMF 字段集合与类型对齐。
+- 桌面端切片一：Rust 侧 rusqlite（WAL，appData/taskora.db）+ 三个 IPC 命令；`packages/api` 的 TaskBackend 注入层（Task/Feed 全部 hooks 零改动切换数据源）；Inbox/Today 的 Task CRUD（创建/编辑/完成/取消/重开/Trash/恢复/拖拽/标签）全部本地读写，写后防抖 flush + 30s 周期 + 聚焦同步。
+
+与 spec 的已知偏差（后续切片跟进）：
+
+- Assistant 写入路径：spec 原文为「改向合并器提交 Change Event（进程内调用）」。V1 经 collector tap 桥接实现等价效果（无特权写入、同一合并语义、走同一推流）；`SyncHubService.submitVirtualWrite` 已就绪，agent 模块的直接切换留待后续切片。
+- Subtask CRUD 与 convert-to-project：Engine 后端回落 REST（变更经同步推流回流设备），不在切片一的 Task CRUD 集内。
+- quick-add 窗口：独立 webview，维持 REST；其变更经 hub 同步回流主窗口。
+- Event Stream（SSE）与旧 REST CRUD 端点：未迁移切片仍按 ADR-0005 原样工作，按片退役。
+- Web 端（WASM + OPFS）：Out of Scope，未动。

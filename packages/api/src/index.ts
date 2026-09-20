@@ -53,6 +53,8 @@ export * from './api/projects.api';
 export * from './api/tag-groups.api';
 export * from './api/tags.api';
 export * from './api/tasks.api';
+export { setTaskBackend, currentTaskBackend, type TaskBackend } from './api/task-backend';
+export { createEngineTaskBackend } from './engine/task-backend.engine';
 export * from './api/users.api';
 export * from './api/agent.api';
 export { subscribeAgentEvents } from './api/agent-sse';

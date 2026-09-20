@@ -32,6 +32,9 @@ importers:
       '@tanstack/react-query':
         specifier: ^5.59.0
         version: 5.101.4(react@18.3.1)
+      '@taskora/engine':
+        specifier: workspace:*
+        version: link:../engine
       '@taskora/shared':
         specifier: workspace:*
         version: link:../shared
@@ -193,6 +196,9 @@ importers:
       '@taskora/api':
         specifier: workspace:*
         version: link:../api
+      '@taskora/engine':
+        specifier: workspace:*
+        version: link:../engine
       '@taskora/shared':
         specifier: workspace:*
         version: link:../shared
@@ -272,13 +278,7 @@ importers:
       '@taskora/shared':
         specifier: workspace:*
         version: link:../shared
-      react:
-        specifier: ^18.3.1
-        version: 18.3.1
     devDependencies:
-      '@types/react':
-        specifier: ^18.3.12
-        version: 18.3.31
       typescript:
         specifier: ^5.8.2
         version: 5.9.3
