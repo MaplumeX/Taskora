@@ -102,6 +102,10 @@ _Avoid_: offset、分页游标
 Hub 的 GC 物理删除实体后下发给设备的变更类型：指令设备从 Local Replica 中移除一批实体，区别于携带实体内容的 Change Event。仅在清空 Trash / 级联清理后产生。
 _Avoid_: 硬删除广播、tombstone（我们用软删除，无墓碑）
 
+**Delete Request（删除请求）**:
+设备发给 Sync Hub 的物理删除请求（ADR-0008）：携带实体类型与一批 id，hub 校验归属后删除并以 Compact Event 广播；设备端在 Outbox 排队、断网可用。与设备端软删除（trashedAt 等普通字段变更）相对。
+_Avoid_: 硬删除广播、墓碑（不携带值与时钟）
+
 **Event Stream**:
 设备与 Sync Hub 之间的常驻双向通道，按单调递增的序号传输 Change Event；从旧的服务端单向推送通道演化而来，现为同步协议的传输层。
 _Avoid_: WebSocket、订阅、频道

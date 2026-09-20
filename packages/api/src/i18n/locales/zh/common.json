@@ -41,5 +41,8 @@
   "newProject": "新增项目",
   "newArea": "新增区域",
   "more": "更多",
-  "clear": "清除"
+  "clear": "清除",
+  "syncStatusSynced": "已同步",
+  "syncStatusSyncing": "同步中…",
+  "syncStatusOffline": "离线 · {{count}} 条待同步"
 }

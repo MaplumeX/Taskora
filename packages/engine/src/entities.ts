@@ -10,13 +10,7 @@
  */
 
 export type SyncEntity =
-  'task'
-  | 'subtask'
-  | 'project'
-  | 'project-heading'
-  | 'area'
-  | 'tag'
-  | 'tag-group';
+  'task' | 'subtask' | 'project' | 'project-heading' | 'area' | 'tag' | 'tag-group';
 
 export type SqlColumnType = 'TEXT' | 'INTEGER';
 
@@ -155,6 +149,34 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
 
 export const SYNC_ENTITIES: SyncEntity[] = Object.keys(ENTITIES) as SyncEntity[];
 
+/**
+ * 删除级联（ADR-0008）：删除 Task 时级联删除其 Subtask（对齐 hub 侧
+ * onDelete: Cascade）。设备侧与 hub 侧适用同一条规则，孤儿 Subtask
+ * 不残留在任何副本。
+ */
+export const DELETE_CASCADES: Partial<
+  Record<SyncEntity, Array<{ entity: SyncEntity; foreignKey: string }>>
+> = {
+  task: [{ entity: 'subtask', foreignKey: 'taskId' }],
+};
+
+/**
+ * Compact 引用清理（ADR-0008）：某实体被 compact 后，将其在其它实体上
+ * 的引用字段置 null（对齐 hub 侧 onDelete: SetNull）。仅做本地副本清理，
+ * 不携带新时钟——字段级 LWW 仍由真正的字段写裁决，不会以清理写压掉
+ * 他人后来的真实编辑。
+ */
+export const COMPACT_NULL_REFS: Partial<
+  Record<SyncEntity, Array<{ entity: SyncEntity; field: string }>>
+> = {
+  area: [
+    { entity: 'task', field: 'areaId' },
+    { entity: 'project', field: 'areaId' },
+  ],
+  'project-heading': [{ entity: 'task', field: 'headingId' }],
+  'tag-group': [{ entity: 'tag', field: 'tagGroupId' }],
+};
+
 export function entityDef(entity: SyncEntity): EntityDef {
   return ENTITIES[entity];
 }
@@ -178,14 +200,13 @@ export function schemaDdl(): string[] {
       ),
       "clocks TEXT NOT NULL DEFAULT '{}'",
     ];
-    statements.push(
-      `CREATE TABLE IF NOT EXISTS ${def.table} (${columns.join(', ')})`,
-    );
+    statements.push(`CREATE TABLE IF NOT EXISTS ${def.table} (${columns.join(', ')})`);
   }
   statements.push(
     'CREATE TABLE IF NOT EXISTS _engine_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
     `CREATE TABLE IF NOT EXISTS _outbox (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      kind TEXT NOT NULL DEFAULT 'write',
       entity TEXT NOT NULL,
       entity_id TEXT NOT NULL,
       fields TEXT NOT NULL

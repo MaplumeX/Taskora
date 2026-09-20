@@ -55,6 +55,28 @@ export * from './api/tags.api';
 export * from './api/tasks.api';
 export { setTaskBackend, currentTaskBackend, type TaskBackend } from './api/task-backend';
 export { createEngineTaskBackend } from './engine/task-backend.engine';
+export {
+  setProjectBackend,
+  currentProjectBackend,
+  type ProjectBackend,
+} from './api/project-backend';
+export { createEngineProjectBackend } from './engine/project-backend.engine';
+export { setAreaBackend, currentAreaBackend, type AreaBackend } from './api/area-backend';
+export { createEngineAreaBackend } from './engine/area-backend.engine';
+export { setTagBackend, currentTagBackend, type TagBackend } from './api/tag-backend';
+export { createEngineTagBackend } from './engine/tag-backend.engine';
+export {
+  setTagGroupBackend,
+  currentTagGroupBackend,
+  type TagGroupBackend,
+} from './api/tag-group-backend';
+export { createEngineTagGroupBackend } from './engine/tag-group-backend.engine';
+export {
+  setProjectHeadingBackend,
+  currentProjectHeadingBackend,
+  type ProjectHeadingBackend,
+} from './api/project-heading-backend';
+export { createEngineProjectHeadingBackend } from './engine/project-heading-backend.engine';
 export * from './api/users.api';
 export * from './api/agent.api';
 export { subscribeAgentEvents } from './api/agent-sse';
@@ -87,6 +109,7 @@ export * from './hooks/usePageTaskContext';
 
 // UI-agnostic UI state stores
 export { useUiInteractionStore, type SettingsTab } from './stores/uiInteraction.store';
+export { useSyncStatusStore, setSyncStatus, type SyncStatus } from './stores/sync-status.store';
 export {
   useSelectionStore,
   flattenSelectionRows,

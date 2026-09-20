@@ -91,6 +91,9 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get device() {
     return this.extended.device;
   }
+  get compactedEntity() {
+    return this.extended.compactedEntity;
+  }
 
   // Overridden in the constructor (wrapped with the collector's tx scope).
   declare $transaction: PrismaClient['$transaction'];

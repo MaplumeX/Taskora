@@ -16,7 +16,14 @@ import {
   type SyncEntity,
   ENTITIES,
 } from '@taskora/engine';
-import { HeadingStatus, ProjectBucket, ProjectStatus, ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import {
+  HeadingStatus,
+  ProjectBucket,
+  ProjectStatus,
+  ScheduledType,
+  TaskBucket,
+  TaskStatus,
+} from '@taskora/shared';
 
 /** 虚拟设备 0（Assistant / hub 合成基线），ADR-0007。 */
 export const VIRTUAL_DEVICE_ID = '0';
@@ -39,7 +46,14 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     entity: 'task',
     def: ENTITIES.task,
     model: 'task',
-    dateFields: new Set(['scheduledDate', 'dueDate', 'settledAt', 'trashedAt', 'createdAt', 'updatedAt']),
+    dateFields: new Set([
+      'scheduledDate',
+      'dueDate',
+      'settledAt',
+      'trashedAt',
+      'createdAt',
+      'updatedAt',
+    ]),
     enumFields: {
       bucket: new Set(Object.values(TaskBucket)),
       scheduledType: new Set(Object.values(ScheduledType)),
@@ -58,7 +72,14 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     entity: 'project',
     def: ENTITIES.project,
     model: 'project',
-    dateFields: new Set(['scheduledDate', 'dueDate', 'completedAt', 'trashedAt', 'createdAt', 'updatedAt']),
+    dateFields: new Set([
+      'scheduledDate',
+      'dueDate',
+      'completedAt',
+      'trashedAt',
+      'createdAt',
+      'updatedAt',
+    ]),
     enumFields: {
       status: new Set(Object.values(ProjectStatus)),
       bucket: new Set(Object.values(ProjectBucket)),
@@ -109,6 +130,7 @@ type PrismaDelegate = {
   findMany(args: unknown): Promise<PrismaRow[]>;
   create(args: unknown): Promise<PrismaRow>;
   update(args: unknown): Promise<PrismaRow>;
+  deleteMany(args: unknown): Promise<{ count: number }>;
 };
 
 /** 经 PrismaService 委托读取（写入走扩展客户端、产生 Change Events）。 */
@@ -116,8 +138,12 @@ export function delegate(prisma: unknown, model: string): PrismaDelegate {
   return (prisma as Record<string, PrismaDelegate>)[model];
 }
 
-export function includeFor(codec: EntityCodec): Record<string, { select: { tagId: boolean } }> | undefined {
-  return codec.tagRelation ? { [codec.tagRelation.relation]: { select: { tagId: true } } } : undefined;
+export function includeFor(
+  codec: EntityCodec,
+): Record<string, { select: { tagId: boolean } }> | undefined {
+  return codec.tagRelation
+    ? { [codec.tagRelation.relation]: { select: { tagId: true } } }
+    : undefined;
 }
 
 export async function loadRow(
@@ -131,7 +157,11 @@ export async function loadRow(
   });
 }
 
-export async function loadAllRows(prisma: unknown, codec: EntityCodec, userId: string): Promise<PrismaRow[]> {
+export async function loadAllRows(
+  prisma: unknown,
+  codec: EntityCodec,
+  userId: string,
+): Promise<PrismaRow[]> {
   // Subtask 没有 userId 列：经父 Task 过滤（ADR-0005 同样的路由思路）。
   const where = codec.entity === 'subtask' ? { task: { userId } } : { userId };
   return delegate(prisma, codec.model).findMany({ where, include: includeFor(codec) });

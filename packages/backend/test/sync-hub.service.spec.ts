@@ -48,11 +48,7 @@ describe('SyncHubService（合并器集成）', () => {
   function build() {
     buffer = new SyncEventBuffer();
     changeEventHub = new ChangeEventHub();
-    service = new SyncHubService(
-      mockPrisma as unknown as PrismaService,
-      buffer,
-      changeEventHub,
-    );
+    service = new SyncHubService(mockPrisma as unknown as PrismaService, buffer, changeEventHub);
     service.onModuleInit();
   }
 
@@ -62,6 +58,7 @@ describe('SyncHubService（合并器集成）', () => {
       findMany: vi.fn().mockResolvedValue([]),
       create: vi.fn().mockResolvedValue(null),
       update: vi.fn().mockResolvedValue(null),
+      deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
     });
     mockPrisma = {
       task: {
@@ -69,6 +66,7 @@ describe('SyncHubService（合并器集成）', () => {
         findMany: vi.fn().mockResolvedValue([]),
         create: vi.fn(),
         update: vi.fn(),
+        deleteMany: vi.fn().mockResolvedValue({ count: 0 }),
       },
       subtask: emptyDelegate(),
       project: emptyDelegate(),
@@ -76,6 +74,12 @@ describe('SyncHubService（合并器集成）', () => {
       area: emptyDelegate(),
       tag: emptyDelegate(),
       tagGroup: emptyDelegate(),
+      compactedEntity: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        findMany: vi.fn().mockResolvedValue([]),
+        create: vi.fn(),
+        createMany: vi.fn().mockResolvedValue({ count: 0 }),
+      },
     };
     build();
   });
@@ -117,11 +121,13 @@ describe('SyncHubService（合并器集成）', () => {
         notes: JSON.stringify('旧备注'),
       },
     });
-    mockPrisma.task.update.mockImplementation(async ({ data }: { data: Record<string, unknown> }) => ({
-      ...taskRow,
-      ...(data as object),
-      fieldClocks: data.fieldClocks,
-    }));
+    mockPrisma.task.update.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => ({
+        ...taskRow,
+        ...(data as object),
+        fieldClocks: data.fieldClocks,
+      }),
+    );
 
     await service.push(USER, [
       {
@@ -255,6 +261,75 @@ describe('SyncHubService（合并器集成）', () => {
     );
   });
 
+  describe('Delete Request（ADR-0008：设备发起删除）', () => {
+    it('归属校验通过：物理删除 + 级联删除 Subtask + 登记 + 广播', async () => {
+      mockPrisma.task.findMany.mockResolvedValue([
+        { id: 'task-1', userId: USER },
+        { id: 'task-2', userId: USER },
+      ]);
+      mockPrisma.subtask.findMany.mockResolvedValue([{ id: 'sub-1' }, { id: 'sub-2' }]);
+      mockPrisma.task.deleteMany.mockResolvedValue({ count: 2 });
+      mockPrisma.subtask.deleteMany.mockResolvedValue({ count: 2 });
+
+      const cursorBefore = buffer.currentSeq(USER);
+      await service.push(USER, [], [{ entity: 'task', ids: ['task-1', 'task-2'] }]);
+
+      // 归属校验：按 id 批量取行 + userId 过滤
+      expect(mockPrisma.task.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ where: { id: { in: ['task-1', 'task-2'] } } }),
+      );
+      // 级联：Subtask 先于父 Task 删除
+      expect(mockPrisma.subtask.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: ['sub-1', 'sub-2'] } },
+      });
+      expect(mockPrisma.task.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: ['task-1', 'task-2'] } },
+      });
+      // 登记：Task 与级联 Subtask 都进 CompactedEntity
+      expect(mockPrisma.compactedEntity.createMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.arrayContaining([
+            expect.objectContaining({ entity: 'task', entityId: 'task-1' }),
+            expect.objectContaining({ entity: 'task', entityId: 'task-2' }),
+          ]),
+        }),
+      );
+      // 广播：级联 Subtask 的 Compact Event（每用户单调 seq）
+      const { changes, cursor } = buffer.pull(USER, cursorBefore);
+      expect(cursor).toBeGreaterThan(cursorBefore);
+      expect(changes).toContainEqual(
+        expect.objectContaining({ kind: 'compact', entity: 'subtask', ids: ['sub-1', 'sub-2'] }),
+      );
+    });
+
+    it('越权 id 被拒绝：不删除、不广播（story 6）', async () => {
+      mockPrisma.task.findMany.mockResolvedValue([{ id: 'task-1', userId: 'someone-else' }]);
+      mockPrisma.task.deleteMany.mockResolvedValue({ count: 0 });
+
+      const cursorBefore = buffer.currentSeq(USER);
+      await service.push(USER, [], [{ entity: 'task', ids: ['task-1'] }]);
+
+      expect(mockPrisma.task.deleteMany).not.toHaveBeenCalled();
+      expect(buffer.pull(USER, cursorBefore).changes).toHaveLength(0);
+    });
+
+    it('Compact 永久获胜：已 compact 的实体，迟到字段写被静默丢弃', async () => {
+      mockPrisma.task.findUnique.mockResolvedValue(null);
+      mockPrisma.compactedEntity.findUnique.mockResolvedValue({ id: 'cx-1' });
+
+      await service.push(USER, [
+        {
+          entity: 'task',
+          id: 'task-1',
+          fields: { title: { value: '迟到编辑', hlc: stamp(LATER_THAN_ROW, 0, 'dev-b') } },
+        },
+      ]);
+
+      expect(mockPrisma.task.create).not.toHaveBeenCalled();
+      expect(buffer.pull(USER, 0).changes.every((c) => c.kind !== 'entity')).toBe(true);
+    });
+  });
+
   it('虚拟设备 0 提交（Assistant）：与设备推送同一合并路径', async () => {
     const createdRow = {
       ...taskRow,
@@ -308,19 +383,21 @@ describe('SyncHubService（合并器集成）', () => {
   describe('subtask 认领（无 userId 列的实体）', () => {
     it('父 Task 属于该用户：subtask create 不带 userId、经父认领写入', async () => {
       const subtaskCodecRow = {
-      id: 'sub-1',
-      title: '步骤',
-      status: 'ACTIVE',
-      settledAt: null,
-      sortOrder: 0,
-      taskId: 'task-1',
-      createdAt: new Date('2026-01-01T00:00:00Z'),
-      updatedAt: new Date('2026-01-02T00:00:00Z'),
-      fieldClocks: null,
-      fieldDigests: null,
-    };
+        id: 'sub-1',
+        title: '步骤',
+        status: 'ACTIVE',
+        settledAt: null,
+        sortOrder: 0,
+        taskId: 'task-1',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        updatedAt: new Date('2026-01-02T00:00:00Z'),
+        fieldClocks: null,
+        fieldDigests: null,
+      };
       let created = false;
-      mockPrisma.subtask.findUnique.mockImplementation(async () => (created ? subtaskCodecRow : null));
+      mockPrisma.subtask.findUnique.mockImplementation(async () =>
+        created ? subtaskCodecRow : null,
+      );
       mockPrisma.subtask.create.mockImplementation(async () => {
         created = true;
         return subtaskCodecRow;

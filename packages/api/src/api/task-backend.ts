@@ -17,7 +17,6 @@ import type {
   UpdateSubtaskDto,
   UpdateTaskDto,
 } from '@taskora/shared';
-
 import type { TaskQuery } from './tasks.api.rest';
 
 export type { TaskQuery };
@@ -44,6 +43,8 @@ export interface TaskBackend {
   cancelSubtask(id: string): Promise<SubtaskResponseDto>;
   uncancelSubtask(id: string): Promise<SubtaskResponseDto>;
   reorderSubtasks(taskId: string, orderedIds: string[]): Promise<void>;
+  /** 清空 Trash：物理删除（Engine 实现走 Delete Request，ADR-0008）。 */
+  emptyTrash(): Promise<{ deletedTasks: number; deletedProjects: number }>;
 }
 
 import * as rest from './tasks.api.rest';
