@@ -10,7 +10,23 @@
 
 import type { QueryClient } from '@tanstack/react-query';
 
-import { useAuthStore, onRemoteChangeEvent, setTaskBackend, createEngineTaskBackend } from '@taskora/api';
+import {
+  useAuthStore,
+  onRemoteChangeEvent,
+  setTaskBackend,
+  createEngineTaskBackend,
+  setProjectBackend,
+  createEngineProjectBackend,
+  setAreaBackend,
+  createEngineAreaBackend,
+  setTagBackend,
+  createEngineTagBackend,
+  setTagGroupBackend,
+  createEngineTagGroupBackend,
+  setProjectHeadingBackend,
+  createEngineProjectHeadingBackend,
+  setSyncStatus,
+} from '@taskora/api';
 import { openEngine, type Engine } from '@taskora/engine';
 
 import { createHttpSyncTransport, registerDevice } from './http-transport';
@@ -62,13 +78,28 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
       deviceId,
       transport: createHttpSyncTransport(),
     });
+    // 全域注入（V2）：各域沿用 TaskBackend 已验证的注入模式
     setTaskBackend(createEngineTaskBackend({ engine }));
+    setProjectBackend(createEngineProjectBackend({ engine }));
+    setAreaBackend(createEngineAreaBackend({ engine }));
+    setTagBackend(createEngineTagBackend({ engine }));
+    setTagGroupBackend(createEngineTagGroupBackend({ engine }));
+    setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine }));
     registerDevice(deviceId).catch(() => undefined); // 注册失败不阻塞本地使用
 
     // 副本变更 → UI 缓存失效（本地读，立即生效）
     engine.onChange(() => {
       queryClient.invalidateQueries({ queryKey: ['tasks'] });
       queryClient.invalidateQueries({ queryKey: ['feed'] });
+      queryClient.invalidateQueries({ queryKey: ['projects'] });
+      queryClient.invalidateQueries({ queryKey: ['project'] }); // detail
+      queryClient.invalidateQueries({ queryKey: ['project-headings'] });
+      queryClient.invalidateQueries({ queryKey: ['areas'] });
+      queryClient.invalidateQueries({ queryKey: ['area'] }); // detail
+      queryClient.invalidateQueries({ queryKey: ['tags'] });
+      queryClient.invalidateQueries({ queryKey: ['tag'] }); // detail
+      queryClient.invalidateQueries({ queryKey: ['tag-groups'] });
+      queryClient.invalidateQueries({ queryKey: ['tag-group'] }); // detail
       scheduleSync(1_000);
     });
 
@@ -85,13 +116,25 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     }
   } catch (error) {
     console.error('[desktop-engine] 装配失败，退回 REST 后端', error);
-    setTaskBackend(undefined);
+    resetBackends();
     engine = null;
+    setSyncStatus('idle');
   }
 }
 
-function stopEngine(): void {
+/** 全域退回 REST（登出 / 装配失败）。 */
+function resetBackends(): void {
   setTaskBackend(undefined);
+  setProjectBackend(undefined);
+  setAreaBackend(undefined);
+  setTagBackend(undefined);
+  setTagGroupBackend(undefined);
+  setProjectHeadingBackend(undefined);
+}
+
+function stopEngine(): void {
+  resetBackends();
+  setSyncStatus('idle');
   if (syncTimer !== null) {
     clearInterval(syncTimer);
     syncTimer = null;
@@ -109,13 +152,22 @@ function stopEngine(): void {
   globalThis.localStorage?.removeItem(DEVICE_ID_KEY);
 }
 
-/** flush + pull；并发调用合并为一个在飞任务。 */
+/** flush + pull；并发调用合并为一个在飞任务。成败驱动同步指示器（V2）。 */
 function syncNow(): Promise<void> {
   if (!engine) return Promise.resolve();
   if (syncInFlight) return syncInFlight;
+  setSyncStatus('syncing');
   syncInFlight = engine
     .sync()
-    .catch(() => undefined) // 断网/服务器维护：静默退避，等下个时机
+    .then(() => {
+      // 已同步：Outbox 清空、增量拉平
+      setSyncStatus('synced');
+    })
+    .catch(async () => {
+      // 断网/服务器维护：静默退避，等下个时机；离线·N 条待同步。
+      // 不用 navigator.onLine：服务器不可达不应被假在线掩盖。
+      setSyncStatus('offline', await engine!.pendingCount());
+    })
     .finally(() => {
       syncInFlight = null;
     });

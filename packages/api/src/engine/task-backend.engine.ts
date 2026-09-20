@@ -1,13 +1,13 @@
 /**
- * Engine 实现的 Task 传输层 — 桌面端切片一（ADR-0007）。
+ * Engine 实现的 Task 传输层 — 桌面端完全体（ADR-0007 / ADR-0008）。
  *
- * Task/Feed 的全部读写直接作用于 Local Replica：零网络往返、断网全功
- * 能可用；写操作进 Outbox，由调用方（desktop boot）调度 flush/pull 收
- * 敛。语义与 REST 实现对齐（bucket 解析、视图过滤、终态/恢复语义、
- * feed 合并排序），view 口径沿用后端 views.ts / feed.service.ts。
- *
- * 未迁移到 Engine 的 hub 复合操作（convert-to-project）回落 REST，其
- * 变更经 collector → 同步推流到达设备。
+ * Task/Feed/Subtask 的全部读写直接作用于 Local Replica：零网络往返、
+ * 断网全功能可用；写操作进 Outbox，由调用方（desktop boot）调度
+ * flush/pull 收敛。convert-to-project 分解为普通字段写（新 Project、
+ * Subtask 提升为 Task）+ 原 Task 的 Delete Request；emptyTrash 复用
+ * 同一删除原语。语义与 REST 实现对齐（bucket 解析、视图过滤、终态/
+ * 恢复语义、feed 合并排序），view 口径沿用后端 views.ts /
+ * feed.service.ts / tasks.service.ts / subtasks.service.ts。
  */
 
 import type { Engine, ReplicaRow } from '@taskora/engine';
@@ -20,6 +20,7 @@ import {
   ProjectBucket,
 } from '@taskora/shared';
 import type {
+  CreateSubtaskDto,
   CreateTaskDto,
   FeedItem,
   FeedView,
@@ -28,13 +29,18 @@ import type {
   TagResponseDto,
   TaskFeedItem,
   TaskResponseDto,
+  UpdateSubtaskDto,
   UpdateTaskDto,
 } from '@taskora/shared';
 
 import type { TaskBackend, TaskQuery } from '../api/task-backend';
-import * as rest from '../api/tasks.api.rest';
-
-const SETTLED_STATUSES = new Set<TaskStatus>([TaskStatus.COMPLETED, TaskStatus.CANCELLED]);
+import {
+  SETTLED_TASK_STATUSES as SETTLED_STATUSES,
+  projectRowToDto,
+  subtaskRowToDto,
+  tagRowToDto,
+  taskRowToDto,
+} from './mappers';
 
 export interface EngineTaskBackendOptions {
   engine: Engine;
@@ -56,14 +62,17 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
 
   async function subtasksOf(taskId: string): Promise<SubtaskResponseDto[]> {
     const rows = await engine.list('subtask');
-    return rows
-      .filter((row) => row.fields.taskId === taskId)
-      .map((row) => subtaskRowToDto(row));
+    return rows.filter((row) => row.fields.taskId === taskId).map((row) => subtaskRowToDto(row));
   }
   async function taskDto(id: string): Promise<TaskResponseDto> {
     const row = await engine.get('task', id);
     if (!row) throw new Error(`Task not found: ${id}`);
     return taskRowToDto(row, await tagIndex());
+  }
+  async function subtaskDto(id: string): Promise<SubtaskResponseDto> {
+    const row = await engine.get('subtask', id);
+    if (!row) throw new Error(`Subtask not found: ${id}`);
+    return subtaskRowToDto(row);
   }
 
   return {
@@ -97,7 +106,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
           const tasksOf = allTasks.filter((t) => t.fields.projectId === row.id);
           const total = tasksOf.filter((t) => t.fields.trashedAt == null).length;
           const completed = tasksOf.filter(
-            (t) => t.fields.trashedAt == null && SETTLED_STATUSES.has(t.fields.status as TaskStatus),
+            (t) =>
+              t.fields.trashedAt == null && SETTLED_STATUSES.has(t.fields.status as TaskStatus),
           ).length;
           return projectRowToFeedItem(row, index, total, completed);
         });
@@ -116,12 +126,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
 
     async createTask(data: CreateTaskDto): Promise<TaskResponseDto> {
       const scheduledType = data.scheduledType ?? ScheduledType.NONE;
-      const bucket = resolveBucket(
-        data.bucket,
-        scheduledType,
-        data.projectId,
-        data.areaId,
-      );
+      const bucket = resolveBucket(data.bucket, scheduledType, data.projectId, data.areaId);
       const existing = await engine.list('task');
       const id = await engine.create('task', {
         title: data.title,
@@ -151,7 +156,9 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       const fields = existing.fields;
 
       const newScheduledType =
-        data.scheduledType !== undefined ? data.scheduledType : (fields.scheduledType as ScheduledType);
+        data.scheduledType !== undefined
+          ? data.scheduledType
+          : (fields.scheduledType as ScheduledType);
 
       let effectiveScheduledDate: string | null;
       if (newScheduledType === ScheduledType.SOMEDAY || newScheduledType === ScheduledType.NONE) {
@@ -162,7 +169,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         effectiveScheduledDate = (fields.scheduledDate as string | null) ?? null;
       }
 
-      const newProjectId = data.projectId !== undefined ? data.projectId : (fields.projectId as string | null);
+      const newProjectId =
+        data.projectId !== undefined ? data.projectId : (fields.projectId as string | null);
       const newAreaId = data.areaId !== undefined ? data.areaId : (fields.areaId as string | null);
 
       let bucket = fields.bucket as TaskBucket;
@@ -257,75 +265,190 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       );
     },
 
-    // hub 复合操作：未迁移切片回落 REST（collector → 同步推流到达设备）
-    convertTaskToProject(id: string): Promise<ProjectResponseDto> {
-      return rest.convertTaskToProject(id);
+    // ---------- Subtask CRUD（全部本地，进 Outbox） ----------
+
+    async createSubtask(taskId: string, data: CreateSubtaskDto): Promise<SubtaskResponseDto> {
+      const task = await engine.get('task', taskId);
+      if (!task) throw new Error(`Task not found: ${taskId}`);
+      // sortOrder = max + 1（与 SubtasksService 一致：追加在末尾）
+      const existing = await subtasksOf(taskId);
+      const sortOrder = existing.reduce((max, s) => Math.max(max, s.sortOrder), -1) + 1;
+      const id = await engine.create('subtask', {
+        title: data.title,
+        taskId,
+        sortOrder,
+        status: TaskStatus.ACTIVE,
+        settledAt: null,
+      });
+      return subtaskDto(id);
     },
 
-    // Subtask 与 convert-to-project 同为未迁移切片：回落 REST，变更经
-    // collector → 同步推流到达设备。
-    createSubtask: rest.createSubtask,
-    updateSubtask: rest.updateSubtask,
-    deleteSubtask: rest.deleteSubtask,
-    completeSubtask: rest.completeSubtask,
-    uncompleteSubtask: rest.uncompleteSubtask,
-    cancelSubtask: rest.cancelSubtask,
-    uncancelSubtask: rest.uncancelSubtask,
-    reorderSubtasks: rest.reorderSubtasks,
-  };
-}
+    async updateSubtask(id: string, data: UpdateSubtaskDto): Promise<SubtaskResponseDto> {
+      const existing = await engine.get('subtask', id);
+      if (!existing) throw new Error(`Subtask not found: ${id}`);
+      const patch: Record<string, unknown> = {};
+      if (data.title !== undefined) patch.title = data.title;
+      if (data.status !== undefined) {
+        patch.status = data.status;
+        // 终态刷新了结时间，非终态清空（与 SubtasksService 一致）
+        patch.settledAt = SETTLED_STATUSES.has(data.status) ? new Date().toISOString() : null;
+      }
+      await engine.update('subtask', id, patch);
+      return subtaskDto(id);
+    },
 
-// ---------- 行 → DTO 映射 ----------
+    async deleteSubtask(id: string): Promise<void> {
+      await engine.delete('subtask', [id]);
+    },
 
-function taskRowToDto(row: ReplicaRow, tags: Map<string, TagResponseDto>): TaskResponseDto {
-  const f = row.fields;
-  const tagIds = Array.isArray(f.tagIds) ? (f.tagIds as string[]) : [];
-  return {
-    id: row.id,
-    title: (f.title as string) ?? '',
-    notes: (f.notes as string | null) ?? null,
-    scheduledDate: (f.scheduledDate as string | null) ?? null,
-    scheduledType: (f.scheduledType as ScheduledType) ?? ScheduledType.NONE,
-    dueDate: (f.dueDate as string | null) ?? null,
-    bucket: (f.bucket as TaskBucket) ?? TaskBucket.INBOX,
-    status: (f.status as TaskStatus) ?? TaskStatus.ACTIVE,
-    // DTO 字段名保留 completedAt，承载 Settled At 语义（ADR 0006）。
-    completedAt: (f.settledAt as string | null) ?? null,
-    trashedAt: (f.trashedAt as string | null) ?? null,
-    sortOrder: (f.sortOrder as number) ?? 0,
-    projectId: (f.projectId as string | null) ?? null,
-    headingId: (f.headingId as string | null) ?? null,
-    areaId: (f.areaId as string | null) ?? null,
-    tags: tagIds.map((id) => tags.get(id)).filter((t): t is TagResponseDto => t !== undefined),
-    createdAt: (f.createdAt as string) ?? new Date().toISOString(),
-    updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),
-  };
-}
+    async completeSubtask(id: string): Promise<SubtaskResponseDto> {
+      await engine.update('subtask', id, {
+        status: TaskStatus.COMPLETED,
+        settledAt: new Date().toISOString(),
+      });
+      return subtaskDto(id);
+    },
 
-function subtaskRowToDto(row: ReplicaRow): SubtaskResponseDto {
-  const f = row.fields;
-  return {
-    id: row.id,
-    title: (f.title as string) ?? '',
-    status: (f.status as TaskStatus) ?? TaskStatus.ACTIVE,
-    completedAt: (f.settledAt as string | null) ?? null,
-    sortOrder: (f.sortOrder as number) ?? 0,
-    taskId: (f.taskId as string) ?? '',
-    createdAt: (f.createdAt as string) ?? new Date().toISOString(),
-    updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),
-  };
-}
+    async uncompleteSubtask(id: string): Promise<SubtaskResponseDto> {
+      await engine.update('subtask', id, { status: TaskStatus.ACTIVE, settledAt: null });
+      return subtaskDto(id);
+    },
 
-function tagRowToDto(row: ReplicaRow): TagResponseDto {
-  const f = row.fields;
-  return {
-    id: row.id,
-    title: (f.title as string) ?? '',
-    color: (f.color as string) ?? '#3B82F6',
-    sortOrder: (f.sortOrder as number) ?? 0,
-    tagGroupId: (f.tagGroupId as string | null) ?? null,
-    createdAt: (f.createdAt as string) ?? new Date().toISOString(),
-    updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),
+    async cancelSubtask(id: string): Promise<SubtaskResponseDto> {
+      await engine.update('subtask', id, {
+        status: TaskStatus.CANCELLED,
+        settledAt: new Date().toISOString(),
+      });
+      return subtaskDto(id);
+    },
+
+    async uncancelSubtask(id: string): Promise<SubtaskResponseDto> {
+      await engine.update('subtask', id, { status: TaskStatus.ACTIVE, settledAt: null });
+      return subtaskDto(id);
+    },
+
+    async reorderSubtasks(taskId: string, orderedIds: string[]): Promise<void> {
+      await Promise.all(
+        orderedIds.map(async (id, index) => {
+          const row = await engine.get('subtask', id);
+          // 与 reorderTasks 同惯例：顺序未变的行不动，控制 Outbox 体积
+          if (row && row.fields.taskId === taskId && row.fields.sortOrder !== index) {
+            await engine.update('subtask', id, { sortOrder: index });
+          }
+        }),
+      );
+    },
+
+    // ---------- hub 复合操作的 Engine 分解（ADR-0008） ----------
+
+    /**
+     * convert-to-project 全离线分解：新 Project 创建、Subtask 逐条提升
+     * 为完整 Task（继承标题/状态/了结时间，落位 INBOX）全部是普通字段
+     * 写（走 LWW）；原 Task 的消失是一个 Delete Request（级联其
+     * Subtask）。语义与 TasksService.convertToProject 对齐（终态映射、
+     * areaId 回退、标签继承、排序位次）。
+     */
+    async convertTaskToProject(id: string): Promise<ProjectResponseDto> {
+      const task = await engine.get('task', id);
+      if (!task) throw new Error(`Task not found: ${id}`);
+      const f = task.fields;
+
+      // areaId 回退：Task 的 areaId → 父 Project 的 areaId
+      let effectiveAreaId = (f.areaId as string | null) ?? null;
+      if (effectiveAreaId === null && typeof f.projectId === 'string') {
+        const parent = await engine.get('project', f.projectId);
+        effectiveAreaId = (parent?.fields.areaId as string | null) ?? null;
+      }
+
+      // 新 Project 排在末尾（sortOrder = max + 1，Position 追加）
+      const projects = await engine.list('project');
+      const nextSortOrder =
+        projects.reduce((max, p) => Math.max(max, (p.fields.sortOrder as number) ?? 0), -1) + 1;
+      const position = positionAfter(
+        projects,
+        projects.length > 0 ? projects[projects.length - 1].id : null,
+      );
+
+      const status =
+        f.status === TaskStatus.COMPLETED ? ProjectStatus.COMPLETED : ProjectStatus.ACTIVE;
+      // Project 无 CANCELLED 终态（out of scope）：仅完成任务携带了结时间。
+      const completedAt =
+        f.status === TaskStatus.COMPLETED ? ((f.settledAt as string | null) ?? null) : null;
+      const tagIds = Array.isArray(f.tagIds) ? (f.tagIds as string[]) : [];
+
+      const projectId = await engine.create('project', {
+        title: (f.title as string) ?? '',
+        notes: (f.notes as string | null) ?? null,
+        scheduledDate: (f.scheduledDate as string | null) ?? null,
+        dueDate: (f.dueDate as string | null) ?? null,
+        scheduledType: (f.scheduledType as ScheduledType) ?? ScheduledType.NONE,
+        status,
+        completedAt,
+        trashedAt: (f.trashedAt as string | null) ?? null,
+        areaId: effectiveAreaId,
+        bucket: (f.bucket as ProjectBucket) ?? ProjectBucket.ANYTIME,
+        position,
+        sortOrder: nextSortOrder,
+        tagIds,
+      });
+
+      // Subtask 提升为完整 Task（继承标题/状态/了结时间，落位 INBOX）。
+      // 与 REST 同口径：逐条 create、排最前（createdAt desc 观感一致）。
+      const subtasks = (await engine.list('subtask')).filter((row) => row.fields.taskId === id);
+      const allTasks = await engine.list('task');
+      for (const subtask of subtasks) {
+        const sf = subtask.fields;
+        await engine.create('task', {
+          title: (sf.title as string) ?? '',
+          notes: null,
+          scheduledDate: null,
+          dueDate: null,
+          scheduledType: ScheduledType.NONE,
+          bucket: TaskBucket.INBOX,
+          status: (sf.status as TaskStatus) ?? TaskStatus.ACTIVE,
+          settledAt: (sf.settledAt as string | null) ?? null,
+          trashedAt: null,
+          position: positionAfter(allTasks, null),
+          projectId,
+          headingId: null,
+          areaId: null,
+          tagIds: [],
+        });
+      }
+
+      // 原 Task 的消失：Delete Request（级联其 Subtask；不在 Trash 留尸体）
+      await engine.delete('task', [id]);
+
+      const index = await tagIndex();
+      const project = await engine.get('project', projectId);
+      if (!project) throw new Error(`Project not found: ${projectId}`);
+      return projectRowToDto(project, index, 0, 0);
+    },
+
+    /**
+     * emptyTrash 复用 Delete Request（ADR-0008）：收集 Trash 内的
+     * Task/Project id（含 trashed Project 下属 Task，与 FeedService 同
+     * 口径），批量物理删除；断网可用，联网后收敛。
+     */
+    async emptyTrash(): Promise<{ deletedTasks: number; deletedProjects: number }> {
+      const projects = await engine.list('project');
+      const trashedProjectIds = new Set(
+        projects.filter((row) => row.fields.trashedAt != null).map((row) => row.id),
+      );
+      const tasks = await engine.list('task');
+      const taskIds = tasks
+        .filter(
+          (row) =>
+            row.fields.trashedAt != null ||
+            (typeof row.fields.projectId === 'string' &&
+              trashedProjectIds.has(row.fields.projectId)),
+        )
+        .map((row) => row.id);
+
+      await engine.delete('task', taskIds);
+      await engine.delete('project', [...trashedProjectIds]);
+      return { deletedTasks: taskIds.length, deletedProjects: trashedProjectIds.size };
+    },
   };
 }
 
@@ -380,13 +503,33 @@ function taskMatchesView(row: ReplicaRow, view: TaskQuery['view'], now: Date): b
   const active = f.status === TaskStatus.ACTIVE;
   switch (view) {
     case 'inbox':
-      return f.bucket === TaskBucket.INBOX && active && f.scheduledType === ScheduledType.NONE && f.trashedAt == null;
+      return (
+        f.bucket === TaskBucket.INBOX &&
+        active &&
+        f.scheduledType === ScheduledType.NONE &&
+        f.trashedAt == null
+      );
     case 'today':
-      return active && f.scheduledType === ScheduledType.DATE && isDateLte(f.scheduledDate, now) && f.trashedAt == null;
+      return (
+        active &&
+        f.scheduledType === ScheduledType.DATE &&
+        isDateLte(f.scheduledDate, now) &&
+        f.trashedAt == null
+      );
     case 'upcoming':
-      return active && f.scheduledType === ScheduledType.DATE && !isDateLte(f.scheduledDate, now) && f.trashedAt == null;
+      return (
+        active &&
+        f.scheduledType === ScheduledType.DATE &&
+        !isDateLte(f.scheduledDate, now) &&
+        f.trashedAt == null
+      );
     case 'anytime':
-      return f.bucket === TaskBucket.ANYTIME && active && f.scheduledType === ScheduledType.NONE && f.trashedAt == null;
+      return (
+        f.bucket === TaskBucket.ANYTIME &&
+        active &&
+        f.scheduledType === ScheduledType.NONE &&
+        f.trashedAt == null
+      );
     case 'someday':
       return f.scheduledType === ScheduledType.SOMEDAY && active && f.trashedAt == null;
     case 'trash':
@@ -424,11 +567,13 @@ function filterTasks(rows: ReplicaRow[], params?: TaskQuery): ReplicaRow[] {
     filtered = filtered.filter((row) => taskMatchesView(row, params.view, new Date()));
     return filtered;
   }
-  if (params.projectId) filtered = filtered.filter((row) => row.fields.projectId === params.projectId);
+  if (params.projectId)
+    filtered = filtered.filter((row) => row.fields.projectId === params.projectId);
   if (params.areaId) filtered = filtered.filter((row) => row.fields.areaId === params.areaId);
   if (params.tagId) {
-    filtered = filtered.filter((row) =>
-      Array.isArray(row.fields.tagIds) && (row.fields.tagIds as string[]).includes(params.tagId!),
+    filtered = filtered.filter(
+      (row) =>
+        Array.isArray(row.fields.tagIds) && (row.fields.tagIds as string[]).includes(params.tagId!),
     );
   }
   if (params.hasScheduled === true) {
@@ -461,9 +606,19 @@ function projectMatchesView(row: ReplicaRow, view: FeedView, now: Date): boolean
   const active = f.status === ProjectStatus.ACTIVE;
   switch (view) {
     case 'today':
-      return active && f.scheduledType === ScheduledType.DATE && isDateLte(f.scheduledDate, now) && f.trashedAt == null;
+      return (
+        active &&
+        f.scheduledType === ScheduledType.DATE &&
+        isDateLte(f.scheduledDate, now) &&
+        f.trashedAt == null
+      );
     case 'upcoming':
-      return active && f.scheduledType === ScheduledType.DATE && !isDateLte(f.scheduledDate, now) && f.trashedAt == null;
+      return (
+        active &&
+        f.scheduledType === ScheduledType.DATE &&
+        !isDateLte(f.scheduledDate, now) &&
+        f.trashedAt == null
+      );
     case 'someday':
       return f.scheduledType === ScheduledType.SOMEDAY && active && f.trashedAt == null;
     case 'trash':

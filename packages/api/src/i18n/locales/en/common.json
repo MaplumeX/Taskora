@@ -41,5 +41,8 @@
   "newProject": "New Project",
   "newArea": "New Area",
   "more": "More",
-  "clear": "Clear"
+  "clear": "Clear",
+  "syncStatusSynced": "Synced",
+  "syncStatusSyncing": "Syncing…",
+  "syncStatusOffline": "Offline · {{count}} pending"
 }

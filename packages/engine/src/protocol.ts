@@ -20,10 +20,22 @@ export interface OutboxEvent {
   fields: Record<string, FieldWrite>;
 }
 
+/**
+ * Delete Request（设备 → hub，ADR-0008）：设备发起的物理删除请求，
+ * 携带实体类型与一批 id。hub 校验归属后物理删除，并按现有机制广播
+ * Compact Event。与设备端软删除（trashedAt 等普通字段变更）相对。
+ */
+export interface DeleteRequest {
+  entity: SyncEntity;
+  ids: string[];
+}
+
 /** 设备 → hub：推送一批本地变更。 */
 export interface PushRequest {
   deviceId: string;
   events: OutboxEvent[];
+  /** 设备发起的物理删除（ADR-0008）。hub 先合并 events、再应用 deletes。 */
+  deletes?: DeleteRequest[];
 }
 
 export interface PushResponse {

@@ -1,27 +1,27 @@
-import type {
-  CreateTagDto,
-  TagResponseDto,
-  UpdateTagDto,
-} from '@taskora/shared';
+import type { CreateTagDto, TagResponseDto, UpdateTagDto } from '@taskora/shared';
 
-import { apiClient } from './client';
+import { currentTagBackend } from './tag-backend';
 
+/**
+ * Tag API 门面 — 数据源随 TaskBackend 同一注入模式切换（V2 spec）：
+ * 默认 REST（web），桌面端登录装配时切到 Local Replica。
+ */
 export function getTags(): Promise<TagResponseDto[]> {
-  return apiClient.get<TagResponseDto[]>('/tags').then((res) => res.data);
+  return currentTagBackend().getTags();
 }
 
 export function getTag(id: string): Promise<TagResponseDto> {
-  return apiClient.get<TagResponseDto>(`/tags/${id}`).then((res) => res.data);
+  return currentTagBackend().getTag(id);
 }
 
 export function createTag(data: CreateTagDto): Promise<TagResponseDto> {
-  return apiClient.post<TagResponseDto>('/tags', data).then((res) => res.data);
+  return currentTagBackend().createTag(data);
 }
 
 export function updateTag(id: string, data: UpdateTagDto): Promise<TagResponseDto> {
-  return apiClient.patch<TagResponseDto>(`/tags/${id}`, data).then((res) => res.data);
+  return currentTagBackend().updateTag(id, data);
 }
 
 export function deleteTag(id: string): Promise<void> {
-  return apiClient.delete(`/tags/${id}`).then(() => undefined);
+  return currentTagBackend().deleteTag(id);
 }

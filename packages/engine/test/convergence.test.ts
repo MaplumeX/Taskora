@@ -246,9 +246,7 @@ describe('Engine 端到端收敛（主接缝）', () => {
     await b.sync();
 
     const order = async (engine: Engine) =>
-      (await engine.list('task'))
-        .map((row) => row.fields.title)
-        .filter(Boolean);
+      (await engine.list('task')).map((row) => row.fields.title).filter(Boolean);
     expect(await order(a)).toEqual(await order(b));
     expect(await order(a)).toEqual(['T3', 'T1', 'T2']);
     await a.close();
@@ -408,6 +406,245 @@ describe('Engine 端到端收敛（主接缝）', () => {
   });
 });
 
+describe('Delete Request（ADR-0008：设备发起删除）', () => {
+  it('端到端：A 删除 Task（级联 Subtask），B 同步后消失；幂等重放无新事件', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+
+    const taskId = await createTask(a, '要删的');
+    const sub1 = await a.create('subtask', { title: '子步骤1', taskId, status: 'ACTIVE' });
+    const sub2 = await a.create('subtask', { title: '子步骤2', taskId, status: 'ACTIVE' });
+    await a.sync();
+    await b.sync();
+    expect((await b.list('subtask')).map((r) => r.fields.title).sort()).toEqual([
+      '子步骤1',
+      '子步骤2',
+    ]);
+
+    // 断网删除：本地立即消失（含级联 Subtask）
+    h.online(a, false);
+    await a.delete('task', [taskId]);
+    expect(await a.get('task', taskId)).toBeNull();
+    expect(await a.get('subtask', sub1)).toBeNull();
+    expect(await a.get('subtask', sub2)).toBeNull();
+
+    // 恢复联网：hub 删除并广播 Compact，B 同步后同样消失
+    h.online(a, true);
+    await a.sync();
+    await b.sync();
+    expect(await b.get('task', taskId)).toBeNull();
+    expect(await b.get('subtask', sub1)).toBeNull();
+    expect(await b.get('subtask', sub2)).toBeNull();
+    expect(h.hub.entityState(USER, 'task', taskId)).toBeNull();
+    expect(h.hub.entityState(USER, 'subtask', sub1)).toBeNull();
+
+    // 幂等重放：同一 Delete Request 再推一次 → no-op，无新事件
+    const seq = h.hub.currentSeq(USER);
+    h.hub.transportFor(USER).push({
+      deviceId: 'dev-a',
+      events: [],
+      deletes: [{ entity: 'task', ids: [taskId] }],
+    });
+    expect(h.hub.currentSeq(USER)).toBe(seq);
+    await a.sync();
+    await a.close();
+    await b.close();
+  });
+
+  it('Compact 永久获胜：删除与另一设备并发编辑竞争，不会删了又复活', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a', 1_000);
+    const b = await h.device('dev-b', 2_000); // B 的 HLC 更新——即便如此删除仍胜
+
+    const id = await createTask(a, '竞争目标');
+    await a.sync();
+    await b.sync();
+
+    // B 离线编辑；A 删除并同步（Compact 已广播）
+    h.online(b, false);
+    await b.update('task', id, { title: 'B 的迟到编辑' });
+    await a.delete('task', [id]);
+    await a.sync();
+
+    // B 上线：迟到字段写被 hub 丢弃（不重建、无事件），Compact 到达后副本移除
+    h.online(b, true);
+    await b.sync();
+    await a.sync();
+
+    expect(await b.get('task', id)).toBeNull();
+    expect(await a.get('task', id)).toBeNull();
+    expect(h.hub.entityState(USER, 'task', id)).toBeNull();
+    await a.close();
+    await b.close();
+  });
+
+  it('迟到的 Subtask create 对已 compact 父 Task 被丢弃（无孤儿残留）', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+
+    const taskId = await createTask(a, '父任务');
+    await a.sync();
+    await b.sync();
+
+    await a.delete('task', [taskId]);
+    await a.sync();
+
+    // B 离线时已给父任务建了 Subtask（尚不知道删除）
+    const subId = await b.create('subtask', { title: '孤儿企图', taskId, status: 'ACTIVE' });
+    await b.sync();
+    await b.sync();
+
+    // hub 丢弃孤儿写入；B 拉到 Compact 后本地级联清理，副本无残留
+    expect(h.hub.entityState(USER, 'subtask', subId)).toBeNull();
+    expect(await b.get('subtask', subId)).toBeNull();
+    expect(await b.get('task', taskId)).toBeNull();
+    await a.close();
+    await b.close();
+  });
+
+  it('断网重放不丢删除：bootstrap 前 Outbox 里的 Delete Request 照常生效', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+
+    const id = await createTask(a, '重建前删除');
+    await a.sync();
+    await b.sync();
+
+    h.online(a, false);
+    await a.delete('task', [id]);
+    // 未 flush 就 bootstrap（resync 场景）：删除回放为本地移除，不丢捔
+    h.online(a, true);
+    await a.bootstrap();
+    expect(await a.get('task', id)).toBeNull();
+
+    await a.sync();
+    await b.sync();
+    expect(await b.get('task', id)).toBeNull();
+    await a.close();
+    await b.close();
+  });
+
+  it('全实体离线：Area/Project/Tag/TagGroup/Heading 断网 CRUD 后双端收敛', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+    h.online(a, false);
+
+    const areaId = await a.create('area', { title: '工作', notes: null, tagIds: [] });
+    const groupId = await a.create('tag-group', { title: '语境' });
+    const tagId = await a.create('tag', { title: '紧急', color: '#FF0000', tagGroupId: groupId });
+    const projectId = await a.create('project', {
+      title: '装修',
+      notes: '新房',
+      status: 'ACTIVE',
+      bucket: 'ANYTIME',
+      scheduledType: 'NONE',
+      areaId,
+      tagIds: [tagId],
+      trashedAt: null,
+      completedAt: null,
+    });
+    const headingId = await a.create('project-heading', {
+      title: '准备阶段',
+      projectId,
+      status: 'ACTIVE',
+    });
+    await a.update('area', areaId, { notes: '生活与工作' });
+    await a.update('tag', tagId, { color: '#00FF00' });
+    await a.update('project-heading', headingId, { title: '筹备阶段' });
+
+    h.online(a, true);
+    await a.sync();
+    await b.sync();
+
+    for (const entity of ['area', 'project', 'tag', 'tag-group', 'project-heading'] as const) {
+      const rowsA = await a.list(entity);
+      const rowsB = await b.list(entity);
+      expect(rowsB.map((r) => r.fields.title)).toEqual(rowsA.map((r) => r.fields.title));
+      expect(rowsB.length).toBeGreaterThan(0);
+    }
+    expect((await b.get('area', areaId))?.fields.notes).toBe('生活与工作');
+    expect((await b.get('tag', tagId))?.fields.color).toBe('#00FF00');
+    expect((await b.get('project-heading', headingId))?.fields.title).toBe('筹备阶段');
+    expect((await b.get('project', projectId))?.fields.areaId).toBe(areaId);
+    await a.close();
+    await b.close();
+  });
+
+  it('compact 后引用清理（SetNull 语义）：删 Area 后 Task/Project 的 areaId 置空', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+
+    const areaId = await a.create('area', { title: '待删领域', notes: null, tagIds: [] });
+    const taskId = await createTask(a, '领域内任务', { areaId });
+    const projectId = await a.create('project', {
+      title: '领域内项目',
+      status: 'ACTIVE',
+      bucket: 'ANYTIME',
+      scheduledType: 'NONE',
+      areaId,
+    });
+    await a.sync();
+    await b.sync();
+
+    await a.delete('area', [areaId]);
+    await a.sync();
+    await b.sync();
+
+    expect(await b.get('area', areaId)).toBeNull();
+    // 引用被置空（对齐 hub 侧 onDelete: SetNull），不残留悬挂 areaId
+    expect((await b.get('task', taskId))?.fields.areaId).toBeNull();
+    expect((await b.get('project', projectId))?.fields.areaId).toBeNull();
+    expect((await a.get('task', taskId))?.fields.areaId).toBeNull();
+    await a.close();
+    await b.close();
+  });
+
+  it('convert 组合原语：字段写 + 删除混合批次后双端收敛（顺序不乱）', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+
+    // 模拟 convert 分解：先对原 Task 字段写，再建新 Project + Task，最后删除原 Task
+    const taskId = await createTask(a, '原任务', { bucket: 'ANYTIME' });
+    const subId = await a.create('subtask', {
+      title: '子步骤',
+      taskId,
+      status: 'COMPLETED',
+      settledAt: '2026-01-01T00:00:00.000Z',
+    });
+    await a.update('task', taskId, { notes: '转换前的最后编辑' });
+    const projectId = await a.create('project', {
+      title: '新项目',
+      notes: '转换前的最后编辑',
+      status: 'ACTIVE',
+      bucket: 'ANYTIME',
+      scheduledType: 'NONE',
+    });
+    const promotedId = await createTask(a, '子步骤', { bucket: 'INBOX', projectId });
+    await a.delete('task', [taskId]);
+    await a.sync();
+    await b.sync();
+
+    // 双端收敛：原 Task 与 Subtask 消失，新 Project 与提升的 Task 存在
+    for (const engine of [a, b]) {
+      expect(await engine.get('task', taskId)).toBeNull();
+      expect(await engine.get('subtask', subId)).toBeNull();
+      expect((await engine.get('project', projectId))?.fields.title).toBe('新项目');
+      expect((await engine.get('task', promotedId))?.fields.projectId).toBe(projectId);
+    }
+    expect((await a.list('task')).map((r) => r.fields.title)).toEqual(
+      (await b.list('task')).map((r) => r.fields.title),
+    );
+    await a.close();
+    await b.close();
+  });
+});
+
 describe('Position re-balance（sync 后台摊平超长键）', () => {
   it('反复插队产生超长 Position 后，sync 将整组摊平为短键且顺序不变', async () => {
     const h = await makeHarness();
@@ -427,9 +664,7 @@ describe('Position re-balance（sync 后台摊平超长键）', () => {
     await a.sync(); // 触发 re-balance
 
     const after = await a.list('task');
-    expect(
-      after.every((row) => (row.fields.position as string).length <= 24),
-    ).toBe(true);
+    expect(after.every((row) => (row.fields.position as string).length <= 24)).toBe(true);
     // 顺序保持（标题相对顺序不变）
     expect(after.map((row) => row.fields.title)).toEqual(before.map((row) => row.fields.title));
     // re-balance 的写也进 Outbox → flush 后 hub 收敛

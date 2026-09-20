@@ -1,5 +1,11 @@
 # Local-first Engine (tier-3 sync)
 
+> **Note (2026-09-20)**: The "Physical deletion is hub-side GC only"
+> decision below is superseded for device-initiated deletions by
+> [ADR-0008](./0008-device-initiated-delete-requests.md) (Delete Requests,
+> needed for offline convert-to-project and empty-trash). Hub-side GC and
+> the no-tombstone stance stand unchanged.
+
 Taskora's clients are thin: every read and write goes through the NestJS API,
 so the app is useless offline and every interaction pays a network round trip.
 We decided to move to a local-first architecture: a cross-client Engine

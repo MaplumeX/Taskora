@@ -1,31 +1,31 @@
-import type {
-  AreaResponseDto,
-  CreateAreaDto,
-  UpdateAreaDto,
-} from '@taskora/shared';
+import type { AreaResponseDto, CreateAreaDto, UpdateAreaDto } from '@taskora/shared';
 
-import { apiClient } from './client';
+import { currentAreaBackend } from './area-backend';
 
+/**
+ * Area API 门面 — 数据源随 TaskBackend 同一注入模式切换（V2 spec）：
+ * 默认 REST（web），桌面端登录装配时切到 Local Replica。
+ */
 export function getAreas(): Promise<AreaResponseDto[]> {
-  return apiClient.get<AreaResponseDto[]>('/areas').then((res) => res.data);
+  return currentAreaBackend().getAreas();
 }
 
 export function getArea(id: string): Promise<AreaResponseDto> {
-  return apiClient.get<AreaResponseDto>(`/areas/${id}`).then((res) => res.data);
+  return currentAreaBackend().getArea(id);
 }
 
 export function createArea(data: CreateAreaDto): Promise<AreaResponseDto> {
-  return apiClient.post<AreaResponseDto>('/areas', data).then((res) => res.data);
+  return currentAreaBackend().createArea(data);
 }
 
 export function updateArea(id: string, data: UpdateAreaDto): Promise<AreaResponseDto> {
-  return apiClient.patch<AreaResponseDto>(`/areas/${id}`, data).then((res) => res.data);
+  return currentAreaBackend().updateArea(id, data);
 }
 
 export function deleteArea(id: string): Promise<void> {
-  return apiClient.delete(`/areas/${id}`).then(() => undefined);
+  return currentAreaBackend().deleteArea(id);
 }
 
 export function reorderAreas(orderedIds: string[]): Promise<void> {
-  return apiClient.post('/areas/reorder', { orderedIds }).then(() => undefined);
+  return currentAreaBackend().reorderAreas(orderedIds);
 }
