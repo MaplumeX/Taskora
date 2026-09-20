@@ -9,10 +9,30 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
-## [Unreleased]
+## [0.4.0] - 2026-09-20
 
 ### Added
 
+- **sync**: Local-first sync engine with Sync Hub and SQLite replica
+  (#46, ADR 0007): a new `@taskora/engine` package provides the HLC
+  hybrid logical clock, fractional-indexing positions, a field-level LWW
+  merger shared by device and hub, and a reactive SQLite LocalReplica
+  whose local writes enter an Outbox (pending edits survive restarts
+  and merge on sync); the backend runs a Sync Hub (device registry,
+  `POST /sync/devices`, `POST /sync/push`, `GET /sync/pull`,
+  `GET /sync/bootstrap`) where REST and Assistant writes enter the same
+  merge stream as virtual device 0, with field digests so REST writes
+  never collateral-drop concurrent device edits on other fields; the
+  desktop client runs Inbox/Today task CRUD on the engine.
+- **desktop**: Full offline via delete requests and domain backends
+  (#47, ADR 0008): a Delete Request primitive queues deletions in the
+  Outbox with compact-wins convergence and local cascade cleanup;
+  per-domain Engine backends (task, subtask, project, area, tag, tag
+  group, project heading) replace REST calls after login (REST
+  fallback on logout/failure) so every desktop entity works offline;
+  quick-add relays through the main window's engine, and a sync-status
+  store drives a SyncIndicator (synced / syncing / offline with
+  pending count).
 - **desktop**: System tray with Show Taskora / New Task / Quit entries:
   closing the main window now hides to the tray on every platform
   instead of exiting on Windows/Linux, so the global quick-add
@@ -31,6 +51,16 @@ project adheres to [Semantic Versioning](https://semver.org/).
   migrated once (copied) for the first account that signs in and then
   renamed to `taskora.db.legacy`; other accounts start from a fresh
   replica.
+
+### Fixes
+
+- **desktop**: Stop the stale-query refetch on WebView resume from
+  reintroducing the foreground flash (#45): `refetchOnReconnect` is now
+  disabled in the desktop and frontend query clients — the Tauri
+  WebView resume fired the browser `online` event and refetched every
+  stale query, recreating the loading-state flash; the SSE reconnect
+  with `?since=` replay, gap detection and resync signal remain the
+  backstop.
 
 ## [0.3.6] - 2026-09-19
 

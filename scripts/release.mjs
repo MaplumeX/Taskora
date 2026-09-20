@@ -27,7 +27,7 @@ import path from 'node:path';
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** 全部子包：共享统一版本号，随 v* tag 发版。 */
-const PACKAGES = ['backend', 'frontend', 'api', 'ui', 'shared', 'desktop'];
+const PACKAGES = ['backend', 'frontend', 'api', 'ui', 'shared', 'desktop', 'engine'];
 
 const TAURI_DIR = path.join(ROOT, 'packages/desktop/src-tauri');
 
