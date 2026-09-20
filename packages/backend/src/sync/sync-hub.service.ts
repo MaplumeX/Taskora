@@ -32,6 +32,7 @@ import {
   loadRow,
   serializeRow,
   toPrismaData,
+  wireViewOfRow,
   type PrismaRow,
 } from './entity-codec';
 import { registerCompacted } from './compact-registry';
@@ -333,9 +334,12 @@ export class SyncHubService implements OnModuleInit {
         row ? 'update' : 'create',
       );
       data.fieldClocks = outcome.clocks;
-      data.fieldDigests = digestMap(codec, outcome.fields);
-      // updatedAt 不超过最大时钟墙钟，避免自己的合并写触发 REST 摘要检测。
-      data.updatedAt = new Date(Math.max(0, ...Object.values(outcome.clocks).map(hlcWallMs)) + 1);
+      // 补丁未携带 updatedAt 时（如虚拟设备 0 的部分写）才兑底：避免
+      // Prisma @updatedAt 自动取 hub 墙钟，使时钟与列值失去确定性。
+      // 携带时保持设备值原样落库——回声平局下两端值也一致。
+      if (data.updatedAt === undefined) {
+        data.updatedAt = new Date(Math.max(0, ...Object.values(outcome.clocks).map(hlcWallMs)));
+      }
 
       if (row) {
         await delegate(tx, codec.model).update({ where: { id: event.id }, data });
@@ -350,9 +354,27 @@ export class SyncHubService implements OnModuleInit {
         await delegate(tx, codec.model).create({ data: { ...data, id: event.id, userId } });
       }
 
-      // 返回写库后的真实序列化态；事务提交后再发布。
+      // 落库值摘要回填（回声幂等的关键）：fieldDigests 必须按「实际落库
+      // 的列值」的 wire 视图计算，而非设备推送值——不可空列的 Prisma
+      // 默认值（如 sortOrder null → 0）、tagIds 关系表排序都会使列值 ≠
+      // 推送值。若按推送值存摘要，serializeRow 的摘要检测会把这次合并
+      // 写误判为「REST 绕过合并器」，将字段时钟重置为虚拟设备 0 @
+      // updatedAt——设备 pull 回自己的回声时时钟反而更新，被当作远端
+      // 写应用，触发 onChange → 全域失效 → 界面「同步后刷新一下」。
+      // 回填后摘要匹配，时钟保持合并结果，回声在设备端逐字段持平 →
+      // 零应用、零通知。
       const fresh = await loadRow(tx, codec, event.id);
-      return fresh ? serializeRow(codec, fresh) : null;
+      if (!fresh) return null;
+      const digests = digestMap(codec, wireViewOfRow(codec, fresh));
+      // 显式回写 updatedAt：列是 @updatedAt，否则这次 UPDATE 会把列值
+      // 推到真实 now()，重新制造摘要不一致。
+      await delegate(tx, codec.model).update({
+        where: { id: event.id },
+        data: { fieldDigests: digests, updatedAt: fresh.updatedAt as Date },
+      });
+      // 写库后的真实序列化态（摘要已回填 → 时钟保持合并结果）；
+      // 事务提交后再发布。
+      return serializeRow(codec, { ...fresh, fieldDigests: digests });
     });
 
     if (state) {

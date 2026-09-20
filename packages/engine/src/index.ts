@@ -34,6 +34,7 @@ export {
   type ReplicaRow,
   type LocalReplicaOptions,
   type OutboxEntry,
+  type EngineChange,
 } from './replica';
 export { openEngine, positionAfter, type Engine, type EngineOptions } from './engine';
 export type {

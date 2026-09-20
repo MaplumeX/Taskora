@@ -135,7 +135,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     });
 
     // 3. 设备 pull 增量并合并（模拟 LocalReplica.applyRemoteEntity）
-    let deviceState: EntityMergeState | null = null;
+    let deviceState: EntityMergeState;
     {
       const incoming = Object.fromEntries(
         Object.entries(created.fields).map(([name, w]) => [
@@ -267,5 +267,57 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     const pulled = buffer.pull(attacker.id, cursorBefore);
     expect(pulled.resync).toBe(false);
     expect(pulled.changes).toHaveLength(0);
+  });
+
+  it('回声幂等：设备 pull 自己 push 的变更，任何字段的时钟不被摘要检测重置', async () => {
+    const cursorBefore = buffer.currentSeq(USER);
+
+    // 1. 全字段 create（与 LocalReplica.createInternal 同构）
+    const created = fullCreateEvent('task-echo-1');
+    await hub.push(USER, [created]);
+
+    // 设备本地合并态 = 自己刚写的内容
+    let deviceState = mergeEntityState(null, {
+      fields: Object.fromEntries(
+        Object.entries(created.fields).map(([n, w]) => [n, (w as { value: unknown }).value]),
+      ),
+      clocks: Object.fromEntries(
+        Object.entries(created.fields).map(([n, w]) => [n, (w as { hlc: string }).hlc]),
+      ),
+    });
+
+    // 2. 部分字段编辑（title + 自动推进的 updatedAt）——设备本地已先应用，
+    // 再 push 给 hub
+    const edit = {
+      title: { value: '回声测试的编辑' as unknown, hlc: stamp(200) },
+      updatedAt: { value: new Date().toISOString() as unknown, hlc: stamp(201) },
+    };
+    deviceState = mergeEntityState(deviceState, {
+      fields: { title: edit.title.value, updatedAt: edit.updatedAt.value },
+      clocks: { title: edit.title.hlc, updatedAt: edit.updatedAt.hlc },
+    });
+    await hub.push(USER, [{ entity: 'task', id: 'task-echo-1', fields: edit }]);
+
+    // 3. pull 自己的两次回声并逐条合并
+    const { changes, resync } = buffer.pull(USER, cursorBefore);
+    expect(resync).toBe(false);
+    const echoes = changes.filter((c) => c.kind === 'entity' && c.id === 'task-echo-1');
+    expect(echoes.length).toBeGreaterThan(0);
+
+    for (const change of echoes) {
+      if (change.kind !== 'entity') continue;
+      const outcome = mergeEntityState(deviceState, {
+        fields: change.fields,
+        clocks: change.clocks,
+      });
+      // 回声不得改写设备本地任何字段（时钟全部持平或更旧 → 零应用）。
+      // 回归前兆：hub 落库的 fieldDigests 按推送值计算，而 updatedAt
+      // 列被覆盖为 maxWall+1（另有 tagIds 排序 / 不可空列默认值），
+      // serializeRow 的摘要检测把合并写误判为 REST 绕过，把字段的时钟
+      // 重置为虚拟设备 0 @ updatedAt —— 回声反而「新」，被设备应用并
+      // 触发 onChange → 全域失效 → 界面「同步后刷新一下」。
+      expect(outcome.appliedFields).toEqual([]);
+      deviceState = { fields: outcome.fields, clocks: outcome.clocks };
+    }
   });
 });

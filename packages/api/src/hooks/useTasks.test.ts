@@ -39,7 +39,16 @@ import {
   uncompleteTask,
   updateTask,
 } from '@/api/tasks.api';
-import { taskKeys, useCancelTask, useCompleteTask, useCreateTask, useDeleteTask, useUncancelTask, useUncompleteTask, useUpdateTask } from './useTasks';
+import {
+  taskKeys,
+  useCancelTask,
+  useCompleteTask,
+  useCreateTask,
+  useDeleteTask,
+  useUncancelTask,
+  useUncompleteTask,
+  useUpdateTask,
+} from './useTasks';
 
 const baseTask: TaskResponseDto = {
   id: 'task-1',
@@ -98,9 +107,7 @@ describe('useCompleteTask (optimistic)', () => {
       expect(listData?.[0].status).toBe(TaskStatus.COMPLETED);
     });
 
-    const detailData = queryClient.getQueryData<TaskResponseDto>(
-      taskKeys.detail('task-1'),
-    );
+    const detailData = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail('task-1'));
     expect(detailData?.status).toBe(TaskStatus.COMPLETED);
     expect(detailData?.completedAt).not.toBeNull();
   });
@@ -115,15 +122,11 @@ describe('useCompleteTask (optimistic)', () => {
 
     await expect(result.current.mutateAsync('task-1')).rejects.toThrow('network');
 
-    const listData = queryClient.getQueryData<TaskResponseDto[]>(
-      taskKeys.list({ view: 'today' }),
-    );
+    const listData = queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'today' }));
     expect(listData?.[0].status).toBe(TaskStatus.ACTIVE);
     expect(listData?.[0].completedAt).toBeNull();
 
-    const detailData = queryClient.getQueryData<TaskResponseDto>(
-      taskKeys.detail('task-1'),
-    );
+    const detailData = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail('task-1'));
     expect(detailData?.status).toBe(TaskStatus.ACTIVE);
   });
 });
@@ -157,9 +160,7 @@ describe('useUncompleteTask (optimistic)', () => {
       expect(listData?.[0].status).toBe(TaskStatus.ACTIVE);
     });
 
-    const detailData = queryClient.getQueryData<TaskResponseDto>(
-      taskKeys.detail('task-1'),
-    );
+    const detailData = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail('task-1'));
     expect(detailData?.status).toBe(TaskStatus.ACTIVE);
     expect(detailData?.completedAt).toBeNull();
   });
@@ -179,9 +180,7 @@ describe('useUncompleteTask (optimistic)', () => {
 
     await expect(result.current.mutateAsync('task-1')).rejects.toThrow('network');
 
-    const listData = queryClient.getQueryData<TaskResponseDto[]>(
-      taskKeys.list({ view: 'today' }),
-    );
+    const listData = queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'today' }));
     expect(listData?.[0].status).toBe(TaskStatus.COMPLETED);
     expect(listData?.[0].completedAt).toBe('2024-06-01T00:00:00.000Z');
   });
@@ -212,9 +211,7 @@ describe('useCancelTask (optimistic, spec: task-cancelled)', () => {
       expect(listData?.[0].completedAt).not.toBeNull();
     });
 
-    const detailData = queryClient.getQueryData<TaskResponseDto>(
-      taskKeys.detail('task-1'),
-    );
+    const detailData = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail('task-1'));
     expect(detailData?.status).toBe(TaskStatus.CANCELLED);
     expect(detailData?.completedAt).not.toBeNull();
   });
@@ -229,9 +226,7 @@ describe('useCancelTask (optimistic, spec: task-cancelled)', () => {
 
     await expect(result.current.mutateAsync('task-1')).rejects.toThrow('network');
 
-    const listData = queryClient.getQueryData<TaskResponseDto[]>(
-      taskKeys.list({ view: 'today' }),
-    );
+    const listData = queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'today' }));
     expect(listData?.[0].status).toBe(TaskStatus.ACTIVE);
     expect(listData?.[0].completedAt).toBeNull();
   });
@@ -266,9 +261,7 @@ describe('useUncancelTask (optimistic, spec: task-cancelled)', () => {
       expect(listData?.[0].status).toBe(TaskStatus.ACTIVE);
     });
 
-    const detailData = queryClient.getQueryData<TaskResponseDto>(
-      taskKeys.detail('task-1'),
-    );
+    const detailData = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail('task-1'));
     expect(detailData?.status).toBe(TaskStatus.ACTIVE);
     expect(detailData?.completedAt).toBeNull();
   });
@@ -297,9 +290,7 @@ describe('useUpdateTask (optimistic)', () => {
       expect(listData?.[0].title).toBe('Updated Title');
     });
 
-    const detailData = queryClient.getQueryData<TaskResponseDto>(
-      taskKeys.detail('task-1'),
-    );
+    const detailData = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail('task-1'));
     expect(detailData?.title).toBe('Updated Title');
   });
 
@@ -315,14 +306,10 @@ describe('useUpdateTask (optimistic)', () => {
       result.current.mutateAsync({ id: 'task-1', data: { title: 'Updated Title' } }),
     ).rejects.toThrow('network');
 
-    const listData = queryClient.getQueryData<TaskResponseDto[]>(
-      taskKeys.list({ view: 'today' }),
-    );
+    const listData = queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'today' }));
     expect(listData?.[0].title).toBe('My Task');
 
-    const detailData = queryClient.getQueryData<TaskResponseDto>(
-      taskKeys.detail('task-1'),
-    );
+    const detailData = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail('task-1'));
     expect(detailData?.title).toBe('My Task');
   });
 });
@@ -330,7 +317,7 @@ describe('useUpdateTask (optimistic)', () => {
 describe('useCreateTask (optimistic)', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('optimistically appends temp item to list, replaces with real on success', async () => {
+  it('optimistically prepends temp item to list, replaces with real on success', async () => {
     const realTask: TaskResponseDto = {
       ...baseTask,
       id: 'task-real',
@@ -371,9 +358,7 @@ describe('useCreateTask (optimistic)', () => {
 
     await expect(result.current.mutateAsync({ title: 'New Task' })).rejects.toThrow('network');
 
-    const listData = queryClient.getQueryData<TaskResponseDto[]>(
-      taskKeys.list({ view: 'today' }),
-    );
+    const listData = queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'today' }));
     expect(listData).toHaveLength(0);
   });
 });
