@@ -31,7 +31,7 @@ import {
 import { openEngine, type Engine } from '@taskora/engine';
 
 import { createHttpSyncTransport, registerDevice } from './http-transport';
-import { createTauriSqlStorage, isTauriRuntime } from './tauri-storage';
+import { createTauriSqlStorage, isTauriRuntime, useUserReplicaDb } from './tauri-storage';
 
 const DEVICE_ID_KEY = 'taskora.deviceId';
 const SYNC_INTERVAL_MS = 30_000;
@@ -73,6 +73,9 @@ export function initDesktopEngine(queryClient: QueryClient): void {
 
 async function startEngine(queryClient: QueryClient): Promise<void> {
   try {
+    const userId = useAuthStore.getState().user?.id;
+    if (!userId) throw new Error('登录用户缺失，无法选择副本数据库');
+    await useUserReplicaDb(userId);
     const deviceId = ensureDeviceId();
     engine = await openEngine({
       storage: createTauriSqlStorage(),

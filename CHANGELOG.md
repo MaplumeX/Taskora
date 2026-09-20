@@ -11,6 +11,27 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **desktop**: System tray with Show Taskora / New Task / Quit entries:
+  closing the main window now hides to the tray on every platform
+  instead of exiting on Windows/Linux, so the global quick-add
+  shortcut keeps working; re-open via tray, Dock icon or a second
+  launch, exit via the tray's Quit entry.
+- **desktop**: Main-window size and position are remembered across
+  launches (tauri-plugin-window-state, quick-add denylisted, visibility
+  not restored so fresh starts always show the window).
+
+### Changed
+
+- **desktop**: The Local Replica SQLite database is now per-user
+  (`taskora-<userId>.db`) instead of a single shared `taskora.db`:
+  switching accounts no longer leaks the previous account's sync
+  cursor and queued Outbox edits. The legacy single-user database is
+  migrated once (copied) for the first account that signs in and then
+  renamed to `taskora.db.legacy`; other accounts start from a fresh
+  replica.
+
 ## [0.3.6] - 2026-09-19
 
 ### Changed

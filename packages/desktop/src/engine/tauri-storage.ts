@@ -15,6 +15,16 @@ export function isTauriRuntime(): boolean {
   return '__TAURI_INTERNALS__' in globalThis;
 }
 
+/**
+ * 按登录用户切换 Local Replica 数据库（多账号隔离）：Rust 侧惰性打开
+ * 应用数据目录下的 taskora-<userId>.db；旧版单用户 taskora.db 由首个
+ * 登录用户一次性迁移继承。登录哪个账号，Engine 就读写哪个账号的副本，
+ * Sync Cursor / Outbox 不再跨账号串号。
+ */
+export async function useUserReplicaDb(userId: string): Promise<void> {
+  await invoke('sql_use_db', { user: userId });
+}
+
 export function createTauriSqlStorage(): SqlStorage {
   return {
     async exec(sql: string): Promise<void> {

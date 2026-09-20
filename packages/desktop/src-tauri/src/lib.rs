@@ -1,6 +1,10 @@
 mod session;
 mod sqlite;
-use tauri::{Emitter, Manager};
+use tauri::{
+    menu::{Menu, MenuItem},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Emitter, Manager,
+};
 use tauri_plugin_global_shortcut::ShortcutState;
 
 /// Global quick-add shortcut (Things-style): Cmd/Ctrl + Shift + Space.
@@ -8,17 +12,48 @@ use tauri_plugin_global_shortcut::ShortcutState;
 /// Windows and Cmd+Space is Spotlight on macOS — see ADR-0004.)
 const QUICK_ADD_SHORTCUT: &str = "CmdOrCtrl+Shift+Space";
 
+/// Bring the (possibly hidden) main window to the front.
+fn show_main_window(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+/// Show the floating quick-add window (tray "New Task" entry uses the
+/// same path as the global shortcut).
+fn show_quick_add(app: &tauri::AppHandle) {
+    if let Some(window) = app.get_webview_window("quick-add") {
+        let _ = window.show();
+        let _ = window.set_focus();
+        let _ = app.emit_to("quick-add", "quick-add://open", ());
+    } else {
+        show_main_window(app);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
         .manage(session::SessionLock::default())
+        // Remember main-window size/position across launches. Quick-add is
+        // a centered borderless popup — denylisted so its geometry is not
+        // restored. VISIBLE is excluded: close-to-tray hides the window,
+        // and that hidden state must not leak into the next launch
+        // (fresh starts always show the main window).
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_denylist(&["quick-add"])
+                .with_state_flags(
+                    tauri_plugin_window_state::StateFlags::all()
+                        & !tauri_plugin_window_state::StateFlags::VISIBLE,
+                )
+                .build(),
+        )
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             // Second instance launched: bring the existing window to front.
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.show();
-                let _ = window.unminimize();
-                let _ = window.set_focus();
-            }
+            show_main_window(app);
         }))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
@@ -31,21 +66,48 @@ pub fn run() {
                     // Only the quick-add shortcut is registered; toggling it
                     // shows/hides the floating quick-add window.
                     let _ = shortcut; // (multiple shortcuts would branch here)
-                    if let Some(window) = app.get_webview_window("quick-add") {
-                        let _ = window.show();
-                        let _ = window.set_focus();
-                        let _ = window.emit_to("quick-add", "quick-add://open", ());
-                    } else {
-                        // No quick-add window (shouldn't happen — declared in
-                        // tauri.conf.json); fall back to focusing the main one.
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
-                        }
-                    }
+                    show_quick_add(app);
                 })
                 .build(),
         )
+        .setup(|app| {
+            // System tray (desktop shell hardening): re-entry point for a
+            // hidden main window + the explicit quit path. Without it, the
+            // Windows/Linux close-to-tray behavior below would leave no way
+            // to bring the app back or exit it.
+            let show = MenuItem::with_id(app, "show", "Show Taskora", true, None::<&str>)?;
+            let quick_add = MenuItem::with_id(app, "quick-add", "New Task", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit Taskora", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&show, &quick_add, &quit])?;
+            TrayIconBuilder::with_id("taskora-tray")
+                .icon(
+                    app.default_window_icon()
+                        .expect("missing window icon")
+                        .clone(),
+                )
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "show" => show_main_window(app),
+                    "quick-add" => show_quick_add(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    // Left click toggles the main window (right click opens
+                    // the menu — the platform default).
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        show_main_window(tray.app_handle());
+                    }
+                })
+                .build(app)?;
+            Ok(())
+        })
         .on_window_event(|window, event| {
             // Quick-add window: hide on blur (fill-and-go interaction).
             if window.label() == "quick-add" {
@@ -53,20 +115,15 @@ pub fn run() {
                     let _ = window.hide();
                 }
             }
-            // macOS convention: closing the window keeps the app in the Dock
-            // (re-openable). Windows/Linux: default close → process exits.
+            // Close hides to the tray on every platform: the global
+            // quick-add shortcut must keep working after "closing" the
+            // window. Re-open via tray / Dock icon / second launch; exit
+            // via the tray's Quit entry. (Previously Windows/Linux exited
+            // on close, which silently killed the shortcut.)
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" {
-                    if cfg!(target_os = "macos") {
-                        api.prevent_close();
-                        let _ = window.hide();
-                    } else {
-                        // Windows/Linux convention: closing the main window
-                        // exits the process. The hidden quick-add window would
-                        // otherwise keep the event loop alive, so exit
-                        // explicitly instead of relying on last-window-close.
-                        window.app_handle().exit(0);
-                    }
+                    api.prevent_close();
+                    let _ = window.hide();
                 }
             }
         })
