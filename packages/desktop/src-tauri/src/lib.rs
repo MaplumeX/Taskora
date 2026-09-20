@@ -35,7 +35,7 @@ fn show_quick_add(app: &tauri::AppHandle) {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let builder = tauri::Builder::default()
+    tauri::Builder::default()
         .manage(session::SessionLock::default())
         // Remember main-window size/position across launches. Quick-add is
         // a centered borderless popup — denylisted so its geometry is not
@@ -106,6 +106,11 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+            // Local Replica 状态注册（ADR-0007）。注意：Builder 的 setup /
+            // invoke_handler 都是「替换」语义，不能由模块各自链一次 ——
+            // v0.4.0 曾因此让 sqlite::install 覆盖掉 session 命令注册与
+            // 托盘初始化，桌面端表现为登录恢复永远失败。
+            sqlite::manage_state(app)?;
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -129,11 +134,12 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             session::session_read,
-            session::session_write
-        ]);
-    // Local Replica 的原生存储（ADR-0007）：setup 打开 WAL 连接并注册
-    // sql_exec / sql_all / sql_run 三个 IPC 命令。
-    sqlite::install(builder)
+            session::session_write,
+            sqlite::sql_exec,
+            sqlite::sql_all,
+            sqlite::sql_run,
+            sqlite::sql_use_db
+        ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|_app, _event| {
