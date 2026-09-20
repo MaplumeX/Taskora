@@ -12,6 +12,8 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 
 import {
   mergeFieldWrites,
+  hlcWallMs,
+  SYNC_ENTITIES,
   type FieldWrite,
   type OutboxEvent,
   type SyncEntity,
@@ -30,17 +32,6 @@ import {
 } from './entity-codec';
 import { SyncEventBuffer } from './sync-event-buffer.service';
 
-const SYNC_ENTITIES: readonly SyncEntity[] = [
-  'task',
-  'subtask',
-  'project',
-  'project-heading',
-  'area',
-  'tag',
-  'tag-group',
-];
-
-/** collector 的旧 ChangeEntity → 同步实体名。 */
 const CHANGE_ENTITY_TO_SYNC: Record<ChangeEntity, SyncEntity> = {
   task: 'task',
   subtask: 'subtask',
@@ -50,6 +41,9 @@ const CHANGE_ENTITY_TO_SYNC: Record<ChangeEntity, SyncEntity> = {
   tag: 'tag',
   'tag-group': 'tag-group',
 };
+
+/** 无 userId 列的实体（Subtask 经父 Task 认领归属）。 */
+const NO_USER_ID_ENTITIES = new Set<SyncEntity>(['subtask']);
 
 @Injectable()
 export class SyncHubService implements OnModuleInit {
@@ -181,10 +175,19 @@ export class SyncHubService implements OnModuleInit {
     data.fieldDigests = digestMap(codec, outcome.fields);
     // updatedAt 不超过最大时钟墙钟：REST 写检测（摘要不匹配才重置基线）
     // 不会被自己的合并写误触发。
-    data.updatedAt = new Date(maxWallMs(outcome.clocks) + 1);
+    data.updatedAt = new Date(
+        Math.max(0, ...Object.values(outcome.clocks).map(hlcWallMs)) + 1,
+      );
 
     if (row) {
       await delegate(this.prisma, codec.model).update({ where: { id: event.id }, data });
+    } else if (NO_USER_ID_ENTITIES.has(event.entity)) {
+      // Subtask 无 userId 列：归属经父 Task 认领（不属于该用户则拒绝）。
+      const taskId = outcome.fields.taskId;
+      if (typeof taskId !== 'string') return;
+      const parent = await loadRow(this.prisma, codecFor('task'), taskId);
+      if (!parent || parent.userId !== userId) return;
+      await delegate(this.prisma, codec.model).create({ data: { ...data, id: event.id } });
     } else {
       await delegate(this.prisma, codec.model).create({
         data: { ...data, id: event.id, userId },
@@ -216,11 +219,4 @@ function digestMap(codec: ReturnType<typeof codecFor>, fields: Record<string, un
   return digests;
 }
 
-function maxWallMs(clocks: Record<string, string>): number {
-  let max = 0;
-  for (const stamp of Object.values(clocks)) {
-    const wall = Number(stamp.split(':', 1)[0]);
-    if (Number.isFinite(wall) && wall > max) max = wall;
-  }
-  return max;
-}
+

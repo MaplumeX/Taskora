@@ -18,7 +18,7 @@ export type SyncEntity =
   | 'tag'
   | 'tag-group';
 
-export type SqlColumnType = 'TEXT' | 'INTEGER' | 'REAL';
+export type SqlColumnType = 'TEXT' | 'INTEGER';
 
 export interface FieldDef {
   name: string;

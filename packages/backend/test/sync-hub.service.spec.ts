@@ -304,4 +304,60 @@ describe('SyncHubService（合并器集成）', () => {
     expect(typeof entry.fields.position).toBe('string');
     expect(result.cursor).toBe(buffer.currentSeq(USER));
   });
+
+  describe('subtask 认领（无 userId 列的实体）', () => {
+    it('父 Task 属于该用户：subtask create 不带 userId、经父认领写入', async () => {
+      const subtaskCodecRow = {
+      id: 'sub-1',
+      title: '步骤',
+      status: 'ACTIVE',
+      settledAt: null,
+      sortOrder: 0,
+      taskId: 'task-1',
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      updatedAt: new Date('2026-01-02T00:00:00Z'),
+      fieldClocks: null,
+      fieldDigests: null,
+    };
+      let created = false;
+      mockPrisma.subtask.findUnique.mockImplementation(async () => (created ? subtaskCodecRow : null));
+      mockPrisma.subtask.create.mockImplementation(async () => {
+        created = true;
+        return subtaskCodecRow;
+      });
+      mockPrisma.task.findUnique.mockResolvedValue({ id: 'task-1', userId: USER });
+
+      await service.push(USER, [
+        {
+          entity: 'subtask',
+          id: 'sub-1',
+          fields: {
+            title: { value: '步骤', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') },
+            taskId: { value: 'task-1', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') },
+          },
+        },
+      ]);
+
+      const createArgs = mockPrisma.subtask.create.mock.calls[0][0] as {
+        data: Record<string, unknown>;
+      };
+      expect(createArgs.data).not.toHaveProperty('userId');
+      expect(createArgs.data.taskId).toBe('task-1');
+    });
+
+    it('父 Task 不属于该用户（或缺失）：subtask create 被拒绝', async () => {
+      mockPrisma.subtask.findUnique.mockResolvedValue(null);
+      mockPrisma.task.findUnique.mockResolvedValue({ id: 'task-1', userId: 'someone-else' });
+
+      await service.push(USER, [
+        {
+          entity: 'subtask',
+          id: 'sub-2',
+          fields: { title: { value: '越权', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') } },
+        },
+      ]);
+
+      expect(mockPrisma.subtask.create).not.toHaveBeenCalled();
+    });
+  });
 });

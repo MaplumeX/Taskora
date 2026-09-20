@@ -13,7 +13,7 @@
 
 import { LocalReplica, type ReplicaRow } from './replica';
 import { HybridClock } from './hlc';
-import { positionBetween } from './position';
+import { positionBetween, rebalancePositions } from './position';
 import type { SyncEntity, WireRow } from './entities';
 import type { SyncTransport } from './protocol';
 import type { SqlStorage } from './storage';
@@ -110,6 +110,29 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
     await replica.setCursor(response.cursor);
   };
 
+  /**
+   * Position re-balance（ADR-0007）：带 Position 的实体出现超长键
+   * （反复插队的痕迹）时，为整组重新分配短小等距键并作为普通字段写
+   * 入（走 LWW，推送 hub）。仅在真正膨胀时触发，平时零成本。
+   */
+  const rebalanceIfInflated = async (): Promise<void> => {
+    for (const entity of ['task', 'project', 'tag'] as SyncEntity[]) {
+      const rows = await replica.list(entity);
+      const keys = rows
+        .map((row) => row.fields.position)
+        .filter((key): key is string => typeof key === 'string');
+      const rebalanced = rebalancePositions(keys);
+      if (!rebalanced) continue;
+      let index = 0;
+      for (const row of rows) {
+        if (typeof row.fields.position === 'string') {
+          await replica.update(entity, row.id, { position: rebalanced[index] });
+          index += 1;
+        }
+      }
+    }
+  };
+
   return {
     deviceId: options.deviceId,
     get: async (entity, id) => {
@@ -126,6 +149,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
     async sync() {
       await flush();
       await applyPull();
+      await rebalanceIfInflated();
     },
     bootstrap,
     cursor: () => replica.getCursor(),

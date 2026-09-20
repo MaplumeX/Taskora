@@ -10,10 +10,8 @@
 
 import type { QueryClient } from '@tanstack/react-query';
 
-import { useAuthStore } from '@taskora/api';
+import { useAuthStore, onRemoteChangeEvent, setTaskBackend, createEngineTaskBackend } from '@taskora/api';
 import { openEngine, type Engine } from '@taskora/engine';
-import { setTaskBackend } from '@taskora/api';
-import { createEngineTaskBackend } from '@taskora/api';
 
 import { createHttpSyncTransport, registerDevice } from './http-transport';
 import { createTauriSqlStorage, isTauriRuntime } from './tauri-storage';
@@ -22,6 +20,7 @@ const DEVICE_ID_KEY = 'taskora.deviceId';
 const SYNC_INTERVAL_MS = 30_000;
 
 let engine: Engine | null = null;
+let unsubscribeRemoteChange: (() => void) | null = null;
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribeAuth: (() => void) | null = null;
@@ -73,6 +72,11 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
       scheduleSync(1_000);
     });
 
+    // Event Stream 作为同步传输层（ADR-0007）：SSE live change 到达即
+    // 拉取增量——远端变更秒级到达（Story 9），周期同步只作兜底。
+    unsubscribeRemoteChange?.();
+    unsubscribeRemoteChange = onRemoteChangeEvent(() => void syncNow());
+
     // 首次装配先 bootstrap（新设备全量快照），此后走增量
     await syncNow();
     if (syncTimer === null) {
@@ -96,8 +100,13 @@ function stopEngine(): void {
     clearTimeout(debounceTimer);
     debounceTimer = null;
   }
+  unsubscribeRemoteChange?.();
+  unsubscribeRemoteChange = null;
   void engine?.close().catch(() => undefined);
   engine = null;
+  // 登出丢弃 device id：重新登录分配新 device id（ADR-0007），
+  // 本地数据（SQLite 文件）保留。
+  globalThis.localStorage?.removeItem(DEVICE_ID_KEY);
 }
 
 /** flush + pull；并发调用合并为一个在飞任务。 */

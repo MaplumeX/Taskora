@@ -1,4 +1,4 @@
-export { HybridClock, compareHlc, formatHlc, parseHlc, type HlcParts } from './hlc';
+export { HybridClock, compareHlc, formatHlc, hlcWallMs, parseHlc, type HlcParts } from './hlc';
 export {
   BASE_62_DIGITS,
   positionBetween,

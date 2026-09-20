@@ -8,6 +8,7 @@
  */
 
 import { mergeFieldWrites, type EntityMergeState } from './merger';
+import { hlcWallMs } from './hlc';
 import type { SyncEntity } from './entities';
 import type {
   BootstrapResponse,
@@ -172,8 +173,4 @@ export class InMemorySyncHub {
 function splitKey(key: string): [SyncEntity, string] {
   const separator = key.indexOf(':');
   return [key.slice(0, separator) as SyncEntity, key.slice(separator + 1)];
-}
-
-function hlcWallMs(stamp: string): number {
-  return Number(stamp.split(':', 1)[0]);
 }

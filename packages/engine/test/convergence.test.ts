@@ -9,7 +9,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { openEngine, type Engine } from '../src/engine';
+import { openEngine, positionBetween, type Engine } from '../src/index';
 import { HybridClock } from '../src/hlc';
 import { InMemorySyncHub } from '../src/hub';
 import { formatHlc } from '../src/hlc';
@@ -403,6 +403,42 @@ describe('Engine 端到端收敛（主接缝）', () => {
     unsubscribe();
     await createTask(a, '不应触发');
     expect(notifications).toBe(3);
+    await a.close();
+    await b.close();
+  });
+});
+
+describe('Position re-balance（sync 后台摊平超长键）', () => {
+  it('反复插队产生超长 Position 后，sync 将整组摊平为短键且顺序不变', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+
+    // 制造一个超长键：在固定两键间反复插队
+    await createTask(a, '锚点A', { position: 'a0' });
+    await createTask(a, '锚点B', { position: 'a1' });
+    let current = 'a0';
+    for (let i = 0; i < 400; i++) {
+      current = positionBetween(current, 'a1');
+      await createTask(a, `插队${i}`, { position: current });
+    }
+    const before = await a.list('task');
+    expect(before.some((row) => (row.fields.position as string).length > 24)).toBe(true);
+
+    await a.sync(); // 触发 re-balance
+
+    const after = await a.list('task');
+    expect(
+      after.every((row) => (row.fields.position as string).length <= 24),
+    ).toBe(true);
+    // 顺序保持（标题相对顺序不变）
+    expect(after.map((row) => row.fields.title)).toEqual(before.map((row) => row.fields.title));
+    // re-balance 的写也进 Outbox → flush 后 hub 收敛
+    await a.sync();
+    const b = await h.device('dev-b');
+    await b.sync();
+    expect((await b.list('task')).map((row) => row.fields.title)).toEqual(
+      before.map((row) => row.fields.title),
+    );
     await a.close();
     await b.close();
   });

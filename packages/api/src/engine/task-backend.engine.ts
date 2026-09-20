@@ -81,8 +81,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
 
     async getFeed(view: FeedView): Promise<FeedItem[]> {
       const index = await tagIndex();
-      const taskRows = filterFeedTasks(await engine.list('task'), view);
-      const taskItems: TaskFeedItem[] = taskRows.map((row) => {
+      const allTasks = await engine.list('task');
+      const taskItems: TaskFeedItem[] = filterFeedTasks(allTasks, view).map((row) => {
         const dto = taskRowToDto(row, index);
         return { ...dto, type: 'task' as const, tags: dto.tags ?? [] };
       });
@@ -90,7 +90,6 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       const includeProjects = ['today', 'upcoming', 'someday', 'logbook', 'trash'].includes(view);
       let projectItems: FeedItem[] = [];
       if (includeProjects) {
-        const allTasks = await engine.list('task');
         const projectRows = (await engine.list('project')).filter((row) =>
           projectMatchesView(row, view, new Date()),
         );

@@ -28,6 +28,11 @@ export function parseHlc(stamp: string): HlcParts {
   return { wallMs: Number(wall), counter: Number(counter), deviceId: deviceId.join(':') };
 }
 
+/** 取时间戳的墙钟毫秒读数（合并器/hub 合成基线用）。 */
+export function hlcWallMs(stamp: string): number {
+  return Number(stamp.split(':', 1)[0]);
+}
+
 /** 比较两个时间戳：新者返回正数。可直接用字符串比较，等价。 */
 export function compareHlc(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;

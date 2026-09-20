@@ -61,7 +61,11 @@ export { subscribeAgentEvents } from './api/agent-sse';
 
 // Event Stream (Change Event push sync, ADR 0005)
 export { applyChangeEvents, dedupeEvents, EventStreamApplier } from './events/event-applier';
-export { initEventStream, destroyEventStream } from './events/event-stream-client';
+export {
+  initEventStream,
+  destroyEventStream,
+  onRemoteChangeEvent,
+} from './events/event-stream-client';
 export { taskMatchesQuery } from './events/task-query-match';
 
 // Query hooks

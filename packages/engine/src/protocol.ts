@@ -9,7 +9,7 @@
  * 双向流动；不再是「服务端推送通知」。
  */
 
-import type { FieldClocks, FieldWrite } from './merger';
+import type { EntityMergeState, FieldWrite } from './merger';
 import type { SyncEntity } from './entities';
 
 /** Outbox 中的一条 Change Event：实体 + 字段级时间戳写。 */
@@ -32,13 +32,11 @@ export interface PushResponse {
 }
 
 /** hub → 设备：一个实体的合并态变更（完整字段 + 完整时钟）。 */
-export interface EntityChange {
+export interface EntityChange extends EntityMergeState {
   kind: 'entity';
   seq: number;
   entity: SyncEntity;
   id: string;
-  fields: Record<string, unknown>;
-  clocks: FieldClocks;
 }
 
 /**
@@ -68,11 +66,9 @@ export interface PullResponse {
 }
 
 /** hub → 设备：全量快照（新设备 / 重置副本的设备）。 */
-export interface SnapshotEntry {
+export interface SnapshotEntry extends EntityMergeState {
   entity: SyncEntity;
   id: string;
-  fields: Record<string, unknown>;
-  clocks: FieldClocks;
 }
 
 export interface BootstrapResponse {

@@ -51,11 +51,13 @@ export class LocalReplica {
 
   // ---------- 生命周期 ----------
 
-  /** 建表 + 恢复持久化的 HLC 状态。 */
+  /** 建表 + 恢复持久化的 HLC 状态；device id 落 meta（设备身份存于
+   * Local Replica，ADR-0007：决胜与审计有稳定主体）。 */
   async init(): Promise<void> {
     for (const statement of schemaDdl()) {
       await this.storage.exec(statement);
     }
+    await this.metaSet('deviceId', this.options.deviceId);
     const saved = await this.metaGet('hlc');
     if (saved) {
       const state = JSON.parse(saved) as { wallMs: number; counter: number };
@@ -73,11 +75,6 @@ export class LocalReplica {
 
   async setCursor(seq: number): Promise<void> {
     await this.metaSet('syncCursor', String(seq));
-  }
-
-  /** 数据变更版本号（订阅失效用）。 */
-  get version(): number {
-    return this.changeVersion;
   }
 
   /** 订阅数据变更；返回退订函数。 */

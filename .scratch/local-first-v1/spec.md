@@ -138,10 +138,20 @@ Taskora 的每一次读写都要经 API 往返 Postgres：断网时应用完全�
 - 契约测试：Engine 注册表 ↔ Prisma DMMF 字段集合与类型对齐。
 - 桌面端切片一：Rust 侧 rusqlite（WAL，appData/taskora.db）+ 三个 IPC 命令；`packages/api` 的 TaskBackend 注入层（Task/Feed 全部 hooks 零改动切换数据源）；Inbox/Today 的 Task CRUD（创建/编辑/完成/取消/重开/Trash/恢复/拖拽/标签）全部本地读写，写后防抖 flush + 30s 周期 + 聚焦同步。
 
+code-review 补救（双轴审查后修复）：
+
+- P1 已修：SSE Event Stream 现作为同步传输层——live change 帧到达即触发 engine pull（`onRemoteChangeEvent`），远端变更秒级到达（Story 9）；30s 周期同步降级为兜底。
+- P2 已修：重新登录分配新 device id（登出丢弃存储的 id，本地数据保留）；device id 同时写入 Local Replica meta。
+- P2 已修：Position re-balance 接入 Engine.sync()（出现超长键时整组摊平，作为普通字段写走 LWW，有端到端测试）。
+- P2 已修：设备推送 Subtask create 不再因 userId 列缺失崩溃——经父 Task 认领归属，越权拒绝（有测试）。
+- P2 已修：契约测试补反向检查（Prisma 新增标量列未注册/未豁免即失败）。
+- Standards 判断项清理：后端复用 engine 的 SYNC_ENTITIES 与 hlcWallMs；EntityChange/SnapshotEntry 复用 EntityMergeState；删除未使用的 version getter 与 REAL 列型；getFeed 不再重复 list('task')。
+- 未处理的判断项（接受现状）：ring-buffer 三处形态重复（spec 明确背书复用 ADR-0005 语义）；(entity, id) 数据团（重构级别）；行→DTO 映射器的时间戳兜底默认。
+
 与 spec 的已知偏差（后续切片跟进）：
 
 - Assistant 写入路径：spec 原文为「改向合并器提交 Change Event（进程内调用）」。V1 经 collector tap 桥接实现等价效果（无特权写入、同一合并语义、走同一推流）；`SyncHubService.submitVirtualWrite` 已就绪，agent 模块的直接切换留待后续切片。
 - Subtask CRUD 与 convert-to-project：Engine 后端回落 REST（变更经同步推流回流设备），不在切片一的 Task CRUD 集内。
 - quick-add 窗口：独立 webview，维持 REST；其变更经 hub 同步回流主窗口。
-- Event Stream（SSE）与旧 REST CRUD 端点：未迁移切片仍按 ADR-0005 原样工作，按片退役。
+- Event Stream（SSE）：保留为「变更到达提示」通道（触发 engine pull），未迁移切片仍按 ADR-0005 原样工作，按片退役。
 - Web 端（WASM + OPFS）：Out of Scope，未动。
