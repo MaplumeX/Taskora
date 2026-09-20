@@ -9,7 +9,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
-## [Unreleased]
+## [0.4.3] - 2026-09-20
 
 ### Fixes
 
