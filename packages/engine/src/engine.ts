@@ -15,7 +15,7 @@ import { LocalReplica, type ReplicaRow } from './replica';
 import { HybridClock } from './hlc';
 import { positionBetween, rebalancePositions } from './position';
 import type { SyncEntity, WireRow } from './entities';
-import type { SyncTransport } from './protocol';
+import type { DeleteRequest, OutboxEvent, SyncTransport } from './protocol';
 import type { SqlStorage } from './storage';
 
 export interface EngineOptions {
@@ -38,6 +38,12 @@ export interface Engine {
   create(entity: SyncEntity, values: WireRow): Promise<string>;
   /** 更新实体字段（软删除即更新 trashedAt 等字段）。 */
   update(entity: SyncEntity, id: string, patch: WireRow): Promise<void>;
+  /**
+   * 设备发起的物理删除（Delete Request，ADR-0008）：立即从副本移除
+   * （级联 Subtask、清理引用），并把删除请求排进 Outbox；flush 推给
+   * hub，hub 校验归属后删除并广播 Compact Event。幂等可重放。
+   */
+  delete(entity: SyncEntity, ids: string[]): Promise<void>;
   /** Outbox 未同步条数（诊断/测试）。 */
   pendingCount(): Promise<number>;
   /** 把 Outbox 推给 Sync Hub；成功后清空已推条目。 */
@@ -75,9 +81,25 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
     for (;;) {
       const batch = await replica.takeOutbox();
       if (batch.length === 0) return;
+      const events: OutboxEvent[] = [];
+      const deletesByEntity = new Map<SyncEntity, string[]>();
+      for (const item of batch) {
+        if (item.kind === 'write') {
+          events.push(item.event);
+        } else {
+          const ids = deletesByEntity.get(item.entity) ?? [];
+          ids.push(item.id);
+          deletesByEntity.set(item.entity, ids);
+        }
+      }
+      const deletes: DeleteRequest[] = [...deletesByEntity].map(([entity, ids]) => ({
+        entity,
+        ids,
+      }));
       await transport.push({
         deviceId: options.deviceId,
-        events: batch.map((item) => item.event),
+        events,
+        ...(deletes.length > 0 ? { deletes } : {}),
       });
       await replica.deleteOutbox(batch.map((item) => item.rowId));
     }
@@ -143,6 +165,11 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
     list: (entity) => replica.list(entity),
     create: (entity, values) => replica.create(entity, values),
     update: (entity, id, patch) => replica.update(entity, id, patch),
+    delete: (entity, ids) =>
+      replica.requestDelete(
+        entity,
+        ids.filter((id) => typeof id === 'string'),
+      ),
     pendingCount: () => replica.outboxCount(),
     flush,
     pull: applyPull,

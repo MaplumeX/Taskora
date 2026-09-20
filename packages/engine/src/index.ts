@@ -20,6 +20,8 @@ export {
   entityDef,
   isSyncEntity,
   schemaDdl,
+  DELETE_CASCADES,
+  COMPACT_NULL_REFS,
   type EntityDef,
   type FieldDef,
   type SyncEntity,
@@ -27,16 +29,17 @@ export {
 } from './entities';
 export type { SqlRow, SqlStorage } from './storage';
 export { inTransaction } from './storage';
-export { LocalReplica, type ReplicaRow, type LocalReplicaOptions } from './replica';
 export {
-  openEngine,
-  positionAfter,
-  type Engine,
-  type EngineOptions,
-} from './engine';
+  LocalReplica,
+  type ReplicaRow,
+  type LocalReplicaOptions,
+  type OutboxEntry,
+} from './replica';
+export { openEngine, positionAfter, type Engine, type EngineOptions } from './engine';
 export type {
   BootstrapResponse,
   CompactChange,
+  DeleteRequest,
   EntityChange,
   HubChange,
   OutboxEvent,

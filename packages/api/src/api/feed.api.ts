@@ -1,6 +1,5 @@
 import type { FeedItem, FeedView } from '@taskora/shared';
 
-import { apiClient } from './client';
 import { currentTaskBackend } from './task-backend';
 
 export type { FeedView };
@@ -12,7 +11,7 @@ export function getFeed(view: FeedView): Promise<FeedItem[]> {
 }
 
 export function emptyTrash(): Promise<{ deletedTasks: number; deletedProjects: number }> {
-  return apiClient
-    .post<{ deletedTasks: number; deletedProjects: number }>('/feed/trash/empty')
-    .then((res) => res.data);
+  // 与 Task/Feed 同源（TaskBackend）：Engine 实现下断网可用（Delete
+  // Request，ADR-0008）。
+  return currentTaskBackend().emptyTrash();
 }

@@ -125,7 +125,6 @@ Taskora 的每一次读写都要经 API 往返 Postgres：断网时应用完全�
 - 术语演变提醒：Change Event 已从「服务端推送通知」重定义为「同步协议中的变更单元」；Event Stream 已从「单向推送通道」重定义为「双向同步的传输层」。ADR-0005 已加 superseded 注记。写作与评审时不要沿用旧义。
 - 后续切片建议在各自开工前另立 spec（沿用本目录或新目录），本 spec 不假装覆盖到 web 端。
 
-
 ## Comments
 
 ### 2026-09-20 · V1 实现记录（切片一交付）
@@ -155,3 +154,7 @@ code-review 补救（双轴审查后修复）：
 - quick-add 窗口：独立 webview，维持 REST；其变更经 hub 同步回流主窗口。
 - Event Stream（SSE）：保留为「变更到达提示」通道（触发 engine pull），未迁移切片仍按 ADR-0005 原样工作，按片退役。
 - Web 端（WASM + OPFS）：Out of Scope，未动。
+
+### 2026-09-20 · 后续切片指针
+
+Subtask CRUD、convert-to-project、quick-add 三项偏差与桌面端其余实体的 Engine 化由 `.scratch/local-first-v2/spec.md`（桌面端完全体）收编；删除原语另立 ADR-0008。

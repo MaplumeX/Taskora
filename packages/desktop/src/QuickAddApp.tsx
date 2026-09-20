@@ -14,9 +14,10 @@ import { useTranslation } from 'react-i18next';
 
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
-import { listen } from '@tauri-apps/api/event';
-import { createTask, i18n, useAuthStore } from '@taskora/api';
+import { emitTo, listen } from '@tauri-apps/api/event';
+import { i18n, useAuthStore } from '@taskora/api';
 import { bootQuickAdd } from './quickAddBoot';
+import { QUICK_ADD_SUBMIT_EVENT } from './quick-add-relay';
 
 async function showMainWindow() {
   const main = await WebviewWindow.getByLabel('main');
@@ -83,14 +84,14 @@ export function QuickAddApp() {
     setSubmitting(true);
     setError(null);
     try {
-      await createTask({ title: trimmed });
+      // 事件中继（V2）：标题发给主窗口，由其单一 Engine 实例创建任务
+      // （进 Outbox，断网可用）；与主窗口看到的是同一份数据。fire-and-
+      // forget：失败由主窗口呈现，不在本窗口阻塞。
+      await emitTo('main', QUICK_ADD_SUBMIT_EVENT, { title: trimmed });
       setTitle('');
       hideWindow();
-    } catch (err) {
-      setError(
-        (err as { message?: string })?.message ??
-          i18n.t('task:quickAddFailed', { defaultValue: 'Could not create the task' }),
-      );
+    } catch {
+      setError(i18n.t('task:quickAddFailed', { defaultValue: 'Could not create the task' }));
     } finally {
       setSubmitting(false);
     }

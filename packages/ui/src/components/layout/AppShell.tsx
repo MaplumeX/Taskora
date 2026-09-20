@@ -9,6 +9,7 @@ import { MobileNavDrawer } from '@/components/layout/MobileNavDrawer';
 import { MobileTopBar } from '@/components/layout/MobileTopBar';
 import { MobileFab } from '@/components/layout/MobileFab';
 import { SettingsModal } from '@/components/settings/SettingsModal';
+import { SyncIndicator } from './SyncIndicator';
 
 export function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -29,6 +30,8 @@ export function AppShell() {
       <MobileFab />
       <SettingsModal />
       <KeyboardShortcuts />
+      {/* 同步指示器（V2）：仅桌面端有 Engine 时渲染，常驻角落不拦操作 */}
+      <SyncIndicator />
     </div>
   );
 }

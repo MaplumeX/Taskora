@@ -39,6 +39,16 @@ export class OutboxEventDto {
   fields!: Record<string, FieldWriteDto>;
 }
 
+/** Delete Request（ADR-0008）：设备发起的物理删除请求。 */
+export class DeleteRequestDto {
+  @IsIn(SYNC_ENTITY_VALUES)
+  entity!: SyncEntity;
+
+  @IsArray()
+  @IsString({ each: true })
+  ids!: string[];
+}
+
 export class PushRequestDto {
   @IsString()
   deviceId!: string;
@@ -46,4 +56,9 @@ export class PushRequestDto {
   @IsArray()
   @ValidateNested({ each: true })
   events!: OutboxEventDto[];
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  deletes?: DeleteRequestDto[];
 }

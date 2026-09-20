@@ -14,7 +14,15 @@
  * 存储接口为异步（Tauri IPC 场景），方法均返回 Promise。
  */
 
-import { entityDef, schemaDdl, SYNC_ENTITIES, type SyncEntity, type WireRow } from './entities';
+import {
+  COMPACT_NULL_REFS,
+  DELETE_CASCADES,
+  entityDef,
+  schemaDdl,
+  SYNC_ENTITIES,
+  type SyncEntity,
+  type WireRow,
+} from './entities';
 import { HybridClock } from './hlc';
 import { mergeEntityState, type EntityMergeState, type FieldWrite } from './merger';
 import type { OutboxEvent, SnapshotEntry } from './protocol';
@@ -24,6 +32,11 @@ export interface ReplicaRow {
   id: string;
   fields: WireRow;
 }
+
+/** Outbox 条目：普通字段写，或设备发起的 Delete Request（ADR-0008）。 */
+export type OutboxEntry =
+  | { rowId: number; kind: 'write'; event: OutboxEvent }
+  | { rowId: number; kind: 'delete'; entity: SyncEntity; id: string };
 
 export interface LocalReplicaOptions {
   deviceId: string;
@@ -37,6 +50,13 @@ export class LocalReplica {
   private readonly generateId: () => string;
   private listeners = new Set<() => void>();
   private changeVersion = 0;
+  /**
+   * Compact 登记（ADR-0008，仅内存）：已被 compact 的实体 id。迟到的
+   * 远端字段变更到达这些 id 时被静默丢弃（Compact 永久获胜，副本与
+   * hub 同规则）。不持久化——不是墓碑；正常协议流（seq 顺序 + hub 侧
+   * 同规则丢弃）不会把已 compact 实体的字段变更送到副本。
+   */
+  private readonly compacted = new Set<string>();
   /** 写串行化：异步存储下防止并发写的 BEGIN/COMMIT 交错。 */
   private writeChain: Promise<unknown> = Promise.resolve();
 
@@ -45,8 +65,7 @@ export class LocalReplica {
     private readonly options: LocalReplicaOptions,
   ) {
     this.clock = options.clock ?? new HybridClock(options.deviceId);
-    this.generateId =
-      options.generateId ?? (() => globalThis.crypto.randomUUID());
+    this.generateId = options.generateId ?? (() => globalThis.crypto.randomUUID());
   }
 
   // ---------- 生命周期 ----------
@@ -56,6 +75,14 @@ export class LocalReplica {
   async init(): Promise<void> {
     for (const statement of schemaDdl()) {
       await this.storage.exec(statement);
+    }
+    // V1 → V2 迁移：_outbox 增加 kind 列（Delete Request 排队，ADR-0008）。
+    // 新库由 DDL 直接带列；旧库（V1 桌面安装）按需 ALTER。
+    const columns = await this.storage.all<{ name: string }>(
+      "SELECT name FROM pragma_table_info('_outbox')",
+    );
+    if (columns.length > 0 && !columns.some((column) => column.name === 'kind')) {
+      await this.storage.exec("ALTER TABLE _outbox ADD COLUMN kind TEXT NOT NULL DEFAULT 'write'");
     }
     await this.metaSet('deviceId', this.options.deviceId);
     const saved = await this.metaGet('hlc');
@@ -136,7 +163,7 @@ export class LocalReplica {
     });
   }
 
-  // ---------- 本地写 ----------
+  // ---------- 本地写（含 Delete Request，ADR-0008） ----------
 
   /**
    * 创建实体：未显式提供的字段取 null（tagIds 为 []），
@@ -214,6 +241,73 @@ export class LocalReplica {
     this.notifyChanged();
   }
 
+  /**
+   * 设备发起的物理删除（Delete Request，ADR-0008）：立即从副本移除
+   * （UI 即时可见），并把删除请求排进 Outbox 待 flush 推给 hub。hub
+   * 处理后广播 Compact Event，其他设备同步移除。级联（Task → Subtask）
+   * 与引用清理（SetNull 语义）与 hub 侧同规则。
+   */
+  async requestDelete(entity: SyncEntity, ids: string[]): Promise<void> {
+    if (ids.length === 0) return;
+    return this.serialized(() => this.requestDeleteInternal(entity, ids));
+  }
+
+  private async requestDeleteInternal(entity: SyncEntity, ids: string[]): Promise<void> {
+    await inTransaction(this.storage, async () => {
+      await this.removeRows(entity, ids, { enqueue: true });
+    });
+    this.notifyChanged();
+  }
+
+  /**
+   * 从副本移除一批实体行：级联子实体、清理引用（SetNull 语义）、登记
+   * compact（丢弃迟到远端写）。enqueue 时为每个 id 排一条 Delete
+   * Request 进 Outbox。
+   */
+  private async removeRows(
+    entity: SyncEntity,
+    ids: string[],
+    opts: { enqueue: boolean },
+  ): Promise<number> {
+    const def = entityDef(entity);
+    for (const id of ids) {
+      this.compacted.add(`${entity}:${id}`);
+    }
+    let removed = 0;
+    // 级联（对齐 hub 侧 onDelete: Cascade）：Task → Subtask
+    for (const cascade of DELETE_CASCADES[entity] ?? []) {
+      const childDef = entityDef(cascade.entity);
+      const placeholders = ids.map(() => '?').join(', ');
+      const childRows = await this.storage.all<{ id: string }>(
+        `SELECT id FROM ${childDef.table} WHERE ${cascade.foreignKey} IN (${placeholders})`,
+        ids,
+      );
+      const childIds = childRows.map((row) => row.id);
+      if (childIds.length > 0) {
+        removed += await this.removeRows(cascade.entity, childIds, opts);
+      }
+    }
+    // 引用清理（对齐 hub 侧 onDelete: SetNull）：仅本地副本清理，不携
+    // 带新时钟，不进 Outbox——真实字段写的 LWW 裁决不受影响。
+    for (const ref of COMPACT_NULL_REFS[entity] ?? []) {
+      const refDef = entityDef(ref.entity);
+      const placeholders = ids.map(() => '?').join(', ');
+      await this.storage.run(
+        `UPDATE ${refDef.table} SET ${ref.field} = NULL WHERE ${ref.field} IN (${placeholders})`,
+        ids,
+      );
+    }
+    for (const id of ids) {
+      const { changes } = await this.storage.run(`DELETE FROM ${def.table} WHERE id = ?`, [id]);
+      removed += changes;
+      if (changes === 0) continue; // 幂等：已不存在则无需排队
+      if (opts.enqueue) {
+        await this.appendDeleteOutbox(entity, id);
+      }
+    }
+    return removed;
+  }
+
   // ---------- 远端写（pull / bootstrap 应用） ----------
 
   /**
@@ -234,6 +328,9 @@ export class LocalReplica {
     remote: EntityMergeState,
   ): Promise<boolean> {
     this.absorbRemoteClocks(remote.clocks);
+    // Compact 永久获胜（ADR-0008）：已 compact 的实体，迟到的远端字段
+    // 变更一律静默丢弃（副本与 hub 同规则），不会「删了又复活」。
+    if (this.compacted.has(`${entity}:${id}`)) return false;
     const current = await this.get(entity, id);
     const outcome = mergeEntityState(current, remote);
     if (outcome.appliedFields.length === 0) return false;
@@ -252,13 +349,11 @@ export class LocalReplica {
   }
 
   private async applyCompactInternal(entity: SyncEntity, ids: string[]): Promise<boolean> {
-    const def = entityDef(entity);
     let removed = 0;
     await inTransaction(this.storage, async () => {
-      for (const id of ids) {
-        const { changes } = await this.storage.run(`DELETE FROM ${def.table} WHERE id = ?`, [id]);
-        removed += changes;
-      }
+      // 级联与引用清理与设备发起删除同规则（Task → Subtask；SetNull）；
+      // 登记无论本地是否有行——compact 是 hub 的事实。
+      removed = await this.removeRows(entity, ids, { enqueue: false });
     });
     if (removed > 0) this.notifyChanged();
     return removed > 0;
@@ -285,9 +380,17 @@ export class LocalReplica {
         this.absorbRemoteClocks(entry.clocks);
       }
     });
-    // Outbox 回放：本地合并（不重新打时间戳，保留原 HLC）
+    // bootstrap 后 hub 快照即事实：清空本会话的 compact 登记
+    this.compacted.clear();
+    // Outbox 回放：本地合并（不重新打时间戳，保留原 HLC）；Delete
+    // Request 照常回放为本地删除（未同步的删除不因重建而丢捔）。
     const pending = await this.takeOutbox(Number.MAX_SAFE_INTEGER);
-    for (const { event } of pending) {
+    for (const entry of pending) {
+      if (entry.kind === 'delete') {
+        await this.removeRows(entry.entity, [entry.id], { enqueue: false });
+        continue;
+      }
+      const { event } = entry;
       const current = await this.get(event.entity, event.id);
       const remote: EntityMergeState = {
         fields: Object.fromEntries(
@@ -307,22 +410,34 @@ export class LocalReplica {
 
   // ---------- Outbox ----------
 
-  /** 取待推送的 Change Events（按入队顺序）。 */
-  async takeOutbox(limit = 500): Promise<Array<{ rowId: number; event: OutboxEvent }>> {
+  /** 取待推送的条目（按入队顺序）：普通字段写与 Delete Request。 */
+  async takeOutbox(limit = 500): Promise<OutboxEntry[]> {
     const rows = await this.storage.all<{
       id: number;
+      kind: string;
       entity: string;
       entity_id: string;
       fields: string;
-    }>('SELECT id, entity, entity_id, fields FROM _outbox ORDER BY id ASC LIMIT ?', [limit]);
-    return rows.map((row) => ({
-      rowId: row.id,
-      event: {
-        entity: row.entity as SyncEntity,
-        id: row.entity_id,
-        fields: JSON.parse(row.fields) as Record<string, FieldWrite>,
-      },
-    }));
+    }>('SELECT id, kind, entity, entity_id, fields FROM _outbox ORDER BY id ASC LIMIT ?', [limit]);
+    return rows.map((row) => {
+      if (row.kind === 'delete') {
+        return {
+          rowId: row.id,
+          kind: 'delete' as const,
+          entity: row.entity as SyncEntity,
+          id: row.entity_id,
+        };
+      }
+      return {
+        rowId: row.id,
+        kind: 'write' as const,
+        event: {
+          entity: row.entity as SyncEntity,
+          id: row.entity_id,
+          fields: JSON.parse(row.fields) as Record<string, FieldWrite>,
+        },
+      };
+    });
   }
 
   async outboxCount(): Promise<number> {
@@ -419,10 +534,10 @@ export class LocalReplica {
       );
     } else {
       const assignments = allColumns.slice(1).map((column) => `${column} = ?`);
-      await this.storage.run(
-        `UPDATE ${def.table} SET ${assignments.join(', ')} WHERE id = ?`,
-        [...allValues.slice(1), id],
-      );
+      await this.storage.run(`UPDATE ${def.table} SET ${assignments.join(', ')} WHERE id = ?`, [
+        ...allValues.slice(1),
+        id,
+      ]);
     }
   }
 
@@ -437,7 +552,7 @@ export class LocalReplica {
   ): Promise<void> {
     if (Object.keys(writes).length === 0) return;
     const rows = await this.storage.all<{ id: number; fields: string }>(
-      'SELECT id, fields FROM _outbox WHERE entity = ? AND entity_id = ? ORDER BY id DESC',
+      "SELECT id, fields FROM _outbox WHERE entity = ? AND entity_id = ? AND kind = 'write' ORDER BY id DESC",
       [entity, id],
     );
     const existing = rows[0];
@@ -452,10 +567,26 @@ export class LocalReplica {
       ]);
       return;
     }
-    await this.storage.run('INSERT INTO _outbox (entity, entity_id, fields) VALUES (?, ?, ?)', [
-      entity,
-      id,
-      JSON.stringify(writes),
-    ]);
+    await this.storage.run(
+      "INSERT INTO _outbox (kind, entity, entity_id, fields) VALUES ('write', ?, ?, ?)",
+      [entity, id, JSON.stringify(writes)],
+    );
+  }
+
+  /**
+   * 排入 Delete Request（ADR-0008）。重复删除同 id 幂等：已有 pending
+   * delete 则不再追加；已有的 pending 字段写保留（flush 时 hub 先合并
+   * 字段写、再应用删除，顺序不乱）。
+   */
+  private async appendDeleteOutbox(entity: SyncEntity, id: string): Promise<void> {
+    const rows = await this.storage.all<{ id: number }>(
+      "SELECT id FROM _outbox WHERE entity = ? AND entity_id = ? AND kind = 'delete'",
+      [entity, id],
+    );
+    if (rows.length > 0) return;
+    await this.storage.run(
+      "INSERT INTO _outbox (kind, entity, entity_id, fields) VALUES ('delete', ?, ?, '{}')",
+      [entity, id],
+    );
   }
 }

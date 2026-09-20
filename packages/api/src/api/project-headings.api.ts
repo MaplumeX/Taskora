@@ -6,58 +6,48 @@ import type {
   UpdateProjectHeadingDto,
 } from '@taskora/shared';
 
-import { apiClient } from './client';
+import { currentProjectHeadingBackend } from './project-heading-backend';
 
+/**
+ * Project Heading API 门面 — 数据源随 TaskBackend 同一注入模式切换
+ * （V2 spec）：默认 REST（web），桌面端登录装配时切到 Local Replica。
+ */
 export function getProjectHeadings(
   projectId: string,
   options?: { includeArchived?: boolean },
 ): Promise<ProjectHeadingResponseDto[]> {
-  return apiClient
-    .get<ProjectHeadingResponseDto[]>('/project-headings', {
-      params: { projectId, includeArchived: options?.includeArchived },
-    })
-    .then((response) => response.data);
+  return currentProjectHeadingBackend().getProjectHeadings(projectId, options);
 }
 
 export function createProjectHeading(
   data: CreateProjectHeadingDto,
 ): Promise<ProjectHeadingResponseDto> {
-  return apiClient
-    .post<ProjectHeadingResponseDto>('/project-headings', data)
-    .then((response) => response.data);
+  return currentProjectHeadingBackend().createProjectHeading(data);
 }
 
 export function updateProjectHeading(
   id: string,
   data: UpdateProjectHeadingDto,
 ): Promise<ProjectHeadingResponseDto> {
-  return apiClient
-    .patch<ProjectHeadingResponseDto>(`/project-headings/${id}`, data)
-    .then((response) => response.data);
+  return currentProjectHeadingBackend().updateProjectHeading(id, data);
 }
 
 export function deleteProjectHeading(id: string): Promise<void> {
-  return apiClient.delete(`/project-headings/${id}`).then(() => undefined);
+  return currentProjectHeadingBackend().deleteProjectHeading(id);
 }
 
 export function convertProjectHeadingToProject(id: string): Promise<ProjectResponseDto> {
-  return apiClient
-    .post<ProjectResponseDto>(`/project-headings/${id}/convert-to-project`)
-    .then((response) => response.data);
+  return currentProjectHeadingBackend().convertProjectHeadingToProject(id);
 }
 
 export function reorderProjectHeadingLayout(data: ReorderProjectHeadingLayoutDto): Promise<void> {
-  return apiClient.post('/project-headings/reorder', data).then(() => undefined);
+  return currentProjectHeadingBackend().reorderProjectHeadingLayout(data);
 }
 
 export function archiveProjectHeading(id: string): Promise<ProjectHeadingResponseDto> {
-  return apiClient
-    .post<ProjectHeadingResponseDto>(`/project-headings/${id}/archive`)
-    .then((response) => response.data);
+  return currentProjectHeadingBackend().archiveProjectHeading(id);
 }
 
 export function unarchiveProjectHeading(id: string): Promise<ProjectHeadingResponseDto> {
-  return apiClient
-    .post<ProjectHeadingResponseDto>(`/project-headings/${id}/unarchive`)
-    .then((response) => response.data);
+  return currentProjectHeadingBackend().unarchiveProjectHeading(id);
 }

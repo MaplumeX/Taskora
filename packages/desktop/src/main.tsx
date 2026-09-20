@@ -72,11 +72,15 @@ async function mount() {
   const { initEventStream } = await import('@taskora/api');
   initEventStream(queryClient);
 
-  // Local-first Engine（切片一，ADR-0007）：登录后 Task/Feed 读写切换到
+  // Local-first Engine（完全体，ADR-0007/V2）：登录后全部实体读写切换到
   // 本地副本（Tauri 侧 SQLite），Event Stream 之外的同步走 /sync 推拉。
-  // 仅主窗口装配；quick-add 窗口维持 REST（变更经同步推流回流）。
+  // 仅主窗口装配；quick-add 窗口经事件中继复用本实例（单一 Outbox/HLC）。
   const { initDesktopEngine } = await import('./engine/desktop-engine');
   initDesktopEngine(queryClient);
+
+  // quick-add 事件中继：主窗口代为执行 quick-add 的任务创建。
+  const { initQuickAddRelay } = await import('./quick-add-relay');
+  initQuickAddRelay();
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>

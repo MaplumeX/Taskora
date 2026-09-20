@@ -24,9 +24,7 @@ export interface TaskQuery {
 }
 
 export function getTasks(params?: TaskQuery): Promise<TaskResponseDto[]> {
-  return apiClient
-    .get<TaskResponseDto[]>('/tasks', { params })
-    .then((res) => res.data);
+  return apiClient.get<TaskResponseDto[]>('/tasks', { params }).then((res) => res.data);
 }
 
 export function getTask(id: string): Promise<TaskResponseDto> {
@@ -46,33 +44,23 @@ export function deleteTask(id: string): Promise<void> {
 }
 
 export function restoreTask(id: string): Promise<TaskResponseDto> {
-  return apiClient
-    .post<TaskResponseDto>(`/tasks/${id}/restore`)
-    .then((res) => res.data);
+  return apiClient.post<TaskResponseDto>(`/tasks/${id}/restore`).then((res) => res.data);
 }
 
 export function completeTask(id: string): Promise<TaskResponseDto> {
-  return apiClient
-    .post<TaskResponseDto>(`/tasks/${id}/complete`)
-    .then((res) => res.data);
+  return apiClient.post<TaskResponseDto>(`/tasks/${id}/complete`).then((res) => res.data);
 }
 
 export function uncompleteTask(id: string): Promise<TaskResponseDto> {
-  return apiClient
-    .post<TaskResponseDto>(`/tasks/${id}/uncomplete`)
-    .then((res) => res.data);
+  return apiClient.post<TaskResponseDto>(`/tasks/${id}/uncomplete`).then((res) => res.data);
 }
 
 export function cancelTask(id: string): Promise<TaskResponseDto> {
-  return apiClient
-    .post<TaskResponseDto>(`/tasks/${id}/cancel`)
-    .then((res) => res.data);
+  return apiClient.post<TaskResponseDto>(`/tasks/${id}/cancel`).then((res) => res.data);
 }
 
 export function uncancelTask(id: string): Promise<TaskResponseDto> {
-  return apiClient
-    .post<TaskResponseDto>(`/tasks/${id}/uncancel`)
-    .then((res) => res.data);
+  return apiClient.post<TaskResponseDto>(`/tasks/${id}/uncancel`).then((res) => res.data);
 }
 
 export function reorderTasks(orderedIds: string[]): Promise<void> {
@@ -85,22 +73,14 @@ export function convertTaskToProject(id: string): Promise<ProjectResponseDto> {
     .then((res) => res.data);
 }
 
-export function createSubtask(
-  taskId: string,
-  data: CreateSubtaskDto,
-): Promise<SubtaskResponseDto> {
+export function createSubtask(taskId: string, data: CreateSubtaskDto): Promise<SubtaskResponseDto> {
   return apiClient
     .post<SubtaskResponseDto>(`/tasks/${taskId}/subtasks`, data)
     .then((res) => res.data);
 }
 
-export function updateSubtask(
-  id: string,
-  data: UpdateSubtaskDto,
-): Promise<SubtaskResponseDto> {
-  return apiClient
-    .patch<SubtaskResponseDto>(`/subtasks/${id}`, data)
-    .then((res) => res.data);
+export function updateSubtask(id: string, data: UpdateSubtaskDto): Promise<SubtaskResponseDto> {
+  return apiClient.patch<SubtaskResponseDto>(`/subtasks/${id}`, data).then((res) => res.data);
 }
 
 export function deleteSubtask(id: string): Promise<void> {
@@ -108,35 +88,28 @@ export function deleteSubtask(id: string): Promise<void> {
 }
 
 export function completeSubtask(id: string): Promise<SubtaskResponseDto> {
-  return apiClient
-    .post<SubtaskResponseDto>(`/subtasks/${id}/complete`)
-    .then((res) => res.data);
+  return apiClient.post<SubtaskResponseDto>(`/subtasks/${id}/complete`).then((res) => res.data);
 }
 
 export function uncompleteSubtask(id: string): Promise<SubtaskResponseDto> {
-  return apiClient
-    .post<SubtaskResponseDto>(`/subtasks/${id}/uncomplete`)
-    .then((res) => res.data);
+  return apiClient.post<SubtaskResponseDto>(`/subtasks/${id}/uncomplete`).then((res) => res.data);
 }
 
 export function cancelSubtask(id: string): Promise<SubtaskResponseDto> {
-  return apiClient
-    .post<SubtaskResponseDto>(`/subtasks/${id}/cancel`)
-    .then((res) => res.data);
+  return apiClient.post<SubtaskResponseDto>(`/subtasks/${id}/cancel`).then((res) => res.data);
 }
 
 export function uncancelSubtask(id: string): Promise<SubtaskResponseDto> {
-  return apiClient
-    .post<SubtaskResponseDto>(`/subtasks/${id}/uncancel`)
-    .then((res) => res.data);
+  return apiClient.post<SubtaskResponseDto>(`/subtasks/${id}/uncancel`).then((res) => res.data);
 }
 
-export function reorderSubtasks(
-  taskId: string,
-  orderedIds: string[],
-): Promise<void> {
+export function reorderSubtasks(taskId: string, orderedIds: string[]): Promise<void> {
   const body: ReorderSubtasksDto = { orderedIds };
+  return apiClient.post(`/tasks/${taskId}/subtasks/reorder`, body).then(() => undefined);
+}
+
+export function emptyTrash(): Promise<{ deletedTasks: number; deletedProjects: number }> {
   return apiClient
-    .post(`/tasks/${taskId}/subtasks/reorder`, body)
-    .then(() => undefined);
+    .post<{ deletedTasks: number; deletedProjects: number }>('/feed/trash/empty')
+    .then((res) => res.data);
 }

@@ -371,3 +371,18 @@ model Device {
   @@unique([userId, deviceId])
   @@index([userId])
 }
+
+/// Compact 登记（ADR-0008）：已被物理删除（Delete Request / hub GC）的
+/// 实体 id。迟到的设备字段写到达这些实体时被静默丢弃（Compact 永久
+/// 获胜，副本与 hub 同规则）。这不是墓碑：不承载值与时钟，仅登记
+/// 「该 id 已不存在，拒绝重建」。
+model CompactedEntity {
+  id        String   @id @default(uuid())
+  userId    String
+  entity    String
+  entityId  String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, entity, entityId])
+  @@index([userId])
+}

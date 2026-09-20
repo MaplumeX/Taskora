@@ -9,9 +9,10 @@
 
 import { mergeFieldWrites, type EntityMergeState } from './merger';
 import { hlcWallMs } from './hlc';
-import type { SyncEntity } from './entities';
+import { DELETE_CASCADES, type SyncEntity } from './entities';
 import type {
   BootstrapResponse,
+  DeleteRequest,
   HubChange,
   OutboxEvent,
   PullRequest,
@@ -28,6 +29,12 @@ type UserState = {
   buffer: HubChange[];
   /** 设备（含虚拟设备 0）已提交的最大 HLC，用于合成基线时钟。 */
   seenWallMs: number;
+  /**
+   * Compact 登记（ADR-0008）：已被物理删除的实体 key。迟到的字段写
+   * 到达这些 key 时被静默丢弃（Compact 永久获胜，与 NestJS hub 的
+   * CompactedEntity 表同规则）。
+   */
+  compacted: Set<string>;
 };
 
 export interface InMemorySyncHubOptions {
@@ -49,12 +56,16 @@ export class InMemorySyncHub {
 
   // ---------- 设备侧协议面 ----------
 
-  push(userId: string, request: PushRequest): PushResponse {
+  push(userId: string, pushRequest: PushRequest): PushResponse {
     const state = this.stateFor(userId);
-    for (const event of request.events) {
+    for (const event of pushRequest.events) {
       this.mergeEvent(state, event);
     }
-    return { acked: request.events.length };
+    // 先合并字段写、再应用删除（ADR-0008 同序：字段写 → 删除）
+    for (const deleteRequest of pushRequest.deletes ?? []) {
+      this.applyDeleteRequest(state, deleteRequest);
+    }
+    return { acked: pushRequest.events.length };
   }
 
   pull(userId: string, request: PullRequest): PullResponse {
@@ -99,12 +110,8 @@ export class InMemorySyncHub {
 
   /** hub GC 物理删除后下发 Compact Event。 */
   compact(userId: string, entity: SyncEntity, ids: string[]): void {
-    if (ids.length === 0) return;
     const state = this.stateFor(userId);
-    for (const id of ids) {
-      state.entities.delete(`${entity}:${id}`);
-    }
-    this.publish(state, { kind: 'compact', seq: 0, entity, ids });
+    this.removeAndPublish(state, entity, ids);
   }
 
   /** hub 重启：保留合并态，清空缓冲、seq 重新播种（持旧 cursor 的设备将被推入 resync）。 */
@@ -131,7 +138,13 @@ export class InMemorySyncHub {
     if (!state) {
       // Date.now() 种子：hub 重启后 seq 跳变，持旧 cursor 的设备被推入
       // resync（与 ADR-0005 同一思路）。
-      state = { entities: new Map(), nextSeq: this.wallClock() + 1, buffer: [], seenWallMs: 0 };
+      state = {
+        entities: new Map(),
+        nextSeq: this.wallClock() + 1,
+        buffer: [],
+        seenWallMs: 0,
+        compacted: new Set(),
+      };
       this.users.set(userId, state);
     }
     return state;
@@ -139,6 +152,14 @@ export class InMemorySyncHub {
 
   private mergeEvent(state: UserState, event: OutboxEvent): void {
     const key = `${event.entity}:${event.id}`;
+    // Compact 永久获胜（ADR-0008）：已 compact 的实体，迟到的字段写
+    // 静默丢弃（不重建、不发事件）。
+    if (state.compacted.has(key)) return;
+    // 孤儿 Subtask 防御：父 Task 不存在（含已被 compact）时丢弃，与
+    // NestJS hub 的越权拒绝路径同规则。
+    if (event.entity === 'subtask' && !state.entities.has(`task:${event.fields.taskId?.value}`)) {
+      return;
+    }
     const current = state.entities.get(key) ?? null;
     const outcome = mergeFieldWrites(current, event.fields);
     if (outcome.appliedFields.length === 0) {
@@ -159,6 +180,45 @@ export class InMemorySyncHub {
       fields: outcome.fields,
       clocks: outcome.clocks,
     });
+  }
+
+  /**
+   * 设备发起的 Delete Request（ADR-0008）：物理删除并广播 Compact
+   * Event。Task 级联删除其 Subtask（每用户单调 seq）。幂等：重放
+   * （实体已不存在）为 no-op，不产生新事件。
+   */
+  private applyDeleteRequest(state: UserState, request: DeleteRequest): void {
+    if (request.ids.length === 0) return;
+    const cascade = DELETE_CASCADES[request.entity] ?? [];
+    // 级联（对齐 NestJS hub 的 onDelete: Cascade）：Task → Subtask
+    for (const rule of cascade) {
+      const childIds: string[] = [];
+      for (const [key, entityState] of state.entities) {
+        if (!key.startsWith(`${rule.entity}:`)) continue;
+        if (request.ids.includes(entityState.fields[rule.foreignKey] as string)) {
+          childIds.push(key.slice(rule.entity.length + 1));
+        }
+      }
+      this.removeAndPublish(state, rule.entity, childIds);
+    }
+    this.removeAndPublish(state, request.entity, request.ids);
+  }
+
+  /**
+   * 登记 compact + 删行 + 广播 Compact Event（仅实际移除的 id；
+   * 不存在的 id 幂等跳过，不产生新事件）。
+   */
+  private removeAndPublish(state: UserState, entity: SyncEntity, ids: string[]): void {
+    if (ids.length === 0) return;
+    const removed: string[] = [];
+    for (const id of ids) {
+      const key = `${entity}:${id}`;
+      state.compacted.add(key);
+      if (state.entities.delete(key)) removed.push(id);
+    }
+    if (removed.length > 0) {
+      this.publish(state, { kind: 'compact', seq: 0, entity, ids: removed });
+    }
   }
 
   private publish(state: UserState, change: HubChange): void {

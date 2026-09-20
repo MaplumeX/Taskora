@@ -14,23 +14,17 @@ export class SyncController {
   constructor(private readonly syncHub: SyncHubService) {}
 
   @Post('devices')
-  registerDevice(
-    @Request() req: { user: { id: string } },
-    @Body() dto: RegisterDeviceDto,
-  ) {
+  registerDevice(@Request() req: { user: { id: string } }, @Body() dto: RegisterDeviceDto) {
     return this.syncHub.registerDevice(req.user.id, dto.deviceId, dto.label);
   }
 
   @Post('push')
   push(@Request() req: { user: { id: string } }, @Body() dto: PushRequestDto) {
-    return this.syncHub.push(req.user.id, dto.events);
+    return this.syncHub.push(req.user.id, dto.events, dto.deletes);
   }
 
   @Get('pull')
-  pull(
-    @Request() req: { user: { id: string } },
-    @Query('cursor') cursorRaw: string | undefined,
-  ) {
+  pull(@Request() req: { user: { id: string } }, @Query('cursor') cursorRaw: string | undefined) {
     const cursor = Number.parseInt(cursorRaw ?? '0', 10);
     const safeCursor = Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : 0;
     return this.syncHub.pull(req.user.id, safeCursor);
