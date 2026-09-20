@@ -31,6 +31,7 @@ import {
   loadRow,
   serializeRow,
   toPrismaData,
+  type PrismaRow,
 } from './entity-codec';
 import { SyncEventBuffer } from './sync-event-buffer.service';
 
@@ -237,6 +238,18 @@ export class SyncHubService implements OnModuleInit {
     return row !== null;
   }
 
+  /**
+   * 行归属校验：已存在的行是否属于该用户（Subtask 无 userId 列，经
+   * 父 Task 认领）。字段写与 Delete Request 适用同一规则（story 6）。
+   */
+  private async ownsRow(userId: string, entity: SyncEntity, row: PrismaRow): Promise<boolean> {
+    if (entity === 'subtask') {
+      const parent = await loadRow(this.prisma, codecFor('task'), row.taskId as string);
+      return (parent as { userId?: string } | null)?.userId === userId;
+    }
+    return row.userId === userId;
+  }
+
   // ---------- 内部 ----------
 
   /** collector tap：REST/Assistant 写 → 序列化并入同步推流。 */
@@ -276,6 +289,11 @@ export class SyncHubService implements OnModuleInit {
     if (Object.keys(incoming).length === 0) return;
 
     const row = await loadRow(this.prisma, codec, event.id);
+    // 归属校验（story 6 对偶，字段写与 Delete Request 同口径）：行存在
+    // 但属于其他用户（Subtask 经父 Task 认领）时静默丢弃——不写库、
+    // 不发布（否则越权者既可篡改他人数据、又能在自己的增量流里读到
+    // 他人实体的完整字段）。
+    if (row && !(await this.ownsRow(userId, event.entity, row))) return;
     // Compact 永久获胜（ADR-0008）：已 compact 的实体，迟到的字段写
     // 静默丢弃（不重建、不发事件）。
     if (!row && (await this.isCompacted(userId, event.entity, event.id))) return;
@@ -289,7 +307,14 @@ export class SyncHubService implements OnModuleInit {
       return; // 纯重放：合并态未变，不写库、不发事件
     }
 
-    const data = toPrismaData(codec, outcome.fields, outcome.appliedFields);
+    // 新建行走 create 模式：tagIds 只物化为纯 create（update 模式的
+    // deleteMany 会让 Prisma 校验直接拒绝 create，见 toPrismaData 注释）。
+    const data = toPrismaData(
+      codec,
+      outcome.fields,
+      outcome.appliedFields,
+      row ? 'update' : 'create',
+    );
     data.fieldClocks = outcome.clocks;
     data.fieldDigests = digestMap(codec, outcome.fields);
     // updatedAt 不超过最大时钟墙钟：REST 写检测（摘要不匹配才重置基线）

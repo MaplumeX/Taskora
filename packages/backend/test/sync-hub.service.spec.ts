@@ -330,6 +330,74 @@ describe('SyncHubService（合并器集成）', () => {
     });
   });
 
+  describe('归属校验（字段写与 Delete Request 同口径，story 6 对偶）', () => {
+    it('越权 update（行属于他人）：不写库、不发事件', async () => {
+      mockPrisma.task.findUnique.mockResolvedValue({
+        ...taskRow,
+        userId: 'someone-else',
+      });
+
+      const cursorBefore = buffer.currentSeq(USER);
+      await service.push(USER, [
+        {
+          entity: 'task',
+          id: 'task-1',
+          fields: {
+            title: { value: '越权改写', hlc: stamp(LATER_THAN_ROW, 0, 'dev-attacker') },
+          },
+        },
+      ]);
+
+      expect(mockPrisma.task.update).not.toHaveBeenCalled();
+      expect(buffer.pull(USER, cursorBefore).changes).toHaveLength(0);
+    });
+
+    it('越权 subtask update（父 Task 属于他人）：被拒绝', async () => {
+      mockPrisma.subtask.findUnique.mockResolvedValue({
+        id: 'sub-1',
+        title: '步骤',
+        status: 'ACTIVE',
+        settledAt: null,
+        sortOrder: 0,
+        taskId: 'task-1',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        updatedAt: new Date('2026-01-02T00:00:00Z'),
+        fieldClocks: null,
+        fieldDigests: null,
+      });
+      mockPrisma.task.findUnique.mockResolvedValue({ id: 'task-1', userId: 'someone-else' });
+
+      await service.push(USER, [
+        {
+          entity: 'subtask',
+          id: 'sub-1',
+          fields: {
+            title: { value: '越权', hlc: stamp(LATER_THAN_ROW, 0, 'dev-attacker') },
+          },
+        },
+      ]);
+
+      expect(mockPrisma.subtask.update).not.toHaveBeenCalled();
+    });
+
+    it('自己的行：正常合并（不误伤）', async () => {
+      mockPrisma.task.findUnique.mockResolvedValue(taskRow);
+      mockPrisma.task.update.mockResolvedValue({ ...taskRow, title: '新标题' });
+
+      await service.push(USER, [
+        {
+          entity: 'task',
+          id: 'task-1',
+          fields: {
+            title: { value: '新标题', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') },
+          },
+        },
+      ]);
+
+      expect(mockPrisma.task.update).toHaveBeenCalled();
+    });
+  });
+
   it('虚拟设备 0 提交（Assistant）：与设备推送同一合并路径', async () => {
     const createdRow = {
       ...taskRow,
