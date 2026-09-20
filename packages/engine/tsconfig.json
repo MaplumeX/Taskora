@@ -3,17 +3,16 @@
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
-    "module": "ESNext",
-    "moduleResolution": "bundler",
-    "noEmit": true,
-    "isolatedModules": true,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "declaration": true,
+    "outDir": "dist",
+    "rootDir": "src",
     "strict": true,
     "skipLibCheck": true,
-    "types": ["vitest/globals"],
-    "baseUrl": ".",
-    "paths": {
-      "@taskora/shared": ["../shared/src/index.ts"]
-    }
+    "esModuleInterop": true,
+    "types": ["vitest/globals"]
   },
-  "include": ["src", "vitest.config.ts"]
+  "include": ["src"],
+  "exclude": ["src/**/*.test.ts"]
 }

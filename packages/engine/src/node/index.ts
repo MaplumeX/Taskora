@@ -5,15 +5,12 @@
  * `node:sqlite` 仅在此动态加载。
  */
 
-import { createRequire } from 'node:module';
-
 import type { SqlRow, SqlStorage } from '../storage';
 
-const require = createRequire(import.meta.url);
-
 export async function createNodeSqliteStorage(path: string): Promise<SqlStorage> {
-  // createRequire 而非动态 import：打包器（Vite）不会试图解析 node:sqlite
-  const { DatabaseSync } = require('node:sqlite') as typeof import('node:sqlite');
+  // 计算出的 specifier：打包器（Vite）不会试图静态解析 node:sqlite
+  const specifier = ['node', 'sqlite'].join(':');
+  const { DatabaseSync } = (await import(/* @vite-ignore */ specifier)) as typeof import('node:sqlite');
   const db = new DatabaseSync(path);
   const bind = (params: unknown[]) => params as never[];
 

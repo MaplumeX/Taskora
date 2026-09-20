@@ -2,13 +2,25 @@
   "name": "@taskora/engine",
   "version": "0.3.6",
   "private": true,
-  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
   "exports": {
-    ".": "./src/index.ts",
-    "./node": "./src/node/index.ts",
-    "./react": "./src/react/index.ts"
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./node": {
+      "types": "./dist/node/index.d.ts",
+      "default": "./dist/node/index.js"
+    },
+    "./react": {
+      "types": "./dist/react/index.d.ts",
+      "default": "./dist/react/index.js"
+    }
   },
   "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "test": "vitest run"

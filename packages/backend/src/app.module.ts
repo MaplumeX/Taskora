@@ -12,6 +12,7 @@ import { FeedModule } from './feed/feed.module';
 import { ProjectHeadingsModule } from './project-headings/project-headings.module';
 import { SubtasksModule } from './subtasks/subtasks.module';
 import { AgentModule } from './agent/agent.module';
+import { SyncModule } from './sync/sync.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -29,6 +30,7 @@ import { HealthController } from './health/health.controller';
     ProjectHeadingsModule,
     SubtasksModule,
     AgentModule,
+    SyncModule,
   ],
   controllers: [HealthController],
 })
