@@ -40,9 +40,7 @@ describe('serializeRow（时钟基线 / 合成 Position）', () => {
     expect(state.fields.tagIds).toEqual(['tag-a', 'tag-b']); // 排序保证摘要稳定
     expect(state.clocks.title).toBe(baseline);
     expect(state.clocks.tagIds).toBe(baseline);
-    expect(Object.keys(state.clocks).sort()).toEqual(
-      codec.def.fields.map((f) => f.name).sort(),
-    );
+    expect(Object.keys(state.clocks).sort()).toEqual(codec.def.fields.map((f) => f.name).sort());
   });
 
   it('摘要匹配（设备写过、REST 未动）：设备时钟原样保留', () => {
@@ -103,7 +101,8 @@ describe('synthPosition', () => {
     const key = synthPosition(2, new Date('2026-05-01T00:00:00Z'));
     expect(() => {
       // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { positionBetween, validatePosition } = require('@taskora/engine') as typeof import('@taskora/engine');
+      const { positionBetween, validatePosition } =
+        require('@taskora/engine') as typeof import('@taskora/engine');
       validatePosition(key);
       expect(positionBetween(key, null) > key).toBe(true);
     }).not.toThrow();
@@ -112,17 +111,21 @@ describe('synthPosition', () => {
 
 describe('toPrismaData', () => {
   it('日期字段 ISO → Date、null 保留、非法日期剔除', () => {
-    const data = toPrismaData(codec, {
-      dueDate: '2026-02-01T00:00:00.000Z',
-      trashedAt: null,
-      scheduledDate: 'not-a-date',
-    }, ['dueDate', 'trashedAt', 'scheduledDate']);
+    const data = toPrismaData(
+      codec,
+      {
+        dueDate: '2026-02-01T00:00:00.000Z',
+        trashedAt: null,
+        scheduledDate: 'not-a-date',
+      },
+      ['dueDate', 'trashedAt', 'scheduledDate'],
+    );
     expect(data.dueDate).toEqual(new Date('2026-02-01T00:00:00.000Z'));
     expect(data.trashedAt).toBeNull();
     expect(data).not.toHaveProperty('scheduledDate');
   });
 
-  it('tagIds → 关系物化（deleteMany + create）', () => {
+  it('tagIds → 关系物化（update 模式：deleteMany + create 整组替换）', () => {
     const data = toPrismaData(codec, { tagIds: ['tag-a', 'tag-b'] }, ['tagIds']);
     expect(data.tags).toEqual({
       deleteMany: {},
@@ -130,12 +133,32 @@ describe('toPrismaData', () => {
     });
   });
 
+  it('tagIds → create 模式：纯 { create }（Prisma create 嵌套输入不接受 deleteMany）', () => {
+    // 回归：v0.4.2 「同步后任务变 Inbox」事故——create 路径携带
+    // deleteMany 会让 Prisma 把数据按 checked 输入校验（要求 user
+    // connect、拒绝裸 userId）而拒掉整个设备 create 事件。
+    const data = toPrismaData(codec, { tagIds: ['tag-a'] }, ['tagIds'], 'create');
+    expect(data.tags).toEqual({ create: [{ tagId: 'tag-a' }] });
+  });
+
+  it('不可空列的 null 被剔除（交给 Prisma 列默认值）', () => {
+    // 回归：sortOrder: null 透传曾让 unchecked create 校验失败，错误
+    // 被报成 checked 变体的「Argument user is missing」。
+    const data = toPrismaData(codec, { sortOrder: null, notes: null }, ['sortOrder', 'notes']);
+    expect(data).not.toHaveProperty('sortOrder');
+    expect(data.notes).toBeNull(); // 可空列的 null 照透传
+  });
+
   it('非法枚举剔除、合法枚举透传', () => {
-    const data = toPrismaData(codec, {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      status: 'BOGUS' as any,
-      bucket: 'ANYTIME',
-    }, ['status', 'bucket']);
+    const data = toPrismaData(
+      codec,
+      {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        status: 'BOGUS' as any,
+        bucket: 'ANYTIME',
+      },
+      ['status', 'bucket'],
+    );
     expect(data).not.toHaveProperty('status');
     expect(data.bucket).toBe('ANYTIME');
   });
