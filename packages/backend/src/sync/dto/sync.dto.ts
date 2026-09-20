@@ -1,7 +1,7 @@
 import { IsArray, IsIn, IsObject, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
-import type { SyncEntity, OutboxEvent, DeleteRequest } from '@taskora/engine';
+import type { SyncEntity, OutboxEvent } from '@taskora/engine';
 
 export const SYNC_ENTITY_VALUES = [
   'task',

@@ -16,6 +16,7 @@ import {
   type SyncEntity,
   ENTITIES,
 } from '@taskora/engine';
+import { Prisma } from '@prisma/client';
 import {
   HeadingStatus,
   ProjectBucket,
@@ -269,26 +270,62 @@ export function synthPosition(sortOrder: number, createdAt: Date): string {
 // ---------- 合并态 → Prisma 写数据 ----------
 
 /**
+ * DMMF 派生：模型名（小写）→ 不可为 null 的列集合。
+ *
+ * 注册表（entities.ts）面向 SQLite 副本、字段一律可空；Prisma 侧却有
+ * 不可空列（如 Task.sortOrder Int @default(0)）。设备事件里这些列的
+ * null 值若照透传，unchecked create/update 校验会失败（错误常被
+ * Prisma 报成 checked 变体的「Argument user is missing」，极具迷惑性
+ * —— v0.4.2「同步后任务变 Inbox」事故的第二根因），因此 null 一律
+ * 剔除、交给 Prisma 列默认值。契约测试保证 DMMF 与注册表对齐。
+ */
+const NON_NULLABLE_COLUMNS: ReadonlyMap<string, ReadonlySet<string>> = (() => {
+  const map = new Map<string, ReadonlySet<string>>();
+  for (const model of Prisma.dmmf.datamodel.models) {
+    const columns = new Set<string>();
+    for (const field of model.fields) {
+      if ((field.kind === 'scalar' || field.kind === 'enum') && !field.isList && field.isRequired) {
+        columns.add(field.name);
+      }
+    }
+    map.set(model.name.toLowerCase(), columns);
+  }
+  return map;
+})();
+
+/**
  * 把（合并后胜出的）wire 字段转换为 Prisma 写数据。
  * 无效日期/非法枚举字段被静默剔除（设备侧 bug 不应击穿 hub）。
+ *
+ * mode（默认 'update'）：
+ * - 'create'：tagIds 物化为纯 `{ create: [...] }`——Prisma 的 create
+ *   嵌套输入（*CreateNestedManyWithout*）不接受 deleteMany，且出现
+ *   嵌套关系写会让 Prisma 把整份数据按 checked 输入（要求 user
+ *   connect、拒绝裸 userId）校验，直接抛错（v0.4.2 「同步后任务变
+ *   Inbox」事故的根因）；
+ * - 'update'：`{ deleteMany: {}, create: [...] }` 整组替换，语义不变。
  */
 export function toPrismaData(
   codec: EntityCodec,
   fields: Record<string, unknown>,
   appliedFields: string[],
+  mode: 'create' | 'update' = 'update',
 ): Record<string, unknown> {
   const data: Record<string, unknown> = {};
   for (const fieldName of appliedFields) {
     if (fieldName === 'tagIds' && codec.tagRelation) {
       const tagIds = fields[fieldName];
       if (!Array.isArray(tagIds) || tagIds.some((id) => typeof id !== 'string')) continue;
-      data[codec.tagRelation.relation] = {
-        deleteMany: {},
-        create: tagIds.map((tagId) => ({ tagId })),
-      };
+      const create = tagIds.map((tagId) => ({ tagId }));
+      data[codec.tagRelation.relation] =
+        mode === 'create' ? { create } : { deleteMany: {}, create };
       continue;
     }
     const value = fields[fieldName];
+    // 不可空列不接受 null（sortOrder 等）：剔除，交给 Prisma 列默认值
+    if (value === null && NON_NULLABLE_COLUMNS.get(codec.model.toLowerCase())?.has(fieldName)) {
+      continue;
+    }
     if (codec.dateFields.has(fieldName)) {
       if (value === null) {
         data[fieldName] = null;

@@ -289,7 +289,14 @@ export class SyncHubService implements OnModuleInit {
       return; // 纯重放：合并态未变，不写库、不发事件
     }
 
-    const data = toPrismaData(codec, outcome.fields, outcome.appliedFields);
+    // 新建行走 create 模式：tagIds 只物化为纯 create（update 模式的
+    // deleteMany 会让 Prisma 校验直接拒绝 create，见 toPrismaData 注释）。
+    const data = toPrismaData(
+      codec,
+      outcome.fields,
+      outcome.appliedFields,
+      row ? 'update' : 'create',
+    );
     data.fieldClocks = outcome.clocks;
     data.fieldDigests = digestMap(codec, outcome.fields);
     // updatedAt 不超过最大时钟墙钟：REST 写检测（摘要不匹配才重置基线）
