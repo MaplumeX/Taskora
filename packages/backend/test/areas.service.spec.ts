@@ -23,7 +23,10 @@ describe('AreasService', () => {
         deleteMany: vi.fn(),
         createMany: vi.fn(),
       },
-      $transaction: vi.fn((promises: unknown[]) => Promise.all(promises)),
+      compactedEntity: { createMany: vi.fn() },
+      $transaction: vi.fn((value: unknown) =>
+        typeof value === 'function' ? value(mockPrisma) : Promise.all(value as Promise<unknown>[]),
+      ),
     } as unknown as InstanceType<typeof PrismaService>;
 
     service = new AreasService(mockPrisma);
@@ -87,7 +90,15 @@ describe('AreasService', () => {
     it('should create area with tagIds via nested create', async () => {
       const userId = 'user-1';
       const dto = { title: 'Work', tagIds: ['tag-1', 'tag-2'] };
-      const tag = { id: 'tag-1', title: 'Urgent', color: '#FF0000', sortOrder: 0, tagGroupId: null, createdAt: new Date(), updatedAt: new Date() };
+      const tag = {
+        id: 'tag-1',
+        title: 'Urgent',
+        color: '#FF0000',
+        sortOrder: 0,
+        tagGroupId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
       mockPrisma.area.aggregate.mockResolvedValue({ _max: { sortOrder: null } });
       mockPrisma.area.create.mockResolvedValue({
         id: 'area-1',
@@ -136,7 +147,15 @@ describe('AreasService', () => {
 
     it('should map tags from join table to tag array', async () => {
       const userId = 'user-1';
-      const tag = { id: 'tag-1', title: 'Urgent', color: '#FF0000', sortOrder: 0, tagGroupId: null, createdAt: new Date(), updatedAt: new Date() };
+      const tag = {
+        id: 'tag-1',
+        title: 'Urgent',
+        color: '#FF0000',
+        sortOrder: 0,
+        tagGroupId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
       mockPrisma.area.findMany.mockResolvedValue([
         { id: 'area-1', title: 'Work', notes: null, userId, sortOrder: 0, tags: [{ tag }] },
       ]);
@@ -166,9 +185,7 @@ describe('AreasService', () => {
     it('should throw NotFoundException when area does not exist', async () => {
       mockPrisma.area.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne('user-1', 'nonexistent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.findOne('user-1', 'nonexistent')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -198,7 +215,15 @@ describe('AreasService', () => {
       const userId = 'user-1';
       const areaId = 'area-1';
       const existing = { id: areaId, title: 'Work', notes: null, userId, tags: [] };
-      const tag = { id: 'tag-1', title: 'Urgent', color: '#FF0000', sortOrder: 0, tagGroupId: null, createdAt: new Date(), updatedAt: new Date() };
+      const tag = {
+        id: 'tag-1',
+        title: 'Urgent',
+        color: '#FF0000',
+        sortOrder: 0,
+        tagGroupId: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
       mockPrisma.area.findFirst.mockResolvedValue(existing);
       mockPrisma.areaTag.deleteMany.mockResolvedValue({ count: 1 });
       mockPrisma.areaTag.createMany.mockResolvedValue({ count: 1 });
@@ -243,6 +268,10 @@ describe('AreasService', () => {
       expect(mockPrisma.area.delete).toHaveBeenCalledWith({
         where: { id: areaId },
       });
+      expect(mockPrisma.compactedEntity.createMany).toHaveBeenCalledWith({
+        data: [{ userId, entity: 'area', entityId: areaId }],
+        skipDuplicates: true,
+      });
       expect(result).toEqual(existing);
     });
   });
@@ -285,9 +314,7 @@ describe('AreasService', () => {
       const orderedIds = ['area-1', 'foreign-area'];
       mockPrisma.area.findMany.mockResolvedValue([{ id: 'area-1' }]);
 
-      await expect(service.reorder(userId, orderedIds)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.reorder(userId, orderedIds)).rejects.toThrow(NotFoundException);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
@@ -296,9 +323,7 @@ describe('AreasService', () => {
       const orderedIds = ['area-1', 'nonexistent'];
       mockPrisma.area.findMany.mockResolvedValue([{ id: 'area-1' }]);
 
-      await expect(service.reorder(userId, orderedIds)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.reorder(userId, orderedIds)).rejects.toThrow(NotFoundException);
     });
   });
 });

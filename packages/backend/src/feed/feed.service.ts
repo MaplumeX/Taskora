@@ -1,12 +1,33 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncHubService } from '../sync/sync-hub.service';
+import { registerCompacted } from '../sync/compact-registry';
 import { buildTaskViewWhere, SETTLED_STATUSES, type TaskView } from '../tasks/views';
 import { buildProjectViewWhere, type ProjectView } from '../projects/views';
-import { ScheduledType, TaskStatus, TaskBucket, ProjectStatus, ProjectBucket } from '@taskora/shared';
-import type { FeedItem, FeedView, TaskFeedItem, ProjectFeedItem, TagResponseDto } from '@taskora/shared';
+import {
+  ScheduledType,
+  TaskStatus,
+  TaskBucket,
+  ProjectStatus,
+  ProjectBucket,
+} from '@taskora/shared';
+import type {
+  FeedItem,
+  FeedView,
+  TaskFeedItem,
+  ProjectFeedItem,
+  TagResponseDto,
+} from '@taskora/shared';
 
-function mapTag(tag: { id: string; title: string; color: string; sortOrder: number; tagGroupId: string | null; createdAt: Date; updatedAt: Date }): TagResponseDto {
+function mapTag(tag: {
+  id: string;
+  title: string;
+  color: string;
+  sortOrder: number;
+  tagGroupId: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}): TagResponseDto {
   return {
     id: tag.id,
     title: tag.title,
@@ -26,7 +47,7 @@ export class FeedService {
   ) {}
 
   async emptyTrash(userId: string): Promise<{ deletedTasks: number; deletedProjects: number }> {
-    return this.prisma.$transaction(async (tx) => {
+    const result = await this.prisma.$transaction(async (tx) => {
       // 1. 取本用户所有 trashed project 的 id
       const trashedProjects = await tx.project.findMany({
         where: { userId, trashedAt: { not: null } },
@@ -42,21 +63,14 @@ export class FeedService {
 
       // 3. 删除集 = trashed tasks ∪ trashed project 的下属 tasks
       //    Subtask 自动 CASCADE（onDelete: Cascade），无需手工收集后代
-      const trashedTaskIds = new Set(
-        allTasks.filter((t) => t.trashedAt !== null).map((t) => t.id),
-      );
+      const trashedTaskIds = new Set(allTasks.filter((t) => t.trashedAt !== null).map((t) => t.id));
 
       // 3a. trashed project 下属任务: projectId ∈ trashedProjectIds 的 task
       const projectOrphanIds = new Set(
-        allTasks
-          .filter((t) => t.projectId && trashedProjectIds.has(t.projectId))
-          .map((t) => t.id),
+        allTasks.filter((t) => t.projectId && trashedProjectIds.has(t.projectId)).map((t) => t.id),
       );
 
-      const taskDeleteIds = new Set<string>([
-        ...trashedTaskIds,
-        ...projectOrphanIds,
-      ]);
+      const taskDeleteIds = new Set<string>([...trashedTaskIds, ...projectOrphanIds]);
 
       // 3b. DB 级联删除的 Subtask 不会产生 collector 事件，先收集其 id，
       //     之后与 Task 一起下发 Compact Event（ADR-0007：GC 后压缩变更）。
@@ -69,6 +83,12 @@ export class FeedService {
           ).map((s) => s.id)
         : [];
 
+      // Compact 登记与物理删除同事务提交。即使进程在提交后、广播前退出，
+      // bootstrap 仍能知道这些 id 永久删除，迟到字段写也不会复活它们。
+      await registerCompacted(tx, userId, 'task', [...taskDeleteIds]);
+      await registerCompacted(tx, userId, 'project', [...trashedProjectIds]);
+      await registerCompacted(tx, userId, 'subtask', cascadedSubtaskIds);
+
       // 4. 物理删除: TaskTag/ProjectTag/Subtask 关联走 onDelete: Cascade 自动清理
       //    where 再带一次 userId 作防御性约束(集合已来自本用户数据,纯双保险)
       const taskDelete = await tx.task.deleteMany({
@@ -78,25 +98,26 @@ export class FeedService {
         where: { id: { in: [...trashedProjectIds] }, userId },
       });
 
-      // 5. Compact Event：Task/Project 由 collector tap 转 compact，
-      //    Subtask 级联无事件，显式下发。
-      this.syncHub.publishCompact(userId, 'subtask', cascadedSubtaskIds);
-
-      return { deletedTasks: taskDelete.count, deletedProjects: projectDelete.count };
+      return {
+        deletedTasks: taskDelete.count,
+        deletedProjects: projectDelete.count,
+        taskIds: [...taskDeleteIds],
+        projectIds: [...trashedProjectIds],
+        cascadedSubtaskIds,
+      };
     });
+    // 事务提交后再广播；collector 产生的重复 Compact 对设备幂等。
+    await this.syncHub.publishCompact(userId, 'task', result.taskIds);
+    await this.syncHub.publishCompact(userId, 'project', result.projectIds);
+    await this.syncHub.publishCompact(userId, 'subtask', result.cascadedSubtaskIds);
+    return { deletedTasks: result.deletedTasks, deletedProjects: result.deletedProjects };
   }
 
   async findAll(userId: string, view: FeedView): Promise<FeedItem[]> {
     // Projects never appear in the inbox or anytime feeds —
     // they only surface in schedule/terminal views (today, upcoming,
     // someday, logbook, trash).
-    const includeProjects = [
-      'today',
-      'upcoming',
-      'someday',
-      'logbook',
-      'trash',
-    ].includes(view);
+    const includeProjects = ['today', 'upcoming', 'someday', 'logbook', 'trash'].includes(view);
 
     const [tasks, projects] = await Promise.all([
       this.prisma.task.findMany({

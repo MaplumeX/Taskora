@@ -78,6 +78,25 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     };
   }
 
+  function fullTagCreateEvent(id: string) {
+    const fields: Record<string, unknown> = {
+      title: '稍后创建的标签',
+      color: '#3B82F6',
+      position: 'a0',
+      sortOrder: 0,
+      tagGroupId: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    return {
+      entity: 'tag' as const,
+      id,
+      fields: Object.fromEntries(
+        Object.entries(fields).map(([name, value], i) => [name, { value, hlc: stamp(100 + i) }]),
+      ),
+    };
+  }
+
   it('设备全字段 create 落库并保留 Today 语义（不再被 Prisma 拒掉）', async () => {
     await hub.push(USER, [fullCreateEvent('task-today-1')]);
 
@@ -169,6 +188,53 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     });
     expect(row).not.toBeNull();
     expect(row!.tags.map((t) => t.tagId)).toEqual(['tag-1']);
+  });
+
+  it('批内前序依赖失败时不确认 Outbox；后序父实体落库后重试可收敛', async () => {
+    const task = fullCreateEvent('task-retry-1', { tagIds: ['tag-late-1'] });
+    const tag = fullTagCreateEvent('tag-late-1');
+
+    // 第一轮 Task 在 Tag 之前，关系写失败；Hub 仍继续创建后面的 Tag，
+    // 但整体请求失败，使设备保留整批。
+    await expect(hub.push(USER, [task, tag])).rejects.toBeTruthy();
+    expect(await testPrisma.tag.findUnique({ where: { id: 'tag-late-1' } })).not.toBeNull();
+    expect(await testPrisma.task.findUnique({ where: { id: 'task-retry-1' } })).toBeNull();
+
+    // 第二轮幂等重放：Tag 已存在，Task 关系可以正常物化。
+    await hub.push(USER, [task, tag]);
+    const row = await testPrisma.task.findUnique({
+      where: { id: 'task-retry-1' },
+      include: { tags: true },
+    });
+    expect(row?.tags.map((entry) => entry.tagId)).toEqual(['tag-late-1']);
+  });
+
+  it('并发修改同一字段时严格按 HLC 决胜，而不是按数据库提交顺序', async () => {
+    await hub.push(USER, [fullCreateEvent('task-concurrent-1', { title: '初始' })]);
+    const newer = formatHlc({ wallMs: WALL + 2, counter: 0, deviceId: 'dev-newer' });
+    const older = formatHlc({ wallMs: WALL + 1, counter: 0, deviceId: 'dev-older' });
+
+    // 故意先启动新写、后启动旧写；没有事务实体锁时，旧写可能最后提交并覆盖。
+    await Promise.all([
+      hub.push(USER, [
+        {
+          entity: 'task',
+          id: 'task-concurrent-1',
+          fields: { title: { value: 'HLC 新写', hlc: newer } },
+        },
+      ]),
+      hub.push(USER, [
+        {
+          entity: 'task',
+          id: 'task-concurrent-1',
+          fields: { title: { value: 'HLC 旧写', hlc: older } },
+        },
+      ]),
+    ]);
+
+    const row = await testPrisma.task.findUnique({ where: { id: 'task-concurrent-1' } });
+    expect(row?.title).toBe('HLC 新写');
+    expect((row?.fieldClocks as Record<string, string>).title).toBe(newer);
   });
 
   it('回归：越权字段写被拒——他人实体不可改写、不进自己的增量流', async () => {

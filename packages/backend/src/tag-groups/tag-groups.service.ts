@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { registerCompacted } from '../sync/compact-registry';
 import { CreateTagGroupDto, UpdateTagGroupDto } from './dto/tag-groups.dto';
 
 @Injectable()
@@ -47,6 +48,9 @@ export class TagGroupsService {
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
     // 删除分组后，其下 Tag 的 tagGroupId 通过 onDelete: SetNull 自动置 null
-    return this.prisma.tagGroup.delete({ where: { id } });
+    return this.prisma.$transaction(async (tx) => {
+      await registerCompacted(tx, userId, 'tag-group', [id]);
+      return tx.tagGroup.delete({ where: { id } });
+    });
   }
 }
