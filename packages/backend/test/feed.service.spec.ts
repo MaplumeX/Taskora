@@ -29,7 +29,10 @@ describe('FeedService', () => {
 
     // emptyTrash 现在还会下发 Subtask 级联的 Compact Event（ADR-0007）
     mockPrisma.subtask = { findMany: vi.fn().mockResolvedValue([]) };
-    service = new FeedService(mockPrisma, { publishCompact: vi.fn() } as never);
+    mockPrisma.compactedEntity = { createMany: vi.fn().mockResolvedValue({ count: 0 }) };
+    service = new FeedService(mockPrisma, {
+      publishCompact: vi.fn().mockResolvedValue(undefined),
+    } as never);
   });
 
   describe('emptyTrash', () => {
@@ -54,7 +57,12 @@ describe('FeedService', () => {
     });
 
     it('2. 仅 trashed task → 删该 task, count=1', async () => {
-      const trashedTask = { id: 't1', projectId: null, trashedAt: new Date(), status: TaskStatus.ACTIVE };
+      const trashedTask = {
+        id: 't1',
+        projectId: null,
+        trashedAt: new Date(),
+        status: TaskStatus.ACTIVE,
+      };
       mockPrisma.project.findMany.mockResolvedValue([]);
       mockPrisma.task.findMany.mockResolvedValue([trashedTask]);
       mockPrisma.task.deleteMany.mockResolvedValue({ count: 1 });
@@ -69,9 +77,7 @@ describe('FeedService', () => {
     });
 
     it('5. trashed project + 下属 active task → project + task 都删', async () => {
-      const tasks = [
-        { id: 't1', projectId: 'p1', trashedAt: null, status: TaskStatus.ACTIVE },
-      ];
+      const tasks = [{ id: 't1', projectId: 'p1', trashedAt: null, status: TaskStatus.ACTIVE }];
       mockPrisma.project.findMany.mockResolvedValue([{ id: 'p1' }]);
       mockPrisma.task.findMany.mockResolvedValue(tasks);
       mockPrisma.task.deleteMany.mockResolvedValue({ count: 1 });

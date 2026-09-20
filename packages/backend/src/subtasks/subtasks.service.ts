@@ -1,9 +1,7 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException } from '@nestjs/common';
 import { TaskStatus } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { registerCompacted } from '../sync/compact-registry';
 import { CreateSubtaskDto, UpdateSubtaskDto } from './dto/subtasks.dto';
 import { settledToCompletedAt } from '../tasks/task-dto.mapper';
 
@@ -78,7 +76,10 @@ export class SubtasksService {
       throw new NotFoundException('Subtask not found');
     }
 
-    await this.prisma.subtask.delete({ where: { id } });
+    await this.prisma.$transaction(async (tx) => {
+      await registerCompacted(tx, userId, 'subtask', [id]);
+      await tx.subtask.delete({ where: { id } });
+    });
   }
 
   async complete(userId: string, id: string) {

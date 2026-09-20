@@ -36,9 +36,8 @@ describe('ProjectHeadingsService — convertToProject', () => {
       task: {
         updateMany: vi.fn(),
       },
-      $transaction: vi.fn(
-        async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma),
-      ),
+      compactedEntity: { createMany: vi.fn() },
+      $transaction: vi.fn(async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),
     } as unknown as InstanceType<typeof PrismaService>;
 
     service = new ProjectHeadingsService(mockPrisma);
@@ -57,9 +56,7 @@ describe('ProjectHeadingsService — convertToProject', () => {
     mockPrisma.projectHeading.findFirst.mockResolvedValue(headingRow);
     mockPrisma.project.findFirst.mockResolvedValue(null);
 
-    await expect(service.convertToProject(userId, headingId)).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(service.convertToProject(userId, headingId)).rejects.toThrow(NotFoundException);
     expect(mockPrisma.project.create).not.toHaveBeenCalled();
   });
 
@@ -98,12 +95,14 @@ describe('ProjectHeadingsService — convertToProject', () => {
       data: { projectId: 'proj-new', headingId: null },
     });
 
+    expect(mockPrisma.compactedEntity.createMany).toHaveBeenCalledWith({
+      data: [{ userId, entity: 'project-heading', entityId: headingId }],
+      skipDuplicates: true,
+    });
     expect(mockPrisma.projectHeading.deleteMany).toHaveBeenCalledWith({
       where: { id: headingId, userId, projectId: 'project-1' },
     });
-    expect(result).toEqual(
-      expect.objectContaining({ id: 'proj-new', title: 'Build', tags: [] }),
-    );
+    expect(result).toEqual(expect.objectContaining({ id: 'proj-new', title: 'Build', tags: [] }));
   });
 
   it('falls back to null areaId when the source project has no area', async () => {
@@ -173,8 +172,6 @@ describe('ProjectHeadingsService — convertToProject', () => {
     mockPrisma.task.updateMany.mockResolvedValue({ count: 1 });
     mockPrisma.projectHeading.deleteMany.mockResolvedValue({ count: 0 });
 
-    await expect(service.convertToProject(userId, headingId)).rejects.toThrow(
-      BadRequestException,
-    );
+    await expect(service.convertToProject(userId, headingId)).rejects.toThrow(BadRequestException);
   });
 });

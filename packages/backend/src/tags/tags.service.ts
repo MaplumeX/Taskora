@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { registerCompacted } from '../sync/compact-registry';
 import { CreateTagDto, UpdateTagDto } from './dto/tags.dto';
 
 @Injectable()
@@ -49,6 +50,9 @@ export class TagsService {
   async remove(userId: string, id: string) {
     await this.findOne(userId, id);
     // TaskTag 关联通过 onDelete: Cascade 自动清理
-    return this.prisma.tag.delete({ where: { id } });
+    return this.prisma.$transaction(async (tx) => {
+      await registerCompacted(tx, userId, 'tag', [id]);
+      return tx.tag.delete({ where: { id } });
+    });
   }
 }

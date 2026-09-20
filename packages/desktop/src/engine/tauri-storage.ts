@@ -34,7 +34,8 @@ export function createTauriSqlStorage(): SqlStorage {
       return invoke<T[]>('sql_all', { sql, params });
     },
     async run(sql: string, params: unknown[] = []): Promise<{ changes: number }> {
-      return invoke<{ changes: number }>('sql_run', { sql, params });
+      const changes = await invoke<number>('sql_run', { sql, params });
+      return { changes };
     },
     async close(): Promise<void> {
       // 连接随 app 生命周期管理（Rust 侧），无需显式关闭

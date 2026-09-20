@@ -46,6 +46,7 @@ describe('TasksService — convertToProject (subtask promotion)', () => {
         aggregate: vi.fn(),
         create: vi.fn(),
       },
+      compactedEntity: { createMany: vi.fn() },
       $transaction: vi.fn(async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),
     } as unknown as InstanceType<typeof PrismaService>;
 
@@ -138,6 +139,18 @@ describe('TasksService — convertToProject (subtask promotion)', () => {
     });
 
     // Original task hard-deleted (triggers Subtask CASCADE)
+    expect(mockPrisma.compactedEntity.createMany).toHaveBeenCalledWith({
+      data: [{ userId, entity: 'task', entityId: taskId }],
+      skipDuplicates: true,
+    });
+    expect(mockPrisma.compactedEntity.createMany).toHaveBeenCalledWith({
+      data: subtasks.map((subtask) => ({
+        userId,
+        entity: 'subtask',
+        entityId: subtask.id,
+      })),
+      skipDuplicates: true,
+    });
     expect(mockPrisma.task.delete).toHaveBeenCalledWith({ where: { id: taskId } });
 
     // Returns the new project with resolved tags

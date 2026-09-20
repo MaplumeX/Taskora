@@ -39,6 +39,20 @@ Key decisions, in the order they matter:
   surface becomes the sync endpoints (push batch / pull since cursor /
   bootstrap snapshot). New devices bootstrap from a full snapshot + seq, never
   by replaying history.
+- **A pushed Outbox batch is acknowledged atomically at the protocol boundary.**
+  The hub still attempts later events after an earlier event fails (a later
+  event may create the dependency the earlier one needs), but any failure makes
+  the HTTP request fail and the device retains and idempotently replays the
+  whole batch. A partial-success response must never cause the device to drop
+  unmerged writes.
+- **Hub merges are serialized per user/entity/id.** Each read-merge-write runs
+  in a database transaction guarded by a PostgreSQL advisory lock (and a row
+  lock when the row exists). This preserves field-clock LWW under concurrent
+  pushes, including concurrent creation of the same id across hub instances.
+- **Bootstrap uses a cursor fence.** The hub captures the current cursor before
+  reading the snapshot. Writes racing with the snapshot therefore either
+  appear in it or carry a later sequence and are replayed by the next pull;
+  bootstrap must not pair an old snapshot with a cursor captured afterwards.
 - **The server is just device zero.** Assistant (pi-agent-core) writes go
   through the same merge path with their own virtual device id and HLC — no
   privileged writes, no server-clock comparisons against device HLCs. The

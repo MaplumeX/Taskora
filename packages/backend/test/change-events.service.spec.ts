@@ -235,6 +235,11 @@ integrationDescribe('Change Events (service-level integration)', () => {
 
     await feed.emptyTrash(userId);
 
+    expect(
+      await prisma.compactedEntity.findUnique({
+        where: { userId_entity_entityId: { userId, entity: 'task', entityId: trashed.id } },
+      }),
+    ).not.toBeNull();
     const batch = await drainWhere((e) => e.entity === 'task' && e.id === trashed.id);
     expect(batch).toHaveLength(1);
     expect(batch[0]).toMatchObject({ action: 'deleted', id: trashed.id });
@@ -266,6 +271,11 @@ integrationDescribe('Change Events (service-level integration)', () => {
 
     await subtasks.remove(userId, subtask.id);
 
+    expect(
+      await prisma.compactedEntity.findUnique({
+        where: { userId_entity_entityId: { userId, entity: 'subtask', entityId: subtask.id } },
+      }),
+    ).not.toBeNull();
     const batch = await drainWhere((e) => e.entity === 'subtask' && e.id === subtask.id);
     expect(batch).toHaveLength(1);
     expect(batch[0]).toMatchObject({ action: 'deleted', id: subtask.id });
@@ -274,8 +284,8 @@ integrationDescribe('Change Events (service-level integration)', () => {
 
   it('emits created for the promoted tasks when converting a task to a project', async () => {
     const task = await tasks.create(userId, { title: 'Convert me' });
-    await subtasks.create(userId, task.id, { title: 'Sub one' });
-    await subtasks.create(userId, task.id, { title: 'Sub two' });
+    const subtaskOne = await subtasks.create(userId, task.id, { title: 'Sub one' });
+    const subtaskTwo = await subtasks.create(userId, task.id, { title: 'Sub two' });
     await drain();
 
     const project = await tasks.convertToProject(userId, task.id);
@@ -287,6 +297,17 @@ integrationDescribe('Change Events (service-level integration)', () => {
     const taskDeleted = batch.find((e) => e.entity === 'task' && e.id === task.id);
     expect(taskDeleted).toMatchObject({ action: 'deleted' });
     expect(taskDeleted).not.toHaveProperty('data');
+    const compacted = await prisma.compactedEntity.findMany({
+      where: { userId, entityId: { in: [task.id, subtaskOne.id, subtaskTwo.id] } },
+      select: { entity: true, entityId: true },
+    });
+    expect(compacted).toEqual(
+      expect.arrayContaining([
+        { entity: 'task', entityId: task.id },
+        { entity: 'subtask', entityId: subtaskOne.id },
+        { entity: 'subtask', entityId: subtaskTwo.id },
+      ]),
+    );
 
     const promoted = batch.filter(
       (e) => e.entity === 'task' && e.action === 'created' && e.data?.projectId === project.id,

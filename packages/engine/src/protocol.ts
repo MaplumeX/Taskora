@@ -86,6 +86,11 @@ export interface SnapshotEntry extends EntityMergeState {
 export interface BootstrapResponse {
   snapshot: SnapshotEntry[];
   cursor: number;
+  /**
+   * 已被永久 compact 的 id。设备重建副本时据此拒绝回放相同 id 的
+   * 待同步字段写，避免 bootstrap 把已删除实体在本地复活。
+   */
+  compacted?: DeleteRequest[];
 }
 
 /** Engine 侧的同步传输层（HTTP/SSE 实现 live in 桌面端；测试用进程内 hub）。 */

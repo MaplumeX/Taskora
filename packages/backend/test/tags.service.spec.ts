@@ -17,6 +17,8 @@ describe('TagsService', () => {
         update: vi.fn(),
         delete: vi.fn(),
       },
+      compactedEntity: { createMany: vi.fn() },
+      $transaction: vi.fn(async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),
     } as unknown as InstanceType<typeof PrismaService>;
 
     service = new TagsService(mockPrisma);
@@ -121,9 +123,7 @@ describe('TagsService', () => {
     it('should throw NotFoundException when tag does not exist', async () => {
       mockPrisma.tag.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne('user-1', 'nonexistent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.findOne('user-1', 'nonexistent')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -171,6 +171,10 @@ describe('TagsService', () => {
 
       const result = await service.remove(userId, tagId);
 
+      expect(mockPrisma.compactedEntity.createMany).toHaveBeenCalledWith({
+        data: [{ userId, entity: 'tag', entityId: tagId }],
+        skipDuplicates: true,
+      });
       expect(mockPrisma.tag.delete).toHaveBeenCalledWith({ where: { id: tagId } });
       expect(result).toEqual(existing);
     });

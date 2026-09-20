@@ -35,12 +35,26 @@ changes for it — from a device push or a hub merge — are silently dropped.
 The hub keeps a persistent registry of compacted ids per user
 (`CompactedEntity`; ids only, no values, no clocks — not a tombstone in the
 classical sense) so the rule survives hub restarts; replicas keep a
-session-scoped in-memory set. Resurrection only happens by creating a new
-entity with a new id, which needs no extra mechanism.
+session-scoped in-memory set. Bootstrap includes this registry as snapshot
+metadata so a device rebuilding its replica cannot replay a pending Outbox
+write into an entity that was deleted while it was offline. If an id appears
+in both the snapshot and the registry, the live snapshot row wins; this makes
+a pre-registered delete intent harmless if its physical delete rolls back.
+Resurrection only happens by creating a new entity with a new id, which needs
+no extra mechanism.
 
-**No tombstones on the wire.** The Compact Event remains the only
-non-field-level change type in the downstream direction; the Delete Request
-is its device-initiated dual. Upstream there is nothing to replay after the
+**Durable registration precedes publication.** Every hard-delete path records
+the affected entity ids (including database-cascaded subtasks) in
+`CompactedEntity` in the same transaction as the physical delete. A Compact
+Event is broadcast only after commit. If the process exits after commit but
+before the in-memory broadcast, restart forces resync and bootstrap recovers
+the durable registry; there is no interval in which a late device write can
+recreate a successfully deleted row.
+
+**No tombstones in incremental history.** The Compact Event remains the only
+non-field-level incremental change type in the downstream direction; the
+Delete Request is its device-initiated dual. The compact registry is carried
+only as bootstrap metadata. Upstream there is nothing to replay after the
 delete lands — repeats are idempotent no-ops on both sides.
 
 **Replica-side cleanup mirrors hub referential semantics.** When a replica

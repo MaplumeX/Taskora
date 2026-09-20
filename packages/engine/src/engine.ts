@@ -101,7 +101,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
         events,
         ...(deletes.length > 0 ? { deletes } : {}),
       });
-      await replica.deleteOutbox(batch.map((item) => item.rowId));
+      await replica.deleteOutbox(batch);
     }
   };
 
@@ -128,7 +128,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
   const bootstrap = async (): Promise<void> => {
     const transport = requireTransport();
     const response = await transport.bootstrap();
-    await replica.replaceAll(response.snapshot);
+    await replica.replaceAll(response.snapshot, response.compacted);
     await replica.setCursor(response.cursor);
   };
 
