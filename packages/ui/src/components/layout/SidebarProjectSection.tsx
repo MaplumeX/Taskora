@@ -393,6 +393,16 @@ export function SidebarProjectSection({ projects, areas }: Props) {
         sensors={sensors}
         collisionDetection={collisionDetection}
         measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
+        autoScroll={{
+          // 侧边栏内容在 Radix ScrollArea 里滚动。dnd-kit 默认 autoScroll
+          // （20% 边缘区 + 5ms 间隔 + 10 加速度）在列表可滚动时会把指针
+          // 进入底部边缘区的拖拽变成 ~2000px/s 的失控狂滚：占位符扫过
+          // 整列、drop 落到相邻区域或列表末尾，观感上就是「拖不动/乱跳」。
+          // 收窄边缘区并放缓滚动，保留「贴边轻滚」的定位手感。
+          threshold: { x: 0.2, y: 0.06 },
+          acceleration: 4,
+          interval: 20,
+        }}
         onDragStart={handleDragStart}
         onDragMove={handleDragMove}
         onDragOver={handleDragOver}
