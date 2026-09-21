@@ -248,6 +248,17 @@ function SortableTask({
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: taskId(task.id),
   });
+  // dnd-kit KeyboardSensor 默认把 Enter/Space 当作「开始拖拽」的启动键，
+  // 而行焦点按 Enter=展开 / Space=下方新建是全局键位（ADR-0004）。
+  // listeners 铺在整行上时，行内 Enter/Space 会先被拦截成键盘拖拽
+  // （isDragging 半透明 + placeholder，且 handleDragStart 会清空
+  // selection/expanded），同一事件再冒泡到 window 又触发展开，表现为
+  // 「展开的行卡在拖拽态」。因此任务行不响应键盘拖拽启动：剔除
+  // listeners 的 onKeyDown，并把 sortable 容器设为不可 Tab 聚焦，
+  // 让焦点始终落在 roving tabindex 的行本身。指针拖拽不受影响；
+  // KeyboardSensor 保留给 Heading 拖拽手柄（手柄上无键位冲突）。
+  const pointerListeners = { ...listeners };
+  delete pointerListeners.onKeyDown;
   return (
     <div
       ref={setNodeRef}
@@ -259,7 +270,8 @@ function SortableTask({
         zIndex: isDragging && !placeholder ? 10 : undefined,
       }}
       {...attributes}
-      {...listeners}
+      {...pointerListeners}
+      tabIndex={-1}
     >
       {placeholder ? (
         <div
