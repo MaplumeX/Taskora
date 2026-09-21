@@ -77,17 +77,65 @@ mod imp {
         format!("android: JNI string conversion failed: {e}")
     }
 
-    /// 拿到当前线程的 JNIEnv（tao 在启动时填充 ndk_context）。
-    fn with_env<T>(run: impl FnOnce(&mut JNIEnv<'_>) -> Result<T, String>) -> Result<T, String> {
+    /// 进程级缓存的 JavaVM：from_raw 只是包指针不夺所有权，但每次重建
+    /// 既浪费又容易在将来踩 Drop 语义；tao 填充的 ndk_context 指针
+    /// 进程生命周期内有效，缓存是安全的。
+    static JAVA_VM: std::sync::OnceLock<Result<JavaVM, String>> = std::sync::OnceLock::new();
+
+    fn java_vm() -> Result<&'static JavaVM, String> {
         let ctx = ndk_context::android_context();
         // SAFETY: tao 已用主线程的 JavaVM 指针初始化 ndk_context；指针
         // 在进程生命周期内有效（JavaVM 不可销毁）。
-        let vm = unsafe { JavaVM::from_raw(ctx.vm().cast()) }
-            .map_err(|e| format!("android: JavaVM unavailable: {e}"))?;
+        JAVA_VM
+            .get_or_init(|| {
+                unsafe { JavaVM::from_raw(ctx.vm().cast()) }
+                    .map_err(|e| format!("android: JavaVM unavailable: {e}"))
+            })
+            .as_ref()
+            .map_err(Clone::clone)
+    }
+
+    /// 拿到当前线程的 JNIEnv（tao 在启动时填充 ndk_context）。
+    ///
+    /// 关键：任何 JNI 调用抛 Java 异常时，异常会**留在 JNIEnv 里 pending**。
+    /// jni crate 返回 Err(JavaException) 但不会自动清除它；带 pending 异常
+    /// 返回到 ART 后，下一次任何 JNI 调用都会让运行时 abort（JNI
+    /// DETECTED ERROR IN APPLICATION）——在真机上表现为登录后 App 直接
+    /// 崩溃。所以 run 返回 Err 时必须 exception_clear。
+    fn with_env<T>(run: impl FnOnce(&mut JNIEnv<'_>) -> Result<T, String>) -> Result<T, String> {
+        let vm = java_vm()?;
         let mut env = vm
             .attach_current_thread_as_daemon()
             .map_err(|e| format!("android: JNI attach failed: {e}"))?;
-        run(&mut env)
+        let mut result = run(&mut env);
+        if result.is_err() {
+            // 清掉 pending 的 Java 异常（无异常时为 no-op）。错误描述
+            // 尽力把 Java 侧异常链带出来，方便诊断（Keystore 未解锁、
+            // 厂商 ROM 差异等）。已转换成 Err(String) 的 JNI 错误不带
+            // pending 异常，此调用无副作用。
+            if env.exception_check().unwrap_or(false) {
+                if let Ok(exception) = env.exception_occurred() {
+                    // 把异常 toString 追加进错误信息再清除。
+                    let detail = env
+                        .call_method(&exception, "toString", "()Ljava/lang/String;", &[])
+                        .and_then(|v| v.l())
+                        .and_then(|o| {
+                            let s = jni::objects::JString::from(o);
+                            env.get_string(&s).map(|js| js.to_string_lossy().to_string())
+                        })
+                        .unwrap_or_default();
+                    let _ = env.exception_clear();
+                    if let Err(message) = &mut result {
+                        if !detail.is_empty() {
+                            *message = format!("{message}; java: {detail}");
+                        }
+                    }
+                } else {
+                    let _ = env.exception_clear();
+                }
+            }
+        }
+        result
     }
 
     /// 打开（并 load）AndroidKeyStore，返回 KeyStore 对象。
