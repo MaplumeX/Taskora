@@ -157,6 +157,33 @@ pnpm --filter @taskora/desktop dev    # dev window
 pnpm --filter @taskora/desktop build  # installers for your platform
 ```
 
+## Android Client
+
+An Android build is published on the [GitHub Releases page](https://github.com/maplumex/taskora/releases) alongside the desktop installers: the `#Taskora-x.y.z.apk` attachment under each `v*` tag. It is the same full-parity local-first client as the desktop app (complete local replica, offline capture, foreground sync) — not a companion app.
+
+### Sideload installation
+
+1. Download the APK from the release page (on your phone, or transfer it there).
+2. Tap the file. Android will warn that the app comes from an unknown source — allow installs from your file manager / browser for this one app (*Settings → Apps → Special access → Install unknown apps*, depending on the Android version). No Play Services is required (no FCM; sync runs while the app is in the foreground).
+3. Sign in with your existing account after pointing the app at your self-hosted server.
+
+### Upgrades
+
+- Install the new APK on top of the old one — data (the local replica) is preserved.
+- Upgrades only work with the **same signing key**: the project never rotates the release keystore. If an upgrade refuses to install, check that you downloaded the official APK from Releases — never uninstall first, that deletes your local replica (queued offline edits would be lost).
+
+### Building from source
+
+```bash
+# Android Studio (SDK + NDK + JDK 17) and the Android Rust targets are
+# required: https://tauri.app/start/prerequisites/
+rustup target add aarch64-linux-android armv7-linux-androideabi \
+  i686-linux-android x86_64-linux-android
+pnpm --filter @taskora/mobile exec tauri android init   # generates gen/android
+pnpm --filter @taskora/mobile dev    # run on an emulator / device
+pnpm --filter @taskora/mobile build  # signed APK (debug keystore)
+```
+
 ## Docker Deployment
 
 A `docker-compose.yml` is provided for local full-stack runs:
@@ -190,6 +217,7 @@ GitHub Actions workflows live in `.github/workflows/`:
   - `ghcr.io/maplumex/taskora-backend:vX.Y.Z` / `:latest`
   - `ghcr.io/maplumex/taskora-frontend:vX.Y.Z` / `:latest`
 - **Desktop Release** (`desktop-release.yml`) — on the same `v*` git tags: builds the three-platform desktop installers (dmg / NSIS exe / AppImage) and uploads them to a GitHub Release. The desktop version number is unified with the rest of the monorepo. V1 builds are unsigned and have no auto-update.
+- **Android Release** (`android-release.yml`) — on the same `v*` git tags: builds the signed Android APK (release keystore injected via secrets) and attaches it to the GitHub Release for sideloading. The signing key is never rotated — rotating it would force every user to uninstall (losing their local replica).
 
 See [docs/versioning-and-deployment.md](docs/versioning-and-deployment.md) for the full versioning, branching, and multi-client rollout strategy.
 

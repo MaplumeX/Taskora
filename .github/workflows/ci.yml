@@ -75,3 +75,39 @@ jobs:
       - name: Test DPAPI session persistence and migration
         working-directory: packages/desktop/src-tauri
         run: 'cargo test --locked --lib session::'
+
+  # mobile Rust 编译检查（Linux）：host 目标验证 sqlite/session 模块；
+  # Android 目标编译 keystore.rs 的 JNI 路径（整体在
+  # #[cfg(target_os = "android")] 内，仅靠 host check 编译不到；cargo
+  # check 不链接，无需 NDK）。与 desktop-rust-check 同模式。
+  mobile-rust-check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: packages/mobile/src-tauri
+
+      - name: cargo check (host)
+        working-directory: packages/mobile/src-tauri
+        run: cargo check --locked
+
+      - name: cargo check (Android target)
+        working-directory: packages/mobile/src-tauri
+        run: cargo check --locked --target aarch64-linux-android
+
+      - name: cargo test
+        working-directory: packages/mobile/src-tauri
+        run: cargo test --locked --lib
