@@ -68,7 +68,7 @@ let unsubscribeRemoteChange: (() => void) | null = null;
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribeAuth: (() => void) | null = null;
-let syncInFlight: Promise<void> | null = null;
+let syncInFlight: Promise<boolean> | null = null;
 
 /** 供诊断/测试：当前 Engine 实例。 */
 export function getDesktopEngine(): Engine | null {
@@ -136,8 +136,12 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     unsubscribeRemoteChange?.();
     unsubscribeRemoteChange = onRemoteChangeEvent(() => void syncNow());
 
-    // 首次装配先 bootstrap（新设备全量快照），此后走增量
-    await syncNow();
+    // 首次装配先 bootstrap（新设备全量快照），此后走增量。首次失败且
+    // 副本尚未同步过（cursor === 0，本地无数据）时激进退避重试直到
+    // 首次成功——否则新设备对着空副本渲染「数据全没了」长达一个周期。
+    if (!(await syncNow()) && (await engine.cursor()) === 0) {
+      await retryUntilFirstSync();
+    }
     if (syncTimer === null) {
       syncTimer = setInterval(() => void syncNow(), SYNC_INTERVAL_MS);
       window.addEventListener('focus', () => void syncNow());
@@ -184,8 +188,8 @@ function stopEngine(): void {
 }
 
 /** flush + pull；并发调用合并为一个在飞任务。成败驱动同步指示器（V2）。 */
-function syncNow(): Promise<void> {
-  if (!engine) return Promise.resolve();
+function syncNow(): Promise<boolean> {
+  if (!engine) return Promise.resolve(false);
   if (syncInFlight) return syncInFlight;
   setSyncStatus('syncing');
   syncInFlight = engine
@@ -193,16 +197,32 @@ function syncNow(): Promise<void> {
     .then(() => {
       // 已同步：Outbox 清空、增量拉平
       setSyncStatus('synced');
+      return true;
     })
     .catch(async () => {
       // 断网/服务器维护：静默退避，等下个时机；离线·N 条待同步。
       // 不用 navigator.onLine：服务器不可达不应被假在线掩盖。
       setSyncStatus('offline', await engine!.pendingCount());
+      return false;
     })
     .finally(() => {
       syncInFlight = null;
     });
   return syncInFlight;
+}
+
+/**
+ * 首次同步（副本为空）失败的退避重试：2s 起步、倍增至 15s 封顶，
+ * 直到首次同步成功或 Engine 被停用。常规周期同步不在此路径。
+ */
+async function retryUntilFirstSync(): Promise<void> {
+  let delayMs = 2_000;
+  while (engine && (await engine.cursor()) === 0) {
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
+    if (!engine) return;
+    if (await syncNow()) return;
+    delayMs = Math.min(delayMs * 2, 15_000);
+  }
 }
 
 /** 写后防抖同步：连续录入一串任务只触发一次 flush/pull。 */

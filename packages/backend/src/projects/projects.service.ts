@@ -4,6 +4,7 @@ import {
 } from '@nestjs/common';
 import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
+import { synthPosition } from '../sync/entity-codec';
 import { SETTLED_STATUSES } from '../tasks/views';
 import { CreateProjectDto, UpdateProjectDto } from './dto/projects.dto';
 import { Prisma } from '@prisma/client';
@@ -300,13 +301,20 @@ export class ProjectsService {
       throw new NotFoundException('Project not found');
     }
 
+    // 只捡回「随项目一起进 Trash」的下属任务：级联时 project 与 task 拿到
+    // 同一 trashedAt（remove 的同一 now）；项目进 Trash 前后单独删掉的
+    // 任务保持原状。与 Engine 实现同启发式。
+    const cascadeTrashedAt = existing.trashedAt;
     await this.prisma.$transaction([
       this.prisma.project.updateMany({
         where: { id, userId },
         data: { trashedAt: null },
       }),
       this.prisma.task.updateMany({
-        where: { projectId: id, userId },
+        where:
+          cascadeTrashedAt != null
+            ? { projectId: id, userId, trashedAt: cascadeTrashedAt }
+            : { projectId: id, userId, trashedAt: null },
         data: { trashedAt: null },
       }),
     ]);
@@ -351,18 +359,25 @@ export class ProjectsService {
   async reorder(userId: string, orderedIds: string[]) {
     const owned = await this.prisma.project.findMany({
       where: { id: { in: orderedIds }, userId },
-      select: { id: true },
+      select: { id: true, createdAt: true },
     });
     const ownedSet = new Set(owned.map((p) => p.id));
     if (ownedSet.size !== orderedIds.length) {
       throw new NotFoundException('Project not found');
     }
 
+    // 双排序键一起写（与 TasksService.reorder 同理由）：sortOrder 供 web
+    // 端 REST 读，position 供桌面端 Local Replica 读；写入值与 hub 的
+    // legacy 合成函数一致。
+    const createdAtOf = new Map(owned.map((p) => [p.id, p.createdAt]));
     await this.prisma.$transaction(
       orderedIds.map((id, index) =>
         this.prisma.project.updateMany({
           where: { id, userId },
-          data: { sortOrder: index },
+          data: {
+            sortOrder: index,
+            position: synthPosition(index, createdAtOf.get(id)!),
+          },
         }),
       ),
     );

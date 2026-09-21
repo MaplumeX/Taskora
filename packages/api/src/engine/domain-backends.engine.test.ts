@@ -21,6 +21,7 @@ import { createEngineAreaBackend } from './area-backend.engine';
 import { createEngineTagBackend } from './tag-backend.engine';
 import { createEngineTagGroupBackend } from './tag-group-backend.engine';
 import { createEngineProjectHeadingBackend } from './project-heading-backend.engine';
+import { createEngineTaskBackend } from './task-backend.engine';
 
 const USER = 'user-1';
 
@@ -31,10 +32,12 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
   let tags: ReturnType<typeof createEngineTagBackend>;
   let tagGroups: ReturnType<typeof createEngineTagGroupBackend>;
   let headings: ReturnType<typeof createEngineProjectHeadingBackend>;
+  let tasks: ReturnType<typeof createEngineTaskBackend>;
+  let hub: InMemorySyncHub;
 
   beforeEach(async () => {
     const storage = await createNodeSqliteStorage(':memory:');
-    const hub = new InMemorySyncHub();
+    hub = new InMemorySyncHub();
     engine = await openEngine({
       storage,
       deviceId: 'dev-test',
@@ -45,6 +48,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     tags = createEngineTagBackend({ engine });
     tagGroups = createEngineTagGroupBackend({ engine });
     headings = createEngineProjectHeadingBackend({ engine });
+    tasks = createEngineTaskBackend({ engine });
   });
 
   it('Project：create bucket 解析（DATE→SCHEDULED、无归属→ANYTIME），计数本地计算', async () => {
@@ -91,7 +95,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     expect(detail.taskCompletedCount).toBe(1);
   });
 
-  it('Project：软删级联（project + 下属 task 一起进 Trash）、恢复一并捡回', async () => {
+  it('Project：软删级联（project + 下属 task 一起进 Trash）、恢复一并捡回；单独删掉的任务不被捡回', async () => {
     const project = await projects.createProject({ title: '要删的项目' });
     const taskId = await engine.create('task', {
       title: '下属任务',
@@ -109,6 +113,14 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     await projects.restoreProject(project.id);
     expect((await projects.getProjects()).map((p) => p.title)).toEqual(['要删的项目']);
     expect((await engine.get('task', taskId))?.fields.trashedAt).toBeNull();
+
+    // 恢复后项目处于未删状态：项目再入 Trash（级联 now2）期间，任务被
+    // 单独捡回又单独删除（时间戳 now3 ≠ now2）→ 恢复项目时不应捡回它
+    await projects.deleteProject(project.id);
+    await tasks.restoreTask(taskId);
+    await tasks.deleteTask(taskId);
+    await projects.restoreProject(project.id);
+    expect((await engine.get('task', taskId))?.fields.trashedAt).not.toBeNull();
   });
 
   it('Project：完成/重开语义与拖拽重排（Position 生效）', async () => {
@@ -306,5 +318,154 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     expect((await projectsA.getProjects()).map((p) => p.title)).toEqual(['第二个', '项目']);
     await a.close();
     await b.close();
+  });
+
+  it('Task 换 Project：headingId 解除（对齐 REST 的 heading disconnect）', async () => {
+    const source = await projects.createProject({ title: '源' });
+    const target = await projects.createProject({ title: '目标' });
+    const heading = await headings.createProjectHeading({ projectId: source.id, title: '分组' });
+    const taskId = await engine.create('task', {
+      title: '在分组里的任务',
+      status: TaskStatus.ACTIVE,
+      bucket: 'ANYTIME',
+      projectId: source.id,
+      headingId: heading.id,
+      trashedAt: null,
+      settledAt: null,
+    });
+
+    await tasks.updateTask(taskId, { projectId: target.id });
+    expect((await engine.get('task', taskId))?.fields.headingId).toBeNull();
+
+    // 同项目内的 projectId 写入（值未变）不动 headingId
+    const other = await engine.create('task', {
+      title: '同项目任务',
+      status: TaskStatus.ACTIVE,
+      bucket: 'ANYTIME',
+      projectId: source.id,
+      headingId: heading.id,
+      trashedAt: null,
+      settledAt: null,
+    });
+    await tasks.updateTask(other, { projectId: source.id });
+    expect((await engine.get('task', other))?.fields.headingId).toBe(heading.id);
+  });
+
+  it('Project compact：副本级联移除其 ProjectHeading，不留孤儿', async () => {
+    const project = await projects.createProject({ title: '带分组的项目' });
+    const heading = await headings.createProjectHeading({
+      projectId: project.id,
+      title: '分组',
+    });
+    const otherProject = await projects.createProject({ title: '别的项目' });
+    const otherHeading = await headings.createProjectHeading({
+      projectId: otherProject.id,
+      title: '别家的分组',
+    });
+    await engine.sync();
+
+    await engine.delete('project', [project.id]);
+
+    // 级联删除本项目的 heading；其它项目的 heading 不受影响
+    expect(await engine.get('project-heading', heading.id)).toBeNull();
+    expect(await engine.get('project-heading', otherHeading.id)).not.toBeNull();
+
+    // Delete Request flush 到 hub → 广播 Compact（含级联 heading）
+    await engine.sync();
+
+    // 跨设备：另一台设备同步后也不含孤儿 heading
+    const other = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'dev-other',
+      transport: hub.transportFor(USER),
+    });
+    await other.sync();
+    expect(await other.get('project-heading', heading.id)).toBeNull();
+    expect(await other.get('project-heading', otherHeading.id)).not.toBeNull();
+    await other.close();
+  });
+
+  it('Heading 布局重排：position/sortOrder 双写，副本读序反映视觉顺序且跨设备收敛', async () => {
+    const projectId = (await projects.createProject({ title: '布局' })).id;
+    const h1 = await headings.createProjectHeading({ projectId, title: 'H1' });
+    const h2 = await headings.createProjectHeading({ projectId, title: 'H2' });
+    const makeTask = (title: string, headingId: string | null) =>
+      engine.create('task', {
+        title,
+        projectId,
+        headingId,
+        status: TaskStatus.ACTIVE,
+        bucket: 'ANYTIME',
+        trashedAt: null,
+        settledAt: null,
+      });
+    const u1 = await makeTask('u1', null);
+    const a1 = await makeTask('a1', h1.id);
+    const a2 = await makeTask('a2', h1.id);
+    const b1 = await makeTask('b1', h2.id);
+    await engine.sync();
+
+    // 重排：H2 分组提到 H1 前，H1 组内倒序；ungrouped 始终在最前
+    // （normalizeLayout 惯例：视觉顺序 = ungrouped → 各 heading 分组）
+    await headings.reorderProjectHeadingLayout({
+      projectId,
+      ungroupedTaskIds: [u1],
+      groups: [
+        { headingId: h2.id, taskIds: [b1] },
+        { headingId: h1.id, taskIds: [a2, a1] },
+      ],
+    });
+
+    // 副本读序（position）= 视觉顺序。回归：只写 sortOrder 不写 position
+    // 时，本地副本读序不变，拖拽看起来「没有反应」。
+    expect((await engine.list('task')).map((row) => row.fields.title)).toEqual([
+      'u1',
+      'b1',
+      'a2',
+      'a1',
+    ]);
+
+    // sortOrder 维持 REST 列惯例：分组内索引
+    const byTitle = new Map(
+      (await engine.list('task')).map((row) => [row.fields.title as string, row]),
+    );
+    expect(byTitle.get('b1')!.fields.sortOrder).toBe(0);
+    expect(byTitle.get('u1')!.fields.sortOrder).toBe(0);
+    expect(byTitle.get('a2')!.fields.sortOrder).toBe(0);
+    expect(byTitle.get('a1')!.fields.sortOrder).toBe(1);
+
+    // 跨设备收敛：另一台设备 bootstrap 后读序一致（hub 快照携带 position）
+    await engine.sync();
+    const other = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'dev-other',
+      transport: hub.transportFor(USER),
+    });
+    await other.bootstrap();
+    expect((await other.list('task')).map((row) => row.fields.title)).toEqual([
+      'u1',
+      'b1',
+      'a2',
+      'a1',
+    ]);
+    // web 读序（sortOrder asc, createdAt desc）在分组内与副本读序一致
+    const webOrder = [...(await other.list('task'))].sort((x, y) => {
+      const sx = (x.fields.sortOrder as number) ?? 0;
+      const sy = (y.fields.sortOrder as number) ?? 0;
+      return (
+        sx - sy ||
+        String(y.fields.createdAt ?? '').localeCompare(String(x.fields.createdAt ?? ''))
+      );
+    });
+    for (const headingId of [h1.id, h2.id, null]) {
+      const replicaOrder = (await other.list('task'))
+        .filter((row) => row.fields.headingId === headingId)
+        .map((row) => row.fields.title);
+      const webSameGroup = webOrder
+        .filter((row) => row.fields.headingId === headingId)
+        .map((row) => row.fields.title);
+      expect(replicaOrder).toEqual(webSameGroup);
+    }
+    await other.close();
   });
 });

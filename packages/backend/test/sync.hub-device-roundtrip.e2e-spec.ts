@@ -320,4 +320,51 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
       deviceState = { fields: outcome.fields, clocks: outcome.clocks };
     }
   });
+
+  it('同步毒丸防御：离线写引用已删 tag，hub 清洗后 push 不再反复失败且两端收敛', async () => {
+    // 初始：任务携带 tag-1，同步落库
+    await testPrisma.tag.create({ data: { id: 'tag-keep', title: '保留', userId: USER } });
+    await testPrisma.tag.create({ data: { id: 'tag-doom', title: '将删', userId: USER } });
+    await hub.push(USER, [
+      fullCreateEvent('task-pill-1', { tagIds: ['tag-keep', 'tag-doom'] }),
+    ]);
+    const row = await testPrisma.task.findUnique({
+      where: { id: 'task-pill-1' },
+      include: { tags: true },
+    });
+    expect(row!.tags.map((t) => t.tagId).sort()).toEqual(['tag-doom', 'tag-keep']);
+
+    // 离线窗口：hub 侧删除 tag-doom（登记 + 物理删除），设备毫不知情
+    await testPrisma.compactedEntity.create({
+      data: { userId: USER, entity: 'tag', entityId: 'tag-doom' },
+    });
+    await testPrisma.tag.delete({ where: { id: 'tag-doom' } });
+
+    // 设备恢复联网：携带失效引用的写必须被清洗而非 FK 拒绝（回归前：
+    // TaskTag 物化触发 FK violation，push 永远失败，Outbox 卡死）
+    const event = fullCreateEvent('task-pill-1', {});
+    const edited = {
+      tagIds: { value: ['tag-keep', 'tag-doom'], hlc: stamp(300) },
+      title: { value: '离线改名', hlc: stamp(301) },
+    };
+    void event;
+    await expect(
+      hub.push(USER, [{ entity: 'task', id: 'task-pill-1', fields: edited }]),
+    ).resolves.toEqual({ acked: 1 });
+
+    const after = await testPrisma.task.findUnique({
+      where: { id: 'task-pill-1' },
+      include: { tags: true },
+    });
+    expect(after!.tags.map((t) => t.tagId)).toEqual(['tag-keep']);
+    expect(after!.title).toBe('离线改名');
+
+    // 设备 pull 回声后本地收敛（清洗值以虚拟设备 0 的更新时钟胜出）
+    const pull = buffer.pull(USER, 0);
+    const echo = pull.changes.find(
+      (change) => change.kind === 'entity' && change.id === 'task-pill-1' && 'tagIds' in change.fields,
+    ) as (typeof pull.changes)[number] & { fields: Record<string, unknown> } | undefined;
+    expect(echo).toBeDefined();
+    expect(echo!.fields.tagIds).toEqual(['tag-keep']);
+  });
 });

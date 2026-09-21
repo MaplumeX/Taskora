@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { formatHlc } from '@taskora/engine';
+import { formatHlc, positionBetween, validatePosition } from '@taskora/engine';
 
 import { serializeRow, synthPosition, toPrismaData, codecFor } from '../src/sync/entity-codec';
 
@@ -99,13 +99,8 @@ describe('serializeRow（时钟基线 / 合成 Position）', () => {
 describe('synthPosition', () => {
   it('生成的 key 是合法 fractional index（可再在其间插队）', () => {
     const key = synthPosition(2, new Date('2026-05-01T00:00:00Z'));
-    expect(() => {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const { positionBetween, validatePosition } =
-        require('@taskora/engine') as typeof import('@taskora/engine');
-      validatePosition(key);
-      expect(positionBetween(key, null) > key).toBe(true);
-    }).not.toThrow();
+    validatePosition(key);
+    expect(positionBetween(key, null) > key).toBe(true);
   });
 });
 

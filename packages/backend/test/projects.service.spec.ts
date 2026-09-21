@@ -1,6 +1,8 @@
 import { NotFoundException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { synthPosition } from '@taskora/engine';
+
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ProjectsService } from '../src/projects/projects.service';
 import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
@@ -230,10 +232,15 @@ describe('ProjectsService', () => {
       );
     });
 
-    it('restores project and cascades to下属 tasks', async () => {
+    it('restores project and cascades to下属 tasks（随级联进 Trash 的同时间戳任务）', async () => {
       const userId = 'user-1';
       const projectId = 'project-1';
-      mockPrisma.project.findFirst.mockResolvedValue({ id: projectId, userId });
+      const cascadeTrashedAt = new Date('2026-01-01T00:00:00Z');
+      mockPrisma.project.findFirst.mockResolvedValue({
+        id: projectId,
+        userId,
+        trashedAt: cascadeTrashedAt,
+      });
       mockPrisma.project.updateMany.mockResolvedValue({ count: 1 });
       mockPrisma.task.updateMany.mockResolvedValue({ count: 2 });
 
@@ -245,7 +252,12 @@ describe('ProjectsService', () => {
       expect(projCall.data.trashedAt).toBeNull();
       expect(projCall.data).not.toHaveProperty('status');
       const taskCall = mockPrisma.task.updateMany.mock.calls[0][0];
-      expect(taskCall.where).toEqual({ projectId, userId });
+      // 只捡回级联时间戳相同的任务；单独删掉（不同 trashedAt）的保持原状
+      expect(taskCall.where).toEqual({
+        projectId,
+        userId,
+        trashedAt: cascadeTrashedAt,
+      });
       expect(taskCall.data.trashedAt).toBeNull();
       expect(taskCall.data).not.toHaveProperty('status');
       expect(taskCall.data).not.toHaveProperty('headingId');
@@ -253,35 +265,40 @@ describe('ProjectsService', () => {
   });
 
   describe('reorder', () => {
-    it('should update sortOrder for all orderedIds in a transaction', async () => {
+    it('should update sortOrder and position for all orderedIds in a transaction', async () => {
       const userId = 'user-1';
       const orderedIds = ['project-1', 'project-2', 'project-3'];
-      mockPrisma.project.findMany.mockResolvedValue([
-        { id: 'project-1' },
-        { id: 'project-2' },
-        { id: 'project-3' },
-      ]);
+      const created = [
+        new Date('2026-01-01T00:00:00Z'),
+        new Date('2026-01-02T00:00:00Z'),
+        new Date('2026-01-03T00:00:00Z'),
+      ];
+      mockPrisma.project.findMany.mockResolvedValue(
+        orderedIds.map((id, i) => ({ id, createdAt: created[i] })),
+      );
       mockPrisma.project.updateMany.mockResolvedValue({ count: 1 });
 
       await service.reorder(userId, orderedIds);
 
       expect(mockPrisma.project.findMany).toHaveBeenCalledWith({
         where: { id: { in: orderedIds }, userId },
-        select: { id: true },
+        select: { id: true, createdAt: true },
       });
       expect(mockPrisma.$transaction).toHaveBeenCalled();
       expect(mockPrisma.project.updateMany).toHaveBeenCalledTimes(3);
+      // position 写入值与 hub 的 legacy 合成函数一致（synthPosition），
+      // 保证桌面端 Local Replica 与 web 端 sortOrder 序列不漂移。
       expect(mockPrisma.project.updateMany).toHaveBeenNthCalledWith(1, {
         where: { id: 'project-1', userId },
-        data: { sortOrder: 0 },
+        data: { sortOrder: 0, position: synthPosition(0, created[0]) },
       });
       expect(mockPrisma.project.updateMany).toHaveBeenNthCalledWith(2, {
         where: { id: 'project-2', userId },
-        data: { sortOrder: 1 },
+        data: { sortOrder: 1, position: synthPosition(1, created[1]) },
       });
       expect(mockPrisma.project.updateMany).toHaveBeenNthCalledWith(3, {
         where: { id: 'project-3', userId },
-        data: { sortOrder: 2 },
+        data: { sortOrder: 2, position: synthPosition(2, created[2]) },
       });
     });
 

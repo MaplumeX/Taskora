@@ -10,7 +10,7 @@
 
 import {
   formatHlc,
-  positionsBetween,
+  synthPosition,
   type EntityDef,
   type FieldClocks,
   type SyncEntity,
@@ -241,42 +241,9 @@ function digestOf(value: unknown): string {
 }
 
 // ---------- Position 合成 ----------
-
-const MAX_TS = 4_102_444_800_000; // 2100-01-01，分数编码的值域上界
-const BASE_62 = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-const FRACTION_WIDTH = 9;
-
-const intKeyCache = new Map<number, string>();
-
-function intToPositionKey(intValue: number): string {
-  let key = intKeyCache.get(intValue);
-  if (key === undefined) {
-    const keys = positionsBetween(null, null, intValue + 1);
-    key = keys[intValue];
-    intKeyCache.set(intValue, key);
-  }
-  return key;
-}
-
-function toBase62(value: number): string {
-  let digits = '';
-  let rest = value;
-  do {
-    digits = BASE_62[rest % 62] + digits;
-    rest = Math.floor(rest / 62);
-  } while (rest > 0);
-  return digits;
-}
-
-/**
- * 合成 Position：整数部分 = sortOrder，分数部分 = (MAX_TS - createdAt)
- * 的定宽 base62 + 非零哨兵（防尾零）。createdAt 越大排越前（REST 排序
- * 的 createdAt desc 语义）。纯函数，重复序列化结果稳定。
- */
-export function synthPosition(sortOrder: number, createdAt: Date): string {
-  const descending = toBase62(Math.max(0, MAX_TS - createdAt.getTime()));
-  return intToPositionKey(Math.max(0, sortOrder)) + descending.padStart(FRACTION_WIDTH, '0') + '1';
-}
+// 实现下沉在 @taskora/engine（position.ts）：hub 的 legacy 行合成与
+// REST reorder 的 position 写入共用同一纯函数，保证两端排序口径一致。
+export { synthPosition };
 
 // ---------- 合并态 → Prisma 写数据 ----------
 

@@ -279,28 +279,35 @@ export class LocalReplica {
   }
 
   private async requestDeleteInternal(entity: SyncEntity, ids: string[]): Promise<void> {
+    const affected = new Set<SyncEntity>([entity]);
     await inTransaction(this.storage, async () => {
-      await this.removeRows(entity, ids, { enqueue: true });
+      await this.removeRows(entity, ids, { enqueue: true }, affected);
     });
-    this.notifyChanged({ origin: 'local', entities: [entity] });
+    this.notifyChanged({ origin: 'local', entities: [...affected] });
   }
 
   /**
-   * 从副本移除一批实体行：级联子实体、清理引用（SetNull 语义）、登记
-   * compact（丢弃迟到远端写）。enqueue 时为每个 id 排一条 Delete
-   * Request 进 Outbox。
+   * 从副本移除一批实体行：级联子实体、清理引用（SetNull 语义）、
+   * 从引用实体的 tagIds 数组剔除被删 tag、登记 compact（丢弃迟到远端
+   * 写）。enqueue 时为每个 id 排一条 Delete Request 进 Outbox。
+   *
+   * affected 收集本次被波及的全部实体（含级联子实体与被清理引用的
+   * 宿主实体），供上层按实体粒度失效 UI 缓存（M2：Area 被删时其下
+   * Task/Project 的 areaId 清理必须失效 tasks/projects 查询）。
    */
   private async removeRows(
     entity: SyncEntity,
     ids: string[],
     opts: { enqueue: boolean },
+    affected: Set<SyncEntity>,
   ): Promise<number> {
     const def = entityDef(entity);
     for (const id of ids) {
       this.compacted.add(`${entity}:${id}`);
     }
     let removed = 0;
-    // 级联（对齐 hub 侧 onDelete: Cascade）：Task → Subtask
+    // 级联（对齐 hub 侧 onDelete: Cascade）：Task → Subtask、
+    // Project → ProjectHeading
     for (const cascade of DELETE_CASCADES[entity] ?? []) {
       const childDef = entityDef(cascade.entity);
       const placeholders = ids.map(() => '?').join(', ');
@@ -310,7 +317,8 @@ export class LocalReplica {
       );
       const childIds = childRows.map((row) => row.id);
       if (childIds.length > 0) {
-        removed += await this.removeRows(cascade.entity, childIds, opts);
+        affected.add(cascade.entity);
+        removed += await this.removeRows(cascade.entity, childIds, opts, affected);
       }
     }
     // 引用清理（对齐 hub 侧 onDelete: SetNull）：仅本地副本清理，不携
@@ -318,10 +326,40 @@ export class LocalReplica {
     for (const ref of COMPACT_NULL_REFS[entity] ?? []) {
       const refDef = entityDef(ref.entity);
       const placeholders = ids.map(() => '?').join(', ');
-      await this.storage.run(
+      const { changes } = await this.storage.run(
         `UPDATE ${refDef.table} SET ${ref.field} = NULL WHERE ${ref.field} IN (${placeholders})`,
         ids,
       );
+      if (changes > 0) affected.add(ref.entity);
+    }
+    // TagIds 数组清理：hub 侧 TagTag/ProjectTag/AreaTag 关系行随 tag
+    // 删除级联消失，wire 读回已不含它；副本侧同步从 JSON 数组剔除，
+    // 不携时钟不进 Outbox（与 SetNull 清理同一惯例）。
+    if (entity === 'tag') {
+      for (const refEntity of ['task', 'project', 'area'] as SyncEntity[]) {
+        const refDef = entityDef(refEntity);
+        for (const id of ids) {
+          const rows = await this.storage.all<{ id: string; tagIds: string | null }>(
+            `SELECT id, tagIds FROM ${refDef.table} WHERE tagIds LIKE ?`,
+            [`%"${id}"%`],
+          );
+          for (const row of rows) {
+            let parsed: unknown;
+            try {
+              parsed = JSON.parse(row.tagIds ?? '[]');
+            } catch {
+              continue;
+            }
+            if (!Array.isArray(parsed) || !parsed.includes(id)) continue;
+            const next = parsed.filter((value) => value !== id);
+            await this.storage.run(`UPDATE ${refDef.table} SET tagIds = ? WHERE id = ?`, [
+              JSON.stringify(next),
+              row.id,
+            ]);
+            affected.add(refEntity);
+          }
+        }
+      }
     }
     for (const id of ids) {
       const { changes } = await this.storage.run(`DELETE FROM ${def.table} WHERE id = ?`, [id]);
@@ -375,14 +413,23 @@ export class LocalReplica {
   }
 
   private async applyCompactInternal(entity: SyncEntity, ids: string[]): Promise<boolean> {
+    const affected = new Set<SyncEntity>([entity]);
     let removed = 0;
     await inTransaction(this.storage, async () => {
       // 级联与引用清理与设备发起删除同规则（Task → Subtask；SetNull）；
       // 登记无论本地是否有行——compact 是 hub 的事实。
-      removed = await this.removeRows(entity, ids, { enqueue: false });
+      removed = await this.removeRows(entity, ids, { enqueue: false }, affected);
     });
-    if (removed > 0) this.notifyChanged({ origin: 'remote', entities: [entity] });
-    return removed > 0;
+    if (removed > 0) {
+      this.notifyChanged({ origin: 'remote', entities: [...affected] });
+      return true;
+    }
+    // 行本身不存在，但引用清理（SetNull/tagIds 剔除）仍可能波及他实体
+    if (affected.size > 1) {
+      this.notifyChanged({ origin: 'remote', entities: [...affected] });
+      return true;
+    }
+    return false;
   }
 
   /**
@@ -428,7 +475,7 @@ export class LocalReplica {
     const pending = await this.takeOutbox(Number.MAX_SAFE_INTEGER);
     for (const entry of pending) {
       if (entry.kind === 'delete') {
-        await this.removeRows(entry.entity, [entry.id], { enqueue: false });
+        await this.removeRows(entry.entity, [entry.id], { enqueue: false }, new Set());
         continue;
       }
       const { event } = entry;

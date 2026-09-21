@@ -48,7 +48,8 @@ describe('sync PushRequestDto under the global ValidationPipe', () => {
   });
 
   it('accepts a payload without deletes (optional)', async () => {
-    const { deletes: _deletes, ...withoutDeletes } = validBody;
+    const { deletes: _ignored, ...withoutDeletes } = validBody;
+    void _ignored;
     const dto = await pipe.transform(withoutDeletes as never, {
       type: 'body',
       metatype: PushRequestDto,

@@ -8,6 +8,7 @@ import {
 } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { registerCompacted } from '../sync/compact-registry';
+import { synthPosition } from '../sync/entity-codec';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
 import { Prisma } from '@prisma/client';
 import { buildTaskViewWhere, WITH_SETTLED_STATUSES } from './views';
@@ -423,18 +424,27 @@ export class TasksService {
   async reorder(userId: string, orderedIds: string[]) {
     const owned = await this.prisma.task.findMany({
       where: { id: { in: orderedIds }, userId },
-      select: { id: true },
+      select: { id: true, createdAt: true },
     });
     const ownedSet = new Set(owned.map((t) => t.id));
     if (ownedSet.size !== orderedIds.length) {
       throw new NotFoundException('Task not found');
     }
 
+    // 双排序键一起写：sortOrder 是 web 端 REST 读序列，position 是
+    // 桌面端 Local Replica 读序列（fractional indexing）。漏写 position
+    // 时，已被设备写过真实 position 的行在桌面端不会再变序（hub 对
+    // position null 的 legacy 行才按 sortOrder 合成）。写入值与 hub
+    // 的合成函数完全一致，两端排序口径不漂移。
+    const createdAtOf = new Map(owned.map((t) => [t.id, t.createdAt]));
     await this.prisma.$transaction(
       orderedIds.map((id, index) =>
         this.prisma.task.updateMany({
           where: { id, userId },
-          data: { sortOrder: index },
+          data: {
+            sortOrder: index,
+            position: synthPosition(index, createdAtOf.get(id)!),
+          },
         }),
       ),
     );

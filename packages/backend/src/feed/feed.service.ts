@@ -72,8 +72,10 @@ export class FeedService {
 
       const taskDeleteIds = new Set<string>([...trashedTaskIds, ...projectOrphanIds]);
 
-      // 3b. DB 级联删除的 Subtask 不会产生 collector 事件，先收集其 id，
-      //     之后与 Task 一起下发 Compact Event（ADR-0007：GC 后压缩变更）。
+      // 3b. DB 级联删除的 Subtask / ProjectHeading 不会产生 collector 事件，
+      //     先收集其 id，之后与主体一起下发 Compact Event（ADR-0007：
+      //     GC 后压缩变更）。Heading 随 trashed project 的 DB 级联消失，
+      //     不登记会永久残留其他设备的副本。
       const cascadedSubtaskIds = taskDeleteIds.size
         ? (
             await tx.subtask.findMany({
@@ -82,12 +84,21 @@ export class FeedService {
             })
           ).map((s) => s.id)
         : [];
+      const cascadedHeadingIds = trashedProjectIds.size
+        ? (
+            await tx.projectHeading.findMany({
+              where: { projectId: { in: [...trashedProjectIds] } },
+              select: { id: true },
+            })
+          ).map((h) => h.id)
+        : [];
 
       // Compact 登记与物理删除同事务提交。即使进程在提交后、广播前退出，
       // bootstrap 仍能知道这些 id 永久删除，迟到字段写也不会复活它们。
       await registerCompacted(tx, userId, 'task', [...taskDeleteIds]);
       await registerCompacted(tx, userId, 'project', [...trashedProjectIds]);
       await registerCompacted(tx, userId, 'subtask', cascadedSubtaskIds);
+      await registerCompacted(tx, userId, 'project-heading', cascadedHeadingIds);
 
       // 4. 物理删除: TaskTag/ProjectTag/Subtask 关联走 onDelete: Cascade 自动清理
       //    where 再带一次 userId 作防御性约束(集合已来自本用户数据,纯双保险)
@@ -104,12 +115,14 @@ export class FeedService {
         taskIds: [...taskDeleteIds],
         projectIds: [...trashedProjectIds],
         cascadedSubtaskIds,
+        cascadedHeadingIds,
       };
     });
     // 事务提交后再广播；collector 产生的重复 Compact 对设备幂等。
     await this.syncHub.publishCompact(userId, 'task', result.taskIds);
     await this.syncHub.publishCompact(userId, 'project', result.projectIds);
     await this.syncHub.publishCompact(userId, 'subtask', result.cascadedSubtaskIds);
+    await this.syncHub.publishCompact(userId, 'project-heading', result.cascadedHeadingIds);
     return { deletedTasks: result.deletedTasks, deletedProjects: result.deletedProjects };
   }
 
