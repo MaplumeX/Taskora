@@ -276,7 +276,7 @@ export function KeyboardShortcuts({ platform }: Props) {
           if (rowById.get(id)?.kind !== 'task') return;
           // 与点击循环对齐（idle → selected → expanded → selected）：
           // 已展开时再按 Enter 收起；展开后 TaskItem 自行聚焦标题编辑
-          // （编辑态让路，Enter 在 input 内只 blur 不收起）。
+          // （输入框内 Enter 自身会保存并收起，不会冒泡到这里）。
           const ui = useUiInteractionStore.getState();
           const collapsing = ui.expandedId === id;
           ui.setExpandedId(collapsing ? null : id);
