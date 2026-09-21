@@ -205,7 +205,9 @@ describe('TaskRowExpanded — icon button hints', () => {
 
     await user.click(screen.getByText('My task'));
 
-    // 五个字段图标按钮（日期/到期/项目/区域/标签）hover 后应浮出 hint 文案
+    // 五个字段图标按钮（日期/到期/项目/区域/标签）hover 后应浮出 hint 文案。
+    // Hint 为真实 400ms 延迟（非 fake timers），5 个按钮逐个 hover/unhover
+    // 在 CI 慢环境下可能超过默认 5s，这里放宽单测超时。
     const labelPatterns: RegExp[] = [
       /^(Date|日期)$/,
       /^(Due|到期)$/,
@@ -219,7 +221,7 @@ describe('TaskRowExpanded — icon button hints', () => {
       expect(await screen.findByText(pattern)).toBeInTheDocument();
       await user.unhover(btn);
     }
-  });
+  }, 15000);
 });
 
 describe('TaskRowExpanded — hide subtask empty state', () => {
