@@ -1,8 +1,13 @@
-import { StrictMode, Suspense, lazy } from 'react';
+import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
+
+// eager import：lazy + Suspense 在 CI 共享 runner 上首次模块转换可能超过
+// waitFor 的短超时（测试卡在 fallback）。两个回归点（路由复用、mutation
+// 时序）均与 lazy 无关，直接顶层加载。
+import ProjectDetailPage from '@taskora/ui/pages/ProjectDetail';
 
 /**
  * 桌面 shell「新建项目 → 标题输入框自动聚焦」回归测试。
@@ -108,28 +113,18 @@ function TestSidebar({ client }: { client: QueryClient }) {
   return <button onClick={handleNewProject}>new-project</button>;
 }
 
-const LazyProjectDetail = lazy(async () => ({
-  default: (await import('@taskora/ui/pages/ProjectDetail')).default,
-}));
-const LazyToday = lazy(async () => ({
-  default: () => <div>today</div>,
-}));
-
-function PageFallback() {
-  return <div>fallback</div>;
-}
+const LazyProjectDetail = ProjectDetailPage;
+const LazyToday = () => <div>today</div>;
 
 function renderDesktopShell(client: QueryClient, initialEntry: string) {
   return render(
     <StrictMode>
       <QueryClientProvider client={client}>
         <MemoryRouter initialEntries={[initialEntry]}>
-          <Suspense fallback={<PageFallback />}>
-            <Routes>
-              <Route path="/today" element={<LazyToday />} />
-              <Route path="/projects/:id" element={<LazyProjectDetail />} />
-            </Routes>
-          </Suspense>
+          <Routes>
+            <Route path="/today" element={<LazyToday />} />
+            <Route path="/projects/:id" element={<LazyProjectDetail />} />
+          </Routes>
           <TestSidebar client={client} />
         </MemoryRouter>
       </QueryClientProvider>

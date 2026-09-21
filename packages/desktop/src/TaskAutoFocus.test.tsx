@@ -1,4 +1,4 @@
-import { StrictMode, Suspense, lazy } from 'react';
+import { StrictMode } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
@@ -6,6 +6,11 @@ import { describe, expect, it, beforeEach, vi } from 'vitest';
 
 import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
+
+// eager import：lazy + Suspense 在 CI 共享 runner 上首次模块转换可能超过
+// waitFor 的短超时（测试卡在 fallback）。回归点（写后失效竞态）与 lazy
+// 无关，直接顶层加载。
+import ProjectDetailPage from '@taskora/ui/pages/ProjectDetail';
 
 /**
  * 桌面 shell「项目页新建任务 → 展开行标题输入框自动聚焦」回归测试。
@@ -173,20 +178,10 @@ function TestBottomBar() {
 function Shell() {
   return (
     <div>
-      <Suspense fallback={<PageFallback />}>
-        <Outlet />
-      </Suspense>
+      <Outlet />
       <TestBottomBar />
     </div>
   );
-}
-
-const LazyProjectDetail = lazy(async () => ({
-  default: (await import('@taskora/ui/pages/ProjectDetail')).default,
-}));
-
-function PageFallback() {
-  return <div>fallback</div>;
 }
 
 function makeProject(id: string, title: string) {
@@ -234,7 +229,7 @@ describe('desktop: auto-focus task title input after new task (project page)', (
           <MemoryRouter initialEntries={['/projects/p-0']}>
             <Routes>
               <Route element={<Shell />}>
-                <Route path="/projects/:id" element={<LazyProjectDetail />} />
+                <Route path="/projects/:id" element={<ProjectDetailPage />} />
               </Route>
             </Routes>
           </MemoryRouter>
