@@ -9,6 +9,99 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.4.5] - 2026-09-21
+
+### Added
+
+- **ui**: Hover hints on the expanded task row's field icon buttons
+  (date, due, project, area, tags) (#57): sibling buttons (add/delete
+  subtask) already had tooltips while the five field triggers showed
+  none. The IconPopover trigger is now wrapped in `Hint` inside
+  `TaskRowExpanded`, with the label sourced from the same i18n key as
+  the button's `aria-label`; Radix Tooltip closes its content on
+  trigger click/pointerdown, so the hint does not linger behind the
+  opened popover.
+
+### Changed
+
+- **deps**: Pin TypeScript to 5.9.3 via `pnpm-workspace.yaml` overrides
+  (#55): i18next v26 declares typescript as an optional peer, and the
+  lockfile resolved typescript 5.8.2 for `packages/frontend` but 5.9.3
+  for `packages/api` and friends, so pnpm created two distinct
+  peer-variant copies of i18next/react-i18next — `@taskora/api`
+  initialized one copy while `Login.tsx`'s `useTranslation()` read from
+  the other (uninitialized) copy, rendering raw keys ("auth:login") on
+  the web/desktop login pages. A Login i18n smoke test now fails when
+  raw keys are rendered.
+- **ci**: Align CI's pnpm with the lockfile-generating pnpm 11 (#55):
+  CI installed pnpm 9, which does not read overrides from
+  `pnpm-workspace.yaml`, so it saw an empty overrides config that
+  mismatched the lockfile's recorded override and failed with
+  `ERR_PNPM_LOCKFILE_CONFIG_MISMATCH` on `--frozen-lockfile`. A
+  `packageManager` field (pnpm@11.17.0) is now the single source of
+  truth and the hardcoded `version: 9` was dropped from the workflows
+  so `pnpm/action-setup` reads the version from package.json.
+
+### Fixes
+
+- **ui**: Touch support for row context menus, drag reorder, and
+  agent/calendar layout (#56): row context menus (task/project/subtask)
+  were mouse-only (`onContextMenu`), so touch devices could not delete,
+  cancel, move, or restore rows — a `useLongPress` hook (touch/pen only,
+  500ms hold, 8px tolerance, click suppression after firing) now opens
+  them via a shared `openMenuAt(x, y)` virtual-anchor path. The
+  `/agent` (full-bleed) and `/calendar` (canvas) `h-full` containers
+  were occluded by the fixed MobileTabBar on small screens —
+  `MainContent` gains `max-md` bottom padding (3.5rem + safe-area
+  inset). Drag reorder used `PointerSensor(distance: 5)`, so touch
+  scrolling 5px hijacked the list into a drag and the heading drag
+  handle was hover-only (invisible on touch) — five DndContexts
+  (TaskList, FeedListView, AreaDetail, ProjectTaskLayout,
+  SidebarProjectSection) switch to `MouseSensor(distance: 5)` +
+  `TouchSensor(delay: 300, tolerance: 8)`, and the heading handle is
+  visible with `max-md:opacity-100`.
+- **ui/desktop**: Restore title auto-focus when creating projects,
+  areas, and tasks (#58): creating a new project/area while already on
+  another detail page left the title as a static `<h1>` instead of the
+  auto-focused empty input — the route change only swaps params, React
+  Router reuses the page component, and `InlineTitleEdit`'s
+  `useState(autoFocusAndSelect)` initializer never re-runs; it now
+  enters edit mode when `autoFocusAndSelect` turns true while mounted
+  (mirroring `ProjectHeadingRow`), covered by a desktop-shell test
+  (MemoryRouter + Suspense + lazy pages, StrictMode, engine cache
+  replacement). Additionally, creating a task on the project/area page
+  left the expanded row's title input unfocused: `useCreateTask`
+  invalidated and replaced the optimistic temp row before the mutation
+  resolved, then `onSuccess` blindly prepended the real row again —
+  React's dedupe reconciliation unmounted the focused expanded row;
+  the create `onSuccess` now dedupes against concurrent cache updates.
+- **ui**: Clamp long sidebar titles instead of spilling past the panel
+  (#60): Radix ScrollArea's viewport wraps content in a shrink-to-fit
+  `display: table` div, so a long project title's min-content inflated
+  the wrapper (~721px), pushed past the viewport, and got hard-clipped
+  without ellipsis — the shared ui ScrollArea overrides the wrapper
+  back to `display: block`. SidebarAreaRow / CollapsibleSection title
+  NavLinks were flex items with `min-width: auto`, forcing rows wider
+  than the sidebar — they gain `min-w-0` so the inner truncate span
+  measures correctly (verified with a vite+playwright geometry harness:
+  53 overflowing elements before, 0 after).
+- **ui/desktop**: Tame sidebar auto-scroll so edge-zone project drags
+  land correctly (#59): sidebar project drags inside the Radix
+  ScrollArea ran away whenever the dragged item sat in the bottom 20%
+  of the scroll viewport — dnd-kit's default autoScroll (20% threshold,
+  5ms interval, acceleration 10) spun the list at ~2000px/s, sweeping
+  the placeholder through the whole column and committing the drop to
+  a neighboring area or the list end. The edge threshold narrows to one
+  row (~6%), the scroll slows (acceleration 4, interval 20ms) so edge
+  drags keep a gentle auto-scroll, and the parameters are locked with a
+  regression assertion.
+- **ui**: Save and collapse task on plain Enter in the title input
+  (#61): pressing Enter while focused on an expanded task's title input
+  previously only blurred it to commit the edit, requiring a second
+  Enter after focus returned to the row to collapse — the plain-Enter
+  path now merges with the Cmd/Ctrl+Enter path so both blur to commit,
+  hand focus back to the row, and collapse the expansion in one step.
+
 ## [0.4.4] - 2026-09-21
 
 ### Fixes
