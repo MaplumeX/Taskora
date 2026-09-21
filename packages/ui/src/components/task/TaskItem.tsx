@@ -151,15 +151,12 @@ export function TaskItem({
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.stopPropagation();
-                // ⌘Enter/Ctrl+Enter：保存（先 blur 触发提交）并收起。
-                if (e.metaKey || e.ctrlKey) {
-                  e.preventDefault();
-                  e.currentTarget.blur();
-                  rowRef.current?.focus();
-                  onRowClick?.();
-                } else {
-                  e.currentTarget.blur();
-                }
+                e.preventDefault();
+                // Enter（含 ⌘Enter/Ctrl+Enter）：先 blur 触发提交，再收起，
+                // 避免出现「退出编辑」与「收起」拆成两次按键的中间态。
+                e.currentTarget.blur();
+                rowRef.current?.focus();
+                onRowClick?.();
               } else if (e.key === ' ') {
                 e.stopPropagation();
               } else if (e.key === 'Escape') {
