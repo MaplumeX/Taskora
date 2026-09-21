@@ -8,6 +8,8 @@ allowBuilds:
   esbuild: true
   prisma: true
   protobufjs: true
+overrides:
+  typescript: 5.9.3
 pnpm:
   onlyBuiltDependencies:
     - '@google/genai'
