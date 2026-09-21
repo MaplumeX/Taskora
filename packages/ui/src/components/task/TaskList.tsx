@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import {
   DndContext,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   closestCenter,
@@ -99,8 +100,11 @@ onReorder,
   const { t } = useTranslation();
   const topTasks = tasks;
 
+  // 鼠标：移动 5px 激活；触摸：按住 300ms 再移动才激活，避免与列表滚动
+  // 冲突（PointerSensor 会在触摸滑动 5px 时误触拖拽）。
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
   );
 
   if (topTasks.length === 0) {

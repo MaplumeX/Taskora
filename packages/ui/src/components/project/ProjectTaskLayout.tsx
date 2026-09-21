@@ -4,7 +4,8 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   pointerWithin,
   useDroppable,
   useSensor,
@@ -418,8 +419,11 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
     }
     return sortableKeyboardCoordinates(event, args);
   }, []);
+  // 鼠标：移动 5px 激活；触摸：按住 300ms 再移动才激活，避免与列表滚动冲突
+  // （滚动期间移动超过容差即取消，不会误触拖拽）。
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: keyboardCoordinates }),
   );
 

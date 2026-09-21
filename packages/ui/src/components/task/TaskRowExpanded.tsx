@@ -28,6 +28,7 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { MenuRow } from '@/components/common/MenuRow';
+import { useLongPress } from '../../lib/useLongPress';
 import { cn } from '@/lib/utils';
 import { useProjectsQuery } from '@taskora/api';
 import { useAreasQuery } from '@taskora/api';
@@ -345,10 +346,7 @@ function SubtaskRow({
     { getBoundingClientRect: () => ClientRect } | null
   >(null);
 
-  const onContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    const x = e.clientX;
-    const y = e.clientY;
+  const openMenuAt = (x: number, y: number) => {
     virtualAnchorRef.current = {
       getBoundingClientRect: () => ({
         width: 0,
@@ -364,6 +362,14 @@ function SubtaskRow({
     };
     setMenuOpen(true);
   };
+
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    openMenuAt(e.clientX, e.clientY);
+  };
+
+  // 触屏长按与右键走同一菜单（取消/撤销取消）。
+  const longPress = useLongPress((p) => openMenuAt(p.x, p.y));
 
   const toggleCancel = () => {
     setMenuOpen(false);
@@ -387,7 +393,7 @@ function SubtaskRow({
   };
 
   return (
-    <li className="flex items-center gap-2 text-sm" onContextMenu={onContextMenu}>
+    <li className="flex items-center gap-2 text-sm" onContextMenu={onContextMenu} {...longPress}>
       <TaskCheckbox
         checked={completed}
         cancelled={cancelled}
