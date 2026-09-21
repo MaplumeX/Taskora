@@ -84,17 +84,15 @@ export function useCreateArea() {
       }
     },
     onSuccess: (area, _data, ctx) => {
-      // Replace temp item with server-returned real value
+      // Replace temp item with server-returned real value. 幂等去重：
+      // 并发缓存更新可能已写入真实行——再追加会重复（duplicate key）。
       const tempId = ctx?.tempId;
       queryClient.setQueriesData<AreaResponseDto[]>(
         { queryKey: areaKeys.all },
         (old) => {
           if (!old) return old;
-          if (tempId) {
-            const withoutTemp = old.filter((a) => a.id !== tempId);
-            return [...withoutTemp, area];
-          }
-          return [...old, area];
+          const deduped = old.filter((a) => a.id !== tempId && a.id !== area.id);
+          return [...deduped, area];
         },
       );
       // Set detail cache so detail page can read immediately
