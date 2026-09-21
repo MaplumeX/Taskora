@@ -158,6 +158,10 @@ export const DELETE_CASCADES: Partial<
   Record<SyncEntity, Array<{ entity: SyncEntity; foreignKey: string }>>
 > = {
   task: [{ entity: 'subtask', foreignKey: 'taskId' }],
+  // Project 物理删除时级联其 ProjectHeading（对齐 Prisma onDelete:
+  // Cascade）。hub 侧 DB 级联不产生事件，副本靠本表在收到 project
+  // Compact Event 时本地级联，否则孤儿 heading 永久残留副本。
+  project: [{ entity: 'project-heading', foreignKey: 'projectId' }],
 };
 
 /**
@@ -175,6 +179,37 @@ export const COMPACT_NULL_REFS: Partial<
   ],
   'project-heading': [{ entity: 'task', field: 'headingId' }],
   'tag-group': [{ entity: 'tag', field: 'tagGroupId' }],
+  // Task.project 是可选关系，Prisma 默认 onDelete: SetNull——hub 删除
+  // project 时 DB 自动置 null；副本按同一语义清理（emptyTrash 场景下
+  // 下属 task 本就同批删除，此条为防御性对齐）。
+  project: [{ entity: 'task', field: 'projectId' }],
+};
+
+/**
+ * 引用字段注册表 — hub 合并前的失效引用清洗（同步毒丸防御）。
+ *
+ * 设备离线期间的写可能引用此后被物理删除（compact）的实体：hub 直接
+ * 物化会触发 FK violation，整个 push 批次反复失败（毒丸）。合并后按本
+ * 表清洗 applied 字段：数组引用剔除失效 id、标量引用置 null（对齐
+ * compact 的 SetNull 语义）；Subtask.taskId 失效则整事件丢弃（孤儿
+ * 防御）。两端 hub（NestJS SyncHubService / InMemorySyncHub）共用。
+ */
+export const REFERENCE_FIELDS: Partial<
+  Record<SyncEntity, Record<string, { entity: SyncEntity; array?: boolean }>>
+> = {
+  task: {
+    tagIds: { entity: 'tag', array: true },
+    projectId: { entity: 'project' },
+    headingId: { entity: 'project-heading' },
+    areaId: { entity: 'area' },
+  },
+  project: {
+    tagIds: { entity: 'tag', array: true },
+    areaId: { entity: 'area' },
+  },
+  area: { tagIds: { entity: 'tag', array: true } },
+  tag: { tagGroupId: { entity: 'tag-group' } },
+  subtask: { taskId: { entity: 'task' } },
 };
 
 export function entityDef(entity: SyncEntity): EntityDef {

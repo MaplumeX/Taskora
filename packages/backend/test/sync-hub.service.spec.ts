@@ -597,4 +597,147 @@ describe('SyncHubService（合并器集成）', () => {
       expect(mockPrisma.subtask.create).not.toHaveBeenCalled();
     });
   });
+
+  describe('失效引用清洗（同步毒丸防御）', () => {
+    it('tagIds 携带已删 tag：物化时剔除失效 id，字段时钟提升为虚拟设备 0', async () => {
+      const existingClocks = { tagIds: stamp(1_000, 0, '0') };
+      mockPrisma.task.findUnique.mockResolvedValue({
+        ...taskRow,
+        fieldClocks: existingClocks,
+        fieldDigests: { tagIds: JSON.stringify([]) },
+      });
+      // 引用探针：tag-alive 存在且属于本人；tag-dead 已 compact（物理
+      // 删除 + 登记），探针经 compactedEntity 判 dead
+      mockPrisma.tag.findMany.mockResolvedValue([{ id: 'tag-alive' }]);
+      mockPrisma.compactedEntity.findMany.mockResolvedValue([
+        { entity: 'tag', entityId: 'tag-dead', userId: USER },
+      ]);
+      mockPrisma.task.update.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => ({
+          ...taskRow,
+          ...(data as object),
+          fieldClocks: data.fieldClocks,
+        }),
+      );
+
+      const result = await service.push(USER, [
+        {
+          entity: 'task',
+          id: 'task-1',
+          fields: {
+            tagIds: {
+              value: ['tag-alive', 'tag-dead'],
+              hlc: stamp(LATER_THAN_ROW, 0, 'dev-a'),
+            },
+          },
+        },
+      ]);
+
+      expect(result).toEqual({ acked: 1 });
+      const updateArgs = mockPrisma.task.update.mock.calls[0][0] as {
+        where: { id: string };
+        data: Record<string, unknown>;
+      };
+      // 物化只含存活 tag（不触发 FK violation，批次不成为毒丸）
+      expect(updateArgs.data.tags).toEqual({
+        deleteMany: {},
+        create: [{ tagId: 'tag-alive' }],
+      });
+      // 清洗值以虚拟设备 0 的更新时钟下发，推送设备 pull 回声时真正应用
+      const scrubClock = updateArgs.data.fieldClocks as Record<string, string>;
+      expect(scrubClock.tagIds).not.toBe(stamp(LATER_THAN_ROW, 0, 'dev-a'));
+      expect(scrubClock.tagIds.endsWith(':0')).toBe(true);
+    });
+
+    it('projectId 指向已删 project：物化为 null（对齐 compact 的 SetNull 语义）', async () => {
+      mockPrisma.task.findUnique.mockResolvedValue({
+        ...taskRow,
+        projectId: 'project-old',
+        fieldClocks: { projectId: stamp(1_000, 0, '0') },
+        fieldDigests: { projectId: JSON.stringify('project-old') },
+      });
+      mockPrisma.project.findUnique.mockResolvedValue(null);
+      mockPrisma.compactedEntity.findUnique.mockImplementation(
+        async ({
+          where,
+        }: {
+          where: { userId_entity_entityId?: { entityId?: string } };
+        }) =>
+          where.userId_entity_entityId?.entityId === 'project-gone'
+            ? { entity: 'project', entityId: 'project-gone', userId: USER }
+            : null,
+      );
+      mockPrisma.task.update.mockImplementation(
+        async ({ data }: { data: Record<string, unknown> }) => ({
+          ...taskRow,
+          ...(data as object),
+          fieldClocks: data.fieldClocks,
+        }),
+      );
+
+      await service.push(USER, [
+        {
+          entity: 'task',
+          id: 'task-1',
+          fields: {
+            projectId: {
+              value: 'project-gone',
+              hlc: stamp(LATER_THAN_ROW, 0, 'dev-a'),
+            },
+          },
+        },
+      ]);
+
+      const updateArgs = mockPrisma.task.update.mock.calls[0][0] as {
+        data: Record<string, unknown>;
+      };
+      expect(updateArgs.data.projectId).toBeNull();
+    });
+
+    it('subtask 字段写把 taskId 改到已删 Task：整事件丢弃，不落库', async () => {
+      const subtaskRow = {
+        id: 'sub-1',
+        title: '步骤',
+        status: 'ACTIVE',
+        settledAt: null,
+        sortOrder: 0,
+        taskId: 'task-alive',
+        createdAt: new Date('2026-01-01T00:00:00Z'),
+        updatedAt: new Date('2026-01-02T00:00:00Z'),
+        fieldClocks: null,
+        fieldDigests: null,
+      };
+      mockPrisma.subtask.findUnique.mockResolvedValue(subtaskRow);
+      // 现存父 Task 归属校验通过；改写目标 task-gone 不存在且已 compact
+      mockPrisma.task.findUnique.mockImplementation(async ({ where }: { where: { id: string } }) =>
+        where.id === 'task-alive' ? { id: 'task-alive', userId: USER } : null,
+      );
+      mockPrisma.compactedEntity.findUnique.mockImplementation(
+        async ({
+          where,
+        }: {
+          where: { userId_entity_entityId?: { entityId?: string } };
+        }) =>
+          where.userId_entity_entityId?.entityId === 'task-gone'
+            ? { entity: 'task', entityId: 'task-gone', userId: USER }
+            : null,
+      );
+
+      await service.push(USER, [
+        {
+          entity: 'subtask',
+          id: 'sub-1',
+          fields: {
+            taskId: {
+              value: 'task-gone',
+              hlc: stamp(LATER_THAN_ROW, 0, 'dev-a'),
+            },
+          },
+        },
+      ]);
+
+      expect(mockPrisma.subtask.update).not.toHaveBeenCalled();
+      expect(mockPrisma.subtask.create).not.toHaveBeenCalled();
+    });
+  });
 });

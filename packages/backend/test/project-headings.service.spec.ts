@@ -1,7 +1,15 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { describe, expect, it, vi } from 'vitest';
+
+import { synthPosition } from '@taskora/engine';
+
 import { ProjectHeadingsService } from '../src/project-headings/project-headings.service';
 import type { PrismaService } from '../src/prisma/prisma.service';
+
+const TASK_CREATED = {
+  'task-1': new Date('2026-01-01T00:00:00Z'),
+  'task-2': new Date('2026-01-02T00:00:00Z'),
+};
 
 function createPrismaMock() {
   const prisma = {
@@ -23,7 +31,10 @@ function createPrismaMock() {
       deleteMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     task: {
-      findMany: vi.fn().mockResolvedValue([{ id: 'task-1' }, { id: 'task-2' }]),
+      findMany: vi.fn().mockResolvedValue([
+        { id: 'task-1', createdAt: TASK_CREATED['task-1'] },
+        { id: 'task-2', createdAt: TASK_CREATED['task-2'] },
+      ]),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
     compactedEntity: { createMany: vi.fn() },
@@ -177,7 +188,27 @@ describe('ProjectHeadingsService', () => {
         trashedAt: null,
         status: 'ACTIVE',
       },
-      data: { headingId: 'heading-2', sortOrder: 0 },
+      // 视觉顺序（ungrouped 在前：task-2 为 0，heading-2 分组 task-1 为 1）
+      // 决定 position；写入值与 hub 的合成函数一致。
+      data: {
+        headingId: 'heading-2',
+        sortOrder: 0,
+        position: synthPosition(1, TASK_CREATED['task-1']),
+      },
+    });
+    expect(prisma.task.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: 'task-2',
+        userId: 'user-1',
+        projectId: 'project-1',
+        trashedAt: null,
+        status: 'ACTIVE',
+      },
+      data: {
+        headingId: null,
+        sortOrder: 0,
+        position: synthPosition(0, TASK_CREATED['task-2']),
+      },
     });
   });
 

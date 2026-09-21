@@ -194,6 +194,16 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       if (data.projectId !== undefined) patch.projectId = data.projectId;
       if (data.areaId !== undefined) patch.areaId = data.areaId;
       if (data.tagIds !== undefined) patch.tagIds = data.tagIds;
+      // 与 REST 对齐：projectId 变化时解除 heading 归属（TasksService.update
+      // 的 heading disconnect），否则任务换项目后 headingId 仍指旧项目的
+      // 分组，移回原项目时会突然重新出现在旧分组下。
+      if (
+        data.projectId !== undefined &&
+        data.projectId !== (fields.projectId as string | null) &&
+        fields.headingId != null
+      ) {
+        patch.headingId = null;
+      }
 
       await engine.update('task', id, patch);
       return taskDto(id);
@@ -246,13 +256,15 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       const rows = await engine.list('task');
       const byId = new Map(rows.map((row) => [row.id, row]));
       // 为整个有序集重新分配等距 Position；与现状相同的行不动（控制
-      // Outbox 体积）。
+      // Outbox 体积）。position 供本地副本读（fractional indexing），
+      // sortOrder 供过渡期 web 端 REST 读——两个排序键必须一起写
+      // （对齐 reorderProjects 惯例），否则两端顺序分叉。
       const keys = positionsBetween(null, null, orderedIds.length);
       await Promise.all(
         orderedIds.map(async (id, index) => {
           const row = byId.get(id);
-          if (row && row.fields.position !== keys[index]) {
-            await engine.update('task', id, { position: keys[index] });
+          if (row && (row.fields.position !== keys[index] || row.fields.sortOrder !== index)) {
+            await engine.update('task', id, { position: keys[index], sortOrder: index });
           }
         }),
       );

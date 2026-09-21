@@ -13,12 +13,17 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 import {
   mergeFieldWrites,
   hlcWallMs,
+  formatHlc,
+  scrubReferences,
   SYNC_ENTITIES,
   DELETE_CASCADES,
+  REFERENCE_FIELDS,
+  VIRTUAL_DEVICE_ID,
   isSyncEntity,
   type FieldWrite,
   type DeleteRequest,
   type OutboxEvent,
+  type ReferenceStatus,
   type SyncEntity,
 } from '@taskora/engine';
 import type { ChangeAction, ChangeEntity } from '@taskora/shared';
@@ -213,7 +218,9 @@ export class SyncHubService implements OnModuleInit {
         )
         .map((row) => row.id);
 
-      const cascadedSubtaskIds: string[] = [];
+      // 级联子实体（DELETE_CASCADES：Task → Subtask、Project →
+      // ProjectHeading）：登记 + 物理删除同事务，按实体分组广播
+      const cascaded: Array<{ entity: SyncEntity; ids: string[] }> = [];
       for (const rule of DELETE_CASCADES[request.entity] ?? []) {
         const childCodec = codecFor(rule.entity);
         const childRows = (await delegate(tx, childCodec.model).findMany({
@@ -221,9 +228,9 @@ export class SyncHubService implements OnModuleInit {
           select: { id: true },
         })) as Array<{ id: string }>;
         const childIds = childRows.map((row) => row.id);
-        cascadedSubtaskIds.push(...childIds);
         await registerCompacted(tx, userId, rule.entity, childIds);
         if (childIds.length > 0) {
+          cascaded.push({ entity: rule.entity, ids: childIds });
           await delegate(tx, childCodec.model).deleteMany({ where: { id: { in: childIds } } });
         }
       }
@@ -233,12 +240,14 @@ export class SyncHubService implements OnModuleInit {
       if (owned.length > 0) {
         await delegate(tx, codec.model).deleteMany({ where: { id: { in: owned } } });
       }
-      return { owned, cascadedSubtaskIds };
+      return { owned, cascaded };
     });
 
     // 只在事务提交后发布；collector 的重复 Compact 对设备幂等。
     this.broadcastCompact(userId, request.entity, result.owned);
-    this.broadcastCompact(userId, 'subtask', result.cascadedSubtaskIds);
+    for (const group of result.cascaded) {
+      this.broadcastCompact(userId, group.entity, group.ids);
+    }
   }
 
   /** 查询某实体 id 是否已被 compact（迟到写丢弃，ADR-0008）。 */
@@ -324,6 +333,26 @@ export class SyncHubService implements OnModuleInit {
         current ? { fields: current.fields, clocks: current.clocks } : null,
         incoming,
       );
+      // 失效引用清洗（REFERENCE_FIELDS）：设备离线期间的写可能引用此后
+      // 被 compact（或从未存在且永不会到达）的实体——直接物化会触发
+      // FK violation，整批 push 反复失败（同步毒丸）。尚未到达的引用
+      // （同批后序事件可能创建）保留，由 FK 失败驱动重试收敛（既有
+      // 语义）。先批量预加载引用状态，再清洗。
+      const referenceStatuses = await this.loadReferenceStatuses(
+        tx,
+        userId,
+        event.entity,
+        outcome,
+      );
+      const bumpWall = 1 + Math.max(Date.now(), ...Object.values(outcome.clocks).map(hlcWallMs));
+      const handled = scrubReferences(
+        event.entity,
+        current ? { fields: current.fields, clocks: current.clocks } : null,
+        outcome,
+        (target, id) => referenceStatuses.get(`${target}:${id}`) ?? 'pending',
+        () => formatHlc({ wallMs: bumpWall, counter: 0, deviceId: VIRTUAL_DEVICE_ID }),
+      );
+      if (!handled) return null; // 孤儿 Subtask：整事件丢弃
       if (outcome.appliedFields.length === 0) return null;
 
       // 新建行走 create 模式：tagIds 只物化为纯 create。
@@ -391,6 +420,94 @@ export class SyncHubService implements OnModuleInit {
         fingerprint(state),
       );
     }
+  }
+
+  /**
+   * 批量预加载 applied 字段引用的目标状态（ReferenceStatus）。
+   * - 行存在且属于该用户：alive；
+   * - 行不存在且已登记 compact：dead（迟到引用，清洗对象）；
+   * - 行不存在且未登记：pending（同批后序事件可能创建，保留引用
+   *   由 FK 失败驱动重试）；
+   * - 行存在但属于他人：dead（越权引用，不物化）。
+   */
+  private async loadReferenceStatuses(
+    tx: unknown,
+    userId: string,
+    entity: SyncEntity,
+    outcome: { appliedFields: string[]; fields: Record<string, unknown> },
+  ): Promise<Map<string, ReferenceStatus>> {
+    const refs = REFERENCE_FIELDS[entity];
+    const statuses = new Map<string, ReferenceStatus>();
+    if (!refs) return statuses;
+    const scalarTargets = new Map<SyncEntity, Set<string>>();
+    const arrayTargets = new Map<SyncEntity, Set<string>>();
+    const add = (
+      map: Map<SyncEntity, Set<string>>,
+      target: SyncEntity,
+      ids: string[],
+    ) => {
+      if (ids.length === 0) return;
+      const set = map.get(target) ?? new Set<string>();
+      ids.forEach((id) => set.add(id));
+      map.set(target, set);
+    };
+    for (const field of outcome.appliedFields) {
+      const ref = refs[field];
+      if (!ref) continue;
+      const value = outcome.fields[field];
+      if (ref.array) {
+        add(
+          arrayTargets,
+          ref.entity,
+          Array.isArray(value)
+            ? value.filter((id): id is string => typeof id === 'string')
+            : [],
+        );
+      } else if (typeof value === 'string') {
+        add(scalarTargets, ref.entity, [value]);
+      }
+    }
+    // 标量引用：逐个 findUnique + 归属校验（复用 ownsRow 的认领口径）
+    for (const [target, ids] of scalarTargets) {
+      for (const id of ids) {
+        const row = await loadRow(tx, codecFor(target), id);
+        if (row) {
+          statuses.set(
+            `${target}:${id}`,
+            (await this.ownsRow(tx, userId, target, row)) ? 'alive' : 'dead',
+          );
+        } else {
+          statuses.set(
+            `${target}:${id}`,
+            (await this.isCompacted(tx, userId, target, id)) ? 'dead' : 'pending',
+          );
+        }
+      }
+    }
+    // 数组引用（tagIds）：一次批量查询存活集，缺失集再查 compact 登记
+    for (const [target, ids] of arrayTargets) {
+      const codec = codecFor(target);
+      const rows = (await delegate(tx, codec.model).findMany({
+        where: { id: { in: [...ids] }, userId },
+        select: { id: true },
+      })) as Array<{ id: string }>;
+      const owned = new Set(rows.map((row) => row.id));
+      ids.forEach((id) => {
+        if (owned.has(id)) statuses.set(`${target}:${id}`, 'alive');
+      });
+      const missing = [...ids].filter((id) => !owned.has(id));
+      if (missing.length > 0) {
+        const compactedRows = (await delegate(tx, 'compactedEntity').findMany({
+          where: { userId, entity: target, entityId: { in: missing } },
+          select: { entityId: true },
+        })) as Array<{ entityId: string }>;
+        const compacted = new Set(compactedRows.map((row) => row.entityId));
+        missing.forEach((id) => {
+          statuses.set(`${target}:${id}`, compacted.has(id) ? 'dead' : 'pending');
+        });
+      }
+    }
+    return statuses;
   }
 
   /** 同一实体的跨实例事务锁；行存在时再取 FOR UPDATE，与普通 REST 写互斥。 */

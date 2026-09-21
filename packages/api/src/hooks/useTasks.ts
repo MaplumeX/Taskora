@@ -380,15 +380,16 @@ export function useReorderTasks() {
     mutationFn: (orderedIds: string[]) => reorderTasks(orderedIds),
     onMutate: async (orderedIds) => {
       await queryClient.cancelQueries({ queryKey: taskKeys.all });
+      const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
       queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) => {
         if (!old) return old;
-        const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
-        return [...old].sort((a, b) => {
-          const ai = orderMap.get(a.id);
-          const bi = orderMap.get(b.id);
-          if (ai !== undefined && bi !== undefined) return ai - bi;
-          return 0;
-        });
+        // 仅对成员完全覆盖的列表（目标视图）做乐观重排；异构过滤参数的
+        // 列表（其它项目/视图）保持原序，避免 comparator 对非成员返回 0
+        // 造成的未定义交错，等 onSettled 拉平。
+        if (!old.every((task) => orderMap.has(task.id))) return old;
+        return [...old].sort(
+          (a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0),
+        );
       });
     },
     onError: () => {

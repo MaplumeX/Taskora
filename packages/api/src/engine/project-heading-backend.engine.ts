@@ -7,7 +7,7 @@
  */
 
 import type { Engine } from '@taskora/engine';
-import { positionAfter } from '@taskora/engine';
+import { positionAfter, positionsBetween } from '@taskora/engine';
 import {
   HeadingStatus,
   ProjectBucket,
@@ -55,7 +55,16 @@ export function createEngineProjectHeadingBackend(
           row.fields.projectId === projectId &&
           (options?.includeArchived || row.fields.status === HeadingStatus.ACTIVE),
       );
-      return headings.map((row) => projectHeadingRowToDto(row));
+      // tiebreak 对齐 REST（ProjectHeadingsService：sortOrder asc, createdAt
+      // asc）；副本 list 的 createdAt 是 desc（通用 tiebreak）
+      return [...headings]
+        .sort((a, b) => {
+          const sa = (a.fields.sortOrder as number) ?? 0;
+          const sb = (b.fields.sortOrder as number) ?? 0;
+          if (sa !== sb) return sa - sb;
+          return String(a.fields.createdAt ?? '').localeCompare(String(b.fields.createdAt ?? ''));
+        })
+        .map((row) => projectHeadingRowToDto(row));
     },
 
     async createProjectHeading(data) {
@@ -163,17 +172,42 @@ export function createEngineProjectHeadingBackend(
         'task',
       );
 
+      // 双排序键一起写（对齐 reorderProjects 惯例）：sortOrder 维持 REST
+      // 列惯例（分组内索引）；position 按整页视觉顺序（ungrouped 在前、
+      // 各 heading 分组依次）分配全局等距键——本地副本按 position 读，
+      // 漏写会让桌面端拖拽后弹回旧顺序。
+      const visualTaskIds = [
+        ...data.ungroupedTaskIds,
+        ...data.groups.flatMap((group) => group.taskIds),
+      ];
+      const positionKeys = positionsBetween(null, null, visualTaskIds.length);
+      const positionOf = new Map(visualTaskIds.map((id, index) => [id, positionKeys[index]]));
+      const positionPatch = (taskId: string): Record<string, unknown> => {
+        const position = positionOf.get(taskId);
+        return position !== undefined ? { position } : {};
+      };
+
       const writes: Array<Promise<unknown>> = [];
       for (const [groupIndex, group] of data.groups.entries()) {
         writes.push(engine.update('project-heading', group.headingId, { sortOrder: groupIndex }));
         for (const [taskIndex, taskId] of group.taskIds.entries()) {
           writes.push(
-            engine.update('task', taskId, { headingId: group.headingId, sortOrder: taskIndex }),
+            engine.update('task', taskId, {
+              headingId: group.headingId,
+              sortOrder: taskIndex,
+              ...positionPatch(taskId),
+            }),
           );
         }
       }
       for (const [taskIndex, taskId] of data.ungroupedTaskIds.entries()) {
-        writes.push(engine.update('task', taskId, { headingId: null, sortOrder: taskIndex }));
+        writes.push(
+          engine.update('task', taskId, {
+            headingId: null,
+            sortOrder: taskIndex,
+            ...positionPatch(taskId),
+          }),
+        );
       }
       await Promise.all(writes);
     },

@@ -102,7 +102,7 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     expect((await backend.getFeed('inbox')).map((i) => i.title)).toEqual(['要删的']);
   });
 
-  it('拖拽排序：reorder 后 Position 生效且不产生多余 Outbox 条目', async () => {
+  it('拖拽排序：reorder 后 Position/sortOrder 双写生效且不产生多余 Outbox 条目', async () => {
     const a = await backend.createTask({ title: 'A' });
     const b = await backend.createTask({ title: 'B' });
     const c = await backend.createTask({ title: 'C' });
@@ -110,6 +110,15 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
 
     await backend.reorderTasks([c.id, a.id, b.id]);
     expect((await backend.getFeed('inbox')).map((i) => i.title)).toEqual(['C', 'A', 'B']);
+
+    // sortOrder 同步写入（web 端 REST 读序列）；漏写时 web 端不变序
+    for (const [id, index] of [
+      [c.id, 0],
+      [a.id, 1],
+      [b.id, 2],
+    ] as const) {
+      expect((await engine.get('task', id))?.fields.sortOrder).toBe(index);
+    }
 
     // 只给顺序变化的行追加 Outbox（A、B 换位，C 已在最前不动）
     const pendingAfter = await engine.pendingCount();
