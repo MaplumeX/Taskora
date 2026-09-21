@@ -16,8 +16,8 @@ interface Props {
  * 侧边栏可拖拽项目条目包装。
  *
  * - sortable id 采用 `proj:<projectId>` 前缀，与区域条目 (`area:<id>`) 区分。
- * - listeners 挂在外层 div 而非 ProjectItem 的点击区域上，配合 PointerSensor
- *   distance:5 激活距离，保留点击导航行为。
+ * - listeners 挂在外层 div 而非 ProjectItem 的点击区域上，配合鼠标
+ *   distance:5 / 触摸 delay:300 的激活约束，保留点击导航行为。
  */
 export function SortableProjectItem({
   project,

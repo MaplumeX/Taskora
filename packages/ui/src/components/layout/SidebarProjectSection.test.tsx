@@ -28,7 +28,9 @@ const harness = vi.hoisted(() => ({
   dndProps: null as DndHandlers | null,
   pointerCollisionIds: [] as string[],
   closestCollisionIds: [] as string[],
-  sensorOptions: null as { activationConstraint?: { distance?: number } } | null,
+  sensorOptionsList: [] as Array<
+    { activationConstraint?: { distance?: number; delay?: number; tolerance?: number } } | null
+  >,
   reorderProjectsMutate: vi.fn(),
   updateProjectMutate: vi.fn(),
   reorderAreasMutate: vi.fn(),
@@ -59,8 +61,11 @@ vi.mock('@dnd-kit/core', async () => {
         .map((id) => ({ id }));
     },
     useDroppable: () => ({ setNodeRef: () => undefined }),
-    useSensor: (_sensor: unknown, options?: typeof harness.sensorOptions) => {
-      harness.sensorOptions = options ?? null;
+    useSensor: (
+      _sensor: unknown,
+      options?: { activationConstraint?: { distance?: number; delay?: number; tolerance?: number } },
+    ) => {
+      harness.sensorOptionsList.push(options ?? null);
       return {};
     },
     useSensors: (...sensors: unknown[]) => sensors,
@@ -218,7 +223,7 @@ beforeEach(() => {
   harness.dndProps = null;
   harness.pointerCollisionIds = [];
   harness.closestCollisionIds = [];
-  harness.sensorOptions = null;
+  harness.sensorOptionsList = [];
   harness.reorderProjectsMutate.mockReset();
   harness.updateProjectMutate.mockReset();
   harness.reorderAreasMutate.mockReset();
@@ -533,10 +538,12 @@ describe('SidebarProjectSection persistence and area isolation', () => {
     expect(harness.reorderProjectsMutate).not.toHaveBeenCalled();
   });
 
-  it('keeps the 5px activation threshold, explicit measuring, and untinted containers', () => {
+  it('keeps mouse 5px activation, touch delayed activation, explicit measuring, and untinted containers', () => {
     renderSection();
 
-    expect(harness.sensorOptions?.activationConstraint?.distance).toBe(5);
+    const constraints = harness.sensorOptionsList.map((o) => o?.activationConstraint);
+    expect(constraints).toContainEqual({ distance: 5 });
+    expect(constraints).toContainEqual({ delay: 300, tolerance: 8 });
     expect(handlers().measuring).toBeDefined();
     document.querySelectorAll('[data-project-container]').forEach((container) => {
       expect(container).not.toHaveClass('bg-muted/60');

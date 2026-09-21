@@ -5,7 +5,8 @@ import {
   DndContext,
   DragOverlay,
   MeasuringStrategy,
-  PointerSensor,
+  MouseSensor,
+  TouchSensor,
   closestCenter,
   pointerWithin,
   useDroppable,
@@ -134,8 +135,11 @@ export function SidebarProjectSection({ projects, areas }: Props) {
   const reorderProjects = useReorderProjects();
   const reorderAreas = useReorderAreas();
   const updateProject = useUpdateProject();
+  // 本组件同时用于桌面侧边栏与手机「更多」抽屉：触摸需按住 300ms 再移动
+  // 才进入拖拽，避免抽屉内滚动列表时误触。
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
   );
 
   const updateRenderedLayout = React.useCallback(
