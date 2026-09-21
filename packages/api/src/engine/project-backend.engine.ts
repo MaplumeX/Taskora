@@ -163,11 +163,21 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
     },
 
     async restoreProject(id: string): Promise<ProjectResponseDto> {
+      const existing = await engine.get('project', id);
+      if (!existing) throw new Error(`Project not found: ${id}`);
       await engine.update('project', id, { trashedAt: null });
+      // 只捡回「随项目一起进 Trash」的下属任务（级联时同一时间戳，与
+      // REST 同启发式）；项目进 Trash 前后单独删掉的任务保持原状。
+      const cascadeTrashedAt = existing.fields.trashedAt ?? null;
       const tasks = await engine.list('task');
       await Promise.all(
         tasks
-          .filter((row) => row.fields.projectId === id)
+          .filter(
+            (row) =>
+              row.fields.projectId === id &&
+              cascadeTrashedAt !== null &&
+              row.fields.trashedAt === cascadeTrashedAt,
+          )
           .map((row) => engine.update('task', row.id, { trashedAt: null })),
       );
       return projectDto(id);
