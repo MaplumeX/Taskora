@@ -91,6 +91,11 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
             libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
 
+      - uses: android-actions/setup-android@v3
+
+      - name: Install NDK
+        run: sdkmanager --install "ndk;28.0.13004108"
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android
@@ -104,9 +109,16 @@ jobs:
         working-directory: packages/mobile/src-tauri
         run: cargo check --locked
 
-      - name: cargo check (Android target)
+      # 交叉编译检查：需指向 NDK 的 clang（bundled sqlite 的 cc crate 不会
+      # 自动发现 NDK，须显式 CC/AR/LINKER）。
+      - name: cargo check (Android target, covers keystore JNI)
         working-directory: packages/mobile/src-tauri
-        run: cargo check --locked --target aarch64-linux-android
+        run: |
+          NDK_BIN=$ANDROID_HOME/ndk/28.0.13004108/toolchains/llvm/prebuilt/linux-x86_64/bin
+          export CC_aarch64_linux_android=$NDK_BIN/aarch64-linux-android24-clang
+          export AR_aarch64_linux_android=$NDK_BIN/llvm-ar
+          export CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$NDK_BIN/aarch64-linux-android24-clang
+          cargo check --locked --target aarch64-linux-android
 
       - name: cargo test
         working-directory: packages/mobile/src-tauri

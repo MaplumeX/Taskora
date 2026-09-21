@@ -268,8 +268,8 @@ mod imp {
         if array.as_raw().is_null() {
             return Err("android: null byte array".to_string());
         }
-        let array = JByteArray::from(array.clone());
-        env.convert_byte_array(&array)
+        let array = <&JByteArray>::from(array);
+        env.convert_byte_array(array)
             .map_err(|e| format!("android: byte array conversion failed: {e}"))
     }
 

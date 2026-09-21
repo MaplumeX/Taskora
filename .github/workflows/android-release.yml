@@ -40,6 +40,9 @@ jobs:
       # NDK 并设置 ANDROID_HOME。
       - uses: android-actions/setup-android@v3
 
+      - name: Install NDK
+        run: sdkmanager --install "ndk;28.0.13004108"
+
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
@@ -65,12 +68,64 @@ jobs:
         run: |
           echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > $RUNNER_TEMP/taskora-release.jks
 
-      - name: Build signed APK
+      # Tauri CLI 不读 TAURI_ANDROID_* 环境变量——官方签名方式是往
+      # gen/android 写 keystore.properties 并给 app/build.gradle.kts 注入
+      # signingConfigs（https://v2.tauri.app/distribute/sign/android/）。
+      # gen/ 是构建时生成的，注入必须每次构建后重新做。
+      - name: Configure signing (keystore.properties + gradle signingConfigs)
         env:
-          TAURI_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/taskora-release.jks
-          TAURI_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          TAURI_ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-          TAURI_ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEYSTORE_PATH: ${{ runner.temp }}/taskora-release.jks
+        run: |
+          cd packages/mobile/src-tauri/gen/android
+          python3 - <<'PY'
+          import os
+          props = {
+              'keyAlias': os.environ['ANDROID_KEY_ALIAS'],
+              'keyPassword': os.environ['ANDROID_KEY_PASSWORD'],
+              'storePassword': os.environ['ANDROID_KEYSTORE_PASSWORD'],
+              'storeFile': os.environ['KEYSTORE_PATH'],
+          }
+          with open('keystore.properties', 'w', encoding='utf8', newline='\n') as f:
+              f.write(''.join(f'{k}={v}\n' for k, v in props.items()))
+
+          path = 'app/build.gradle.kts'
+          src = open(path, encoding='utf8').read()
+          src = src.replace(
+              'import java.util.Properties\n',
+              'import java.util.Properties\nimport java.io.FileInputStream\n',
+              1,
+          )
+          signing = '''    signingConfigs {
+          create("release") {
+              val keystorePropertiesFile = rootProject.file("keystore.properties")
+              val keystoreProperties = Properties()
+              if (keystorePropertiesFile.exists()) {
+                  keystoreProperties.load(FileInputStream(keystorePropertiesFile))
+              }
+              keyAlias = keystoreProperties["keyAlias"] as String
+              keyPassword = keystoreProperties["keyPassword"] as String
+              storeFile = file(keystoreProperties["storeFile"] as String)
+              storePassword = keystoreProperties["storePassword"] as String
+          }
+      }
+      buildTypes {
+  '''
+          assert '    buildTypes {\n' in src
+          src = src.replace('    buildTypes {\n', signing, 1)
+          old = '''        getByName("release") {
+              isMinifyEnabled = true'''
+          new = '''        getByName("release") {
+              signingConfig = signingConfigs.getByName("release")
+              isMinifyEnabled = true'''
+          assert old in src
+          src = src.replace(old, new, 1)
+          open(path, 'w', encoding='utf8', newline='\n').write(src)
+          PY
+
+      - name: Build signed APK
         # 全 ABI universal APK：单个安装包覆盖任何 64/32 位设备，侧载
         # 分发不需要按架构选包。
         run: pnpm --filter @taskora/mobile exec tauri android build --apk
