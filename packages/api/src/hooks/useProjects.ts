@@ -117,17 +117,16 @@ export function useCreateProject() {
       }
     },
     onSuccess: (project, _data, ctx) => {
-      // Replace temp item with server-returned real value
+      // Replace temp item with server-returned real value. 幂等去重：
+      // 并发缓存更新（SSE 手术 / engine 写后失效 refetch）可能已写入
+      // 真实行——再追加会重复（duplicate key → 卸载重建 → 丢焦）。
       const tempId = ctx?.tempId;
       queryClient.setQueriesData<ProjectResponseDto[]>(
         { queryKey: projectKeys.all },
         (old) => {
           if (!old) return old;
-          if (tempId) {
-            const withoutTemp = old.filter((p) => p.id !== tempId);
-            return [...withoutTemp, project];
-          }
-          return [...old, project];
+          const deduped = old.filter((p) => p.id !== tempId && p.id !== project.id);
+          return [...deduped, project];
         },
       );
       // Set detail cache so detail page can read immediately

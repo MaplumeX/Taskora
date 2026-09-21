@@ -130,15 +130,16 @@ export function useCreateTask() {
       }
     },
     onSuccess: (task, _data, ctx) => {
-      // Replace temp item with server-returned real value
+      // Replace temp item with server-returned real value. 幂等：并发缓存
+      // 更新（SSE 缓存手术 / 桌面 engine 写后失效引发的 refetch）可能
+      // 已把真实行写入列表，temp 行已被冲掉——此时再首插会产生同 id
+      // 重复条目（React duplicate key），新建行在去重调和时被卸载重建，
+      // 自动聚焦的标题输入框随之丢焦。过滤两个 id 后只插入一次。
       const tempId = ctx?.tempId;
       queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) => {
         if (!old) return old;
-        if (tempId) {
-          const withoutTemp = old.filter((t) => t.id !== tempId);
-          return [task, ...withoutTemp];
-        }
-        return [task, ...old];
+        const deduped = old.filter((t) => t.id !== tempId && t.id !== task.id);
+        return [task, ...deduped];
       });
     },
     onSettled: () => {
@@ -509,11 +510,10 @@ export function useCreateSubtask() {
       const tempId = ctx?.tempId;
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(subtask.taskId), (old) =>
         applyToSubtasks(old, (subtasks) => {
-          if (tempId) {
-            const withoutTemp = subtasks.filter((s) => s.id !== tempId);
-            return [...withoutTemp, subtask];
-          }
-          return [...subtasks, subtask];
+          // 同 useCreateTask：幂等去重，防止并发缓存更新已写入真实行时
+          // 重复追加（duplicate key → 卸载重建 → 丢焦）。
+          const deduped = subtasks.filter((s) => s.id !== tempId && s.id !== subtask.id);
+          return [...deduped, subtask];
         }),
       );
     },

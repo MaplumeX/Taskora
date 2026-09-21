@@ -156,6 +156,49 @@ describe('useCreateArea', () => {
     const listData = queryClient.getQueryData<AreaResponseDto[]>(areaKeys.all);
     expect(listData).toHaveLength(2);
   });
+
+  it('does not duplicate when a concurrent cache update already flushed the temp row', async () => {
+    // 桌面 engine 写后失效 / SSE 缓存手术：mutation 在途时并发 refetch
+    // 可能已把 temp 行冲成真实行。onSuccess 若仍盲目追加，会产生同 id
+    // 重复条目（React duplicate key）。回归：幂等去重。
+    const realArea: AreaResponseDto = {
+      id: 'area-real',
+      title: 'Health',
+      notes: null,
+      sortOrder: 2,
+      createdAt: '2024-01-03T00:00:00.000Z',
+      updatedAt: '2024-01-03T00:00:00.000Z',
+    };
+    let resolveCreate: (a: AreaResponseDto) => void = () => {};
+    vi.mocked(createArea).mockImplementation(
+      () =>
+        new Promise<AreaResponseDto>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(areaKeys.all, [...mockAreas]);
+
+    const { result } = renderHook(() => useCreateArea(), { wrapper });
+    result.current.mutate({ title: 'Health' });
+
+    // onMutate：乐观追加 temp
+    await waitFor(() => {
+      expect(queryClient.getQueryData<AreaResponseDto[]>(areaKeys.all)).toHaveLength(3);
+    });
+
+    // 模拟并发缓存更新：temp 被冲掉，列表已含真实行
+    queryClient.setQueryData(areaKeys.all, [...mockAreas, realArea]);
+
+    // mutationFn 返回真实行（onSuccess 接手）
+    resolveCreate(realArea);
+
+    await waitFor(() => {
+      const listData = queryClient.getQueryData<AreaResponseDto[]>(areaKeys.all);
+      expect(listData).toHaveLength(3);
+      expect(listData?.filter((a) => a.id === 'area-real')).toHaveLength(1);
+    });
+  });
 });
 
 describe('useUpdateArea (optimistic)', () => {
