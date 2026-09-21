@@ -258,3 +258,45 @@ export function rebalancePositions(
   }
   return positionsBetween(null, null, keys.length);
 }
+
+// ---------- Legacy 行的 Position 合成（REST 写 / 兜底共用） ----------
+
+const MAX_TS = 4_102_444_800_000; // 2100-01-01，分数编码的值域上界
+const FRACTION_WIDTH = 9;
+
+const intKeyCache = new Map<number, string>();
+
+function intToPositionKey(intValue: number): string {
+  let key = intKeyCache.get(intValue);
+  if (key === undefined) {
+    const keys = positionsBetween(null, null, intValue + 1);
+    key = keys[intValue];
+    intKeyCache.set(intValue, key);
+  }
+  return key;
+}
+
+function toBase62(value: number): string {
+  let digits = '';
+  let rest = value;
+  do {
+    digits = BASE_62_DIGITS[rest % 62] + digits;
+    rest = Math.floor(rest / 62);
+  } while (rest > 0);
+  return digits;
+}
+
+/**
+ * 合成 Position：整数部分 = sortOrder，分数部分 = (MAX_TS - createdAt)
+ * 的定宽 base62 + 非零哨兵（防尾零）。createdAt 越大排越前（REST 排序
+ * 的 createdAt desc 语义）。纯函数，重复序列化结果稳定。
+ *
+ * 用于 legacy 行（REST 创建、position 为 null）的确定性合成——hub
+ * 侧 wireViewOfRow 与 REST reorder 写 position 时共用同一实现，
+ * 保证「写下的 position」与「未写时 hub 合成的 position」完全一致，
+ * 两端排序口径不因写与不写而漂移。
+ */
+export function synthPosition(sortOrder: number, createdAt: Date): string {
+  const descending = toBase62(Math.max(0, MAX_TS - createdAt.getTime()));
+  return intToPositionKey(Math.max(0, sortOrder)) + descending.padStart(FRACTION_WIDTH, '0') + '1';
+}

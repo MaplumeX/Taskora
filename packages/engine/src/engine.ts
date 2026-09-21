@@ -13,7 +13,7 @@
 
 import { LocalReplica, type EngineChange, type ReplicaRow } from './replica';
 import { HybridClock } from './hlc';
-import { positionBetween, rebalancePositions } from './position';
+import { positionBetween, rebalancePositions, synthPosition } from './position';
 import type { SyncEntity, WireRow } from './entities';
 import type { DeleteRequest, OutboxEvent, SyncTransport } from './protocol';
 import type { SqlStorage } from './storage';
@@ -188,14 +188,26 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
 
 /**
  * 便捷：为带 Position 的实体生成「插在某行之后」的位次。
- * afterId 为 null 表示插在最前。
+ * afterId 为 null 表示插在最前。邻居缺 Position（理论仅防御：hub wire
+ * 与本地写总是携带）时，按 sortOrder + createdAt 合成兜底——与 hub
+ * 对 legacy 行的合成口径一致，而不是「插到最前」（positionBetween(null,
+ * null) 恒为 a0，会让「追加末尾」变成「排到最前」）。
  */
 export function positionAfter(
   rows: { id: string; fields: WireRow }[],
   afterId: string | null,
 ): string {
+  const positionOfRow = (row: { fields: WireRow }): string | null => {
+    if (typeof row.fields.position === 'string') return row.fields.position;
+    const sortOrder = typeof row.fields.sortOrder === 'number' ? row.fields.sortOrder : 0;
+    const createdAt =
+      typeof row.fields.createdAt === 'string' && !Number.isNaN(Date.parse(row.fields.createdAt))
+        ? new Date(row.fields.createdAt)
+        : new Date();
+    return synthPosition(sortOrder, createdAt);
+  };
   const ordered = rows
-    .map((row) => row.fields.position)
+    .map((row) => positionOfRow(row))
     .filter((p): p is string => typeof p === 'string');
   if (ordered.length === 0) return positionBetween(null, null);
   if (afterId === null) return positionBetween(null, ordered[0]);
@@ -203,10 +215,10 @@ export function positionAfter(
   if (index === -1 || index === rows.length - 1) {
     return positionBetween(ordered[ordered.length - 1], null);
   }
-  const a = rows[index].fields.position;
-  const b = rows[index + 1].fields.position;
+  const a = positionOfRow(rows[index]);
+  const b = positionOfRow(rows[index + 1]);
   if (typeof a === 'string' && typeof b === 'string') {
     return positionBetween(a, b);
   }
-  return positionBetween(null, null);
+  return positionBetween(ordered[ordered.length - 1], null);
 }

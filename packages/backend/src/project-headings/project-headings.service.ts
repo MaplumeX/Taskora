@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import { HeadingStatus, TaskStatus } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { registerCompacted } from '../sync/compact-registry';
+import { synthPosition } from '../sync/entity-codec';
 import {
   CreateProjectHeadingDto,
   ReorderProjectHeadingLayoutDto,
@@ -218,7 +219,7 @@ export class ProjectHeadingsService {
             trashedAt: null,
             status: TaskStatus.ACTIVE,
           },
-          select: { id: true },
+          select: { id: true, createdAt: true },
         }),
       ]);
 
@@ -238,6 +239,21 @@ export class ProjectHeadingsService {
         visibleTasks.map((task) => task.id),
         'task',
       );
+
+      const createdAtOf = new Map(visibleTasks.map((task) => [task.id, task.createdAt]));
+      // 任务双排序键一起写：sortOrder（分组内索引，web REST 读）+
+      // position（桌面 Local Replica 读）。position 按整页视觉顺序
+      // （ungrouped 在前、各分组依次）分配，与 Engine 实现同口径；
+      // 写入值由 hub 的合成函数生成，与未写时的合成口径一致。
+      const visualTaskIds = [
+        ...dto.ungroupedTaskIds,
+        ...dto.groups.flatMap((group) => group.taskIds),
+      ];
+      const positionOf = new Map(
+        visualTaskIds.map((id, index) => [id, synthPosition(index, createdAtOf.get(id)!)]),
+      );
+      const positionPatch = (id: string) =>
+        positionOf.has(id) ? { position: positionOf.get(id)! } : {};
 
       const writes = await Promise.all([
         ...dto.groups.map((group, sortOrder) =>
@@ -259,7 +275,7 @@ export class ProjectHeadingsService {
               trashedAt: null,
               status: TaskStatus.ACTIVE,
             },
-            data: { headingId: null, sortOrder },
+            data: { headingId: null, sortOrder, ...positionPatch(id) },
           }),
         ),
         ...dto.groups.flatMap((group) =>
@@ -272,7 +288,7 @@ export class ProjectHeadingsService {
                 trashedAt: null,
                 status: TaskStatus.ACTIVE,
               },
-              data: { headingId: group.headingId, sortOrder },
+              data: { headingId: group.headingId, sortOrder, ...positionPatch(id) },
             }),
           ),
         ),

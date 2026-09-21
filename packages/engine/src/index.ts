@@ -4,6 +4,7 @@ export {
   positionBetween,
   positionsBetween,
   rebalancePositions,
+  synthPosition,
   validatePosition,
 } from './position';
 export {
