@@ -7,9 +7,9 @@
  * Event（GC）、虚拟设备 0（Assistant）写。
  */
 
-import { mergeFieldWrites, type EntityMergeState } from './merger';
-import { hlcWallMs } from './hlc';
-import { DELETE_CASCADES, type SyncEntity } from './entities';
+import { mergeFieldWrites, type EntityMergeState, type MergeOutcome } from './merger';
+import { formatHlc, hlcWallMs } from './hlc';
+import { DELETE_CASCADES, REFERENCE_FIELDS, type SyncEntity } from './entities';
 import type {
   BootstrapResponse,
   DeleteRequest,
@@ -173,6 +173,37 @@ export class InMemorySyncHub {
     }
     const current = state.entities.get(key) ?? null;
     const outcome = mergeFieldWrites(current, event.fields);
+    // 失效引用清洗（REFERENCE_FIELDS）：离线写可能引用此后被 compact
+    // 的实体。数组剔除失效 id、标量置 null；Subtask.taskId 失效则整
+    // 事件丢弃。清洗值需以虚拟设备 0 的更新时钟下发，否则推送设备
+    // 的同钟本地值在 LWW 平局下保留、永不收敛。三态探针：尚未到达
+    // （同批后序事件可能创建）的引用保留，由 FK 失败驱动重试收敛。
+    const referenceStatus = (target: SyncEntity, id: string) => {
+      const targetKey = `${target}:${id}`;
+      if (state.compacted.has(targetKey)) return 'dead' as const;
+      if (state.entities.has(targetKey)) return 'alive' as const;
+      return 'pending' as const;
+    };
+    const handled = scrubReferences(
+      event.entity,
+      current,
+      outcome,
+      referenceStatus,
+      () =>
+        formatHlc({
+          // 必胜时钟：晚于已见时钟、hub 墙钟与本事件自身的 HLC 墙钟
+          // （设备时钟可能超前于 hub 墙钟）。
+          wallMs:
+            Math.max(
+              state.seenWallMs,
+              this.wallClock(),
+              ...Object.values(event.fields).map((write) => hlcWallMs(write.hlc)),
+            ) + 1,
+          counter: 0,
+          deviceId: VIRTUAL_DEVICE_ID,
+        }),
+    );
+    if (!handled) return;
     if (outcome.appliedFields.length === 0) {
       // 纯重放：合并态未变，不分配 seq、不下发事件
       state.entities.set(key, { fields: outcome.fields, clocks: outcome.clocks });
@@ -270,4 +301,92 @@ export class InMemorySyncHub {
 function splitKey(key: string): [SyncEntity, string] {
   const separator = key.indexOf(':');
   return [key.slice(0, separator) as SyncEntity, key.slice(separator + 1)];
+}
+
+/** 虚拟设备 0：hub 合成修正（清洗/基线）的时钟主体。 */
+export const VIRTUAL_DEVICE_ID = '0';
+
+/** 引用目标状态：存活 / 已失效（compact、越权）/ 未到达（同批后序事件可能创建，保留引用由 FK 失败驱动重试）。 */
+export type ReferenceStatus = 'alive' | 'dead' | 'pending';
+
+/** 引用目标状态探针。 */
+export type ReferenceProbe = (entity: SyncEntity, id: string) => ReferenceStatus;
+
+/** 为被清洗字段生成必胜时钟（晚于推送设备的 HLC）。 */
+export type ClockBump = () => string;
+
+/**
+ * 合并结果中的失效引用清洗（REFERENCE_FIELDS 注册表驱动）。
+ *
+ * 就地修改 outcome（fields/clocks/appliedFields）：
+ * - 数组引用：剔除 dead id（pending 保留，等待批内后序事件）；
+ * - 标量引用：置 null（对齐 compact 的 SetNull 语义）；
+ * - Subtask.taskId 为 dead：返回 false（整事件丢弃，孤儿防御）；
+ * - 清洗后值与当前态一致：从 appliedFields 撤销并还原时钟（维持
+ *   「合并态未变 → 零事件」的纯重放性质）；
+ * - 清洗产生新值：字段时钟提升为 bumpClock()（虚拟设备 0），保证推送
+ *   设备 pull 回声时真正应用清洗值（平局保留本地会导致永不收敛）。
+ *
+ * 返回 false 表示事件应被丢弃；true 表示已处理（可能零变更）。
+ * 同步纯函数：调用方（NestJS hub）先批量预加载状态集，再传入探针。
+ */
+export function scrubReferences(
+  entity: SyncEntity,
+  current: EntityMergeState | null,
+  outcome: MergeOutcome,
+  probe: ReferenceProbe,
+  bumpClock: ClockBump,
+): boolean {
+  const refs = REFERENCE_FIELDS[entity];
+  if (!refs) return true;
+  for (const field of [...outcome.appliedFields]) {
+    const ref = refs[field];
+    if (!ref) continue;
+    const value = outcome.fields[field];
+
+    if (ref.array) {
+      if (!Array.isArray(value)) continue;
+      const kept: string[] = [];
+      for (const id of value) {
+        if (typeof id !== 'string') continue;
+        if (probe(ref.entity, id) !== 'dead') kept.push(id);
+      }
+      if (kept.length === value.length) continue;
+      applyScrub(field, kept, current, outcome, bumpClock);
+      continue;
+    }
+
+    if (value == null) {
+      // Subtask.taskId 不可为 null（孤儿防御）：丢弃整事件
+      if (entity === 'subtask' && field === 'taskId') return false;
+      continue;
+    }
+    if (typeof value !== 'string') continue;
+    if (probe(ref.entity, value) !== 'dead') continue;
+    if (entity === 'subtask' && field === 'taskId') return false;
+    applyScrub(field, null, current, outcome, bumpClock);
+  }
+  return true;
+}
+
+function applyScrub(
+  field: string,
+  scrubbed: string[] | null,
+  current: EntityMergeState | null,
+  outcome: MergeOutcome,
+  bumpClock: ClockBump,
+): void {
+  // 清洗后与当前态一致：撤销应用（维持纯重放性质），不提升时钟
+  if (current && sameValue(current.fields[field], scrubbed)) {
+    const index = outcome.appliedFields.indexOf(field);
+    if (index !== -1) outcome.appliedFields.splice(index, 1);
+    if (current.clocks[field] !== undefined) outcome.clocks[field] = current.clocks[field];
+    return;
+  }
+  outcome.fields[field] = scrubbed;
+  outcome.clocks[field] = bumpClock();
+}
+
+function sameValue(a: unknown, b: unknown): boolean {
+  return JSON.stringify(a) === JSON.stringify(b);
 }

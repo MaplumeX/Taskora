@@ -804,4 +804,157 @@ describe('Position re-balance（sync 后台摊平超长键）', () => {
     await a.close();
     await b.close();
   });
+
+  it('同步毒丸防御：离线写引用被删实体，hub 清洗失效引用后两端收敛', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+
+    // 初始状态：任务携带两个标签，A 同步
+    const tagX = await b.create('tag', {
+      title: 'X',
+      color: '#000000',
+      tagGroupId: null,
+      position: 'a0',
+      sortOrder: 0,
+    });
+    const tagT = await b.create('tag', {
+      title: 'T',
+      color: '#111111',
+      tagGroupId: null,
+      position: 'a1',
+      sortOrder: 0,
+    });
+    const task = await createTask(b, '带标签', { tagIds: [tagX, tagT] });
+    await b.sync();
+    await a.sync();
+    // hub 归一化会把 tagIds 排序（关系表读回口径），断言用排序后预期
+    expect((await a.get('task', task))?.fields.tagIds).toEqual([tagX, tagT].sort());
+
+    // A 离线期间：B 删除 tag T（hub compact），同时 A 改任务标题并保留
+    // 对 T 的引用（tagIds 重写携带 T）
+    h.online(a, false);
+    await b.delete('tag', [tagT]);
+    await b.sync();
+    await a.update('task', task, { title: '离线改名', tagIds: [tagX, tagT] });
+
+    // A 恢复联网：hub 必须清洗失效引用（而非 FK 拒绝导致毒丸重放），
+    // A 拉回清洗值并收敛
+    h.online(a, true);
+    await a.sync();
+    const tagIdsAfter = (await a.get('task', task))?.fields.tagIds;
+    expect(tagIdsAfter).toEqual([tagX]);
+    expect((await a.get('task', task))?.fields.title).toBe('离线改名');
+    // 真实毒丸场景的另一面：B 端状态一致
+    await b.sync();
+    expect((await b.get('task', task))?.fields.tagIds).toEqual([tagX]);
+    await a.close();
+    await b.close();
+  });
+
+  it('tag compact：副本本地剔除引用实体的 tagIds，通知携带受影响实体', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+
+    const tagX = await b.create('tag', {
+      title: 'X',
+      color: '#000000',
+      tagGroupId: null,
+      position: 'a0',
+      sortOrder: 0,
+    });
+    const tagT = await b.create('tag', {
+      title: 'T',
+      color: '#111111',
+      tagGroupId: null,
+      position: 'a1',
+      sortOrder: 0,
+    });
+    const task = await createTask(b, '带标签', { tagIds: [tagX, tagT] });
+    await b.sync();
+    await a.sync();
+    // hub 归一化会把 tagIds 排序（关系表读回口径），断言用排序后预期
+    expect((await a.get('task', task))?.fields.tagIds).toEqual([tagX, tagT].sort());
+
+    // 收集 A 端同步过程中的变更通知（实体粒度）
+    const notifiedEntities: string[][] = [];
+    a.onChange((change) => {
+      if (change.entities) notifiedEntities.push([...change.entities].sort());
+    });
+
+    await b.delete('tag', [tagT]);
+    await b.sync();
+    await a.sync(); // pull compact → 副本本地 scrub tagIds
+
+    // 引用实体的 tagIds 在副本本地被剔除（与 hub 关系表级联同口径）
+    expect((await a.get('task', task))?.fields.tagIds).toEqual([tagX]);
+    // 通知不仅携带 tag，还携带被清理引用的宿主实体（task）——
+    // 否则 UI 的 task 缓存不会失效（M2）
+    expect(notifiedEntities).toContainEqual(['tag', 'task']);
+    await a.close();
+    await b.close();
+  });
+
+  it('同步毒丸防御：离线写引用被删实体，hub 清洗后两端收敛（设备时钟超前 hub 墙钟）', async () => {
+    // 清洗时钟必须晚于事件自身的 HLC（设备时钟可能超前于 hub 墙钟），
+    // 否则回声在设备端 LWW 平局下丢失、永不收敛。
+    const h = await makeHarness({ wallClock: () => 1_000_000 });
+    const a = await h.device('dev-a', 10_000_000_000_000);
+    const b = await h.device('dev-b', 10_000_000_000_000);
+
+    const tagX = await b.create('tag', {
+      title: 'X',
+      color: '#000000',
+      tagGroupId: null,
+      position: 'a0',
+      sortOrder: 0,
+    });
+    const tagT = await b.create('tag', {
+      title: 'T',
+      color: '#111111',
+      tagGroupId: null,
+      position: 'a1',
+      sortOrder: 0,
+    });
+    const task = await createTask(b, '带标签', { tagIds: [tagX, tagT] });
+    await b.sync();
+    await a.sync();
+
+    h.online(a, false);
+    await b.delete('tag', [tagT]);
+    await b.sync();
+    await a.update('task', task, { tagIds: [tagX, tagT] });
+
+    h.online(a, true);
+    await a.sync();
+    expect((await a.get('task', task))?.fields.tagIds).toEqual([tagX]);
+    await a.close();
+    await b.close();
+  });
+
+  it('孤儿 Subtask 字段写：父 Task 被 compact 后到达的字段写被丢弃', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+
+    const task = await createTask(b, '父任务');
+    const sub = await b.create('subtask', { title: '步骤', taskId: task, sortOrder: 0, status: 'ACTIVE', settledAt: null });
+    await b.sync();
+    await a.sync();
+
+    // A 离线改 subtask；期间 B 删除父 Task（Delete Request → compact）
+    h.online(a, false);
+    await b.delete('task', [task]);
+    await b.sync();
+    await a.update('subtask', sub, { title: '离线改步骤' });
+
+    // A 恢复：字段写被孤儿防御丢弃，副本不复活 subtask
+    h.online(a, true);
+    await a.sync();
+    expect(await a.get('subtask', sub)).toBeNull();
+    expect(await a.get('task', task)).toBeNull();
+    await a.close();
+    await b.close();
+  });
 });

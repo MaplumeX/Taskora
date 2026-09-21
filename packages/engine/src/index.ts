@@ -23,6 +23,7 @@ export {
   schemaDdl,
   DELETE_CASCADES,
   COMPACT_NULL_REFS,
+  REFERENCE_FIELDS,
   type EntityDef,
   type FieldDef,
   type SyncEntity,
@@ -52,4 +53,4 @@ export type {
   SnapshotEntry,
   SyncTransport,
 } from './protocol';
-export { InMemorySyncHub, type InMemorySyncHubOptions } from './hub';
+export { InMemorySyncHub, scrubReferences, VIRTUAL_DEVICE_ID, type InMemorySyncHubOptions, type ReferenceProbe, type ReferenceStatus } from './hub';

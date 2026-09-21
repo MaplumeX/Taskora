@@ -27,8 +27,10 @@ describe('FeedService', () => {
       $transaction: vi.fn(async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),
     } as unknown as InstanceType<typeof PrismaService>;
 
-    // emptyTrash 现在还会下发 Subtask 级联的 Compact Event（ADR-0007）
+    // emptyTrash 现在还会下发 Subtask / ProjectHeading 级联的 Compact Event
+    // （ADR-0007；heading 随 trashed project 的 DB 级联消失）
     mockPrisma.subtask = { findMany: vi.fn().mockResolvedValue([]) };
+    mockPrisma.projectHeading = { findMany: vi.fn().mockResolvedValue([]) };
     mockPrisma.compactedEntity = { createMany: vi.fn().mockResolvedValue({ count: 0 }) };
     service = new FeedService(mockPrisma, {
       publishCompact: vi.fn().mockResolvedValue(undefined),
