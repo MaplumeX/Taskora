@@ -10,6 +10,11 @@ import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface DndHandlers {
+  autoScroll?: {
+    threshold?: { x?: number; y?: number };
+    acceleration?: number;
+    interval?: number;
+  };
   collisionDetection?: (args: {
     active: { id: string };
     pointerCoordinates: { x: number; y: number } | null;
@@ -552,5 +557,18 @@ describe('SidebarProjectSection persistence and area isolation', () => {
       'href',
       '/areas/a',
     );
+  });
+
+  it('tames auto-scroll so edge drags do not run away', () => {
+    renderSection();
+
+    // dnd-kit 默认（20% 边缘区 + interval 5ms + acceleration 10）在侧边栏
+    // ScrollArea 里会把底部边缘区的拖拽变成 ~2000px/s 的失控狂滚，
+    // 占位符扫过整列、drop 落到相邻区域。锁定收敛后的参数。
+    expect(handlers().autoScroll).toEqual({
+      threshold: { x: 0.2, y: 0.06 },
+      acceleration: 4,
+      interval: 20,
+    });
   });
 });
