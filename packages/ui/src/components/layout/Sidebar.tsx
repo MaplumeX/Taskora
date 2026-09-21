@@ -100,7 +100,7 @@ function CollapsibleSection({
           to={to}
           className={({ isActive }) =>
             cn(
-              'flex flex-1 items-center gap-2.5 rounded-full px-3 py-1.5 text-sm text-muted-foreground hover-instant hover:bg-accent/60 hover:text-accent-foreground',
+              'flex min-w-0 flex-1 items-center gap-2.5 rounded-full px-3 py-1.5 text-sm text-muted-foreground hover-instant hover:bg-accent/60 hover:text-accent-foreground',
               isActive && 'bg-accent font-medium text-foreground',
             )
           }
