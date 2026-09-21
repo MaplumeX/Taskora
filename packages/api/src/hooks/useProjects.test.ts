@@ -21,6 +21,7 @@ vi.mock('@/api/projects.api', () => ({
 
 import {
   completeProject,
+  createProject,
   deleteProject,
   uncompleteProject,
   updateProject,
@@ -28,6 +29,7 @@ import {
 import {
   projectKeys,
   useCompleteProject,
+  useCreateProject,
   useDeleteProject,
   useUncompleteProject,
   useUpdateProject,
@@ -205,6 +207,50 @@ describe('useUpdateProject (optimistic)', () => {
 
     const listData = queryClient.getQueryData<ProjectResponseDto[]>(projectKeys.all);
     expect(listData?.[0].title).toBe('My Project');
+  });
+});
+
+describe('useCreateProject (optimistic)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('does not duplicate when a concurrent cache update already flushed the temp row', async () => {
+    // 桌面 engine 写后失效 / SSE 缓存手术：mutation 在途时并发 refetch
+    // 可能已把 temp 行冲成真实行。onSuccess 若仍盲目追加，会产生同 id
+    // 重复条目（React duplicate key）。回归：幂等去重。
+    const realProject: ProjectResponseDto = {
+      ...baseProject,
+      id: 'project-real',
+      title: '',
+    };
+    let resolveCreate: (p: ProjectResponseDto) => void = () => {};
+    vi.mocked(createProject).mockImplementation(
+      () =>
+        new Promise<ProjectResponseDto>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(projectKeys.all, [baseProject]);
+
+    const { result } = renderHook(() => useCreateProject(), { wrapper });
+    result.current.mutate({ title: '' });
+
+    // onMutate：乐观追加 temp
+    await waitFor(() => {
+      expect(queryClient.getQueryData<ProjectResponseDto[]>(projectKeys.all)).toHaveLength(2);
+    });
+
+    // 模拟并发缓存更新：temp 被冲掉，列表已含真实行
+    queryClient.setQueryData(projectKeys.all, [baseProject, realProject]);
+
+    // mutationFn 返回真实行（onSuccess 接手）
+    resolveCreate(realProject);
+
+    await waitFor(() => {
+      const listData = queryClient.getQueryData<ProjectResponseDto[]>(projectKeys.all);
+      expect(listData).toHaveLength(2);
+      expect(listData?.filter((p) => p.id === 'project-real')).toHaveLength(1);
+    });
   });
 });
 
