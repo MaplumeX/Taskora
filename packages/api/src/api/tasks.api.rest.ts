@@ -1,6 +1,8 @@
 import type {
   CreateSubtaskDto,
   CreateTaskDto,
+  FeedItem,
+  FeedView,
   ProjectResponseDto,
   ReorderSubtasksDto,
   SubtaskResponseDto,
@@ -29,6 +31,10 @@ export function getTasks(params?: TaskQuery): Promise<TaskResponseDto[]> {
 
 export function getTask(id: string): Promise<TaskResponseDto> {
   return apiClient.get<TaskResponseDto>(`/tasks/${id}`).then((res) => res.data);
+}
+
+export function getFeed(view: FeedView): Promise<FeedItem[]> {
+  return apiClient.get<FeedItem[]>('/feed', { params: { view } }).then((res) => res.data);
 }
 
 export function createTask(data: CreateTaskDto): Promise<TaskResponseDto> {
