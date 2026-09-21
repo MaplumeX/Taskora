@@ -103,7 +103,7 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
           <button
             type="button"
             aria-label={t('project:dragHeading')}
-            className="cursor-grab rounded p-1 text-muted-foreground/60 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 active:cursor-grabbing"
+            className="cursor-grab rounded p-1 text-muted-foreground/60 opacity-0 transition-opacity hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100 max-md:opacity-100 active:cursor-grabbing"
             {...dragHandleProps}
           >
             <GripVertical className="h-4 w-4" />

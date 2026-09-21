@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { MenuRow } from '@/components/common/MenuRow';
+import { useLongPress } from '../../lib/useLongPress';
 import {
   projectKeys,
   useCompleteProject,
@@ -196,11 +197,8 @@ export function ProjectContextMenu({
     setActivePicker(kind);
   };
 
-  const onContextMenu = (e: React.MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const x = e.clientX;
-    const y = e.clientY;
+  /** 以坐标为锚点打开主菜单（右键与触屏长按共用）。 */
+  const openMenuAt = (x: number, y: number) => {
     virtualAnchorRef.current = {
       getBoundingClientRect: () => ({
         width: 0,
@@ -218,6 +216,15 @@ export function ProjectContextMenu({
     setMenuOpen(true);
   };
 
+  const onContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    openMenuAt(e.clientX, e.clientY);
+  };
+
+  // 触屏长按与右键走同一菜单；触发后的抬手 click 被 hook 抑制。
+  const longPress = useLongPress((p) => openMenuAt(p.x, p.y));
+
   // Auto-focus first menu item when opened.
   React.useEffect(() => {
     if (menuOpen) {
@@ -227,7 +234,7 @@ export function ProjectContextMenu({
   }, [menuOpen]);
 
   return (
-    <div ref={containerRef} className="flex flex-col" onContextMenu={onContextMenu}>
+    <div ref={containerRef} className="flex flex-col" onContextMenu={onContextMenu} {...longPress}>
       {children}
 
       <Popover open={menuOpen} onOpenChange={setMenuOpen}>
