@@ -193,6 +193,35 @@ describe('TaskRowExpanded — DnD keyboard stuck regression', () => {
   });
 });
 
+describe('TaskRowExpanded — icon button hints', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useUiInteractionStore.setState({ expandedId: null, pendingAutoEditId: null });
+  });
+
+  it('shows tooltip hints for field icon buttons on hover', async () => {
+    const user = userEvent.setup();
+    withQueryClient(<DndList task={renderTask} />);
+
+    await user.click(screen.getByText('My task'));
+
+    // 五个字段图标按钮（日期/到期/项目/区域/标签）hover 后应浮出 hint 文案
+    const labelPatterns: RegExp[] = [
+      /^(Date|日期)$/,
+      /^(Due|到期)$/,
+      /^(Project|项目)$/,
+      /^(Area|区域)$/,
+      /^(Tags|标签)$/,
+    ];
+    for (const pattern of labelPatterns) {
+      const btn = screen.getByRole('button', { name: pattern });
+      await user.hover(btn);
+      expect(await screen.findByText(pattern)).toBeInTheDocument();
+      await user.unhover(btn);
+    }
+  });
+});
+
 describe('TaskRowExpanded — hide subtask empty state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
