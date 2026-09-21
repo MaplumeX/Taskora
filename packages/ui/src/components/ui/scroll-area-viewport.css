@@ -1,0 +1,13 @@
+/*
+ * Radix ScrollArea 的 Viewport 内层包了一个 <div style="min-width:100%; display:table">。
+ * display:table 的宽度是 shrink-to-fit，其 min-content 由内部最长的
+ * nowrap/truncate 文本决定；侧边栏长标题会把这层 table 直接撑到
+ * max-content 宽度，溢出 viewport 后被 overflow-x:hidden 硬裁——
+ * 条目看不到省略号，表现为"条目溢出侧边栏"。
+ * 改回 display:block 让 containing block 宽度正常下传，truncate 恢复生效。
+ * 本项目所有 ScrollArea 均为全宽行列表（侧边栏 / 搜索 / 设置 / 移动端抽屉），
+ * 没有依赖 table 的 fit-content 收缩行为，此覆盖安全。
+ */
+[data-radix-scroll-area-viewport] > div {
+  display: block !important;
+}
