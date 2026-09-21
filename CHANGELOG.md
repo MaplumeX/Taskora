@@ -9,6 +9,73 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.4.4] - 2026-09-21
+
+### Fixes
+
+- **api**: Add the missing `getFeed` to the REST task backend — the web
+  feed rendered "load failed" (#53): the feed query hook calls
+  `currentTaskBackend().getFeed(view)`, but the REST module (the default
+  backend on web) never implemented it; the `TaskBackend` interface was
+  satisfied via an unchecked `rest as TaskBackend` cast, so the gap only
+  surfaced at runtime as `getFeed is not a function` → react-query
+  `isError` → "加载失败". `getFeed(view)` now calls the existing
+  `GET /feed?view=...` endpoint, and the `as TaskBackend` casts are
+  replaced with structural assignment so future missing members fail at
+  compile time.
+- **sync**: Dual-write position/sortOrder in every reorder path (#54):
+  desktop drag-reorder inside a project silently bounced back while the
+  web client showed the new order, because the two surfaces read
+  different sort keys (replica: fractional-indexing `position`; web:
+  `sortOrder asc, createdAt desc`), and once a device wrote a real
+  position a reorder touching only `sortOrder` stopped affecting the
+  desktop (the mirror bug froze the web for position-only writes).
+  `synthPosition` moved into `@taskora/engine` so written and
+  synthesized positions never diverge; `positionAfter` falls back to
+  synthesizing from `sortOrder`+`createdAt` instead of "insert at
+  front" when a neighbor has no position; engine backends and the REST
+  reorder endpoints (tasks/projects/project-headings) now write both
+  keys in the same transaction.
+- **sync**: Poison-pill defense, completed compact cascades (#54): a
+  device writing offline could reference an entity physically deleted
+  (compacted) elsewhere — the hub's merge hit a foreign-key violation,
+  failed the whole push batch, and the device replayed the same poison
+  batch forever (stuck at "offline, N pending"). The hub now scrubs
+  dangling references before merge (array refs drop dead ids, scalar
+  refs null out per compact `SetNull` semantics, a dead subtask drops
+  the whole event) with a three-state alive/dead/pending probe that
+  preserves forward references within the same batch; scrubbed values
+  carry a virtual-device-0 clock that wins over the pushing device's
+  HLC so the echo actually applies. Tag compaction scrubs `tagIds` in
+  replicas as well as hub relation rows; `removeRows` reports every
+  affected entity (cascade children, SetNull hosts, `tagIds` hosts) so
+  UI caches invalidate correctly; `DELETE_CASCADES` gains
+  project → project-heading, `COMPACT_NULL_REFS` gains
+  project → task.projectId, and the hub broadcasts cascaded compacts
+  per entity (emptyTrash registers and broadcasts heading compacts —
+  orphan headings no longer survive forever).
+- **sync/desktop**: Keep the local-first desktop app usable offline
+  after restart (#54): boot's `refresh()` failure previously surfaced a
+  retry screen instead of the main window, and without a hydrated user
+  there was no `userId` to open the per-user replica — offline only
+  worked within a running session. Boot now mirrors a
+  preferences-free user snapshot to WebView storage (tokens stay in the
+  secure store) and, on network failure with a snapshot available,
+  keeps the hydrated user and starts offline (the sync indicator shows
+  offline state); 401 still signs out and a no-snapshot first-run keeps
+  the retry screen. `syncNow` reports success, and a first sync failing
+  on an empty replica (cursor 0) retries with 2s→15s backoff until the
+  bootstrap lands instead of rendering empty data.
+- **sync**: Align remaining replica semantics with REST (#54):
+  `updateTask` clears `headingId` when `projectId` changes (a task
+  moved to another project previously reappeared under the old
+  project's heading when moved back); `restoreProject` (both surfaces)
+  only revives tasks trashed by the project cascade (same `trashedAt`
+  timestamp), leaving independently deleted tasks in the trash;
+  `getProjectHeadings` sorts ties by `createdAt asc` matching
+  `ProjectHeadingsService`; `useReorderTasks` optimistic update only
+  reorders lists fully covered by the submitted ids.
+
 ## [0.4.3] - 2026-09-20
 
 ### Fixes
