@@ -55,7 +55,7 @@ _Avoid_: 把 Cancelled 当作 COMPLETED 的子集、把终态与删除混淆
 ### 界面交互
 
 **Selection**:
-键盘导航下当前被高亮、并作为键盘动作（完成、删除、新建于下方等）作用对象的 Task / Project / Project Heading；区别于 focus（DOM 焦点）与完成态。
+仅存在于键盘交互域：键盘导航下当前被高亮、并作为键盘动作（完成、删除、新建于下方等）作用对象的 Task / Project / Project Heading；区别于 focus（DOM 焦点）与完成态。触控交互没有 Selection：点击 = 打开详情，勾选用专用 checkbox，行内菜单用长按触发。
 _Avoid_: 高亮、hover、焦点
 
 ### 引擎与同步（local-first）
