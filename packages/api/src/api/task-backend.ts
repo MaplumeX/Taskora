@@ -49,11 +49,15 @@ export interface TaskBackend {
 
 import * as rest from './tasks.api.rest';
 
-let backend: TaskBackend = rest as TaskBackend;
+// 结构化赋值（非 as 强转）：rest 模块一旦缺失 TaskBackend 的任何成员，
+// 这里会直接编译报错，避免运行时 undefined 方法（线上「加载失败」缺陷的成因）。
+const restBackend: TaskBackend = rest;
+
+let backend: TaskBackend = restBackend;
 
 /** 注入 Task 传输层实现（如 Engine）。传 undefined 恢复 REST。 */
 export function setTaskBackend(implementation: TaskBackend | undefined): void {
-  backend = implementation ?? (rest as TaskBackend);
+  backend = implementation ?? restBackend;
 }
 
 export function currentTaskBackend(): TaskBackend {
