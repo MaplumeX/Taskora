@@ -184,6 +184,8 @@ pnpm --filter @taskora/mobile dev    # run on an emulator / device
 pnpm --filter @taskora/mobile build  # signed APK (debug keystore)
 ```
 
+The `dev` and `build` scripts copy the checked-in Taskora launcher icons into the generated Android project before running Tauri. If you run `tauri android build` directly, run `node scripts/sync-android-icons.mjs` from the repository root after `tauri android init` first.
+
 ## Docker Deployment
 
 A `docker-compose.yml` is provided for local full-stack runs:
