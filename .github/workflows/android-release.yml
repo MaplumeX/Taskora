@@ -123,6 +123,41 @@ jobs:
           assert old in src
           src = src.replace(old, new, 1)
           open(path, 'w', encoding='utf8', newline='\n').write(src)
+
+          # 系统栏避让（真机反馈：状态栏遮挡顶栏）：模板 MainActivity 的
+          # enableEdgeToEdge 后 WebView 不保证报告 safe-area-inset-*（取值
+          # 0 时顶栏被状态栏遮挡），在原生层消费 insets 给内容视图加
+          # padding。gen 不入库，每次构建后重写该文件。
+          main_activity = '''package app.taskora.mobile
+
+import android.os.Bundle
+import android.view.ViewGroup
+import androidx.activity.enableEdgeToEdge
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+
+class MainActivity : TauriActivity() {
+  override fun onCreate(savedInstanceState: Bundle?) {
+    enableEdgeToEdge()
+    super.onCreate(savedInstanceState)
+
+    val content = findViewById<ViewGroup>(android.R.id.content)
+    ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
+      val bars = insets.getInsets(
+        WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
+      )
+      view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
+      insets
+    }
+  }
+}
+'''
+          open(
+              'app/src/main/java/app/taskora/mobile/MainActivity.kt',
+              'w',
+              encoding='utf8',
+              newline='\n',
+          ).write(main_activity)
           PY
 
       - name: Build signed APK
