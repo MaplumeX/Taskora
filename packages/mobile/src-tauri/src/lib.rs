@@ -2,10 +2,10 @@
 //!
 //! 与 desktop 同构的 Rust command 面：
 //! - `sqlite`：Local Replica 的 rusqlite 适配层（自 desktop 平移）；
-//! - `session`：会话令牌的 Android Keystore 加密存储（ADR-0009）；
+//! - `session`：会话令牌的应用私有目录明文存储（ADR-0011；Keystore
+//!   JNI 桥已移除，见 ADR-0011 的取舍记录）；
 //! - `app_exit`：返回手势级联的根页退出（back-navigation.ts 调用）。
 
-mod keystore;
 mod session;
 mod sqlite;
 

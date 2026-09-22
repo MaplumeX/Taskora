@@ -1,16 +1,19 @@
 /**
- * Native secure session storage: Android Keystore 加密落盘（ADR-0009，
- * android-app issue 03）。
+ * Native session storage: 应用私有目录明文 JSON（ADR-0011，android-app
+ * issue 03）。
  *
- * 真正的加解密住在 Rust 侧（src-tauri/src/keystore.rs，经 JNI 调用
- * Android Keystore 的不可导出 AES 密钥，AES-256-GCM）：
- * - `session_read { serverUrl }`：解密读取（无会话返回空）；
- * - `session_write { serverUrl, tokens }`：加密原子写入；
- * - `session_clear`：登出清除密文与 Keystore 密钥引用。
+ * 落盘住在 Rust 侧（src-tauri/src/session.rs）：
+ * - `session_read { serverUrl }`：读取（无会话返回空）；
+ * - `session_write { serverUrl, tokens }`：原子写入；
+ * - `session_clear`：登出删除会话文件。
+ *
+ * ADR-0009 的 Android Keystore JNI 桥在真机登录时崩溃（无法定位根因，
+ * 无真机日志），ADR-0011 采纳明文降级：未 root 设备仍受 Linux 沙箱
+ * 保护，root/备份提取面前明文裸奔（已知取舍）。
  *
  * 对齐 desktop 的注入模式与内存/在飞写串行语义（见 desktop
- * secure-token-store.ts；差异仅是后端从 DPAPI 换成 Keystore，以及单
- * WebView 壳不再需要跨窗口 Web Locks）。
+ * secure-token-store.ts；差异仅是后端从 DPAPI 换成应用私有目录文件，
+ * 以及单 WebView 壳不再需要跨窗口 Web Locks）。
  */
 import { i18n, type TokenStore } from '@taskora/api';
 

@@ -77,9 +77,9 @@ jobs:
         run: 'cargo test --locked --lib session::'
 
   # mobile Rust 编译检查（Linux）：host 目标验证 sqlite/session 模块；
-  # Android 目标编译 keystore.rs 的 JNI 路径（整体在
-  # #[cfg(target_os = "android")] 内，仅靠 host check 编译不到；cargo
-  # check 不链接，无需 NDK）。与 desktop-rust-check 同模式。
+  # Android 目标交叉编译验证（rusqlite bundled sqlite 需要 NDK clang，
+  # cargo check 不链接但 cc crate 需显式 CC/AR/LINKER）。与
+  # desktop-rust-check 同模式。
   mobile-rust-check:
     runs-on: ubuntu-22.04
     steps:
@@ -111,7 +111,7 @@ jobs:
 
       # 交叉编译检查：需指向 NDK 的 clang（bundled sqlite 的 cc crate 不会
       # 自动发现 NDK，须显式 CC/AR/LINKER）。
-      - name: cargo check (Android target, covers keystore JNI)
+      - name: cargo check (Android target)
         working-directory: packages/mobile/src-tauri
         run: |
           NDK_BIN=$ANDROID_HOME/ndk/28.0.13004108/toolchains/llvm/prebuilt/linux-x86_64/bin

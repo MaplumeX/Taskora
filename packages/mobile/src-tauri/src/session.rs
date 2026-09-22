@@ -1,28 +1,28 @@
-//! 会话令牌的加密落盘（ADR-0009，android-app issue 03）。
+//! 会话令牌的落盘（android-app issue 03，ADR-0011）。
 //!
-//! 结构对齐 desktop 的 `session/mod.rs`（versioned / server-bound），
-//! 但存储介质从 keyring/DPAPI 换成「Android Keystore 加密 + 应用私有
-//! 目录文件」：
-//! - `session_read { serverUrl }`：读取 → Keystore 解密 → 解析；无文件
-//!   / 换服务器 / 版本不识别 → 空 Tokens（视同未登录）；
-//! - `session_write { serverUrl, tokens }`：加密后原子写入（tempfile
-//!   + rename，避免半截文件）；
-//! - `session_clear`：登出——删除密文文件与 Keystore 密钥引用。
+//! 结构对齐 desktop 的 `session/mod.rs`（versioned / server-bound）。
+//! 存储介质：应用私有目录（`/data/data/app.taskora.mobile/files`）下的
+//! **明文 JSON**——ADR-0009 的 Android Keystore JNI 桥在真机登录时崩溃
+//! （无真机日志定位，见 ADR-0011），v1 退回明文存储：
+//! - `session_read { serverUrl }`：读取解析；无文件 / 换服务器 / 版本不
+//!   识别 → 空 Tokens（视同未登录）；
+//! - `session_write { serverUrl, tokens }`：原子写入（tempfile + rename，
+//!   避免半截文件）；
+//! - `session_clear`：登出——删除会话文件。
 //!
-//! 文件内容是 base64(`iv || ciphertext`)，明文 JSON 结构：
+//! 未 root 设备上应用私有目录受 Linux 沙箱保护（其他 App / 普通用户
+//! 均不可读）；root 与 adb 备份提取面前明文裸奔——这是 ADR-0011 采纳
+//! 的已知降级。文件内容：
 //! `{ version: 1, serverUrl, tokens: { token, refreshToken } }`。
 
-use base64::engine::general_purpose::STANDARD as BASE64;
-use base64::Engine;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 
-use crate::keystore;
-
 /// 会话文件名（应用数据目录下）。
-const SESSION_FILE: &str = "session.v1.bin";
+/// `.json`（非早期试验版本的加密 `.bin`）：换名避免读到旧密文。
+const SESSION_FILE: &str = "session.v1.json";
 const SESSION_VERSION: u8 = 1;
 
 #[derive(Clone, Default, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -61,35 +61,28 @@ fn session_path(app: &AppHandle) -> Result<PathBuf, String> {
     Ok(app.state::<SessionDir>().0.join(SESSION_FILE))
 }
 
-/// 读密文并解密为 Session；文件缺失 / 解密失败 / 解析失败时返回 None。
-/// 解密失败（密钥被删或密文被篡改）由调用方决定是否覆盖重写。
+/// 读取并解析 Session；文件缺失返回 None，内容损坏报错。
 fn read_session(path: &Path) -> Result<Option<Session>, String> {
     let bytes = match std::fs::read(path) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(format!("session: read failed: {error}")),
     };
-    let text = String::from_utf8(bytes).map_err(|_| "session: non-UTF-8 file".to_string())?;
-    let payload = BASE64
-        .decode(text.trim())
-        .map_err(|_| "session: invalid base64".to_string())?;
-    let plaintext = keystore::decrypt(&payload)?;
-    let session: Session = serde_json::from_slice(&plaintext)
+    let session: Session = serde_json::from_slice(&bytes)
         .map_err(|_| "session: invalid saved session".to_string())?;
     Ok(Some(session))
 }
 
-/// 加密并原子写入。
+/// 原子写入。
 fn write_session(path: &Path, session: &Session) -> Result<(), String> {
-    let plaintext = serde_json::to_vec(session).map_err(|e| format!("session: encode: {e}"))?;
-    let payload = keystore::encrypt(&plaintext)?;
-    let text = BASE64.encode(&payload);
+    let bytes = serde_json::to_vec_pretty(session)
+        .map_err(|e| format!("session: encode: {e}"))?;
     let dir = path.parent().ok_or_else(|| "session: no parent dir".to_string())?;
     // tempfile + rename：崩溃在写入中途不会留下半截会话文件。
     let mut file = tempfile::NamedTempFile::new_in(dir)
         .map_err(|e| format!("session: temp file failed: {e}"))?;
     use std::io::Write;
-    file.write_all(text.as_bytes())
+    file.write_all(&bytes)
         .and_then(|_| file.flush())
         .map_err(|e| format!("session: write failed: {e}"))?;
     file.persist(path)
@@ -139,8 +132,7 @@ pub fn session_write(
     )
 }
 
-/// 登出：清除密文与 Keystore 密钥引用（issue 03 验收）。
-/// 任一步失败都返回错误（调用方提示），已删的部分不回滚。
+/// 登出：删除会话文件（issue 03 验收）。
 #[tauri::command]
 pub fn session_clear(app: AppHandle) -> Result<(), String> {
     let _guard = WRITE_LOCK.lock().map_err(|_| "session: lock failed".to_string())?;
@@ -150,7 +142,7 @@ pub fn session_clear(app: AppHandle) -> Result<(), String> {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
         Err(error) => return Err(format!("session: remove failed: {error}")),
     }
-    keystore::delete_key()
+    Ok(())
 }
 
 #[cfg(test)]
@@ -168,14 +160,39 @@ mod tests {
         }
     }
 
-    /// restore 的纯逻辑路径不触 Keystore（加密在 write 路径），直接
-    /// 构造已解密的 Session 文件无法离线完成——Keystore 只有真机有。
-    /// 这里覆盖「无文件 / 换服务器 / 版本不符」三条无需解密的分支。
     #[test]
     fn missing_file_restores_empty() {
         let dir = tempfile::tempdir().unwrap();
         let tokens = restore(dir.path().join(SESSION_FILE).as_path(), "server").unwrap();
         assert_eq!(tokens, Tokens::default());
+    }
+
+    /// 明文存储不再依赖 Android Keystore，round-trip 可在 host 全覆盖。
+    #[test]
+    fn write_then_restore_round_trips() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SESSION_FILE);
+        write_session(&path, &session("server", Some("access"))).unwrap();
+        let tokens = restore(&path, "server").unwrap();
+        assert_eq!(tokens.token.as_deref(), Some("access"));
+        assert_eq!(tokens.refresh_token.as_deref(), Some("refresh"));
+    }
+
+    #[test]
+    fn credentials_are_not_shared_between_servers() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SESSION_FILE);
+        write_session(&path, &session("server-a", Some("access"))).unwrap();
+        let tokens = restore(&path, "server-b").unwrap();
+        assert_eq!(tokens, Tokens::default());
+    }
+
+    #[test]
+    fn corrupted_file_is_an_error_not_a_logout() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join(SESSION_FILE);
+        std::fs::write(&path, b"not json").unwrap();
+        assert!(restore(&path, "server").is_err());
     }
 
     #[test]
