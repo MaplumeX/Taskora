@@ -130,17 +130,23 @@ jobs:
           # padding。gen 不入库，每次构建后重写该文件。
           main_activity = '''package app.taskora.mobile
 
+import android.content.res.Configuration
 import android.os.Bundle
 import android.view.ViewGroup
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.ViewCompat
+import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
 
+    // 系统栏避让：Android WebView 不保证报告 safe-area-inset-*（取值 0
+    // 时页面顶栏被状态栏遮挡、底栏被导航栏遮挡），在原生层消费 insets
+    // 给内容视图加 padding，WebView 整体布局在系统栏之间。
     val content = findViewById<ViewGroup>(android.R.id.content)
     ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
       val bars = insets.getInsets(
@@ -149,6 +155,34 @@ class MainActivity : TauriActivity() {
       view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
       insets
     }
+
+    applySystemBarColors()
+  }
+
+  // 状态栏/导航栏 strip 背景 = App 主题背景色（ui/src/index.css 的
+  // --background）：亮色 hsl(40 33% 97%)，暗色 hsl(270 14% 9%)。
+  // 跟随系统 DayNight；manifest 的 configChanges 含 uiMode，主题切换
+  // 不重建 Activity，靠 onConfigurationChanged 重刷。
+  // 已知取舍：App 内手动指定主题（非 system）时 strip 仍按系统主题着色。
+  private fun applySystemBarColors() {
+    val night =
+      (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+        Configuration.UI_MODE_NIGHT_YES
+    val background = if (night) 0xFF14171A.toInt() else 0xFFFAF8F5.toInt()
+
+    val content = findViewById<ViewGroup>(android.R.id.content)
+    content.setBackgroundColor(background)
+
+    // strip 由我们着色，系统栏图标的明暗需显式匹配（浅底用深色图标）。
+    WindowCompat.getInsetsController(window, content).apply {
+      isAppearanceLightStatusBars = !night
+      isAppearanceLightNavigationBars = !night
+    }
+  }
+
+  override fun onConfigurationChanged(newConfig: Configuration) {
+    super.onConfigurationChanged(newConfig)
+    applySystemBarColors()
   }
 }
 '''
