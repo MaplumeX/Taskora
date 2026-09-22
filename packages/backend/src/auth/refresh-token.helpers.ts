@@ -3,13 +3,17 @@ import type { Request as ExpressRequest } from 'express';
 
 export const RT_COOKIE_NAME = 'rt';
 
-/** Header desktop clients send to opt into the body-based refresh flow. */
+/** Header non-cookie clients (desktop / mobile) send to opt into the
+ * body-based refresh flow. */
 export const CLIENT_KIND_HEADER = 'x-client';
 export const CLIENT_KIND_DESKTOP = 'desktop';
+export const CLIENT_KIND_MOBILE = 'mobile';
 
-/** True when the request comes from a desktop (non-cookie) client. */
-export function isDesktopClient(req: ExpressRequest): boolean {
-  return req.headers[CLIENT_KIND_HEADER] === CLIENT_KIND_DESKTOP;
+/** True when the request comes from a non-cookie client (no browser
+ * session to piggyback the rotating refresh token on). */
+export function isNonCookieClient(req: ExpressRequest): boolean {
+  const kind = req.headers[CLIENT_KIND_HEADER];
+  return kind === CLIENT_KIND_DESKTOP || kind === CLIENT_KIND_MOBILE;
 }
 
 export const RT_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days

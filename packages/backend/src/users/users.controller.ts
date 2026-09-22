@@ -12,7 +12,7 @@ import {
 import type { Request as ExpressRequest, Response } from 'express';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AuthService } from '../auth/auth.service';
-import { isDesktopClient, RT_COOKIE_NAME, COOKIE_OPTS } from '../auth/refresh-token.helpers';
+import { isNonCookieClient, RT_COOKIE_NAME, COOKIE_OPTS } from '../auth/refresh-token.helpers';
 import { UsersService } from './users.service';
 import {
   UpdateProfileDto,
@@ -50,7 +50,7 @@ export class UsersController {
     // session that performed the change a fresh one so it survives. Same
     // transport split as login: cookie on web, body on desktop.
     const rt = await this.authService.issueRefreshToken(req.user.id);
-    if (isDesktopClient(expressReq)) {
+    if (isNonCookieClient(expressReq)) {
       return { ...result, refreshToken: rt };
     }
     res.cookie(RT_COOKIE_NAME, rt, COOKIE_OPTS);

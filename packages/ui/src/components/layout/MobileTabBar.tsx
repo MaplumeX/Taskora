@@ -58,7 +58,10 @@ export function MobileTabBar({ onOpenDrawer }: Props) {
     <nav
       aria-label={t('nav:mainNavigation')}
       className="fixed inset-x-0 bottom-0 z-40 flex border-t bg-background/95 backdrop-blur-sm md:hidden"
-      style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}
+      style={{
+        bottom: 'var(--kb-inset, 0px)',
+        paddingBottom: 'env(safe-area-inset-bottom)',
+      }}
     >
       {TAB_ITEMS.map((item) => {
         const Icon = item.icon;

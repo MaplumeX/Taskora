@@ -59,7 +59,7 @@ export function MobileFab() {
   );
 
   return (
-    <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom))] right-4 z-40 md:hidden">
+    <div className="fixed bottom-[calc(4.5rem+env(safe-area-inset-bottom)+var(--kb-inset,0px))] right-4 z-40 md:hidden">
       {hasMenu ? (
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>{fab}</DropdownMenuTrigger>
