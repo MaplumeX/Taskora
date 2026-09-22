@@ -109,4 +109,7 @@ jobs:
             --title "Taskora ${{ github.ref_name }}" \
             --generate-notes \
             --verify-tag || true
-          gh release upload "${{ github.ref_name }}" "$APK" "#Taskora-${{ github.ref_name }}.apk" --clobber
+          # gh release upload 不支持 file#label 重命名（那是 create/edit 的
+          # assets 语法）；复制为友好文件名后上传。
+          cp "$APK" "Taskora-${{ github.ref_name }}.apk"
+          gh release upload "${{ github.ref_name }}" "Taskora-${{ github.ref_name }}.apk" --clobber
