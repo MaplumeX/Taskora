@@ -1,0 +1,112 @@
+name: Android Release
+
+# Android APK 签名构建 + GitHub Releases 侧载分发（android-app issue 06）。
+# tag 触发，与 desktop-release.yml 同一套 v* tag；密钥经 secrets 注入，
+# 签名密钥不轮换（轮换会迫使所有用户卸载重装、丢失 Local Replica）。
+#
+# 所需 secrets（且仅此四个，不含源码内文件）：
+#   ANDROID_KEYSTORE_BASE64    release keystore（base64 编码的 .jks）
+#   ANDROID_KEYSTORE_PASSWORD  keystore 密码
+#   ANDROID_KEY_PASSWORD       密钥条目密码
+#   ANDROID_KEY_ALIAS          密钥别名
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # ubuntu runner 预装 Android SDK（ANDROID_HOME + cmdline-tools）。
+      # 不用 setup-android@v3：其默认包 'tools' 已从 SDK 仓库移除
+      # （Failed to find package 'tools'）；直接用预装 sdkmanager 装 NDK
+      # （上面 setup-java 提供它需要的 JDK 17+）。
+      - name: Install NDK
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.0.13004108" --sdk_root="$ANDROID_HOME"
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,i686-linux-android,x86_64-linux-android
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: packages/mobile/src-tauri
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      # shared DTOs are consumed from source; build its .d.ts for tsc
+      - run: pnpm --filter @taskora/shared build
+
+      # gen/android 不入库，构建时生成（tauri.conf.json + icons 为权威源）。
+      - name: Generate Android project
+        run: pnpm --filter @taskora/mobile exec tauri android init --ci
+
+      - name: Decode release keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > $RUNNER_TEMP/taskora-release.jks
+
+      # 签名 + MainActivity 注入逻辑在 scripts/android-signing.py（仓库内真
+      # 实文件）：Tauri CLI 不读 TAURI_ANDROID_* 环境变量，官方方式是写
+      # gen/android/keystore.properties 并给 app/build.gradle.kts 注入
+      # signingConfigs（https://v2.tauri.app/distribute/sign/android/）；
+      # 系统栏避让/着色的 MainActivity 也要重写（gen/ 不入库）。嵌套
+      # heredoc 会因浅缩进文本破坏 run: | 块，故用脚本文件。
+      - name: Configure signing and MainActivity (scripts/android-signing.py)
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEYSTORE_PATH: ${{ runner.temp }}/taskora-release.jks
+        run: python3 scripts/android-signing.py packages/mobile/src-tauri/gen/android
+
+      - name: Build signed APK
+        # 仅 arm64（arm64-v8a）：2019 年后的安卓手机全部是 arm64
+        # （Play 商店同期起强制 64 位）；x86 只有模拟器用，armeabi-v7a
+        # 仅覆盖 2018 年前的老机型。单架构构建省 3/4 的 Rust 交叉编译
+        # 时间与 APK 体积。发 ABI 需求变化时去掉 --target 即回到 universal。
+        run: pnpm --filter @taskora/mobile exec tauri android build --apk --target aarch64
+
+      - name: Attach APK to the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # --target aarch64 的产物仍在 universal/ 目录（Tauri 的 target
+          # 参数只影响编译目标，不改产物路径），按名称兜底两种布局。
+          APK=$(find packages/mobile/src-tauri/gen/android/app/build/outputs/apk \
+            \( -name 'app-universal-release.apk' -o -name 'app-aarch64-release.apk' \) | head -n1)
+          if [ -z "$APK" ]; then
+            echo "release APK not found" >&2
+            find packages/mobile/src-tauri/gen/android/app/build/outputs/apk -name '*.apk' >&2 || true
+            exit 1
+          fi
+          # release 本体由 desktop-release.yml 的 tauri-action 创建，两个
+          # workflow 无顺序保证：先确保 release 存在（已存在则跳过），再上
+          # 传附件，避免 Android 先构建完时 upload 报 release not found。
+          gh release create "${{ github.ref_name }}" \
+            --title "Taskora ${{ github.ref_name }}" \
+            --generate-notes \
+            --verify-tag || true
+          gh release upload "${{ github.ref_name }}" "$APK" "#Taskora-${{ github.ref_name }}.apk" --clobber

@@ -157,6 +157,33 @@ pnpm --filter @taskora/desktop dev    # 开发窗口
 pnpm --filter @taskora/desktop build  # 当前平台安装包
 ```
 
+## Android 客户端
+
+Android 版与桌面安装包一同发布在 [GitHub Releases](https://github.com/maplumex/taskora/releases)：每个 `v*` tag 下的 `#Taskora-x.y.z.apk` 附件。它与桌面端同为完整平价的 local-first 客户端（全量本地副本、断网捕获、前台同步）——不是伴侣应用。
+
+### 侧载安装
+
+1. 从 Release 页面下载 APK（直接在手机上下载，或传输到手机）。
+2. 点击安装。系统会提示「未知来源应用」——在系统弹窗里允许本次安装（不同 Android 版本入口略有差异，一般在 *设置 → 应用 → 特殊权限 → 安装未知应用*）。不依赖 Play Services（无 FCM，同步在前台进行），无 Google 服务的 ROM 也可用。
+3. 启动后先配置自托管服务器地址，再登录现有账号。
+
+### 升级
+
+- 直接用新版 APK 覆盖安装，数据（本地副本）保留。
+- 覆盖安装依赖**同一签名密钥**：项目的 release keystore 永不轮换。若升级安装失败，请确认下载的是 Releases 的官方 APK——切勿先卸载，卸载会删除本地副本（未同步的离线编辑将丢失）。
+
+### 从源码构建
+
+```bash
+# 需要 Android Studio（SDK + NDK + JDK 17）与 Android Rust target：
+# https://tauri.app/start/prerequisites/
+rustup target add aarch64-linux-android armv7-linux-androideabi \
+  i686-linux-android x86_64-linux-android
+pnpm --filter @taskora/mobile exec tauri android init   # 生成 gen/android
+pnpm --filter @taskora/mobile dev    # 模拟器 / 真机运行
+pnpm --filter @taskora/mobile build  # 签名 APK（debug keystore）
+```
+
 ## Docker 部署
 
 仓库提供 `docker-compose.yml`，用于本地全栈运行：
@@ -190,6 +217,7 @@ GitHub Actions 工作流位于 `.github/workflows/`：
   - `ghcr.io/maplumex/taskora-backend:vX.Y.Z` / `:latest`
   - `ghcr.io/maplumex/taskora-frontend:vX.Y.Z` / `:latest`
 - **桌面端 Release**（`desktop-release.yml`）—— 同样由 `v*` tag 触发：三平台安装包（dmg / NSIS exe / AppImage）构建并上传到 GitHub Release。桌面端版本号与仓库其余包统一。V1 不签名、无自动更新。
+- **Android Release**（`android-release.yml`）—— 同样由 `v*` tag 触发：签名构建 Android APK（release keystore 经 secrets 注入）并挂到 GitHub Release 供侧载。签名密钥永不轮换——轮换会迫使所有用户卸载重装（丢失本地副本）。
 
 完整的版本管理、分支策略与多客户端演进计划详见 [docs/versioning-and-deployment.md](docs/versioning-and-deployment.md)。
 

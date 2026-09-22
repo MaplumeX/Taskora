@@ -10,26 +10,31 @@
  *   2. 编辑 CHANGELOG.md（Keep a Changelog 格式，桌面专属改动标注 (desktop)）
  *   3. git commit -am "release: v<x.y.z>"
  *   4. git tag v<x.y.z> && git push origin main --tags
- *      tag v<x.y.z> 同时触发 release.yml（推双镜像）和
- *      desktop-release.yml（三平台桌面打包）。
+ *      tag v<x.y.z> 同时触发 release.yml（推双镜像）、
+ *      desktop-release.yml（三平台桌面打包）和 android-release.yml
+ *      （Android APK 签名构建，GitHub Releases 侧载分发）。
  *
  * 版本载体：
- *   - 根 package.json + 全部子包 package.json（含 desktop）
- *   - packages/desktop/src-tauri/tauri.conf.json 与 Cargo.toml
- *     （Tauri 打包读的是这两处，不是 packages/desktop/package.json，
+ *   - 根 package.json + 全部子包 package.json（含 desktop / mobile）
+ *   - 两个 Tauri 壳的 src-tauri/tauri.conf.json 与 Cargo.toml
+ *     （Tauri 打包读的是这两处，不是壳的 package.json，
  *     三处都要 bump，否则打出来的安装包版本号会滞后；
  *     Cargo.lock 由 cargo update 同步，保证 --locked 构建可用）
  */
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 /** 全部子包：共享统一版本号，随 v* tag 发版。 */
-const PACKAGES = ['backend', 'frontend', 'api', 'ui', 'shared', 'desktop', 'engine'];
+const PACKAGES = ['backend', 'frontend', 'api', 'ui', 'shared', 'desktop', 'engine', 'mobile'];
 
-const TAURI_DIR = path.join(ROOT, 'packages/desktop/src-tauri');
+/** Tauri 版本载体（tauri.conf.json / Cargo.toml / Cargo.lock）：desktop 与 mobile。 */
+const TAURI_DIRS = [
+  'packages/desktop/src-tauri',
+  'packages/mobile/src-tauri',
+].map((dir) => path.join(ROOT, dir));
 
 const USAGE = 'usage: node scripts/release.mjs <x.y.z>';
 
@@ -75,17 +80,20 @@ function cmpSemVer(a, b) {
 const tag = `v${version}`;
 console.log(`版本 ${version}，tag: ${tag}\n`);
 
-// 版本检查：全部 package.json + Tauri 两处版本载体。
+// 版本检查：全部 package.json + 两个 Tauri 壳的版本载体。
 const pkgJsonFiles = ['package.json', ...PACKAGES.map((p) => `packages/${p}/package.json`)];
 const currentVersions = Object.fromEntries(
   pkgJsonFiles.map((file) => [file, JSON.parse(readFileSync(path.join(ROOT, file), 'utf8')).version]),
 );
-const tauriConf = JSON.parse(readFileSync(path.join(TAURI_DIR, 'tauri.conf.json'), 'utf8'));
-currentVersions['packages/desktop/src-tauri/tauri.conf.json'] = tauriConf.version;
-const cargoVersion = /^version\s*=\s*"(.+)"$/m.exec(
-  readFileSync(path.join(TAURI_DIR, 'Cargo.toml'), 'utf8'),
-)?.[1];
-currentVersions['packages/desktop/src-tauri/Cargo.toml'] = cargoVersion;
+for (const dir of TAURI_DIRS) {
+  const rel = path.relative(ROOT, dir);
+  const tauriConf = JSON.parse(readFileSync(path.join(dir, 'tauri.conf.json'), 'utf8'));
+  currentVersions[`${rel}/tauri.conf.json`] = tauriConf.version;
+  const cargoVersion = /^version\s*=\s*"(.+)"$/m.exec(
+    readFileSync(path.join(dir, 'Cargo.toml'), 'utf8'),
+  )?.[1];
+  currentVersions[`${rel}/Cargo.toml`] = cargoVersion;
+}
 
 for (const [file, current] of Object.entries(currentVersions)) {
   if (!current) {
@@ -107,30 +115,46 @@ for (const file of pkgJsonFiles) {
   console.log(`  bumped ${file} → ${version}`);
 }
 
-// bump Tauri 版本载体，只替换 "version" 行，避免重排原有格式。
-const tauriConfPath = path.join(TAURI_DIR, 'tauri.conf.json');
-writeFileSync(
-  tauriConfPath,
-  readFileSync(tauriConfPath, 'utf8').replace(
-    /^(\s*"version"\s*:\s*").*(",?)$/m,
-    `$1${version}$2`,
-  ),
-);
-console.log(`  bumped packages/desktop/src-tauri/tauri.conf.json → ${version}`);
+// bump Tauri 版本载体（desktop + mobile），只替换 "version" 行，避免重排原有格式。
+for (const dir of TAURI_DIRS) {
+  const rel = path.relative(ROOT, dir);
+  const tauriConfPath = path.join(dir, 'tauri.conf.json');
+  writeFileSync(
+    tauriConfPath,
+    readFileSync(tauriConfPath, 'utf8').replace(
+      /^(\s*"version"\s*:\s*").*(",?)$/m,
+      `$1${version}$2`,
+    ),
+  );
+  console.log(`  bumped ${rel}/tauri.conf.json → ${version}`);
 
-const cargoTomlPath = path.join(TAURI_DIR, 'Cargo.toml');
-writeFileSync(
-  cargoTomlPath,
-  readFileSync(cargoTomlPath, 'utf8').replace(/^version\s*=\s*".*"$/m, `version = "${version}"`),
-);
-console.log(`  bumped packages/desktop/src-tauri/Cargo.toml → ${version}`);
+  const cargoTomlPath = path.join(dir, 'Cargo.toml');
+  writeFileSync(
+    cargoTomlPath,
+    readFileSync(cargoTomlPath, 'utf8').replace(
+      /^version\s*=\s*".*"$/m,
+      `version = "${version}"`,
+    ),
+  );
+  console.log(`  bumped ${rel}/Cargo.toml → ${version}`);
+}
 
-// 同步 Cargo.lock（desktop-release.yml 的 cargo test 用了 --locked，lock 不同步会挂）。
-execSync(`cargo update -p taskora-desktop --manifest-path "${cargoTomlPath}"`, {
-  cwd: ROOT,
-  stdio: 'inherit',
-});
-console.log(`  synced packages/desktop/src-tauri/Cargo.lock → ${version}`);
+// 同步 Cargo.lock（desktop-release.yml 的 cargo test 用了 --locked，lock 不同步会挂；
+// mobile 的 Cargo.lock 已随仓库入库，同样需要同步）。
+for (const dir of TAURI_DIRS) {
+  const cargoTomlPath = path.join(dir, 'Cargo.toml');
+  const lockPath = path.join(dir, 'Cargo.lock');
+  if (!existsSync(lockPath)) {
+    console.log(`  skipped ${path.relative(ROOT, lockPath)}（尚未生成）`);
+    continue;
+  }
+  const pkgName = /^name\s*=\s*"(.+)"$/m.exec(readFileSync(cargoTomlPath, 'utf8'))?.[1];
+  execSync(`cargo update -p ${pkgName} --manifest-path "${cargoTomlPath}"`, {
+    cwd: ROOT,
+    stdio: 'inherit',
+  });
+  console.log(`  synced ${path.relative(ROOT, lockPath)} → ${version}`);
+}
 
 console.log(`\n下一步:`);
 console.log(`  1. 编辑 CHANGELOG.md（桌面专属改动标注 (desktop)）`);

@@ -14,7 +14,7 @@ import type { Response, Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
 import { LoginDto, RegisterDto, RefreshRequestDto } from './dto/auth.dto';
 import { JwtAuthGuard } from './jwt-auth.guard';
-import { RT_COOKIE_NAME, COOKIE_OPTS, isDesktopClient } from './refresh-token.helpers';
+import { RT_COOKIE_NAME, COOKIE_OPTS, isNonCookieClient } from './refresh-token.helpers';
 
 @Controller('auth')
 export class AuthController {
@@ -32,7 +32,7 @@ export class AuthController {
     @Res({ passthrough: true }) res: Response,
   ) {
     const { accessToken, rt, user } = await this.authService.login(dto);
-    if (isDesktopClient(req)) {
+    if (isNonCookieClient(req)) {
       // Desktop webview runs cross-origin to the server (Tauri bundles the
       // page from tauri.localhost), so SameSite cookies cannot carry the
       // refresh token. Return it in the body instead; the client keeps it in

@@ -28,18 +28,18 @@ export function setApiBaseUrl(url: string): void {
 }
 
 /** Client kind reported to the server via the `X-Client` header. */
-export type ClientKind = 'web' | 'desktop';
+export type ClientKind = 'web' | 'desktop' | 'mobile';
 
 let clientKind: ClientKind = 'web';
 
 /**
- * Declare the client kind. Desktop must call this (once, at boot) so the
- * backend uses the body-based refresh-token flow instead of cookies.
+ * Declare the client kind. Desktop and mobile must call this (once, at boot)
+ * so the backend uses the body-based refresh-token flow instead of cookies.
  */
 export function setClientKind(kind: ClientKind): void {
   clientKind = kind;
-  if (kind === 'desktop') {
-    apiClient.defaults.headers['X-Client'] = 'desktop';
+  if (kind !== 'web') {
+    apiClient.defaults.headers['X-Client'] = kind;
   } else {
     delete apiClient.defaults.headers['X-Client'];
   }

@@ -14,13 +14,15 @@ import { SyncIndicator } from './SyncIndicator';
 export function AppShell() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
+  // h-[calc(100dvh-var(--kb-inset,0px))]：Android 键盘避让（mobile 壳的
+  // visualViewport 驱动，其余端未设置 → 0px，等价 h-dvh）。
   return (
-    <div className="flex h-dvh w-full noise-overlay">
+    <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] w-full noise-overlay">
       {/* 桌面侧边栏（手机端隐藏） */}
       <div className="hidden md:flex">
         <Sidebar />
       </div>
-      <div className="flex h-dvh min-w-0 flex-1 flex-col">
+      <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] min-w-0 flex-1 flex-col">
         <MobileTopBar />
         <MainContent />
         <ContentBottomBar />

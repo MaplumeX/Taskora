@@ -22,7 +22,7 @@ export function SyncIndicator() {
       <div
         role="status"
         data-sync-status="offline"
-        className="pointer-events-none fixed bottom-3 right-3 z-40 flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-xs text-destructive backdrop-blur-sm"
+        className="pointer-events-none fixed bottom-[calc(0.75rem+var(--kb-inset,0px))] right-3 z-40 max-md:bottom-[calc(4rem+var(--kb-inset,0px))] max-md:right-auto max-md:left-3 flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-xs text-destructive backdrop-blur-sm"
       >
         <CloudOff className="h-3.5 w-3.5" />
         <span>{t('common:syncStatusOffline', { count: pendingCount })}</span>
@@ -35,7 +35,7 @@ export function SyncIndicator() {
       <div
         role="status"
         data-sync-status="syncing"
-        className="pointer-events-none fixed bottom-3 right-3 z-40 flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs text-muted-foreground backdrop-blur-sm"
+        className="pointer-events-none fixed bottom-[calc(0.75rem+var(--kb-inset,0px))] right-3 z-40 max-md:bottom-[calc(4rem+var(--kb-inset,0px))] max-md:right-auto max-md:left-3 flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 px-3 py-1 text-xs text-muted-foreground backdrop-blur-sm"
       >
         <Loader2 className="h-3.5 w-3.5 animate-spin" />
         <span>{t('common:syncStatusSyncing')}</span>
@@ -47,7 +47,7 @@ export function SyncIndicator() {
     <div
       role="status"
       data-sync-status="synced"
-      className="pointer-events-none fixed bottom-3 right-3 z-40 flex items-center gap-1.5 rounded-full border border-border/40 bg-background/60 px-2.5 py-0.5 text-[11px] text-muted-foreground/70 backdrop-blur-sm"
+      className="pointer-events-none fixed bottom-[calc(0.75rem+var(--kb-inset,0px))] right-3 z-40 max-md:bottom-[calc(4rem+var(--kb-inset,0px))] max-md:right-auto max-md:left-3 flex items-center gap-1.5 rounded-full border border-border/40 bg-background/60 px-2.5 py-0.5 text-[11px] text-muted-foreground/70 backdrop-blur-sm"
     >
       <Cloud className="h-3 w-3" />
       <span>{t('common:syncStatusSynced')}</span>
