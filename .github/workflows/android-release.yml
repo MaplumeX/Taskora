@@ -36,12 +36,12 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # ubuntu-latest 预装 Android SDK；setup-android 补齐 cmdline-tools 与
-      # NDK 并设置 ANDROID_HOME。
-      - uses: android-actions/setup-android@v3
-
+      # ubuntu runner 预装 Android SDK（ANDROID_HOME + cmdline-tools）。
+      # 不用 setup-android@v3：其默认包 'tools' 已从 SDK 仓库移除
+      # （Failed to find package 'tools'）；直接用预装 sdkmanager 装 NDK
+      # （上面 setup-java 提供它需要的 JDK 17+）。
       - name: Install NDK
-        run: sdkmanager --install "ndk;28.0.13004108"
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;28.0.13004108" --sdk_root="$ANDROID_HOME"
 
       - uses: dtolnay/rust-toolchain@stable
         with:
