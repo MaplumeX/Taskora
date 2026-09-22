@@ -9,6 +9,30 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.4.6] - 2026-09-22
+
+### Added
+
+- **mobile**: Android app (#63) — the third thin shell alongside
+  web/desktop (ADR-0010): a Tauri v2 app reusing `@taskora/ui` pages and
+  the `@taskora/engine` local replica. Full parity — Areas / Projects /
+  Tasks / Tags / Buckets / calendar / search, offline capture with the
+  full local replica, foreground sync (startup pull, post-write push,
+  foreground-resume pull, pull-to-refresh), the Android back-gesture
+  cascade (overlay → history back → app exit), keyboard avoidance, and
+  system-bar insets handling with theme-matched strips. Login tokens are
+  stored as plaintext JSON in the app-private directory (ADR-0011 — the
+  ADR-0009 Keystore JNI bridge crashed on real-device login and was
+  removed; the Linux sandbox still shields unrooted devices).
+  Distribution: signed arm64-only APK published to GitHub Releases on
+  `v*` tags (`android-release.yml`, signing setup in
+  `scripts/android-signing.py`); sideload instructions in the README
+  (bilingual). Version carriers (package.json / tauri.conf.json /
+  Cargo.toml) bumped with the monorepo via `release.mjs`.
+- **api**: `ClientKind: 'mobile'` (X-Client header) — the backend
+  refresh flow accepts mobile alongside desktop for the body-based
+  refresh-token exchange (`isNonCookieClient`).
+
 ## [0.4.5] - 2026-09-21
 
 ### Added
