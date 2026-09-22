@@ -184,6 +184,8 @@ pnpm --filter @taskora/mobile dev    # 模拟器 / 真机运行
 pnpm --filter @taskora/mobile build  # 签名 APK（debug keystore）
 ```
 
+`dev` 和 `build` 脚本会先把仓库内的 Taskora 启动图标复制到生成的 Android 工程。如果直接运行 `tauri android build`，请在 `tauri android init` 后先从仓库根目录执行 `node scripts/sync-android-icons.mjs`。
+
 ## Docker 部署
 
 仓库提供 `docker-compose.yml`，用于本地全栈运行：
