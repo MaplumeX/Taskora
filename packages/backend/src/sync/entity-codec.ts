@@ -38,6 +38,8 @@ export interface EntityCodec {
   dateFields: Set<string>;
   /** wire 字段中的枚举字段及其合法值。 */
   enumFields: Record<string, Set<string>>;
+  /** wire 字段中「对象 ↔ TEXT JSON 列」的字段（如 repeatRule）。 */
+  jsonFields: Set<string>;
   /** tagIds 物化关系（无则 tagIds 不存在）。 */
   tagRelation?: { model: string; fk: string; relation: string };
 }
@@ -60,6 +62,7 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
       scheduledType: new Set(Object.values(ScheduledType)),
       status: new Set(Object.values(TaskStatus)),
     },
+    jsonFields: new Set(['repeatRule']),
     tagRelation: { model: 'taskTag', fk: 'taskId', relation: 'tags' },
   },
   subtask: {
@@ -68,6 +71,7 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     model: 'subtask',
     dateFields: new Set(['settledAt', 'createdAt', 'updatedAt']),
     enumFields: { status: new Set(Object.values(TaskStatus)) },
+    jsonFields: new Set(),
   },
   project: {
     entity: 'project',
@@ -86,6 +90,7 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
       bucket: new Set(Object.values(ProjectBucket)),
       scheduledType: new Set(Object.values(ScheduledType)),
     },
+    jsonFields: new Set(),
     tagRelation: { model: 'projectTag', fk: 'projectId', relation: 'tags' },
   },
   'project-heading': {
@@ -94,6 +99,7 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     model: 'projectHeading',
     dateFields: new Set(['completedAt', 'createdAt', 'updatedAt']),
     enumFields: { status: new Set(Object.values(HeadingStatus)) },
+    jsonFields: new Set(),
   },
   area: {
     entity: 'area',
@@ -101,6 +107,7 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     model: 'area',
     dateFields: new Set(['createdAt', 'updatedAt']),
     enumFields: {},
+    jsonFields: new Set(),
     tagRelation: { model: 'areaTag', fk: 'areaId', relation: 'tags' },
   },
   tag: {
@@ -109,6 +116,7 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     model: 'tag',
     dateFields: new Set(['createdAt', 'updatedAt']),
     enumFields: {},
+    jsonFields: new Set(),
   },
   'tag-group': {
     entity: 'tag-group',
@@ -116,6 +124,7 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     model: 'tagGroup',
     dateFields: new Set(['createdAt', 'updatedAt']),
     enumFields: {},
+    jsonFields: new Set(),
   },
 };
 
@@ -211,7 +220,15 @@ function wireValueOf(codec: EntityCodec, row: PrismaRow, fieldName: string): unk
     return relationRows.map((entry) => entry.tagId).sort();
   }
   const value = row[fieldName];
-  return codec.dateFields.has(fieldName) && value instanceof Date ? value.toISOString() : value;
+  if (codec.dateFields.has(fieldName) && value instanceof Date) return value.toISOString();
+  if (codec.jsonFields.has(fieldName) && typeof value === 'string') {
+    try {
+      return JSON.parse(value);
+    } catch {
+      return null; // 毒丸防御：坏 JSON 不击穿序列化
+    }
+  }
+  return value;
 }
 
 /**
@@ -311,6 +328,15 @@ export function toPrismaData(
         data[fieldName] = new Date(value);
       } else {
         continue; // 无效日期：剔除
+      }
+      continue;
+    }
+    if (codec.jsonFields.has(fieldName)) {
+      // 对象字段物化为 JSON 文本列（repeatRule）：null 清除；非对象剔除
+      if (value === null) {
+        data[fieldName] = null;
+      } else if (typeof value === 'object' && !Array.isArray(value)) {
+        data[fieldName] = JSON.stringify(value);
       }
       continue;
     }

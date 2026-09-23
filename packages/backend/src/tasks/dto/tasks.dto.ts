@@ -5,10 +5,42 @@ import {
   IsString,
   IsDateString,
   IsArray,
+  IsInt,
+  IsIn,
   Matches,
+  Max,
+  Min,
+  ValidateNested,
 } from 'class-validator';
-import { Transform } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { TaskBucket, ScheduledType } from '@taskora/shared';
+
+/**
+ * Repeat Rule（recurring-tasks spec）：结构化规则对象的入参校验。
+ * 形状与 @taskora/shared 的 RepeatRule 对齐；规范化（canonical form）由
+ * @taskora/engine 的 normalizeRepeatRule 在写入时完成。
+ */
+export class RepeatRuleDto {
+  @IsIn(['day', 'week', 'month', 'year'])
+  unit!: 'day' | 'week' | 'month' | 'year';
+
+  @IsInt()
+  @Min(1)
+  @Max(999)
+  interval!: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  weekdays?: number[];
+
+  @IsIn(['scheduled', 'completion'])
+  anchor!: 'scheduled' | 'completion';
+
+  @IsOptional()
+  @IsDateString()
+  until?: string | null;
+}
 
 export class CreateTaskDto {
   @IsString()
@@ -70,6 +102,12 @@ export class UpdateTaskDto {
     message: 'reminderTime must be an HH:mm time-of-day string',
   })
   reminderTime?: string | null;
+
+  /** 重复规则：null 清除；对象经 normalizeRepeatRule 归一后落库。 */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RepeatRuleDto)
+  repeatRule?: RepeatRuleDto | null;
 
   @IsOptional()
   @IsDateString()

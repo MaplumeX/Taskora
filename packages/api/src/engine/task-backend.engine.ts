@@ -13,6 +13,12 @@
 import type { Engine, ReplicaRow } from '@taskora/engine';
 import { positionAfter, positionsBetween } from '@taskora/engine';
 import {
+  deriveRepeatInstanceId,
+  deriveSubtaskId,
+  nextOccurrenceDate,
+  normalizeRepeatRule,
+} from '@taskora/engine';
+import {
   ProjectStatus,
   ScheduledType,
   TaskStatus,
@@ -66,6 +72,108 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     const row = await engine.get('subtask', id);
     if (!row) throw new Error(`Subtask not found: ${id}`);
     return subtaskRowToDto(row);
+  }
+
+  /**
+   * Repeat Instance 派生（recurring-tasks spec / ADR-0012）：完成的设备
+   * 在本地立刻派生下一个实例 —— 携带相同规则的普通 Task，写入 Local
+   * Replica、走 Outbox，断网全功能。确定性 id 保证多设备并发完成天然
+   * 去重；目标 id 已存在（restore 后重新完成）时幂等跳过。
+   *
+   * parent 为结算前的任务行（reminderTime 等复制源以结算前状态为准；
+   * 规则/日期字段在结算后不变，仅提醒会被结算清除）。
+   */
+  async function deriveRepeatInstance(
+    parentId: string,
+    parent: ReplicaRow,
+    settledAt: string,
+  ): Promise<string | null> {
+    const f = parent.fields;
+    const rule = normalizeRepeatRule(f.repeatRule);
+    if (!rule) return null;
+    const occurrence = nextOccurrenceDate(rule, {
+      scheduledDate: (f.scheduledDate as string | null) ?? null,
+      settledAt,
+    });
+    if (occurrence === null) return null; // 到达 until / 无锚：链终结，不派生
+
+    let instanceId = deriveRepeatInstanceId(parentId, rule, occurrence);
+    // 幂等：同一逻辑实例已存在（另一设备已派生 / restore 后重完成）→ 跳过
+    if ((await engine.get('task', instanceId)) !== null) return instanceId;
+    // 确定性 id 已被 compact（un-complete 删除过该实例后重新完成）：该 id
+    // 无法经 hub 复活（ADR-0008 Compact 永久获胜），回退到新生成 id——
+    // ADR-0008 认可的唯一复活路径。确定性仅在并发派生时是必需的；这里
+    // 是同设备顺序重派生，换 id 不破坏去重。代价：其后再次 un-complete
+    // 无法凭确定性 id 找到该实例（v1 接受的边界，见 spec Comments）。
+    if (engine.isCompacted('task', instanceId)) {
+      instanceId = undefined as unknown as string; // create 内走 generateId
+    }
+
+    // 派生实例进入目标列表末尾（新位次，不继承父任务位次）
+    const allTasks = await engine.list('task');
+    const position = positionAfter(
+      allTasks,
+      allTasks.length > 0 ? allTasks[allTasks.length - 1].id : null,
+    );
+    const sortOrder =
+      allTasks.reduce((max, row) => Math.max(max, (row.fields.sortOrder as number) ?? 0), -1) + 1;
+
+    // 复制集（spec）：标题/备注/标签/提醒时刻/归属位置/规则；
+    // 子任务复制为派生实体并重置 ACTIVE
+    await engine.create('task', {
+      id: instanceId,
+      title: (f.title as string) ?? '',
+      notes: (f.notes as string | null) ?? null,
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: occurrence,
+      reminderTime: (f.reminderTime as string | null) ?? null,
+      repeatRule: rule,
+      dueDate: null,
+      bucket: TaskBucket.SCHEDULED,
+      status: TaskStatus.ACTIVE,
+      settledAt: null,
+      trashedAt: null,
+      position,
+      sortOrder,
+      projectId: (f.projectId as string | null) ?? null,
+      headingId: (f.headingId as string | null) ?? null,
+      areaId: (f.areaId as string | null) ?? null,
+      tagIds: Array.isArray(f.tagIds) ? (f.tagIds as string[]) : [],
+    });
+
+    const subtasks = (await engine.list('subtask')).filter((row) => row.fields.taskId === parentId);
+    for (const [index, subtask] of subtasks.entries()) {
+      await engine.create('subtask', {
+        id: deriveSubtaskId(instanceId, index),
+        title: (subtask.fields.title as string) ?? '',
+        taskId: instanceId,
+        sortOrder: index,
+        status: TaskStatus.ACTIVE,
+        settledAt: null,
+      });
+    }
+    return instanceId;
+  }
+
+  /**
+   * 取消派生副作用（ADR-0012）：重开（un-complete / un-cancel）删除其
+   * 派生实例 —— 派生属于结算副作用，重开即撤销。实例 id 重算自当前
+   * 行（规则 + 锚点 + 了结时间）；不存在则无操作（纯取消从未派生）。
+   * 删除已派生实例（含用户已编辑的）是 v1 接受的行为。
+   */
+  async function deleteDerivedInstance(taskId: string): Promise<void> {
+    const row = await engine.get('task', taskId);
+    if (!row) return;
+    const f = row.fields;
+    const rule = normalizeRepeatRule(f.repeatRule);
+    if (!rule) return;
+    const occurrence = nextOccurrenceDate(rule, {
+      scheduledDate: (f.scheduledDate as string | null) ?? null,
+      settledAt: (f.settledAt as string | null) ?? null,
+    });
+    if (occurrence === null) return;
+    const instanceId = deriveRepeatInstanceId(taskId, rule, occurrence);
+    await engine.delete('task', [instanceId]); // 幂等：不存在则无操作
   }
 
   return {
@@ -128,6 +236,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
           scheduledType === ScheduledType.DATE && data.scheduledDate ? data.scheduledDate : null,
         scheduledType,
         reminderTime: null,
+        repeatRule: null,
         dueDate: data.dueDate ?? null,
         bucket,
         status: TaskStatus.ACTIVE,
@@ -198,6 +307,18 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       } else if (data.reminderTime !== undefined) {
         patch.reminderTime = data.reminderTime;
       }
+      // Repeat Rule 清理规则（recurring-tasks spec）：ScheduledType 离开
+      // DATE 时一律清除规则（规则无锚即无意义，镜像 Reminder 清理语义）；
+      // 换日期（DATE → DATE）保留规则。写入前归一化为规范形（派生 id 依赖
+      // 稳定输入，ADR-0012）；非法对象忽略（不写垃圾）。
+      if (newScheduledType !== ScheduledType.DATE) {
+        patch.repeatRule = null;
+      } else if (data.repeatRule !== undefined) {
+        const normalized = normalizeRepeatRule(data.repeatRule);
+        if (data.repeatRule === null || normalized !== null) {
+          patch.repeatRule = normalized;
+        }
+      }
       if (data.dueDate !== undefined) patch.dueDate = data.dueDate;
       if (data.bucket !== undefined || 'scheduledType' in patch) patch.bucket = bucket;
       if (data.projectId !== undefined) patch.projectId = data.projectId;
@@ -237,15 +358,20 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       const existing = await engine.get('task', id);
       if (existing?.fields.status === TaskStatus.COMPLETED) return taskDto(id);
       // 了结清除提醒（reminders spec）：已完成/取消的工作不再通知。
+      const settledAt = new Date().toISOString();
       await engine.update('task', id, {
         status: TaskStatus.COMPLETED,
-        settledAt: new Date().toISOString(),
+        settledAt,
         reminderTime: null,
       });
+      // 重复任务：完成后立刻派生下一实例（结算副作用；取消不派生）
+      await deriveRepeatInstance(id, existing!, settledAt);
       return taskDto(id);
     },
 
     async uncompleteTask(id: string): Promise<TaskResponseDto> {
+      // 重开取消派生副作用：删除其派生实例（ADR-0012）
+      await deleteDerivedInstance(id);
       await engine.update('task', id, { status: TaskStatus.ACTIVE, settledAt: null });
       return taskDto(id);
     },
@@ -262,6 +388,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     },
 
     async uncancelTask(id: string): Promise<TaskResponseDto> {
+      // 重开同样取消派生副作用（完成→取消→重开路径下删除仍存活的实例）
+      await deleteDerivedInstance(id);
       await engine.update('task', id, { status: TaskStatus.ACTIVE, settledAt: null });
       return taskDto(id);
     },
@@ -487,6 +615,7 @@ function projectRowToFeedItem(
     scheduledDate: (f.scheduledDate as string | null) ?? null,
     scheduledType: (f.scheduledType as ScheduledType) ?? ScheduledType.NONE,
     reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
+    repeatRule: null, // Project 不设 Repeat Rule（CONTEXT.md）
     dueDate: (f.dueDate as string | null) ?? null,
     status: (f.status as ProjectStatus) ?? ProjectStatus.ACTIVE,
     bucket: (f.bucket as ProjectBucket) ?? ProjectBucket.ANYTIME,

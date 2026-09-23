@@ -114,6 +114,7 @@ function task(id: string, completed = false): TaskResponseDto {
     scheduledDate: null,
     scheduledType: ScheduledType.NONE,
     reminderTime: null,
+    repeatRule: null,
     dueDate: null,
     bucket: TaskBucket.INBOX,
     status: completed ? TaskStatus.COMPLETED : TaskStatus.ACTIVE,

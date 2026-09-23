@@ -30,6 +30,7 @@ function makeTask(overrides: Partial<TaskResponseDto> = {}): TaskResponseDto {
     scheduledDate: null,
     scheduledType: ScheduledType.NONE,
     reminderTime: null,
+    repeatRule: null,
     dueDate: null,
     bucket: TaskBucket.INBOX,
     status: TaskStatus.ACTIVE,

@@ -4,6 +4,7 @@ import { SyncHubService } from '../sync/sync-hub.service';
 import { registerCompacted } from '../sync/compact-registry';
 import { buildTaskViewWhere, SETTLED_STATUSES, type TaskView } from '../tasks/views';
 import { buildProjectViewWhere, type ProjectView } from '../projects/views';
+import { parseRepeatRule } from '../tasks/task-dto.mapper';
 import {
   ScheduledType,
   TaskStatus,
@@ -161,6 +162,7 @@ export class FeedService {
       scheduledDate: t.scheduledDate ? t.scheduledDate.toISOString() : null,
       scheduledType: t.scheduledType as ScheduledType,
       reminderTime: t.reminderTime,
+      repeatRule: parseRepeatRule(t.repeatRule),
       dueDate: t.dueDate ? t.dueDate.toISOString() : null,
       status: t.status as TaskStatus,
       bucket: t.bucket as TaskBucket,
@@ -224,6 +226,7 @@ export class FeedService {
         scheduledDate: p.scheduledDate ? p.scheduledDate.toISOString() : null,
         scheduledType: p.scheduledType as ScheduledType,
         reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
+        repeatRule: null, // Project 不设 Repeat Rule（CONTEXT.md）
         dueDate: p.dueDate ? p.dueDate.toISOString() : null,
         status: p.status as ProjectStatus,
         bucket: p.bucket as ProjectBucket,

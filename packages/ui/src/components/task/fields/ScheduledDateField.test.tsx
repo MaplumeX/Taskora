@@ -1,8 +1,10 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import React from 'react';
 
 import { ScheduledType } from '@taskora/shared';
+import type { ScheduledFieldPatch } from './fieldProps';
 
 import { useReminderPermissionStore } from '@taskora/api';
 
@@ -13,16 +15,16 @@ import { ScheduledDateField } from './ScheduledDateField';
 const now = new Date(2026, 1, 4); // 2026-02-04，日历渲染稳定
 
 function renderField(
-  current: { scheduledType: ScheduledType; scheduledDate?: string | null; reminderTime?: string | null },
+  current: {
+    scheduledType: ScheduledType;
+    scheduledDate?: string | null;
+    reminderTime?: string | null;
+  },
   options: { onPatch?: ReturnType<typeof vi.fn>; showReminder?: boolean } = {},
 ) {
   const onPatch = options.onPatch ?? vi.fn();
   render(
-    <ScheduledDateField
-      current={current}
-      onPatch={onPatch}
-      showReminder={options.showReminder}
-    />,
+    <ScheduledDateField current={current} onPatch={onPatch} showReminder={options.showReminder} />,
   );
   return { onPatch };
 }
@@ -144,7 +146,10 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
     );
 
     await user.click(screen.getByRole('button', { name: /^Someday$/ }));
-    expect(onPatch).toHaveBeenCalledWith({ scheduledType: ScheduledType.SOMEDAY, reminderTime: null });
+    expect(onPatch).toHaveBeenCalledWith({
+      scheduledType: ScheduledType.SOMEDAY,
+      reminderTime: null,
+    });
 
     await user.click(screen.getByRole('button', { name: /Clear|清除/ }));
     expect(onPatch).toHaveBeenCalledWith({
@@ -165,7 +170,9 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
       { showReminder: true },
     );
     expect(screen.queryByText(/Notifications are disabled|系统通知已禁用/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /Open Settings|打开设置/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Open Settings|打开设置/ }),
+    ).not.toBeInTheDocument();
   });
 
   it('点击「明天」→ patch 明天的日期（DATE 型）', async () => {
@@ -194,5 +201,193 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
       { showReminder: true },
     );
     await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+});
+
+/* ------------- Repeat Rule 编辑区（recurring-tasks spec） ------------- */
+
+describe('ScheduledDateField — Repeat Rule 重复区（recurring-tasks spec）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useReminderPermissionStore.setState({ permission: 'unknown', supported: false });
+  });
+
+  function renderRepeatField(
+    initial: {
+      scheduledType: ScheduledType;
+      scheduledDate?: string | null;
+      repeatRule?: unknown;
+    },
+    options: { onPatch?: ReturnType<typeof vi.fn>; showRepeatRule?: boolean } = {},
+  ) {
+    const onPatch = options.onPatch ?? vi.fn();
+    // 有状态 harness：patch 即时回灌 current，模拟真实缓存更新下的连续编辑
+    function Harness() {
+      const [current, setCurrent] = React.useState(initial);
+      const handlePatch = (patch: ScheduledFieldPatch) => {
+        onPatch(patch);
+        setCurrent((prev) => ({ ...prev, ...patch }) as typeof prev);
+      };
+      return (
+        <ScheduledDateField
+          current={current as never}
+          onPatch={handlePatch}
+          showRepeatRule={options.showRepeatRule}
+        />
+      );
+    }
+    render(<Harness />);
+    return { onPatch };
+  }
+
+  it('DATE 任务且 showRepeatRule 时显示重复区；开启默认每周规则，关闭清除', async () => {
+    const user = userEvent.setup();
+    const { onPatch } = renderRepeatField(
+      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-05' },
+      { showRepeatRule: true },
+    );
+    expect(screen.getByRole('switch', { name: /Repeat|重复/ })).toBeInTheDocument();
+
+    // 开启：默认每周、从计划日期算
+    await user.click(screen.getByRole('switch', { name: /Repeat|重复/ }));
+    expect(onPatch).toHaveBeenCalledWith({
+      repeatRule: { unit: 'week', interval: 1, anchor: 'scheduled' },
+    });
+  });
+
+  it('已有规则时关闭开关 → 清除规则（patch null）', async () => {
+    const user = userEvent.setup();
+    const { onPatch } = renderRepeatField(
+      {
+        scheduledType: ScheduledType.DATE,
+        scheduledDate: '2026-02-05',
+        repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+      },
+      { showRepeatRule: true },
+    );
+    await user.click(screen.getByRole('switch', { name: /Repeat|重复/ }));
+    expect(onPatch).toHaveBeenLastCalledWith({ repeatRule: null });
+  });
+
+  it('Someday / 无日期任务、以及 Project 上下文（showRepeatRule 缺省）不渲染重复区', () => {
+    const { rerender } = render(
+      <ScheduledDateField
+        current={{ scheduledType: ScheduledType.SOMEDAY }}
+        onPatch={vi.fn()}
+        showRepeatRule
+      />,
+    );
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/Repeat until|直到/)).not.toBeInTheDocument();
+
+    rerender(
+      <ScheduledDateField
+        current={{ scheduledType: ScheduledType.NONE }}
+        onPatch={vi.fn()}
+        showRepeatRule
+      />,
+    );
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+
+    // Project 上下文（不传 showRepeatRule）：即使误传 DATE 型也不出现
+    rerender(
+      <ScheduledDateField
+        current={{ scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-05' }}
+        onPatch={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('switch')).not.toBeInTheDocument();
+  });
+
+  it('已有规则：改单位 / 调间隔 / 切星期 / 锚点 / until 各自 patch 完整规则', async () => {
+    const user = userEvent.setup();
+    const { onPatch } = renderRepeatField(
+      {
+        scheduledType: ScheduledType.DATE,
+        scheduledDate: '2026-02-05',
+        repeatRule: { unit: 'day', interval: 2, anchor: 'scheduled' },
+      },
+      { showRepeatRule: true },
+    );
+
+    // 间隔 +1 → 3
+    await user.click(screen.getByRole('button', { name: /Increase repeat interval|增大重复间隔/ }));
+    expect(onPatch).toHaveBeenLastCalledWith({
+      repeatRule: { unit: 'day', interval: 3, anchor: 'scheduled' },
+    });
+
+    // 单位 → week（携带 weekdays 编辑入口）
+    fireEvent.change(screen.getByLabelText(/Repeat unit|重复单位/), { target: { value: 'week' } });
+    expect(onPatch).toHaveBeenLastCalledWith({
+      repeatRule: { unit: 'week', interval: 3, anchor: 'scheduled' },
+    });
+
+    // 切一个星期几（周一）→ weekdays 数组
+    await user.click(screen.getByRole('button', { name: /^Monday$|^星期一$/ }));
+    expect(onPatch).toHaveBeenLastCalledWith({
+      repeatRule: { unit: 'week', interval: 3, weekdays: [1], anchor: 'scheduled' },
+    });
+
+    // 锚点 → 从完成日期算
+    await user.click(screen.getByRole('checkbox', { name: /After completion|从完成日期算/ }));
+    expect(onPatch).toHaveBeenLastCalledWith({
+      repeatRule: { unit: 'week', interval: 3, weekdays: [1], anchor: 'completion' },
+    });
+
+    // until 日期
+    fireEvent.change(screen.getByLabelText(/Until|直到/), { target: { value: '2026-06-30' } });
+    expect(onPatch).toHaveBeenLastCalledWith({
+      repeatRule: {
+        unit: 'week',
+        interval: 3,
+        weekdays: [1],
+        anchor: 'completion',
+        until: '2026-06-30',
+      },
+    });
+  });
+
+  it('实时预览显示下一次出现日期（纯函数计算）', () => {
+    renderRepeatField(
+      {
+        scheduledType: ScheduledType.DATE,
+        scheduledDate: '2026-02-05',
+        repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+      },
+      { showRepeatRule: true },
+    );
+    // 2026-02-05 + 1 天 = 02-06
+    expect(screen.getByText(/Next:|下次：/)).toBeInTheDocument();
+    expect(screen.getByText(/Next:|下次：/).textContent).toMatch(/6/);
+  });
+
+  it('until 已过：预览显示链终结', () => {
+    renderRepeatField(
+      {
+        scheduledType: ScheduledType.DATE,
+        scheduledDate: '2026-02-05',
+        repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled', until: '2026-02-04' },
+      },
+      { showRepeatRule: true },
+    );
+    expect(screen.getByText(/No further occurrences|已到最后一次重复/)).toBeInTheDocument();
+  });
+
+  it('Someday / 清除按钮携带 repeatRule: null（Task 上下文即时生效）', async () => {
+    const user = userEvent.setup();
+    const { onPatch } = renderRepeatField(
+      {
+        scheduledType: ScheduledType.DATE,
+        scheduledDate: '2026-02-05',
+        repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+      },
+      { showRepeatRule: true },
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Someday' }));
+    expect(onPatch).toHaveBeenCalledWith({
+      scheduledType: ScheduledType.SOMEDAY,
+      repeatRule: null,
+    });
   });
 });

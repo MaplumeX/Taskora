@@ -1,3 +1,6 @@
+import { normalizeRepeatRule } from '@taskora/engine';
+import type { RepeatRule } from '@taskora/shared';
+
 /**
  * Task / Subtask 行 → 响应 DTO 的字段映射。
  *
@@ -15,4 +18,25 @@ export function settledToCompletedAt<T extends { settledAt: Date | null }>(
 ): Omit<T, 'settledAt'> & { completedAt: Date | null } {
   const { settledAt, ...rest } = row;
   return { ...rest, completedAt: settledAt };
+}
+
+/**
+ * repeatRule 列（TEXT JSON）→ DTO 规则对象。坏 JSON 归 null（毒丸
+ * 防御：不击穿读路径）；经 normalizeRepeatRule 收敛为规范形。
+ */
+export function parseRepeatRule(raw: string | null): RepeatRule | null {
+  if (!raw) return null;
+  try {
+    return normalizeRepeatRule(JSON.parse(raw));
+  } catch {
+    return null;
+  }
+}
+
+/** Task 行的 repeatRule 列替换为 DTO 对象（settledToCompletedAt 之前套用）。 */
+export function withRepeatRuleDto<T extends { repeatRule: string | null }>(
+  row: T,
+): Omit<T, 'repeatRule'> & { repeatRule: RepeatRule | null } {
+  const { repeatRule, ...rest } = row;
+  return { ...rest, repeatRule: parseRepeatRule(repeatRule) };
 }

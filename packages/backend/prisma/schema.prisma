@@ -220,6 +220,9 @@ model Task {
   scheduledDate DateTime?
   dueDate       DateTime?
   reminderTime  String?
+  /// Repeat Rule（recurring-tasks spec）：规范形规则对象的 JSON 文本
+  /// （unit/interval/weekdays/anchor/until）。仅 DATE 型任务携带。
+  repeatRule    String?
   bucket        TaskBucket    @default(INBOX)
   scheduledType ScheduledType @default(NONE)
   status        TaskStatus    @default(ACTIVE)

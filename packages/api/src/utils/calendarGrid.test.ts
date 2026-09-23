@@ -21,6 +21,7 @@ function task(id: string, scheduledDate: string | null): TaskResponseDto {
     scheduledDate,
     scheduledType: ScheduledType.DATE,
     reminderTime: null,
+    repeatRule: null,
     dueDate: null,
     bucket: TaskBucket.INBOX,
     status: TaskStatus.ACTIVE,

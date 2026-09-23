@@ -21,12 +21,7 @@ import { Hint } from '@/components/ui/hint';
 import { Input } from '@/components/ui/input';
 import { MarkdownNotesEditor } from '@/components/common/MarkdownNotesEditor';
 import { Separator } from '@/components/ui/separator';
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { MenuRow } from '@/components/common/MenuRow';
 import { useLongPress } from '../../lib/useLongPress';
 import { cn } from '@/lib/utils';
@@ -116,10 +111,7 @@ export function TaskRowExpanded({ task, current }: Props) {
   };
 
   return (
-    <div
-      className="flex flex-col gap-3 px-2 pb-3 pt-1"
-      onClick={(e) => e.stopPropagation()}
-    >
+    <div className="flex flex-col gap-3 px-2 pb-3 pt-1" onClick={(e) => e.stopPropagation()}>
       <MarkdownNotesEditor
         value={notes}
         onChange={setNotes}
@@ -174,6 +166,7 @@ export function TaskRowExpanded({ task, current }: Props) {
               onPatch={patch}
               onClose={close}
               showReminder={getClientKind() !== 'web'}
+              showRepeatRule
             />
           )}
         </IconPopover>
@@ -183,9 +176,7 @@ export function TaskRowExpanded({ task, current }: Props) {
           icon={<Clock className="h-4 w-4" />}
           active={!!current.dueDate}
         >
-          {(close) => (
-            <DueDateField current={current} onPatch={patch} onClose={close} />
-          )}
+          {(close) => <DueDateField current={current} onPatch={patch} onClose={close} />}
         </IconPopover>
 
         <IconPopover
@@ -312,7 +303,10 @@ function IconPopover({
           <Button
             variant="ghost"
             size="icon"
-            className={cn('h-8 w-8 max-md:h-11 max-md:w-11', active ? 'text-primary' : 'text-muted-foreground')}
+            className={cn(
+              'h-8 w-8 max-md:h-11 max-md:w-11',
+              active ? 'text-primary' : 'text-muted-foreground',
+            )}
             aria-label={label}
           >
             {icon}
@@ -350,23 +344,22 @@ function SubtaskRow({
   const [draft, setDraft] = React.useState(subtask.title);
   // 右键菜单（取消/撤销取消）：勾选框仍只管完成/重开，取消只走菜单（story 22）。
   const [menuOpen, setMenuOpen] = React.useState(false);
-  const virtualAnchorRef = React.useRef<
-    { getBoundingClientRect: () => ClientRect } | null
-  >(null);
+  const virtualAnchorRef = React.useRef<{ getBoundingClientRect: () => ClientRect } | null>(null);
 
   const openMenuAt = (x: number, y: number) => {
     virtualAnchorRef.current = {
-      getBoundingClientRect: () => ({
-        width: 0,
-        height: 0,
-        x,
-        y,
-        top: y,
-        right: x,
-        bottom: y,
-        left: x,
-        toJSON: () => ({}),
-      }) as ClientRect,
+      getBoundingClientRect: () =>
+        ({
+          width: 0,
+          height: 0,
+          x,
+          y,
+          top: y,
+          right: x,
+          bottom: y,
+          left: x,
+          toJSON: () => ({}),
+        }) as ClientRect,
     };
     setMenuOpen(true);
   };
@@ -448,11 +441,7 @@ function SubtaskRow({
       {/* 右键菜单：取消 / 撤销取消（story 20）。 */}
       <Popover open={menuOpen} onOpenChange={setMenuOpen}>
         <PopoverAnchor virtualRef={virtualAnchorRef} />
-        <PopoverContent
-          align="start"
-          className="w-44 p-1"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <PopoverContent align="start" className="w-44 p-1" onClick={(e) => e.stopPropagation()}>
           <MenuRow icon={CircleSlash} onClick={toggleCancel}>
             {cancelled ? t('task:markUncancelled') : t('task:markCancelled')}
           </MenuRow>
@@ -466,10 +455,7 @@ function SubtaskRow({
           aria-label={t('common:delete')}
           onClick={(e) => {
             e.stopPropagation();
-            deleteSubtask.mutate(
-              { id: subtask.id, taskId },
-              { onSuccess: onMutated },
-            );
+            deleteSubtask.mutate({ id: subtask.id, taskId }, { onSuccess: onMutated });
           }}
         >
           <Trash2 className="h-3.5 w-3.5" />
