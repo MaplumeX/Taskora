@@ -18,10 +18,14 @@ export function isToday(date: Date): boolean {
   return isSameDay(date, new Date());
 }
 
-export function isTomorrow(date: Date): boolean {
+export function startOfTomorrow(): Date {
   const tomorrow = startOfToday();
   tomorrow.setDate(tomorrow.getDate() + 1);
-  return isSameDay(date, tomorrow);
+  return tomorrow;
+}
+
+export function isTomorrow(date: Date): boolean {
+  return isSameDay(date, startOfTomorrow());
 }
 
 export function isOverdue(date: Date): boolean {
