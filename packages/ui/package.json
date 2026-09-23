@@ -29,6 +29,7 @@
     "@radix-ui/react-slot": "^1.1.0",
     "@radix-ui/react-switch": "^1.3.7",
     "@radix-ui/react-tooltip": "^1.2.16",
+    "@tauri-apps/plugin-autostart": "^2.5.0",
     "@taskora/api": "workspace:*",
     "@taskora/shared": "workspace:*",
     "@tiptap/markdown": "^3.29.2",

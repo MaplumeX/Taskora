@@ -1,4 +1,9 @@
 {
+  "general": "General",
+  "generalSettings": "General Settings",
+  "launchAtLogin": "Launch at login",
+  "launchAtLoginHint": "After you log in, Taskora starts in the background and stays in the tray without opening a window.",
+  "launchAtLoginFailed": "Failed to change launch-at-login",
   "appearance": "Appearance",
   "account": "Account",
   "data": "Data",
