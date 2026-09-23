@@ -4,7 +4,7 @@ import type { DueDateFieldCurrent, DueDateFieldPatch } from './fieldProps';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { startOfToday } from '@taskora/api';
+import { startOfToday, startOfTomorrow } from '@taskora/api';
 import { usePreferencesStore } from '@taskora/api';
 
 import { getCalendarLocale, startOfLocalDay } from './calendarFieldUtils';
@@ -32,6 +32,11 @@ export function DueDateField({ current, onPatch, onClose }: FieldProps) {
     onClose?.();
   };
 
+  const handleTomorrow = () => {
+    onPatch({ dueDate: startOfTomorrow().toISOString() });
+    onClose?.();
+  };
+
   const handleClear = () => {
     onPatch({ dueDate: null });
     onClose?.();
@@ -48,6 +53,9 @@ export function DueDateField({ current, onPatch, onClose }: FieldProps) {
       <div className="flex items-center gap-1 border-t border-border/50 p-2">
         <Button variant="ghost" size="sm" onClick={handleToday}>
           {t('common:today')}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={handleTomorrow}>
+          {t('common:tomorrow')}
         </Button>
         <Button
           variant="ghost"

@@ -6,7 +6,7 @@ import { ScheduledType } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { startOfToday } from '@taskora/api';
+import { startOfToday, startOfTomorrow } from '@taskora/api';
 import { usePreferencesStore, useReminderPermissionStore } from '@taskora/api';
 
 import { getCalendarLocale, startOfLocalDay } from './calendarFieldUtils';
@@ -69,6 +69,14 @@ export function ScheduledDateField({
     onPatch({
       scheduledType: ScheduledType.DATE,
       scheduledDate: startOfToday().toISOString(),
+    });
+    onClose?.();
+  };
+
+  const handleTomorrow = () => {
+    onPatch({
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: startOfTomorrow().toISOString(),
     });
     onClose?.();
   };
@@ -157,6 +165,9 @@ export function ScheduledDateField({
       <div className="flex items-center gap-1 border-t border-border/50 p-2">
         <Button variant="ghost" size="sm" onClick={handleToday}>
           {t('common:today')}
+        </Button>
+        <Button variant="ghost" size="sm" onClick={handleTomorrow}>
+          {t('common:tomorrow')}
         </Button>
         <Button
           variant={scheduledType === ScheduledType.SOMEDAY ? 'secondary' : 'ghost'}
