@@ -16,6 +16,7 @@ function task(id: string, scheduledDate: string | null): FeedItem {
     notes: null,
     scheduledDate,
     scheduledType: scheduledDate ? ScheduledType.DATE : ScheduledType.NONE,
+    reminderTime: null,
     dueDate: null,
     status: TaskStatus.ACTIVE,
     bucket: TaskBucket.SCHEDULED,

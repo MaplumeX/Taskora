@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import { useProjectsQuery } from '@taskora/api';
 import { useAreasQuery } from '@taskora/api';
 import {
+  getClientKind,
   taskKeys,
   useCancelSubtask,
   useCompleteSubtask,
@@ -168,7 +169,12 @@ export function TaskRowExpanded({ task, current }: Props) {
           active={scheduledType !== ScheduledType.NONE}
         >
           {(close) => (
-            <ScheduledDateField current={current} onPatch={patch} onClose={close} />
+            <ScheduledDateField
+              current={current}
+              onPatch={patch}
+              onClose={close}
+              showReminder={getClientKind() !== 'web'}
+            />
           )}
         </IconPopover>
 

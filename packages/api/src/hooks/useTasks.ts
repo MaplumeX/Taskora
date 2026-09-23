@@ -102,6 +102,7 @@ export function useCreateTask() {
         notes: data.notes ?? null,
         scheduledDate: data.scheduledDate ?? null,
         scheduledType: data.scheduledType ?? ScheduledType.NONE,
+        reminderTime: null,
         dueDate: data.dueDate ?? null,
         bucket: data.bucket ?? TaskBucket.INBOX,
         status: TaskStatus.ACTIVE,

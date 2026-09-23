@@ -110,6 +110,14 @@ export class LocalReplica {
     if (columns.length > 0 && !columns.some((column) => column.name === 'revision')) {
       await this.storage.exec('ALTER TABLE _outbox ADD COLUMN revision INTEGER NOT NULL DEFAULT 0');
     }
+    // Reminders feature（reminders spec）：task 增加 reminderTime 列。
+    // 新库由 DDL 直接带列；旧库（无该列的桌面/移动安装）按需 ALTER。
+    const taskColumns = await this.storage.all<{ name: string }>(
+      "SELECT name FROM pragma_table_info('task')",
+    );
+    if (taskColumns.length > 0 && !taskColumns.some((column) => column.name === 'reminderTime')) {
+      await this.storage.exec('ALTER TABLE task ADD COLUMN reminderTime TEXT');
+    }
     await this.metaSet('deviceId', this.options.deviceId);
     const saved = await this.metaGet('hlc');
     if (saved) {

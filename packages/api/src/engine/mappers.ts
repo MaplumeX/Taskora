@@ -67,6 +67,7 @@ export function taskRowToDto(row: ReplicaRow, tags: Map<string, TagResponseDto>)
     notes: (f.notes as string | null) ?? null,
     scheduledDate: (f.scheduledDate as string | null) ?? null,
     scheduledType: (f.scheduledType as ScheduledType) ?? ScheduledType.NONE,
+    reminderTime: (f.reminderTime as string | null) ?? null,
     dueDate: (f.dueDate as string | null) ?? null,
     bucket: (f.bucket as TaskBucket) ?? TaskBucket.INBOX,
     status: (f.status as TaskStatus) ?? TaskStatus.ACTIVE,

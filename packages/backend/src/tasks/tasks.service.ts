@@ -191,6 +191,14 @@ export class TasksService {
     if (dto.scheduledType !== undefined) {
       data.scheduledType = newScheduledType;
     }
+    // Reminder 清理规则（reminders spec）：ScheduledType 离开 DATE 时
+    // 一律清除提醒，防止残留提醒在 Someday/NONE 任务上到期触发；
+    // 换日期（DATE → DATE）保留 reminderTime 不变。
+    if (newScheduledType !== ScheduledType.DATE) {
+      data.reminderTime = null;
+    } else if (dto.reminderTime !== undefined) {
+      data.reminderTime = dto.reminderTime;
+    }
     if (dto.dueDate !== undefined) {
       data.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
     }
@@ -242,7 +250,8 @@ export class TasksService {
     const now = new Date();
     await this.prisma.task.updateMany({
       where: { id, userId },
-      data: { trashedAt: now },
+      // 移入 Trash 清除提醒（reminders spec）：被丢弃的工作不再通知。
+      data: { trashedAt: now, reminderTime: null },
     });
 
     return { id, trashedAt: now };
@@ -356,11 +365,13 @@ export class TasksService {
     }
 
     // 终态可直接改写（ADR 0006）：COMPLETED ↔ CANCELLED 切换时刷新 settledAt。
+    // 了结清除提醒（reminders spec）：已完成/取消的工作不再通知。
     const updated = await this.prisma.task.update({
       where: { id },
       data: {
         status: TaskStatus.COMPLETED,
         settledAt: new Date(),
+        reminderTime: null,
       },
     });
     return settledToCompletedAt(updated);
@@ -393,11 +404,13 @@ export class TasksService {
     }
 
     // 取消父 Task 不改动其 Subtasks（与 complete 行为一致，见 CONTEXT.md）。
+    // 了结清除提醒（reminders spec）：已完成/取消的工作不再通知。
     const updated = await this.prisma.task.update({
       where: { id },
       data: {
         status: TaskStatus.CANCELLED,
         settledAt: new Date(),
+        reminderTime: null,
       },
     });
     return settledToCompletedAt(updated);

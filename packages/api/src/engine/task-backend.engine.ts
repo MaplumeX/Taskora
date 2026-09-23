@@ -127,6 +127,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         scheduledDate:
           scheduledType === ScheduledType.DATE && data.scheduledDate ? data.scheduledDate : null,
         scheduledType,
+        reminderTime: null,
         dueDate: data.dueDate ?? null,
         bucket,
         status: TaskStatus.ACTIVE,
@@ -189,6 +190,14 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         patch.scheduledType = newScheduledType;
         patch.scheduledDate = effectiveScheduledDate;
       }
+      // Reminder 清理规则（reminders spec）：ScheduledType 离开 DATE 时
+      // 一律清除提醒，防止残留提醒在 Someday/NONE 任务上到期触发；
+      // 换日期（DATE → DATE）保留 reminderTime 不变（同一天同一时刻新一天）。
+      if (newScheduledType !== ScheduledType.DATE) {
+        patch.reminderTime = null;
+      } else if (data.reminderTime !== undefined) {
+        patch.reminderTime = data.reminderTime;
+      }
       if (data.dueDate !== undefined) patch.dueDate = data.dueDate;
       if (data.bucket !== undefined || 'scheduledType' in patch) patch.bucket = bucket;
       if (data.projectId !== undefined) patch.projectId = data.projectId;
@@ -210,7 +219,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     },
 
     async deleteTask(id: string): Promise<void> {
-      await engine.update('task', id, { trashedAt: new Date().toISOString() });
+      // 移入 Trash 清除提醒（reminders spec）：被丢弃的工作不再通知。
+      await engine.update('task', id, { trashedAt: new Date().toISOString(), reminderTime: null });
     },
 
     async restoreTask(id: string): Promise<TaskResponseDto> {
@@ -226,9 +236,11 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     async completeTask(id: string): Promise<TaskResponseDto> {
       const existing = await engine.get('task', id);
       if (existing?.fields.status === TaskStatus.COMPLETED) return taskDto(id);
+      // 了结清除提醒（reminders spec）：已完成/取消的工作不再通知。
       await engine.update('task', id, {
         status: TaskStatus.COMPLETED,
         settledAt: new Date().toISOString(),
+        reminderTime: null,
       });
       return taskDto(id);
     },
@@ -240,9 +252,11 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
 
     async cancelTask(id: string): Promise<TaskResponseDto> {
       // 取消已完成的任务直接改写终态（CONTEXT.md：Cancelled）。
+      // 了结清除提醒（reminders spec）：已完成/取消的工作不再通知。
       await engine.update('task', id, {
         status: TaskStatus.CANCELLED,
         settledAt: new Date().toISOString(),
+        reminderTime: null,
       });
       return taskDto(id);
     },
@@ -472,6 +486,7 @@ function projectRowToFeedItem(
     notes: (f.notes as string | null) ?? null,
     scheduledDate: (f.scheduledDate as string | null) ?? null,
     scheduledType: (f.scheduledType as ScheduledType) ?? ScheduledType.NONE,
+    reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
     dueDate: (f.dueDate as string | null) ?? null,
     status: (f.status as ProjectStatus) ?? ProjectStatus.ACTIVE,
     bucket: (f.bucket as ProjectBucket) ?? ProjectBucket.ANYTIME,

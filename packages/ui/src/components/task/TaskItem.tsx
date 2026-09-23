@@ -12,6 +12,7 @@ import { TaskCheckbox } from './TaskCheckbox';
 import { TaskContextMenu } from './TaskContextMenu';
 import { TaskDateBadge } from './TaskDateBadge';
 import { TaskDueDateBadge } from './TaskDueDateBadge';
+import { TaskReminderBadge } from './TaskReminderBadge';
 import { TaskRowExpanded } from './TaskRowExpanded';
 import type { SelectionState } from '@taskora/api';
 
@@ -207,6 +208,9 @@ export function TaskItem({
               className="shrink-0"
             />
           )}
+          {/* 提醒徽标不受 showScheduledBadge 限制：Today/Scheduled 等视图
+              不展示日期徽标时仍能看到提醒时刻（reminders spec）。 */}
+          <TaskReminderBadge reminderTime={current.reminderTime} className="shrink-0" />
           <TaskDueDateBadge dueDate={current.dueDate} className="shrink-0" />
 
         </div>
