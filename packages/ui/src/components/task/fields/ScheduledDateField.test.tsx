@@ -175,6 +175,23 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
     ).not.toBeInTheDocument();
   });
 
+  it('点击「明天」→ patch 明天的日期（DATE 型）', async () => {
+    const user = userEvent.setup();
+    vi.setSystemTime(now);
+    const { onPatch } = renderField(
+      { scheduledType: ScheduledType.NONE },
+      { showReminder: true },
+    );
+
+    await user.click(screen.getByRole('button', { name: /^Tomorrow|明天$/ }));
+    const expected = new Date(2026, 1, 5);
+    expected.setHours(0, 0, 0, 0);
+    expect(onPatch).toHaveBeenCalledWith({
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: expected.toISOString(),
+    });
+  });
+
   it('授权刷新在提醒区打开时触发（拒绝状态跨会话可见）', async () => {
     const refresh = vi.fn(async () => undefined);
     useReminderPermissionStore.setState({ refresh });
