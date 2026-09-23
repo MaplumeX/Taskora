@@ -86,6 +86,13 @@ pub fn run() {
             // Second instance launched: bring the existing window to front.
             show_main_window(app);
         }))
+        // 开机自启（desktop-v1 spec V1.x）：注册系统登录启动项，开关由
+        // 设置「通用」页通过 autostart 插件命令控制。macOS 走 LaunchAgent
+        //（不弹终端、随应用卸载清理），参数传 `--hidden` 供静默启动使用。
+        .plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            Some(vec!["--hidden"]),
+        ))
         .plugin(
             tauri_plugin_global_shortcut::Builder::new()
                 .with_shortcuts([QUICK_ADD_SHORTCUT])
@@ -139,6 +146,14 @@ pub fn run() {
                     }
                 })
                 .build(app)?;
+            // 开机自启的 --hidden 启动：主窗口隐藏、仅托盘常驻，避免登录时
+            // 弹窗打扰；用户从托盘 / 快捷键 / 再次启动随时唤出。手动启动
+            // 不带参数，行为不变。
+            if std::env::args().any(|arg| arg == "--hidden") {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.hide();
+                }
+            }
             // Local Replica 状态注册（ADR-0007）。注意：Builder 的 setup /
             // invoke_handler 都是「替换」语义，不能由模块各自链一次 ——
             // v0.4.0 曾因此让 sqlite::install 覆盖掉 session 命令注册与

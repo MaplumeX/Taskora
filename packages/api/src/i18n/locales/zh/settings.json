@@ -1,4 +1,9 @@
 {
+  "general": "通用",
+  "generalSettings": "通用设置",
+  "launchAtLogin": "登录时自动启动",
+  "launchAtLoginHint": "开机登录后 Taskora 将在后台启动并常驻托盘，不弹出窗口。",
+  "launchAtLoginFailed": "设置自动启动失败",
   "appearance": "外观",
   "account": "账户",
   "data": "数据",

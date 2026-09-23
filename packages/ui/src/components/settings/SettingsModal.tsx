@@ -1,6 +1,6 @@
 import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SunMedium, User, Download, Info, Bot, type LucideIcon } from 'lucide-react';
+import { SunMedium, User, Download, Info, Bot, SlidersHorizontal, type LucideIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -13,10 +13,14 @@ import {
 import { useUiInteractionStore, type SettingsTab } from '@taskora/api';
 
 const SettingsAppearance = lazy(() => import('@/components/settings/SettingsAppearance'));
+const SettingsGeneral = lazy(() => import('@/components/settings/SettingsGeneral'));
 const SettingsAccount = lazy(() => import('@/components/settings/SettingsAccount'));
 const SettingsData = lazy(() => import('@/components/settings/SettingsData'));
 const SettingsAbout = lazy(() => import('@/components/settings/SettingsAbout'));
 const SettingsAssistant = lazy(() => import('@/components/settings/SettingsAssistant'));
+
+/** 桌面端专属设置（如开机自启）只在 Tauri 运行时出现，Web 版不渲染。 */
+const isDesktopRuntime = () => '__TAURI_INTERNALS__' in globalThis;
 
 interface SettingsNavItem {
   tab: SettingsTab;
@@ -25,6 +29,7 @@ interface SettingsNavItem {
 }
 
 const settingsNav: SettingsNavItem[] = [
+  { tab: 'general', labelKey: 'settings:general', icon: SlidersHorizontal },
   { tab: 'appearance', labelKey: 'settings:appearance', icon: SunMedium },
   { tab: 'account', labelKey: 'settings:account', icon: User },
   { tab: 'data', labelKey: 'settings:data', icon: Download },
@@ -41,6 +46,8 @@ export function SettingsModal() {
 
   const renderContent = () => {
     switch (settingsTab) {
+      case 'general':
+        return <SettingsGeneral />;
       case 'appearance':
         return <SettingsAppearance />;
       case 'account':
@@ -69,6 +76,8 @@ export function SettingsModal() {
             >
               {settingsNav.map((item) => {
                 const Icon = item.icon;
+                // 「通用」页含桌面专属系统设置，Web 端隐藏该入口。
+                if (item.tab === 'general' && !isDesktopRuntime()) return null;
                 const active = item.tab === settingsTab;
                 return (
                   <li key={item.tab} className="shrink-0">
