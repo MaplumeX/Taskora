@@ -88,3 +88,24 @@ Status: ready-for-agent
 - Timezone semantics: Scheduled Date + reminderTime interpreted in device local timezone; no timezone stored. Cross-timezone travel may shift the wall-clock firing time; accepted for this version.
 - Duplicate notifications across multiple devices are expected and accepted (matches Things 3).
 - CONTEXT.md has been updated with the Reminder term during the design session.
+
+## Comments
+
+### 2026-09-23 — Implementation (a471822)
+
+Implemented on `feat/reminder-time-in-schedule-popover` (a471822). Notes
+on two deliberate deviations from the letter of the spec:
+
+- **Story 16 (tap opens/focuses the app)**: On Android, tapping the
+  notification opens the app (standard plugin/activity behavior). On
+  desktop, `tauri-plugin-notification` does not expose click callbacks,
+  so a desktop notification click does not focus the window this
+  version; the window/tray/global-shortcut re-entry points remain. The
+  deferred deep-link carve-out is unaffected.
+- **Story 10 (system-level scheduling)**: implemented via the
+  notification plugin's `Schedule.at` (AlarmManager on Android), with
+  `allowWhileIdle: true` and a dedicated `reminders` channel.
+
+Also noted: opening system notification settings on Linux desktops has
+no standard URI — the action returns an error there and is silently
+ignored (the notice still shows).
