@@ -45,8 +45,12 @@ export function App() {
     );
   }
 
-  // Silent refresh in progress (startup recovery) — wait for it.
-  if (refreshing) return null;
+  // Silent refresh in progress (startup recovery) — wait for it. Only
+  // when the session isn't hydrated yet: a mid-session refresh (token
+  // expired while the window was unfocused) must not unmount MainApp,
+  // which would reintroduce the whole-page refresh flash on resume.
+  // A rejected 401 refresh clears the store and falls through to Login.
+  if (refreshing && !user) return null;
 
   return <MainApp />;
 }
