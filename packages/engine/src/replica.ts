@@ -118,6 +118,11 @@ export class LocalReplica {
     if (taskColumns.length > 0 && !taskColumns.some((column) => column.name === 'reminderTime')) {
       await this.storage.exec('ALTER TABLE task ADD COLUMN reminderTime TEXT');
     }
+    // Recurring tasks feature（recurring-tasks spec）：task 增加 repeatRule 列
+    // （JSON 文本：规范形规则对象）。新库由 DDL 直接带列；旧库按需 ALTER。
+    if (taskColumns.length > 0 && !taskColumns.some((column) => column.name === 'repeatRule')) {
+      await this.storage.exec('ALTER TABLE task ADD COLUMN repeatRule TEXT');
+    }
     await this.metaSet('deviceId', this.options.deviceId);
     const saved = await this.metaGet('hlc');
     if (saved) {
@@ -217,7 +222,8 @@ export class LocalReplica {
       if (provided !== undefined) {
         fields[field.name] = normalizeWriteValue(field, provided);
       } else if (field.json) {
-        fields[field.name] = [];
+        // tagIds 缺省 []（关系数组）；其余 JSON 字段（repeatRule 规则对象）缺省 null
+        fields[field.name] = field.name === 'tagIds' ? [] : null;
       } else if (field.name === 'createdAt' || field.name === 'updatedAt') {
         fields[field.name] = nowIso;
       } else {
@@ -284,6 +290,16 @@ export class LocalReplica {
   async requestDelete(entity: SyncEntity, ids: string[]): Promise<void> {
     if (ids.length === 0) return;
     return this.serialized(() => this.requestDeleteInternal(entity, ids));
+  }
+
+  /**
+   * 该 id 是否已被 compact（本地删除、远端 Compact Event 或 bootstrap
+   * 登记过的）。Repeat 派生用它判断确定性 id 是否已「死」——已 compact
+   * 的 id 无法经 hub 复活（ADR-0008：复活必须换新 id），派生需回退到
+   * 新生成的 id（ADR-0012 的重派生路径）。
+   */
+  isCompacted(entity: SyncEntity, id: string): boolean {
+    return this.compacted.has(`${entity}:${id}`);
   }
 
   private async requestDeleteInternal(entity: SyncEntity, ids: string[]): Promise<void> {

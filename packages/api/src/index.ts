@@ -152,6 +152,10 @@ export {
 
 // Utilities
 export * from './utils/date';
+
+// Repeat Rule 纯函数（recurring-tasks spec）：规则编辑器的实时预览与
+// 规范化写入共用 @taskora/engine 的同一实现（跨端派生 id 一致的前提）。
+export { normalizeRepeatRule, nextOccurrenceDate } from '@taskora/engine';
 export { setAppVersion, getAppVersion } from './utils/appInfo';
 export {
   normalizePreferences,

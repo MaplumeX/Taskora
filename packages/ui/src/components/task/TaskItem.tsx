@@ -13,6 +13,7 @@ import { TaskContextMenu } from './TaskContextMenu';
 import { TaskDateBadge } from './TaskDateBadge';
 import { TaskDueDateBadge } from './TaskDueDateBadge';
 import { TaskReminderBadge } from './TaskReminderBadge';
+import { TaskRepeatBadge } from './TaskRepeatBadge';
 import { TaskRowExpanded } from './TaskRowExpanded';
 import type { SelectionState } from '@taskora/api';
 
@@ -101,17 +102,22 @@ export function TaskItem({
   return (
     <div
       data-task-item
-      aria-selected={selectionState === 'selected' || selectionState === 'expanded' ? true : undefined}
+      aria-selected={
+        selectionState === 'selected' || selectionState === 'expanded' ? true : undefined
+      }
       className={cn(
         'group flex flex-col transition-colors',
         selectionState === 'selected' && 'bg-accent rounded-lg',
-        selectionState === 'expanded' &&
-          'rounded-xl border border-border/60 bg-card shadow-soft'
+        selectionState === 'expanded' && 'rounded-xl border border-border/60 bg-card shadow-soft',
       )}
       onKeyDown={(e) => {
         if (!expanded || e.key !== 'Escape' || !onRowClick) return;
         const target = e.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        if (
+          target.tagName === 'INPUT' ||
+          target.tagName === 'TEXTAREA' ||
+          target.isContentEditable
+        ) {
           e.preventDefault();
           // 收起前先把焦点还给行本身，避免输入框卸载后焦点落到 body。
           rowRef.current?.focus();
@@ -140,80 +146,80 @@ export function TaskItem({
           }}
           role={onRowClick ? 'button' : undefined}
         >
-        <TaskCheckbox checked={completed} cancelled={cancelled} onToggle={handleToggle} />
+          <TaskCheckbox checked={completed} cancelled={cancelled} onToggle={handleToggle} />
 
-        {expanded ? (
-          <Input
-            ref={titleInputRef}
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={commitTitle}
-            placeholder={t('task:newTaskPlaceholder')}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.stopPropagation();
-                e.preventDefault();
-                // Enter（含 ⌘Enter/Ctrl+Enter）：先 blur 触发提交，再收起，
-                // 避免出现「退出编辑」与「收起」拆成两次按键的中间态。
-                e.currentTarget.blur();
-                rowRef.current?.focus();
-                onRowClick?.();
-              } else if (e.key === ' ') {
-                e.stopPropagation();
-              } else if (e.key === 'Escape') {
-                setTitle(current.title);
-                e.currentTarget.blur();
-              }
-            }}
-            onClick={(e) => e.stopPropagation()}
-            className={cn(
-              'flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
-              settled && 'text-muted-foreground line-through',
-            )}
-          />
-        ) : (
-          <span
-            className={cn(
-              'flex-1 truncate text-left text-sm transition-colors',
-              settled
-                ? 'text-muted-foreground line-through'
-                : current.title
-                  ? 'text-foreground'
-                  : 'text-muted-foreground',
-            )}
-          >
-            {current.title || t('task:newTaskPlaceholder')}
-          </span>
-        )}
-
-        <div className="flex min-w-0 shrink items-center gap-2">
-          {current.tags && current.tags.length > 0 && (
-            <div className="hidden items-center gap-1 md:flex">
-              {current.tags.slice(0, 5).map((tag) => (
-                <span
-                  key={tag.id}
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: tag.color }}
-                  title={tag.title}
-                />
-              ))}
-            </div>
-          )}
-          {tag && (
-            <span className="hidden max-w-24 truncate text-xs text-muted-foreground md:inline">{tag}</span>
-          )}
-          {showScheduledBadge && (
-            <TaskDateBadge
-              scheduledDate={current.scheduledDate}
-              className="shrink-0"
+          {expanded ? (
+            <Input
+              ref={titleInputRef}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={commitTitle}
+              placeholder={t('task:newTaskPlaceholder')}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.stopPropagation();
+                  e.preventDefault();
+                  // Enter（含 ⌘Enter/Ctrl+Enter）：先 blur 触发提交，再收起，
+                  // 避免出现「退出编辑」与「收起」拆成两次按键的中间态。
+                  e.currentTarget.blur();
+                  rowRef.current?.focus();
+                  onRowClick?.();
+                } else if (e.key === ' ') {
+                  e.stopPropagation();
+                } else if (e.key === 'Escape') {
+                  setTitle(current.title);
+                  e.currentTarget.blur();
+                }
+              }}
+              onClick={(e) => e.stopPropagation()}
+              className={cn(
+                'flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
+                settled && 'text-muted-foreground line-through',
+              )}
             />
+          ) : (
+            <span
+              className={cn(
+                'flex-1 truncate text-left text-sm transition-colors',
+                settled
+                  ? 'text-muted-foreground line-through'
+                  : current.title
+                    ? 'text-foreground'
+                    : 'text-muted-foreground',
+              )}
+            >
+              {current.title || t('task:newTaskPlaceholder')}
+            </span>
           )}
-          {/* 提醒徽标不受 showScheduledBadge 限制：Today/Scheduled 等视图
-              不展示日期徽标时仍能看到提醒时刻（reminders spec）。 */}
-          <TaskReminderBadge reminderTime={current.reminderTime} className="shrink-0" />
-          <TaskDueDateBadge dueDate={current.dueDate} className="shrink-0" />
 
-        </div>
+          <div className="flex min-w-0 shrink items-center gap-2">
+            {current.tags && current.tags.length > 0 && (
+              <div className="hidden items-center gap-1 md:flex">
+                {current.tags.slice(0, 5).map((tag) => (
+                  <span
+                    key={tag.id}
+                    className="h-2 w-2 rounded-full"
+                    style={{ backgroundColor: tag.color }}
+                    title={tag.title}
+                  />
+                ))}
+              </div>
+            )}
+            {tag && (
+              <span className="hidden max-w-24 truncate text-xs text-muted-foreground md:inline">
+                {tag}
+              </span>
+            )}
+            {showScheduledBadge && (
+              <TaskDateBadge scheduledDate={current.scheduledDate} className="shrink-0" />
+            )}
+            {/* 提醒徽标不受 showScheduledBadge 限制：Today/Scheduled 等视图
+              不展示日期徽标时仍能看到提醒时刻（reminders spec）。 */}
+            <TaskReminderBadge reminderTime={current.reminderTime} className="shrink-0" />
+            {/* 重复徽标：设了 Repeat Rule 的任务一眼可见（recurring-tasks spec）。 */}
+            <TaskRepeatBadge repeatRule={current.repeatRule} className="shrink-0" />
+            <TaskDueDateBadge dueDate={current.dueDate} className="shrink-0" />
+          </div>
         </div>
       </TaskContextMenu>
 

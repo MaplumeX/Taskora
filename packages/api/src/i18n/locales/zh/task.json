@@ -39,5 +39,19 @@
   "reminder": "提醒",
   "reminderTime": "提醒时间",
   "reminderDisabledNotice": "系统通知已禁用",
-  "reminderOpenSettings": "打开设置"
+  "reminderOpenSettings": "打开设置",
+  "repeat": "重复",
+  "repeatUnit-day": "天",
+  "repeatUnit-week": "周",
+  "repeatUnit-month": "月",
+  "repeatUnit-year": "年",
+  "repeatInterval": "重复间隔",
+  "repeatIntervalMinus": "减小重复间隔",
+  "repeatIntervalPlus": "增大重复间隔",
+  "repeatWeekdays": "周模式星期几",
+  "repeatAfterCompletion": "从完成日期算",
+  "repeatUntil": "直到",
+  "repeatNextPreview": "下次：{{date}}",
+  "repeatEnded": "已到最后一次重复",
+  "repeatUnit": "重复单位"
 }

@@ -13,6 +13,23 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **recurring-tasks**: Repeating Tasks — attach a Repeat Rule to a
+  scheduled Task (unit day/week/month/year × interval N, optional weekday
+  pattern for week rules, "after completion" anchor option, optional
+  `until` end date). Completing a repeating Task immediately derives the
+  next occurrence: a plain Task carrying the same rule, landing in
+  Upcoming (future) or Today (overdue), with title/notes/tags/reminder/
+  placement copied and subtasks reset to active. Multi-device concurrent
+  completion converges on exactly one next instance via deterministic id
+  derivation (`hash(parentTaskId, canonicalRule, occurrenceDate)`,
+  ADR-0012) — the sync hub stays a dumb merger with zero business-logic
+  changes. Rule edits fork the chain by design; cancelling ends it;
+  moving to Someday/None clears the rule; settling keeps it for Logbook
+  provenance; un-completing deletes the derived instance. The rule
+  editor lives in the scheduling popover (visible only for date-
+  scheduled Tasks, never Projects) with a live "next occurrence"
+  preview; Task rows show a ↻ badge. Web clients get the same editor
+  with server-side derivation on the REST complete path.
 - **reminders**: Task reminder times — set a time-of-day (HH:mm)
   reminder in the scheduling popover while a Task is scheduled to a
   date. Desktop fires the notification from a runtime scheduler while

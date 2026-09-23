@@ -1,6 +1,9 @@
 import type { TagResponseDto } from './tag.dto';
 import type { SubtaskResponseDto } from './subtask.dto';
+import type { RepeatRule } from './repeat-rule.dto';
 import { TaskBucket, TaskStatus, ScheduledType } from '../enums/task.enum';
+
+export type { RepeatRule, RepeatUnit, RepeatAnchor } from './repeat-rule.dto';
 
 export interface CreateTaskDto {
   title: string;
@@ -21,6 +24,11 @@ export interface UpdateTaskDto {
   scheduledType?: ScheduledType;
   /** 提醒时刻（Reminder，HH:mm，本地时区语义）：仅 ScheduledType 为 DATE 时有效；null 清除。 */
   reminderTime?: string | null;
+  /**
+   * 重复规则（Repeat Rule）：仅 ScheduledType 为 DATE 时有效；离开 DATE
+   * 时数据层自动清除（null）。写入时归一化为规范形（派生 id 依赖稳定输入）。
+   */
+  repeatRule?: RepeatRule | null;
   dueDate?: string | null;
   bucket?: TaskBucket;
   projectId?: string | null;
@@ -36,6 +44,8 @@ export interface TaskResponseDto {
   scheduledType: ScheduledType;
   /** 提醒时刻（Reminder，HH:mm）：依附于计划日期，到点由客户端本地触发系统通知；null 表示未设置。 */
   reminderTime: string | null;
+  /** 重复规则（Repeat Rule）：完成后按规则派生下一实例；已了结任务保留该字段作 Logbook 溯源；null 表示未设置。 */
+  repeatRule: RepeatRule | null;
   dueDate: string | null; // 通知日期（新增）
   bucket: TaskBucket;
   status: TaskStatus;

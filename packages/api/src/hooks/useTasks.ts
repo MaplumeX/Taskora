@@ -103,6 +103,7 @@ export function useCreateTask() {
         scheduledDate: data.scheduledDate ?? null,
         scheduledType: data.scheduledType ?? ScheduledType.NONE,
         reminderTime: null,
+        repeatRule: null,
         dueDate: data.dueDate ?? null,
         bucket: data.bucket ?? TaskBucket.INBOX,
         status: TaskStatus.ACTIVE,
@@ -389,9 +390,7 @@ export function useReorderTasks() {
         // 列表（其它项目/视图）保持原序，避免 comparator 对非成员返回 0
         // 造成的未定义交错，等 onSettled 拉平。
         if (!old.every((task) => orderMap.has(task.id))) return old;
-        return [...old].sort(
-          (a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0),
-        );
+        return [...old].sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
       });
     },
     onError: () => {

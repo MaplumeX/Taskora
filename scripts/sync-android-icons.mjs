@@ -2,7 +2,7 @@ import { cpSync, existsSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
-const root = resolve(fileURLToPath(new URL('..', import.meta.url)))
+const root = resolve(fileURLToPath(new globalThis.URL('..', import.meta.url)))
 const icons = join(root, 'packages/mobile/src-tauri/icons/android')
 const android = process.argv[2]
   ? resolve(process.argv[2])

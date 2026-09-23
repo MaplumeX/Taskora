@@ -33,6 +33,18 @@ _Avoid_: Section
 Task 上的一个时刻（HH:mm），依附于计划日期（Scheduled Date），到点由各客户端本地触发系统通知；仅 ScheduledType 为 DATE 的 Task 可设。Project 不设 Reminder。
 _Avoid_: 闹钟、alarm、通知时间（Reminder 是数据，通知是其触发效果）
 
+**Repeat Rule（重复规则）**:
+Task 上的一个结构化规则字段（单位 × 间隔 × 周模式的星期几集合），声明该 Task 完成后按规则再现；锚点默认从计划日期推算，可选从完成日期推算。仅 ScheduledType 为 DATE 的 Task 可设；移入 Someday/NONE 时自动清除。Project 不设 Repeat Rule。
+_Avoid_: 循环、周期任务、RRULE、模板（无独立模板实体）
+
+**Repeat Instance（重复实例）**:
+带 Repeat Rule 的 Task 完成时由客户端按规则派生出的下一个 Task，携带相同规则使链得以延续。是普通 Task 而非特殊实体；未来日期落 Upcoming，逾期落 Today。
+_Avoid_: 副本、克隆（实例是正式任务，不是复制品）
+
+**Repeat Chain（重复链）**:
+同一规则沿 Task 字段传递形成的实例序列；无中心模板，编辑某实例的规则只影响该实例及其后代，链自然分叉。链在取消、移出日期或到达 until 日期时终结。
+_Avoid_: 系列、模板实例（链是结果不是投影）
+
 **Bucket**:
 按状态/时间过滤出的任务视图：Inbox、Anytime、Scheduled、Someday、Today、Upcoming、Logbook、Trash。不是存储位置。
 _Avoid_: 列表、filter、缓存

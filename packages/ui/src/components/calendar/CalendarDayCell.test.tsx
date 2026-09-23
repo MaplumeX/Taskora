@@ -26,6 +26,7 @@ function task(id: string, dueDate: string | null, status = TaskStatus.ACTIVE): T
     scheduledDate: null,
     scheduledType: ScheduledType.NONE,
     reminderTime: null,
+    repeatRule: null,
     dueDate,
     bucket: TaskBucket.INBOX,
     status,

@@ -36,6 +36,7 @@ describe('TasksService — logbook view', () => {
         settledAt: new Date('2025-07-24T10:00:00Z'),
         bucket: TaskBucket.INBOX,
         userId,
+        repeatRule: null,
         tags: [],
       },
       {
@@ -45,6 +46,7 @@ describe('TasksService — logbook view', () => {
         settledAt: new Date('2025-07-25T10:00:00Z'),
         bucket: TaskBucket.INBOX,
         userId,
+        repeatRule: null,
         tags: [],
       },
     ];
@@ -113,6 +115,7 @@ describe('TasksService — logbook view', () => {
         settledAt: new Date('2025-07-25T10:00:00Z'),
         bucket: TaskBucket.INBOX,
         userId,
+        repeatRule: null,
         tags: [],
       },
     ]);

@@ -1,17 +1,11 @@
 import type { TagResponseDto } from './tag.dto';
+import type { RepeatRule } from './repeat-rule.dto';
 import { ScheduledType, TaskStatus, TaskBucket } from '../enums/task.enum';
 import { ProjectStatus, ProjectBucket } from '../enums/project.enum';
 
 export type FeedItemType = 'task' | 'project';
 
-export type FeedView =
-  | 'inbox'
-  | 'today'
-  | 'upcoming'
-  | 'anytime'
-  | 'someday'
-  | 'trash'
-  | 'logbook';
+export type FeedView = 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
 
 export interface FeedItemBase {
   id: string;
@@ -22,6 +16,8 @@ export interface FeedItemBase {
   scheduledType: ScheduledType;
   /** 提醒时刻（Reminder，HH:mm）；project 恒为 null（Project 不设 Reminder）。 */
   reminderTime: string | null;
+  /** 重复规则（Repeat Rule）；project 恒为 null（Project 不设 Repeat Rule）。 */
+  repeatRule: RepeatRule | null;
   dueDate: string | null;
   status: TaskStatus | ProjectStatus;
   bucket: TaskBucket | ProjectBucket;

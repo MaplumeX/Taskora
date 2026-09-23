@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { InMemorySyncHub, openEngine, type Engine } from '@taskora/engine';
+import { InMemorySyncHub, deriveRepeatInstanceId, openEngine, type Engine } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
 import {
   ScheduledType,
@@ -498,5 +498,346 @@ describe('EngineTaskBackend — Reminder 清理规则（reminders spec）', () =
     expect((await a.get('task', task.id))?.fields.reminderTime).toBe('20:00');
     await a.close();
     await b.close();
+  });
+});
+
+describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () => {
+  let engine: Engine;
+  let backend: ReturnType<typeof createEngineTaskBackend>;
+
+  /** 相对当前 UTC 日的日期键（±N 天）。 */
+  const utcDay = (offset: number): string =>
+    new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+
+  beforeEach(async () => {
+    const storage = await createNodeSqliteStorage(':memory:');
+    const hub = new InMemorySyncHub();
+    engine = await openEngine({
+      storage,
+      deviceId: 'dev-repeat',
+      transport: hub.transportFor(USER),
+    });
+    backend = createEngineTaskBackend({ engine });
+    setTaskBackend(backend);
+  });
+
+  it('DATE 任务可设置/修改/清除规则；写入归一化为规范形；换日期保留规则', async () => {
+    const task = await backend.createTask({
+      title: '浇花',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2026-02-01',
+    });
+    expect(task.repeatRule).toBeNull();
+
+    // 冗余 weekdays（day 单位）被归一化剥离
+    const withRule = await backend.updateTask(task.id, {
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled', weekdays: [1, 2] },
+    });
+    expect(withRule.repeatRule).toEqual({ unit: 'day', interval: 1, anchor: 'scheduled' });
+
+    // DATE → DATE：只换日期，规则保留
+    const moved = await backend.updateTask(task.id, { scheduledDate: '2026-03-05' });
+    expect(moved.repeatRule).toEqual({ unit: 'day', interval: 1, anchor: 'scheduled' });
+
+    // 非法规则对象被忽略（不写垃圾、不清除既有规则）
+    const bogus = await backend.updateTask(task.id, {
+      repeatRule: { unit: 'hour', interval: 1, anchor: 'scheduled' } as never,
+    });
+    expect(bogus.repeatRule).toEqual({ unit: 'day', interval: 1, anchor: 'scheduled' });
+
+    const off = await backend.updateTask(task.id, { repeatRule: null });
+    expect(off.repeatRule).toBeNull();
+  });
+
+  it('ScheduledType 离开 DATE（Someday / NONE）自动清除规则（规则无锚即无意义）', async () => {
+    const task = await backend.createTask({
+      title: '月度备份',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2026-02-01',
+    });
+    await backend.updateTask(task.id, {
+      repeatRule: { unit: 'month', interval: 1, anchor: 'completion' },
+    });
+
+    const someday = await backend.updateTask(task.id, { scheduledType: ScheduledType.SOMEDAY });
+    expect(someday.repeatRule).toBeNull();
+
+    await backend.updateTask(task.id, {
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2026-02-02',
+    });
+    await backend.updateTask(task.id, {
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+    });
+    const cleared = await backend.updateTask(task.id, {
+      scheduledType: ScheduledType.NONE,
+      scheduledDate: null,
+    });
+    expect(cleared.repeatRule).toBeNull();
+  });
+
+  it('完成 → 立刻派生下一实例：复制集完整、子任务重置、逾期落 Today；父任务保留规则', async () => {
+    const tagId = await engine.create('tag', { title: '家务', color: '#3B82F6', tagGroupId: null });
+    const task = await backend.createTask({
+      title: '浇花',
+      notes: '客厅绿植',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(-2),
+      tagIds: [tagId],
+    });
+    await backend.updateTask(task.id, {
+      reminderTime: '09:00',
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+    });
+    const sub1 = await backend.createSubtask(task.id, { title: '客厅' });
+    await backend.createSubtask(task.id, { title: '阳台' });
+    await backend.completeSubtask(sub1.id);
+
+    const expectedId = deriveRepeatInstanceId(
+      task.id,
+      { unit: 'day', interval: 1, anchor: 'scheduled' },
+      utcDay(-1),
+    );
+
+    await backend.completeTask(task.id);
+
+    // 派生实例存在且 id 确定
+    const instanceRow = await engine.get('task', expectedId);
+    expect(instanceRow).not.toBeNull();
+    const instance = await backend.getTask(expectedId);
+    expect(instance.title).toBe('浇花');
+    expect(instance.notes).toBe('客厅绿植');
+    expect(instance.scheduledDate).toBe(utcDay(-1));
+    expect(instance.scheduledType).toBe(ScheduledType.DATE);
+    expect(instance.bucket).toBe(TaskBucket.SCHEDULED);
+    expect(instance.status).toBe(TaskStatus.ACTIVE);
+    expect(instance.reminderTime).toBe('09:00'); // 提醒随实例延续
+    expect(instance.repeatRule).toEqual({ unit: 'day', interval: 1, anchor: 'scheduled' });
+    expect(instance.tags?.map((t) => t.id)).toEqual([tagId]);
+    // 子任务复制为派生实体并重置 ACTIVE
+    expect(instance.subtasks).toHaveLength(2);
+    expect(instance.subtasks?.every((s) => s.status === TaskStatus.ACTIVE)).toBe(true);
+    expect(instance.subtasks?.map((s) => s.title).sort()).toEqual(['客厅', '阳台']);
+
+    // 逾期实例（昨天）落 Today；父任务留在 Logbook 且保留规则作溯源
+    expect((await backend.getFeed('today')).map((i) => i.id)).toContain(expectedId);
+    const parent = await backend.getTask(task.id);
+    expect(parent.status).toBe(TaskStatus.COMPLETED);
+    expect(parent.reminderTime).toBeNull(); // 了结清除提醒（父任务）
+    expect(parent.repeatRule).toEqual({ unit: 'day', interval: 1, anchor: 'scheduled' });
+  });
+
+  it('未来实例落 Upcoming；anchor=completion 从完成日期推算', async () => {
+    // anchor=scheduled：明天的任务完成后天出现 → Upcoming
+    const fixed = await backend.createTask({
+      title: '例会',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(1),
+    });
+    await backend.updateTask(fixed.id, {
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+    });
+    await backend.completeTask(fixed.id);
+    const fixedInstance = (await backend.getTasks({ view: 'upcoming' })).find(
+      (t) => t.title === '例会',
+    );
+    expect(fixedInstance?.scheduledDate).toBe(utcDay(2));
+
+    // anchor=completion：30 天前的任务，今天完成 → 明天出现
+    const gap = await backend.createTask({
+      title: '换床单',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(-30),
+    });
+    await backend.updateTask(gap.id, {
+      repeatRule: { unit: 'day', interval: 1, anchor: 'completion' },
+    });
+    await backend.completeTask(gap.id);
+    const gapInstance = (await backend.getTasks({ view: 'upcoming' })).find(
+      (t) => t.title === '换床单',
+    );
+    expect(gapInstance?.scheduledDate).toBe(utcDay(1));
+  });
+
+  it('到达 until 日期链自动终结：完成后不派生实例', async () => {
+    const task = await backend.createTask({
+      title: '短期项目同步',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(-5),
+    });
+    await backend.updateTask(task.id, {
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled', until: utcDay(-4) },
+    });
+    await backend.completeTask(task.id);
+    // until 含当天：下一次出现 == until（utcDay(-4)）→ 仍派生（最后一次）
+    expect((await engine.list('task')).filter((t) => t.id !== task.id)).toHaveLength(1);
+
+    // until 早于下一次出现 → 链终结，不派生
+    const last = await backend.createTask({
+      title: '已到期的承诺',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(-5),
+    });
+    await backend.updateTask(last.id, {
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled', until: utcDay(-5) },
+    });
+    await backend.completeTask(last.id);
+    expect(
+      (await engine.list('task')).filter((t) => t.id !== task.id && t.id !== last.id),
+    ).toHaveLength(1);
+  });
+
+  it('取消不派生实例；取消后重开（uncancel）无副作用', async () => {
+    const task = await backend.createTask({
+      title: '戒掉的习惯',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(-1),
+    });
+    await backend.updateTask(task.id, {
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+    });
+    const cancelled = await backend.cancelTask(task.id);
+    expect(cancelled.status).toBe(TaskStatus.CANCELLED);
+    expect((await engine.list('task')).filter((t) => t.id !== task.id)).toHaveLength(0);
+
+    // 重开：规则完整保留（Cancel 不清规则，与 Completed 同为 Logbook 溯源）
+    const revived = await backend.uncancelTask(task.id);
+    expect(revived.repeatRule).toEqual({ unit: 'day', interval: 1, anchor: 'scheduled' });
+    expect((await engine.list('task')).filter((t) => t.id !== task.id)).toHaveLength(0);
+  });
+
+  it('重开（uncomplete）取消派生副作用：删除派生实例（含其子任务级联）', async () => {
+    const task = await backend.createTask({
+      title: '浇花',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(-2),
+    });
+    await backend.updateTask(task.id, {
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+    });
+    await backend.createSubtask(task.id, { title: '客厅' });
+    await backend.completeTask(task.id);
+    const instanceId = deriveRepeatInstanceId(
+      task.id,
+      { unit: 'day', interval: 1, anchor: 'scheduled' },
+      utcDay(-1),
+    );
+    expect(await engine.get('task', instanceId)).not.toBeNull();
+    expect(
+      (await engine.list('subtask')).filter((s) => s.fields.taskId === instanceId),
+    ).toHaveLength(1);
+
+    await backend.uncompleteTask(task.id);
+    expect(await engine.get('task', instanceId)).toBeNull();
+    expect(
+      (await engine.list('subtask')).filter((s) => s.fields.taskId === instanceId),
+    ).toHaveLength(0);
+  });
+
+  it('幂等派生：Logbook 恢复（Trash restore）后重新完成不产生重复实例', async () => {
+    const task = await backend.createTask({
+      title: '每周汇报',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(-1),
+    });
+    await backend.updateTask(task.id, {
+      repeatRule: { unit: 'week', interval: 1, anchor: 'scheduled' },
+    });
+    await backend.completeTask(task.id);
+    const instanceId = deriveRepeatInstanceId(
+      task.id,
+      { unit: 'week', interval: 1, anchor: 'scheduled' },
+      utcDay(6),
+    );
+    expect(await engine.get('task', instanceId)).not.toBeNull();
+
+    // 从 Trash 捡回（不删派生实例）→ 重新完成：目标 id 已存在 → 幂等跳过
+    await backend.deleteTask(task.id);
+    await backend.restoreTask(task.id);
+    await backend.completeTask(task.id);
+
+    const tasks = await engine.list('task');
+    expect(tasks).toHaveLength(2); // 父任务 + 唯一实例，无重复
+    expect(await engine.get('task', instanceId)).not.toBeNull();
+  });
+
+  it('两台离线设备并发完成同一重复任务 → 同步后恰好一个实例（ADR-0012）', async () => {
+    const hub = new InMemorySyncHub();
+    const a = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'dev-a',
+      transport: hub.transportFor(USER),
+    });
+    const b = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'dev-b',
+      transport: hub.transportFor(USER),
+    });
+    const backendA = createEngineTaskBackend({ engine: a });
+    const backendB = createEngineTaskBackend({ engine: b });
+
+    const task = await backendA.createTask({
+      title: '跨设备重复',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(-1),
+    });
+    await backendA.updateTask(task.id, {
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+    });
+    await backendA.createSubtask(task.id, { title: '子任务一' });
+    await backendA.createSubtask(task.id, { title: '子任务二' });
+    await a.sync();
+    await b.sync(); // B 拉到任务与规则后离线
+
+    // 两台设备各自离线完成 → 各自本地派生（确定性 id 相同）
+    await backendA.completeTask(task.id);
+    await backendB.completeTask(task.id);
+
+    await a.sync();
+    await b.sync();
+    await a.sync(); // 双向收敛
+
+    const rowsA = await a.list('task');
+    const rowsB = await b.list('task');
+    expect(rowsA).toHaveLength(2); // 父任务 + 恰好一个实例
+    expect(rowsB).toHaveLength(2);
+    const instanceA = rowsA.find((row) => row.id !== task.id)!;
+    const instanceB = rowsB.find((row) => row.id !== task.id)!;
+    expect(instanceA.id).toBe(instanceB.id); // 同一逻辑实例
+    expect(instanceA.fields.title).toBe('跨设备重复');
+    // 实例作为普通 Task 走 LWW：字段一致
+    expect(instanceB.fields.title).toBe('跨设备重复');
+    expect(instanceA.fields.scheduledDate).toBe(instanceB.fields.scheduledDate);
+    // 子任务集合同样收敛（ADR-0012：子任务 id 也确定性派生）
+    const subtasksA = (await a.list('subtask')).filter((s) => s.fields.taskId === instanceA.id);
+    const subtasksB = (await b.list('subtask')).filter((s) => s.fields.taskId === instanceB.id);
+    expect(subtasksA.map((s) => s.id).sort()).toEqual(subtasksB.map((s) => s.id).sort());
+    expect(subtasksA).toHaveLength(2);
+    await a.close();
+    await b.close();
+  });
+
+  it('un-complete → re-complete：确定性 id 已 compact 时换新 id 派生，实例在同步后存活（ADR-0008 复活路径）', async () => {
+    const task = await backend.createTask({
+      title: '手滑党',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(-2),
+    });
+    await backend.updateTask(task.id, {
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+    });
+    await backend.completeTask(task.id);
+    await backend.uncompleteTask(task.id); // 派生实例删除（Delete Request）
+    await backend.completeTask(task.id); // 重新完成 → 重新派生
+
+    // 本地立即存在一个实例（确定性 id 已死 → 新 id）
+    const local = (await engine.list('task')).filter((row) => row.id !== task.id);
+    expect(local).toHaveLength(1);
+
+    // 同步后仍存活：新 id 不在 compact 登记，hub 正常物化
+    await engine.sync();
+    const after = (await engine.list('task')).filter((row) => row.id !== task.id);
+    expect(after).toHaveLength(1);
+    expect(after[0].fields.scheduledDate).toBe(utcDay(-1));
   });
 });

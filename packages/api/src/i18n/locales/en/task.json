@@ -39,5 +39,19 @@
   "reminder": "Reminder",
   "reminderTime": "Reminder time",
   "reminderDisabledNotice": "Notifications are disabled",
-  "reminderOpenSettings": "Open Settings"
+  "reminderOpenSettings": "Open Settings",
+  "repeat": "Repeat",
+  "repeatUnit-day": "days",
+  "repeatUnit-week": "weeks",
+  "repeatUnit-month": "months",
+  "repeatUnit-year": "years",
+  "repeatInterval": "Repeat interval",
+  "repeatIntervalMinus": "Decrease repeat interval",
+  "repeatIntervalPlus": "Increase repeat interval",
+  "repeatWeekdays": "Repeat weekdays",
+  "repeatAfterCompletion": "After completion",
+  "repeatUntil": "Until",
+  "repeatNextPreview": "Next: {{date}}",
+  "repeatEnded": "No further occurrences",
+  "repeatUnit": "Repeat unit"
 }

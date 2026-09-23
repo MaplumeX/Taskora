@@ -1,5 +1,12 @@
 export { HybridClock, compareHlc, formatHlc, hlcWallMs, parseHlc, type HlcParts } from './hlc';
 export {
+  normalizeRepeatRule,
+  canonicalRepeatRule,
+  nextOccurrenceDate,
+  deriveRepeatInstanceId,
+  deriveSubtaskId,
+} from './repeat';
+export {
   BASE_62_DIGITS,
   positionBetween,
   positionsBetween,
@@ -53,4 +60,11 @@ export type {
   SnapshotEntry,
   SyncTransport,
 } from './protocol';
-export { InMemorySyncHub, scrubReferences, VIRTUAL_DEVICE_ID, type InMemorySyncHubOptions, type ReferenceProbe, type ReferenceStatus } from './hub';
+export {
+  InMemorySyncHub,
+  scrubReferences,
+  VIRTUAL_DEVICE_ID,
+  type InMemorySyncHubOptions,
+  type ReferenceProbe,
+  type ReferenceStatus,
+} from './hub';
