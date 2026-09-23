@@ -38,7 +38,13 @@ export function App() {
     return <ServerSetup />;
   }
 
-  if (refreshing) return null;
+  // 无条件刷新等待只保留给「会话尚未恢复」的场景（与 web 端
+  // ProtectedRoute 的 refreshing && !user 同口径）：会话已在时，后台
+  // 超过 token TTL（15 分钟）后回前台，首个同步请求会触发静默
+  // refreshSession，若在此期间卸载 MainApp 会让整个页面重挂载——
+  // 这正是 desktop #45 已修掉的前台刷新问题在 mobile 的复活路径。
+  // refresh 失败（401）时 store 会被 clear，下方自然会切到 Login。
+  if (refreshing && !user) return null;
 
   if (!token && !user) {
     return (
