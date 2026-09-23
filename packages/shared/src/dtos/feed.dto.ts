@@ -20,6 +20,8 @@ export interface FeedItemBase {
   notes: string | null;
   scheduledDate: string | null;
   scheduledType: ScheduledType;
+  /** 提醒时刻（Reminder，HH:mm）；project 恒为 null（Project 不设 Reminder）。 */
+  reminderTime: string | null;
   dueDate: string | null;
   status: TaskStatus | ProjectStatus;
   bucket: TaskBucket | ProjectBucket;

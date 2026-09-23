@@ -8,11 +8,15 @@ import { ScheduledType } from '@taskora/shared';
 export interface ScheduledFieldCurrent {
   scheduledType?: ScheduledType | null;
   scheduledDate?: string | null;
+  /** Reminder（HH:mm）：仅 Task 提供（Project 不设 Reminder）。 */
+  reminderTime?: string | null;
 }
 
 export interface ScheduledFieldPatch {
-  scheduledType: ScheduledType;
+  scheduledType?: ScheduledType;
   scheduledDate?: string | null;
+  /** 开关开启（缺省 09:00）或改时刻时携带；null 表示关闭提醒。 */
+  reminderTime?: string | null;
 }
 
 export interface DueDateFieldCurrent {

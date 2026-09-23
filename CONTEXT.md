@@ -29,6 +29,10 @@ _Avoid_: Section
 **Tag / Tag Group**:
 可带颜色与排序、可附加在 Task/Project/Area 上的标签；Tag Group 是 Tag 的分组容器。
 
+**Reminder**:
+Task 上的一个时刻（HH:mm），依附于计划日期（Scheduled Date），到点由各客户端本地触发系统通知；仅 ScheduledType 为 DATE 的 Task 可设。Project 不设 Reminder。
+_Avoid_: 闹钟、alarm、通知时间（Reminder 是数据，通知是其触发效果）
+
 **Bucket**:
 按状态/时间过滤出的任务视图：Inbox、Anytime、Scheduled、Someday、Today、Upcoming、Logbook、Trash。不是存储位置。
 _Avoid_: 列表、filter、缓存

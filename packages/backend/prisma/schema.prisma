@@ -219,6 +219,7 @@ model Task {
   notes         String?
   scheduledDate DateTime?
   dueDate       DateTime?
+  reminderTime  String?
   bucket        TaskBucket    @default(INBOX)
   scheduledType ScheduledType @default(NONE)
   status        TaskStatus    @default(ACTIVE)

@@ -5,6 +5,7 @@ import {
   IsString,
   IsDateString,
   IsArray,
+  Matches,
 } from 'class-validator';
 import { Transform } from 'class-transformer';
 import { TaskBucket, ScheduledType } from '@taskora/shared';
@@ -63,6 +64,12 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsEnum(ScheduledType)
   scheduledType?: ScheduledType;
+
+  @IsOptional()
+  @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
+    message: 'reminderTime must be an HH:mm time-of-day string',
+  })
+  reminderTime?: string | null;
 
   @IsOptional()
   @IsDateString()

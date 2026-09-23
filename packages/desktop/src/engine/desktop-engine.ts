@@ -30,9 +30,11 @@ import {
   setSyncStatus,
 } from '@taskora/api';
 import { openEngine, type Engine, type SyncEntity } from '@taskora/engine';
+import { createReminderCoordinator, type ReminderCoordinator } from '@taskora/api';
 
 import { createHttpSyncTransport, registerDevice } from './http-transport';
 import { createTauriSqlStorage, isTauriRuntime, useUserReplicaDb } from './tauri-storage';
+import { createDesktopNotificationShell } from '../reminders/tauri-notification-shell';
 
 const DEVICE_ID_KEY = 'taskora.deviceId';
 const SYNC_INTERVAL_MS = 30_000;
@@ -69,6 +71,8 @@ let syncTimer: ReturnType<typeof setInterval> | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribeAuth: (() => void) | null = null;
 let syncInFlight: Promise<boolean> | null = null;
+/** Reminders（reminders spec）：runtime 模式调度器，随 Engine 生命周期启停。 */
+let reminderCoordinator: ReminderCoordinator | null = null;
 
 /** 供诊断/测试：当前 Engine 实例。 */
 export function getDesktopEngine(): Engine | null {
@@ -146,8 +150,16 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
       syncTimer = setInterval(() => void syncNow(), SYNC_INTERVAL_MS);
       window.addEventListener('focus', () => void syncNow());
     }
+    // Reminders：副本变更 + 周期 tick 驱动，到点 fireNow（runtime 模式）。
+    reminderCoordinator = createReminderCoordinator({
+      engine,
+      shell: createDesktopNotificationShell(),
+      mode: 'runtime',
+    });
+    reminderCoordinator.start();
   } catch (error) {
     console.error('[desktop-engine] 装配失败，退回 REST 后端', error);
+    stopReminderCoordinator();
     resetBackends();
     setEventStreamCacheSurgery(true);
     engine = null;
@@ -166,6 +178,7 @@ function resetBackends(): void {
 }
 
 function stopEngine(): void {
+  stopReminderCoordinator();
   resetBackends();
   // 退回 REST 后端：恢复 SSE 缓存手术（web 同款失效路径）
   setEventStreamCacheSurgery(true);
@@ -185,6 +198,11 @@ function stopEngine(): void {
   // 登出丢弃 device id：重新登录分配新 device id（ADR-0007），
   // 本地数据（SQLite 文件）保留。
   globalThis.localStorage?.removeItem(DEVICE_ID_KEY);
+}
+
+function stopReminderCoordinator(): void {
+  reminderCoordinator?.stop();
+  reminderCoordinator = null;
 }
 
 /** flush + pull；并发调用合并为一个在飞任务。成败驱动同步指示器（V2）。 */

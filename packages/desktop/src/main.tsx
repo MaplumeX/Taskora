@@ -78,6 +78,12 @@ async function mount() {
   const { initDesktopEngine } = await import('./engine/desktop-engine');
   initDesktopEngine(queryClient);
 
+  // Reminders（reminders spec）：注册通知薄壳，UI 提醒区据此获得授权
+  // 状态与跳转系统设置能力（web 前端不注册 → 提醒区隐藏）。
+  const { setNotificationShell } = await import('@taskora/api');
+  const { createDesktopNotificationShell } = await import('./reminders/tauri-notification-shell');
+  setNotificationShell(createDesktopNotificationShell());
+
   // quick-add 事件中继：主窗口代为执行 quick-add 的任务创建。
   const { initQuickAddRelay } = await import('./quick-add-relay');
   initQuickAddRelay();

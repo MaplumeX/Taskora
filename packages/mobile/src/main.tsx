@@ -60,6 +60,12 @@ async function mount() {
   const { initMobileEngine } = await import('./engine/mobile-engine');
   initMobileEngine(queryClient);
 
+  // Reminders（reminders spec）：注册通知薄壳，UI 提醒区据此获得授权
+  // 状态与跳转系统设置能力（web 前端不注册 → 提醒区隐藏）。
+  const { setNotificationShell } = await import('@taskora/api');
+  const { createMobileNotificationShell } = await import('./reminders/tauri-notification-shell');
+  setNotificationShell(createMobileNotificationShell());
+
   // 键盘避让（issue 05）：visualViewport → --kb-inset CSS 变量。
   installKeyboardInset();
 
