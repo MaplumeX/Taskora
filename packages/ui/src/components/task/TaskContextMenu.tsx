@@ -14,6 +14,7 @@ import {
 import { MenuRow } from '@/components/common/MenuRow';
 import { useLongPress } from '../../lib/useLongPress';
 import {
+  getClientKind,
   taskKeys,
   useCancelTask,
   useCompleteTask,
@@ -232,6 +233,8 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
               current={current}
               onPatch={patch}
               onClose={() => setActivePicker(null)}
+              showReminder={getClientKind() !== 'web'}
+              showRepeatRule
             />
           )}
           {activePicker === 'due' && (
