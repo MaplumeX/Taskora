@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.59.0",
+    "@tauri-apps/plugin-autostart": "^2.5.0",
     "@taskora/api": "workspace:*",
     "@taskora/engine": "workspace:*",
     "@taskora/shared": "workspace:*",
