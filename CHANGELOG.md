@@ -11,6 +11,8 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-23
+
 ### Added
 
 - **recurring-tasks**: Repeating Tasks — attach a Repeat Rule to a
