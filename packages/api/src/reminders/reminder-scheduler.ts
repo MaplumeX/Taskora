@@ -46,6 +46,22 @@ export function reminderNotificationKey(taskId: string): string {
 }
 
 /**
+ * 任务是否仍符合提醒的数据条件（DATE 型、有计划日、合法 HH:mm、
+ * 未了结未进 Trash）。不含时间判断——协调器用它区分「到点注销」与
+ * 「数据变更注销」（后者绝不补发）。
+ */
+export function isReminderEligible(task: ReminderTaskInput): boolean {
+  return (
+    task.scheduledType === ScheduledType.DATE &&
+    task.status === TaskStatus.ACTIVE &&
+    task.trashedAt == null &&
+    task.scheduledDate != null &&
+    task.reminderTime != null &&
+    HH_MM.test(task.reminderTime)
+  );
+}
+
+/**
  * 计算期望的通知集合。
  *
  * 规则：仅 ScheduledType 为 DATE、有计划日期、有合法 HH:mm 提醒、且
@@ -59,17 +75,8 @@ export function computeReminderPlan(
   const nowMs = now.getTime();
   const plan: ReminderNotification[] = [];
   for (const t of tasks) {
-    if (
-      t.scheduledType !== ScheduledType.DATE ||
-      t.status !== TaskStatus.ACTIVE ||
-      t.trashedAt != null ||
-      t.scheduledDate == null ||
-      t.reminderTime == null ||
-      !HH_MM.test(t.reminderTime)
-    ) {
-      continue;
-    }
-    const fireAt = fireAtOf(t.scheduledDate, t.reminderTime);
+    if (!isReminderEligible(t)) continue;
+    const fireAt = fireAtOf(t.scheduledDate!, t.reminderTime!);
     if (fireAt === null || fireAt <= nowMs) continue;
     plan.push({
       key: reminderNotificationKey(t.id),

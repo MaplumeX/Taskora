@@ -7,8 +7,8 @@
  * （web 前端不注册 → 不支持，符合 spec 的范围划定）。
  */
 
-import type { Engine } from '@taskora/engine';
 import type { ReplicaRow } from '@taskora/engine';
+import { ScheduledType, TaskStatus } from '@taskora/shared';
 
 import type { ReminderTaskInput } from './reminder-scheduler';
 
@@ -63,12 +63,10 @@ export function reminderInputFromReplicaRow(row: ReplicaRow): ReminderTaskInput 
   return {
     id: row.id,
     title: typeof f.title === 'string' ? f.title : '',
-    scheduledType: (f.scheduledType as ReminderTaskInput['scheduledType']) ?? 'NONE',
+    scheduledType: (f.scheduledType as ReminderTaskInput['scheduledType']) ?? ScheduledType.NONE,
     scheduledDate: typeof f.scheduledDate === 'string' ? f.scheduledDate : null,
     reminderTime: typeof f.reminderTime === 'string' ? f.reminderTime : null,
-    status: (f.status as ReminderTaskInput['status']) ?? 'ACTIVE',
+    status: (f.status as ReminderTaskInput['status']) ?? TaskStatus.ACTIVE,
     trashedAt: typeof f.trashedAt === 'string' ? f.trashedAt : null,
   };
 }
-
-export type { Engine };

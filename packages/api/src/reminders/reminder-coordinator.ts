@@ -17,6 +17,7 @@ import type { Engine } from '@taskora/engine';
 import {
   computeReminderPlan,
   diffReminderRegistration,
+  isReminderEligible,
   type ReminderNotification,
 } from './reminder-scheduler';
 import {
@@ -66,14 +67,26 @@ export function createReminderCoordinator(options: ReminderCoordinatorOptions): 
     const nowMs = now().getTime();
     const desired = computeReminderPlan(tasks, now());
     const diff = diffReminderRegistration(registered, desired);
+    const tasksById = new Map(tasks.map((t) => [t.id, t]));
+    // 同 key 改期会在同一批同时出现 cancel + register（新 fireAt），
+ // 此时旧时刻的补发跳过——用户意图是改到新时刻，不是补旧钟。
+    const reRegistering = new Set(diff.register.map((n) => n.key));
 
     // 先注销后注册：同一 key 改期时 cancel 先落到系统侧，随后的
     // schedule 重新登记（否则先 set 后 delete 会把注册表清丢）。
     for (const key of diff.cancel) {
       const m = meta.get(key);
-      // runtime 到点路径：fireAt 已过、尚未触发 → 在注销前补发
-      // （错过的提醒不回放只针对 App 未运行；运行中错过 tick 边界仍应发）。
-      if (mode === 'runtime' && m && m.fireAt <= nowMs) {
+      // runtime 到点路径：App 运行中错过 tick 边界的提醒补发。仅当
+      // 任务本身仍符合提醒条件（未了结/未 Trash/仍为 DATE）且不足
+      // 改期注销——否则（spec story 7）已完结的工作绝不通知。
+      if (
+        mode === 'runtime' &&
+        m &&
+        m.fireAt <= nowMs &&
+        !reRegistering.has(key) &&
+        tasksById.get(m.taskId) != null &&
+        isReminderEligible(tasksById.get(m.taskId)!)
+      ) {
         const { title, body } = texts(m);
         void shell.fireNow(title, body).catch(noop);
       }

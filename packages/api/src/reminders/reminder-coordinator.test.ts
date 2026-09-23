@@ -14,9 +14,11 @@ function makeShell() {
     isSupported: vi.fn(() => true),
     isPermissionGranted: vi.fn(async () => true),
     requestPermission: vi.fn(async () => true),
-    schedule: vi.fn(async (): Promise<void> => {}),
-    cancel: vi.fn(async () => {}),
-    fireNow: vi.fn(async () => {}),
+    schedule: vi.fn<(key: string, title: string, body: string, fireAt: number) => Promise<void>>(
+      async () => {},
+    ),
+    cancel: vi.fn<(key: string) => Promise<void>>(async () => {}),
+    fireNow: vi.fn<(title: string, body: string) => Promise<void>>(async () => {}),
     openSettings: vi.fn(async () => {}),
   } satisfies ReminderNotificationShell & Record<string, ReturnType<typeof vi.fn>>;
 }
@@ -133,6 +135,44 @@ describe('ReminderCoordinator — runtime（桌面）模式', () => {
     coordinator.start();
     await vi.advanceTimersByTimeAsync(60_000);
     expect(shell.fireNow).not.toHaveBeenCalled();
+    coordinator.stop();
+    await engine.close();
+  });
+
+  it('到点之后才了结：不补发已完结工作的提醒（spec story 7）', async () => {
+    const taskId = await seedTask(engine); // 2月5日 09:00
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+
+    // 到点（错过 tick 边界）之后、下个 tick 之前完结任务
+    clock.advance(dayAt(5, 9, 0) - dayAt(4, 12) + 5_000);
+    await engine.update('task', taskId, {
+      status: TaskStatus.COMPLETED,
+      settledAt: new Date(clock.now()).toISOString(),
+      reminderTime: null,
+    });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(shell.fireNow).not.toHaveBeenCalled();
+    coordinator.stop();
+    await engine.close();
+  });
+
+  it('到点后改期：同 key 改期注销不补发旧时刻（用户意图是新时刻）', async () => {
+    const taskId = await seedTask(engine); // 2月5日 09:00
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+
+    // 到点之后把提醒改到当天更晚
+    clock.advance(dayAt(5, 9, 0) - dayAt(4, 12) + 5_000);
+    await engine.update('task', taskId, { reminderTime: '15:00' });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(shell.fireNow).not.toHaveBeenCalled();
+
+    // 新时刻到点后正常触发（当前时刻 = 09:00:05）
+    clock.advance(dayAt(5, 15, 0) - (dayAt(5, 9, 0) + 5_000));
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(shell.fireNow).toHaveBeenCalledTimes(1);
+    expect(shell.fireNow).toHaveBeenCalledWith('提醒任务', '15:00');
     coordinator.stop();
     await engine.close();
   });

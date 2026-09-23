@@ -154,6 +154,20 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
     });
   });
 
+  it('从未询问过（unknown）：不显示禁用提示（story 14：不在启动/未询问时弹提示）', () => {
+    useReminderPermissionStore.setState({
+      permission: 'unknown',
+      supported: true,
+      refresh: vi.fn(async () => undefined),
+    });
+    renderField(
+      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-05', reminderTime: '09:00' },
+      { showReminder: true },
+    );
+    expect(screen.queryByText(/Notifications are disabled|系统通知已禁用/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Open Settings|打开设置/ })).not.toBeInTheDocument();
+  });
+
   it('授权刷新在提醒区打开时触发（拒绝状态跨会话可见）', async () => {
     const refresh = vi.fn(async () => undefined);
     useReminderPermissionStore.setState({ refresh });

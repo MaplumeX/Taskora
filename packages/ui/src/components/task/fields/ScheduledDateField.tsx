@@ -40,7 +40,8 @@ export function ScheduledDateField({
   const refreshPermission = useReminderPermissionStore((s) => s.refresh);
   const openNotificationSettings = useReminderPermissionStore((s) => s.openSettings);
 
-  const scheduledType = current.scheduledType ?? ScheduledType.NONE;  const selectedDate =
+  const scheduledType = current.scheduledType ?? ScheduledType.NONE;
+  const selectedDate =
     scheduledType === ScheduledType.DATE && current.scheduledDate
       ? new Date(current.scheduledDate)
       : undefined;
