@@ -124,6 +124,32 @@ export { usePreferencesStore, hydrateFromServer } from './stores/preferences.sto
 export { useTheme } from './hooks/useTheme';
 export { applyTheme, applyThemeFromStorage } from './stores/preferences.store';
 
+// Reminders（reminders spec）：纯调度计算 + 通知薄壳 + 协调器 + 权限 store
+export {
+  computeReminderPlan,
+  diffReminderRegistration,
+  reminderNotificationKey,
+  type ReminderTaskInput,
+  type ReminderNotification,
+  type ReminderRegistrationDiff,
+} from './reminders/reminder-scheduler';
+export {
+  setNotificationShell,
+  getNotificationShell,
+  notificationIdForKey,
+  reminderInputFromReplicaRow,
+  type ReminderNotificationShell,
+} from './reminders/notification-shell';
+export {
+  createReminderCoordinator,
+  type ReminderCoordinator,
+  type ReminderCoordinatorOptions,
+} from './reminders/reminder-coordinator';
+export {
+  useReminderPermissionStore,
+  type ReminderPermissionState,
+} from './reminders/permission.store';
+
 // Utilities
 export * from './utils/date';
 export { setAppVersion, getAppVersion } from './utils/appInfo';

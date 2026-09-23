@@ -7,6 +7,37 @@ use tauri::{
 };
 use tauri_plugin_global_shortcut::ShortcutState;
 
+/// 跳转到系统通知设置页（Reminders spec：授权被拒后的引导入口）。
+/// 桌面三平台无统一入口：macOS 开通知偏好设置面板，Windows 开
+/// ms-settings；Linux 无标准方案，返回错误（JS 侧静默吞掉）。
+#[tauri::command]
+fn open_notification_settings() -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg("x-apple.systempreferences:com.apple.Notifications-Settings.extension")
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", "ms-settings:notifications"])
+            .spawn()
+            .map_err(|e| e.to_string())?;
+    }
+    #[cfg(target_os = "linux")]
+    {
+        return Err("opening notification settings is not supported on this platform".into());
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
+    {
+        return Err("unsupported platform".into());
+    }
+    #[allow(unreachable_code)]
+    Ok(())
+}
+
 /// Global quick-add shortcut (Things-style): Cmd/Ctrl + Shift + Space.
 /// (Plain Cmd/Ctrl+Space was dropped: Ctrl+Space is the IME toggle on
 /// Windows and Cmd+Space is Spotlight on macOS — see ADR-0004.)
@@ -70,6 +101,8 @@ pub fn run() {
                 })
                 .build(),
         )
+        // 系统通知（Reminders spec）：到点本地提醒的发送通道。
+        .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             // System tray (desktop shell hardening): re-entry point for a
             // hidden main window + the explicit quit path. Without it, the
@@ -138,7 +171,8 @@ pub fn run() {
             sqlite::sql_exec,
             sqlite::sql_all,
             sqlite::sql_run,
-            sqlite::sql_use_db
+            sqlite::sql_use_db,
+            open_notification_settings
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

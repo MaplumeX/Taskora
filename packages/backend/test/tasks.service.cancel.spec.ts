@@ -56,6 +56,8 @@ describe('TasksService — cancel / uncancel (terminal state)', () => {
       data: {
         status: TaskStatus.CANCELLED,
         settledAt: expect.any(Date),
+        // 了结清除提醒（reminders spec）
+        reminderTime: null,
       },
     });
     // DTO 字段名保持 completedAt，承载 Settled At 语义（ADR 0006）。

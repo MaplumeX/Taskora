@@ -56,6 +56,7 @@ const baseTask: TaskResponseDto = {
   notes: null,
   scheduledDate: null,
   scheduledType: ScheduledType.NONE,
+  reminderTime: null,
   dueDate: null,
   bucket: TaskBucket.INBOX,
   status: TaskStatus.ACTIVE,

@@ -160,6 +160,7 @@ export class FeedService {
       notes: t.notes,
       scheduledDate: t.scheduledDate ? t.scheduledDate.toISOString() : null,
       scheduledType: t.scheduledType as ScheduledType,
+      reminderTime: t.reminderTime,
       dueDate: t.dueDate ? t.dueDate.toISOString() : null,
       status: t.status as TaskStatus,
       bucket: t.bucket as TaskBucket,
@@ -222,6 +223,7 @@ export class FeedService {
         notes: p.notes,
         scheduledDate: p.scheduledDate ? p.scheduledDate.toISOString() : null,
         scheduledType: p.scheduledType as ScheduledType,
+        reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
         dueDate: p.dueDate ? p.dueDate.toISOString() : null,
         status: p.status as ProjectStatus,
         bucket: p.bucket as ProjectBucket,

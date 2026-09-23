@@ -35,5 +35,9 @@
   "convertFailed": "转换失败",
   "quickAddPlaceholder": "添加任务到收件箱…",
   "quickAddNotSignedIn": "请先在主窗口登录后再使用快速添加",
-  "quickAddFailed": "任务创建失败"
+  "quickAddFailed": "任务创建失败",
+  "reminder": "提醒",
+  "reminderTime": "提醒时间",
+  "reminderDisabledNotice": "系统通知已禁用",
+  "reminderOpenSettings": "打开设置"
 }

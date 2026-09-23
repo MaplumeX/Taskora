@@ -51,14 +51,21 @@ const fakeEngine = {
   cursor: vi.fn(async () => 1),
   pendingCount: vi.fn(async () => 0),
   close: vi.fn(async () => undefined),
-  onChange: vi.fn<(cb: EngineOnChange) => () => undefined>(),
+  // Reminders 协调器重算时拉任务列表（空列表 → 无通知注册）
+  list: vi.fn(async () => [] as []),
+  onChange: vi.fn<(cb: EngineOnChange) => () => boolean>(),
 };
 
-let engineOnChange: EngineOnChange | null = null;
+// 多订阅者语义（Reminders 协调器与同步调度都订阅 engine.onChange；
+// mockImplementation 只能保留最后一个实现，会悄悄丢掉前者）。
+const engineChangeListeners = new Set<EngineOnChange>();
 fakeEngine.onChange.mockImplementation((cb) => {
-  engineOnChange = cb;
-  return () => undefined;
+  engineChangeListeners.add(cb);
+  return () => engineChangeListeners.delete(cb);
 });
+const emitEngineChange: EngineOnChange = (change) => {
+  for (const listener of engineChangeListeners) listener(change);
+};
 
 async function loadEngine() {
   const mod = await import('./mobile-engine');
@@ -69,7 +76,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   authListeners.clear();
   Object.assign(authState, { token: 'token-1', user: { id: 'u1' } });
-  engineOnChange = null;
+  engineChangeListeners.clear();
 });
 
 afterEach(async () => {
@@ -102,12 +109,12 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
       await vi.waitFor(() => {
         expect(fakeEngine.sync).toHaveBeenCalledTimes(1);
       });
-      expect(engineOnChange).toBeTruthy();
+      expect(engineChangeListeners.size).toBeGreaterThan(0);
 
       // 连续三次本地写（地铁里快速录入）
-      engineOnChange!({ origin: 'local' });
-      engineOnChange!({ origin: 'local' });
-      engineOnChange!({ origin: 'local' });
+      emitEngineChange({ origin: 'local' });
+      emitEngineChange({ origin: 'local' });
+      emitEngineChange({ origin: 'local' });
 
       // 防抖窗口内未触发
       await vi.advanceTimersByTimeAsync(500);
@@ -118,7 +125,7 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
 
       // 远端写应用后不调度同步（无新 Outbox，再拉是空转）
       fakeEngine.sync.mockClear();
-      engineOnChange!({ origin: 'remote' });
+      emitEngineChange({ origin: 'remote' });
       await vi.advanceTimersByTimeAsync(2_000);
       expect(fakeEngine.sync).not.toHaveBeenCalled();
     } finally {

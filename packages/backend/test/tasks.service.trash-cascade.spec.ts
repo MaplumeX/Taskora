@@ -75,7 +75,7 @@ describe('TasksService — trash/restore (no BFS cascade)', () => {
       await service.remove(userId, 'task-c');
 
       const call = mockPrisma.task.updateMany.mock.calls[0][0];
-      expect(call.data).toEqual({ trashedAt: expect.any(Date) });
+      expect(call.data).toEqual({ trashedAt: expect.any(Date), reminderTime: null });
       expect(call.data).not.toHaveProperty('status');
     });
   });

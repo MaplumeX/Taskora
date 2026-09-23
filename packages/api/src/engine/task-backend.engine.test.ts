@@ -376,3 +376,127 @@ describe('EngineTaskBackend（V2：Subtask / convert / emptyTrash 全离线）',
     await b.close();
   });
 });
+
+describe('EngineTaskBackend — Reminder 清理规则（reminders spec）', () => {
+  let engine: Engine;
+  let backend: ReturnType<typeof createEngineTaskBackend>;
+
+  beforeEach(async () => {
+    const storage = await createNodeSqliteStorage(':memory:');
+    const hub = new InMemorySyncHub();
+    engine = await openEngine({
+      storage,
+      deviceId: 'dev-reminder',
+      transport: hub.transportFor(USER),
+    });
+    backend = createEngineTaskBackend({ engine });
+    setTaskBackend(backend);
+  });
+
+  it('DATE 任务可设置/修改/关闭提醒；换日期保留提醒时刻', async () => {
+    const task = await backend.createTask({
+      title: '看牙医',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2026-02-01',
+    });
+    expect(task.reminderTime).toBeNull();
+
+    const withReminder = await backend.updateTask(task.id, { reminderTime: '09:00' });
+    expect(withReminder.reminderTime).toBe('09:00');
+
+    const changed = await backend.updateTask(task.id, { reminderTime: '18:30' });
+    expect(changed.reminderTime).toBe('18:30');
+
+    // DATE → DATE：只换日期，提醒时刻保留
+    const moved = await backend.updateTask(task.id, {
+      scheduledDate: '2026-03-05',
+    });
+    expect(moved.reminderTime).toBe('18:30');
+
+    const off = await backend.updateTask(task.id, { reminderTime: null });
+    expect(off.reminderTime).toBeNull();
+  });
+
+  it('ScheduledType 离开 DATE（Someday / NONE）自动清除提醒', async () => {
+    const task = await backend.createTask({
+      title: '整理书架',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2026-02-01',
+    });
+    await backend.updateTask(task.id, { reminderTime: '09:00' });
+
+    const someday = await backend.updateTask(task.id, {
+      scheduledType: ScheduledType.SOMEDAY,
+    });
+    expect(someday.reminderTime).toBeNull();
+
+    // 重新设回 DATE + 提醒，再走 NONE
+    await backend.updateTask(task.id, {
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2026-02-02',
+    });
+    await backend.updateTask(task.id, { reminderTime: '08:00' });
+    const cleared = await backend.updateTask(task.id, {
+      scheduledType: ScheduledType.NONE,
+      scheduledDate: null,
+    });
+    expect(cleared.reminderTime).toBeNull();
+  });
+
+  it('了结（完成/取消）与移入 Trash 清除提醒', async () => {
+    const task = await backend.createTask({
+      title: '缴水电费',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2026-02-01',
+    });
+    await backend.updateTask(task.id, { reminderTime: '09:00' });
+
+    expect((await backend.completeTask(task.id)).reminderTime).toBeNull();
+
+    // 恢复为 ACTIVE 后提醒不会复活（数据已清除）
+    await backend.uncompleteTask(task.id);
+    const revived = await backend.getTask(task.id);
+    expect(revived.reminderTime).toBeNull();
+
+    await backend.updateTask(task.id, { reminderTime: '10:00' });
+    expect((await backend.cancelTask(task.id)).reminderTime).toBeNull();
+
+    await backend.uncancelTask(task.id);
+    await backend.updateTask(task.id, { reminderTime: '10:00' });
+    await backend.deleteTask(task.id);
+    expect((await backend.getTask(task.id)).reminderTime).toBeNull();
+  });
+
+  it('reminderTime 走字段级 LWW：跨设备经 hub 收敛', async () => {
+    const hub = new InMemorySyncHub();
+    const a = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'dev-a',
+      transport: hub.transportFor(USER),
+    });
+    const b = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'dev-b',
+      transport: hub.transportFor(USER),
+    });
+    const backendA = createEngineTaskBackend({ engine: a });
+    const task = await backendA.createTask({
+      title: '跨设备提醒',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2026-02-01',
+    });
+    await a.update('task', task.id, { reminderTime: '09:00' });
+    await a.sync();
+    await b.sync();
+    expect((await b.get('task', task.id))?.fields.reminderTime).toBe('09:00');
+
+    // B 端晚写胜出
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    await b.update('task', task.id, { reminderTime: '20:00' });
+    await b.sync();
+    await a.sync();
+    expect((await a.get('task', task.id))?.fields.reminderTime).toBe('20:00');
+    await a.close();
+    await b.close();
+  });
+});

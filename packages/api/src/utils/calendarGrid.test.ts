@@ -20,6 +20,7 @@ function task(id: string, scheduledDate: string | null): TaskResponseDto {
     notes: null,
     scheduledDate,
     scheduledType: ScheduledType.DATE,
+    reminderTime: null,
     dueDate: null,
     bucket: TaskBucket.INBOX,
     status: TaskStatus.ACTIVE,

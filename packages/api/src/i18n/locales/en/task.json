@@ -35,5 +35,9 @@
   "convertFailed": "Conversion failed",
   "quickAddPlaceholder": "Add a task to Inbox…",
   "quickAddNotSignedIn": "Sign in from the main window to use quick add",
-  "quickAddFailed": "Could not create the task"
+  "quickAddFailed": "Could not create the task",
+  "reminder": "Reminder",
+  "reminderTime": "Reminder time",
+  "reminderDisabledNotice": "Notifications are disabled",
+  "reminderOpenSettings": "Open Settings"
 }

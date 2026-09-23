@@ -64,6 +64,7 @@ function makeTaskDto(id: string, title: string, projectId: string | null): TaskR
     notes: null,
     scheduledDate: null,
     scheduledType: ScheduledType.NONE,
+    reminderTime: null,
     dueDate: null,
     bucket: TaskBucket.ANYTIME,
     status: TaskStatus.ACTIVE,

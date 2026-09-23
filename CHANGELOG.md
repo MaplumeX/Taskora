@@ -9,6 +9,26 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [Unreleased]
+
+### Added
+
+- **reminders**: Task reminder times — set a time-of-day (HH:mm)
+  reminder in the scheduling popover while a Task is scheduled to a
+  date. Desktop fires the notification from a runtime scheduler while
+  the app is running (missed ones are silently dropped, never replayed);
+  mobile registers system-level scheduled notifications via
+  `tauri-plugin-notification` that fire even when the app is closed.
+  Reminder data is a new `reminderTime` field on Task that syncs through
+  the existing field-level HLC last-write-wins merge; Projects do not
+  support reminders. Reminders are cleared automatically when a Task is
+  settled (completed/cancelled), trashed, or moves off a scheduled date;
+  moving to another date keeps the reminder time. Permission is
+  requested on first reminder enable (not app launch); if denied, the
+  time can still be saved with an in-popover notice and a jump to
+  system notification settings. Task rows show a clock + HH:mm badge,
+  and the web frontend hides the reminder section entirely this version.
+
 ## [0.4.6] - 2026-09-22
 
 ### Added

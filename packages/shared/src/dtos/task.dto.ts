@@ -19,6 +19,8 @@ export interface UpdateTaskDto {
   notes?: string;
   scheduledDate?: string | null;
   scheduledType?: ScheduledType;
+  /** 提醒时刻（Reminder，HH:mm，本地时区语义）：仅 ScheduledType 为 DATE 时有效；null 清除。 */
+  reminderTime?: string | null;
   dueDate?: string | null;
   bucket?: TaskBucket;
   projectId?: string | null;
@@ -32,6 +34,8 @@ export interface TaskResponseDto {
   notes: string | null;
   scheduledDate: string | null; // 计划日期（原 dueDate）
   scheduledType: ScheduledType;
+  /** 提醒时刻（Reminder，HH:mm）：依附于计划日期，到点由客户端本地触发系统通知；null 表示未设置。 */
+  reminderTime: string | null;
   dueDate: string | null; // 通知日期（新增）
   bucket: TaskBucket;
   status: TaskStatus;
