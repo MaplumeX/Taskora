@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
   TaskBucket,
@@ -6,17 +8,142 @@ import {
   ProjectStatus,
   ScheduledType,
 } from '@taskora/shared';
+import {
+  canonicalRepeatRule,
+  deriveRepeatInstanceId,
+  deriveSubtaskId,
+  nextOccurrenceDate,
+  normalizeRepeatRule,
+} from '@taskora/engine';
 import { PrismaService } from '../prisma/prisma.service';
 import { registerCompacted } from '../sync/compact-registry';
 import { synthPosition } from '../sync/entity-codec';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
 import { Prisma } from '@prisma/client';
 import { buildTaskViewWhere, WITH_SETTLED_STATUSES } from './views';
-import { settledToCompletedAt } from './task-dto.mapper';
+import { parseRepeatRule, settledToCompletedAt, withRepeatRuleDto } from './task-dto.mapper';
+
+/** 派生路径需要的 Task 行形状（含标签关系与子任务）。 */
+type TaskRowWithChildren = Prisma.TaskGetPayload<{
+  include: { tags: true; subtasks: { orderBy: { sortOrder: 'asc' } } };
+}>;
 
 @Injectable()
 export class TasksService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Repeat Instance 服务端派生（recurring-tasks spec / ADR-0012）：REST
+   * 客户端（web）无法本地派生，完成路径由服务端代为派生 —— 与设备侧
+   * 派生共用 @taskora/engine 纯函数，产出同一确定性 id；设备侧派生的
+   * 同一实例经 hub 字段级 LWW 自然收敛。幂等：目标 id 已存在则跳过。
+   */
+  private async deriveRepeatInstance(
+    userId: string,
+    parent: TaskRowWithChildren,
+    settledAt: Date,
+  ): Promise<void> {
+    const rule = parseRepeatRule(parent.repeatRule);
+    if (!rule) return;
+    const occurrence = nextOccurrenceDate(rule, {
+      scheduledDate: parent.scheduledDate ? parent.scheduledDate.toISOString() : null,
+      settledAt: settledAt.toISOString(),
+    });
+    if (occurrence === null) return; // 到达 until / 无锚：链终结
+
+    const deterministicId = deriveRepeatInstanceId(parent.id, rule, occurrence);
+    const existing = await this.prisma.task.findFirst({
+      where: { id: deterministicId, userId },
+      select: { id: true },
+    });
+    if (existing) return; // 幂等（restore 后重完成 / 并发派生）
+    // 确定性 id 已被 compact（un-complete 删除过该实例后重新完成）：该 id
+    // 无法在设备副本上复活（ADR-0008 Compact 永久获胜——设备的 compact 集
+    // 会丢弃增量拉取），回退到新生成 id（ADR-0008 认可的复活路径）。
+    const compacted = await this.prisma.compactedEntity.findFirst({
+      where: { userId, entity: 'task', entityId: deterministicId },
+      select: { entityId: true },
+    });
+    const instanceId = compacted ? randomUUID() : deterministicId;
+
+    const maxSort = await this.prisma.task.aggregate({
+      where: { userId },
+      _max: { sortOrder: true },
+    });
+    // 派生实例进入列表末尾（新位次，不继承父任务位次）；标签随实例延续
+    await this.prisma.task.create({
+      data: {
+        id: instanceId,
+        title: parent.title,
+        notes: parent.notes,
+        scheduledDate: new Date(`${occurrence}T00:00:00.000Z`),
+        scheduledType: ScheduledType.DATE,
+        reminderTime: parent.reminderTime,
+        repeatRule: canonicalRepeatRule(rule),
+        bucket: TaskBucket.SCHEDULED,
+        status: TaskStatus.ACTIVE,
+        userId,
+        projectId: parent.projectId,
+        headingId: parent.headingId,
+        areaId: parent.areaId,
+        sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
+        ...(parent.tags.length > 0
+          ? { tags: { create: parent.tags.map((tt) => ({ tagId: tt.tagId })) } }
+          : {}),
+      },
+    });
+    // Subtask 复制为派生实体（确定性 id）并重置 ACTIVE
+    for (const [index, subtask] of parent.subtasks.entries()) {
+      await this.prisma.subtask.create({
+        data: {
+          id: deriveSubtaskId(instanceId, index),
+          title: subtask.title,
+          taskId: instanceId,
+          sortOrder: index,
+          status: TaskStatus.ACTIVE,
+        },
+      });
+    }
+  }
+
+  /**
+   * 取消派生副作用（ADR-0012）：重开（un-complete / un-cancel）删除其
+   * 派生实例 —— Compact 登记 + 物理删除（Subtask 由 DB 级联），与
+   * convertToProject 的删除惯例一致。不存在则无操作（纯取消从未派生）。
+   */
+  private async deleteDerivedInstance(
+    userId: string,
+    parent: {
+      id: string;
+      repeatRule: string | null;
+      scheduledDate: Date | null;
+      settledAt: Date | null;
+    },
+  ): Promise<void> {
+    const rule = parseRepeatRule(parent.repeatRule);
+    if (!rule) return;
+    const occurrence = nextOccurrenceDate(rule, {
+      scheduledDate: parent.scheduledDate ? parent.scheduledDate.toISOString() : null,
+      settledAt: parent.settledAt ? parent.settledAt.toISOString() : null,
+    });
+    if (occurrence === null) return;
+    const instanceId = deriveRepeatInstanceId(parent.id, rule, occurrence);
+    await this.prisma.$transaction(async (tx) => {
+      const instance = await tx.task.findFirst({
+        where: { id: instanceId, userId },
+        include: { subtasks: { select: { id: true } } },
+      });
+      if (!instance) return;
+      await registerCompacted(tx, userId, 'task', [instanceId]);
+      await registerCompacted(
+        tx,
+        userId,
+        'subtask',
+        instance.subtasks.map((s) => s.id),
+      );
+      await tx.task.delete({ where: { id: instanceId } });
+    });
+  }
 
   /**
    * Resolve bucket based on scheduledType, following design.md.
@@ -62,10 +189,9 @@ export class TasksService {
       },
       include: { tags: { include: { tag: true } } },
     });
-    return settledToCompletedAt({
-      ...created,
-      tags: created.tags.map((tt) => tt.tag),
-    });
+    return settledToCompletedAt(
+      withRepeatRuleDto({ ...created, tags: created.tags.map((tt) => tt.tag) }),
+    );
   }
 
   async findAll(userId: string, query: TaskQueryDto) {
@@ -114,7 +240,9 @@ export class TasksService {
       orderBy,
       include: { tags: { include: { tag: true } } },
     });
-    return tasks.map((t) => settledToCompletedAt({ ...t, tags: t.tags.map((tt) => tt.tag) }));
+    return tasks.map((t) =>
+      settledToCompletedAt(withRepeatRuleDto({ ...t, tags: t.tags.map((tt) => tt.tag) })),
+    );
   }
 
   async findOne(userId: string, id: string) {
@@ -130,7 +258,7 @@ export class TasksService {
     }
     const { tags: taskTags, subtasks, ...rest } = task;
     return settledToCompletedAt({
-      ...rest,
+      ...withRepeatRuleDto(rest),
       tags: taskTags.map((tt) => tt.tag),
       subtasks: subtasks.map(settledToCompletedAt),
     });
@@ -199,6 +327,18 @@ export class TasksService {
     } else if (dto.reminderTime !== undefined) {
       data.reminderTime = dto.reminderTime;
     }
+    // Repeat Rule 清理规则（recurring-tasks spec）：离开 DATE 一律清除
+    // 规则（规则无锚即无意义，镜像 Reminder 清理语义）；换日期保留。
+    // 写入前归一化为规范形（派生 id 依赖稳定输入，ADR-0012）；非法对象
+    // 忽略（校验层已挡形状，此处防御纵深）。
+    if (newScheduledType !== ScheduledType.DATE) {
+      data.repeatRule = null;
+    } else if (dto.repeatRule !== undefined) {
+      const normalized = normalizeRepeatRule(dto.repeatRule);
+      if (dto.repeatRule === null || normalized !== null) {
+        data.repeatRule = normalized === null ? null : canonicalRepeatRule(normalized);
+      }
+    }
     if (dto.dueDate !== undefined) {
       data.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
     }
@@ -233,10 +373,9 @@ export class TasksService {
       data,
       include: { tags: { include: { tag: true } } },
     });
-    return settledToCompletedAt({
-      ...updated,
-      tags: updated.tags.map((tt) => tt.tag),
-    });
+    return settledToCompletedAt(
+      withRepeatRuleDto({ ...updated, tags: updated.tags.map((tt) => tt.tag) }),
+    );
   }
 
   async remove(userId: string, id: string) {
@@ -359,6 +498,12 @@ export class TasksService {
   async complete(userId: string, id: string) {
     const existing = await this.prisma.task.findFirst({
       where: { id, userId },
+      include: {
+        tags: true,
+        // 派生序号的排序口径与设备副本一致（sortOrder ASC, createdAt DESC
+        // tie-break），否则平局顺序两端漂移 → 派生出不同的子任务 id。
+        subtasks: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }] },
+      },
     });
     if (!existing) {
       throw new NotFoundException('Task not found');
@@ -366,15 +511,24 @@ export class TasksService {
 
     // 终态可直接改写（ADR 0006）：COMPLETED ↔ CANCELLED 切换时刷新 settledAt。
     // 了结清除提醒（reminders spec）：已完成/取消的工作不再通知。
+    const settledAt = new Date();
     const updated = await this.prisma.task.update({
       where: { id },
       data: {
         status: TaskStatus.COMPLETED,
-        settledAt: new Date(),
+        settledAt,
         reminderTime: null,
       },
     });
-    return settledToCompletedAt(updated);
+    // 重复任务：完成后立刻派生下一实例（结算副作用；取消不派生）。
+    // 提醒等复制源以结算前状态（existing）为准。已 COMPLETED 的重复完成
+    // （双击/重试）不二次派生：anchor=completion 下刷新 settledAt 会算出
+    // 不同 occurrence，产生第二个实例（与设备侧 completeTask 的早退守卫
+    // 同口径）。
+    if (existing.status !== TaskStatus.COMPLETED) {
+      await this.deriveRepeatInstance(userId, existing, settledAt);
+    }
+    return settledToCompletedAt(withRepeatRuleDto(updated));
   }
 
   async uncomplete(userId: string, id: string) {
@@ -385,6 +539,8 @@ export class TasksService {
       throw new NotFoundException('Task not found');
     }
 
+    // 重开取消派生副作用：删除其派生实例（ADR-0012）
+    await this.deleteDerivedInstance(userId, existing);
     const updated = await this.prisma.task.update({
       where: { id },
       data: {
@@ -392,7 +548,7 @@ export class TasksService {
         settledAt: null,
       },
     });
-    return settledToCompletedAt(updated);
+    return settledToCompletedAt(withRepeatRuleDto(updated));
   }
 
   async cancel(userId: string, id: string) {
@@ -405,6 +561,7 @@ export class TasksService {
 
     // 取消父 Task 不改动其 Subtasks（与 complete 行为一致，见 CONTEXT.md）。
     // 了结清除提醒（reminders spec）：已完成/取消的工作不再通知。
+    // 取消不派生 Repeat Instance：链就此终结，规则保留作 Logbook 溯源。
     const updated = await this.prisma.task.update({
       where: { id },
       data: {
@@ -413,7 +570,7 @@ export class TasksService {
         reminderTime: null,
       },
     });
-    return settledToCompletedAt(updated);
+    return settledToCompletedAt(withRepeatRuleDto(updated));
   }
 
   async uncancel(userId: string, id: string) {
@@ -424,6 +581,8 @@ export class TasksService {
       throw new NotFoundException('Task not found');
     }
 
+    // 重开同样取消派生副作用（完成→取消→重开路径下删除仍存活的实例）
+    await this.deleteDerivedInstance(userId, existing);
     const updated = await this.prisma.task.update({
       where: { id },
       data: {
@@ -431,7 +590,7 @@ export class TasksService {
         settledAt: null,
       },
     });
-    return settledToCompletedAt(updated);
+    return settledToCompletedAt(withRepeatRuleDto(updated));
   }
 
   async reorder(userId: string, orderedIds: string[]) {

@@ -2,6 +2,7 @@ export * from './enums/task.enum';
 export * from './enums/project.enum';
 export * from './enums/heading.enum';
 export * from './dtos/task.dto';
+export * from './dtos/repeat-rule.dto';
 export * from './dtos/subtask.dto';
 export * from './dtos/project.dto';
 export * from './dtos/feed.dto';

@@ -65,6 +65,7 @@ function makeTaskDto(id: string, title: string, projectId: string | null): TaskR
     scheduledDate: null,
     scheduledType: ScheduledType.NONE,
     reminderTime: null,
+    repeatRule: null,
     dueDate: null,
     bucket: TaskBucket.ANYTIME,
     status: TaskStatus.ACTIVE,
