@@ -12,8 +12,10 @@ import { TaskCheckbox } from './TaskCheckbox';
 import { TaskContextMenu } from './TaskContextMenu';
 import { TaskDateBadge } from './TaskDateBadge';
 import { TaskDueDateBadge } from './TaskDueDateBadge';
+import { TaskNotesBadge } from './TaskNotesBadge';
 import { TaskReminderBadge } from './TaskReminderBadge';
 import { TaskRepeatBadge } from './TaskRepeatBadge';
+import { TaskSubtasksBadge } from './TaskSubtasksBadge';
 import { TaskRowExpanded } from './TaskRowExpanded';
 import type { SelectionState } from '@taskora/api';
 
@@ -210,6 +212,10 @@ export function TaskItem({
                 {tag}
               </span>
             )}
+            {/* 备注徽标：有备注的任务一眼可见。 */}
+            <TaskNotesBadge notes={current.notes} className="shrink-0" />
+            {/* 子任务徽标：有子任务的任务一眼可见，并显示未了结数量。 */}
+            <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
             {showScheduledBadge && (
               <TaskDateBadge scheduledDate={current.scheduledDate} className="shrink-0" />
             )}
