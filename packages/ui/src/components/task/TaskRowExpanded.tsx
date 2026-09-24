@@ -6,6 +6,7 @@ import {
   Clock,
   Folder,
   ListPlus,
+  Repeat,
   Tag,
   Target,
   Trash2,
@@ -42,6 +43,7 @@ import {
 import { toast } from 'sonner';
 import { ScheduledDateField } from './fields/ScheduledDateField';
 import { DueDateField } from './fields/DueDateField';
+import { RepeatRuleField } from './fields/RepeatRuleField';
 import { TagsField } from './fields/TagsField';
 import { TaskCheckbox } from './TaskCheckbox';
 
@@ -166,10 +168,21 @@ export function TaskRowExpanded({ task, current }: Props) {
               onPatch={patch}
               onClose={close}
               showReminder={getClientKind() !== 'web'}
-              showRepeatRule
             />
           )}
         </IconPopover>
+
+        {/* 重复规则是独立入口（不内嵌于计划 popover）：仅 DATE 型任务
+            显示（规则需要计划日期作锚点，Someday/NONE 不提供该选项）。 */}
+        {scheduledType === ScheduledType.DATE && (
+          <IconPopover
+            label={t('task:repeat')}
+            icon={<Repeat className="h-4 w-4" />}
+            active={!!current.repeatRule}
+          >
+            <RepeatRuleField current={current} onPatch={patch} />
+          </IconPopover>
+        )}
 
         <IconPopover
           label={t('task:dueDate')}
