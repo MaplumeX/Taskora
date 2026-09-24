@@ -8,7 +8,7 @@ Taskora 用户的很多任务是周期性的——「每周一浇花」「每月
 
 ## Solution
 
-采用 Things 3 式的 **Task 字段模型**：Task 上新增 `repeatRule` 结构化字段（单位 day/week/month/year × 间隔 N × 周模式的星期几集合，可选锚点开关「从完成日期算」）。设了规则的 Task 被完成时，**完成的设备在本地立刻派生出下一个实例**——一个携带相同规则的普通 Task：未来的日期落在 Upcoming，逾期则落在 Today。多设备并发完成通过**确定性 ID 派生**天然去重（ADR-0012）：同一逻辑实例无论由哪台设备派生，ID 相同，字段级 LWW 照常收敛。Sync Hub 零业务逻辑改动。规则编辑只影响当前实例及其后代，链自然分叉；取消任务、移入 Someday 或到达 `until` 日期时链终结。UI 上，ScheduledDateField Popover 式的编辑入口提供「每 N 单位」步进器、周模式星期按钮与「下次：X 月 X 日」实时预览；Task 行显示 ↻ 图标。
+采用 Things 3 式的 **Task 字段模型**：Task 上新增 `repeatRule` 结构化字段（单位 day/week/month/year × 间隔 N × 周模式的星期几集合，可选锚点开关「从完成日期算」）。设了规则的 Task 被完成时，**完成的设备在本地立刻派生出下一个实例**——一个携带相同规则的普通 Task：未来的日期落在 Upcoming，逾期则落在 Today。多设备并发完成通过**确定性 ID 派生**天然去重（ADR-0012）：同一逻辑实例无论由哪台设备派生，ID 相同，字段级 LWW 照常收敛。Sync Hub 零业务逻辑改动。规则编辑只影响当前实例及其后代，链自然分叉；取消任务、移入 Someday 或到达 `until` 日期时链终结。UI 上，重复规则是**独立的编辑入口**（任务展开行的图标按钮与右键菜单各一项，与计划日期平级），编辑面板提供「每 N 单位」步进器、周模式星期按钮与「下次：X 月 X 日」实时预览；Task 行显示 ↻ 图标。
 
 ## User Stories
 
@@ -33,7 +33,7 @@ Taskora 用户的很多任务是周期性的——「每周一浇花」「每月
 19. As an offline user, I want the next occurrence derived locally the moment I complete the task, so that repetition works in the subway with no network.
 20. As a Taskora user, I want the rule preserved on the settled task in the Logbook, so that history records that the task used to repeat.
 21. As a Taskora user restoring a previously-settled repeating Task from the Logbook, I want completing it again to reuse the derivation idempotently (skip if the descendant already exists), so that restore never duplicates.
-22. As a Taskora user, I want the rule editor available wherever the scheduling UI is (date popover), so that setting "when" and "how often" live in one place.
+22. As a Taskora user, I want the rule editor as its own option (a Repeat entry next to the Scheduled Date entry, not inside the date popover), so that setting "when" and "how often" are each one deliberate, discoverable choice.
 23. As a Taskora user with a Someday or dateless task, I do not see the repeat rule option, so that the UI never offers a rule that cannot anchor.
 
 ## Implementation Decisions
@@ -63,7 +63,7 @@ Taskora 用户的很多任务是周期性的——「每周一浇花」「每月
 
 ### UI
 
-- Rule editor lives in the scheduling popover (alongside the Reminder section), following its established pattern: visible/enabled only for ScheduledType DATE, disabled for Projects.
+- Rule editor is an **independent entry** (own icon button in the expanded task row and own context-menu item, peer of Scheduled Date — not embedded in the date popover): visible only for ScheduledType DATE, never offered for Projects.
 - Editor controls: unit selector (day/week/month/year), "every N" stepper, weekday toggle buttons for week mode, "after completion" anchor toggle, optional until-date field. Live next-occurrence preview line ("下次：2 月 9 日 周一") computed by the pure rule→date function.
 - Task rows show a ↻ badge when `repeatRule` is set (pattern: Reminder's clock badge). No chain navigation, no "view series" affordances.
 - Copy uses「重复」(never 循环/周期); next occurrence references Scheduled Date semantics.
@@ -79,7 +79,7 @@ Taskora 用户的很多任务是周期性的——「每周一浇花」「每月
 - **Good tests assert external behavior**: given a task with a rule and a completion action, the observable outcomes are (a) the parent settles, (b) a task with the derived id and expected fields/date exists, (c) idempotency/dedup behavior. No assertion on hash internals beyond stability.
 - The rule→occurrence-date function is a **pure function** and gets exhaustive unit tests (the highest-value seam): unit × interval × weekdays × anchor × until, month/year end-of-month, overdue catch-up, chain termination.
 - Derivation has two seams worth testing: the **engine-level** test (complete a task in a Local Replica → instance exists; un-complete → instance gone) and the **merge-level** test (two replicas each complete the same task offline → sync → exactly one instance, fields converge) following the prior art of `merger.test.ts` / `hlc.test.ts` in `packages/engine`.
-- UI-level: rule editor visibility gating (DATE vs Someday/NONE, Task vs Project) and the ↻ badge, tested like the Reminder section's equivalents.
+- UI-level: rule editor entry visibility gating (DATE vs Someday/NONE, Task vs Project) and the ↻ badge, tested like the Reminder section's equivalents.
 
 ## Out of Scope
 

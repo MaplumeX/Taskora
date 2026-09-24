@@ -2,9 +2,10 @@ import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Check, Circle, CircleSlash, CalendarClock, CalendarDays, Tag, FolderInput, Trash2, RotateCcw } from 'lucide-react';
+import { Check, Circle, CircleSlash, CalendarClock, CalendarDays, Repeat, Tag, FolderInput, Trash2, RotateCcw } from 'lucide-react';
 
 import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
+import { ScheduledType } from '@taskora/shared';
 
 import {
   Popover,
@@ -27,6 +28,7 @@ import {
 } from '@taskora/api';
 import { ScheduledDateField } from './fields/ScheduledDateField';
 import { DueDateField } from './fields/DueDateField';
+import { RepeatRuleField } from './fields/RepeatRuleField';
 import { TagsField } from './fields/TagsField';
 
 interface Props {
@@ -36,7 +38,7 @@ interface Props {
   variant?: 'default' | 'trash';
 }
 
-type PickerKind = 'scheduled' | 'due' | 'tags' | null;
+type PickerKind = 'scheduled' | 'repeat' | 'due' | 'tags' | null;
 
 export function TaskContextMenu({ task, current, children, variant = 'default' }: Props) {
   const { t } = useTranslation('task');
@@ -196,6 +198,12 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
           <MenuRow icon={CalendarClock} onClick={() => openPicker('scheduled')}>
             {t('scheduledDate')}
           </MenuRow>
+          {/* 重复规则是独立入口：仅 DATE 型任务显示（规则需要计划日期作锚点）。 */}
+          {(current.scheduledType ?? ScheduledType.NONE) === ScheduledType.DATE && (
+            <MenuRow icon={Repeat} onClick={() => openPicker('repeat')}>
+              {t('repeat')}
+            </MenuRow>
+          )}
           <MenuRow icon={CalendarDays} onClick={() => openPicker('due')}>
             {t('dueDate')}
           </MenuRow>
@@ -234,8 +242,10 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
               onPatch={patch}
               onClose={() => setActivePicker(null)}
               showReminder={getClientKind() !== 'web'}
-              showRepeatRule
             />
+          )}
+          {activePicker === 'repeat' && (
+            <RepeatRuleField current={current} onPatch={patch} />
           )}
           {activePicker === 'due' && (
             <DueDateField
