@@ -30,7 +30,9 @@ let bootPromise: Promise<void> | null = null;
  *
  * 无快照时，refresh 网络失败 → 启动错误页，Engine 无法启动（缺
  * userId 选副本库）——「离线全功能」在重启场景下失效。有快照时，
- * 网络失败用快照继续离线运行，401 仍走登出。
+ * refresh 完全移出启动关键路径（issue 07）：boot 直接放行主界面，
+ * refresh 后台静默跑——成功则补 preferences，401 由 client.ts 既有
+ * 路径 clear 会话切 Login，网络失败用快照继续离线运行。
  */
 const USER_SNAPSHOT_KEY = 'taskora.userSnapshot';
 
@@ -85,6 +87,20 @@ export function bootMobile(): Promise<void> {
       configureTokenStore(store);
       if (!(await store.hydrate())) return;
       hydrateAuthSnapshot(readUserSnapshot());
+      // 有快照且会话已恢复（token + user）：主界面数据本地全有，
+      // refresh 后台静默跑，不再阻塞首屏（issue 07；转圈长的主因）。
+      if (useAuthStore.getState().user && useAuthStore.getState().token) {
+        void refresh()
+          .then((data) => hydrateFromServer(data.user.preferences ?? null))
+          .catch((error) => {
+            // 401：client.ts 已 clear 会话，快照镜像同 transition 移除
+            // user，App 自动切 Login。其余（网络失败等）：忽略，离线
+            // 继续，SyncIndicator 呈现离线态。
+            if ((error as { response?: { status?: number } }).response?.status === 401) return;
+          });
+        return;
+      }
+      // 无快照：没有任何本地身份可兜底，必须等服务器裁决。
       try {
         const data = await refresh();
         hydrateFromServer(data.user.preferences ?? null);
