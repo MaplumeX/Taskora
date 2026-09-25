@@ -32,6 +32,8 @@ interface Props {
   items: FeedItem[];
   emptyHint?: string;
   sortable?: boolean;
+  /** 视图本身已表达日期语境时传 false(如 Today/Upcoming),省略行首日期 chip。 */
+  showScheduledBadge?: boolean;
 }
 
 /** 时间视图共享的空态展示（平铺 FeedListView 与 GroupedFeedListView 共用）。 */
@@ -64,6 +66,7 @@ interface SortableFeedItemRowProps {
   selectionState: SelectionState;
   onToggleComplete: () => void;
   onRowClick?: () => void;
+  showScheduledBadge?: boolean;
 }
 
 function SortableFeedItemRow({
@@ -73,9 +76,11 @@ function SortableFeedItemRow({
   selectionState,
   onToggleComplete,
   onRowClick,
+  showScheduledBadge,
 }: SortableFeedItemRowProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: item.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id: item.id,
+  });
 
   return (
     <div
@@ -95,15 +100,15 @@ function SortableFeedItemRow({
         selectionState={selectionState}
         onToggleComplete={onToggleComplete}
         onRowClick={onRowClick}
+        showScheduledBadge={showScheduledBadge}
       />
     </div>
   );
 }
 
-export function FeedListView({ items, emptyHint, sortable }: Props) {
+export function FeedListView({ items, emptyHint, sortable, showScheduledBadge }: Props) {
   const { t } = useTranslation();
-  const { handleRowClick, handleBlankClick, selectedIds, expandedId } =
-    useTaskRowSelection();
+  const { handleRowClick, handleBlankClick, selectedIds, expandedId } = useTaskRowSelection();
   // 注册当前可见行（task + project 行均可被键盘遍历停留；动作仅对
   // task 行生效，见 ADR-0004）。
   const rows = useMemo(
@@ -127,10 +132,7 @@ export function FeedListView({ items, emptyHint, sortable }: Props) {
     () => Object.fromEntries(projects.map((p) => [p.id, p.title])),
     [projects],
   );
-  const areaMap = useMemo(
-    () => Object.fromEntries(areas.map((a) => [a.id, a.title])),
-    [areas],
-  );
+  const areaMap = useMemo(() => Object.fromEntries(areas.map((a) => [a.id, a.title])), [areas]);
 
   // 鼠标：移动 5px 激活；触摸：按住 300ms 再移动才激活，避免与列表滚动冲突。
   const sensors = useSensors(
@@ -168,6 +170,7 @@ export function FeedListView({ items, emptyHint, sortable }: Props) {
         selectionState,
         onToggleComplete: () => handleToggle(item),
         onRowClick: isTask ? () => handleRowClick(item.id) : undefined,
+        showScheduledBadge,
       };
 
       if (sortable && isTask) {
@@ -199,7 +202,10 @@ export function FeedListView({ items, emptyHint, sortable }: Props) {
   return (
     <div className="flex flex-col" onClick={handleBlankClick}>
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-        <SortableContext items={topItems.filter((i) => i.type === 'task').map((i) => i.id)} strategy={verticalListSortingStrategy}>
+        <SortableContext
+          items={topItems.filter((i) => i.type === 'task').map((i) => i.id)}
+          strategy={verticalListSortingStrategy}
+        >
           <div className="flex flex-col">{renderItems()}</div>
         </SortableContext>
       </DndContext>

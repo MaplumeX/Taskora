@@ -7,7 +7,7 @@ import type { TaskResponseDto } from '@taskora/shared';
 
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { taskKeys, useTaskQuery, useUpdateTask } from '@taskora/api';
+import { isOverdue, taskKeys, useTaskQuery, useUpdateTask } from '@taskora/api';
 import { TaskCheckbox } from './TaskCheckbox';
 import { TaskContextMenu } from './TaskContextMenu';
 import { TaskDateBadge } from './TaskDateBadge';
@@ -48,6 +48,11 @@ export function TaskItem({
   const settled = completed || cancelled;
   const [exiting, setExiting] = React.useState(false);
   const expanded = selectionState === 'expanded';
+  // 逾期例外:语境视图(Today/Upcoming)省略日期 chip(列表本身即语境),
+  // 但逾期日期偏离语境,仍显示红色 chip 保留信号(参考 Things 3)。
+  const scheduledOverdue = current.scheduledDate
+    ? isOverdue(new Date(current.scheduledDate))
+    : false;
 
   const updateTask = useUpdateTask();
   const [title, setTitle] = React.useState(current.title);
@@ -150,49 +155,63 @@ export function TaskItem({
         >
           <TaskCheckbox checked={completed} cancelled={cancelled} onToggle={handleToggle} />
 
-          {expanded ? (
-            <Input
-              ref={titleInputRef}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={commitTitle}
-              placeholder={t('task:newTaskPlaceholder')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  // Enter（含 ⌘Enter/Ctrl+Enter）：先 blur 触发提交，再收起，
-                  // 避免出现「退出编辑」与「收起」拆成两次按键的中间态。
-                  e.currentTarget.blur();
-                  rowRef.current?.focus();
-                  onRowClick?.();
-                } else if (e.key === ' ') {
-                  e.stopPropagation();
-                } else if (e.key === 'Escape') {
-                  setTitle(current.title);
-                  e.currentTarget.blur();
-                }
-              }}
-              onClick={(e) => e.stopPropagation()}
-              className={cn(
-                'flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
-                settled && 'text-muted-foreground line-through',
-              )}
-            />
-          ) : (
-            <span
-              className={cn(
-                'flex-1 truncate text-left text-sm transition-colors',
-                settled
-                  ? 'text-muted-foreground line-through'
-                  : current.title
-                    ? 'text-foreground'
-                    : 'text-muted-foreground',
-              )}
-            >
-              {current.title || t('task:newTaskPlaceholder')}
-            </span>
+          {/* 行首日期 chip + 重复图标:参考 Things 3 的 [chip][↻] 标题 结构。 */}
+          {(showScheduledBadge || scheduledOverdue) && (
+            <TaskDateBadge scheduledDate={current.scheduledDate} className="shrink-0" />
           )}
+          <TaskRepeatBadge repeatRule={current.repeatRule} className="shrink-0" />
+
+          {/* 标题区：备注/子任务徽标紧贴标题文本（参考 Things 3），
+            而非被 flex-1 的标题推到行尾。 */}
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            {expanded ? (
+              <Input
+                ref={titleInputRef}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={commitTitle}
+                placeholder={t('task:newTaskPlaceholder')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    // Enter（含 ⌘Enter/Ctrl+Enter）：先 blur 触发提交，再收起，
+                    // 避免出现「退出编辑」与「收起」拆成两次按键的中间态。
+                    e.currentTarget.blur();
+                    rowRef.current?.focus();
+                    onRowClick?.();
+                  } else if (e.key === ' ') {
+                    e.stopPropagation();
+                  } else if (e.key === 'Escape') {
+                    setTitle(current.title);
+                    e.currentTarget.blur();
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'min-w-0 flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
+                  settled && 'text-muted-foreground line-through',
+                )}
+              />
+            ) : (
+              <span
+                className={cn(
+                  'truncate text-left text-sm transition-colors',
+                  settled
+                    ? 'text-muted-foreground line-through'
+                    : current.title
+                      ? 'text-foreground'
+                      : 'text-muted-foreground',
+                )}
+              >
+                {current.title || t('task:newTaskPlaceholder')}
+              </span>
+            )}
+            {/* 备注徽标：有备注的任务一眼可见。 */}
+            <TaskNotesBadge notes={current.notes} className="shrink-0" />
+            {/* 子任务徽标：有子任务的任务一眼可见，并显示未了结数量。 */}
+            <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
+          </div>
 
           <div className="flex min-w-0 shrink items-center gap-2">
             {current.tags && current.tags.length > 0 && (
@@ -212,18 +231,10 @@ export function TaskItem({
                 {tag}
               </span>
             )}
-            {/* 备注徽标：有备注的任务一眼可见。 */}
-            <TaskNotesBadge notes={current.notes} className="shrink-0" />
-            {/* 子任务徽标：有子任务的任务一眼可见，并显示未了结数量。 */}
-            <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
-            {showScheduledBadge && (
-              <TaskDateBadge scheduledDate={current.scheduledDate} className="shrink-0" />
-            )}
             {/* 提醒徽标不受 showScheduledBadge 限制：Today/Scheduled 等视图
               不展示日期徽标时仍能看到提醒时刻（reminders spec）。 */}
             <TaskReminderBadge reminderTime={current.reminderTime} className="shrink-0" />
-            {/* 重复徽标：设了 Repeat Rule 的任务一眼可见（recurring-tasks spec）。 */}
-            <TaskRepeatBadge repeatRule={current.repeatRule} className="shrink-0" />
+            {/* 截止徽标在行尾右对齐（参考 Things 3 的旗帜 + 日期）。 */}
             <TaskDueDateBadge dueDate={current.dueDate} className="shrink-0" />
           </div>
         </div>

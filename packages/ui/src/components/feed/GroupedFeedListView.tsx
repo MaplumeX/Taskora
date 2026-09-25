@@ -56,6 +56,8 @@ interface Props {
   view: GroupedTimeView;
   items: FeedItem[];
   emptyHint?: string;
+  /** 视图本身已表达日期语境时传 false（如 Today），省略行首日期 chip。 */
+  showScheduledBadge?: boolean;
 }
 
 const UNGROUPED = 'ungrouped';
@@ -201,6 +203,7 @@ interface SortableFeedTaskProps {
   selectionState: SelectionState;
   onToggleComplete: () => void;
   onRowClick: () => void;
+  showScheduledBadge?: boolean;
 }
 
 function SortableFeedTask({
@@ -210,6 +213,7 @@ function SortableFeedTask({
   selectionState,
   onToggleComplete,
   onRowClick,
+  showScheduledBadge,
 }: SortableFeedTaskProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: taskDndId(item.id) });
@@ -235,6 +239,7 @@ function SortableFeedTask({
         selectionState={selectionState}
         onToggleComplete={onToggleComplete}
         onRowClick={onRowClick}
+        showScheduledBadge={showScheduledBadge}
       />
     </div>
   );
@@ -317,7 +322,7 @@ type RenderChunk =
  * 设备本地记忆；组内拖拽重排写回全局 Position，跨组拖拽改任务归属，
  * 组头不可拖拽（组间顺序由侧边栏持有）。
  */
-export function GroupedFeedListView({ view, items, emptyHint }: Props) {
+export function GroupedFeedListView({ view, items, emptyHint, showScheduledBadge }: Props) {
   const { t } = useTranslation();
   const { handleRowClick, handleBlankClick, selectedIds, expandedId } =
     useTaskRowSelection();
@@ -611,6 +616,7 @@ export function GroupedFeedListView({ view, items, emptyHint }: Props) {
         selectionState={selectionStateOf(selectedIds, expandedId, taskId)}
         onToggleComplete={() => handleToggle(item)}
         onRowClick={() => handleRowClick(taskId)}
+        showScheduledBadge={showScheduledBadge}
       />
     );
   };
