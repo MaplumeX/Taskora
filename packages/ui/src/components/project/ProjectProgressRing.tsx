@@ -24,6 +24,8 @@ export function ProjectProgressRing({
   const { t } = useTranslation('task');
 
   const isChecked = projectStatus === ProjectStatus.COMPLETED;
+  // 取消不属于项目模型（ADR 0006 out of scope）；作防御性呈现，与未来扩展兼容。
+  const isCancelled = projectStatus === ('CANCELLED' as ProjectStatus);
   const ratio = total > 0 ? completed / total : 0;
   const offset = CIRCUMFERENCE * (1 - ratio);
 
@@ -32,7 +34,7 @@ export function ProjectProgressRing({
       type="button"
       role="checkbox"
       aria-checked={isChecked}
-      aria-label={t(isChecked ? 'markIncomplete' : 'markComplete')}
+      aria-label={t(isCancelled ? 'markUncancelled' : isChecked ? 'markIncomplete' : 'markComplete')}
       disabled={disabled}
       onClick={(e) => {
         e.stopPropagation();
@@ -52,10 +54,12 @@ export function ProjectProgressRing({
           fill="none"
           stroke="currentColor"
           strokeWidth="2"
-          className={isChecked ? 'text-primary' : 'text-muted-foreground/30'}
+          className={
+            isChecked ? 'text-primary' : isCancelled ? 'text-muted-foreground/40' : 'text-muted-foreground/30'
+          }
         />
         {/* 进度弧（进行中且有进度时，满环时满圈无实心无勾） */}
-        {!isChecked && ratio > 0 && (
+        {!isChecked && !isCancelled && ratio > 0 && (
           <circle
             cx="9"
             cy="9"
@@ -74,6 +78,10 @@ export function ProjectProgressRing({
         {isChecked && (
           <circle cx="9" cy="9" r={RADIUS} fill="currentColor" className="text-primary" />
         )}
+        {/* 已取消时弱化实心填充 */}
+        {isCancelled && (
+          <circle cx="9" cy="9" r={RADIUS} fill="currentColor" className="text-muted-foreground/30" />
+        )}
         {/* 中心勾（仅项目已完成时） */}
         {isChecked && (
           <path
@@ -84,6 +92,17 @@ export function ProjectProgressRing({
             strokeLinecap="round"
             strokeLinejoin="round"
             className="text-primary-foreground"
+          />
+        )}
+        {/* 中心叉（仅项目已取消时） */}
+        {isCancelled && (
+          <path
+            d="M6 6 L12 12 M12 6 L6 12"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            className="text-muted-foreground"
           />
         )}
       </svg>

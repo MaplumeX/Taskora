@@ -27,6 +27,8 @@ interface Props {
   onToggleComplete: () => void;
   onRowClick?: () => void;
   showScheduledBadge?: boolean;
+  /** Logbook 专用：标题区后注入的了却日期徽标 */
+  settledDateBadge?: React.ReactNode;
 }
 
 export function TaskItem({
@@ -37,6 +39,7 @@ export function TaskItem({
   onToggleComplete,
   onRowClick,
   showScheduledBadge = true,
+  settledDateBadge,
 }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -211,6 +214,8 @@ export function TaskItem({
             <TaskNotesBadge notes={current.notes} className="shrink-0" />
             {/* 子任务徽标：有子任务的任务一眼可见，并显示未了结数量。 */}
             <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
+            {/* 了却日期（仅 Logbook 注入）。 */}
+            {settledDateBadge}
           </div>
 
           <div className="flex min-w-0 shrink items-center gap-2">

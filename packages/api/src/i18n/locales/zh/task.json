@@ -27,6 +27,7 @@
   "trashEmpty": "废纸篓是空的",
   "yesterday": "昨天",
   "earlier": "更早",
+  "logbookWeekRange": "{{start}} – {{end}}",
   "markComplete": "标记完成",
   "markIncomplete": "标记未完成",
   "markCancelled": "取消任务",

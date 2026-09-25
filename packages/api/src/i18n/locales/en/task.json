@@ -27,6 +27,7 @@
   "trashEmpty": "Trash is empty",
   "yesterday": "Yesterday",
   "earlier": "Earlier",
+  "logbookWeekRange": "{{start}} – {{end}}",
   "markComplete": "Mark Complete",
   "markIncomplete": "Mark Incomplete",
   "markCancelled": "Cancel Task",
