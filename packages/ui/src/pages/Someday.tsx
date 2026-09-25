@@ -13,7 +13,7 @@ export default function Someday() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        <TimeViewFeedList view="someday" items={items} emptyHint={t('task:somedayEmpty')} />
+        <TimeViewFeedList items={items} emptyHint={t('task:somedayEmpty')} />
       )}
     </div>
   );

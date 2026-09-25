@@ -16,14 +16,12 @@ import { toast } from 'sonner';
 
 import type { CreateTaskDto } from '@taskora/shared';
 import {
-  groupedViewCollapseKey,
   useCancelTask,
   useCompleteTask,
   useContentBottomActionsForRoute,
   viewOf,
   useCreateTask,
   useDeleteTask,
-  useGroupedViewCollapseStore,
   usePageTaskContext,
   useReorderTasks,
   useRestoreTask,
@@ -218,26 +216,6 @@ export function KeyboardShortcuts({ platform }: Props) {
           const row = action.type === 'moveFirst' ? pool[0] : pool[pool.length - 1];
           useSelectionStore.getState().setSelection([row.id]);
           useUiInteractionStore.getState().setExpandedId(null);
-          focusSelectionRow(row.id);
-          return;
-        }
-        case 'collapseGroup':
-        case 'expandGroup': {
-          const id = selection.selectedIds.at(-1);
-          const row = id ? rowById.get(id) : undefined;
-          // 仅 Group Header 行响应（story 21）；其他行 ←/→ 无动作。
-          if (!row?.groupHeader) return;
-          // 以折叠 store 的实时状态为准（注册的行元数据可能是旧快照），
-          // 保证 ←/→ 在连续按键下稳定往返。
-          const currentlyCollapsed =
-            useGroupedViewCollapseStore.getState().collapsed[
-              groupedViewCollapseKey(view, row.id)
-            ] === true;
-          const targetCollapsed = action.type === 'collapseGroup';
-          if (currentlyCollapsed === targetCollapsed) return;
-          useGroupedViewCollapseStore
-            .getState()
-            .setCollapsed(view, row.id, targetCollapsed);
           focusSelectionRow(row.id);
           return;
         }

@@ -119,10 +119,6 @@ export {
   type SelectionRowGroupHeader,
 } from './stores/selection.store';
 export { useProjectUiPrefsStore } from './stores/projectUiPrefs.store';
-export {
-  useGroupedViewCollapseStore,
-  groupedViewCollapseKey,
-} from './stores/groupedViewCollapse.store';
 
 // Preferences (theme / language / week start)
 export { usePreferencesStore, hydrateFromServer } from './stores/preferences.store';
@@ -154,6 +150,29 @@ export {
   useReminderPermissionStore,
   type ReminderPermissionState,
 } from './reminders/permission.store';
+
+// Status Bar（android-status-bar，滴答清单形态）：内容组装 + 通知薄壳 + 控制器
+export {
+  sortStatusBarTasks,
+  taskLine,
+  carouselTitle,
+  type StatusBarTaskInput,
+} from './status-bar/content';
+export {
+  setStatusBarShell,
+  getStatusBarShell,
+  type StatusBarShell,
+  type StatusBarActionEvent,
+} from './status-bar/shell';
+export {
+  createStatusBarController,
+  registerStatusBarController,
+  currentStatusBarController,
+  STATUS_BAR_ENABLED_KEY,
+  type StatusBarController,
+  type StatusBarControllerOptions,
+  type TranslateFn as StatusBarTranslateFn,
+} from './status-bar/controller';
 
 // Utilities
 export * from './utils/date';

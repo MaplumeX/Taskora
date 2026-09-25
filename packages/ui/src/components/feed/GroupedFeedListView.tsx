@@ -38,11 +38,9 @@ import {
   selectionStateOf,
   useAreasQuery,
   useCompleteTask,
-  useGroupedViewCollapseStore,
   useProjectsQuery,
   useReorderTasks,
   useSelectionScope,
-  useSelectionStore,
   useTaskRowSelection,
   useUncompleteTask,
   useUpdateTask,
@@ -50,10 +48,7 @@ import {
   type SelectionRow,
 } from '@taskora/api';
 
-type GroupedTimeView = 'today' | 'anytime' | 'someday';
-
 interface Props {
-  view: GroupedTimeView;
   items: FeedItem[];
   emptyHint?: string;
   /** 视图本身已表达日期语境时传 false（如 Today），省略行首日期 chip。 */
@@ -86,10 +81,7 @@ export function headerDndId(id: string) {
   return `${HEADER_DND_PREFIX}${id}`;
 }
 
-/**
- * 由推导结果播种拖拽容器：ungrouped 装顶部浮动任务；每个组头容器装
- * 其成员任务（折叠组也保有完整成员，投向折叠组时才能落到组末尾）。
- */
+/** 由推导结果播种拖拽容器：ungrouped 装顶部浮动任务；每个组头容器装其成员任务。 */
 export function containersFromLayout(layout: GroupedFeedLayout): {
   zoneOrder: ContainerId[];
   containers: Record<ContainerId, string[]>;
@@ -112,26 +104,18 @@ export function containersFromLayout(layout: GroupedFeedLayout): {
 
 interface ParentMaps {
   kinds: Map<string, 'project' | 'area'>;
-  titles: Map<string, string>;
-  collapsed: Map<string, boolean>;
 }
 
 function parentMapsFromLayout(layout: GroupedFeedLayout): ParentMaps {
   const kinds = new Map<string, 'project' | 'area'>();
-  const titles = new Map<string, string>();
-  const collapsed = new Map<string, boolean>();
   for (const block of layout.blocks) {
     if (block.kind === 'projectGroupHeader') {
       kinds.set(block.project.id, 'project');
-      titles.set(block.project.id, block.project.title);
-      collapsed.set(block.project.id, block.collapsed);
     } else if (block.kind === 'areaGroupHeader') {
       kinds.set(block.area.id, 'area');
-      titles.set(block.area.id, block.area.title);
-      collapsed.set(block.area.id, block.collapsed);
     }
   }
-  return { kinds, titles, collapsed };
+  return { kinds };
 }
 
 /** 落点解析：任务行 → 其容器内 before/after；容器/组头 → 该组末尾。 */
@@ -245,7 +229,8 @@ function SortableFeedTask({
   );
 }
 
-/** 组头行的放置目标（Collapsed 组唯一的投放面；isOver 时给出来落点反馈）。 */
+/** 组头行的放置目标（投向组头 = 落在该组末尾；isOver 时给出落点反馈）。
+ *  同时承载组间间隔：mt-6 开新的一块，首个组头（first）无额外间距。 */
 function GroupHeaderDropZone({
   parentId,
   children,
@@ -258,7 +243,7 @@ function GroupHeaderDropZone({
     <div
       ref={setNodeRef}
       data-group-header-dropzone={parentId}
-      className={cn('rounded-lg', isOver && 'bg-accent/40')}
+      className={cn('mt-6 rounded-lg first:mt-0', isOver && 'bg-accent/40')}
     >
       {children}
     </div>
@@ -318,48 +303,28 @@ type RenderChunk =
 
 /**
  * Grouped View（分组视图）列表：今天/随时/将来三个时间视图按项目/领域
- * 聚类展示任务。分组为纯渲染层推导（deriveGroupedFeedLayout），折叠状态
- * 设备本地记忆；组内拖拽重排写回全局 Position，跨组拖拽改任务归属，
- * 组头不可拖拽（组间顺序由侧边栏持有）。
+ * 聚类展示任务。分组为纯渲染层推导（deriveGroupedFeedLayout），扁平单层、
+ * 不可折叠；组内拖拽重排写回全局 Position，跨组拖拽改任务归属，组头不
+ * 可拖拽（组间顺序由侧边栏持有）。
  */
-export function GroupedFeedListView({ view, items, emptyHint, showScheduledBadge }: Props) {
+export function GroupedFeedListView({ items, emptyHint, showScheduledBadge }: Props) {
   const { t } = useTranslation();
   const { handleRowClick, handleBlankClick, selectedIds, expandedId } =
     useTaskRowSelection();
-  const setSelection = useSelectionStore((s) => s.setSelection);
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
-  const collapsedAll = useGroupedViewCollapseStore((s) => s.collapsed);
-  const setCollapsed = useGroupedViewCollapseStore((s) => s.setCollapsed);
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const reorderTasks = useReorderTasks();
   const updateTask = useUpdateTask();
 
-  // 折叠状态按 `{view}:{parentId}` 存储；推导只消费本视图的 parentId 切片。
-  const viewCollapsed = React.useMemo(() => {
-    const prefix = `${view}:`;
-    const slice: Record<string, boolean> = {};
-    for (const [key, value] of Object.entries(collapsedAll)) {
-      if (value && key.startsWith(prefix)) slice[key.slice(prefix.length)] = true;
-    }
-    return slice;
-  }, [collapsedAll, view]);
-
   const layout = React.useMemo(
-    () =>
-      deriveGroupedFeedLayout({
-        items,
-        projects,
-        areas,
-        collapsed: viewCollapsed,
-        groupingEnabled: true,
-      }),
-    [items, projects, areas, viewCollapsed],
+    () => deriveGroupedFeedLayout({ items, projects, areas, groupingEnabled: true }),
+    [items, projects, areas],
   );
 
-  // 注册当前可见行（ADR-0004）：折叠组只贡献组头行，j/k 不会困进隐藏任务；
-  // 组头行携带 groupHeader 元数据供 ←/→ 折叠与「下方新建」预填父级。
+  // 注册当前可见行（ADR-0004）：组头行携带 groupHeader 元数据供「下方新建」
+  // 预填父级与 Alt+↑/↓ 组边界钳制；所有行始终可见。
   const rows = React.useMemo<SelectionRow[]>(
     () =>
       layout.blocks.map((block): SelectionRow => {
@@ -379,49 +344,20 @@ export function GroupedFeedListView({ view, items, emptyHint, showScheduledBadge
               id: block.project.id,
               kind: 'project',
               groupHeaderId: block.project.id,
-              groupHeader: {
-                collapsed: block.collapsed,
-                createContext: { projectId: block.project.id },
-              },
+              groupHeader: { createContext: { projectId: block.project.id } },
             };
           case 'areaGroupHeader':
             return {
               id: block.area.id,
               kind: 'area',
               groupHeaderId: block.area.id,
-              groupHeader: {
-                collapsed: block.collapsed,
-                createContext: { areaId: block.area.id },
-              },
+              groupHeader: { createContext: { areaId: block.area.id } },
             };
         }
       }),
     [layout],
   );
   useSelectionScope(rows);
-
-  // 选中行所在组被折叠时，Selection 移到接管它的组头（story 26），
-  // 保证 Selection 永不落在不可见行上。
-  React.useEffect(() => {
-    if (selectedIds.length === 0) return;
-    const visible = new Set(rows.map((row) => row.id));
-    let changed = false;
-    const next: string[] = [];
-    for (const id of selectedIds) {
-      if (visible.has(id)) {
-        next.push(id);
-        continue;
-      }
-      const fallback = layout.selectionFallback[id];
-      if (fallback) {
-        if (!next.includes(fallback)) next.push(fallback);
-        changed = true;
-      } else if (!next.includes(id)) {
-        next.push(id);
-      }
-    }
-    if (changed) setSelection(next);
-  }, [layout, rows, selectedIds, setSelection]);
 
   const projectMap = React.useMemo(
     () => Object.fromEntries(projects.map((p) => [p.id, p.title])),
@@ -506,10 +442,6 @@ export function GroupedFeedListView({ view, items, emptyHint, showScheduledBadge
     }
   };
 
-  const toggleGroup = (parentId: string, collapsed: boolean) => {
-    setCollapsed(view, parentId, collapsed);
-  };
-
   const handleDragStart = ({ active }: DragStartEvent) => {
     const activeKey = String(active.id);
     if (!activeKey.startsWith(TASK_DND_PREFIX)) return;
@@ -559,14 +491,6 @@ export function GroupedFeedListView({ view, items, emptyHint, showScheduledBadge
       if (!data) return;
       updateTask.mutate({ id: taskId, data });
       if (orderChanged) reorderTasks.mutate(finalOrder);
-      // 投向折叠组：任务落在组末尾，toast 给出明确反馈（story 20）。
-      if (parentMaps.collapsed.get(placement.containerId)) {
-        toast.success(
-          t('task:movedToGroup', {
-            title: parentMaps.titles.get(placement.containerId) ?? '',
-          }),
-        );
-      }
       return;
     }
 
@@ -580,7 +504,7 @@ export function GroupedFeedListView({ view, items, emptyHint, showScheduledBadge
   };
 
   // 渲染序列切块：连续同容器任务合并为一个容器块；顶部未分组区与分组块
-  // 依次排列（Area 组内可再嵌套项目子组块）。
+  // 依次排列（扁平单层，组间无嵌套）。
   const chunks: RenderChunk[] = [];
   for (const block of layout.blocks) {
     if (block.kind === 'task') {
@@ -604,8 +528,8 @@ export function GroupedFeedListView({ view, items, emptyHint, showScheduledBadge
   const renderTask = (containerId: ContainerId) => (taskId: string) => {
     const item = itemMap.get(taskId);
     if (!item) return null;
-    // 孤儿任务在未分组区保留项目/领域标题标签（story 27）；组内任务的
-    // 归属已由组头表达，不再重复标签。
+    // 孤儿任务在未分组区保留项目/领域标题标签；组内任务的归属已由组头
+    // 表达，不再重复标签。
     const ungrouped = containerId === UNGROUPED;
     return (
       <SortableFeedTask
@@ -628,8 +552,6 @@ export function GroupedFeedListView({ view, items, emptyHint, showScheduledBadge
       return (
         <ProjectGroupHeaderRow
           project={block.project}
-          collapsed={block.collapsed}
-          onToggleCollapse={() => toggleGroup(block.project.id, !block.collapsed)}
           selectionState={selectionStateOf(selectedIds, expandedId, block.project.id)}
         />
       );
@@ -637,9 +559,6 @@ export function GroupedFeedListView({ view, items, emptyHint, showScheduledBadge
     return (
       <AreaGroupHeaderRow
         area={block.area}
-        directTaskCount={block.directTaskCount}
-        collapsed={block.collapsed}
-        onToggleCollapse={() => toggleGroup(block.area.id, !block.collapsed)}
         selectionState={selectionStateOf(selectedIds, expandedId, block.area.id)}
       />
     );

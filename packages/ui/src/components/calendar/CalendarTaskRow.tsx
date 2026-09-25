@@ -15,6 +15,9 @@ interface CalendarTaskRowProps {
 export function CalendarTaskRow({ task, onToggleComplete, selected = false, onRowClick }: CalendarTaskRowProps) {
   const { t } = useTranslation();
   const completed = task.status === 'COMPLETED';
+  const cancelled = task.status === 'CANCELLED';
+  // 已了结（完成或取消）：标题删除线 + 弱化（ADR 0006）。
+  const settled = completed || cancelled;
 
   return (
     <div
@@ -26,8 +29,9 @@ export function CalendarTaskRow({ task, onToggleComplete, selected = false, onRo
     >
       <TaskCheckbox
         checked={completed}
+        cancelled={cancelled}
         onToggle={() => onToggleComplete(task)}
-        className="h-3.5 w-3.5"
+        className="h-3 w-3"
       />
       <button
         type="button"
@@ -37,7 +41,7 @@ export function CalendarTaskRow({ task, onToggleComplete, selected = false, onRo
         }}
         className={cn(
           'min-w-0 flex-1 truncate text-left text-xs leading-4 text-foreground',
-          completed && 'text-muted-foreground line-through',
+          settled && 'text-muted-foreground line-through',
         )}
         title={task.title}
       >

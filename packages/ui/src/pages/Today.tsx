@@ -19,7 +19,6 @@ export default function Today() {
         // Today 视图本身即日期语境,行上省略日期标记(逾期任务同此——
         // When 永不逾期,一律按「今天」对待,参考 Things 3)。
         <TimeViewFeedList
-          view="today"
           items={items}
           emptyHint={t('task:todayEmpty')}
           showScheduledBadge={false}
