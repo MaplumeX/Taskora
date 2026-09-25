@@ -248,4 +248,25 @@ describe('ReminderCoordinator — system（移动）模式', () => {
     coordinator.stop();
     await engine.close();
   });
+
+  it('系统注册失败不落表：下 tick 自动重试，恢复后注册成功且不再重复', async () => {
+    await seedTask(engine);
+    // 首次注册失败（典型诱因：本机授权未授予——多设备同步来的提醒）
+    shell.schedule.mockRejectedValueOnce(new Error('notification permission not granted'));
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10); // 首次对齐：schedule 失败
+    expect(shell.schedule).toHaveBeenCalledTimes(1);
+
+    // 下 tick：失败未落表 → 同一 key 重试注册并成功
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(shell.schedule).toHaveBeenCalledTimes(2);
+    expect(shell.schedule.mock.calls[1][0]).toBe(shell.schedule.mock.calls[0][0]);
+
+    // 已落表后不再重复注册
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(shell.schedule).toHaveBeenCalledTimes(2);
+
+    coordinator.stop();
+    await engine.close();
+  });
 });
