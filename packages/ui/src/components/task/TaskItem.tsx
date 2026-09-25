@@ -161,14 +161,21 @@ export function TaskItem({
           <TaskCheckbox checked={completed} cancelled={cancelled} onToggle={handleToggle} />
 
           {/* 行首日期标记 + 重复图标:参考 Things 3 的 [chip][↻] 标题 结构。
-            ≤ 今天 → 黄星；未来日期 → 灰色短日期 chip（两者互斥）。 */}
-          {showScheduledBadge && scheduledOnOrBeforeToday && (
-            <TaskTodayBadge className="shrink-0" />
+            ≤ 今天 → 黄星；未来日期 → 灰色短日期 chip（两者互斥）。
+            已了结任务（Logbook）不适用：行首改显示了结时间。 */}
+          {settled ? (
+            settledDateBadge
+          ) : (
+            <>
+              {showScheduledBadge && scheduledOnOrBeforeToday && (
+                <TaskTodayBadge className="shrink-0" />
+              )}
+              {showScheduledBadge && (
+                <TaskDateBadge scheduledDate={current.scheduledDate} className="shrink-0" />
+              )}
+              <TaskRepeatBadge repeatRule={current.repeatRule} className="shrink-0" />
+            </>
           )}
-          {showScheduledBadge && (
-            <TaskDateBadge scheduledDate={current.scheduledDate} className="shrink-0" />
-          )}
-          <TaskRepeatBadge repeatRule={current.repeatRule} className="shrink-0" />
 
           {/* 标题区：备注/子任务徽标紧贴标题文本（参考 Things 3），
             而非被 flex-1 的标题推到行尾。 */}
@@ -220,8 +227,6 @@ export function TaskItem({
             <TaskNotesBadge notes={current.notes} className="shrink-0" />
             {/* 子任务徽标：有子任务的任务一眼可见，并显示未了结数量。 */}
             <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
-            {/* 了却日期（仅 Logbook 注入）。 */}
-            {settledDateBadge}
           </div>
 
           <div className="flex min-w-0 shrink items-center gap-2">

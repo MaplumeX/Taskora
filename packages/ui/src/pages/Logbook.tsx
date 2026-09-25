@@ -90,6 +90,7 @@ export default function Logbook() {
               selectionState={selectionState}
               onToggleComplete={() => toggleComplete(item)}
               onRowClick={isTask ? () => handleRowClick(item.id) : undefined}
+              showScheduledBadge={false}
               showSettledDate
             />
           );
