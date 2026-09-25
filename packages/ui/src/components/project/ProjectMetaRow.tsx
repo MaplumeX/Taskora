@@ -67,7 +67,6 @@ export function ProjectMetaRow({ project }: Props) {
                     ? formatDateLabel(new Date(project.scheduledDate))
                     : null
               }
-              urgent={isUrgent(project.scheduledDate)}
             />
           }
         >
@@ -82,7 +81,7 @@ export function ProjectMetaRow({ project }: Props) {
             <MetaBadge
               icon={<Flag className="h-3 w-3" />}
               text={formatDeadlineCountdown(new Date(project.dueDate))}
-              urgent={isUrgent(project.dueDate)}
+              urgent={isDeadlineUrgent(project.dueDate)}
             />
           }
         >
@@ -113,7 +112,11 @@ export function ProjectMetaRow({ project }: Props) {
   );
 }
 
-function isUrgent(dateIso: string | null | undefined): boolean {
+/**
+ * Deadline 警示色：到期/逾期变红（参考 Things 3，红色只属于 Deadline）。
+ * 计划日期（When）永不逾期，不套警示色。
+ */
+function isDeadlineUrgent(dateIso: string | null | undefined): boolean {
   if (!dateIso) return false;
   const date = new Date(dateIso);
   return isOverdue(date) || isToday(date);
@@ -123,11 +126,11 @@ function isUrgent(dateIso: string | null | undefined): boolean {
 function MetaBadge({
   icon,
   text,
-  urgent,
+  urgent = false,
 }: {
   icon: React.ReactNode;
   text: string | null;
-  urgent: boolean;
+  urgent?: boolean;
 }) {
   return (
     <span
