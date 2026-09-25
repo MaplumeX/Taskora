@@ -18,7 +18,7 @@ Taskora 的任务只有两种结局：完成（Completed）或删除（Trash）�
 
 1. Task 与 Subtask 支持 `CANCELLED` 终态：与 `ACTIVE`/`COMPLETED` 同级，留痕、可逆
 2. Logbook 从"已完成任务的档案"升格为"**已了结（Settled）任务的档案**"：完成的与取消的任务都进 Logbook，按了结日期（今天/昨天/更早）分组
-3. 取消的任务在 Logbook 中以 ⊘ 图标 + 标题删除线 + 弱化样式与完成任务区分
+3. 取消的任务在 Logbook 中以实心圆 + X 图标（与完成的实心圆 ✓ 同构，仅色调弱化）+ 标题删除线 + 弱化样式与完成任务区分
 4. 全入口支持：键盘快捷键（⌥⌘K / Ctrl+Alt+K / Alt+Shift+K，预注册于 `docs/keyboard-shortcuts.md`）、右键菜单、Agent 工具
 5. 多端实时同步：另一端正在看的 Today/Anytime 列表中，被取消的任务即时消失，Logbook 即时出现
 
@@ -43,7 +43,7 @@ Taskora 的任务只有两种结局：完成（Completed）或删除（Trash）�
 ### Logbook 呈现
 
 11. As a 用户, I want Logbook 中出现我取消的任务, so that 放弃的决定留有档案
-12. As a 用户, I want 取消的任务在 Logbook 中显示 ⊘ 图标而完成显示 ✓, so that 扫一眼就能分清"做完的"和"放弃的"
+12. As a 用户, I want 取消的任务在 Logbook 中显示 X 图标而完成显示 ✓, so that 扫一眼就能分清"做完的"和"放弃的"
 13. As a 用户, I want 取消的任务标题带删除线并弱化显示, so that 视觉上与完成任务有明确的层次区分
 14. As a 用户, I want 取消的任务与完成的任务一样按了结日期分到今天/昨天/更早组, so that 时间线保持连贯
 15. As a 用户, I want 在 Logbook 中点击取消的任务行展开并撤销取消, so that 恢复入口与完成任务一致
@@ -102,7 +102,7 @@ Taskora 的任务只有两种结局：完成（Completed）或删除（Trash）�
 
 - 快捷键按 `docs/keyboard-shortcuts.md` 预注册执行：macOS 桌面 ⌥⌘K、Windows 桌面 Ctrl+Alt+K、Web Alt+Shift+K；通过现有 keymap registry（见 ADR 0004）注册，与 `complete` 动作同型派发到当前 Selection。
 - 键盘取消后 Selection 的移动行为与 complete 完全一致。
-- Logbook 行样式：取消态行首 ⊘（对照完成的 ✓）、标题删除线、颜色弱化。
+- Logbook 行样式：取消态与完成态同构的实心圆勾选框，行首 X（对照完成的 ✓）、标题删除线、颜色弱化。
 - 右键菜单（Task 与 Subtask）增加"取消 / 撤销取消"项，随当前终态切换文案。
 - Subtask 的勾选框交互不变（仅完成/重开），取消只走右键菜单。
 - 撤销取消入口与撤销完成一致（Logbook 点行展开重开 / ⌘K）。
