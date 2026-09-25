@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import { useFeedQuery } from '@taskora/api';
-import { FeedListView } from '@/components/feed/FeedListView';
+import { TimeViewFeedList } from '@/components/feed/TimeViewFeedList';
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
@@ -16,7 +16,7 @@ export default function Today() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        <FeedListView items={items} emptyHint={t('task:todayEmpty')} />
+        <TimeViewFeedList view="today" items={items} emptyHint={t('task:todayEmpty')} />
       )}
     </div>
   );

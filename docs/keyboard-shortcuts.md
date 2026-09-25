@@ -24,8 +24,16 @@
 | 上移 / 下移选中 | ↑ / ↓ |
 | 选中首项 / 末项 | Alt+↑ / Alt+↓ |
 | 全选（批量完成/删除） | ⌘A / Ctrl+A |
+| 折叠 / 展开选中的 Group Header | ← / → |
 
 覆盖范围：8 个 Bucket 页（Inbox/Today/Upcoming/Anytime/Someday/Logbook/Trash/Calendar）+ Project/Area/Tag 详情页。遍历时 Heading 行可被选中跳过。
+
+Grouped View（今天/随时/将来按项目/领域分组）补充规则：
+
+- ← / → 仅对选中的 Group Header 生效（其他行无动作）；折叠状态按视图按父级设备本地记忆。
+- j/k（↑/↓）只遍历可见行：折叠组只贡献组头行；选中任务所在组被折叠时，选中移到组头。
+- Alt+↑/↓ 在组边界处钳制（组内首/末行，组块首行即组头），任务不会经键盘离开所在组。
+- Group Header 上 Enter 打开项目/领域详情（与项目行一致），Space（下方新建）在该父级内创建任务。
 
 ### 创建
 

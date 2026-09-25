@@ -10,7 +10,15 @@ import { create } from 'zustand';
  * uiInteraction store 承载（鼠标/键盘共用同一语义）。
  */
 
-export type SelectionRowKind = 'task' | 'heading' | 'project';
+export type SelectionRowKind = 'task' | 'heading' | 'project' | 'area';
+
+/** Grouped View 组头行的键盘元数据（ADR-0004 扩展）。 */
+export interface SelectionRowGroupHeader {
+  /** 组当前折叠态（←/→ 据此决定折叠或展开）。 */
+  collapsed: boolean;
+  /** 「下方新建」落在该组头时预填的父级上下文（无 heading）。 */
+  createContext: { projectId?: string; areaId?: string };
+}
 
 export interface SelectionRow {
   id: string;
@@ -19,6 +27,14 @@ export interface SelectionRow {
   completed?: boolean;
   /** 行数据的取消态（仅 task 行有意义），用于批量取消时跳过已取消项。 */
   cancelled?: boolean;
+  /**
+   * Grouped View：行所属的 Group Header id（组内任务行），或行自身即
+   * 组头（组头行，与 id 相同）。未分组行（顶部浮动区）无此字段；
+   * Alt+↑/↓ 以此在组边界处钳制，任务不会经键盘离开所在组。
+   */
+  groupHeaderId?: string;
+  /** 仅 Group Header 行：折叠/新建上下文元数据。 */
+  groupHeader?: SelectionRowGroupHeader;
 }
 
 interface SelectionState {

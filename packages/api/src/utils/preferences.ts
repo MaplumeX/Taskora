@@ -6,12 +6,14 @@ export interface ValidPreferences {
   theme: ThemeMode;
   language: Language;
   weekStartsOn: WeekStartsOn;
+  bucketGrouping: boolean;
 }
 
 export interface PreferencesDefaults {
   theme: ThemeMode;
   language: Language;
   weekStartsOn: WeekStartsOn;
+  bucketGrouping: boolean;
 }
 
 const THEME_MODES: readonly ThemeMode[] = ['light', 'dark', 'system'];
@@ -49,7 +51,12 @@ export function normalizePreferences(raw: unknown, defaults: PreferencesDefaults
     weekStartsOn = defaults.weekStartsOn;
   }
 
-  return { theme, language, weekStartsOn };
+  // 只接受真布尔值；缺失/脏值回落到调用方给的默认（本地现状或 true）。
+  const groupingRaw = obj.bucketGrouping;
+  const bucketGrouping =
+    typeof groupingRaw === 'boolean' ? groupingRaw : defaults.bucketGrouping;
+
+  return { theme, language, weekStartsOn, bucketGrouping };
 }
 
 /** Whether a raw value is a valid theme mode. */

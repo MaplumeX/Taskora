@@ -19,9 +19,6 @@ const SettingsData = lazy(() => import('@/components/settings/SettingsData'));
 const SettingsAbout = lazy(() => import('@/components/settings/SettingsAbout'));
 const SettingsAssistant = lazy(() => import('@/components/settings/SettingsAssistant'));
 
-/** 桌面端专属设置（如开机自启）只在 Tauri 运行时出现，Web 版不渲染。 */
-const isDesktopRuntime = () => '__TAURI_INTERNALS__' in globalThis;
-
 interface SettingsNavItem {
   tab: SettingsTab;
   labelKey: string;
@@ -76,8 +73,6 @@ export function SettingsModal() {
             >
               {settingsNav.map((item) => {
                 const Icon = item.icon;
-                // 「通用」页含桌面专属系统设置，Web 端隐藏该入口。
-                if (item.tab === 'general' && !isDesktopRuntime()) return null;
                 const active = item.tab === settingsTab;
                 return (
                   <li key={item.tab} className="shrink-0">

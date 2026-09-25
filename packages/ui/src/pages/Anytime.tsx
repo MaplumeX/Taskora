@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import { useFeedQuery } from '@taskora/api';
-import { FeedListView } from '@/components/feed/FeedListView';
+import { TimeViewFeedList } from '@/components/feed/TimeViewFeedList';
 
 export default function Anytime() {
   const { t } = useTranslation();
@@ -13,7 +13,7 @@ export default function Anytime() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        <FeedListView items={items} emptyHint={t('task:anytimeEmpty')} />
+        <TimeViewFeedList view="anytime" items={items} emptyHint={t('task:anytimeEmpty')} />
       )}
     </div>
   );
