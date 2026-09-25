@@ -14,8 +14,6 @@ export type SelectionRowKind = 'task' | 'heading' | 'project' | 'area';
 
 /** Grouped View 组头行的键盘元数据（ADR-0004 扩展）。 */
 export interface SelectionRowGroupHeader {
-  /** 组当前折叠态（←/→ 据此决定折叠或展开）。 */
-  collapsed: boolean;
   /** 「下方新建」落在该组头时预填的父级上下文（无 heading）。 */
   createContext: { projectId?: string; areaId?: string };
 }
@@ -33,7 +31,7 @@ export interface SelectionRow {
    * Alt+↑/↓ 以此在组边界处钳制，任务不会经键盘离开所在组。
    */
   groupHeaderId?: string;
-  /** 仅 Group Header 行：折叠/新建上下文元数据。 */
+  /** 仅 Group Header 行：新建上下文元数据。 */
   groupHeader?: SelectionRowGroupHeader;
 }
 

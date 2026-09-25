@@ -16,22 +16,15 @@ import type { SelectionState } from '@taskora/api';
 
 interface Props {
   project: ProjectResponseDto;
-  collapsed: boolean;
-  onToggleCollapse: () => void;
   selectionState?: SelectionState;
 }
 
 /**
- * Grouped View 的项目 Group Header（分组头）：chevron + 进度环（含完成/
- * 取消完成）+ 标题 + 计划/到期徽章 + 项目级全局计数。点击行体进入项目
- * 详情；保留 ProjectContextMenu。
+ * Grouped View 的项目 Group Header（分组头）：下横线小节标题形态，
+ * 进度环（含完成/取消完成）+ 标题 + 计划/到期徽章。点击行体进入项目
+ * 详情；保留 ProjectContextMenu。无折叠按钮、无任务计数。
  */
-export function ProjectGroupHeaderRow({
-  project,
-  collapsed,
-  onToggleCollapse,
-  selectionState = 'idle',
-}: Props) {
+export function ProjectGroupHeaderRow({ project, selectionState = 'idle' }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const completeProject = useCompleteProject();
@@ -49,9 +42,6 @@ export function ProjectGroupHeaderRow({
     <ProjectContextMenu project={project} current={project}>
       <GroupHeaderRowShell
         parentId={project.id}
-        label={label}
-        collapsed={collapsed}
-        onToggleCollapse={onToggleCollapse}
         selectionState={selectionState}
         onOpen={() => navigate(`/projects/${project.id}`)}
       >
@@ -63,7 +53,7 @@ export function ProjectGroupHeaderRow({
         />
         <span
           className={cn(
-            'flex-1 truncate text-left text-sm font-medium',
+            'flex-1 truncate text-left text-sm font-semibold tracking-wide',
             completed
               ? 'text-muted-foreground line-through'
               : project.title
@@ -74,11 +64,6 @@ export function ProjectGroupHeaderRow({
           {label}
         </span>
         <div className="flex items-center gap-2">
-          {project.taskTotalCount > 0 && (
-            <span className="text-xs text-muted-foreground tabular-nums">
-              {project.taskCompletedCount}/{project.taskTotalCount}
-            </span>
-          )}
           <TaskDateBadge scheduledDate={project.scheduledDate} />
           <TaskDueDateBadge dueDate={project.dueDate} />
         </div>

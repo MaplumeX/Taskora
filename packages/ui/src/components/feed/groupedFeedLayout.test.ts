@@ -136,7 +136,6 @@ function area(id: string): AreaResponseDto {
 interface DeriveOpts {
   projects?: ProjectResponseDto[];
   areas?: AreaResponseDto[];
-  collapsed?: Record<string, boolean>;
   groupingEnabled?: boolean;
 }
 
@@ -145,7 +144,6 @@ function derive(items: FeedItem[], opts: DeriveOpts = {}): GroupedFeedLayout {
     items,
     projects: opts.projects ?? [],
     areas: opts.areas ?? [],
-    collapsed: opts.collapsed ?? {},
     groupingEnabled: opts.groupingEnabled ?? true,
   });
 }
@@ -163,33 +161,36 @@ describe('grouped feed layout — membership（按直接父级聚类）', () => 
 
     expect(blockSummary(layout)).toEqual([
       'task:loose',
-      'areaHeader:a1',
-      'task:in-area',
       'projectHeader:p1',
       'task:in-project',
+      'areaHeader:a1',
+      'task:in-area',
     ]);
     const byId = new Map(
-      layout.blocks.filter((b) => b.kind === 'task').map((b) => [(b as { item: TaskFeedItem }).item.id, b]),
+      layout.blocks
+        .filter((b) => b.kind === 'task')
+        .map((b) => [(b as { item: TaskFeedItem }).item.id, b]),
     );
     expect(byId.get('loose')).toMatchObject({ groupHeaderId: null });
     expect(byId.get('in-project')).toMatchObject({ groupHeaderId: 'p1' });
     expect(byId.get('in-area')).toMatchObject({ groupHeaderId: 'a1' });
   });
 
-  it('a task inside an area-scoped project groups under the project sub-group, not the area directly', () => {
+  it('a task inside an area-scoped project groups flatly under the project, not nested in the area', () => {
     const layout = derive([taskItem('t1', { projectId: 'p1', areaId: 'a1' })], {
       projects: [project('p1', { areaId: 'a1' })],
       areas: [area('a1')],
     });
 
-    expect(blockSummary(layout)).toEqual(['areaHeader:a1', 'projectHeader:p1', 'task:t1']);
+    // 扁平单层：只有项目组头，不出现 area 组头，也不出现嵌套。
+    expect(blockSummary(layout)).toEqual(['projectHeader:p1', 'task:t1']);
     const task = layout.blocks.find((b) => b.kind === 'task');
     expect(task).toMatchObject({ groupHeaderId: 'p1' });
   });
 });
 
-describe('grouped feed layout — block order（组间/组内顺序）', () => {
-  it('orders ungrouped first, then area groups, then standalone project groups (sidebar order)', () => {
+describe('grouped feed layout — block order（扁平单层，侧边栏全局顺序）', () => {
+  it('orders ungrouped first, then flat groups in sidebar order (projects by their own Position)', () => {
     const layout = derive(
       [
         taskItem('loose-1'),
@@ -199,7 +200,7 @@ describe('grouped feed layout — block order（组间/组内顺序）', () => {
         taskItem('in-p1', { projectId: 'p1' }),
       ],
       {
-        // 侧边栏位次：p2 在 p1 之前（与数组顺序一致）。
+        // 侧边栏位次：p2 在 p1 之前（与数组顺序一致）；p 都在 a1 之前。
         projects: [project('p2'), project('p1')],
         areas: [area('a1')],
       },
@@ -208,37 +209,88 @@ describe('grouped feed layout — block order（组间/组内顺序）', () => {
     expect(blockSummary(layout)).toEqual([
       'task:loose-1',
       'task:loose-2',
-      'areaHeader:a1',
-      'task:in-a1',
       'projectHeader:p2',
       'task:in-p2',
       'projectHeader:p1',
       'task:in-p1',
+      'areaHeader:a1',
+      'task:in-a1',
     ]);
   });
 
-  it('area body lists direct tasks first, then project sub-groups in sidebar order', () => {
+  it('places an area before its first in-area project (sidebar nesting preserved as flat order)', () => {
     const layout = derive(
       [
-        taskItem('direct-1', { areaId: 'a1' }),
-        taskItem('in-p2', { projectId: 'p2' }),
+        taskItem('in-standalone', { projectId: 'p-standalone' }),
+        taskItem('direct', { areaId: 'a1' }),
         taskItem('in-p1', { projectId: 'p1' }),
-        taskItem('direct-2', { areaId: 'a1' }),
+        taskItem('in-p2', { projectId: 'p2' }),
       ],
       {
-        projects: [project('p2', { areaId: 'a1' }), project('p1', { areaId: 'a1' })],
+        // 侧边栏：p-standalone 在前，随后 a1 及其下 p1、p2。
+        projects: [
+          project('p-standalone'),
+          project('p1', { areaId: 'a1' }),
+          project('p2', { areaId: 'a1' }),
+        ],
         areas: [area('a1')],
       },
     );
 
     expect(blockSummary(layout)).toEqual([
+      'projectHeader:p-standalone',
+      'task:in-standalone',
       'areaHeader:a1',
-      'task:direct-1',
-      'task:direct-2',
-      'projectHeader:p2',
-      'task:in-p2',
+      'task:direct',
       'projectHeader:p1',
       'task:in-p1',
+      'projectHeader:p2',
+      'task:in-p2',
+    ]);
+  });
+
+  it('skips an area group with no direct tasks even when its projects have tasks', () => {
+    const layout = derive(
+      [taskItem('in-p1', { projectId: 'p1' }), taskItem('in-p2', { projectId: 'p2' })],
+      {
+        projects: [project('p1', { areaId: 'a1' }), project('p2', { areaId: 'a1' })],
+        areas: [area('a1')],
+      },
+    );
+
+    // a1 无直属任务 → 无 area 组头；p1/p2 保持侧边栏相对顺序。
+    expect(blockSummary(layout)).toEqual([
+      'projectHeader:p1',
+      'task:in-p1',
+      'projectHeader:p2',
+      'task:in-p2',
+    ]);
+  });
+
+  it('interleaves multiple areas and projects by the sidebar global order', () => {
+    const layout = derive(
+      [
+        taskItem('in-a2', { areaId: 'a2' }),
+        taskItem('in-p1', { projectId: 'p1' }),
+        taskItem('in-a1', { areaId: 'a1' }),
+        taskItem('in-p2', { projectId: 'p2' }),
+      ],
+      {
+        // 侧边栏：a1 及其下 p1 → p2 → a2。
+        projects: [project('p1', { areaId: 'a1' }), project('p2')],
+        areas: [area('a1'), area('a2')],
+      },
+    );
+
+    expect(blockSummary(layout)).toEqual([
+      'areaHeader:a1',
+      'task:in-a1',
+      'projectHeader:p1',
+      'task:in-p1',
+      'projectHeader:p2',
+      'task:in-p2',
+      'areaHeader:a2',
+      'task:in-a2',
     ]);
   });
 
@@ -260,20 +312,6 @@ describe('grouped feed layout — block order（组间/组内顺序）', () => {
       'task:third',
     ]);
   });
-
-  it('orders multiple area groups by sidebar order', () => {
-    const layout = derive(
-      [taskItem('in-a2', { areaId: 'a2' }), taskItem('in-a1', { areaId: 'a1' })],
-      { areas: [area('a1'), area('a2')] },
-    );
-
-    expect(blockSummary(layout)).toEqual([
-      'areaHeader:a1',
-      'task:in-a1',
-      'areaHeader:a2',
-      'task:in-a2',
-    ]);
-  });
 });
 
 describe('grouped feed layout — group visibility（组头可见性）', () => {
@@ -286,13 +324,16 @@ describe('grouped feed layout — group visibility（组头可见性）', () => 
     expect(blockSummary(layout)).toEqual(['task:loose']);
   });
 
-  it('renders an area header when only a nested project sub-group has tasks', () => {
-    const layout = derive([taskItem('in-p1', { projectId: 'p1' })], {
-      projects: [project('p1', { areaId: 'a1' })],
-      areas: [area('a1')],
-    });
+  it('headers carry their view task ids (no counts, no collapse state)', () => {
+    const layout = derive(
+      [taskItem('t1', { projectId: 'p1' }), taskItem('t2', { projectId: 'p1' })],
+      { projects: [project('p1')] },
+    );
 
-    expect(blockSummary(layout)).toEqual(['areaHeader:a1', 'projectHeader:p1', 'task:in-p1']);
+    const header = layout.blocks[0];
+    expect(header).toMatchObject({ kind: 'projectGroupHeader', taskIds: ['t1', 't2'] });
+    expect(header).not.toHaveProperty('collapsed');
+    expect(header).not.toHaveProperty('directTaskCount');
   });
 });
 
@@ -383,75 +424,6 @@ describe('grouped feed layout — orphan tasks（孤儿任务）', () => {
   });
 });
 
-describe('grouped feed layout — collapse（折叠）', () => {
-  it('collapsed project group emits only its header and maps hidden tasks to the header', () => {
-    const layout = derive(
-      [taskItem('t1', { projectId: 'p1' }), taskItem('t2', { projectId: 'p1' })],
-      { projects: [project('p1')], collapsed: { p1: true } },
-    );
-
-    expect(blockSummary(layout)).toEqual(['projectHeader:p1']);
-    expect(layout.selectionFallback).toEqual({ t1: 'p1', t2: 'p1' });
-    const header = layout.blocks[0];
-    expect(header).toMatchObject({ kind: 'projectGroupHeader', collapsed: true, taskIds: ['t1', 't2'] });
-  });
-
-  it('collapsed area group hides direct tasks, sub-group headers and their tasks', () => {
-    const layout = derive(
-      [
-        taskItem('direct', { areaId: 'a1' }),
-        taskItem('in-p1', { projectId: 'p1' }),
-      ],
-      {
-        projects: [project('p1', { areaId: 'a1' })],
-        areas: [area('a1')],
-        collapsed: { a1: true },
-      },
-    );
-
-    expect(blockSummary(layout)).toEqual(['areaHeader:a1']);
-    // 被隐藏的子项目组头与其任务都把 Selection 交给 Area 组头。
-    expect(layout.selectionFallback).toEqual({
-      direct: 'a1',
-      p1: 'a1',
-      'in-p1': 'a1',
-    });
-  });
-
-  it('collapsed sub-group inside an expanded area keeps its header visible', () => {
-    const layout = derive(
-      [taskItem('direct', { areaId: 'a1' }), taskItem('in-p1', { projectId: 'p1' })],
-      {
-        projects: [project('p1', { areaId: 'a1' })],
-        areas: [area('a1')],
-        collapsed: { p1: true },
-      },
-    );
-
-    expect(blockSummary(layout)).toEqual(['areaHeader:a1', 'task:direct', 'projectHeader:p1']);
-    expect(layout.selectionFallback).toEqual({ 'in-p1': 'p1' });
-  });
-
-  it('area header carries the count of direct tasks in the view', () => {
-    const layout = derive(
-      [
-        taskItem('direct-1', { areaId: 'a1' }),
-        taskItem('direct-2', { areaId: 'a1' }),
-        taskItem('in-p1', { projectId: 'p1' }),
-      ],
-      { projects: [project('p1', { areaId: 'a1' })], areas: [area('a1')] },
-    );
-
-    const header = layout.blocks[0];
-    expect(header).toMatchObject({
-      kind: 'areaGroupHeader',
-      directTaskCount: 2,
-      taskIds: ['direct-1', 'direct-2'],
-      collapsed: false,
-    });
-  });
-});
-
 describe('grouped feed layout — toggle off（开关关闭恒等）', () => {
   it('is the identity over the flat feed when grouping is disabled', () => {
     const items: FeedItem[] = [
@@ -461,18 +433,16 @@ describe('grouped feed layout — toggle off（开关关闭恒等）', () => {
     ];
     const layout = derive(items, {
       projects: [project('p1')],
-      collapsed: { p1: true }, // 折叠状态在恒等路径下无意义
       groupingEnabled: false,
     });
 
     expect(blockSummary(layout)).toEqual(['task:t1', 'projectRow:p1', 'task:t2']);
-    expect(layout.selectionFallback).toEqual({});
     expect(layout.taskOrder).toEqual(['t1', 't2']);
   });
 });
 
 describe('grouped feed layout — taskOrder（视图任务序）', () => {
-  it('lists every view task in grouped order regardless of collapse', () => {
+  it('lists every view task in grouped order', () => {
     const layout = derive(
       [
         taskItem('loose'),
@@ -482,10 +452,9 @@ describe('grouped feed layout — taskOrder（视图任务序）', () => {
       {
         projects: [project('p1')],
         areas: [area('a1')],
-        collapsed: { p1: true },
       },
     );
 
-    expect(layout.taskOrder).toEqual(['loose', 'direct', 'in-p1']);
+    expect(layout.taskOrder).toEqual(['loose', 'in-p1', 'direct']);
   });
 });

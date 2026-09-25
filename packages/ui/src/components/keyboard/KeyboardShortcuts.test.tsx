@@ -71,7 +71,7 @@ import { KeyboardShortcuts } from './KeyboardShortcuts';
 import { useSelectionStore } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
 import { useSelectionScope } from '@taskora/api';
-import { useGroupedViewCollapseStore, type SelectionRow } from '@taskora/api';
+import { type SelectionRow } from '@taskora/api';
 
 /** 测试页：渲染任务行（aria-selected + 点击选中）并注册 selection scope。 */
 function ListPage({ tasks }: { tasks: TaskResponseDto[] }) {
@@ -186,7 +186,6 @@ beforeEach(() => {
   useSelectionStore.getState().clearSelection();
   useUiInteractionStore.setState({ expandedId: null, searchOpen: false });
   window.localStorage.clear();
-  useGroupedViewCollapseStore.setState({ collapsed: {} });
 });
 
 describe('KeyboardShortcuts — 导航与选择', () => {
@@ -379,7 +378,7 @@ function GroupedListPage() {
         id: 'p1',
         kind: 'project',
         groupHeaderId: 'p1',
-        groupHeader: { collapsed: false, createContext: { projectId: 'p1' } },
+        groupHeader: { createContext: { projectId: 'p1' } },
       },
       { id: 'a1', kind: 'task', groupHeaderId: 'p1' },
       { id: 'a2', kind: 'task', groupHeaderId: 'p1' },
@@ -387,7 +386,7 @@ function GroupedListPage() {
         id: 'p2',
         kind: 'project',
         groupHeaderId: 'p2',
-        groupHeader: { collapsed: false, createContext: { projectId: 'p2' } },
+        groupHeader: { createContext: { projectId: 'p2' } },
       },
       { id: 'b1', kind: 'task', groupHeaderId: 'p2' },
     ],
@@ -429,46 +428,6 @@ function select(id: string) {
 }
 
 describe('KeyboardShortcuts — Grouped View 组头行为', () => {
-  it('← 折叠选中的 Group Header，→ 重新展开（按视图记忆）', () => {
-    renderGrouped('/today');
-    select('p1');
-
-    press('ArrowLeft');
-    expect(useGroupedViewCollapseStore.getState().collapsed['today:p1']).toBe(true);
-
-    press('ArrowRight');
-    expect(useGroupedViewCollapseStore.getState().collapsed['today:p1']).toBeUndefined();
-  });
-
-  it('折叠状态按视图独立：today 的折叠不写入 anytime 的 key', () => {
-    renderGrouped('/today');
-    select('p1');
-
-    press('ArrowLeft');
-
-    expect(useGroupedViewCollapseStore.getState().collapsed['anytime:p1']).toBeUndefined();
-  });
-
-  it('←/→ 对选中的任务行无动作', () => {
-    renderGrouped('/today');
-    select('a1');
-
-    press('ArrowLeft');
-    press('ArrowRight');
-
-    expect(useGroupedViewCollapseStore.getState().collapsed).toEqual({});
-  });
-
-  it('重复 ← 对已折叠组头幂等', () => {
-    renderGrouped('/today');
-    select('p1');
-
-    press('ArrowLeft');
-    press('ArrowLeft');
-
-    expect(useGroupedViewCollapseStore.getState().collapsed['today:p1']).toBe(true);
-  });
-
   it('Alt+↓ 在组边界钳制：跳到组内末行而非跨组', () => {
     renderGrouped('/today');
     select('a1');

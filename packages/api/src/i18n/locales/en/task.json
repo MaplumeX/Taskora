@@ -30,7 +30,6 @@
   "logbookWeekRange": "{{start}} – {{end}}",
   "markComplete": "Mark Complete",
   "markIncomplete": "Mark Incomplete",
-  "movedToGroup": "Moved to \"{{title}}\"",
   "markCancelled": "Cancel Task",
   "markUncancelled": "Uncancel Task",
   "convertToProject": "Convert to Project",

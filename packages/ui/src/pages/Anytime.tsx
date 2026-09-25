@@ -13,7 +13,7 @@ export default function Anytime() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        <TimeViewFeedList view="anytime" items={items} emptyHint={t('task:anytimeEmpty')} />
+        <TimeViewFeedList items={items} emptyHint={t('task:anytimeEmpty')} />
       )}
     </div>
   );

@@ -18,7 +18,6 @@ export default function Today() {
       ) : (
         // Today 视图本身即日期语境,省略行首日期 chip(逾期任务仍显示红色 chip)。
         <TimeViewFeedList
-          view="today"
           items={items}
           emptyHint={t('task:todayEmpty')}
           showScheduledBadge={false}
