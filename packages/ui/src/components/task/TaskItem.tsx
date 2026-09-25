@@ -161,49 +161,57 @@ export function TaskItem({
           )}
           <TaskRepeatBadge repeatRule={current.repeatRule} className="shrink-0" />
 
-          {expanded ? (
-            <Input
-              ref={titleInputRef}
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              onBlur={commitTitle}
-              placeholder={t('task:newTaskPlaceholder')}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.stopPropagation();
-                  e.preventDefault();
-                  // Enter（含 ⌘Enter/Ctrl+Enter）：先 blur 触发提交，再收起，
-                  // 避免出现「退出编辑」与「收起」拆成两次按键的中间态。
-                  e.currentTarget.blur();
-                  rowRef.current?.focus();
-                  onRowClick?.();
-                } else if (e.key === ' ') {
-                  e.stopPropagation();
-                } else if (e.key === 'Escape') {
-                  setTitle(current.title);
-                  e.currentTarget.blur();
-                }
-              }}
-              onClick={(e) => e.stopPropagation()}
-              className={cn(
-                'flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
-                settled && 'text-muted-foreground line-through',
-              )}
-            />
-          ) : (
-            <span
-              className={cn(
-                'flex-1 truncate text-left text-sm transition-colors',
-                settled
-                  ? 'text-muted-foreground line-through'
-                  : current.title
-                    ? 'text-foreground'
-                    : 'text-muted-foreground',
-              )}
-            >
-              {current.title || t('task:newTaskPlaceholder')}
-            </span>
-          )}
+          {/* 标题区：备注/子任务徽标紧贴标题文本（参考 Things 3），
+            而非被 flex-1 的标题推到行尾。 */}
+          <div className="flex min-w-0 flex-1 items-center gap-1.5">
+            {expanded ? (
+              <Input
+                ref={titleInputRef}
+                value={title}
+                onChange={(e) => setTitle(e.target.value)}
+                onBlur={commitTitle}
+                placeholder={t('task:newTaskPlaceholder')}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    // Enter（含 ⌘Enter/Ctrl+Enter）：先 blur 触发提交，再收起，
+                    // 避免出现「退出编辑」与「收起」拆成两次按键的中间态。
+                    e.currentTarget.blur();
+                    rowRef.current?.focus();
+                    onRowClick?.();
+                  } else if (e.key === ' ') {
+                    e.stopPropagation();
+                  } else if (e.key === 'Escape') {
+                    setTitle(current.title);
+                    e.currentTarget.blur();
+                  }
+                }}
+                onClick={(e) => e.stopPropagation()}
+                className={cn(
+                  'min-w-0 flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
+                  settled && 'text-muted-foreground line-through',
+                )}
+              />
+            ) : (
+              <span
+                className={cn(
+                  'truncate text-left text-sm transition-colors',
+                  settled
+                    ? 'text-muted-foreground line-through'
+                    : current.title
+                      ? 'text-foreground'
+                      : 'text-muted-foreground',
+                )}
+              >
+                {current.title || t('task:newTaskPlaceholder')}
+              </span>
+            )}
+            {/* 备注徽标：有备注的任务一眼可见。 */}
+            <TaskNotesBadge notes={current.notes} className="shrink-0" />
+            {/* 子任务徽标：有子任务的任务一眼可见，并显示未了结数量。 */}
+            <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
+          </div>
 
           <div className="flex min-w-0 shrink items-center gap-2">
             {current.tags && current.tags.length > 0 && (
@@ -223,10 +231,6 @@ export function TaskItem({
                 {tag}
               </span>
             )}
-            {/* 备注徽标：有备注的任务一眼可见。 */}
-            <TaskNotesBadge notes={current.notes} className="shrink-0" />
-            {/* 子任务徽标：有子任务的任务一眼可见，并显示未了结数量。 */}
-            <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
             {/* 提醒徽标不受 showScheduledBadge 限制：Today/Scheduled 等视图
               不展示日期徽标时仍能看到提醒时刻（reminders spec）。 */}
             <TaskReminderBadge reminderTime={current.reminderTime} className="shrink-0" />

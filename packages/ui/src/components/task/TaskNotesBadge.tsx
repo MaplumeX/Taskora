@@ -9,7 +9,7 @@ interface Props {
   className?: string;
 }
 
-/** Task 行上的备注徽标：便签图标（与日期/提醒/重复徽标并排，Pattern：Reminder 时钟徽标）。 */
+/** Task 行上的备注徽标：便签图标，紧贴标题文本显示（参考 Things 3）。 */
 export function TaskNotesBadge({ notes, className }: Props) {
   const { t } = useTranslation();
   if (!notes?.trim()) return null;
