@@ -3,7 +3,7 @@ import type { PrismaClient } from '@prisma/client';
 import type { ChangeAction, ChangeEntity } from '@taskora/shared';
 
 import { ChangeEventHub } from './change-event-hub.service';
-import { settledToCompletedAt } from '../tasks/task-dto.mapper';
+import { settledToCompletedAt, withRepeatRuleDto } from '../tasks/task-dto.mapper';
 
 /**
  * Collects write descriptors from the Prisma extension and publishes Change
@@ -404,15 +404,24 @@ export class ChangeEventCollector {
       withTags && Array.isArray(row.tags)
         ? row.tags.map((tt) => (tt as Record<string, unknown>).tag)
         : [];
-    const settledRow = row as { settledAt: Date | null } & Record<string, unknown>;
-    const data: Record<string, unknown> =
-      entity === 'task'
-        ? settledToCompletedAt({ ...settledRow, tags })
-        : entity === 'subtask'
-          ? settledToCompletedAt(settledRow)
-          : withTags
-            ? { ...row, tags }
-            : row;
+    // Task 的 repeatRule 是 TEXT JSON 列：与 HTTP 读路径（findOne/update）
+    // 一致地经 withRepeatRuleDto 解析成对象后下发，否则客户端从事件拿到
+    // 的 detail 缓存会把规则当成字符串（读 DTO 形状违约）。
+    let data: Record<string, unknown>;
+    if (entity === 'task') {
+      const taskRow = withRepeatRuleDto(
+        row as { repeatRule: string | null } & Record<string, unknown>,
+      );
+      data = settledToCompletedAt({ ...taskRow, tags } as Record<string, unknown> as {
+        settledAt: Date | null;
+      });
+    } else if (entity === 'subtask') {
+      data = settledToCompletedAt(row as { settledAt: Date | null });
+    } else if (withTags) {
+      data = { ...row, tags };
+    } else {
+      data = row;
+    }
     return { userId, data };
   }
 }

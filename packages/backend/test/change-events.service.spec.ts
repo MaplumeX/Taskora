@@ -122,6 +122,31 @@ integrationDescribe('Change Events (service-level integration)', () => {
     expect(typeof event.data?.updatedAt).toBe('string');
   });
 
+  it('emits repeatRule as a parsed object in task payloads (mirrors HTTP read DTO)', async () => {
+    // 回归：repeatRule 是 TEXT JSON 列，payload 若漏过 withRepeatRuleDto
+    // 会把字符串透传给客户端 detail 缓存（读 DTO 形状违约），导致前端
+    // 重复规则编辑器 normalizeRepeatRule 判 null、开关永不勾选。
+    const task = await tasks.create(userId, {
+      title: 'Recurring',
+      scheduledType: 'DATE',
+      scheduledDate: '2026-09-25T00:00:00.000Z',
+    });
+    await drain();
+
+    await tasks.update(userId, task.id, {
+      repeatRule: { unit: 'week', interval: 1, anchor: 'scheduled' },
+    });
+    let batch = await drainWhere((e) => e.entity === 'task' && e.id === task.id);
+    const rule = batch.at(-1)?.data?.repeatRule;
+    expect(typeof rule).toBe('object');
+    expect(rule).toMatchObject({ unit: 'week', interval: 1, anchor: 'scheduled' });
+
+    // 清除规则 → null（而不是字符串 "null" 或残留文本）。
+    await tasks.update(userId, task.id, { repeatRule: null });
+    batch = await drainWhere((e) => e.entity === 'task' && e.id === task.id);
+    expect(batch.at(-1)?.data?.repeatRule).toBeNull();
+  });
+
   it('classifies update/complete/trash/restore as updated (soft-delete semantics)', async () => {
     const task = await tasks.create(userId, { title: 'T1' });
     await drain();
