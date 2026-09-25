@@ -66,6 +66,12 @@ async function mount() {
   const { createMobileNotificationShell } = await import('./reminders/tauri-notification-shell');
   setNotificationShell(createMobileNotificationShell());
 
+  // 状态栏常驻通知（android-status-bar，滴答清单形态）：折叠态单行
+  // ongoing 通知 + 「>」轮播 + 「+」通知内快速添加；登录后随 Engine
+  // 变更刷新。
+  const { initStatusBar } = await import('./status-bar');
+  initStatusBar();
+
   // 键盘避让（issue 05）：visualViewport → --kb-inset CSS 变量。
   installKeyboardInset();
 

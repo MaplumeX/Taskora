@@ -41,6 +41,7 @@ import { createReminderCoordinator, type ReminderCoordinator } from '@taskora/ap
 import { createHttpSyncTransport, registerDevice } from './http-transport';
 import { createTauriSqlStorage, isTauriRuntime, useUserReplicaDb } from './tauri-storage';
 import { createMobileNotificationShell } from '../reminders/tauri-notification-shell';
+import { scheduleStatusBarRefresh } from '../status-bar';
 
 const DEVICE_ID_KEY = 'taskora.deviceId';
 
@@ -135,6 +136,9 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     // 仅本地写需要防抖调度同步——远端写应用后无新 Outbox，再拉是空转。
     engine.onChange((change) => {
       invalidateEntities(queryClient, change.entities);
+      // 状态栏常驻通知（android-status-bar）：任务变更后防抖刷新内容
+      // （控制器内部判定开关/会话，未开启时为空操作）。
+      scheduleStatusBarRefresh();
       if (change.origin === 'local') {
         scheduleSync(1_000);
       }

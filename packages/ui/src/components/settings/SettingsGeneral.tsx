@@ -4,7 +4,12 @@ import { toast } from 'sonner';
 
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { usePreferencesStore, useUpdatePreferences } from '@taskora/api';
+import {
+  currentStatusBarController,
+  getClientKind,
+  usePreferencesStore,
+  useUpdatePreferences,
+} from '@taskora/api';
 
 type AutoStartApi = {
   isEnabled: () => Promise<boolean>;
@@ -14,6 +19,9 @@ type AutoStartApi = {
 
 /** 桌面端专属系统设置（如开机自启）只在 Tauri 运行时出现，Web 版不渲染。 */
 const isDesktopRuntime = () => '__TAURI_INTERNALS__' in globalThis;
+
+/** 状态栏常驻通知（android-status-bar）：仅 Android 渲染，且控制器已注册。 */
+const getStatusBar = () => (getClientKind() === 'mobile' ? currentStatusBarController() : null);
 
 /**
  * 「通用」设置页。
@@ -33,6 +41,29 @@ export default function SettingsGeneral() {
   const bucketGrouping = usePreferencesStore((s) => s.bucketGrouping);
   const setBucketGrouping = usePreferencesStore((s) => s.setBucketGrouping);
   const updatePreferences = useUpdatePreferences();
+
+  // 状态栏常驻通知（Android）：控制器在 mobile init 时注册；初始值同步读取。
+  const statusBar = getStatusBar();
+  const [statusBarEnabled, setStatusBarEnabled] = useState(() =>
+    statusBar ? statusBar.isEnabled() : null,
+  );
+  const [statusBarPending, setStatusBarPending] = useState(false);
+
+  const handleStatusBarChange = async (next: boolean) => {
+    if (!statusBar || statusBarPending) return;
+    setStatusBarPending(true);
+    try {
+      const applied = await statusBar.setEnabled(next);
+      if (next && !applied) {
+        // 权限被拒：不开，引导文案提示去系统设置授权。
+        toast.error(t('settings:statusBarPermissionDenied'));
+        return;
+      }
+      setStatusBarEnabled(next);
+    } finally {
+      setStatusBarPending(false);
+    }
+  };
 
   useEffect(() => {
     if (!desktop) return;
@@ -98,6 +129,22 @@ export default function SettingsGeneral() {
         </div>
         <p className="text-sm text-muted-foreground">{t('settings:groupTasksByParentHint')}</p>
       </div>
+
+      {/* 状态栏快速添加（仅 Android） */}
+      {statusBar && statusBarEnabled !== null && (
+        <div className="flex flex-col gap-2">
+          <div className="flex items-center justify-between gap-4">
+            <Label htmlFor="status-bar">{t('settings:statusBar')}</Label>
+            <Switch
+              id="status-bar"
+              checked={statusBarEnabled}
+              disabled={statusBarPending}
+              onCheckedChange={handleStatusBarChange}
+            />
+          </div>
+          <p className="text-sm text-muted-foreground">{t('settings:statusBarHint')}</p>
+        </div>
+      )}
 
       {/* 登录时自动启动（仅桌面端） */}
       {desktop && (
