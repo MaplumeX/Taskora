@@ -32,6 +32,7 @@
   "markCancelled": "Cancel Task",
   "markUncancelled": "Uncancel Task",
   "convertToProject": "Convert to Project",
+  "move": "Move",
   "convertSuccess": "Converted to project",
   "convertFailed": "Conversion failed",
   "quickAddPlaceholder": "Add a task to Inbox…",

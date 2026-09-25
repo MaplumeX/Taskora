@@ -12,11 +12,7 @@ import {
   useSensor,
   useSensors,
 } from '@dnd-kit/core';
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
+import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { TaskResponseDto } from '@taskora/shared';
 import { TaskStatus, TaskBucket, ScheduledType } from '@taskora/shared';
@@ -26,7 +22,7 @@ import { TaskItem } from './TaskItem';
 
 vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
-    taskKeys: { detail: (id: string) => ['task', id] },
+  taskKeys: { detail: (id: string) => ['task', id] },
   useTaskQuery: () => ({
     data: null,
   }),
@@ -45,9 +41,9 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useRestoreTask: () => ({ mutate: vi.fn(), isPending: false }),
   useConvertTaskToProject: () => ({ mutate: vi.fn(), isPending: false }),
   useReorderTasks: () => ({ mutate: vi.fn(), isPending: false }),
-    useProjectsQuery: () => ({ data: [] }),
-    useAreasQuery: () => ({ data: [] }),
-    useTagsQuery: () => ({ data: [] }),
+  useProjectsQuery: () => ({ data: [] }),
+  useAreasQuery: () => ({ data: [] }),
+  useTagsQuery: () => ({ data: [] }),
 }));
 
 /* ------------- fixtures (hoisted so vi.mock can reference them) ------------- */
@@ -59,7 +55,7 @@ const baseTask = vi.hoisted(() => ({
   scheduledDate: null,
   scheduledType: 'NONE' as const,
   reminderTime: null,
-    repeatRule: null,
+  repeatRule: null,
   dueDate: null,
   bucket: 'INBOX' as const,
   status: 'ACTIVE' as const,
@@ -80,10 +76,6 @@ const mutationMocks = vi.hoisted(() => ({
 }));
 
 /* ------------- mocks ------------- */
-
-
-
-
 
 /* ------------- task object for render ------------- */
 
@@ -106,8 +98,9 @@ function withQueryClient(ui: React.ReactElement) {
 /* ------------- sortable wrapper (mirrors SortableTask) ------------- */
 
 function SortableWrapper({ children, id }: { children: React.ReactNode; id: string }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+    id,
+  });
   return (
     <div
       ref={setNodeRef}
@@ -207,16 +200,10 @@ describe('TaskRowExpanded — icon button hints', () => {
 
     await user.click(screen.getByText('My task'));
 
-    // 五个字段图标按钮（日期/到期/项目/区域/标签）hover 后应浮出 hint 文案。
-    // Hint 为真实 400ms 延迟（非 fake timers），5 个按钮逐个 hover/unhover
+    // 三个字段图标按钮（日期/到期/标签）hover 后应浮出 hint 文案。
+    // Hint 为真实 400ms 延迟（非 fake timers），逐个 hover/unhover
     // 在 CI 慢环境下可能超过默认 5s，这里放宽单测超时。
-    const labelPatterns: RegExp[] = [
-      /^(Date|日期)$/,
-      /^(Due|到期)$/,
-      /^(Project|项目)$/,
-      /^(Area|区域)$/,
-      /^(Tags|标签)$/,
-    ];
+    const labelPatterns: RegExp[] = [/^(Date|日期)$/, /^(Due|到期)$/, /^(Tags|标签)$/];
     for (const pattern of labelPatterns) {
       const btn = screen.getByRole('button', { name: pattern });
       await user.hover(btn);
@@ -289,6 +276,8 @@ describe('TaskRowExpanded — hide subtask empty state', () => {
     expect(screen.getByPlaceholderText(/Add subtask|添加子任务/)).toBeInTheDocument();
 
     // Add subtask button should NOT be shown when subtasks already exist
-    expect(screen.queryByRole('button', { name: /Add subtask|添加子任务/ })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /Add subtask|添加子任务/ }),
+    ).not.toBeInTheDocument();
   });
 });
