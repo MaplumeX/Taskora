@@ -38,6 +38,7 @@ export function FeedItemRow({
         item={item}
         showScheduledBadge={showScheduledBadge}
         selectionState={selectionState}
+        plainSettledTitle={showSettledDate}
         settledDateBadge={
           showSettledDate && item.completedAt ? (
             <SettledDateBadge date={item.completedAt} className="text-primary" />
@@ -65,6 +66,7 @@ export function FeedItemRow({
       onToggleComplete={onToggleComplete ?? (() => {})}
       onRowClick={onRowClick}
       showScheduledBadge={showScheduledBadge}
+      plainSettledTitle={showSettledDate}
       settledDateBadge={
         showSettledDate && item.completedAt ? (
           <SettledDateBadge date={item.completedAt} className="text-primary" />
