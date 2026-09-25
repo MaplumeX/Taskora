@@ -16,7 +16,8 @@ export default function Today() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        <FeedListView items={items} emptyHint={t('task:todayEmpty')} />
+        // Today 视图本身即日期语境,省略行首日期 chip(逾期任务仍显示红色 chip)。
+        <FeedListView items={items} emptyHint={t('task:todayEmpty')} showScheduledBadge={false} />
       )}
     </div>
   );
