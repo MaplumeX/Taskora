@@ -55,8 +55,7 @@ export function ProjectGroupHeaderRow({ project, selectionState = 'idle' }: Prop
         <span
           className={cn(
             'flex-1 truncate text-left text-sm font-semibold tracking-wide',
-            completed
-              ? 'text-muted-foreground line-through'
+            completed ? 'text-muted-foreground'
               : project.title
                 ? 'text-foreground'
                 : 'text-muted-foreground',

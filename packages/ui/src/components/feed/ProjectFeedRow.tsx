@@ -24,9 +24,11 @@ interface Props {
   selectionState?: SelectionState;
   /** Logbook 专用：标题后注入的了却日期徽标 */
   settledDateBadge?: React.ReactNode;
+  /** Logbook 场景：已了结标题保留删除线但不置灰（正常前景色）。 */
+  plainSettledTitle?: boolean;
 }
 
-export function ProjectFeedRow({ item, showScheduledBadge = true, selectionState = 'idle', settledDateBadge }: Props) {
+export function ProjectFeedRow({ item, showScheduledBadge = true, selectionState = 'idle', settledDateBadge, plainSettledTitle = false }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const completeProject = useCompleteProject();
@@ -97,7 +99,13 @@ export function ProjectFeedRow({ item, showScheduledBadge = true, selectionState
           className={cn(
             'flex-1 truncate text-left text-sm',
             settled || trashed
-              ? 'text-muted-foreground line-through'
+              ? plainSettledTitle && !trashed
+                ? cancelled
+                  ? 'text-foreground line-through'
+                  : 'text-foreground'
+                : cancelled
+                  ? 'text-muted-foreground line-through'
+                  : 'text-muted-foreground'
               : item.title
                 ? 'text-foreground'
                 : 'text-muted-foreground',

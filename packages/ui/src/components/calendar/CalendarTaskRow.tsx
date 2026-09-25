@@ -16,7 +16,7 @@ export function CalendarTaskRow({ task, onToggleComplete, selected = false, onRo
   const { t } = useTranslation();
   const completed = task.status === 'COMPLETED';
   const cancelled = task.status === 'CANCELLED';
-  // 已了结（完成或取消）：标题删除线 + 弱化（ADR 0006）。
+  // 已了结（完成或取消）：标题置灰弱化；取消另加删除线（ADR 0006）。
   const settled = completed || cancelled;
 
   return (
@@ -41,7 +41,8 @@ export function CalendarTaskRow({ task, onToggleComplete, selected = false, onRo
         }}
         className={cn(
           'min-w-0 flex-1 truncate text-left text-xs leading-4 text-foreground',
-          settled && 'text-muted-foreground line-through',
+          settled && 'text-muted-foreground',
+          cancelled && 'line-through',
         )}
         title={task.title}
       >
