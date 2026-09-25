@@ -108,8 +108,8 @@ export function TaskItem({
         selectionState === 'selected' || selectionState === 'expanded' ? true : undefined
       }
       className={cn(
-        'group flex flex-col transition-colors',
-        selectionState === 'selected' && 'bg-accent rounded-lg',
+        'group flex flex-col rounded-lg transition-colors',
+        selectionState === 'selected' && 'bg-accent',
         selectionState === 'expanded' && 'rounded-xl border border-border/60 bg-card shadow-soft',
       )}
       onKeyDown={(e) => {
