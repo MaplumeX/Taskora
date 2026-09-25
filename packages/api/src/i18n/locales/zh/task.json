@@ -29,6 +29,7 @@
   "earlier": "更早",
   "markComplete": "标记完成",
   "markIncomplete": "标记未完成",
+  "movedToGroup": "已移动到「{{title}}」",
   "markCancelled": "取消任务",
   "markUncancelled": "撤销取消",
   "convertToProject": "转换为项目",

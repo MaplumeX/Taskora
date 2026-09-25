@@ -58,21 +58,37 @@ describe('usePreferencesStore persisted state normalization', () => {
   });
 
   it('keeps valid persisted values untouched', async () => {
-    setPersisted({ theme: 'dark', language: 'zh', weekStartsOn: 0 });
+    setPersisted({ theme: 'dark', language: 'zh', weekStartsOn: 0, bucketGrouping: false });
     const { usePreferencesStore: fresh } = await importFresh();
     const state = fresh.getState();
     expect(state.theme).toBe('dark');
     expect(state.language).toBe('zh');
     expect(state.weekStartsOn).toBe(0);
+    expect(state.bucketGrouping).toBe(false);
   });
 
-  it('persists the full triple on set actions', async () => {
+  it('defaults bucketGrouping to true when persisted state is missing or dirty', async () => {
+    const { usePreferencesStore: fresh } = await importFresh();
+    expect(fresh.getState().bucketGrouping).toBe(true);
+
+    setPersisted({ theme: 'dark', language: 'en', weekStartsOn: 1, bucketGrouping: 'yes' });
+    const { usePreferencesStore: dirty } = await importFresh();
+    expect(dirty.getState().bucketGrouping).toBe(true);
+  });
+
+  it('persists the full preference set on set actions', async () => {
     const { usePreferencesStore: fresh } = await importFresh();
     fresh.getState().setTheme('dark');
     fresh.getState().setLanguage('zh');
     fresh.getState().setWeekStartsOn(0);
+    fresh.getState().setBucketGrouping(false);
     const persisted = readPersistedState();
-    expect(persisted).toMatchObject({ theme: 'dark', language: 'zh', weekStartsOn: 0 });
+    expect(persisted).toMatchObject({
+      theme: 'dark',
+      language: 'zh',
+      weekStartsOn: 0,
+      bucketGrouping: false,
+    });
   });
 });
 
@@ -149,16 +165,43 @@ describe('usePreferencesStore hydrateFromServer normalization', () => {
     fresh.getState().setTheme('dark');
     fresh.getState().setLanguage('zh');
     fresh.getState().setWeekStartsOn(0);
+    fresh.getState().setBucketGrouping(false);
     fresh.getState().hydrateFromServer({} as unknown as UserPreferences);
     const state = fresh.getState();
     expect(state.theme).toBe('dark');
     expect(state.language).toBe('zh');
     expect(state.weekStartsOn).toBe(0);
+    expect(state.bucketGrouping).toBe(false);
+  });
+
+  it('applies a valid server bucketGrouping flag and ignores dirty ones', async () => {
+    const fresh = await freshStore();
+    fresh.getState().hydrateFromServer({
+      theme: 'system',
+      language: 'en',
+      weekStartsOn: 1,
+      bucketGrouping: false,
+    });
+    expect(fresh.getState().bucketGrouping).toBe(false);
+
+    fresh.getState().hydrateFromServer({
+      theme: 'system',
+      language: 'en',
+      weekStartsOn: 1,
+      bucketGrouping: 'yes',
+    } as unknown as UserPreferences);
+    // 脏值不覆盖本地：保持上一次的有效值。
+    expect(fresh.getState().bucketGrouping).toBe(false);
   });
 
   it('applies a fully valid server payload', async () => {
     const fresh = await freshStore();
-    fresh.getState().hydrateFromServer({ theme: 'light', language: 'en', weekStartsOn: 1 });
+    fresh.getState().hydrateFromServer({
+      theme: 'light',
+      language: 'en',
+      weekStartsOn: 1,
+      bucketGrouping: true,
+    });
     const state = fresh.getState();
     expect(state.theme).toBe('light');
     expect(state.language).toBe('en');
@@ -181,6 +224,7 @@ describe('usePreferencesStore hydrateFromServer normalization', () => {
       theme: 'system',
       language: target,
       weekStartsOn: 1,
+      bucketGrouping: true,
     });
     await vi.waitFor(() => {
       expect(i18n.language).toBe(target);

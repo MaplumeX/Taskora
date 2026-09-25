@@ -40,6 +40,14 @@ describe('resolveAction — mac 桌面（Things 原键位）', () => {
     expect(resolveAction(key('ArrowDown', { altKey: true }), platform)).toEqual({ type: 'moveLast' });
   });
 
+  it('裸 ←/→ 折叠/展开 Group Header；带修饰不触发', () => {
+    expect(resolveAction(key('ArrowLeft'), platform)).toEqual({ type: 'collapseGroup' });
+    expect(resolveAction(key('ArrowRight'), platform)).toEqual({ type: 'expandGroup' });
+    expect(resolveAction(key('ArrowRight', { altKey: true }), platform)).toBeNull();
+    expect(resolveAction(key('ArrowRight', { metaKey: true }), platform)).toBeNull();
+    expect(resolveAction(key('ArrowLeft', { shiftKey: true }), platform)).toBeNull();
+  });
+
   it('⌘A 全选、⌘K 完成、⌫/Delete 删除、Enter 展开、Space 下方新建', () => {
     expect(resolveAction(key('a', { metaKey: true }), platform)).toEqual({ type: 'selectAll' });
     expect(resolveAction(key('k', { metaKey: true }), platform)).toEqual({ type: 'complete' });

@@ -2,13 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import { normalizePreferences } from './preferences';
 
-const defaults = { theme: 'system', language: 'en', weekStartsOn: 1 } as const;
+const defaults = { theme: 'system', language: 'en', weekStartsOn: 1, bucketGrouping: true } as const;
 
 describe('normalizePreferences', () => {
   it('passes valid values through untouched', () => {
     expect(
-      normalizePreferences({ theme: 'dark', language: 'zh', weekStartsOn: 0 }, defaults),
-    ).toEqual({ theme: 'dark', language: 'zh', weekStartsOn: 0 });
+      normalizePreferences(
+        { theme: 'dark', language: 'zh', weekStartsOn: 0, bucketGrouping: false },
+        defaults,
+      ),
+    ).toEqual({ theme: 'dark', language: 'zh', weekStartsOn: 0, bucketGrouping: false });
   });
 
   it('normalizes legacy string "0" to number 0', () => {
@@ -22,10 +25,10 @@ describe('normalizePreferences', () => {
   it('falls back to defaults for garbage values', () => {
     expect(
       normalizePreferences(
-        { theme: 'blue', language: 'fr', weekStartsOn: 'sunday' },
+        { theme: 'blue', language: 'fr', weekStartsOn: 'sunday', bucketGrouping: 'yes' },
         defaults,
       ),
-    ).toEqual({ theme: 'system', language: 'en', weekStartsOn: 1 });
+    ).toEqual({ theme: 'system', language: 'en', weekStartsOn: 1, bucketGrouping: true });
   });
 
   it('falls back to defaults for null / undefined / non-object inputs', () => {
@@ -34,6 +37,7 @@ describe('normalizePreferences', () => {
         theme: 'system',
         language: 'en',
         weekStartsOn: 1,
+        bucketGrouping: true,
       });
     }
   });
@@ -43,11 +47,13 @@ describe('normalizePreferences', () => {
       theme: 'dark',
       language: 'en',
       weekStartsOn: 1,
+      bucketGrouping: true,
     });
     expect(normalizePreferences({ language: 'zh' }, defaults)).toEqual({
       theme: 'system',
       language: 'zh',
       weekStartsOn: 1,
+      bucketGrouping: true,
     });
   });
 
@@ -57,6 +63,20 @@ describe('normalizePreferences', () => {
       theme: 'system',
       language: 'en',
       weekStartsOn: 1,
+      bucketGrouping: true,
     });
+  });
+
+  it('accepts only real booleans for bucketGrouping (invalid/missing → default)', () => {
+    expect(normalizePreferences({ bucketGrouping: false }, defaults).bucketGrouping).toBe(false);
+    expect(normalizePreferences({ bucketGrouping: true }, defaults).bucketGrouping).toBe(true);
+    for (const bad of ['false', 0, 1, null, undefined]) {
+      expect(normalizePreferences({ bucketGrouping: bad }, defaults).bucketGrouping).toBe(true);
+    }
+    // 默认也可以来自调用方（本地现状）：false 默认 + 脏值 → false。
+    expect(
+      normalizePreferences({ bucketGrouping: 'no' }, { ...defaults, bucketGrouping: false })
+        .bucketGrouping,
+    ).toBe(false);
   });
 });

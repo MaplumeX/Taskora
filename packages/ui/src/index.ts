@@ -12,6 +12,8 @@ export { MainContent } from './components/layout/MainContent';
 export { mainNav, type NavItem } from './components/layout/navItems';
 
 export { FeedListView } from './components/feed/FeedListView';
+export { GroupedFeedListView } from './components/feed/GroupedFeedListView';
+export { TimeViewFeedList } from './components/feed/TimeViewFeedList';
 export { TaskListView } from './components/task/TaskListView';
 export { TaskItem } from './components/task/TaskItem';
 export { SearchModal } from './components/search/SearchModal';

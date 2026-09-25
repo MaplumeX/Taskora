@@ -53,6 +53,14 @@ _Avoid_: 系列、模板实例（链是结果不是投影）
 按状态/时间过滤出的任务视图：Inbox、Anytime、Scheduled、Someday、Today、Upcoming、Logbook、Trash。不是存储位置。
 _Avoid_: 列表、filter、缓存
 
+**Grouped View（分组视图）**:
+Bucket 视图的一种展示形态：视图内任务按其直接父级（Project，无项目时按 Area）聚类显示，区别于任务平铺的 Flat View。组是纯渲染层推导，不改数据模型。
+_Avoid_: 分节、分类显示
+
+**Group Header（分组头）**:
+Grouped View 中位于每组任务上方、代表其父级 Project / Area 的标题行；有 ≥1 个可见任务才出现（空父级不出现），可展开/收起，组间顺序跟随侧边栏中 Project / Area 的位次。项目自身日期匹配视图但无视图内任务时，仍以独立项目行出现（此时无组头）。与 Project Heading（项目内部的静态分组标题）是不同概念。
+_Avoid_: Section、Project Heading
+
 **Logbook Entry**:
 已了结（完成或取消）任务的档案记录，按了结日期（今天/昨天/更早）分组展示。Logbook 即所有 Logbook Entry 的聚合视图。
 _Avoid_: 已完成列表（Logbook 不只含完成任务）

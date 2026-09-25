@@ -71,6 +71,7 @@ import { KeyboardShortcuts } from './KeyboardShortcuts';
 import { useSelectionStore } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
 import { useSelectionScope } from '@taskora/api';
+import { useGroupedViewCollapseStore, type SelectionRow } from '@taskora/api';
 
 /** 测试页：渲染任务行（aria-selected + 点击选中）并注册 selection scope。 */
 function ListPage({ tasks }: { tasks: TaskResponseDto[] }) {
@@ -184,6 +185,8 @@ beforeEach(() => {
   useSelectionStore.getState().setSelection([]);
   useSelectionStore.getState().clearSelection();
   useUiInteractionStore.setState({ expandedId: null, searchOpen: false });
+  window.localStorage.clear();
+  useGroupedViewCollapseStore.setState({ collapsed: {} });
 });
 
 describe('KeyboardShortcuts — 导航与选择', () => {
@@ -364,6 +367,157 @@ describe('KeyboardShortcuts — 展开与新建', () => {
     renderAt('/today', tasks);
     press('n', { metaKey: true });
     expect(harness.createMutate).toHaveBeenCalledWith({ title: '', __viaBottomBar: true });
+  });
+});
+
+/** Grouped View 测试页：注册带组头元数据的行（镜像 GroupedFeedListView 的注册形状）。 */
+function GroupedListPage() {
+  const rows = React.useMemo<SelectionRow[]>(
+    () => [
+      { id: 'loose', kind: 'task' },
+      {
+        id: 'p1',
+        kind: 'project',
+        groupHeaderId: 'p1',
+        groupHeader: { collapsed: false, createContext: { projectId: 'p1' } },
+      },
+      { id: 'a1', kind: 'task', groupHeaderId: 'p1' },
+      { id: 'a2', kind: 'task', groupHeaderId: 'p1' },
+      {
+        id: 'p2',
+        kind: 'project',
+        groupHeaderId: 'p2',
+        groupHeader: { collapsed: false, createContext: { projectId: 'p2' } },
+      },
+      { id: 'b1', kind: 'task', groupHeaderId: 'p2' },
+    ],
+    [],
+  );
+  useSelectionScope(rows);
+  const selectedIds = useSelectionStore((s) => s.selectedIds);
+  return (
+    <div>
+      {rows.map((row) => (
+        <div
+          key={row.id}
+          data-testid={`row-${row.id}`}
+          aria-selected={selectedIds.includes(row.id) || undefined}
+        >
+          {row.id}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function renderGrouped(path = '/today') {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <KeyboardShortcuts platform="mac" />
+      <Routes>
+        <Route path="/today" element={<GroupedListPage />} />
+        <Route path="/anytime" element={<GroupedListPage />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
+
+function select(id: string) {
+  act(() => {
+    useSelectionStore.getState().setSelection([id]);
+  });
+}
+
+describe('KeyboardShortcuts — Grouped View 组头行为', () => {
+  it('← 折叠选中的 Group Header，→ 重新展开（按视图记忆）', () => {
+    renderGrouped('/today');
+    select('p1');
+
+    press('ArrowLeft');
+    expect(useGroupedViewCollapseStore.getState().collapsed['today:p1']).toBe(true);
+
+    press('ArrowRight');
+    expect(useGroupedViewCollapseStore.getState().collapsed['today:p1']).toBeUndefined();
+  });
+
+  it('折叠状态按视图独立：today 的折叠不写入 anytime 的 key', () => {
+    renderGrouped('/today');
+    select('p1');
+
+    press('ArrowLeft');
+
+    expect(useGroupedViewCollapseStore.getState().collapsed['anytime:p1']).toBeUndefined();
+  });
+
+  it('←/→ 对选中的任务行无动作', () => {
+    renderGrouped('/today');
+    select('a1');
+
+    press('ArrowLeft');
+    press('ArrowRight');
+
+    expect(useGroupedViewCollapseStore.getState().collapsed).toEqual({});
+  });
+
+  it('重复 ← 对已折叠组头幂等', () => {
+    renderGrouped('/today');
+    select('p1');
+
+    press('ArrowLeft');
+    press('ArrowLeft');
+
+    expect(useGroupedViewCollapseStore.getState().collapsed['today:p1']).toBe(true);
+  });
+
+  it('Alt+↓ 在组边界钳制：跳到组内末行而非跨组', () => {
+    renderGrouped('/today');
+    select('a1');
+
+    press('ArrowDown', { altKey: true });
+
+    expect(useSelectionStore.getState().selectedIds).toEqual(['a2']);
+  });
+
+  it('Alt+↑ 在组边界钳制：跳到组块首行（组头）而非顶部浮动区', () => {
+    renderGrouped('/today');
+    select('a2');
+
+    press('ArrowUp', { altKey: true });
+
+    // 组块的首个可见行是组头本身；未越出组边界进入浮动区。
+    expect(useSelectionStore.getState().selectedIds).toEqual(['p1']);
+  });
+
+  it('未分组行 Alt+↓ 只在未分组区内跳转', () => {
+    renderGrouped('/today');
+    select('loose');
+
+    press('ArrowDown', { altKey: true });
+
+    expect(useSelectionStore.getState().selectedIds).toEqual(['loose']);
+  });
+
+  it('组头上 Space（下方新建）在父级内创建任务，不重排序', () => {
+    renderGrouped('/today');
+    select('p1');
+
+    press(' ');
+
+    expect(harness.createMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ title: '', projectId: 'p1' }),
+    );
+    expect(harness.reorderMutate).not.toHaveBeenCalled();
+    expect(useUiInteractionStore.getState().expandedId).toBe('created-task');
+    expect(useSelectionStore.getState().selectedIds).toContain('created-task');
+  });
+
+  it('组头上 Enter 不行内展开（展开只对任务行生效）', () => {
+    renderGrouped('/today');
+    select('p1');
+
+    press('Enter');
+
+    expect(useUiInteractionStore.getState().expandedId).toBeNull();
   });
 });
 
