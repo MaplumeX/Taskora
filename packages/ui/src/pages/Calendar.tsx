@@ -9,7 +9,7 @@ import { CalendarMonthGrid } from '@/components/calendar/CalendarMonthGrid';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { useScheduledTasksQuery } from '@taskora/api';
-import { useCompleteTask, useSelectionScope, useTaskRowSelection, useUncompleteTask } from '@taskora/api';
+import { useCompleteTask, useSelectionScope, useTaskRowSelection, useUncancelTask, useUncompleteTask } from '@taskora/api';
 import { usePreferencesStore } from '@taskora/api';
 import { addMonths, groupByScheduledDate } from '@taskora/api';
 import { i18n } from '@taskora/api';
@@ -19,6 +19,7 @@ export default function Calendar() {
   const { data: tasks = [], isLoading, isError } = useScheduledTasksQuery();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
+  const uncancelTask = useUncancelTask();
   const weekStartsOn = usePreferencesStore((s) => s.weekStartsOn);
 
   const [anchor, setAnchor] = useState(() => new Date());
@@ -42,6 +43,11 @@ export default function Calendar() {
   const handleToggleComplete = (task: TaskResponseDto) => {
     if (task.status === 'COMPLETED') {
       uncompleteTask.mutate(task.id, {
+        onError: () => toast.error(t('common:operationFailed')),
+      });
+    } else if (task.status === 'CANCELLED') {
+      // 取消态点击圆圈 = 撤销取消（与 Logbook 一致）。
+      uncancelTask.mutate(task.id, {
         onError: () => toast.error(t('common:operationFailed')),
       });
     } else {
