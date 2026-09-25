@@ -37,14 +37,19 @@ export function addMonths(anchor: Date, direction: number): Date {
 /**
  * Group tasks by their local-date `scheduledDate` key (`yyyy-MM-dd`).
  * Tasks without a `scheduledDate` are skipped.
+ *
+ * 参考 Things 3：When 是计划开始日、永不逾期——日期已过的任务视为
+ * 「今天」，归入今天的格子，而不是沉积在过去的日期里。
  */
 export function groupByScheduledDate(
   tasks: TaskResponseDto[],
 ): Map<string, TaskResponseDto[]> {
+  const todayKey = toDateKey(new Date());
   const map = new Map<string, TaskResponseDto[]>();
   for (const task of tasks) {
     if (!task.scheduledDate) continue;
-    const key = toDateKey(task.scheduledDate);
+    const rawKey = toDateKey(task.scheduledDate);
+    const key = rawKey < todayKey ? todayKey : rawKey;
     const list = map.get(key);
     if (list) {
       list.push(task);

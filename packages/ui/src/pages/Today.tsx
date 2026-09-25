@@ -16,7 +16,8 @@ export default function Today() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        // Today 视图本身即日期语境,省略行首日期 chip(逾期任务仍显示红色 chip)。
+        // Today 视图本身即日期语境,行上省略日期标记(逾期任务同此——
+        // When 永不逾期,一律按「今天」对待,参考 Things 3)。
         <TimeViewFeedList
           view="today"
           items={items}

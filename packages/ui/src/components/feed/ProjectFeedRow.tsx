@@ -8,9 +8,11 @@ import type { ProjectFeedItem, ProjectResponseDto } from '@taskora/shared';
 import { cn } from '@/lib/utils';
 import { TaskDateBadge } from '@/components/task/TaskDateBadge';
 import { TaskDueDateBadge } from '@/components/task/TaskDueDateBadge';
+import { TaskTodayBadge } from '@/components/task/TaskTodayBadge';
 import { ProjectContextMenu } from '@/components/project/ProjectContextMenu';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
 import {
+  startOfTomorrow,
   useCompleteProject,
   useUncompleteProject,
 } from '@taskora/api';
@@ -105,9 +107,12 @@ export function ProjectFeedRow({ item, showScheduledBadge = true, selectionState
               ))}
             </div>
           )}
-          {showScheduledBadge && (
-            <TaskDateBadge scheduledDate={item.scheduledDate} />
-          )}
+          {showScheduledBadge &&
+            (item.scheduledDate && new Date(item.scheduledDate) < startOfTomorrow() ? (
+              <TaskTodayBadge />
+            ) : (
+              <TaskDateBadge scheduledDate={item.scheduledDate} />
+            ))}
           <TaskDueDateBadge dueDate={item.dueDate} />
         </div>
       </div>

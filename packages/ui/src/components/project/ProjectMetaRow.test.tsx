@@ -97,6 +97,17 @@ describe('ProjectMetaRow', () => {
     expect(container.querySelector('svg')).toBeNull();
   });
 
+  it('does not mark an overdue scheduled date as destructive（When 永不逾期）', () => {
+    const project: ProjectResponseDto = {
+      ...baseProject,
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2000-01-01T00:00:00.000Z',
+    };
+    const { container } = render(<ProjectMetaRow project={project} />);
+
+    expect(container.querySelector('.text-destructive')).toBeNull();
+  });
+
   it('marks an overdue due date as destructive', () => {
     const project: ProjectResponseDto = {
       ...baseProject,

@@ -375,8 +375,9 @@ beforeEach(() => {
 
 describe('GroupedFeedListView — 组头渲染', () => {
   it('renders project headers with title, count and date badge; area headers with direct count', () => {
+    // 未来日期：> 今天才走灰色日期 chip（≤ 今天按「今天」语义显示黄星）。
     harness.projects = [
-      project('p1', { taskTotalCount: 3, taskCompletedCount: 1, scheduledDate: '2026-08-01T00:00:00.000Z' }),
+      project('p1', { taskTotalCount: 3, taskCompletedCount: 1, scheduledDate: '2999-08-01T00:00:00.000Z' }),
     ];
     harness.areas = [area('a1')];
     renderView([
@@ -388,7 +389,7 @@ describe('GroupedFeedListView — 组头渲染', () => {
     expect(projectHeader).toHaveTextContent('p1');
     expect(projectHeader).toHaveTextContent('1/3');
     expect(projectHeader).toHaveTextContent(
-      formatDateLabel(new Date('2026-08-01T00:00:00.000Z')),
+      formatDateLabel(new Date('2999-08-01T00:00:00.000Z')),
     );
 
     const areaHeader = headerOf('a1');
