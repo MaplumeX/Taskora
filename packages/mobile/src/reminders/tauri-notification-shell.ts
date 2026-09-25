@@ -25,18 +25,28 @@ const CHANNEL_ID = 'reminders';
 
 let channelReady: Promise<void> | null = null;
 
-/** Android 8+：通知必须归属已存在的 Channel，否则静默不触发。 */
+/**
+ * Android 8+：通知必须归属已存在的 Channel，否则静默不触发。
+ * 失败不缓存（典型诱因：授权未授予时 channels() 拒绝）——缓存失败会让
+ * 本会话内渠道永远建不起来、后续通知全部被系统静默丢弃；下次调用重试，
+ * 授权恢复后自愈。
+ */
 function ensureChannel(): Promise<void> {
-  channelReady ??= (async () => {
-    const existing = await channels();
-    if (!existing.some((channel) => channel.id === CHANNEL_ID)) {
-      await createChannel({
-        id: CHANNEL_ID,
-        name: 'Taskora',
-        importance: Importance.High,
-      });
-    }
-  })().catch(() => undefined);
+  if (channelReady === null) {
+    channelReady = (async () => {
+      const existing = await channels();
+      if (!existing.some((channel) => channel.id === CHANNEL_ID)) {
+        await createChannel({
+          id: CHANNEL_ID,
+          name: 'Taskora',
+          importance: Importance.High,
+        });
+      }
+    })();
+    channelReady.catch(() => {
+      channelReady = null;
+    });
+  }
   return channelReady;
 }
 
@@ -59,17 +69,27 @@ export function createMobileNotificationShell(): ReminderNotificationShell {
     },
     async schedule(key, title, body, fireAt) {
       try {
+        // 授权未授予时系统侧注册必然失败（Android 13+ 运行时授权；
+        // 多设备同步来的提醒本机可能从未弹过授权框）。显式预检让失败
+        // 原因可观测，rethrow 交给 coordinator 下 tick 重试。
+        if (!(await isPermissionGranted())) {
+          throw new Error('notification permission not granted');
+        }
         await ensureChannel();
-        sendNotification({
+        // 必须 await：未 await 的 rejection 逃逸 try/catch，注册失败
+        // 完全无迹可循（本 bug 的排查黑洞）。
+        await sendNotification({
           id: notificationIdForKey(key),
           channelId: CHANNEL_ID,
           title,
           body,
           // App 关闭仍按时触发；allowWhileIdle 降低 Doze 模式下的延迟。
+          // （Schedule.at 签名：(date, repeating, allowWhileIdle)）
           schedule: Schedule.at(new Date(fireAt), false, true),
         });
-      } catch {
-        // 注册失败静默（下次数据变更重算时重试）
+      } catch (error) {
+        console.warn('[reminders] schedule failed:', error);
+        throw error;
       }
     },
     async cancel(key) {
@@ -82,9 +102,9 @@ export function createMobileNotificationShell(): ReminderNotificationShell {
     async fireNow(title, body) {
       try {
         await ensureChannel();
-        sendNotification({ channelId: CHANNEL_ID, title, body });
-      } catch {
-        // 忽略
+        await sendNotification({ channelId: CHANNEL_ID, title, body });
+      } catch (error) {
+        console.warn('[reminders] fireNow failed:', error);
       }
     },
     async openSettings() {

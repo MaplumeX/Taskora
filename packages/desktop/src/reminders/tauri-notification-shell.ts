@@ -40,7 +40,12 @@ export function createDesktopNotificationShell(): ReminderNotificationShell {
       // 同上：runtime 模式没有系统注册。
     },
     async fireNow(title: string, body: string) {
-      sendNotification({ title, body });
+      try {
+        // await：未 await 的 rejection 逃逸调用方 catch，失败无迹可查。
+        await sendNotification({ title, body });
+      } catch (error) {
+        console.warn('[reminders] fireNow failed:', error);
+      }
     },
     async openSettings() {
       await invoke('open_notification_settings');
