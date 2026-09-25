@@ -7,7 +7,7 @@ import type { TaskResponseDto } from '@taskora/shared';
 
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { taskKeys, useTaskQuery, useUpdateTask } from '@taskora/api';
+import { isOverdue, taskKeys, useTaskQuery, useUpdateTask } from '@taskora/api';
 import { TaskCheckbox } from './TaskCheckbox';
 import { TaskContextMenu } from './TaskContextMenu';
 import { TaskDateBadge } from './TaskDateBadge';
@@ -48,6 +48,11 @@ export function TaskItem({
   const settled = completed || cancelled;
   const [exiting, setExiting] = React.useState(false);
   const expanded = selectionState === 'expanded';
+  // 逾期例外:语境视图(Today/Upcoming)省略日期 chip(列表本身即语境),
+  // 但逾期日期偏离语境,仍显示红色 chip 保留信号(参考 Things 3)。
+  const scheduledOverdue = current.scheduledDate
+    ? isOverdue(new Date(current.scheduledDate))
+    : false;
 
   const updateTask = useUpdateTask();
   const [title, setTitle] = React.useState(current.title);
@@ -150,6 +155,12 @@ export function TaskItem({
         >
           <TaskCheckbox checked={completed} cancelled={cancelled} onToggle={handleToggle} />
 
+          {/* 行首日期 chip + 重复图标:参考 Things 3 的 [chip][↻] 标题 结构。 */}
+          {(showScheduledBadge || scheduledOverdue) && (
+            <TaskDateBadge scheduledDate={current.scheduledDate} className="shrink-0" />
+          )}
+          <TaskRepeatBadge repeatRule={current.repeatRule} className="shrink-0" />
+
           {expanded ? (
             <Input
               ref={titleInputRef}
@@ -216,14 +227,10 @@ export function TaskItem({
             <TaskNotesBadge notes={current.notes} className="shrink-0" />
             {/* 子任务徽标：有子任务的任务一眼可见，并显示未了结数量。 */}
             <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
-            {showScheduledBadge && (
-              <TaskDateBadge scheduledDate={current.scheduledDate} className="shrink-0" />
-            )}
             {/* 提醒徽标不受 showScheduledBadge 限制：Today/Scheduled 等视图
               不展示日期徽标时仍能看到提醒时刻（reminders spec）。 */}
             <TaskReminderBadge reminderTime={current.reminderTime} className="shrink-0" />
-            {/* 重复徽标：设了 Repeat Rule 的任务一眼可见（recurring-tasks spec）。 */}
-            <TaskRepeatBadge repeatRule={current.repeatRule} className="shrink-0" />
+            {/* 截止徽标在行尾右对齐（参考 Things 3 的旗帜 + 日期）。 */}
             <TaskDueDateBadge dueDate={current.dueDate} className="shrink-0" />
           </div>
         </div>

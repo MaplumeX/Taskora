@@ -10,7 +10,7 @@ export interface CreateTaskDto {
   notes?: string;
   scheduledDate?: string; // ISO 8601（计划日期）
   scheduledType?: ScheduledType;
-  dueDate?: string; // ISO 8601（通知日期，默认 null）
+  dueDate?: string; // ISO 8601（截止日期，默认 null）
   bucket?: TaskBucket;
   projectId?: string;
   areaId?: string;
@@ -46,7 +46,7 @@ export interface TaskResponseDto {
   reminderTime: string | null;
   /** 重复规则（Repeat Rule）：完成后按规则派生下一实例；已了结任务保留该字段作 Logbook 溯源；null 表示未设置。 */
   repeatRule: RepeatRule | null;
-  dueDate: string | null; // 通知日期（新增）
+  dueDate: string | null; // 截止日期：必须完成日，可逾期（与 scheduledDate「计划开始做、永不逾期」对立）
   bucket: TaskBucket;
   status: TaskStatus;
   /** 了结时间（Settled At，ADR 0006）：status 为 COMPLETED/CANCELLED 时的了结时刻；字段名保留 completedAt 以兼容前端。 */
