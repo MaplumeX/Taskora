@@ -188,7 +188,6 @@ import { GroupedFeedListView } from './GroupedFeedListView';
 import {
   flattenSelectionRows,
   formatDateLabel,
-  useGroupedViewCollapseStore,
   useSelectionStore,
   useUiInteractionStore,
 } from '@taskora/api';
@@ -297,15 +296,15 @@ function renderView(items: FeedItem[], view: 'today' | 'anytime' | 'someday' = '
       <Routes>
         <Route
           path="/today"
-          element={<GroupedFeedListView view="today" items={items} emptyHint="empty" />}
+          element={<GroupedFeedListView items={items} emptyHint="empty" />}
         />
         <Route
           path="/anytime"
-          element={<GroupedFeedListView view="anytime" items={items} emptyHint="empty" />}
+          element={<GroupedFeedListView items={items} emptyHint="empty" />}
         />
         <Route
           path="/someday"
-          element={<GroupedFeedListView view="someday" items={items} emptyHint="empty" />}
+          element={<GroupedFeedListView items={items} emptyHint="empty" />}
         />
         <Route path="/projects/:id" element={<div data-testid="project-detail" />} />
         <Route path="/areas/:id" element={<div data-testid="area-detail" />} />
@@ -346,12 +345,6 @@ function headerOf(parentId: string): HTMLElement {
   return header;
 }
 
-function chevronOf(parentId: string, expanded = true): HTMLElement {
-  return screen.getByRole('button', {
-    name: new RegExp(expanded ? `collapse ${parentId}` : `expand ${parentId}`, 'i'),
-  });
-}
-
 beforeEach(() => {
   feedPosition = 0;
   harness.dndProps = null;
@@ -368,15 +361,18 @@ beforeEach(() => {
   harness.toastSuccess.mockReset();
   harness.toastError.mockReset();
   window.localStorage.clear();
-  useGroupedViewCollapseStore.setState({ collapsed: {} });
   useSelectionStore.getState().clearSelection();
   useUiInteractionStore.setState({ expandedId: null });
 });
 
 describe('GroupedFeedListView — 组头渲染', () => {
-  it('renders project headers with title, count and date badge; area headers with direct count', () => {
+  it('renders project headers with title and date badge; area headers with title', () => {
     harness.projects = [
-      project('p1', { taskTotalCount: 3, taskCompletedCount: 1, scheduledDate: '2026-08-01T00:00:00.000Z' }),
+      project('p1', {
+        taskTotalCount: 3,
+        taskCompletedCount: 1,
+        scheduledDate: '2026-08-01T00:00:00.000Z',
+      }),
     ];
     harness.areas = [area('a1')];
     renderView([
@@ -386,14 +382,44 @@ describe('GroupedFeedListView — 组头渲染', () => {
 
     const projectHeader = headerOf('p1');
     expect(projectHeader).toHaveTextContent('p1');
-    expect(projectHeader).toHaveTextContent('1/3');
     expect(projectHeader).toHaveTextContent(
       formatDateLabel(new Date('2026-08-01T00:00:00.000Z')),
     );
 
     const areaHeader = headerOf('a1');
     expect(areaHeader).toHaveTextContent('a1');
-    expect(areaHeader).toHaveTextContent('1');
+  });
+
+  it('renders headers as underlined section titles without any collapse chevron or task count', () => {
+    harness.projects = [project('p1', { taskTotalCount: 3, taskCompletedCount: 1 })];
+    harness.areas = [area('a1')];
+    renderView([
+      taskItem('direct', { areaId: 'a1' }),
+      taskItem('in-p1', { projectId: 'p1' }),
+    ]);
+
+    const projectHeader = headerOf('p1');
+    expect(projectHeader.className).toContain('border-b');
+    // 无 chevron（行内唯一按钮是进度环）；无任务计数文案。
+    expect(projectHeader).not.toHaveTextContent('1/3');
+    expect(
+      screen.queryByRole('button', { name: /collapse|expand/i }),
+    ).not.toBeInTheDocument();
+
+    const areaHeader = headerOf('a1');
+    expect(areaHeader.className).toContain('border-b');
+    // 领域组头：仅图标 + 标题，无计数数字。
+    expect(areaHeader.textContent?.trim()).toBe('a1');
+  });
+
+  it('groups in-area project tasks flatly under the project header (no area nesting)', () => {
+    harness.projects = [project('p1', { areaId: 'a1' })];
+    harness.areas = [area('a1')];
+    renderView([taskItem('in-p1', { projectId: 'p1' })]);
+
+    expect(document.querySelector('[data-group-header="p1"]')).not.toBeNull();
+    // 无直属任务的 Area 不出现组头；区域内项目任务不嵌套进 Area 组。
+    expect(document.querySelector('[data-group-header="a1"]')).toBeNull();
   });
 
   it('wraps the project header in the existing project context menu', () => {
@@ -422,60 +448,16 @@ describe('GroupedFeedListView — 组头渲染', () => {
   });
 });
 
-describe('GroupedFeedListView — 折叠与导航', () => {
-  it('chevron toggles task visibility and persists collapse per view', () => {
-    harness.projects = [project('p1')];
-    renderView([taskItem('a1', { projectId: 'p1' }), taskItem('a2', { projectId: 'p1' })]);
-
-    expect(screen.getByText('a1')).toBeInTheDocument();
-    fireEvent.click(chevronOf('p1'));
-
-    expect(screen.queryByText('a1')).not.toBeInTheDocument();
-    expect(screen.queryByText('a2')).not.toBeInTheDocument();
-    expect(
-      useGroupedViewCollapseStore.getState().collapsed['today:p1'],
-    ).toBe(true);
-
-    fireEvent.click(chevronOf('p1', false));
-    expect(screen.getByText('a1')).toBeInTheDocument();
-    expect(useGroupedViewCollapseStore.getState().collapsed['today:p1']).toBeUndefined();
-  });
-
-  it('collapses per view independently (today collapse does not leak into anytime)', () => {
-    harness.projects = [project('p1')];
-    useGroupedViewCollapseStore.getState().setCollapsed('anytime', 'p1', true);
-    renderView([taskItem('a1', { projectId: 'p1' })], 'today');
-
-    // anytime 的折叠不影响 today：任务仍然可见。
-    expect(screen.getByText('a1')).toBeInTheDocument();
-  });
-
-  it('collapsed group contributes only its header to the selection scope', () => {
+describe('GroupedFeedListView — 导航与行注册', () => {
+  it('headers and tasks all register as visible selection rows (no collapse)', () => {
     harness.projects = [project('p1')];
     renderView([taskItem('a1', { projectId: 'p1' })]);
 
-    let rowIds = flattenSelectionRows(useSelectionStore.getState()).map((r) => r.id);
+    const rowIds = flattenSelectionRows(useSelectionStore.getState()).map((r) => r.id);
     expect(rowIds).toEqual(['p1', 'a1']);
-
-    fireEvent.click(chevronOf('p1'));
-
-    rowIds = flattenSelectionRows(useSelectionStore.getState()).map((r) => r.id);
-    expect(rowIds).toEqual(['p1']);
   });
 
-  it('moves the selection to the group header when the selected task\'s group collapses', () => {
-    harness.projects = [project('p1')];
-    renderView([taskItem('a1', { projectId: 'p1' })]);
-    act(() => {
-      useSelectionStore.getState().setSelection(['a1']);
-    });
-
-    fireEvent.click(chevronOf('p1'));
-
-    expect(useSelectionStore.getState().selectedIds).toEqual(['p1']);
-  });
-
-  it('navigates to the project detail on header body click and on Enter', () => {
+  it('navigates to the project detail on header body click', () => {
     harness.projects = [project('p1')];
     renderView([taskItem('a1', { projectId: 'p1' })]);
 
@@ -572,11 +554,8 @@ describe('GroupedFeedListView — 拖拽语义', () => {
     expect(harness.reorderTasksMutate).toHaveBeenCalledWith(['a2', 'loose', 'a1', 'b1']);
   });
 
-  it('drop onto a collapsed group lands at its end with a confirming toast', () => {
+  it('drop onto a group header lands at the end of that group', () => {
     setupTwoProjects();
-    act(() => {
-      useGroupedViewCollapseStore.getState().setCollapsed('today', 'p2', true);
-    });
 
     dragEnd('task:loose', 'header:p2');
 
@@ -584,9 +563,8 @@ describe('GroupedFeedListView — 拖拽语义', () => {
       id: 'loose',
       data: { projectId: 'p2', areaId: null },
     });
-    // 落在折叠组末尾：b1（隐藏成员）之后。
+    // 落在组末尾：b1 之后。
     expect(harness.reorderTasksMutate).toHaveBeenCalledWith(['a1', 'a2', 'b1', 'loose']);
-    expect(harness.toastSuccess).toHaveBeenCalledWith(expect.stringContaining('p2'));
   });
 
   it('drop onto an area group reassigns the area and clears the project', () => {
