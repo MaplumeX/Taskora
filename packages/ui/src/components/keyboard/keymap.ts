@@ -29,10 +29,6 @@ export type KeyAction =
   | { type: 'delete' }
   /** Enter：行内展开选中任务。 */
   | { type: 'expand' }
-  /** ←：折叠选中的 Group Header（仅 Grouped View 组头行响应）。 */
-  | { type: 'collapseGroup' }
-  /** →：展开选中的 Group Header（仅 Grouped View 组头行响应）。 */
-  | { type: 'expandGroup' }
   /** Space：选中项下方新建任务（无选中时等同 newTask）。 */
   | { type: 'newTaskBelow' }
   | { type: 'newTask' }
@@ -91,15 +87,9 @@ export function resolveAction(e: KeyEventLike, platform: KeyPlatform): KeyAction
   }
 
   // 返回：mac ⌘←；Windows 桌面 Alt+←；Web 不派发（浏览器后退同效）。
-  // 裸 ←/→：Grouped View 组头折叠/展开（非组头行由 handler 忽略）。
   if (key === 'ArrowLeft') {
     if (platform === 'mac' && cmd && !e.altKey) return { type: 'back' };
     if (platform === 'windows' && altOnly) return { type: 'back' };
-    if (bare) return { type: 'collapseGroup' };
-    return null;
-  }
-  if (key === 'ArrowRight') {
-    if (bare) return { type: 'expandGroup' };
     return null;
   }
 

@@ -58,7 +58,7 @@ Bucket 视图的一种展示形态：视图内任务按其直接父级（Project
 _Avoid_: 分节、分类显示
 
 **Group Header（分组头）**:
-Grouped View 中位于每组任务上方、代表其父级 Project / Area 的标题行；有 ≥1 个可见任务才出现（空父级不出现），可展开/收起，组间顺序跟随侧边栏中 Project / Area 的位次。项目自身日期匹配视图但无视图内任务时，仍以独立项目行出现（此时无组头）。与 Project Heading（项目内部的静态分组标题）是不同概念。
+Grouped View 中位于每组任务上方、代表其父级 Project / Area 的标题行；有 ≥1 个可见任务才出现（空父级不出现），下横线小节标题形态、不可折叠，组间顺序跟随侧边栏中 Project / Area 的全局视觉顺序（扁平单层：区域内项目的任务直接归入项目组，不再嵌套于 Area 组）。项目自身日期匹配视图但无视图内任务时，仍以独立项目行出现（此时无组头）。与 Project Heading（项目内部的静态分组标题）是不同概念。
 _Avoid_: Section、Project Heading
 
 **Logbook Entry**:
