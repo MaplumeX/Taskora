@@ -11,6 +11,107 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-09-25
+
+### Added
+
+- **ui**: Grouped View for the time views (#81) — Today/Anytime/Someday
+  tasks now group under their direct parent (project/area) with
+  collapsible group headers (chevron, progress ring, badges, counts)
+  following sidebar order; loose tasks float at the top and orphaned
+  tasks (settled/trashed/missing parents) stay ungrouped with their
+  parent tag. Grouping is a pure render-layer derivation over the
+  unchanged flat feed. Collapse state persists device-locally per view
+  per parent (never synced); within-group reorder writes back the
+  global Position, cross-group drop reassigns projectId/areaId, and
+  dropping on a collapsed group lands at its end with a confirming
+  toast. Keyboard support follows ADR-0004: ←/→ collapse/expand
+  headers, j/k traverse visible rows only, Alt+↑/↓ clamp at group
+  boundaries, Space on a header creates the task in that parent.
+  Settings → General gains a synced "group tasks by project/area in
+  time views" toggle (default on), and the General tab now renders on
+  web too.
+- **logbook**: Logbook redesigned after Things 3 (#82) —
+  progressive-granularity groups replace the flat
+  today/yesterday/earlier buckets: today/yesterday as relative labels,
+  the current week as full weekday names, earlier full weeks of this
+  month as week ranges, then earlier months of the year, then years —
+  a bounded group count keeps long history scannable. Settled dates
+  render inline next to the title on both task and project rows (with
+  year when crossing years), and cancelled project rows render
+  consistently (X progress ring, struck-through dimmed title) —
+  presentational only, per ADR-0006.
+- **ui**: Notes & subtasks badges on collapsed task rows (#71, #79) —
+  a sticky-note icon when notes are present and a list icon with the
+  open-subtask count, pinned in the title cluster next to the title
+  (Things 3 style) and hidden when empty.
+
+### Changed
+
+- **ui**: Things 3-style date display on task rows (#78) — the
+  scheduled date moves from a trailing calendar-icon badge to a
+  leading date chip between checkbox and title (rounded muted capsule
+  with a short absolute date, red when overdue/today); the Today view
+  omits the chip since the list itself is the date context, but
+  overdue tasks keep a red chip. The repeat-rule icon moves to the
+  leading slot next to the chip. The deadline badge switches from a
+  Clock icon with an absolute date to a Flag icon with a countdown
+  ("x days left" / red "today" / red "x days past due"), so the text
+  format itself distinguishes plan-to-start from must-finish; project
+  meta rows follow the same flag + countdown style, and CONTEXT.md
+  gains a Deadline entry recording the distinction.
+- **ui**: Project/area reassignment consolidates into a "Move" entry
+  in the task context menu (#75) — the Project and Area icon buttons
+  leave the expanded task row; the move picker lists areas and
+  projects side by side in one panel, with a "None" row per section
+  to clear the assignment.
+
+### Fixes
+
+- **mobile/desktop**: Cold start no longer blocks on session refresh
+  (#73) — boot awaited the `/auth/refresh` server round-trip (up to
+  the 15s timeout on weak networks) before resolving, stacking a
+  network wait on top of the WebView cold start even though the
+  local-first replica already has everything needed to render. With a
+  persisted user snapshot and hydrated session, boot now resolves
+  immediately and refresh runs in the background (401 still clears
+  the session and switches to login; network failures fall back to
+  offline mode with the sync indicator). Both shells share the same
+  startup semantics, with boot tests added per shell.
+- **backend**: Parse `repeatRule` in change event payloads (#80) —
+  `buildPayload` passed the raw Prisma row through for task events,
+  leaving `repeatRule` as a TEXT JSON string instead of the parsed
+  object every other read path returns; the SSE event then overwrote
+  the client's task cache with the string, so the repeat rule editor
+  bounced the toggle off and disabled all controls. The event payload
+  now mirrors the HTTP read path, locked by an integration regression
+  test.
+- **ui**: Cancelled tasks render with an X checkbox mirroring the
+  completed style (#76) — filled shape with an X instead of a
+  checkmark, muted tones, and the pop animation; the old outlined
+  circle-slash was visually indistinguishable from the unchecked
+  state at 18px.
+- **ui**: Fix calendar size and selected/hover styles (#74) —
+  react-day-picker v10 applies modifier classes (selected/today/
+  outside/disabled) to the outer `td` rather than the day button, so
+  the round selected background rendered as a skewed rounded
+  rectangle layered over the button's own hover background. A custom
+  DayButton now carries the visual states on the button itself, the
+  today dot anchors to the button, and the calendar shrinks one notch
+  (day buttons size-9 → size-8, mobile size-10 → size-9, still ≥36px
+  touch targets).
+- **ui**: Show reminder & repeat rule sections in the task context
+  menu date picker (#70, #72) — the context menu's ScheduledDateField
+  was opened with default props that hid the reminder time and repeat
+  rule sections the expanded task row shows; the repeat rule editor
+  was extracted into a standalone field entry so both entry points
+  render the full editor.
+- **ui**: Keep task rows rounded while the selection fades out (#77)
+  — `rounded-lg` was only applied in the selected/expanded states, so
+  the corner radius vanished instantly when a row switched back to
+  idle while the background kept fading for ~150ms, briefly flashing
+  a square-tinted block; the radius is now always present.
+
 ## [0.5.0] - 2026-09-23
 
 ### Added
