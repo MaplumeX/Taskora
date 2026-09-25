@@ -76,7 +76,7 @@ export function ProjectItem({
         <span className={cn(
           'flex-1 truncate text-sm',
           !project.title && 'text-muted-foreground',
-          isCompleted && 'text-muted-foreground line-through',
+          isCompleted && 'text-muted-foreground',
         )}>
           {project.title || t('project:newItemPlaceholder')}
         </span>

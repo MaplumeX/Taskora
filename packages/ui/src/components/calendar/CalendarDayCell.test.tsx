@@ -72,7 +72,7 @@ describe('CalendarDayCell', () => {
     expect(screen.queryByText('alpha')).not.toBeInTheDocument();
   });
 
-  it('renders completed tasks struck-through', () => {
+  it('renders completed tasks muted without strikethrough', () => {
     render(
       <CalendarDayCell
         date={new Date(2026, 7, 30)}
@@ -82,6 +82,20 @@ describe('CalendarDayCell', () => {
     );
 
     const title = screen.getByText('done');
+    expect(title.className).toContain('text-muted-foreground');
+    expect(title.className).not.toContain('line-through');
+  });
+
+  it('renders cancelled tasks struck-through', () => {
+    render(
+      <CalendarDayCell
+        date={new Date(2026, 7, 30)}
+        tasks={[task('dropped', '2026-08-30T12:00:00.000Z', TaskStatus.CANCELLED)]}
+        onToggleComplete={onToggleComplete}
+      />,
+    );
+
+    const title = screen.getByText('dropped');
     expect(title.className).toContain('line-through');
   });
 

@@ -354,7 +354,7 @@ function SubtaskRow({
             setDraft(subtask.title);
             setEditing(true);
           }}
-          className={cn('flex-1 text-left', settled && 'text-muted-foreground line-through')}
+          className={cn('flex-1 text-left', settled && 'text-muted-foreground', cancelled && 'line-through')}
         >
           {subtask.title}
         </button>

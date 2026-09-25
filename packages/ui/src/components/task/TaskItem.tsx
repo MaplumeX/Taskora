@@ -30,6 +30,8 @@ interface Props {
   showScheduledBadge?: boolean;
   /** Logbook 专用：标题区后注入的了却日期徽标 */
   settledDateBadge?: React.ReactNode;
+  /** Logbook 场景：已了结标题保留删除线但不置灰（正常前景色）。 */
+  plainSettledTitle?: boolean;
 }
 
 export function TaskItem({
@@ -41,6 +43,7 @@ export function TaskItem({
   onRowClick,
   showScheduledBadge = true,
   settledDateBadge,
+  plainSettledTitle = false,
 }: Props) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -48,7 +51,8 @@ export function TaskItem({
   const current = liveTask ?? task;
   const completed = current.status === 'COMPLETED';
   const cancelled = current.status === 'CANCELLED';
-  // 已了结（完成或取消）：标题删除线 + 弱化（ADR 0006）。
+  // 已了结（完成或取消）：标题置灰弱化；取消另加删除线（ADR 0006）。
+  // Logbook 场景（plainSettledTitle）例外：不置灰，仅取消态保留删除线。
   const settled = completed || cancelled;
   const [exiting, setExiting] = React.useState(false);
   const expanded = selectionState === 'expanded';
@@ -158,7 +162,11 @@ export function TaskItem({
           }}
           role={onRowClick ? 'button' : undefined}
         >
-          <TaskCheckbox checked={completed} cancelled={cancelled} onToggle={handleToggle} />
+          {/* 复选框放入 20px 固定槽位，与项目行/组头的进度环（20px）同宽，
+            保证混合列表中任务与项目的标题起始位置对齐。 */}
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+            <TaskCheckbox checked={completed} cancelled={cancelled} onToggle={handleToggle} />
+          </span>
 
           {/* 行首日期标记 + 重复图标:参考 Things 3 的 [chip][↻] 标题 结构。
             ≤ 今天 → 黄星；未来日期 → 灰色短日期 chip（两者互斥）。
@@ -206,7 +214,14 @@ export function TaskItem({
                 onClick={(e) => e.stopPropagation()}
                 className={cn(
                   'min-w-0 flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
-                  settled && 'text-muted-foreground line-through',
+                  settled &&
+                    (plainSettledTitle
+                      ? cancelled
+                        ? 'text-foreground line-through'
+                        : 'text-foreground'
+                      : cancelled
+                        ? 'text-muted-foreground line-through'
+                        : 'text-muted-foreground'),
                 )}
               />
             ) : (
@@ -214,7 +229,13 @@ export function TaskItem({
                 className={cn(
                   'truncate text-left text-sm transition-colors',
                   settled
-                    ? 'text-muted-foreground line-through'
+                    ? plainSettledTitle
+                      ? cancelled
+                        ? 'text-foreground line-through'
+                        : 'text-foreground'
+                      : cancelled
+                        ? 'text-muted-foreground line-through'
+                        : 'text-muted-foreground'
                     : current.title
                       ? 'text-foreground'
                       : 'text-muted-foreground',

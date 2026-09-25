@@ -55,7 +55,7 @@ export function ProjectProgressRing({
           stroke="currentColor"
           strokeWidth="2"
           className={
-            isChecked ? 'text-primary' : isCancelled ? 'text-muted-foreground/40' : 'text-muted-foreground/30'
+            isChecked || isCancelled ? 'text-primary' : 'text-muted-foreground/30'
           }
         />
         {/* 进度弧（进行中且有进度时，满环时满圈无实心无勾） */}
@@ -78,9 +78,9 @@ export function ProjectProgressRing({
         {isChecked && (
           <circle cx="10" cy="10" r={RADIUS} fill="currentColor" className="text-primary" />
         )}
-        {/* 已取消时弱化实心填充 */}
+        {/* 已取消时同样实心填充（主题色） */}
         {isCancelled && (
-          <circle cx="10" cy="10" r={RADIUS} fill="currentColor" className="text-muted-foreground/30" />
+          <circle cx="10" cy="10" r={RADIUS} fill="currentColor" className="text-primary" />
         )}
         {/* 中心勾（仅项目已完成时） */}
         {isChecked && (
@@ -102,7 +102,7 @@ export function ProjectProgressRing({
             stroke="currentColor"
             strokeWidth="2"
             strokeLinecap="round"
-            className="text-muted-foreground"
+            className="text-primary-foreground"
           />
         )}
       </svg>

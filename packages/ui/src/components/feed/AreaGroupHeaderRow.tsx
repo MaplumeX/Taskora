@@ -29,7 +29,10 @@ export function AreaGroupHeaderRow({ area, selectionState = 'idle' }: Props) {
       selectionState={selectionState}
       onOpen={() => navigate(`/areas/${area.id}`)}
     >
-      <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
+      {/* 与进度环等宽的 20px 槽位，保证领域组头与任务行标题对齐。 */}
+      <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+        <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
+      </span>
       <span
         className={cn(
           'flex-1 truncate text-left text-sm font-semibold tracking-wide',
