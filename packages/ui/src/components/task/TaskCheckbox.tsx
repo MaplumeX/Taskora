@@ -10,7 +10,7 @@ interface Props {
   disabled?: boolean;
   /** 取消态：与完成态同构的实心圆，仅 ✓ 换成 X、色调弱化；点击走 onToggle（撤销取消）。 */
   cancelled?: boolean;
-  /** Size override (e.g. compact calendar rows); defaults to 18px */
+  /** Size override (e.g. compact calendar rows); defaults to 14px */
   className?: string;
 }
 
@@ -28,14 +28,14 @@ export function TaskCheckbox({ checked, onToggle, disabled, cancelled, className
         onToggle();
       }}
       className={cn(
-        'flex shrink-0 items-center justify-center rounded-full border transition-all duration-200 active:scale-90',
+        'flex shrink-0 items-center justify-center rounded border transition-all duration-200 active:scale-90',
         checked
           ? 'border-primary bg-primary text-primary-foreground checkbox-pop'
           : cancelled
             ? 'border-muted-foreground/40 bg-muted-foreground/30 text-muted-foreground checkbox-pop'
             : 'border-muted-foreground/40 text-transparent hover:border-primary',
         disabled && 'opacity-50',
-        className ?? 'h-[18px] w-[18px]',
+        className ?? 'h-3.5 w-3.5',
       )}
     >
       {cancelled ? (

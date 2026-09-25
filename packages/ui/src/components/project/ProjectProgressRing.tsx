@@ -11,7 +11,7 @@ interface Props {
   disabled?: boolean;
 }
 
-const RADIUS = 7;
+const RADIUS = 8;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 export function ProjectProgressRing({
@@ -41,15 +41,15 @@ export function ProjectProgressRing({
         onToggle();
       }}
       className={cn(
-        'flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full transition-all duration-200 active:scale-90',
+        'flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-full transition-all duration-200 active:scale-90',
         disabled && 'opacity-50',
       )}
     >
-      <svg viewBox="0 0 18 18" className="h-[18px] w-[18px]">
+      <svg viewBox="0 0 20 20" className="h-[20px] w-[20px]">
         {/* 轨道圆 */}
         <circle
-          cx="9"
-          cy="9"
+          cx="10"
+          cy="10"
           r={RADIUS}
           fill="none"
           stroke="currentColor"
@@ -61,8 +61,8 @@ export function ProjectProgressRing({
         {/* 进度弧（进行中且有进度时，满环时满圈无实心无勾） */}
         {!isChecked && !isCancelled && ratio > 0 && (
           <circle
-            cx="9"
-            cy="9"
+            cx="10"
+            cy="10"
             r={RADIUS}
             fill="none"
             stroke="currentColor"
@@ -70,22 +70,22 @@ export function ProjectProgressRing({
             className="text-primary"
             strokeDasharray={CIRCUMFERENCE}
             strokeDashoffset={offset}
-            transform="rotate(-90 9 9)"
+            transform="rotate(-90 10 10)"
             strokeLinecap="round"
           />
         )}
         {/* 已完成时实心填充 */}
         {isChecked && (
-          <circle cx="9" cy="9" r={RADIUS} fill="currentColor" className="text-primary" />
+          <circle cx="10" cy="10" r={RADIUS} fill="currentColor" className="text-primary" />
         )}
         {/* 已取消时弱化实心填充 */}
         {isCancelled && (
-          <circle cx="9" cy="9" r={RADIUS} fill="currentColor" className="text-muted-foreground/30" />
+          <circle cx="10" cy="10" r={RADIUS} fill="currentColor" className="text-muted-foreground/30" />
         )}
         {/* 中心勾（仅项目已完成时） */}
         {isChecked && (
           <path
-            d="M5.5 9 L8 11.5 L12.5 6.5"
+            d="M6.5 10 L9 12.5 L14 7"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
@@ -97,7 +97,7 @@ export function ProjectProgressRing({
         {/* 中心叉（仅项目已取消时） */}
         {isCancelled && (
           <path
-            d="M6 6 L12 12 M12 6 L6 12"
+            d="M7 7 L13 13 M13 7 L7 13"
             fill="none"
             stroke="currentColor"
             strokeWidth="2"
