@@ -1,16 +1,5 @@
 import * as React from 'react';
-import {
-  Calendar,
-  Check,
-  CircleSlash,
-  Clock,
-  Folder,
-  ListPlus,
-  Repeat,
-  Tag,
-  Target,
-  Trash2,
-} from 'lucide-react';
+import { Calendar, CircleSlash, Clock, ListPlus, Repeat, Tag, Trash2 } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
@@ -26,8 +15,6 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/compon
 import { MenuRow } from '@/components/common/MenuRow';
 import { useLongPress } from '../../lib/useLongPress';
 import { cn } from '@/lib/utils';
-import { useProjectsQuery } from '@taskora/api';
-import { useAreasQuery } from '@taskora/api';
 import {
   getClientKind,
   taskKeys,
@@ -58,8 +45,6 @@ export function TaskRowExpanded({ task, current }: Props) {
 
   const updateTask = useUpdateTask();
   const createSubtask = useCreateSubtask();
-  const { data: projects = [] } = useProjectsQuery();
-  const { data: areas = [] } = useAreasQuery();
 
   const [notes, setNotes] = React.useState(current.notes ?? '');
   const [subtaskTitle, setSubtaskTitle] = React.useState('');
@@ -190,82 +175,6 @@ export function TaskRowExpanded({ task, current }: Props) {
           active={!!current.dueDate}
         >
           {(close) => <DueDateField current={current} onPatch={patch} onClose={close} />}
-        </IconPopover>
-
-        <IconPopover
-          label={t('task:project')}
-          icon={<Folder className="h-4 w-4" />}
-          active={!!current.projectId}
-        >
-          <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
-            <button
-              type="button"
-              onClick={() => patch({ projectId: null })}
-              className={cn(
-                'rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent max-md:py-2.5',
-                !current.projectId && 'font-medium text-primary',
-              )}
-            >
-              {t('common:none')}
-            </button>
-            {projects.map((p) => (
-              <button
-                key={p.id}
-                type="button"
-                onClick={() => p.id !== current.projectId && patch({ projectId: p.id })}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent max-md:py-2.5',
-                  p.id === current.projectId && 'font-medium text-primary',
-                )}
-              >
-                <Check
-                  className={cn(
-                    'h-3.5 w-3.5',
-                    p.id === current.projectId ? 'opacity-100' : 'opacity-0',
-                  )}
-                />
-                {p.title}
-              </button>
-            ))}
-          </div>
-        </IconPopover>
-
-        <IconPopover
-          label={t('task:area')}
-          icon={<Target className="h-4 w-4" />}
-          active={!!current.areaId}
-        >
-          <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
-            <button
-              type="button"
-              onClick={() => patch({ areaId: null })}
-              className={cn(
-                'rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent max-md:py-2.5',
-                !current.areaId && 'font-medium text-primary',
-              )}
-            >
-              {t('common:none')}
-            </button>
-            {areas.map((a) => (
-              <button
-                key={a.id}
-                type="button"
-                onClick={() => a.id !== current.areaId && patch({ areaId: a.id })}
-                className={cn(
-                  'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent max-md:py-2.5',
-                  a.id === current.areaId && 'font-medium text-primary',
-                )}
-              >
-                <Check
-                  className={cn(
-                    'h-3.5 w-3.5',
-                    a.id === current.areaId ? 'opacity-100' : 'opacity-0',
-                  )}
-                />
-                {a.title}
-              </button>
-            ))}
-          </div>
         </IconPopover>
 
         <IconPopover

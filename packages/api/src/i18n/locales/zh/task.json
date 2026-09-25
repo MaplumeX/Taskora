@@ -32,6 +32,7 @@
   "markCancelled": "取消任务",
   "markUncancelled": "撤销取消",
   "convertToProject": "转换为项目",
+  "move": "移动",
   "convertSuccess": "已转换为项目",
   "convertFailed": "转换失败",
   "quickAddPlaceholder": "添加任务到收件箱…",
