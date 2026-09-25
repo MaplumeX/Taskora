@@ -81,6 +81,18 @@ export function ProjectFeedRow({ item, showScheduledBadge = true, selectionState
           projectStatus={item.status as ProjectStatus}
           onToggle={handleToggle}
         />
+        {/* 与 TaskItem 对齐：已了结时行首位置显示了结时间（主题色）；
+          未了结时 ≤ 今天 → 黄星，未来日期 → 灰色短日期 chip（两者互斥）。 */}
+        {settled && settledDateBadge ? (
+          settledDateBadge
+        ) : (
+          showScheduledBadge &&
+          (item.scheduledDate && new Date(item.scheduledDate) < startOfTomorrow() ? (
+            <TaskTodayBadge className="shrink-0" />
+          ) : (
+            <TaskDateBadge scheduledDate={item.scheduledDate} />
+          ))
+        )}
         <span
           className={cn(
             'flex-1 truncate text-left text-sm',
@@ -93,7 +105,6 @@ export function ProjectFeedRow({ item, showScheduledBadge = true, selectionState
         >
           {item.title || t('project:newItemPlaceholder')}
         </span>
-        {settledDateBadge}
         <div className="flex items-center gap-2">
           {item.tags.length > 0 && (
             <div className="hidden items-center gap-1 md:flex">
@@ -107,12 +118,6 @@ export function ProjectFeedRow({ item, showScheduledBadge = true, selectionState
               ))}
             </div>
           )}
-          {showScheduledBadge &&
-            (item.scheduledDate && new Date(item.scheduledDate) < startOfTomorrow() ? (
-              <TaskTodayBadge />
-            ) : (
-              <TaskDateBadge scheduledDate={item.scheduledDate} />
-            ))}
           <TaskDueDateBadge dueDate={item.dueDate} />
         </div>
       </div>

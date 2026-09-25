@@ -40,7 +40,7 @@ export function FeedItemRow({
         selectionState={selectionState}
         settledDateBadge={
           showSettledDate && item.completedAt ? (
-            <SettledDateBadge date={item.completedAt} />
+            <SettledDateBadge date={item.completedAt} className="text-primary" />
           ) : undefined
         }
       />
@@ -67,7 +67,7 @@ export function FeedItemRow({
       showScheduledBadge={showScheduledBadge}
       settledDateBadge={
         showSettledDate && item.completedAt ? (
-          <SettledDateBadge date={item.completedAt} />
+          <SettledDateBadge date={item.completedAt} className="text-primary" />
         ) : undefined
       }
     />
