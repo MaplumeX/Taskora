@@ -147,7 +147,10 @@ export function TaskItem({
           data-selection-row={task.id}
           tabIndex={onRowClick ? (selectionState !== 'idle' ? 0 : -1) : undefined}
           className={cn(
-            'flex h-10 min-w-0 items-center gap-3 rounded-lg px-2 transition-[opacity,background-color] max-md:h-11',
+            'flex min-w-0 items-center gap-3 rounded-lg px-2 py-1 transition-[opacity,background-color]',
+            // 无归属任务保持单行紧凑高度；有归属时由标题行 + 归属小字行
+            // 自然撑高（参考 Things 3 的两段式任务行）。
+            !tag && 'h-10 max-md:h-11',
             // 选中态已有 bg-accent 指示，抑制原生 outline；
             // 仅聚焦但未选中（如 Tab 聚焦）时显示细 ring 保持键盘可访问性。
             'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
@@ -186,68 +189,79 @@ export function TaskItem({
           )}
 
           {/* 标题区：备注/子任务徽标紧贴标题文本（参考 Things 3），
-            而非被 flex-1 的标题推到行尾。 */}
-          <div className="flex min-w-0 flex-1 items-center gap-1.5">
-            {expanded ? (
-              <Input
-                ref={titleInputRef}
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                onBlur={commitTitle}
-                placeholder={t('task:newTaskPlaceholder')}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    // Enter（含 ⌘Enter/Ctrl+Enter）：先 blur 触发提交，再收起，
-                    // 避免出现「退出编辑」与「收起」拆成两次按键的中间态。
-                    e.currentTarget.blur();
-                    rowRef.current?.focus();
-                    onRowClick?.();
-                  } else if (e.key === ' ') {
-                    e.stopPropagation();
-                  } else if (e.key === 'Escape') {
-                    setTitle(current.title);
-                    e.currentTarget.blur();
-                  }
-                }}
-                onClick={(e) => e.stopPropagation()}
-                className={cn(
-                  'min-w-0 flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
-                  settled &&
-                    (plainSettledTitle
-                      ? cancelled
-                        ? 'text-foreground line-through'
-                        : 'text-foreground'
-                      : cancelled
-                        ? 'text-muted-foreground line-through'
-                        : 'text-muted-foreground'),
-                )}
-              />
-            ) : (
-              <span
-                className={cn(
-                  'truncate text-left text-sm transition-colors',
-                  settled
-                    ? plainSettledTitle
-                      ? cancelled
-                        ? 'text-foreground line-through'
-                        : 'text-foreground'
-                      : cancelled
-                        ? 'text-muted-foreground line-through'
-                        : 'text-muted-foreground'
-                    : current.title
-                      ? 'text-foreground'
-                      : 'text-muted-foreground',
-                )}
-              >
-                {current.title || t('task:newTaskPlaceholder')}
+            而非被 flex-1 的标题推到行尾。有归属时归属小字在标题下方
+            自成一行（参考 Things 3），行高随之增加。 */}
+          <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+            <div className="flex min-w-0 items-center gap-1.5">
+              {expanded ? (
+                <Input
+                  ref={titleInputRef}
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  onBlur={commitTitle}
+                  placeholder={t('task:newTaskPlaceholder')}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.stopPropagation();
+                      e.preventDefault();
+                      // Enter（含 ⌘Enter/Ctrl+Enter）：先 blur 触发提交，再收起，
+                      // 避免出现「退出编辑」与「收起」拆成两次按键的中间态。
+                      e.currentTarget.blur();
+                      rowRef.current?.focus();
+                      onRowClick?.();
+                    } else if (e.key === ' ') {
+                      e.stopPropagation();
+                    } else if (e.key === 'Escape') {
+                      setTitle(current.title);
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    'min-w-0 flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
+                    settled &&
+                      (plainSettledTitle
+                        ? cancelled
+                          ? 'text-foreground line-through'
+                          : 'text-foreground'
+                        : cancelled
+                          ? 'text-muted-foreground line-through'
+                          : 'text-muted-foreground'),
+                  )}
+                />
+              ) : (
+                <span
+                  className={cn(
+                    'truncate text-left text-sm transition-colors',
+                    settled
+                      ? plainSettledTitle
+                        ? cancelled
+                          ? 'text-foreground line-through'
+                          : 'text-foreground'
+                        : cancelled
+                          ? 'text-muted-foreground line-through'
+                          : 'text-muted-foreground'
+                      : current.title
+                        ? 'text-foreground'
+                        : 'text-muted-foreground',
+                  )}
+                >
+                  {current.title || t('task:newTaskPlaceholder')}
+                </span>
+              )}
+              {/* 备注徽标：有备注的任务一眼可见。 */}
+              <TaskNotesBadge notes={current.notes} className="shrink-0" />
+              {/* 子任务徽标：有子任务的任务一眼可见，并显示未了结数量。 */}
+              <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
+            </div>
+            {/* 归属上下文：标题下方一行灰色小字，只显示直接父级一层
+              （projectTitle 优先，否则 areaTitle），参考 Things 3。
+              移动端同样显示；分组视图内由组头承担归属、不传入。 */}
+            {tag && (
+              <span className="truncate text-xs leading-tight text-muted-foreground">
+                {tag}
               </span>
             )}
-            {/* 备注徽标：有备注的任务一眼可见。 */}
-            <TaskNotesBadge notes={current.notes} className="shrink-0" />
-            {/* 子任务徽标：有子任务的任务一眼可见，并显示未了结数量。 */}
-            <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
           </div>
 
           <div className="flex min-w-0 shrink items-center gap-2">
@@ -262,11 +276,6 @@ export function TaskItem({
                   />
                 ))}
               </div>
-            )}
-            {tag && (
-              <span className="hidden max-w-24 truncate text-xs text-muted-foreground md:inline">
-                {tag}
-              </span>
             )}
             {/* 提醒徽标不受 showScheduledBadge 限制：Today/Scheduled 等视图
               不展示日期徽标时仍能看到提醒时刻（reminders spec）。 */}
