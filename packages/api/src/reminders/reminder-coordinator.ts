@@ -100,7 +100,14 @@ export function createReminderCoordinator(options: ReminderCoordinatorOptions): 
     for (const n of diff.register) {
       if (mode === 'system') {
         const { title, body } = texts(n);
-        await shell.schedule(n.key, title, body, n.fireAt).catch(noop);
+        const ok = await shell.schedule(n.key, title, body, n.fireAt).then(
+          () => true,
+          () => false,
+        );
+        // 注册失败不落表：否则内存注册表与系统侧脱节，失败后永不再试
+        // （仅数据变更才重算差量）。不落表则下个 tick 自动重试——授权
+        // 或渠道恢复后自愈。
+        if (!ok) continue;
       }
       registered.set(n.key, n.fireAt);
       meta.set(n.key, n);
