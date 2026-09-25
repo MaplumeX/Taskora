@@ -2,16 +2,24 @@ import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Check, Circle, CircleSlash, CalendarClock, CalendarDays, Repeat, Tag, FolderInput, Trash2, RotateCcw } from 'lucide-react';
+import {
+  Check,
+  Circle,
+  CircleSlash,
+  CalendarClock,
+  CalendarDays,
+  FolderTree,
+  Repeat,
+  Tag,
+  FolderInput,
+  Trash2,
+  RotateCcw,
+} from 'lucide-react';
 
 import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
 import { ScheduledType } from '@taskora/shared';
 
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-} from '@/components/ui/popover';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { MenuRow } from '@/components/common/MenuRow';
 import { useLongPress } from '../../lib/useLongPress';
 import {
@@ -30,6 +38,7 @@ import { ScheduledDateField } from './fields/ScheduledDateField';
 import { DueDateField } from './fields/DueDateField';
 import { RepeatRuleField } from './fields/RepeatRuleField';
 import { TagsField } from './fields/TagsField';
+import { MoveField } from './fields/MoveField';
 
 interface Props {
   task: TaskResponseDto;
@@ -38,7 +47,7 @@ interface Props {
   variant?: 'default' | 'trash';
 }
 
-type PickerKind = 'scheduled' | 'repeat' | 'due' | 'tags' | null;
+type PickerKind = 'scheduled' | 'repeat' | 'due' | 'tags' | 'move' | null;
 
 export function TaskContextMenu({ task, current, children, variant = 'default' }: Props) {
   const { t } = useTranslation('task');
@@ -59,9 +68,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const firstItemRef = React.useRef<HTMLButtonElement>(null);
-  const virtualAnchorRef = React.useRef<
-    { getBoundingClientRect: () => ClientRect } | null
-  >(null);
+  const virtualAnchorRef = React.useRef<{ getBoundingClientRect: () => ClientRect } | null>(null);
 
   const completed = current.status === 'COMPLETED';
   const cancelled = current.status === 'CANCELLED';
@@ -139,17 +146,18 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   /** 以坐标为锚点打开主菜单（右键与触屏长按共用）。 */
   const openMenuAt = (x: number, y: number) => {
     virtualAnchorRef.current = {
-      getBoundingClientRect: () => ({
-        width: 0,
-        height: 0,
-        x,
-        y,
-        top: y,
-        right: x,
-        bottom: y,
-        left: x,
-        toJSON: () => ({}),
-      }) as ClientRect,
+      getBoundingClientRect: () =>
+        ({
+          width: 0,
+          height: 0,
+          x,
+          y,
+          top: y,
+          right: x,
+          bottom: y,
+          left: x,
+          toJSON: () => ({}),
+        }) as ClientRect,
     };
     setActivePicker(null);
     setMenuOpen(true);
@@ -179,11 +187,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
       {/* Main context menu (anchored to the right-click coordinates). */}
       <Popover open={menuOpen} onOpenChange={setMenuOpen}>
         <PopoverAnchor virtualRef={virtualAnchorRef} />
-        <PopoverContent
-          align="start"
-          className="w-44 p-1"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <PopoverContent align="start" className="w-44 p-1" onClick={(e) => e.stopPropagation()}>
           <MenuRow
             ref={firstItemRef}
             icon={completed ? Circle : Check}
@@ -210,6 +214,10 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
           <MenuRow icon={Tag} onClick={() => openPicker('tags')}>
             {t('tags')}
           </MenuRow>
+          {/* 移动：更改所属区域/项目（展开行的两个按钮已移除，统一收口到菜单）。 */}
+          <MenuRow icon={FolderTree} onClick={() => openPicker('move')}>
+            {t('move')}
+          </MenuRow>
           {variant === 'default' && (
             <>
               <div className="-mx-1 my-1 h-px bg-muted" />
@@ -230,10 +238,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
       </Popover>
 
       {/* Picker popover (anchored to the row container). */}
-      <Popover
-        open={activePicker !== null}
-        onOpenChange={(o) => !o && setActivePicker(null)}
-      >
+      <Popover open={activePicker !== null} onOpenChange={(o) => !o && setActivePicker(null)}>
         <PopoverAnchor virtualRef={containerRef} />
         <PopoverContent align="start" onClick={(e) => e.stopPropagation()}>
           {activePicker === 'scheduled' && (
@@ -244,19 +249,12 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
               showReminder={getClientKind() !== 'web'}
             />
           )}
-          {activePicker === 'repeat' && (
-            <RepeatRuleField current={current} onPatch={patch} />
-          )}
+          {activePicker === 'repeat' && <RepeatRuleField current={current} onPatch={patch} />}
           {activePicker === 'due' && (
-            <DueDateField
-              current={current}
-              onPatch={patch}
-              onClose={() => setActivePicker(null)}
-            />
+            <DueDateField current={current} onPatch={patch} onClose={() => setActivePicker(null)} />
           )}
-          {activePicker === 'tags' && (
-            <TagsField current={current} onPatch={patch} />
-          )}
+          {activePicker === 'tags' && <TagsField current={current} onPatch={patch} />}
+          {activePicker === 'move' && <MoveField current={current} onPatch={patch} />}
         </PopoverContent>
       </Popover>
     </div>
