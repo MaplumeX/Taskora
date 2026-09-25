@@ -27,7 +27,7 @@ export function CalendarTaskRow({ task, onToggleComplete, selected = false, onRo
       <TaskCheckbox
         checked={completed}
         onToggle={() => onToggleComplete(task)}
-        className="h-3.5 w-3.5"
+        className="h-3 w-3"
       />
       <button
         type="button"
