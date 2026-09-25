@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Check, CircleSlash } from 'lucide-react';
+import { Check, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/lib/utils';
@@ -8,7 +8,7 @@ interface Props {
   checked: boolean;
   onToggle: () => void;
   disabled?: boolean;
-  /** 取消态（⊘）：勾选框只读展示取消标记，点击仍走 onToggle（撤销取消）。 */
+  /** 取消态：与完成态同构的实心圆，仅 ✓ 换成 X、色调弱化；点击走 onToggle（撤销取消）。 */
   cancelled?: boolean;
   /** Size override (e.g. compact calendar rows); defaults to 18px */
   className?: string;
@@ -32,14 +32,14 @@ export function TaskCheckbox({ checked, onToggle, disabled, cancelled, className
         checked
           ? 'border-primary bg-primary text-primary-foreground checkbox-pop'
           : cancelled
-            ? 'border-muted-foreground/40 text-muted-foreground'
+            ? 'border-muted-foreground/40 bg-muted-foreground/30 text-muted-foreground checkbox-pop'
             : 'border-muted-foreground/40 text-transparent hover:border-primary',
         disabled && 'opacity-50',
         className ?? 'h-[18px] w-[18px]',
       )}
     >
       {cancelled ? (
-        <CircleSlash className="h-3 w-3" strokeWidth={2.5} />
+        <X className="h-3 w-3" strokeWidth={3} />
       ) : (
         <Check className="h-3 w-3" strokeWidth={3} />
       )}
