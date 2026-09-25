@@ -4,6 +4,8 @@
   "launchAtLogin": "Launch at login",
   "launchAtLoginHint": "After you log in, Taskora starts in the background and stays in the tray without opening a window.",
   "launchAtLoginFailed": "Failed to change launch-at-login",
+  "groupTasksByParent": "Group tasks by project/area in time views",
+  "groupTasksByParentHint": "When on, tasks in Today, Anytime, and Someday cluster under their project or area. Turn off to return to the flat list.",
   "appearance": "Appearance",
   "account": "Account",
   "data": "Data",

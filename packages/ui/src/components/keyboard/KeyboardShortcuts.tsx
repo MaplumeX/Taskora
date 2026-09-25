@@ -16,12 +16,14 @@ import { toast } from 'sonner';
 
 import type { CreateTaskDto } from '@taskora/shared';
 import {
+  groupedViewCollapseKey,
   useCancelTask,
   useCompleteTask,
   useContentBottomActionsForRoute,
   viewOf,
   useCreateTask,
   useDeleteTask,
+  useGroupedViewCollapseStore,
   usePageTaskContext,
   useReorderTasks,
   useRestoreTask,
@@ -200,9 +202,42 @@ export function KeyboardShortcuts({ platform }: Props) {
         case 'moveFirst':
         case 'moveLast': {
           if (rows.length === 0) return;
-          const row = action.type === 'moveFirst' ? rows[0] : rows[rows.length - 1];
+          // Grouped View 组边界钳制（story 24）：选中行在组内时，
+          // Alt+↑/↓ 只在同组行（groupHeaderId 相同）内跳首末，
+          // 任务不会经键盘离开所在组。未分组行（无 groupHeaderId）
+          // 彼此同组 —— 非分组页面所有行都未分组，行为与之前一致。
+          const currentId = selection.selectedIds.at(-1);
+          const currentRow = currentId ? rowById.get(currentId) : undefined;
+          let pool = rows;
+          if (currentRow) {
+            const clamped = rows.filter(
+              (r) => r.groupHeaderId === currentRow.groupHeaderId,
+            );
+            if (clamped.length > 0) pool = clamped;
+          }
+          const row = action.type === 'moveFirst' ? pool[0] : pool[pool.length - 1];
           useSelectionStore.getState().setSelection([row.id]);
           useUiInteractionStore.getState().setExpandedId(null);
+          focusSelectionRow(row.id);
+          return;
+        }
+        case 'collapseGroup':
+        case 'expandGroup': {
+          const id = selection.selectedIds.at(-1);
+          const row = id ? rowById.get(id) : undefined;
+          // 仅 Group Header 行响应（story 21）；其他行 ←/→ 无动作。
+          if (!row?.groupHeader) return;
+          // 以折叠 store 的实时状态为准（注册的行元数据可能是旧快照），
+          // 保证 ←/→ 在连续按键下稳定往返。
+          const currentlyCollapsed =
+            useGroupedViewCollapseStore.getState().collapsed[
+              groupedViewCollapseKey(view, row.id)
+            ] === true;
+          const targetCollapsed = action.type === 'collapseGroup';
+          if (currentlyCollapsed === targetCollapsed) return;
+          useGroupedViewCollapseStore
+            .getState()
+            .setCollapsed(view, row.id, targetCollapsed);
           focusSelectionRow(row.id);
           return;
         }
@@ -288,6 +323,25 @@ export function KeyboardShortcuts({ platform }: Props) {
           if (!showAddTask) return;
           const anchorId = selection.selectedIds.at(-1);
           const anchor = anchorId ? rowById.get(anchorId) : undefined;
+          // Group Header 行「下方新建」（story 25）：任务落在该父级内
+          // （projectId/areaId 预填，无 heading），页面上下文（如 Today
+          // 的计划日期）保持生效。
+          if (anchor?.groupHeader) {
+            const payload: CreateTaskDto = {
+              title: '',
+              ...createTaskContext,
+              ...anchor.groupHeader.createContext,
+            };
+            createTask.mutate(payload, {
+              onSuccess: (created) => {
+                useUiInteractionStore.getState().setExpandedId(created.id);
+                useSelectionStore.getState().setSelection([created.id]);
+                yieldFocusToNewRow(created.id);
+              },
+              onError: () => toast.error(t('common:createFailed')),
+            });
+            return;
+          }
           const anchorIndex = anchor
             ? taskRows.findIndex((r) => r.id === anchor.id)
             : -1;

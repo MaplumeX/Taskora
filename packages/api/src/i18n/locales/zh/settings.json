@@ -4,6 +4,8 @@
   "launchAtLogin": "登录时自动启动",
   "launchAtLoginHint": "开机登录后 Taskora 将在后台启动并常驻托盘，不弹出窗口。",
   "launchAtLoginFailed": "设置自动启动失败",
+  "groupTasksByParent": "在时间视图中按项目/领域分组任务",
+  "groupTasksByParentHint": "开启后，「今天」「随时」「将来」中的任务按所属项目或领域聚类显示；关闭则回到平铺列表。",
   "appearance": "外观",
   "account": "账户",
   "data": "数据",

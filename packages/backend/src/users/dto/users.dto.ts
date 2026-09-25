@@ -1,4 +1,5 @@
 import {
+  IsBoolean,
   IsIn,
   IsOptional,
   IsString,
@@ -49,6 +50,10 @@ export class UpdatePreferencesDto implements IUpdatePreferencesDto {
   @IsOptional()
   @IsIn([0, 1])
   weekStartsOn?: 0 | 1;
+
+  @IsOptional()
+  @IsBoolean()
+  bucketGrouping?: boolean;
 }
 
 export class DeleteAccountDto implements IDeleteAccountDto {

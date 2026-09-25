@@ -47,10 +47,13 @@ interface PreferencesState {
   theme: ThemeMode;
   language: Language;
   weekStartsOn: WeekStartsOn;
+  /** 时间视图按项目/领域分组（Grouped View）全局开关，默认开启。 */
+  bucketGrouping: boolean;
   resolved: 'light' | 'dark';
   setTheme: (m: ThemeMode) => void;
   setLanguage: (l: Language) => void;
   setWeekStartsOn: (v: WeekStartsOn) => void;
+  setBucketGrouping: (v: boolean) => void;
   cycle: () => void;
   hydrateFromServer: (prefs: UserPreferences | null) => void;
 }
@@ -107,6 +110,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       theme: 'system',
       language: initialLanguage(),
       weekStartsOn: 1,
+      bucketGrouping: true,
       resolved: resolveTheme('system'),
       setTheme: (m) => {
         applyTheme(m);
@@ -117,6 +121,7 @@ export const usePreferencesStore = create<PreferencesState>()(
         set({ language: l });
       },
       setWeekStartsOn: (v) => set({ weekStartsOn: v }),
+      setBucketGrouping: (v) => set({ bucketGrouping: v }),
       cycle: () => {
         const order: ThemeMode[] = ['light', 'dark', 'system'];
         const current = order.indexOf(get().theme);
@@ -129,14 +134,15 @@ export const usePreferencesStore = create<PreferencesState>()(
         // against the same whitelists used for localStorage rehydration.
         // Missing fields fall back to the current local values so partial
         // server payloads never clobber local preferences.
-        const { theme, language, weekStartsOn } = normalizePreferences(prefs, {
+        const { theme, language, weekStartsOn, bucketGrouping } = normalizePreferences(prefs, {
           theme: get().theme,
           language: get().language,
           weekStartsOn: get().weekStartsOn,
+          bucketGrouping: get().bucketGrouping,
         });
         applyTheme(theme);
         applyLanguageSideEffect(language);
-        set({ theme, language, weekStartsOn, resolved: resolveTheme(theme) });
+        set({ theme, language, weekStartsOn, bucketGrouping, resolved: resolveTheme(theme) });
       },
     }),
     {
@@ -145,17 +151,26 @@ export const usePreferencesStore = create<PreferencesState>()(
         theme: state.theme,
         language: state.language,
         weekStartsOn: state.weekStartsOn,
+        bucketGrouping: state.bucketGrouping,
       }),
       merge: (persisted, current) => {
         // When the unified key is absent (first load after upgrade), fall back
         // to the legacy keys so existing users migrate transparently.
         const raw = persisted ?? readLegacyState();
-        const { theme, language, weekStartsOn } = normalizePreferences(raw, {
+        const { theme, language, weekStartsOn, bucketGrouping } = normalizePreferences(raw, {
           theme: current.theme,
           language: current.language,
           weekStartsOn: current.weekStartsOn,
+          bucketGrouping: current.bucketGrouping,
         });
-        return { ...current, theme, language, weekStartsOn, resolved: resolveTheme(theme) };
+        return {
+          ...current,
+          theme,
+          language,
+          weekStartsOn,
+          bucketGrouping,
+          resolved: resolveTheme(theme),
+        };
       },
       onRehydrateStorage: () => (state) => {
         if (!state) return;

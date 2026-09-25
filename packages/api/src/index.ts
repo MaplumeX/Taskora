@@ -116,8 +116,13 @@ export {
   flattenSelectionRows,
   type SelectionRow,
   type SelectionRowKind,
+  type SelectionRowGroupHeader,
 } from './stores/selection.store';
 export { useProjectUiPrefsStore } from './stores/projectUiPrefs.store';
+export {
+  useGroupedViewCollapseStore,
+  groupedViewCollapseKey,
+} from './stores/groupedViewCollapse.store';
 
 // Preferences (theme / language / week start)
 export { usePreferencesStore, hydrateFromServer } from './stores/preferences.store';
