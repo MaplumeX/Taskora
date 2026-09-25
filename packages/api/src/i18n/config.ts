@@ -14,6 +14,7 @@ import searchZh from './locales/zh/search.json';
 import themeZh from './locales/zh/theme.json';
 import settingsZh from './locales/zh/settings.json';
 import agentZh from './locales/zh/agent.json';
+import statusbarZh from './locales/zh/statusbar.json';
 
 import commonEn from './locales/en/common.json';
 import navEn from './locales/en/nav.json';
@@ -27,6 +28,7 @@ import searchEn from './locales/en/search.json';
 import themeEn from './locales/en/theme.json';
 import settingsEn from './locales/en/settings.json';
 import agentEn from './locales/en/agent.json';
+import statusbarEn from './locales/en/statusbar.json';
 
 export const defaultNS = 'common';
 export const namespaces = [
@@ -42,6 +44,7 @@ export const namespaces = [
   'theme',
   'settings',
   'agent',
+  'statusbar',
 ] as const;
 
 void i18n
@@ -62,6 +65,7 @@ void i18n
         theme: themeZh,
         settings: settingsZh,
         agent: agentZh,
+        statusbar: statusbarZh,
       },
       en: {
         common: commonEn,
@@ -76,6 +80,7 @@ void i18n
         theme: themeEn,
         settings: settingsEn,
         agent: agentEn,
+        statusbar: statusbarEn,
       },
     },
     supportedLngs: ['zh', 'en'],
