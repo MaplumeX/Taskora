@@ -15,7 +15,7 @@ import {
 import { useProjectsQuery } from '@taskora/api';
 import { useAreasQuery } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
-import { dayDiff } from '@taskora/api';
+import { groupLogbookItems } from '@taskora/api';
 import { toast } from 'sonner';
 
 export default function Logbook() {
@@ -42,19 +42,7 @@ export default function Logbook() {
     [areas],
   );
 
-  const grouped = useMemo(() => {
-    const today: FeedItem[] = [];
-    const yesterday: FeedItem[] = [];
-    const earlier: FeedItem[] = [];
-    for (const item of items) {
-      if (!item.completedAt) continue;
-      const diff = dayDiff(item.completedAt, new Date());
-      if (diff === 0) today.push(item);
-      else if (diff === 1) yesterday.push(item);
-      else earlier.push(item);
-    }
-    return { today, yesterday, earlier };
-  }, [items]);
+  const groups = useMemo(() => groupLogbookItems(items, new Date()), [items]);
 
   // 注册可遍历行（Logbook 为已了结任务行：完成或取消）。
   const rows = useMemo(
@@ -79,10 +67,11 @@ export default function Logbook() {
     else completeTask.mutate(item.id, { onError: () => toast.error(t('common:operationFailed')) });
   };
 
-  const renderGroup = (label: string, group: FeedItem[]) => {
+  const renderGroup = (label: string, group: FeedItem[], isFirst: boolean) => {
     if (group.length === 0) return null;
     return (
       <div key={label} className="flex flex-col gap-1">
+        {!isFirst && <div className="mx-2 mt-2 border-t border-border/40" />}
         <h2 className="px-2 pb-1 pt-4 text-sm font-medium text-muted-foreground">
           {label}
         </h2>
@@ -101,6 +90,7 @@ export default function Logbook() {
               selectionState={selectionState}
               onToggleComplete={() => toggleComplete(item)}
               onRowClick={isTask ? () => handleRowClick(item.id) : undefined}
+              showSettledDate
             />
           );
         })}
@@ -108,8 +98,7 @@ export default function Logbook() {
     );
   };
 
-  const hasAny =
-    grouped.today.length + grouped.yesterday.length + grouped.earlier.length > 0;
+  const hasAny = groups.length > 0;
 
   return (
     <div className="flex flex-col gap-4" onClick={handleBlankClick}>
@@ -121,11 +110,7 @@ export default function Logbook() {
           {t('task:logbookEmpty')}
         </p>
       ) : (
-        <>
-          {renderGroup(t('common:today'), grouped.today)}
-          {renderGroup(t('task:yesterday'), grouped.yesterday)}
-          {renderGroup(t('task:earlier'), grouped.earlier)}
-        </>
+        groups.map((group, i) => renderGroup(group.label, group.items, i === 0))
       )}
     </div>
   );
