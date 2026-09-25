@@ -10,7 +10,7 @@ interface Props {
   className?: string;
 }
 
-/** Task 行上的子任务徽标：清单图标 + 未了结子任务数（与日期/提醒/重复徽标并排，Pattern：Reminder 时钟徽标）。 */
+/** Task 行上的子任务徽标：清单图标 + 未了结子任务数，紧贴标题文本显示（参考 Things 3）。 */
 export function TaskSubtasksBadge({ subtasks, className }: Props) {
   const { t } = useTranslation();
   if (!subtasks?.length) return null;
