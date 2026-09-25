@@ -1,6 +1,6 @@
 {
   "name": "@taskora/backend",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "private": true,
   "scripts": {
     "predev": "pnpm --filter @taskora/shared build && pnpm --filter @taskora/engine build",
