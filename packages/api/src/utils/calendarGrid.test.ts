@@ -1,7 +1,8 @@
 import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
-import { describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { toDateKey } from './date';
 import {
   addMonths,
   buildMonthCells,
@@ -105,28 +106,59 @@ describe('buildMonthCells', () => {
 });
 
 describe('groupByScheduledDate', () => {
+  // 固定「今天」为 2026-09-25（周五），使「逾期归入今天」的行为可断言。
+  // 日期 key 一律经 toDateKey 推导（月份参数按人类惯例 1-12），避免手工
+  // 写 key 与 JS Date 的 0 基月份错位。
+  const todayKey = () => toDateKey(new Date());
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 8, 25, 12, 0, 0));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  function localNoonKey(year: number, month: number, day: number): string {
+    return toDateKey(new Date(year, month - 1, day, 12));
+  }
+
   it('groups tasks by local-date key of scheduledDate', () => {
     const map = groupByScheduledDate([
-      task('a', localNoonIso(2026, 8, 30)),
-      task('b', localNoonIso(2026, 8, 30)),
-      task('c', localNoonIso(2026, 9, 1)),
+      task('a', localNoonIso(2026, 9, 30)),
+      task('b', localNoonIso(2026, 9, 30)),
+      task('c', localNoonIso(2026, 10, 1)),
     ]);
-    expect(map.get('2026-08-30')?.map((t) => t.id)).toEqual(['a', 'b']);
-    expect(map.get('2026-09-01')?.map((t) => t.id)).toEqual(['c']);
+    expect(map.get(localNoonKey(2026, 9, 30))?.map((t) => t.id)).toEqual(['a', 'b']);
+    expect(map.get(localNoonKey(2026, 10, 1))?.map((t) => t.id)).toEqual(['c']);
     expect(map.size).toBe(2);
   });
 
   it('keeps keys stable regardless of scheduledDate time-of-day (local date)', () => {
     // 23:00 local on the 30th — must still key to the 30th, not roll to UTC 31st
-    const lateEvening = new Date(2026, 7, 30, 23, 30).toISOString();
+    const lateEvening = new Date(2026, 8, 30, 23, 30).toISOString();
     const map = groupByScheduledDate([task('late', lateEvening)]);
-    expect(map.has('2026-08-30')).toBe(true);
+    expect(map.has(toDateKey(new Date(2026, 8, 30, 23, 30)))).toBe(true);
   });
 
   it('skips tasks without scheduledDate', () => {
-    const map = groupByScheduledDate([task('a', null), task('b', localNoonIso(2026, 8, 30))]);
+    const map = groupByScheduledDate([task('a', null), task('b', localNoonIso(2026, 9, 30))]);
     expect(map.size).toBe(1);
-    expect(map.has('2026-08-30')).toBe(true);
+    expect(map.has(localNoonKey(2026, 9, 30))).toBe(true);
+  });
+
+  it('rolls past dates into today（参考 Things 3：When 永不逾期）', () => {
+    const map = groupByScheduledDate([
+      task('yesterday', localNoonIso(2026, 9, 24)),
+      task('lastWeek', localNoonIso(2026, 9, 18)),
+      task('today', localNoonIso(2026, 9, 25)),
+      task('future', localNoonIso(2026, 9, 26)),
+    ]);
+    expect(map.get(todayKey())?.map((t) => t.id)).toEqual(['yesterday', 'lastWeek', 'today']);
+    expect(map.get(localNoonKey(2026, 9, 26))?.map((t) => t.id)).toEqual(['future']);
+    expect(map.size).toBe(2);
+    expect(map.has(localNoonKey(2026, 9, 24))).toBe(false);
   });
 
   it('returns empty map for empty input', () => {

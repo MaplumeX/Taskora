@@ -7,11 +7,12 @@ import type { TaskResponseDto } from '@taskora/shared';
 
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { isOverdue, taskKeys, useTaskQuery, useUpdateTask } from '@taskora/api';
+import { startOfTomorrow, taskKeys, useTaskQuery, useUpdateTask } from '@taskora/api';
 import { TaskCheckbox } from './TaskCheckbox';
 import { TaskContextMenu } from './TaskContextMenu';
 import { TaskDateBadge } from './TaskDateBadge';
 import { TaskDueDateBadge } from './TaskDueDateBadge';
+import { TaskTodayBadge } from './TaskTodayBadge';
 import { TaskNotesBadge } from './TaskNotesBadge';
 import { TaskReminderBadge } from './TaskReminderBadge';
 import { TaskRepeatBadge } from './TaskRepeatBadge';
@@ -51,10 +52,11 @@ export function TaskItem({
   const settled = completed || cancelled;
   const [exiting, setExiting] = React.useState(false);
   const expanded = selectionState === 'expanded';
-  // 逾期例外:语境视图(Today/Upcoming)省略日期 chip(列表本身即语境),
-  // 但逾期日期偏离语境,仍显示红色 chip 保留信号(参考 Things 3)。
-  const scheduledOverdue = current.scheduledDate
-    ? isOverdue(new Date(current.scheduledDate))
+  // When ≤ 今天（含逾期）视为「今天」语义：非语境视图显示黄星（参考
+  // Things 3 的 Anytime 黄星），语境视图（Today/Upcoming）由列表本身
+  // 表达语境、行上不再标记。When 永不逾期，红色只属于 Deadline。
+  const scheduledOnOrBeforeToday = current.scheduledDate
+    ? new Date(current.scheduledDate) < startOfTomorrow()
     : false;
 
   const updateTask = useUpdateTask();
@@ -158,8 +160,12 @@ export function TaskItem({
         >
           <TaskCheckbox checked={completed} cancelled={cancelled} onToggle={handleToggle} />
 
-          {/* 行首日期 chip + 重复图标:参考 Things 3 的 [chip][↻] 标题 结构。 */}
-          {(showScheduledBadge || scheduledOverdue) && (
+          {/* 行首日期标记 + 重复图标:参考 Things 3 的 [chip][↻] 标题 结构。
+            ≤ 今天 → 黄星；未来日期 → 灰色短日期 chip（两者互斥）。 */}
+          {showScheduledBadge && scheduledOnOrBeforeToday && (
+            <TaskTodayBadge className="shrink-0" />
+          )}
+          {showScheduledBadge && (
             <TaskDateBadge scheduledDate={current.scheduledDate} className="shrink-0" />
           )}
           <TaskRepeatBadge repeatRule={current.repeatRule} className="shrink-0" />

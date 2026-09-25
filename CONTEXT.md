@@ -29,8 +29,12 @@ _Avoid_: Section
 **Tag / Tag Group**:
 可带颜色与排序、可附加在 Task/Project/Area 上的标签；Tag Group 是 Tag 的分组容器。
 
+**Scheduled Date（计划日期）**:
+Task/Project 上计划哪天开始做的日期（对应 Things 3 的 When），永不逾期。日期已过的任务按「今天」对待：留在 Today 视图，数据层日期保持原值不改写；在非语境视图（Anytime/项目内等）行上以黄色星星标记「今天」语义，在未来日期才显示灰色短日期 chip；Calendar 视图归入今天的格子。红色警示色只属于 Deadline，计划日期不套红。
+_Avoid_: start date（口语可用，代码用 scheduledDate）、When（Things 原词，仅研究文档引用）
+
 **Deadline（截止日期）**:
-Task/Project 上必须完成的日期，可逾期（Overdue）；与计划日期（Scheduled Date，计划哪天开始做、永不逾期）对立。行上以旗帜图标 + 倒计时文案（还剩 x 天 / 今天 / 逾期 x 天）展示。不设独立提醒（提醒仅依附计划日期）。
+Task/Project 上必须完成的日期，可逾期（Overdue）；与计划日期（Scheduled Date，计划哪天开始做、永不逾期）对立。行上以旗帜图标 + 倒计时文案（还剩 x 天 / 今天 / 逾期 x 天）展示，到期/逾期为红色。不设独立提醒（提醒仅依附计划日期）。
 _Avoid_: due date（一词两义）、通知日期、DDL
 
 **Reminder**:

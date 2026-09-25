@@ -8,10 +8,11 @@ import type { ProjectResponseDto } from '@taskora/shared';
 import { cn } from '@/lib/utils';
 import { TaskDateBadge } from '@/components/task/TaskDateBadge';
 import { TaskDueDateBadge } from '@/components/task/TaskDueDateBadge';
+import { TaskTodayBadge } from '@/components/task/TaskTodayBadge';
 import { ProjectContextMenu } from '@/components/project/ProjectContextMenu';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
 import { GroupHeaderRowShell } from './GroupHeaderRowShell';
-import { useCompleteProject, useUncompleteProject } from '@taskora/api';
+import { startOfTomorrow, useCompleteProject, useUncompleteProject } from '@taskora/api';
 import type { SelectionState } from '@taskora/api';
 
 interface Props {
@@ -64,7 +65,11 @@ export function ProjectGroupHeaderRow({ project, selectionState = 'idle' }: Prop
           {label}
         </span>
         <div className="flex items-center gap-2">
-          <TaskDateBadge scheduledDate={project.scheduledDate} />
+          {project.scheduledDate && new Date(project.scheduledDate) < startOfTomorrow() ? (
+            <TaskTodayBadge />
+          ) : (
+            <TaskDateBadge scheduledDate={project.scheduledDate} />
+          )}
           <TaskDueDateBadge dueDate={project.dueDate} />
         </div>
       </GroupHeaderRowShell>
