@@ -11,6 +11,93 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-09-26
+
+### Added
+
+- **mobile**: Android status bar quick add + pending tasks (#84) — a
+  TickTick-style ongoing LOW-importance notification showing today's
+  open tasks one at a time, with "＞" to cycle to the next task
+  (cursor persisted across cold starts) and "＋" to quick-add via
+  inline RemoteInput; the zero-task state shows a quick-add entry.
+  Platform-agnostic content (sort/overdue prefix/carousel title) and
+  the controller (cursor + debounce + session follow) live in
+  @taskora/api/status-bar, the tauri-plugin-notification shell in
+  @taskora/mobile/status-bar, with a Settings toggle (Android only)
+  that walks the notification-permission flow, and an engine
+  onChange hook refreshing content debounced.
+
+### Changed
+
+- **ui**: Task ownership renders as a subline below the title (#91)
+  — the project/area tag moves from the right end of the task row to
+  a muted line beneath the title, matching Things 3's two-segment
+  row; rows with an owner grow naturally while ownerless tasks keep
+  the compact single-line height, and ownership is now visible on
+  mobile too. Grouped views keep group rows free of ownership tags
+  (the header carries the context).
+- **ui**: Past scheduled dates are treated as today, never overdue
+  (#88) — When semantics aligned with Things 3: a scheduled date is
+  a plan-to-start day, never a due date, so it can never go
+  "overdue". Dates on or before today render a yellow star (Things 3
+  Anytime semantics) across task rows, project rows and group
+  headers; the red overdue date chip is gone and red urgency is now
+  exclusive to deadlines. The calendar rolls past date keys into
+  today so those tasks land in today's cell, and CONTEXT.md
+  documents the Scheduled Date term.
+- **ui**: Grouped View flattened to a single level with
+  section-title headers (#85) — the nested area > project > task
+  hierarchy is replaced by flat single-level groups: tasks join
+  their direct parent's group only, so in-area project tasks cluster
+  under the project header as a sibling of the area group. Group
+  headers become lightweight underlined section titles (bold title +
+  2px underline) with no collapse affordance — the collapse store,
+  chevron buttons, bare ←/→ keymap actions and collapsed-group drop
+  toast are removed. Group order follows the sidebar's global visual
+  order; project headers keep the progress ring, date badges,
+  context menu and detail navigation, and header rows stay droppable
+  (drop lands at group end).
+- **ui**: Task/project row alignment and settled styling cleanup
+  (#90) — the task checkbox is wrapped in a 20px slot matching the
+  project progress ring so task and project titles align in mixed
+  lists; the cancelled checkbox now uses the same theme-color fill
+  as completed, distinguished only by the X icon; strikethrough is
+  reserved for cancelled across task rows, subtasks, calendar cells
+  and project rows (completed titles are muted only); logbook
+  entries drop the muted gray on titles.
+- **ui**: Task checkbox reshaped to a rounded square (#87) — the
+  circle becomes a rounded square, default size 18px → 14px
+  (calendar compact override 12px), and the project progress ring
+  grows 18px → 20px to match.
+
+### Fixes
+
+- **mobile**: Android reminders never fired — registration failures
+  are now surfaced and self-heal (#83) — the failure chain was fully
+  silent: sendNotification rejections escaped un-awaited, channel
+  creation failures were cached for the whole session, and the
+  coordinator recorded failed registrations as done so nothing ever
+  retried. The mobile shell now awaits, logs and rethrows
+  sendNotification failures, retries channel creation, and
+  pre-checks permission; the coordinator no longer marks failed
+  registrations as done, so the periodic tick retries and recovers
+  once permission/channel are restored, without relying on data
+  changes or an app restart. The desktop shell likewise awaits and
+  logs fireNow failures.
+- **calendar**: Cancelled task rows render with settled styling
+  (#86) — calendar rows only handled COMPLETED, so cancelled tasks
+  showed a plain open checkbox and a non-struck title, and clicking
+  the circle completed them instead of uncancelling. Cancelled rows
+  now get the muted X checkbox and struck-through title per
+  ADR-0006, and clicks route through uncancel, consistent with the
+  Logbook.
+- **logbook**: Settled date renders in theme color instead of the
+  scheduled date chip (#89) — planned-date chips no longer leak into
+  settled rows, settled tasks are exempt from the overdue exception
+  that force-rendered a red chip, and the settled date renders at
+  the row-leading chip position in the theme primary color for both
+  task and project rows.
+
 ## [0.5.1] - 2026-09-25
 
 ### Added
