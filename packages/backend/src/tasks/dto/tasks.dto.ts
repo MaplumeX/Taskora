@@ -60,7 +60,7 @@ export class CreateTaskDto {
 
   @IsOptional()
   @IsDateString()
-  dueDate?: string; // 通知日期（新增）
+  dueDate?: string; // 截止日期
 
   @IsOptional()
   @IsEnum(TaskBucket)
@@ -111,7 +111,7 @@ export class UpdateTaskDto {
 
   @IsOptional()
   @IsDateString()
-  dueDate?: string | null; // 通知日期（新增）
+  dueDate?: string | null; // 截止日期
 
   @IsOptional()
   @IsEnum(TaskBucket)

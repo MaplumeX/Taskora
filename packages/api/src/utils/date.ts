@@ -51,8 +51,7 @@ export function formatDateLabel(date: Date): string {
   // Within the next 7 days → weekday name
   const today = startOfToday();
   const diff = Math.round(
-    (new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() -
-      today.getTime()) /
+    (new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime() - today.getTime()) /
       86_400_000,
   );
   const locale = i18n.language;
@@ -60,6 +59,30 @@ export function formatDateLabel(date: Date): string {
     return new Intl.DateTimeFormat(locale, { weekday: 'short' }).format(date);
   }
   return new Intl.DateTimeFormat(locale, { month: 'short', day: 'numeric' }).format(date);
+}
+
+/**
+ * Short absolute date label like "Sep 2" / "9月2日"（locale 感知）。
+ * 用于行内日期 chip——参考 Things 3:行上日期用短绝对格式，
+ * 相对格式（Today/Tomorrow/星期几）只留给分组标题。
+ */
+export function formatShortDate(date: Date): string {
+  return new Intl.DateTimeFormat(i18n.language, {
+    month: 'short',
+    day: 'numeric',
+  }).format(date);
+}
+
+/**
+ * 截止日期倒计时文案——参考 Things 3 的 deadline 行尾展示:
+ * 未来显示 "x days left",到期日 "today",逾期 "x days past due"。
+ * 与 scheduledDate 的短绝对日期区分:文案格式本身即语义(计划 vs 必须完成)。
+ */
+export function formatDeadlineCountdown(date: Date): string {
+  if (isToday(date)) return i18n.t('common:today');
+  const days = Math.abs(dayDiff(startOfToday(), date));
+  if (isOverdue(date)) return i18n.t('common:daysPastDue', { count: days });
+  return i18n.t('common:daysLeft', { count: days });
 }
 
 /** yyyy-mm-dd key for grouping (from ISO or Date) */

@@ -29,6 +29,10 @@ _Avoid_: Section
 **Tag / Tag Group**:
 可带颜色与排序、可附加在 Task/Project/Area 上的标签；Tag Group 是 Tag 的分组容器。
 
+**Deadline（截止日期）**:
+Task/Project 上必须完成的日期，可逾期（Overdue）；与计划日期（Scheduled Date，计划哪天开始做、永不逾期）对立。行上以旗帜图标 + 倒计时文案（还剩 x 天 / 今天 / 逾期 x 天）展示。不设独立提醒（提醒仅依附计划日期）。
+_Avoid_: due date（一词两义）、通知日期、DDL
+
 **Reminder**:
 Task 上的一个时刻（HH:mm），依附于计划日期（Scheduled Date），到点由各客户端本地触发系统通知；仅 ScheduledType 为 DATE 的 Task 可设。Project 不设 Reminder。
 _Avoid_: 闹钟、alarm、通知时间（Reminder 是数据，通知是其触发效果）

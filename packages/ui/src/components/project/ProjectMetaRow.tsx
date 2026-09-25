@@ -2,12 +2,13 @@ import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Calendar, Clock } from 'lucide-react';
+import { Calendar, Flag } from 'lucide-react';
 
 import { ScheduledType } from '@taskora/shared';
 import type { ProjectResponseDto, UpdateProjectDto } from '@taskora/shared';
 import {
   formatDateLabel,
+  formatDeadlineCountdown,
   isOverdue,
   isToday,
   projectKeys,
@@ -70,9 +71,7 @@ export function ProjectMetaRow({ project }: Props) {
             />
           }
         >
-          {(close) => (
-            <ScheduledDateField current={project} onPatch={patch} onClose={close} />
-          )}
+          {(close) => <ScheduledDateField current={project} onPatch={patch} onClose={close} />}
         </MetaPopover>
       ) : null}
 
@@ -81,15 +80,13 @@ export function ProjectMetaRow({ project }: Props) {
           label={t('dueDate')}
           trigger={
             <MetaBadge
-              icon={<Clock className="h-3 w-3" />}
-              text={formatDateLabel(new Date(project.dueDate))}
+              icon={<Flag className="h-3 w-3" />}
+              text={formatDeadlineCountdown(new Date(project.dueDate))}
               urgent={isUrgent(project.dueDate)}
             />
           }
         >
-          {(close) => (
-            <DueDateField current={project} onPatch={patch} onClose={close} />
-          )}
+          {(close) => <DueDateField current={project} onPatch={patch} onClose={close} />}
         </MetaPopover>
       ) : null}
 
