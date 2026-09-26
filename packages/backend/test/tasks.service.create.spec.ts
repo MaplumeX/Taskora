@@ -31,6 +31,7 @@ describe('TasksService create() tagIds support', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      user: { findUnique: vi.fn().mockResolvedValue({ preferences: { timeZone: 'UTC' } }) },
       task: {
         create: vi.fn(),
       },
@@ -44,10 +45,7 @@ describe('TasksService create() tagIds support', () => {
     const tagB = { id: 'tag-b', title: 'B', color: '#000' };
     mockPrisma.task.create.mockResolvedValue({
       ...baseCreatedTask,
-      tags: [
-        { tag: tagA },
-        { tag: tagB },
-      ],
+      tags: [{ tag: tagA }, { tag: tagB }],
     });
 
     const result = await service.create(userId, {

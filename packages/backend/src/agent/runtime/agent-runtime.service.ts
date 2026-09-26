@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, OnModuleDestroy, Logger } from '@nestj
 import type { Agent, AgentEvent, AgentMessage } from '@earendil-works/pi-agent-core';
 import type { Model } from '@earendil-works/pi-ai';
 
+import { userTimeZone } from '../../users/account-time-zone';
 import { PrismaService } from '../../prisma/prisma.service';
 import type { AgentSseEvent, AgentMessageJson } from '@taskora/shared';
 import { AgentConfigService } from '../byok/agent-config.service';
@@ -59,7 +60,13 @@ export class AgentRuntimeService implements OnModuleDestroy {
   async sendMessage(userId: string, conversationId: string, content: string): Promise<void> {
     const entry = await this.getOrCreateEntry(userId, conversationId);
     entry.queue = entry.queue
-      .then(() => entry.agent.prompt(content))
+      .then(async () => {
+        entry.agent.state.systemPrompt = renderSystemPrompt(
+          new Date(),
+          await userTimeZone(this.prisma, userId),
+        );
+        return entry.agent.prompt(content);
+      })
       .catch((error: unknown) => {
         this.logger.error(`Agent run failed: ${(error as Error).message}`);
         this.hub.emit(conversationId, {
@@ -146,7 +153,7 @@ export class AgentRuntimeService implements OnModuleDestroy {
 
     const agent = new piAgent.Agent({
       initialState: {
-        systemPrompt: renderSystemPrompt(),
+        systemPrompt: renderSystemPrompt(new Date(), await userTimeZone(this.prisma, userId)),
         model,
         // Reasoning models stream a thinking block that the UI shows in a
         // collapsible section; off keeps requests free of effort parameters.

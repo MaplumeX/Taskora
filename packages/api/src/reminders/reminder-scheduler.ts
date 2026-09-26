@@ -14,7 +14,7 @@
  * - 过去的提醒（含错过未发的）静默丢弃，绝不补发。
  */
 
-import { ScheduledType, TaskStatus } from '@taskora/shared';
+import { calendarDateKey, calendarTimeInstant, ScheduledType, TaskStatus } from '@taskora/shared';
 
 /** 调度输入：Task 行上与提醒相关的字段（ReplicaRow / DTO 均可满足）。 */
 export interface ReminderTaskInput {
@@ -33,7 +33,7 @@ export interface ReminderNotification {
   key: string;
   taskId: string;
   taskTitle: string;
-  /** 触发时刻（epoch ms，设备本地时区语义）。 */
+  /** 触发时刻（epoch ms，账号时区墙上时钟语义）。 */
   fireAt: number;
 }
 
@@ -65,18 +65,20 @@ export function isReminderEligible(task: ReminderTaskInput): boolean {
  * 计算期望的通知集合。
  *
  * 规则：仅 ScheduledType 为 DATE、有计划日期、有合法 HH:mm 提醒、且
- * 未了结未进 Trash 的任务产出；fireAt = 计划日当天 + 提醒时刻（本地
+ * 未了结未进 Trash 的任务产出；fireAt = 计划日当天 + 提醒时刻（账号
  * 时区），fireAt <= now 的（已错过）静默丢弃——错过的提醒不补发。
  */
 export function computeReminderPlan(
   tasks: ReminderTaskInput[],
   now: Date,
+  timeZone = 'UTC',
+  legacyZone = timeZone,
 ): ReminderNotification[] {
   const nowMs = now.getTime();
   const plan: ReminderNotification[] = [];
   for (const t of tasks) {
     if (!isReminderEligible(t)) continue;
-    const fireAt = fireAtOf(t.scheduledDate!, t.reminderTime!);
+    const fireAt = reminderFireAt(t.scheduledDate!, t.reminderTime!, timeZone, legacyZone);
     if (fireAt === null || fireAt <= nowMs) continue;
     plan.push({
       key: reminderNotificationKey(t.id),
@@ -122,21 +124,16 @@ export function diffReminderRegistration(
   return { register, cancel };
 }
 
-/** 计划日期（ISO）+ HH:mm → 本地时区当天该时刻的 epoch ms；解析失败返回 null。 */
-function fireAtOf(scheduledDate: string, reminderTime: string): number | null {
-  const day = new Date(scheduledDate);
-  if (Number.isNaN(day.getTime())) return null;
-  const [hours, minutes] = reminderTime.split(':').map(Number);
-  // 用本地当天构造（计划日期是纯日期语义，不带时区偏移）：取 day 的
-  // 本地年月日，避免 ISO 字符串被按 UTC 解析后在西半球时区漂移一天。
-  const fire = new Date(
-    day.getFullYear(),
-    day.getMonth(),
-    day.getDate(),
-    hours,
-    minutes,
-    0,
-    0,
-  );
-  return fire.getTime();
+/** 计划日期 + HH:mm → 账号时区当天该时刻的 epoch ms；解析失败返回 null。 */
+export function reminderFireAt(
+  scheduledDate: string,
+  reminderTime: string,
+  timeZone: string,
+  legacyZone = timeZone,
+): number | null {
+  try {
+    return calendarTimeInstant(calendarDateKey(scheduledDate, legacyZone), reminderTime, timeZone);
+  } catch {
+    return null;
+  }
 }

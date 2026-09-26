@@ -38,6 +38,36 @@ export default function SettingsGeneral() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [pending, setPending] = useState(false);
 
+  const timeZone = usePreferencesStore((s) => s.timeZone);
+  const zones = Array.from(
+    new Set([
+      timeZone,
+      'UTC',
+      ...(typeof Intl.supportedValuesOf === 'function'
+        ? Intl.supportedValuesOf('timeZone')
+        : [
+            'Asia/Shanghai',
+            'Asia/Tokyo',
+            'Europe/London',
+            'America/New_York',
+            'America/Los_Angeles',
+          ]),
+    ]),
+  ).sort();
+  const handleTimeZoneChange = (zone: string) => {
+    const previous = usePreferencesStore.getState().timeZone;
+    usePreferencesStore.getState().setTimeZone(zone);
+    updatePreferences.mutate(
+      { timeZone: zone },
+      {
+        onError: () => {
+          usePreferencesStore.getState().setTimeZone(previous);
+          toast.error(t('common:saveFailed'));
+        },
+      },
+    );
+  };
+
   const bucketGrouping = usePreferencesStore((s) => s.bucketGrouping);
   const setBucketGrouping = usePreferencesStore((s) => s.setBucketGrouping);
   const updatePreferences = useUpdatePreferences();
@@ -120,6 +150,24 @@ export default function SettingsGeneral() {
 
   return (
     <div className="flex max-w-lg flex-col gap-6">
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="account-time-zone">{t('settings:timeZone')}</Label>
+        <select
+          id="account-time-zone"
+          value={timeZone}
+          disabled={updatePreferences.isPending}
+          onChange={(event) => handleTimeZoneChange(event.target.value)}
+          className="h-9 w-full rounded-md border border-input bg-background px-3 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {zones.map((zone) => (
+            <option key={zone} value={zone}>
+              {zone.replaceAll('_', ' ')}
+            </option>
+          ))}
+        </select>
+        <p className="text-sm text-muted-foreground">{t('settings:timeZoneHint')}</p>
+      </div>
+
       {/* 在时间视图中按项目/领域分组任务 */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-4">

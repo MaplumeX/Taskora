@@ -176,6 +176,7 @@ function createHarness(options: { storedMessages?: AgentMessage[]; hasTitle?: bo
   };
 
   const prisma = {
+    user: { findUnique: vi.fn().mockResolvedValue({ preferences: { timeZone: 'UTC' } }) },
     conversation: {
       findUnique: vi.fn(async () => ({ title: stored.title })),
     },

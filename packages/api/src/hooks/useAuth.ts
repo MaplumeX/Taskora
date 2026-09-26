@@ -39,6 +39,8 @@ export function useLogin() {
     mutationFn: (input: LoginDto) =>
       withSessionLock(async () => {
         const data = await login(input);
+        // Apply the authoritative zone before setAuth wakes the local engine.
+        hydrateFromServer(data.user.preferences ?? null);
         await setAuth(data.accessToken, data.user, data.refreshToken);
         return data;
       }),
@@ -60,20 +62,21 @@ export function useRegister() {
 
 export function useCurrentUser() {
   const token = useAuthStore((s) => s.token);
+  const userId = useAuthStore((s) => s.user?.id);
   const query = useQuery({
     queryKey: authKeys.me,
     queryFn: getMe,
     enabled: !!token,
+    refetchInterval: 60_000,
   });
 
-  // Hydrate preferences (theme/language/weekStartsOn) when user identity changes.
-  // Only runs when user.id changes (login/switch) to avoid repeated side-effects
-  // on staleTime refetches.
+  // Rehydrate on refreshed account preferences too: remote time-zone changes
+  // must affect an already-open session, not just the next login.
   useEffect(() => {
-    if (query.data?.id) {
+    if (query.data?.id && (!userId || query.data.id === userId)) {
       hydrateFromServer(query.data.preferences ?? null);
     }
-  }, [query.data?.id]);
+  }, [query.data, userId]);
 
   return query;
 }

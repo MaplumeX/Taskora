@@ -1,13 +1,19 @@
+import {
+  useCalendarDay,
+  parseCalendarDate,
+  toInputDateValue,
+  startOfToday,
+  startOfTomorrow,
+  usePreferencesStore,
+} from '@taskora/api';
 import { useTranslation } from 'react-i18next';
 
 import type { DueDateFieldCurrent, DueDateFieldPatch } from './fieldProps';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { startOfToday, startOfTomorrow } from '@taskora/api';
-import { usePreferencesStore } from '@taskora/api';
 
-import { getCalendarLocale, startOfLocalDay } from './calendarFieldUtils';
+import { getCalendarLocale } from './calendarFieldUtils';
 
 interface FieldProps {
   current: DueDateFieldCurrent;
@@ -16,24 +22,25 @@ interface FieldProps {
 }
 
 export function DueDateField({ current, onPatch, onClose }: FieldProps) {
+  useCalendarDay();
   const { t, i18n } = useTranslation();
   const weekStartsOn = usePreferencesStore((s) => s.weekStartsOn);
 
-  const selectedDate = current.dueDate ? new Date(current.dueDate) : undefined;
+  const selectedDate = current.dueDate ? parseCalendarDate(current.dueDate) : undefined;
 
   const handleDaySelect = (date: Date | undefined) => {
     if (!date) return;
-    onPatch({ dueDate: startOfLocalDay(date).toISOString() });
+    onPatch({ dueDate: toInputDateValue(date) });
     onClose?.();
   };
 
   const handleToday = () => {
-    onPatch({ dueDate: startOfToday().toISOString() });
+    onPatch({ dueDate: toInputDateValue(startOfToday()) });
     onClose?.();
   };
 
   const handleTomorrow = () => {
-    onPatch({ dueDate: startOfTomorrow().toISOString() });
+    onPatch({ dueDate: toInputDateValue(startOfTomorrow()) });
     onClose?.();
   };
 

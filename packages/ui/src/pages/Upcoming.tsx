@@ -1,54 +1,44 @@
+import {
+  useCalendarDay,
+  useFeedQuery,
+  useProjectsQuery,
+  useAreasQuery,
+  useTaskRowSelection,
+  fromInputDateValue,
+  i18n,
+} from '@taskora/api';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { FeedItem } from '@taskora/shared';
 
 import { FeedItemRow } from '@/components/feed/FeedItemRow';
-import { useFeedQuery } from '@taskora/api';
 import {
   selectionStateOf,
   useCompleteTask,
   useSelectionScope,
   useUncompleteTask,
 } from '@taskora/api';
-import { useProjectsQuery } from '@taskora/api';
-import { useAreasQuery } from '@taskora/api';
-import { useTaskRowSelection } from '@taskora/api';
-import { fromInputDateValue } from '@taskora/api';
-import {
-  buildUpcomingLayout,
-  type UpcomingDay,
-} from '@taskora/api';
-import { i18n } from '@taskora/api';
+import { buildUpcomingLayout, type UpcomingDay } from '@taskora/api';
 import { toast } from 'sonner';
 
 export default function Upcoming() {
+  const calendarDay = useCalendarDay();
   const { t } = useTranslation();
   const { data: items = [], isLoading, isError } = useFeedQuery('upcoming');
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
-  const {
-    selectedIds,
-    expandedId,
-    handleRowClick,
-    handleBlankClick,
-  } = useTaskRowSelection();
+  const { selectedIds, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
 
   const projectMap = useMemo(
     () => Object.fromEntries(projects.map((p) => [p.id, p.title])),
     [projects],
   );
-  const areaMap = useMemo(
-    () => Object.fromEntries(areas.map((a) => [a.id, a.title])),
-    [areas],
-  );
+  const areaMap = useMemo(() => Object.fromEntries(areas.map((a) => [a.id, a.title])), [areas]);
 
-  const layout = useMemo(
-    () => buildUpcomingLayout(items, new Date()),
-    [items],
-  );
+  const layout = useMemo(() => buildUpcomingLayout(items, new Date()), [items, calendarDay]);
 
   // 注册可遍历行（按渲染顺序：本周每天，之后各月）。
   const rows = useMemo(
@@ -72,9 +62,7 @@ export default function Upcoming() {
   const renderItem = (item: FeedItem) => {
     const isTask = item.type === 'task';
     const taskItem = item as { projectId: string | null; areaId: string | null };
-    const selectionState = isTask
-      ? selectionStateOf(selectedIds, expandedId, item.id)
-      : 'idle';
+    const selectionState = isTask ? selectionStateOf(selectedIds, expandedId, item.id) : 'idle';
     return (
       <FeedItemRow
         key={item.id}
@@ -105,9 +93,7 @@ export default function Upcoming() {
           <span className="text-sm tabular-nums text-muted-foreground">{label}</span>
           <div className="min-w-4 flex-1 border-t border-border" aria-hidden="true" />
         </div>
-        <div className="flex min-h-12 flex-col gap-1">
-          {day.items.map(renderItem)}
-        </div>
+        <div className="flex min-h-12 flex-col gap-1">{day.items.map(renderItem)}</div>
       </div>
     );
   };
@@ -127,9 +113,7 @@ export default function Upcoming() {
                   ? `${month.month}/${month.rangeStartDay}-${month.month}/${month.rangeEndDay}`
                   : new Intl.DateTimeFormat(
                       i18n.language,
-                      month.showYear
-                        ? { month: 'long', year: 'numeric' }
-                        : { month: 'long' },
+                      month.showYear ? { month: 'long', year: 'numeric' } : { month: 'long' },
                     ).format(new Date(month.year, month.month - 1, 1))}
               </h2>
               <div className="flex min-h-12 flex-col gap-1">

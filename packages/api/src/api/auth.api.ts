@@ -1,3 +1,4 @@
+import { deviceTimeZone } from '@taskora/shared';
 import type { AuthResponseDto, LoginDto, RegisterDto, UserResponseDto } from '@taskora/shared';
 
 import { apiClient, refreshSession } from './client';
@@ -10,11 +11,19 @@ export function register(data: RegisterDto): Promise<AuthUser> {
 }
 
 export function login(data: LoginDto): Promise<AuthResponseDto> {
-  return apiClient.post<AuthResponseDto>('/auth/login', data).then((res) => res.data);
+  return apiClient
+    .post<AuthResponseDto>('/auth/login', data, {
+      headers: { 'X-Device-Time-Zone': deviceTimeZone() },
+    })
+    .then((res) => res.data);
 }
 
 export function getMe(): Promise<UserResponseDto> {
-  return apiClient.get<UserResponseDto>('/auth/me').then((res) => res.data);
+  return apiClient
+    .get<UserResponseDto>('/auth/me', {
+      headers: { 'X-Device-Time-Zone': deviceTimeZone() },
+    })
+    .then((res) => res.data);
 }
 
 export function refresh(): Promise<AuthResponseDto> {

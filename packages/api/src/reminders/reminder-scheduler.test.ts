@@ -9,7 +9,7 @@ import {
   type ReminderTaskInput,
 } from './reminder-scheduler';
 
-/** 2026-02-05 是周四。本地时区语义：fireAt = 计划日当天 + HH:mm。 */
+/** 2026-02-05 是周四。UTC 时区语义：fireAt = 计划日当天 + HH:mm。 */
 const SCHEDULED_DATE = '2026-02-05';
 
 function task(partial: Partial<ReminderTaskInput> & { id: string }): ReminderTaskInput {
@@ -25,17 +25,20 @@ function task(partial: Partial<ReminderTaskInput> & { id: string }): ReminderTas
 }
 
 /** 以固定「当天」构造 now，避免跨日午夜边界导致 CI 偶发。 */
-const NOW = new Date(2026, 1, 4, 12, 0, 0); // 2026-02-04 12:00 本地
+const NOW = new Date(Date.UTC(2026, 1, 4, 12, 0, 0)); // 2026-02-04 12:00 UTC
 
 describe('computeReminderPlan — 纯调度计算（reminders spec 新 seam）', () => {
-  it('合格的 DATE 任务产出一条通知：fireAt = 计划日当天 + reminderTime（本地时区）', () => {
-    const plan = computeReminderPlan([task({ id: 't1', title: '看牙医', reminderTime: '18:30' })], NOW);
+  it('合格的 DATE 任务产出一条通知：fireAt = 计划日当天 + reminderTime（UTC 时区）', () => {
+    const plan = computeReminderPlan(
+      [task({ id: 't1', title: '看牙医', reminderTime: '18:30' })],
+      NOW,
+    );
     expect(plan).toHaveLength(1);
     expect(plan[0]).toMatchObject({
       key: reminderNotificationKey('t1'),
       taskId: 't1',
       taskTitle: '看牙医',
-      fireAt: new Date(2026, 1, 5, 18, 30, 0).getTime(),
+      fireAt: new Date(Date.UTC(2026, 1, 5, 18, 30, 0)).getTime(),
     });
   });
 
@@ -81,7 +84,7 @@ describe('computeReminderPlan — 纯调度计算（reminders spec 新 seam）',
     const [n1] = computeReminderPlan([task({ id: 't1' })], NOW);
     const [n2] = computeReminderPlan([task({ id: 't1', reminderTime: '10:15' })], NOW);
     expect(n1.key).toBe(n2.key);
-    expect(n2.fireAt).toBe(new Date(2026, 1, 5, 10, 15, 0).getTime());
+    expect(n2.fireAt).toBe(new Date(Date.UTC(2026, 1, 5, 10, 15, 0)).getTime());
   });
 });
 
@@ -98,7 +101,7 @@ describe('diffReminderRegistration — 期望集 vs 已注册集 的注册/注�
   it('消失的注册（关闭提醒/了结/进 Trash）→ cancel', () => {
     const registered = new Map([
       ['reminder:t1', 1],
-      [reminderNotificationKey('t2'), new Date(2026, 1, 5, 10, 0, 0).getTime()],
+      [reminderNotificationKey('t2'), new Date(Date.UTC(2026, 1, 5, 10, 0, 0)).getTime()],
     ]);
     const diff = diffReminderRegistration(registered, computeReminderPlan([other], NOW));
     expect(diff.register).toEqual([]);
@@ -107,7 +110,7 @@ describe('diffReminderRegistration — 期望集 vs 已注册集 的注册/注�
 
   it('fireAt 变化（改时刻/改日期）→ 先 cancel 再 register 同一 key', () => {
     const registered = new Map([
-      [reminderNotificationKey('t1'), new Date(2026, 1, 5, 9, 0, 0).getTime()],
+      [reminderNotificationKey('t1'), new Date(Date.UTC(2026, 1, 5, 9, 0, 0)).getTime()],
     ]);
     const diff = diffReminderRegistration(
       registered,
@@ -115,13 +118,13 @@ describe('diffReminderRegistration — 期望集 vs 已注册集 的注册/注�
     );
     expect(diff.cancel).toEqual([reminderNotificationKey('t1')]);
     expect(diff.register.map((n) => n.fireAt)).toEqual([
-      new Date(2026, 1, 5, 19, 45, 0).getTime(),
+      new Date(Date.UTC(2026, 1, 5, 19, 45, 0)).getTime(),
     ]);
   });
 
   it('fireAt 未变：不重复 register 也不 cancel（幂等）', () => {
     const registered = new Map([
-      [reminderNotificationKey('t1'), new Date(2026, 1, 5, 9, 0, 0).getTime()],
+      [reminderNotificationKey('t1'), new Date(Date.UTC(2026, 1, 5, 9, 0, 0)).getTime()],
     ]);
     const diff = diffReminderRegistration(
       registered,

@@ -79,18 +79,14 @@ describe('ProjectMetaRow', () => {
     render(<ProjectMetaRow project={project} />);
 
     // 日期徽章触发器携带格式化后的日期文字（非空 textContent）。
-    const buttons = screen
-      .getAllByRole('button')
-      .map((b) => b.textContent ?? '');
+    const buttons = screen.getAllByRole('button').map((b) => b.textContent ?? '');
     expect(buttons.some((text) => text.trim() !== '')).toBe(true);
     // 标签色点渲染（title 提示携带标签名）。
     expect(screen.getByTitle('design')).toBeInTheDocument();
   });
 
   it('renders nothing when no metadata is set', () => {
-    const { container } = render(
-      <ProjectMetaRow project={{ ...baseProject, tags: [] }} />,
-    );
+    const { container } = render(<ProjectMetaRow project={{ ...baseProject, tags: [] }} />);
 
     // 无任何元数据时不渲染按钮。
     expect(screen.queryAllByRole('button')).toHaveLength(0);
@@ -143,7 +139,7 @@ describe('ProjectMetaRow', () => {
       expect(mutationMocks.update).toHaveBeenCalledWith(
         {
           id: 'project-1',
-          data: { dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/) },
+          data: { dueDate: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/) },
         },
         expect.anything(),
       );

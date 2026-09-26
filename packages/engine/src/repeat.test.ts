@@ -104,6 +104,45 @@ describe('nextOccurrenceDate — 规则 → 下一次出现日期（纯函数）
     ).toBe('2026-02-02');
   });
 
+  it('本地零点旧 ISO 在账号时区恢复计划日：今天每天重复 → 明天', () => {
+    const daily = rule({ unit: 'day' });
+    expect(
+      nextOccurrenceDate(daily, {
+        scheduledDate: '2026-09-23T16:00:00.000Z',
+        timeZone: 'Asia/Shanghai',
+      }),
+    ).toBe('2026-09-25');
+    expect(
+      nextOccurrenceDate(daily, {
+        scheduledDate: '2026-09-24',
+        timeZone: 'America/Los_Angeles',
+      }),
+    ).toBe('2026-09-25');
+    expect(
+      nextOccurrenceDate(daily, {
+        scheduledDate: '2026-09-24T00:00:00.000Z',
+        timeZone: 'America/Los_Angeles',
+      }),
+    ).toBe('2026-09-25');
+  });
+
+  it('完成锚点取账号时区日，不取 UTC 日', () => {
+    expect(
+      nextOccurrenceDate(rule({ unit: 'day', anchor: 'completion' }), {
+        scheduledDate: '2026-09-24',
+        settledAt: '2026-09-23T17:00:00Z',
+        timeZone: 'Asia/Shanghai',
+      }),
+    ).toBe('2026-09-25');
+    expect(
+      nextOccurrenceDate(rule({ unit: 'day', anchor: 'completion' }), {
+        scheduledDate: '2026-09-23',
+        settledAt: '2026-09-24T02:00:00Z',
+        timeZone: 'America/Los_Angeles',
+      }),
+    ).toBe('2026-09-24');
+  });
+
   it('week 单位无 weekdays：锚点 + N 周（同星期几）', () => {
     // 2026-02-02 是周一
     expect(nextOccurrenceDate(rule({ unit: 'week' }), { scheduledDate: '2026-02-02' })).toBe(

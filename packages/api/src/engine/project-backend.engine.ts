@@ -6,6 +6,7 @@
  * 与 ProjectsService 对齐，排序位次沿 Position（新项目追加末尾）。
  */
 
+import { toDateKey } from '@/utils/date';
 import type { Engine } from '@taskora/engine';
 import { positionAfter, positionsBetween } from '@taskora/engine';
 import { ProjectBucket, ProjectStatus, ScheduledType, TaskStatus } from '@taskora/shared';
@@ -86,9 +87,11 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
         title: data.title,
         notes: data.notes ?? null,
         scheduledDate:
-          scheduledType === ScheduledType.DATE && data.scheduledDate ? data.scheduledDate : null,
+          scheduledType === ScheduledType.DATE && data.scheduledDate
+            ? toDateKey(data.scheduledDate)
+            : null,
         scheduledType,
-        dueDate: data.dueDate ?? null,
+        dueDate: data.dueDate ? toDateKey(data.dueDate) : null,
         bucket: resolveBucket(data.bucket, scheduledType),
         status: ProjectStatus.ACTIVE,
         completedAt: null,
@@ -119,7 +122,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
       if (newScheduledType === ScheduledType.SOMEDAY || newScheduledType === ScheduledType.NONE) {
         effectiveScheduledDate = null;
       } else if (data.scheduledDate !== undefined) {
-        effectiveScheduledDate = data.scheduledDate ?? null;
+        effectiveScheduledDate = data.scheduledDate ? toDateKey(data.scheduledDate) : null;
       } else {
         effectiveScheduledDate = (fields.scheduledDate as string | null) ?? null;
       }
@@ -141,7 +144,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
         patch.scheduledType = newScheduledType;
         patch.scheduledDate = effectiveScheduledDate;
       }
-      if (data.dueDate !== undefined) patch.dueDate = data.dueDate;
+      if (data.dueDate !== undefined) patch.dueDate = data.dueDate ? toDateKey(data.dueDate) : null;
       if (data.bucket !== undefined || 'scheduledType' in patch) patch.bucket = bucket;
       if (data.areaId !== undefined) patch.areaId = data.areaId;
       if (data.tagIds !== undefined) patch.tagIds = data.tagIds;

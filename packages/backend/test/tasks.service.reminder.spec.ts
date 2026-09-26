@@ -37,6 +37,7 @@ describe('TasksService — reminderTime 清理规则', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      user: { findUnique: vi.fn().mockResolvedValue({ preferences: { timeZone: 'UTC' } }) },
       task: {
         findFirst: vi.fn(),
         update: vi.fn(),

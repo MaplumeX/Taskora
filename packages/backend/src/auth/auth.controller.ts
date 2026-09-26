@@ -9,6 +9,7 @@ import {
   Req,
   UnauthorizedException,
   HttpCode,
+  Headers,
 } from '@nestjs/common';
 import type { Response, Request as ExpressRequest } from 'express';
 import { AuthService } from './auth.service';
@@ -31,7 +32,12 @@ export class AuthController {
     @Body() dto: LoginDto,
     @Res({ passthrough: true }) res: Response,
   ) {
-    const { accessToken, rt, user } = await this.authService.login(dto);
+    const { accessToken, rt, user } = await this.authService.login(
+      dto,
+      typeof req.headers['x-device-time-zone'] === 'string'
+        ? req.headers['x-device-time-zone']
+        : undefined,
+    );
     if (isNonCookieClient(req)) {
       // Desktop webview runs cross-origin to the server (Tauri bundles the
       // page from tauri.localhost), so SameSite cookies cannot carry the
@@ -107,7 +113,7 @@ export class AuthController {
 
   @UseGuards(JwtAuthGuard)
   @Get('me')
-  getMe(@Request() req: { user: { id: string } }) {
-    return this.authService.getMe(req.user.id);
+  getMe(@Request() req: { user: { id: string } }, @Headers('x-device-time-zone') zone?: string) {
+    return this.authService.getMe(req.user.id, zone);
   }
 }

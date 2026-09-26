@@ -1,3 +1,4 @@
+import { userCalendarZones, matchesCalendarView } from '../users/account-time-zone';
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncHubService } from '../sync/sync-hub.service';
@@ -154,29 +155,44 @@ export class FeedService {
         : Promise.resolve([]),
     ]);
 
-    const taskItems: TaskFeedItem[] = tasks.map((t) => ({
-      id: t.id,
-      type: 'task' as const,
-      title: t.title,
-      notes: t.notes,
-      scheduledDate: t.scheduledDate ? t.scheduledDate.toISOString() : null,
-      scheduledType: t.scheduledType as ScheduledType,
-      reminderTime: t.reminderTime,
-      repeatRule: parseRepeatRule(t.repeatRule),
-      dueDate: t.dueDate ? t.dueDate.toISOString() : null,
-      status: t.status as TaskStatus,
-      bucket: t.bucket as TaskBucket,
-      // DTO 字段名保持 completedAt，承载 Settled At 语义（ADR 0006）。
-      completedAt: t.settledAt ? t.settledAt.toISOString() : null,
-      trashedAt: t.trashedAt ? t.trashedAt.toISOString() : null,
-      sortOrder: t.sortOrder,
-      projectId: t.projectId,
-      headingId: t.headingId,
-      areaId: t.areaId,
-      createdAt: t.createdAt.toISOString(),
-      updatedAt: t.updatedAt.toISOString(),
-      tags: t.tags.map((tt) => mapTag(tt.tag)),
-    }));
+    const zones =
+      view === 'today' || view === 'upcoming'
+        ? await userCalendarZones(this.prisma, userId)
+        : { timeZone: 'UTC', legacyDateTimeZone: 'UTC' };
+    const now = new Date();
+    const taskItems: TaskFeedItem[] = tasks
+      .filter((task) =>
+        matchesCalendarView(
+          task.scheduledDate,
+          view,
+          zones.timeZone,
+          now,
+          zones.legacyDateTimeZone,
+        ),
+      )
+      .map((t) => ({
+        id: t.id,
+        type: 'task' as const,
+        title: t.title,
+        notes: t.notes,
+        scheduledDate: t.scheduledDate ? t.scheduledDate.toISOString() : null,
+        scheduledType: t.scheduledType as ScheduledType,
+        reminderTime: t.reminderTime,
+        repeatRule: parseRepeatRule(t.repeatRule),
+        dueDate: t.dueDate ? t.dueDate.toISOString() : null,
+        status: t.status as TaskStatus,
+        bucket: t.bucket as TaskBucket,
+        // DTO 字段名保持 completedAt，承载 Settled At 语义（ADR 0006）。
+        completedAt: t.settledAt ? t.settledAt.toISOString() : null,
+        trashedAt: t.trashedAt ? t.trashedAt.toISOString() : null,
+        sortOrder: t.sortOrder,
+        projectId: t.projectId,
+        headingId: t.headingId,
+        areaId: t.areaId,
+        createdAt: t.createdAt.toISOString(),
+        updatedAt: t.updatedAt.toISOString(),
+        tags: t.tags.map((tt) => mapTag(tt.tag)),
+      }));
 
     const projectIds = projects.map((p) => p.id);
 
@@ -216,31 +232,41 @@ export class FeedService {
       }
     }
 
-    const projectItems: ProjectFeedItem[] = projects.map((p) => {
-      const counts = countMap.get(p.id);
-      return {
-        id: p.id,
-        type: 'project' as const,
-        title: p.title,
-        notes: p.notes,
-        scheduledDate: p.scheduledDate ? p.scheduledDate.toISOString() : null,
-        scheduledType: p.scheduledType as ScheduledType,
-        reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
-        repeatRule: null, // Project 不设 Repeat Rule（CONTEXT.md）
-        dueDate: p.dueDate ? p.dueDate.toISOString() : null,
-        status: p.status as ProjectStatus,
-        bucket: p.bucket as ProjectBucket,
-        completedAt: p.completedAt ? p.completedAt.toISOString() : null,
-        trashedAt: p.trashedAt ? p.trashedAt.toISOString() : null,
-        sortOrder: p.sortOrder,
-        areaId: p.areaId,
-        createdAt: p.createdAt.toISOString(),
-        updatedAt: p.updatedAt.toISOString(),
-        tags: p.tags.map((pt) => mapTag(pt.tag)),
-        taskTotalCount: counts?.total ?? 0,
-        taskCompletedCount: counts?.completed ?? 0,
-      };
-    });
+    const projectItems: ProjectFeedItem[] = projects
+      .filter((project) =>
+        matchesCalendarView(
+          project.scheduledDate,
+          view,
+          zones.timeZone,
+          now,
+          zones.legacyDateTimeZone,
+        ),
+      )
+      .map((p) => {
+        const counts = countMap.get(p.id);
+        return {
+          id: p.id,
+          type: 'project' as const,
+          title: p.title,
+          notes: p.notes,
+          scheduledDate: p.scheduledDate ? p.scheduledDate.toISOString() : null,
+          scheduledType: p.scheduledType as ScheduledType,
+          reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
+          repeatRule: null, // Project 不设 Repeat Rule（CONTEXT.md）
+          dueDate: p.dueDate ? p.dueDate.toISOString() : null,
+          status: p.status as ProjectStatus,
+          bucket: p.bucket as ProjectBucket,
+          completedAt: p.completedAt ? p.completedAt.toISOString() : null,
+          trashedAt: p.trashedAt ? p.trashedAt.toISOString() : null,
+          sortOrder: p.sortOrder,
+          areaId: p.areaId,
+          createdAt: p.createdAt.toISOString(),
+          updatedAt: p.updatedAt.toISOString(),
+          tags: p.tags.map((pt) => mapTag(pt.tag)),
+          taskTotalCount: counts?.total ?? 0,
+          taskCompletedCount: counts?.completed ?? 0,
+        };
+      });
 
     // Merge and sort: default sortOrder asc, createdAt desc; logbook already
     // sorted by completedAt desc from each query, but since we mix two sources

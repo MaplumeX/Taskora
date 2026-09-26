@@ -14,6 +14,7 @@ describe('FeedService', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      user: { findUnique: vi.fn().mockResolvedValue({ preferences: { timeZone: 'UTC' } }) },
       task: {
         findMany: vi.fn(),
         deleteMany: vi.fn(),
@@ -248,8 +249,8 @@ describe('FeedService', () => {
           id: 'p1',
           title: 'Project',
           notes: null,
-          scheduledDate: null,
-          scheduledType: 'NONE',
+          scheduledDate: new Date('2020-01-01T00:00Z'),
+          scheduledType: 'DATE',
           dueDate: null,
           status: 'ACTIVE',
           bucket: 'ANYTIME',

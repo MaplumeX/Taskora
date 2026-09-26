@@ -28,6 +28,7 @@ describe('TasksService heading membership invariant', () => {
 
   beforeEach(() => {
     prisma = {
+      user: { findUnique: vi.fn().mockResolvedValue({ preferences: { timeZone: 'UTC' } }) },
       task: {
         findFirst: vi.fn().mockResolvedValue(existing),
         update: vi.fn().mockImplementation(({ data }) => ({

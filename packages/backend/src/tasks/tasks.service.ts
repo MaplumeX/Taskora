@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto';
+import { calendarDateStorage } from '@taskora/shared';
+import { userCalendarZones, matchesCalendarView } from '../users/account-time-zone';
 
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
@@ -48,6 +50,7 @@ export class TasksService {
     const occurrence = nextOccurrenceDate(rule, {
       scheduledDate: parent.scheduledDate ? parent.scheduledDate.toISOString() : null,
       settledAt: settledAt.toISOString(),
+      ...(await userCalendarZones(this.prisma, userId)),
     });
     if (occurrence === null) return; // 到达 until / 无锚：链终结
 
@@ -125,6 +128,7 @@ export class TasksService {
     const occurrence = nextOccurrenceDate(rule, {
       scheduledDate: parent.scheduledDate ? parent.scheduledDate.toISOString() : null,
       settledAt: parent.settledAt ? parent.settledAt.toISOString() : null,
+      ...(await userCalendarZones(this.prisma, userId)),
     });
     if (occurrence === null) return;
     const instanceId = deriveRepeatInstanceId(parent.id, rule, occurrence);
@@ -165,13 +169,14 @@ export class TasksService {
   }
 
   async create(userId: string, dto: CreateTaskDto) {
+    const zone = (await userCalendarZones(this.prisma, userId)).legacyDateTimeZone;
     const scheduledType = dto.scheduledType ?? ScheduledType.NONE;
     // Determine scheduledDate based on scheduledType
     let scheduledDate: Date | null = null;
     if (scheduledType === ScheduledType.DATE && dto.scheduledDate) {
-      scheduledDate = new Date(dto.scheduledDate);
+      scheduledDate = calendarDateStorage(dto.scheduledDate, zone);
     }
-    const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+    const dueDate = dto.dueDate ? calendarDateStorage(dto.dueDate, zone) : null;
     const bucket = this.resolveBucket(dto.bucket, scheduledType, dto.projectId, dto.areaId);
 
     const created = await this.prisma.task.create({
@@ -240,9 +245,24 @@ export class TasksService {
       orderBy,
       include: { tags: { include: { tag: true } } },
     });
-    return tasks.map((t) =>
-      settledToCompletedAt(withRepeatRuleDto({ ...t, tags: t.tags.map((tt) => tt.tag) })),
-    );
+    const zones =
+      query.view === 'today' || query.view === 'upcoming'
+        ? await userCalendarZones(this.prisma, userId)
+        : { timeZone: 'UTC', legacyDateTimeZone: 'UTC' };
+    const now = new Date();
+    return tasks
+      .filter((task) =>
+        matchesCalendarView(
+          task.scheduledDate,
+          query.view ?? '',
+          zones.timeZone,
+          now,
+          zones.legacyDateTimeZone,
+        ),
+      )
+      .map((t) =>
+        settledToCompletedAt(withRepeatRuleDto({ ...t, tags: t.tags.map((tt) => tt.tag) })),
+      );
   }
 
   async findOne(userId: string, id: string) {
@@ -265,6 +285,7 @@ export class TasksService {
   }
 
   async update(userId: string, id: string, dto: UpdateTaskDto) {
+    const zone = (await userCalendarZones(this.prisma, userId)).legacyDateTimeZone;
     const existing = await this.prisma.task.findFirst({
       where: { id, userId },
     });
@@ -284,7 +305,9 @@ export class TasksService {
     } else {
       // DATE
       if (dto.scheduledDate !== undefined) {
-        effectiveScheduledDate = dto.scheduledDate ? new Date(dto.scheduledDate) : null;
+        effectiveScheduledDate = dto.scheduledDate
+          ? calendarDateStorage(dto.scheduledDate, zone)
+          : null;
       } else {
         effectiveScheduledDate = existing.scheduledDate;
       }
@@ -340,7 +363,7 @@ export class TasksService {
       }
     }
     if (dto.dueDate !== undefined) {
-      data.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+      data.dueDate = dto.dueDate ? calendarDateStorage(dto.dueDate, zone) : null;
     }
     data.bucket = bucket;
     if (dto.projectId !== undefined) {

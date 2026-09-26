@@ -1,6 +1,6 @@
 import type { TaskResponseDto } from '@taskora/shared';
 
-import { toDateKey } from '@/utils/date';
+import { toDateKey, todayDateKey } from '@/utils/date';
 
 /** Week start index (0=Sunday, 1=Monday) from the user preference store value. */
 export type WeekStartsOn = 0 | 1;
@@ -41,10 +41,8 @@ export function addMonths(anchor: Date, direction: number): Date {
  * 参考 Things 3：When 是计划开始日、永不逾期——日期已过的任务视为
  * 「今天」，归入今天的格子，而不是沉积在过去的日期里。
  */
-export function groupByScheduledDate(
-  tasks: TaskResponseDto[],
-): Map<string, TaskResponseDto[]> {
-  const todayKey = toDateKey(new Date());
+export function groupByScheduledDate(tasks: TaskResponseDto[]): Map<string, TaskResponseDto[]> {
+  const todayKey = todayDateKey();
   const map = new Map<string, TaskResponseDto[]>();
   for (const task of tasks) {
     if (!task.scheduledDate) continue;

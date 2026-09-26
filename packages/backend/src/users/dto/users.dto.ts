@@ -1,5 +1,6 @@
 import {
   IsBoolean,
+  IsTimeZone,
   IsIn,
   IsOptional,
   IsString,
@@ -39,6 +40,10 @@ export class UpdatePasswordDto implements IUpdatePasswordDto {
 }
 
 export class UpdatePreferencesDto implements IUpdatePreferencesDto {
+  @ValidateIf((_, value) => value !== undefined)
+  @IsTimeZone()
+  timeZone?: string;
+
   @IsOptional()
   @IsIn(['light', 'dark', 'system'])
   theme?: 'light' | 'dark' | 'system';

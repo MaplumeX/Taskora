@@ -101,6 +101,7 @@ export * from './hooks/useTags';
 export * from './hooks/useTasks';
 export * from './hooks/useScheduledTasksQuery';
 export * from './hooks/useUsers';
+export * from './hooks/useCalendarDay';
 export * from './hooks/useAgent';
 export * from './hooks/useContentBottomActions';
 export * from './hooks/useContentBottomActionsRoute';

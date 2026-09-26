@@ -2,16 +2,35 @@ import { describe, expect, it } from 'vitest';
 
 import { normalizePreferences } from './preferences';
 
-const defaults = { theme: 'system', language: 'en', weekStartsOn: 1, bucketGrouping: true } as const;
+const defaults = {
+  theme: 'system',
+  language: 'en',
+  weekStartsOn: 1,
+  bucketGrouping: true,
+} as const;
 
 describe('normalizePreferences', () => {
+  it('validates account time zones and keeps the existing zone for missing/invalid values', () => {
+    const initial = { ...defaults, timeZone: 'Asia/Shanghai' };
+    expect(normalizePreferences({ timeZone: 'America/New_York' }, initial).timeZone).toBe(
+      'America/New_York',
+    );
+    expect(normalizePreferences({ timeZone: 'invalid' }, initial).timeZone).toBe('Asia/Shanghai');
+    expect(normalizePreferences({}, initial).timeZone).toBe('Asia/Shanghai');
+  });
   it('passes valid values through untouched', () => {
     expect(
       normalizePreferences(
         { theme: 'dark', language: 'zh', weekStartsOn: 0, bucketGrouping: false },
         defaults,
       ),
-    ).toEqual({ theme: 'dark', language: 'zh', weekStartsOn: 0, bucketGrouping: false });
+    ).toEqual({
+      timeZone: 'UTC',
+      theme: 'dark',
+      language: 'zh',
+      weekStartsOn: 0,
+      bucketGrouping: false,
+    });
   });
 
   it('normalizes legacy string "0" to number 0', () => {
@@ -28,12 +47,19 @@ describe('normalizePreferences', () => {
         { theme: 'blue', language: 'fr', weekStartsOn: 'sunday', bucketGrouping: 'yes' },
         defaults,
       ),
-    ).toEqual({ theme: 'system', language: 'en', weekStartsOn: 1, bucketGrouping: true });
+    ).toEqual({
+      timeZone: 'UTC',
+      theme: 'system',
+      language: 'en',
+      weekStartsOn: 1,
+      bucketGrouping: true,
+    });
   });
 
   it('falls back to defaults for null / undefined / non-object inputs', () => {
     for (const bad of [null, undefined, 42, 'dark', true]) {
       expect(normalizePreferences(bad, defaults)).toEqual({
+        timeZone: 'UTC',
         theme: 'system',
         language: 'en',
         weekStartsOn: 1,
@@ -44,12 +70,14 @@ describe('normalizePreferences', () => {
 
   it('falls back per-field for partial objects (missing keys use defaults)', () => {
     expect(normalizePreferences({ theme: 'dark' }, defaults)).toEqual({
+      timeZone: 'UTC',
       theme: 'dark',
       language: 'en',
       weekStartsOn: 1,
       bucketGrouping: true,
     });
     expect(normalizePreferences({ language: 'zh' }, defaults)).toEqual({
+      timeZone: 'UTC',
       theme: 'system',
       language: 'zh',
       weekStartsOn: 1,
@@ -60,6 +88,7 @@ describe('normalizePreferences', () => {
   it('null-valued fields fall back to defaults (null is not "0")', () => {
     expect(normalizePreferences({ weekStartsOn: null }, defaults).weekStartsOn).toBe(1);
     expect(normalizePreferences({ theme: null, language: null }, defaults)).toEqual({
+      timeZone: 'UTC',
       theme: 'system',
       language: 'en',
       weekStartsOn: 1,

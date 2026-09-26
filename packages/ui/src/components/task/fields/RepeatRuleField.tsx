@@ -1,9 +1,16 @@
+import {
+  useCalendarDay,
+  nextOccurrenceDate,
+  normalizeRepeatRule,
+  currentLegacyDateTimeZone,
+  parseCalendarDate,
+  usePreferencesStore,
+} from '@taskora/api';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ScheduledFieldCurrent, ScheduledFieldPatch } from './fieldProps';
 import { RepeatUnit } from '@taskora/shared';
-import { nextOccurrenceDate, normalizeRepeatRule, usePreferencesStore } from '@taskora/api';
 
 import { Button } from '@/components/ui/button';
 
@@ -32,8 +39,10 @@ const REPEAT_UNITS: RepeatUnit[] = ['day', 'week', 'month', 'year'];
  * 完成（normalizeRepeatRule），预览用同一函数保持口径一致。
  */
 export function RepeatRuleField({ current, onPatch }: FieldProps) {
+  useCalendarDay();
   const { t, i18n } = useTranslation();
   const weekStartsOn = usePreferencesStore((s) => s.weekStartsOn);
+  const timeZone = usePreferencesStore((s) => s.timeZone);
 
   const rule = normalizeRepeatRule(current.repeatRule);
 
@@ -95,6 +104,8 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
   const previewDate = rule
     ? nextOccurrenceDate(rule, {
         scheduledDate: current.scheduledDate ?? null,
+        timeZone,
+        legacyDateTimeZone: currentLegacyDateTimeZone(),
         settledAt: rule.anchor === 'completion' ? new Date().toISOString() : null,
       })
     : null;
@@ -103,7 +114,7 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
         month: 'short',
         day: 'numeric',
         weekday: 'short',
-      }).format(new Date(`${previewDate}T00:00:00.000Z`))
+      }).format(parseCalendarDate(previewDate))
     : null;
 
   return (

@@ -4,6 +4,7 @@ import { InMemorySyncHub, openEngine, type Engine } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
 import { ScheduledType, TaskStatus } from '@taskora/shared';
 
+import { usePreferencesStore } from '@/stores/preferences.store';
 import { createReminderCoordinator, type ReminderCoordinator } from './reminder-coordinator';
 import type { ReminderNotificationShell } from './notification-shell';
 
@@ -69,6 +70,34 @@ async function seedTask(
 }
 
 describe('ReminderCoordinator — runtime（桌面）模式', () => {
+  it('账号时区修改立即注销旧提醒并在新时区重排，不误补发', async () => {
+    const previous = usePreferencesStore.getState().timeZone;
+    usePreferencesStore.getState().setTimeZone('Asia/Shanghai');
+    const localEngine = await makeEngine();
+    const localShell = makeShell();
+    const localCoordinator = createReminderCoordinator({
+      engine: localEngine,
+      shell: localShell,
+      mode: 'system',
+      now: () => new Date('2026-02-04T00:00Z'),
+    });
+    try {
+      await seedTask(localEngine);
+      localCoordinator.start();
+      await localCoordinator.reschedule();
+      expect(localShell.schedule.mock.calls.at(-1)?.[3]).toBe(Date.parse('2026-02-05T01:00Z'));
+      usePreferencesStore.getState().setTimeZone('America/New_York');
+      await localCoordinator.reschedule();
+      expect(localShell.cancel).toHaveBeenCalled();
+      expect(localShell.schedule.mock.calls.at(-1)?.[3]).toBe(Date.parse('2026-02-05T14:00Z'));
+      expect(localShell.schedule.mock.calls.at(-1)?.[2]).toBe('09:00');
+      expect(localShell.fireNow).not.toHaveBeenCalled();
+    } finally {
+      localCoordinator.stop();
+      await localEngine.close();
+      usePreferencesStore.getState().setTimeZone(previous);
+    }
+  });
   let engine: Engine;
   let shell: ReturnType<typeof makeShell>;
   let clock: ReturnType<typeof makeClock>;
@@ -119,7 +148,11 @@ describe('ReminderCoordinator — runtime（桌面）模式', () => {
     await vi.advanceTimersByTimeAsync(10);
 
     // 完成任务 → 提醒消失
-    await engine.update('task', taskId, { status: TaskStatus.COMPLETED, settledAt: '2026-02-04T12:00:00.000Z', reminderTime: null });
+    await engine.update('task', taskId, {
+      status: TaskStatus.COMPLETED,
+      settledAt: '2026-02-04T12:00:00.000Z',
+      reminderTime: null,
+    });
     await vi.advanceTimersByTimeAsync(30_000);
     clock.advance(dayAt(5, 9, 1) - dayAt(4, 12));
     await vi.advanceTimersByTimeAsync(30_000);

@@ -1,3 +1,4 @@
+import { useCalendarDay, parseCalendarDate } from '@taskora/api';
 import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -31,6 +32,7 @@ interface Props {
  * 点击徽章打开 Popover 编辑，复用任务侧的字段组件。
  */
 export function ProjectMetaRow({ project }: Props) {
+  useCalendarDay();
   const { t } = useTranslation('task');
   const { t: tc } = useTranslation('common');
   const queryClient = useQueryClient();
@@ -64,7 +66,7 @@ export function ProjectMetaRow({ project }: Props) {
                 scheduledType === ScheduledType.SOMEDAY
                   ? t('somedayLabel')
                   : project.scheduledDate
-                    ? formatDateLabel(new Date(project.scheduledDate))
+                    ? formatDateLabel(parseCalendarDate(project.scheduledDate))
                     : null
               }
             />
@@ -80,7 +82,7 @@ export function ProjectMetaRow({ project }: Props) {
           trigger={
             <MetaBadge
               icon={<Flag className="h-3 w-3" />}
-              text={formatDeadlineCountdown(new Date(project.dueDate))}
+              text={formatDeadlineCountdown(parseCalendarDate(project.dueDate))}
               urgent={isDeadlineUrgent(project.dueDate)}
             />
           }
@@ -118,7 +120,7 @@ export function ProjectMetaRow({ project }: Props) {
  */
 function isDeadlineUrgent(dateIso: string | null | undefined): boolean {
   if (!dateIso) return false;
-  const date = new Date(dateIso);
+  const date = parseCalendarDate(dateIso);
   return isOverdue(date) || isToday(date);
 }
 

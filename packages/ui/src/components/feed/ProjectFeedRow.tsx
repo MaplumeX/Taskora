@@ -1,3 +1,4 @@
+import { useCalendarDay, parseCalendarDate } from '@taskora/api';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -11,11 +12,7 @@ import { TaskDueDateBadge } from '@/components/task/TaskDueDateBadge';
 import { TaskTodayBadge } from '@/components/task/TaskTodayBadge';
 import { ProjectContextMenu } from '@/components/project/ProjectContextMenu';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
-import {
-  startOfTomorrow,
-  useCompleteProject,
-  useUncompleteProject,
-} from '@taskora/api';
+import { startOfTomorrow, useCompleteProject, useUncompleteProject } from '@taskora/api';
 import type { SelectionState } from '@taskora/api';
 
 interface Props {
@@ -28,7 +25,14 @@ interface Props {
   plainSettledTitle?: boolean;
 }
 
-export function ProjectFeedRow({ item, showScheduledBadge = true, selectionState = 'idle', settledDateBadge, plainSettledTitle = false }: Props) {
+export function ProjectFeedRow({
+  item,
+  showScheduledBadge = true,
+  selectionState = 'idle',
+  settledDateBadge,
+  plainSettledTitle = false,
+}: Props) {
+  useCalendarDay();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const completeProject = useCompleteProject();
@@ -85,16 +89,14 @@ export function ProjectFeedRow({ item, showScheduledBadge = true, selectionState
         />
         {/* 与 TaskItem 对齐：已了结时行首位置显示了结时间（主题色）；
           未了结时 ≤ 今天 → 黄星，未来日期 → 灰色短日期 chip（两者互斥）。 */}
-        {settled && settledDateBadge ? (
-          settledDateBadge
-        ) : (
-          showScheduledBadge &&
-          (item.scheduledDate && new Date(item.scheduledDate) < startOfTomorrow() ? (
-            <TaskTodayBadge className="shrink-0" />
-          ) : (
-            <TaskDateBadge scheduledDate={item.scheduledDate} />
-          ))
-        )}
+        {settled && settledDateBadge
+          ? settledDateBadge
+          : showScheduledBadge &&
+            (item.scheduledDate && parseCalendarDate(item.scheduledDate) < startOfTomorrow() ? (
+              <TaskTodayBadge className="shrink-0" />
+            ) : (
+              <TaskDateBadge scheduledDate={item.scheduledDate} />
+            ))}
         <span
           className={cn(
             'flex-1 truncate text-left text-sm',

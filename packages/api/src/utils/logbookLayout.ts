@@ -1,7 +1,7 @@
 import type { FeedItem } from '@taskora/shared';
 
 import { i18n } from '@/i18n/config';
-import { dayDiff } from './date';
+import { dayDiff, instantCalendarDate } from './date';
 
 export type LogbookGroup = {
   key: string;
@@ -36,12 +36,6 @@ function startOfWeek(date: Date): Date {
   const day = (d.getDay() + 6) % 7;
   d.setDate(d.getDate() - day);
   return d;
-}
-
-/** 日粒度上限：昨天之后到本周一之间的日子逐日展示（与今天/昨天连续） */
-function dailyUpperBound(today: Date): Date {
-  const monday = startOfWeek(today);
-  return addDays(monday, -1); // 上周日
 }
 
 function groupKeyOf(date: Date, today: Date): string {
@@ -95,13 +89,13 @@ function groupLabelOf(key: string, rep: Date, today: Date): string {
  * 输入按 settledAt 倒序；空 completedAt 的条目跳过（与既有 Logbook 行为一致）。
  */
 export function groupLogbookItems(items: FeedItem[], now: Date): LogbookGroup[] {
-  const today = localDay(now);
+  const today = instantCalendarDate(now);
   const groups: LogbookGroup[] = [];
   const index = new Map<string, number>();
 
   for (const item of items) {
     if (!item.completedAt) continue;
-    const date = localDay(new Date(item.completedAt));
+    const date = instantCalendarDate(item.completedAt);
     const key = groupKeyOf(date, today);
     let gi = index.get(key);
     if (gi === undefined) {
@@ -114,7 +108,7 @@ export function groupLogbookItems(items: FeedItem[], now: Date): LogbookGroup[] 
 
   // 标签需要分组的代表日；周分组用该组任一日期的周一
   for (const group of groups) {
-    const first = localDay(new Date(group.items[0].completedAt!));
+    const first = instantCalendarDate(group.items[0].completedAt!);
     const rep = group.key.startsWith('week:') ? startOfWeek(first) : first;
     group.label = groupLabelOf(group.key, rep, today);
   }

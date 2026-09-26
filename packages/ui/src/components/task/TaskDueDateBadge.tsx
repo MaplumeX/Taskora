@@ -1,7 +1,13 @@
+import {
+  useCalendarDay,
+  parseCalendarDate,
+  formatDeadlineCountdown,
+  isOverdue,
+  isToday,
+} from '@taskora/api';
 import { Flag } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import { formatDeadlineCountdown, isOverdue, isToday } from '@taskora/api';
 
 interface Props {
   dueDate: string | null;
@@ -14,8 +20,9 @@ interface Props {
  * 的短绝对格式形成语义区分(计划做 vs 必须完成)。
  */
 export function TaskDueDateBadge({ dueDate, className }: Props) {
+  useCalendarDay();
   if (!dueDate) return null;
-  const date = new Date(dueDate);
+  const date = parseCalendarDate(dueDate);
   const overdue = isOverdue(date);
   const today = isToday(date);
   return (

@@ -4,7 +4,6 @@ import type { UserPreferences } from '@taskora/shared';
 
 import type { Language } from '@/utils/preferences';
 
-
 const STORAGE_KEY = 'taskora-preferences';
 const LEGACY_THEME_KEY = 'taskora-theme';
 const LEGACY_WEEK_STARTS_KEY = 'taskora-week-starts';
@@ -194,6 +193,25 @@ describe('usePreferencesStore hydrateFromServer normalization', () => {
     expect(fresh.getState().bucketGrouping).toBe(false);
   });
 
+  it('persists both account and legacy decoding zones; remote updates keep the legacy zone fixed', async () => {
+    const fresh = await freshStore();
+    fresh.getState().hydrateFromServer({
+      timeZone: 'Asia/Shanghai',
+      legacyDateTimeZone: 'Asia/Shanghai',
+    } as UserPreferences);
+    fresh.getState().hydrateFromServer({
+      timeZone: 'America/New_York',
+      legacyDateTimeZone: 'Asia/Shanghai',
+    } as UserPreferences);
+    expect(fresh.getState().timeZone).toBe('America/New_York');
+    expect(fresh.getState().legacyDateTimeZone).toBe('Asia/Shanghai');
+    const persisted = JSON.parse(localStorage.getItem(STORAGE_KEY)!);
+    expect(persisted.state.timeZone).toBe('America/New_York');
+    expect(persisted.state.legacyDateTimeZone).toBe('Asia/Shanghai');
+    fresh.getState().hydrateFromServer({ theme: 'dark' } as UserPreferences);
+    expect(fresh.getState().legacyDateTimeZone).toBe('Asia/Shanghai');
+  });
+
   it('applies a fully valid server payload', async () => {
     const fresh = await freshStore();
     fresh.getState().hydrateFromServer({
@@ -252,4 +270,3 @@ describe('theme side effects', () => {
     expect(fresh.getState().theme).toBe('light');
   });
 });
-

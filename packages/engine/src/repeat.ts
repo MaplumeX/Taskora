@@ -4,15 +4,15 @@
  *
  * 一切与重复任务相关的计算都是纯函数：不触库、不触时钟、可跨端复用
  * （Engine 设备侧派生、REST hub 侧派生共用同一实现，保证两端派生出
- * 同一逻辑实例的同一 id）。日期一律以 UTC 日（YYYY-MM-DD）参与运算，
- * 与设备时区无关 —— 两台不同时区的设备并发完成同一任务必须得到同一
- * occurrence date，否则确定性 id 去重失效。
+ * 同一逻辑实例的同一 id）。日期以日历日期（YYYY-MM-DD）参与运算；
+ * 旧 ISO 计划日期及完成时刻先按显式账号时区解码，与运行设备时区无关
+ * （ADR-0013）。
  *
  * 周模式的周期对齐固定为「周一起始」（ISO 周），与界面周起始偏好无关：
  * 周起始是展示偏好，混入规则语义会让不同偏好的设备派生出不同 id。
  */
 
-import type { RepeatRule, RepeatUnit } from '@taskora/shared';
+import { calendarDateKey, instantDateKey, type RepeatRule, type RepeatUnit } from '@taskora/shared';
 
 /** interval 上限：防整周搜索循环爆炸（Things 也无超长间隔）。 */
 const MAX_INTERVAL = 999;
@@ -142,24 +142,35 @@ function startOfIsoWeek(date: Date): Date {
  *
  * - anchor=scheduled：从 scheduledDate 推进（固定节奏：房租/例会不漂移），
  *   逾期结果保留计算值（落 Today 由视图口径表达）；
- * - anchor=completion：从 settledAt（了结时刻的 UTC 日）推进（间隔型：
+ * - anchor=completion：从 settledAt（了结时刻的账号时区日）推进（间隔型：
  *   换床单/备份从实际完成时算起）；settledAt 缺失时退回 scheduledDate；
  * - 结果超过 until（不含当天）→ null：链终止，不派生实例；
  * - 锚点缺失/非法 → null。
  */
 export function nextOccurrenceDate(
   rule: RepeatRule,
-  input: { scheduledDate: string | null; settledAt?: string | null },
+  input: {
+    scheduledDate: string | null;
+    settledAt?: string | null;
+    timeZone?: string;
+    legacyDateTimeZone?: string;
+  },
 ): string | null {
   const normalized = normalizeRepeatRule(rule);
   if (normalized === null) return null;
 
-  const anchorValue =
-    normalized.anchor === 'completion' && input.settledAt
-      ? dayKey(input.settledAt)
-      : input.scheduledDate
-        ? dayKey(input.scheduledDate)
-        : null;
+  let anchorValue: string | null;
+  try {
+    const zone = input.timeZone ?? 'UTC';
+    anchorValue =
+      normalized.anchor === 'completion' && input.settledAt
+        ? instantDateKey(input.settledAt, zone)
+        : input.scheduledDate
+          ? calendarDateKey(input.scheduledDate, input.legacyDateTimeZone ?? zone)
+          : null;
+  } catch {
+    return null;
+  }
   if (anchorValue === null) return null;
   const anchor = utcDate(anchorValue);
   if (anchor === null) return null;

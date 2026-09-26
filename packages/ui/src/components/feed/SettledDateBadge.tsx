@@ -1,3 +1,4 @@
+import { useCalendarDay, instantCalendarDate, startOfToday } from '@taskora/api';
 import { i18n } from '@/i18n/config';
 import { cn } from '@/lib/utils';
 
@@ -12,8 +13,9 @@ interface Props {
  * 所有分组一律只显示日期（不显示时刻）；跨年时带上年份。
  */
 export function SettledDateBadge({ date, className }: Props) {
-  const d = new Date(date);
-  const now = new Date();
+  useCalendarDay();
+  const d = instantCalendarDate(date);
+  const now = startOfToday();
   const sameYear = d.getFullYear() === now.getFullYear();
   const label = new Intl.DateTimeFormat(i18n.language, {
     month: 'short',
@@ -21,7 +23,5 @@ export function SettledDateBadge({ date, className }: Props) {
     ...(sameYear ? {} : { year: 'numeric' }),
   }).format(d);
 
-  return (
-    <span className={cn('shrink-0 text-xs text-muted-foreground', className)}>{label}</span>
-  );
+  return <span className={cn('shrink-0 text-xs text-muted-foreground', className)}>{label}</span>;
 }

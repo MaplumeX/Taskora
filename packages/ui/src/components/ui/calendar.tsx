@@ -1,3 +1,4 @@
+import { useCalendarDay, startOfToday } from '@taskora/api';
 import * as React from 'react';
 import { DayPicker, type DayButtonProps, type Locale } from 'react-day-picker';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -66,8 +67,11 @@ export function Calendar({
   autoFocus,
   className,
 }: CalendarProps) {
+  useCalendarDay();
   return (
     <DayPicker
+      today={startOfToday()}
+      defaultMonth={selected ?? startOfToday()}
       mode="single"
       selected={selected}
       onSelect={onSelect}

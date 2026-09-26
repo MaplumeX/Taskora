@@ -2,13 +2,7 @@ import { ProjectStatus, ScheduledType } from '@taskora/shared';
 import { Prisma } from '@prisma/client';
 
 export type ProjectView =
-  | 'inbox'
-  | 'today'
-  | 'upcoming'
-  | 'anytime'
-  | 'someday'
-  | 'trash'
-  | 'logbook';
+  'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
 
 /**
  * Build the Prisma `where` clause for a given view (Project version).
@@ -16,9 +10,7 @@ export type ProjectView =
  *
  * Returns only the view-specific conditions (not userId — caller must add that).
  */
-export function buildProjectViewWhere(
-  view: ProjectView,
-): Prisma.ProjectWhereInput {
+export function buildProjectViewWhere(view: ProjectView): Prisma.ProjectWhereInput {
   const where: Prisma.ProjectWhereInput = {};
   switch (view) {
     case 'inbox':
@@ -30,13 +22,13 @@ export function buildProjectViewWhere(
     case 'today':
       where.status = ProjectStatus.ACTIVE;
       where.scheduledType = ScheduledType.DATE;
-      where.scheduledDate = { lte: new Date() };
+      where.scheduledDate = { not: null }; // Calendar predicate is applied by the caller in the account zone.
       where.trashedAt = null;
       break;
     case 'upcoming':
       where.status = ProjectStatus.ACTIVE;
       where.scheduledType = ScheduledType.DATE;
-      where.scheduledDate = { gt: new Date() };
+      where.scheduledDate = { not: null };
       where.trashedAt = null;
       break;
     case 'someday':

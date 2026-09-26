@@ -1,3 +1,4 @@
+import { toDateKey, todayDateKey } from '@/utils/date';
 import { ScheduledType, TaskBucket, TaskStatus, SETTLED_TASK_STATUSES } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
 
@@ -71,7 +72,7 @@ function taskMatchesView(
         task.status === TaskStatus.ACTIVE &&
         task.scheduledType === ScheduledType.DATE &&
         task.scheduledDate !== null &&
-        new Date(task.scheduledDate) <= now &&
+        toDateKey(task.scheduledDate) <= todayDateKey(now) &&
         task.trashedAt === null
       );
     case 'upcoming':
@@ -79,7 +80,7 @@ function taskMatchesView(
         task.status === TaskStatus.ACTIVE &&
         task.scheduledType === ScheduledType.DATE &&
         task.scheduledDate !== null &&
-        new Date(task.scheduledDate) > now &&
+        toDateKey(task.scheduledDate) > todayDateKey(now) &&
         task.trashedAt === null
       );
     case 'anytime':

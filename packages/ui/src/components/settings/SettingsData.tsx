@@ -1,9 +1,9 @@
+import { todayDateKey, useExportData } from '@taskora/api';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
-import { useExportData } from '@taskora/api';
 
 export default function SettingsData() {
   const { t } = useTranslation(['settings', 'common']);
@@ -18,7 +18,7 @@ export default function SettingsData() {
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = `taskora-export-${new Date().toISOString().slice(0, 10)}.json`;
+      a.download = `taskora-export-${todayDateKey()}.json`;
       a.click();
       URL.revokeObjectURL(url);
       toast.success(t('settings:exportSuccess'));
@@ -31,18 +31,10 @@ export default function SettingsData() {
     <div className="flex max-w-lg flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Label>{t('settings:exportData')}</Label>
-        <p className="text-sm text-muted-foreground">
-          {t('settings:exportDescription')}
-        </p>
+        <p className="text-sm text-muted-foreground">{t('settings:exportDescription')}</p>
       </div>
-      <Button
-        onClick={handleExport}
-        disabled={exportMutation.isPending}
-        className="w-fit"
-      >
-        {exportMutation.isPending
-          ? t('settings:exporting')
-          : t('settings:exportButton')}
+      <Button onClick={handleExport} disabled={exportMutation.isPending} className="w-fit">
+        {exportMutation.isPending ? t('settings:exporting') : t('settings:exportButton')}
       </Button>
     </div>
   );
