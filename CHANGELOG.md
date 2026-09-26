@@ -9,6 +9,22 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.5.4] - 2026-09-26
+
+### Fixes
+
+- **backend**: Runtime image was missing workspace package
+  `node_modules` (#97) — the runtime stage copied only the root
+  `node_modules` plus each workspace package's `dist` and
+  `package.json`, so the per-package symlink trees that pnpm creates
+  were absent: `@taskora/shared`'s `@js-temporal/polyfill` lives in
+  `packages/shared/node_modules` (the root directory holds only the
+  `.pnpm` store, since the root package has no dependencies of its
+  own), so `require` resolve walked up past the package and failed at
+  startup. The Dockerfile now also copies
+  `packages/shared/node_modules` and `packages/engine/node_modules`
+  into the runtime stage.
+
 ## [0.5.3] - 2026-09-26
 
 ### Added
