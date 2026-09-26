@@ -1,8 +1,5 @@
-import {
-  Injectable,
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { accountTimeZone } from '@taskora/shared';
 import * as bcrypt from 'bcryptjs';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -82,7 +79,9 @@ export class UsersService {
     }
 
     const current = (user.preferences ?? {}) as Record<string, unknown>;
-    const merged = { ...current, ...dto };
+    // Legacy ISO dates must not move when the user changes the account zone.
+    const legacyDateTimeZone = current.legacyDateTimeZone ?? accountTimeZone(current);
+    const merged = { ...current, ...dto, ...(dto.timeZone ? { legacyDateTimeZone } : {}) };
 
     return this.prisma.user.update({
       where: { id: userId },
@@ -126,24 +125,23 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    const [tasks, projects, areas, tags, tagGroups, projectHeadings] =
-      await Promise.all([
-        this.prisma.task.findMany({
-          where: { userId },
-          include: { subtasks: true, tags: true },
-        }),
-        this.prisma.project.findMany({
-          where: { userId },
-          include: { tags: true },
-        }),
-        this.prisma.area.findMany({
-          where: { userId },
-          include: { tags: true },
-        }),
-        this.prisma.tag.findMany({ where: { userId } }),
-        this.prisma.tagGroup.findMany({ where: { userId } }),
-        this.prisma.projectHeading.findMany({ where: { userId } }),
-      ]);
+    const [tasks, projects, areas, tags, tagGroups, projectHeadings] = await Promise.all([
+      this.prisma.task.findMany({
+        where: { userId },
+        include: { subtasks: true, tags: true },
+      }),
+      this.prisma.project.findMany({
+        where: { userId },
+        include: { tags: true },
+      }),
+      this.prisma.area.findMany({
+        where: { userId },
+        include: { tags: true },
+      }),
+      this.prisma.tag.findMany({ where: { userId } }),
+      this.prisma.tagGroup.findMany({ where: { userId } }),
+      this.prisma.projectHeading.findMany({ where: { userId } }),
+    ]);
 
     return {
       exportedAt: new Date().toISOString(),

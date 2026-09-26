@@ -34,6 +34,7 @@ describe('TasksService tagIds set semantics', () => {
     const deleteMany = vi.fn();
     const createMany = vi.fn();
     mockPrisma = {
+      user: { findUnique: vi.fn().mockResolvedValue({ preferences: { timeZone: 'UTC' } }) },
       task: {
         findFirst: vi.fn(),
         update: vi.fn(),
@@ -108,8 +109,8 @@ describe('TasksService tagIds set semantics', () => {
   it('should throw NotFoundException when task does not exist', async () => {
     mockPrisma.task.findFirst.mockResolvedValue(null);
 
-    await expect(
-      service.update(userId, taskId, { tagIds: ['tag-a'] }),
-    ).rejects.toThrow(NotFoundException);
+    await expect(service.update(userId, taskId, { tagIds: ['tag-a'] })).rejects.toThrow(
+      NotFoundException,
+    );
   });
 });

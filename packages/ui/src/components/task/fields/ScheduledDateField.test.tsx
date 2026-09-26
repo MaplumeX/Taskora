@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ScheduledType } from '@taskora/shared';
 
-import { useReminderPermissionStore } from '@taskora/api';
+import { useReminderPermissionStore, usePreferencesStore, nextOccurrenceDate } from '@taskora/api';
 
 import { ScheduledDateField } from './ScheduledDateField';
 
@@ -36,6 +36,33 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
       permission: 'unknown',
       supported: false,
     });
+  });
+
+  it('北京时间今天快捷按钮写入纯日期，每天重复的预览为明天', () => {
+    const previous = usePreferencesStore.getState().timeZone;
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-23T17:00:00Z'));
+    usePreferencesStore.getState().setTimeZone('Asia/Shanghai');
+    try {
+      const { onPatch } = renderField({ scheduledType: ScheduledType.NONE });
+      fireEvent.click(screen.getByRole('button', { name: /^(Today|今天)$/ }));
+      expect(onPatch).toHaveBeenCalledWith({
+        scheduledType: ScheduledType.DATE,
+        scheduledDate: '2026-09-24',
+      });
+      expect(
+        nextOccurrenceDate(
+          { unit: 'day', interval: 1, anchor: 'scheduled' },
+          {
+            scheduledDate: onPatch.mock.calls[0][0].scheduledDate,
+            timeZone: 'Asia/Shanghai',
+          },
+        ),
+      ).toBe('2026-09-25');
+    } finally {
+      usePreferencesStore.getState().setTimeZone(previous);
+      vi.useRealTimers();
+    }
   });
 
   it('DATE 任务且 showReminder 时显示提醒区；首次开启默认 09:00 并请求授权', async () => {
@@ -176,17 +203,12 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
   it('点击「明天」→ patch 明天的日期（DATE 型）', async () => {
     const user = userEvent.setup();
     vi.setSystemTime(now);
-    const { onPatch } = renderField(
-      { scheduledType: ScheduledType.NONE },
-      { showReminder: true },
-    );
+    const { onPatch } = renderField({ scheduledType: ScheduledType.NONE }, { showReminder: true });
 
     await user.click(screen.getByRole('button', { name: /^Tomorrow|明天$/ }));
-    const expected = new Date(2026, 1, 5);
-    expected.setHours(0, 0, 0, 0);
     expect(onPatch).toHaveBeenCalledWith({
       scheduledType: ScheduledType.DATE,
-      scheduledDate: expected.toISOString(),
+      scheduledDate: '2026-02-05',
     });
   });
 
@@ -201,4 +223,3 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 });
-

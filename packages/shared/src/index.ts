@@ -1,3 +1,4 @@
+export * from './calendar-date';
 export * from './enums/task.enum';
 export * from './enums/project.enum';
 export * from './enums/heading.enum';

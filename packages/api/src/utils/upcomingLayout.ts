@@ -1,6 +1,6 @@
 import type { FeedItem } from '@taskora/shared';
 
-import { fromInputDateValue, toDateKey, toInputDateValue } from './date';
+import { fromInputDateValue, toDateKey, toInputDateValue, instantCalendarDate } from './date';
 
 export type UpcomingDay = {
   dateKey: string;
@@ -40,10 +40,7 @@ function sameYearMonth(
 }
 
 function numberLabel(date: Date, today: Date): string {
-  if (
-    date.getFullYear() === today.getFullYear() &&
-    date.getMonth() === today.getMonth()
-  ) {
+  if (date.getFullYear() === today.getFullYear() && date.getMonth() === today.getMonth()) {
     return String(date.getDate());
   }
   return `${date.getMonth() + 1}.${date.getDate()}`;
@@ -54,6 +51,7 @@ function monthEndDate(ym: { year: number; month: number }): Date {
 }
 
 export function buildUpcomingLayout(items: FeedItem[], today: Date): UpcomingLayout {
+  today = instantCalendarDate(today);
   const weekStart = localDay(today, 1);
   const week: UpcomingDay[] = [];
   const weekIndex = new Map<string, number>();

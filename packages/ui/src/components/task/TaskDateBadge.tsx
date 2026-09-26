@@ -1,5 +1,5 @@
+import { useCalendarDay, parseCalendarDate, formatShortDate, startOfTomorrow } from '@taskora/api';
 import { cn } from '@/lib/utils';
-import { formatShortDate, startOfTomorrow } from '@taskora/api';
 
 interface Props {
   scheduledDate: string | null;
@@ -14,8 +14,9 @@ interface Props {
  * When 是计划开始日、永不逾期，红色警示只属于 Deadline。
  */
 export function TaskDateBadge({ scheduledDate, className }: Props) {
+  useCalendarDay();
   if (!scheduledDate) return null;
-  const date = new Date(scheduledDate);
+  const date = parseCalendarDate(scheduledDate);
   if (date < startOfTomorrow()) return null;
   return (
     <span

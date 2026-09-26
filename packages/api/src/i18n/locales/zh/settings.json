@@ -1,4 +1,6 @@
 {
+  "timeZone": "账号时区",
+  "timeZoneHint": "在所有设备上统一今天、重复任务和提醒的时间。修改时区不会改变已设置的计划日期或截止日期。",
   "general": "通用",
   "generalSettings": "通用设置",
   "launchAtLogin": "登录时自动启动",

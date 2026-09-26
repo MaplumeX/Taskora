@@ -1,9 +1,30 @@
 import { i18n } from '@/i18n/config';
+import { calendarDateKey, instantDateKey } from '@taskora/shared';
+import { usePreferencesStore } from '@/stores/preferences.store';
+
+export function currentTimeZone(): string {
+  return usePreferencesStore.getState().timeZone;
+}
+
+export function currentLegacyDateTimeZone(): string {
+  return usePreferencesStore.getState().legacyDateTimeZone;
+}
+
+export function todayDateKey(now = new Date()): string {
+  return instantDateKey(now, currentTimeZone());
+}
+
+/** UI calendar carrier: local Date components encode a day, not an instant. */
+export function parseCalendarDate(value: string): Date {
+  return fromInputDateValue(calendarDateKey(value, currentLegacyDateTimeZone()));
+}
+
+export function instantCalendarDate(value: string | Date): Date {
+  return fromInputDateValue(instantDateKey(value, currentTimeZone()));
+}
 
 export function startOfToday(): Date {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
+  return fromInputDateValue(todayDateKey());
 }
 
 export function isSameDay(a: Date, b: Date): boolean {
@@ -15,7 +36,7 @@ export function isSameDay(a: Date, b: Date): boolean {
 }
 
 export function isToday(date: Date): boolean {
-  return isSameDay(date, new Date());
+  return isSameDay(date, startOfToday());
 }
 
 export function startOfTomorrow(): Date {
@@ -87,8 +108,9 @@ export function formatDeadlineCountdown(date: Date): string {
 
 /** yyyy-mm-dd key for grouping (from ISO or Date) */
 export function toDateKey(source: string | Date): string {
-  const date = typeof source === 'string' ? new Date(source) : source;
-  return toInputDateValue(date);
+  return typeof source === 'string'
+    ? calendarDateKey(source, currentLegacyDateTimeZone())
+    : toInputDateValue(source);
 }
 
 /**
@@ -97,8 +119,8 @@ export function toDateKey(source: string | Date): string {
  * Returns 0 when both fall on the same calendar day.
  */
 export function dayDiff(a: string | Date, b: string | Date): number {
-  const da = typeof a === 'string' ? new Date(a) : a;
-  const db = typeof b === 'string' ? new Date(b) : b;
+  const da = typeof a === 'string' ? parseCalendarDate(a) : a;
+  const db = typeof b === 'string' ? parseCalendarDate(b) : b;
   const startA = new Date(da.getFullYear(), da.getMonth(), da.getDate());
   const startB = new Date(db.getFullYear(), db.getMonth(), db.getDate());
   return Math.round((startB.getTime() - startA.getTime()) / 86_400_000);

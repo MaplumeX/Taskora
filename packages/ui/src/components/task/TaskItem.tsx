@@ -1,3 +1,11 @@
+import {
+  useCalendarDay,
+  parseCalendarDate,
+  startOfTomorrow,
+  taskKeys,
+  useTaskQuery,
+  useUpdateTask,
+} from '@taskora/api';
 import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
@@ -7,7 +15,6 @@ import type { TaskResponseDto } from '@taskora/shared';
 
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
-import { startOfTomorrow, taskKeys, useTaskQuery, useUpdateTask } from '@taskora/api';
 import { TaskCheckbox } from './TaskCheckbox';
 import { TaskContextMenu } from './TaskContextMenu';
 import { TaskDateBadge } from './TaskDateBadge';
@@ -45,6 +52,7 @@ export function TaskItem({
   settledDateBadge,
   plainSettledTitle = false,
 }: Props) {
+  useCalendarDay();
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { data: liveTask } = useTaskQuery(task.id);
@@ -60,7 +68,7 @@ export function TaskItem({
   // Things 3 的 Anytime 黄星），语境视图（Today/Upcoming）由列表本身
   // 表达语境、行上不再标记。When 永不逾期，红色只属于 Deadline。
   const scheduledOnOrBeforeToday = current.scheduledDate
-    ? new Date(current.scheduledDate) < startOfTomorrow()
+    ? parseCalendarDate(current.scheduledDate) < startOfTomorrow()
     : false;
 
   const updateTask = useUpdateTask();
@@ -258,9 +266,7 @@ export function TaskItem({
               （projectTitle 优先，否则 areaTitle），参考 Things 3。
               移动端同样显示；分组视图内由组头承担归属、不传入。 */}
             {tag && (
-              <span className="truncate text-xs leading-tight text-muted-foreground">
-                {tag}
-              </span>
+              <span className="truncate text-xs leading-tight text-muted-foreground">{tag}</span>
             )}
           </div>
 

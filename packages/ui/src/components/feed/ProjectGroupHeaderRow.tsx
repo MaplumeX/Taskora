@@ -1,3 +1,10 @@
+import {
+  useCalendarDay,
+  parseCalendarDate,
+  startOfTomorrow,
+  useCompleteProject,
+  useUncompleteProject,
+} from '@taskora/api';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -12,7 +19,6 @@ import { TaskTodayBadge } from '@/components/task/TaskTodayBadge';
 import { ProjectContextMenu } from '@/components/project/ProjectContextMenu';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
 import { GroupHeaderRowShell } from './GroupHeaderRowShell';
-import { startOfTomorrow, useCompleteProject, useUncompleteProject } from '@taskora/api';
 import type { SelectionState } from '@taskora/api';
 
 interface Props {
@@ -26,6 +32,7 @@ interface Props {
  * 详情；保留 ProjectContextMenu。无折叠按钮、无任务计数。
  */
 export function ProjectGroupHeaderRow({ project, selectionState = 'idle' }: Props) {
+  useCalendarDay();
   const { t } = useTranslation();
   const navigate = useNavigate();
   const completeProject = useCompleteProject();
@@ -55,7 +62,8 @@ export function ProjectGroupHeaderRow({ project, selectionState = 'idle' }: Prop
         <span
           className={cn(
             'flex-1 truncate text-left text-sm font-semibold tracking-wide',
-            completed ? 'text-muted-foreground'
+            completed
+              ? 'text-muted-foreground'
               : project.title
                 ? 'text-foreground'
                 : 'text-muted-foreground',
@@ -64,7 +72,7 @@ export function ProjectGroupHeaderRow({ project, selectionState = 'idle' }: Prop
           {label}
         </span>
         <div className="flex items-center gap-2">
-          {project.scheduledDate && new Date(project.scheduledDate) < startOfTomorrow() ? (
+          {project.scheduledDate && parseCalendarDate(project.scheduledDate) < startOfTomorrow() ? (
             <TaskTodayBadge />
           ) : (
             <TaskDateBadge scheduledDate={project.scheduledDate} />

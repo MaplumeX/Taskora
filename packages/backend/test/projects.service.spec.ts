@@ -13,6 +13,7 @@ describe('ProjectsService', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      user: { findUnique: vi.fn().mockResolvedValue({ preferences: { timeZone: 'UTC' } }) },
       project: {
         create: vi.fn(),
         findMany: vi.fn(),
@@ -62,7 +63,12 @@ describe('ProjectsService', () => {
         taskCompletedCount: 0,
       };
       mockPrisma.project.aggregate.mockResolvedValue({ _max: { sortOrder: 2 } });
-      mockPrisma.project.create.mockResolvedValue({ ...expected, tags: [], taskTotalCount: undefined, taskCompletedCount: undefined });
+      mockPrisma.project.create.mockResolvedValue({
+        ...expected,
+        tags: [],
+        taskTotalCount: undefined,
+        taskCompletedCount: undefined,
+      });
 
       const result = await service.create(userId, dto);
 
@@ -107,7 +113,12 @@ describe('ProjectsService', () => {
         taskCompletedCount: 0,
       };
       mockPrisma.project.aggregate.mockResolvedValue({ _max: { sortOrder: null } });
-      mockPrisma.project.create.mockResolvedValue({ ...expected, tags: [], taskTotalCount: undefined, taskCompletedCount: undefined });
+      mockPrisma.project.create.mockResolvedValue({
+        ...expected,
+        tags: [],
+        taskTotalCount: undefined,
+        taskCompletedCount: undefined,
+      });
 
       const result = await service.create(userId, dto);
 
@@ -142,9 +153,7 @@ describe('ProjectsService', () => {
           { projectId: 'project-1', _count: { _all: 5 } },
           { projectId: 'project-2', _count: { _all: 0 } },
         ])
-        .mockResolvedValueOnce([
-          { projectId: 'project-1', _count: { _all: 3 } },
-        ]);
+        .mockResolvedValueOnce([{ projectId: 'project-1', _count: { _all: 3 } }]);
 
       const result = await service.findAll(userId);
 
@@ -164,8 +173,22 @@ describe('ProjectsService', () => {
     it('should return a project by id', async () => {
       const userId = 'user-1';
       const projectId = 'project-1';
-      const expected = { id: projectId, title: 'Taskora', notes: null, userId, tags: [], taskTotalCount: 5, taskCompletedCount: 2 };
-      mockPrisma.project.findFirst.mockResolvedValue({ id: projectId, title: 'Taskora', notes: null, userId, tags: [] });
+      const expected = {
+        id: projectId,
+        title: 'Taskora',
+        notes: null,
+        userId,
+        tags: [],
+        taskTotalCount: 5,
+        taskCompletedCount: 2,
+      };
+      mockPrisma.project.findFirst.mockResolvedValue({
+        id: projectId,
+        title: 'Taskora',
+        notes: null,
+        userId,
+        tags: [],
+      });
       mockPrisma.task.aggregate
         .mockResolvedValueOnce({ _count: { _all: 5 } })
         .mockResolvedValueOnce({ _count: { _all: 2 } });
@@ -182,9 +205,7 @@ describe('ProjectsService', () => {
     it('should throw NotFoundException when project does not exist', async () => {
       mockPrisma.project.findFirst.mockResolvedValue(null);
 
-      await expect(service.findOne('user-1', 'nonexistent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.findOne('user-1', 'nonexistent')).rejects.toThrow(NotFoundException);
     });
   });
 
@@ -192,9 +213,7 @@ describe('ProjectsService', () => {
     it('should throw NotFoundException when project does not exist', async () => {
       mockPrisma.project.findFirst.mockResolvedValue(null);
 
-      await expect(service.remove('user-1', 'nonexistent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.remove('user-1', 'nonexistent')).rejects.toThrow(NotFoundException);
     });
 
     it('trashes project and cascades to下属 tasks', async () => {
@@ -227,9 +246,7 @@ describe('ProjectsService', () => {
     it('should throw NotFoundException when project does not exist', async () => {
       mockPrisma.project.findFirst.mockResolvedValue(null);
 
-      await expect(service.restore('user-1', 'nonexistent')).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.restore('user-1', 'nonexistent')).rejects.toThrow(NotFoundException);
     });
 
     it('restores project and cascades to下属 tasks（随级联进 Trash 的同时间戳任务）', async () => {
@@ -307,9 +324,7 @@ describe('ProjectsService', () => {
       const orderedIds = ['project-1', 'foreign-project'];
       mockPrisma.project.findMany.mockResolvedValue([{ id: 'project-1' }]);
 
-      await expect(service.reorder(userId, orderedIds)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.reorder(userId, orderedIds)).rejects.toThrow(NotFoundException);
       expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
 
@@ -318,9 +333,7 @@ describe('ProjectsService', () => {
       const orderedIds = ['project-1', 'nonexistent'];
       mockPrisma.project.findMany.mockResolvedValue([{ id: 'project-1' }]);
 
-      await expect(service.reorder(userId, orderedIds)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.reorder(userId, orderedIds)).rejects.toThrow(NotFoundException);
     });
   });
 });

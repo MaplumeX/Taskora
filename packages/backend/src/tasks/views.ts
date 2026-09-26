@@ -1,14 +1,13 @@
-import { TaskBucket, TaskStatus, ScheduledType, SETTLED_TASK_STATUSES, WITH_SETTLED_TASK_STATUSES } from '@taskora/shared';
+import {
+  TaskBucket,
+  TaskStatus,
+  ScheduledType,
+  SETTLED_TASK_STATUSES,
+  WITH_SETTLED_TASK_STATUSES,
+} from '@taskora/shared';
 import { Prisma } from '@prisma/client';
 
-export type TaskView =
-  | 'inbox'
-  | 'today'
-  | 'upcoming'
-  | 'anytime'
-  | 'someday'
-  | 'trash'
-  | 'logbook';
+export type TaskView = 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
 
 /** 已了结（Settled）状态白名单（ADR 0006）：单一来源在 @taskora/shared，前后端共用。 */
 export const SETTLED_STATUSES = SETTLED_TASK_STATUSES;
@@ -22,9 +21,7 @@ export const WITH_SETTLED_STATUSES = WITH_SETTLED_TASK_STATUSES;
  *
  * Returns only the view-specific conditions (not userId — caller must add that).
  */
-export function buildTaskViewWhere(
-  view: TaskView,
-): Prisma.TaskWhereInput {
+export function buildTaskViewWhere(view: TaskView): Prisma.TaskWhereInput {
   const where: Prisma.TaskWhereInput = {};
   switch (view) {
     case 'inbox':
@@ -36,13 +33,13 @@ export function buildTaskViewWhere(
     case 'today':
       where.status = TaskStatus.ACTIVE;
       where.scheduledType = ScheduledType.DATE;
-      where.scheduledDate = { lte: new Date() };
+      where.scheduledDate = { not: null }; // Calendar predicate is applied by the caller in the account zone.
       where.trashedAt = null;
       break;
     case 'upcoming':
       where.status = TaskStatus.ACTIVE;
       where.scheduledType = ScheduledType.DATE;
-      where.scheduledDate = { gt: new Date() };
+      where.scheduledDate = { not: null };
       where.trashedAt = null;
       break;
     case 'anytime':

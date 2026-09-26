@@ -11,6 +11,7 @@ describe('TasksService — search (q param)', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      user: { findUnique: vi.fn().mockResolvedValue({ preferences: { timeZone: 'UTC' } }) },
       task: {
         create: vi.fn(),
         findMany: vi.fn(),
@@ -63,10 +64,7 @@ describe('TasksService — search (q param)', () => {
     await service.findAll('user-1', { q: 'task' });
 
     const call = mockPrisma.task.findMany.mock.calls[0][0];
-    expect(call.orderBy).toEqual([
-      { sortOrder: 'asc' },
-      { createdAt: 'desc' },
-    ]);
+    expect(call.orderBy).toEqual([{ sortOrder: 'asc' }, { createdAt: 'desc' }]);
   });
 
   it('does not set OR or override status when q is empty/undefined', async () => {
@@ -94,9 +92,7 @@ describe('TasksService — search (q param)', () => {
 
     const result = await service.findAll(userId, { q: 'test' });
 
-    expect(result[0].tags).toEqual([
-      { id: 'tag-1', name: 'urgent', color: '#ff0000' },
-    ]);
+    expect(result[0].tags).toEqual([{ id: 'tag-1', name: 'urgent', color: '#ff0000' }]);
   });
 
   it('applies q OR condition alongside view status logic when both are set', async () => {

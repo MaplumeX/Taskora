@@ -81,7 +81,10 @@ describe('api client — refresh token transports', () => {
 
     const { seen, adapter } = scriptedAdapter(
       { status: 401 }, // initial request rejected
-      { status: 200, data: { accessToken: 'at-2', refreshToken: 'rt-2' } }, // refresh
+      {
+        status: 200,
+        data: { accessToken: 'at-2', refreshToken: 'rt-2', user: { id: 'u', preferences: null } },
+      }, // refresh
       { status: 200, data: { ok: true } }, // retried original
     );
     apiClient.defaults.adapter = adapter;
@@ -111,7 +114,7 @@ describe('api client — refresh token transports', () => {
 
     const { seen, adapter } = scriptedAdapter(
       { status: 401 },
-      { status: 200, data: { accessToken: 'at-2' } },
+      { status: 200, data: { accessToken: 'at-2', user: { id: 'u', preferences: null } } },
       { status: 200, data: { ok: true } },
     );
     apiClient.defaults.adapter = adapter;

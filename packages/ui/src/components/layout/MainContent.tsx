@@ -1,3 +1,4 @@
+import { useCalendarQueryRefresh, useCurrentUser } from '@taskora/api';
 import { Suspense } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 
@@ -25,6 +26,8 @@ function isFullBleedRoute(pathname: string): boolean {
 }
 
 export function MainContent() {
+  useCurrentUser();
+  useCalendarQueryRefresh();
   const { pathname } = useLocation();
   const canvas = isCanvasRoute(pathname);
   const fullBleed = isFullBleedRoute(pathname);

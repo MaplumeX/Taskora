@@ -7,6 +7,7 @@ import {
   deleteAccount,
   exportData,
 } from '@/api/users.api';
+import { hydrateFromServer } from '@/stores/preferences.store';
 import { useAuthStore } from '@/stores/auth.store';
 import { writeRefreshToken } from '@/token-store';
 import { authKeys } from '@/hooks/useAuth';
@@ -63,8 +64,16 @@ export function useUpdatePreferences() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (data: UpdatePreferencesDto) => updatePreferences(data),
-    onSuccess: () => {
+    onSuccess: (user, data) => {
+      hydrateFromServer(user.preferences);
       void queryClient.invalidateQueries({ queryKey: authKeys.me });
+      if (data.timeZone !== undefined) {
+        // The optimistic zone update can refetch REST views before the server
+        // saves it. Refetch again after persistence, even if the zone is unchanged.
+        void queryClient.invalidateQueries({
+          predicate: (query) => ['tasks', 'feed', 'projects'].includes(String(query.queryKey[0])),
+        });
+      }
     },
   });
 }

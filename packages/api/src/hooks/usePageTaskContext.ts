@@ -1,3 +1,5 @@
+import { useCalendarDay } from './useCalendarDay';
+import { todayDateKey } from '@/utils/date';
 import { useLocation, useParams } from 'react-router-dom';
 
 import { ScheduledType, TaskBucket } from '@taskora/shared';
@@ -11,13 +13,14 @@ type PageTaskContext = Omit<Partial<CreateTaskDto>, 'title'>;
  * Returns a partial CreateTaskDto to spread into the payload.
  */
 export function usePageTaskContext(): PageTaskContext {
+  useCalendarDay();
   const { pathname } = useLocation();
   const params = useParams<{ id: string; tagId: string }>();
 
   if (pathname === '/today') {
     return {
       scheduledType: ScheduledType.DATE,
-      scheduledDate: new Date().toISOString(),
+      scheduledDate: todayDateKey(),
     };
   }
 

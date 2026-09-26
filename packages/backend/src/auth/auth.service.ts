@@ -4,6 +4,7 @@ import {
   NotFoundException,
   UnauthorizedException,
 } from '@nestjs/common';
+import { isValidTimeZone } from '@taskora/shared';
 import { JwtService } from '@nestjs/jwt';
 import { randomUUID } from 'node:crypto';
 import * as bcrypt from 'bcryptjs';
@@ -56,7 +57,7 @@ export class AuthService {
     return user;
   }
 
-  async login(dto: LoginDto) {
+  async login(dto: LoginDto, deviceZone?: string) {
     const user = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -69,6 +70,9 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    const preferences = deviceZone
+      ? (await this.getMe(user.id, deviceZone)).preferences
+      : user.preferences;
     const accessToken = this.jwtService.sign({ sub: user.id });
     const rt = await this.issueRefreshToken(user.id);
 
@@ -80,12 +84,25 @@ export class AuthService {
         email: user.email,
         displayName: user.displayName,
         avatarUrl: user.avatarUrl,
-        preferences: user.preferences,
+        preferences,
       },
     };
   }
 
-  async getMe(userId: string) {
+  async getMe(userId: string, deviceZone?: string) {
+    // Atomic first-device initialization; subsequent devices cannot overwrite
+    // an established account zone. Do not derive this value from server TZ.
+    if (isValidTimeZone(deviceZone)) {
+      await this.prisma.$transaction(
+        (tx) => tx.$executeRaw`
+        UPDATE "User" SET preferences = COALESCE(preferences, '{}'::jsonb) || jsonb_build_object(
+          'timeZone', COALESCE(preferences->>'timeZone', ${deviceZone}::text),
+          'legacyDateTimeZone', COALESCE(preferences->>'legacyDateTimeZone', preferences->>'timeZone', ${deviceZone}::text)
+        )
+        WHERE id = ${userId} AND ((preferences->>'timeZone') IS NULL OR (preferences->>'legacyDateTimeZone') IS NULL)
+      `,
+      );
+    }
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: USER_PUBLIC_SELECT,

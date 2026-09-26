@@ -1,8 +1,6 @@
-import {
-  Injectable,
-  NotFoundException,
-} from '@nestjs/common';
-import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
+import { Injectable, NotFoundException } from '@nestjs/common';
+import { userCalendarZones } from '../users/account-time-zone';
+import { calendarDateStorage, ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { synthPosition } from '../sync/entity-codec';
 import { SETTLED_STATUSES } from '../tasks/views';
@@ -34,6 +32,7 @@ export class ProjectsService {
   }
 
   async create(userId: string, dto: CreateProjectDto) {
+    const zone = (await userCalendarZones(this.prisma, userId)).legacyDateTimeZone;
     const max = await this.prisma.project.aggregate({
       where: { userId },
       _max: { sortOrder: true },
@@ -41,9 +40,9 @@ export class ProjectsService {
     const scheduledType = dto.scheduledType ?? ScheduledType.NONE;
     let scheduledDate: Date | null = null;
     if (scheduledType === ScheduledType.DATE && dto.scheduledDate) {
-      scheduledDate = new Date(dto.scheduledDate);
+      scheduledDate = calendarDateStorage(dto.scheduledDate, zone);
     }
-    const dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+    const dueDate = dto.dueDate ? calendarDateStorage(dto.dueDate, zone) : null;
     const bucket = this.resolveBucket(dto.bucket, scheduledType);
 
     const created = await this.prisma.project.create({
@@ -57,9 +56,7 @@ export class ProjectsService {
         scheduledDate,
         dueDate,
         bucket,
-        ...(dto.tagIds?.length
-          ? { tags: { create: dto.tagIds.map((tagId) => ({ tagId })) } }
-          : {}),
+        ...(dto.tagIds?.length ? { tags: { create: dto.tagIds.map((tagId) => ({ tagId })) } } : {}),
       },
       include: { tags: { include: { tag: true } } },
     });
@@ -164,6 +161,7 @@ export class ProjectsService {
   }
 
   async update(userId: string, id: string, dto: UpdateProjectDto) {
+    const zone = (await userCalendarZones(this.prisma, userId)).legacyDateTimeZone;
     const existing = await this.prisma.project.findFirst({
       where: { id, userId },
     });
@@ -183,7 +181,9 @@ export class ProjectsService {
     } else {
       // DATE
       if (dto.scheduledDate !== undefined) {
-        effectiveScheduledDate = dto.scheduledDate ? new Date(dto.scheduledDate) : null;
+        effectiveScheduledDate = dto.scheduledDate
+          ? calendarDateStorage(dto.scheduledDate, zone)
+          : null;
       } else {
         effectiveScheduledDate = existing.scheduledDate;
       }
@@ -214,13 +214,11 @@ export class ProjectsService {
       data.scheduledType = newScheduledType;
     }
     if (dto.dueDate !== undefined) {
-      data.dueDate = dto.dueDate ? new Date(dto.dueDate) : null;
+      data.dueDate = dto.dueDate ? calendarDateStorage(dto.dueDate, zone) : null;
     }
     data.bucket = bucket;
     if (dto.areaId !== undefined) {
-      data.area = dto.areaId
-        ? { connect: { id: dto.areaId } }
-        : { disconnect: true };
+      data.area = dto.areaId ? { connect: { id: dto.areaId } } : { disconnect: true };
     }
 
     // 全量 set 语义：tagIds 传 undefined 不动；传数组则先删旧关联再建新关联

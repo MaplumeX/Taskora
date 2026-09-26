@@ -1,10 +1,17 @@
+import {
+  useCalendarDay,
+  useFeedQuery,
+  useProjectsQuery,
+  useAreasQuery,
+  useTaskRowSelection,
+  groupLogbookItems,
+} from '@taskora/api';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { FeedItem } from '@taskora/shared';
 
 import { FeedItemRow } from '@/components/feed/FeedItemRow';
-import { useFeedQuery } from '@taskora/api';
 import {
   selectionStateOf,
   useCompleteTask,
@@ -12,13 +19,10 @@ import {
   useUncancelTask,
   useUncompleteTask,
 } from '@taskora/api';
-import { useProjectsQuery } from '@taskora/api';
-import { useAreasQuery } from '@taskora/api';
-import { useTaskRowSelection } from '@taskora/api';
-import { groupLogbookItems } from '@taskora/api';
 import { toast } from 'sonner';
 
 export default function Logbook() {
+  const calendarDay = useCalendarDay();
   const { t } = useTranslation();
   const { data: items = [], isLoading, isError } = useFeedQuery('logbook');
   const { data: projects = [] } = useProjectsQuery();
@@ -26,23 +30,15 @@ export default function Logbook() {
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const uncancelTask = useUncancelTask();
-  const {
-    selectedIds,
-    expandedId,
-    handleRowClick,
-    handleBlankClick,
-  } = useTaskRowSelection();
+  const { selectedIds, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
 
   const projectMap = useMemo(
     () => Object.fromEntries(projects.map((p) => [p.id, p.title])),
     [projects],
   );
-  const areaMap = useMemo(
-    () => Object.fromEntries(areas.map((a) => [a.id, a.title])),
-    [areas],
-  );
+  const areaMap = useMemo(() => Object.fromEntries(areas.map((a) => [a.id, a.title])), [areas]);
 
-  const groups = useMemo(() => groupLogbookItems(items, new Date()), [items]);
+  const groups = useMemo(() => groupLogbookItems(items, new Date()), [items, calendarDay]);
 
   // 注册可遍历行（Logbook 为已了结任务行：完成或取消）。
   const rows = useMemo(
@@ -72,9 +68,7 @@ export default function Logbook() {
     return (
       <div key={label} className="flex flex-col gap-1">
         {!isFirst && <div className="mx-2 mt-2 border-t border-border/40" />}
-        <h2 className="px-2 pb-1 pt-4 text-sm font-medium text-muted-foreground">
-          {label}
-        </h2>
+        <h2 className="px-2 pb-1 pt-4 text-sm font-medium text-muted-foreground">{label}</h2>
         {group.map((item) => {
           const isTask = item.type === 'task';
           const taskItem = item as { projectId: string | null; areaId: string | null };
@@ -85,7 +79,9 @@ export default function Logbook() {
             <FeedItemRow
               key={item.id}
               item={item}
-              projectTitle={isTask && taskItem.projectId ? projectMap[taskItem.projectId] : undefined}
+              projectTitle={
+                isTask && taskItem.projectId ? projectMap[taskItem.projectId] : undefined
+              }
               areaTitle={isTask && taskItem.areaId ? areaMap[taskItem.areaId] : undefined}
               selectionState={selectionState}
               onToggleComplete={() => toggleComplete(item)}

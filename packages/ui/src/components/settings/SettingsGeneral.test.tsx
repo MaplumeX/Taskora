@@ -57,6 +57,20 @@ describe('SettingsGeneral — 时间视图分组开关', () => {
     delete (globalThis as Record<string, unknown>).__TAURI_INTERNALS__;
   });
 
+  it('saves the account time zone and rolls back a rejected update', async () => {
+    usePreferencesStore.getState().setTimeZone('UTC');
+    renderPage();
+    const selector = screen.getByRole('combobox', { name: /Account time zone/i });
+    await userEvent.selectOptions(selector, 'Asia/Shanghai');
+    expect(usePreferencesStore.getState().timeZone).toBe('Asia/Shanghai');
+    expect(mutationMocks.updatePreferences).toHaveBeenCalledWith(
+      { timeZone: 'Asia/Shanghai' },
+      expect.anything(),
+    );
+    act(() => capturedOnError()?.());
+    expect(usePreferencesStore.getState().timeZone).toBe('UTC');
+  });
+
   it('renders the grouping toggle reflecting the current preference', () => {
     renderPage();
     const toggle = screen.getByRole('switch', {
