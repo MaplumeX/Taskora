@@ -10,16 +10,15 @@
 import { invoke } from '@tauri-apps/api/core';
 import {
   cancel,
-  channels,
   createChannel,
   isPermissionGranted,
   requestPermission,
-  sendNotification,
   Importance,
   Schedule,
 } from '@tauri-apps/plugin-notification';
 
 import { notificationIdForKey, type ReminderNotificationShell } from '@taskora/api';
+import { listNotificationChannels, postNotification } from '../notification-bridge';
 
 const CHANNEL_ID = 'reminders';
 
@@ -34,7 +33,7 @@ let channelReady: Promise<void> | null = null;
 function ensureChannel(): Promise<void> {
   if (channelReady === null) {
     channelReady = (async () => {
-      const existing = await channels();
+      const existing = await listNotificationChannels();
       if (!existing.some((channel) => channel.id === CHANNEL_ID)) {
         await createChannel({
           id: CHANNEL_ID,
@@ -78,7 +77,7 @@ export function createMobileNotificationShell(): ReminderNotificationShell {
         await ensureChannel();
         // 必须 await：未 await 的 rejection 逃逸 try/catch，注册失败
         // 完全无迹可循（本 bug 的排查黑洞）。
-        await sendNotification({
+        await postNotification({
           id: notificationIdForKey(key),
           channelId: CHANNEL_ID,
           title,
@@ -102,7 +101,7 @@ export function createMobileNotificationShell(): ReminderNotificationShell {
     async fireNow(title, body) {
       try {
         await ensureChannel();
-        await sendNotification({ channelId: CHANNEL_ID, title, body });
+        await postNotification({ channelId: CHANNEL_ID, title, body });
       } catch (error) {
         console.warn('[reminders] fireNow failed:', error);
       }

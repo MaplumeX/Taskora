@@ -6,6 +6,7 @@
   "launchAtLoginFailed": "设置自动启动失败",
   "statusBar": "状态栏快速添加",
   "statusBarHint": "在通知栏常驻显示今天的未完成任务，不下拉 App 也能输入标题快速添加。",
+  "statusBarFailed": "未能显示状态栏通知，请确认系统通知设置中的 Taskora 通知及「状态栏」渠道已开启后重试。",
   "statusBarPermissionDenied": "未获得通知权限，请在系统设置中允许 Taskora 通知后再开启。",
   "groupTasksByParent": "在时间视图中按项目/领域分组任务",
   "groupTasksByParentHint": "开启后，「今天」「随时」「将来」中的任务按所属项目或领域聚类显示；关闭则回到平铺列表。",
