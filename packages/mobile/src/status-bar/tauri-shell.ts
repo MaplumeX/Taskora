@@ -19,18 +19,16 @@
 import { invoke } from '@tauri-apps/api/core';
 import {
   cancel,
-  channels,
   createChannel,
-  isPermissionGranted,
   onAction,
   registerActionTypes,
   requestPermission,
-  sendNotification,
   Importance,
 } from '@tauri-apps/plugin-notification';
 import { i18n } from '@taskora/api';
 
 import type { StatusBarActionEvent, StatusBarShell } from '@taskora/api';
+import { listNotificationChannels, postNotification } from '../notification-bridge';
 
 const CHANNEL_ID = 'status-bar';
 const ACTION_TYPE_ID = 'taskora-status-bar';
@@ -39,45 +37,20 @@ const NEXT_ACTION_ID = 'next';
 /** 固定通知 id：覆盖式更新与登出撤下都命中同一条系统通知。 */
 const NOTIFICATION_ID = 620001;
 
-let channelReady: Promise<void> | null = null;
-
-/** Android 8+：通知必须归属已存在的 Channel，否则静默不显示。 */
-function ensureChannel(): Promise<void> {
-  channelReady ??= (async () => {
-    const existing = await channels();
-    if (!existing.some((channel) => channel.id === CHANNEL_ID)) {
-      await createChannel({
-        id: CHANNEL_ID,
-        name: i18n.t('statusbar:channelName'),
-        importance: Importance.Low,
-      });
-    }
-  })().catch(() => undefined);
-  return channelReady;
-}
-
-let actionTypesReady: Promise<void> | null = null;
-
-/** 动作组只需注册一次（插件持久化到 NotificationStorage）。 */
-function ensureActionTypes(): Promise<void> {
-  actionTypesReady ??= registerActionTypes([
-    {
-      id: ACTION_TYPE_ID,
-      actions: [
-        {
-          id: NEXT_ACTION_ID,
-          title: i18n.t('statusbar:nextTask'),
-        },
-        {
-          id: QUICK_ADD_ACTION_ID,
-          title: i18n.t('statusbar:quickAdd'),
-          input: true,
-          inputPlaceholder: i18n.t('statusbar:quickAddPlaceholder'),
-        },
-      ],
-    },
-  ]).catch(() => undefined);
-  return actionTypesReady;
+/** 每次检查渠道，才能感知用户在系统设置中关闭/恢复渠道。 */
+async function ensureChannel(): Promise<void> {
+  const existing = await listNotificationChannels();
+  const channel = existing.find((channel) => channel.id === CHANNEL_ID);
+  if (channel?.importance === Importance.None) {
+    throw new Error('status bar notification channel is disabled');
+  }
+  if (!channel) {
+    await createChannel({
+      id: CHANNEL_ID,
+      name: i18n.t('statusbar:channelName'),
+      importance: Importance.Low,
+    });
+  }
 }
 
 /** 插件 onAction 原始载荷（d.ts 标为 Options，实际见 Kotlin 源码）。 */
@@ -88,11 +61,36 @@ interface RawActionPayload {
 
 export function createTauriStatusBarShell(): StatusBarShell {
   let actionListenerReady: Promise<unknown> | null = null;
+  let actionTypesReady: Promise<void> | null = null;
+
+  /** 动作组成功后复用；失败不缓存，下次发布重试。 */
+  function ensureActionTypes(): Promise<void> {
+    actionTypesReady ??= registerActionTypes([
+      {
+        id: ACTION_TYPE_ID,
+        actions: [
+          { id: NEXT_ACTION_ID, title: i18n.t('statusbar:nextTask') },
+          {
+            id: QUICK_ADD_ACTION_ID,
+            title: i18n.t('statusbar:quickAdd'),
+            input: true,
+            inputPlaceholder: i18n.t('statusbar:quickAddPlaceholder'),
+          },
+        ],
+      },
+    ]).catch((error) => {
+      actionTypesReady = null;
+      throw error;
+    });
+    return actionTypesReady;
+  }
 
   return {
     async isPermissionGranted() {
       try {
-        return await isPermissionGranted();
+        // 不使用插件缓存的 window.Notification.permission：系统授权可在
+        // 本会话内被用户撤回/恢复。
+        return (await invoke<boolean | null>('plugin:notification|is_permission_granted')) === true;
       } catch {
         return false;
       }
@@ -105,23 +103,17 @@ export function createTauriStatusBarShell(): StatusBarShell {
       }
     },
     async post(content) {
-      try {
-        await ensureChannel();
-        await ensureActionTypes();
-        sendNotification({
-          id: NOTIFICATION_ID,
-          channelId: CHANNEL_ID,
-          title: content.title,
-          ongoing: true,
-          actionTypeId: ACTION_TYPE_ID,
-          // 常驻通知：点按不撤下（动作本身已会 dismiss，见插件行为）。
-          autoCancel: false,
-          // 静默呈现（双保险；LOW 渠道本身无声）。
-          silent: true,
-        });
-      } catch {
-        // 发布失败静默（下次数据变更重试）
-      }
+      await ensureChannel();
+      await ensureActionTypes();
+      await postNotification({
+        id: NOTIFICATION_ID,
+        channelId: CHANNEL_ID,
+        title: content.title,
+        ongoing: true,
+        actionTypeId: ACTION_TYPE_ID,
+        autoCancel: false,
+        // Android 静默由 LOW 渠道保证（silent 仅 iOS 生效）。
+      });
     },
     async clear() {
       try {
@@ -140,7 +132,10 @@ export function createTauriStatusBarShell(): StatusBarShell {
         };
         cb(event);
       });
-      void actionListenerReady;
+      void actionListenerReady.catch((error) => {
+        actionListenerReady = null;
+        console.warn('[status-bar] action listener failed:', error);
+      });
     },
     async openSettings() {
       await invoke('open_notification_settings');

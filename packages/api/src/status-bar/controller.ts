@@ -39,7 +39,8 @@ export interface StatusBarController {
   isEnabled(): boolean;
   /**
    * 设置开关。开启时确保通知权限（未授权先请求；被拒则不开并返回
-   * false，由 UI 引导去系统设置）。返回最终生效状态。
+   * false，由 UI 引导去系统设置）。返回是否应用成功；发布失败回滚并
+   * 抛错，UI 不应在通知发布前报告开启成功。
    */
   setEnabled(next: boolean): Promise<boolean>;
   /** 会话跟随：登录（active=true）时按开关发布/恢复；登出时撤下。幂等。 */
@@ -60,7 +61,7 @@ export function createStatusBarController(
   let sessionActive = false;
   let destroyed = false;
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-  let refreshInFlight = false;
+  let refreshInFlight: Promise<void> | null = null;
   let refreshPending = false;
 
   // 轮播状态：当前已排序任务列表 + 游标（游标持久化，冷启动恢复）。
@@ -81,22 +82,24 @@ export function createStatusBarController(
 
   /** 覆盖式发布常驻通知（固定 id 由 shell 侧保证）。 */
   async function postCurrent(): Promise<void> {
+    if (!effectiveActive()) return;
     const title =
       tasks.length === 0
         ? options.t('statusbar:quickAddEntry')
         : carouselTitle(tasks, index, now());
     await options.shell.post({ title });
+    // 发布期间可能关闭/登出，不能让在飞通知在撤下之后重新出现。
+    if (!effectiveActive()) await options.shell.clear();
   }
 
   /** 拉取最新任务并发布。并发合并：在飞期间到的刷新只补跑一次。 */
-  async function refreshNow(): Promise<void> {
-    if (!effectiveActive()) return;
+  function refreshNow(): Promise<void> {
+    if (!effectiveActive()) return Promise.resolve();
     if (refreshInFlight) {
       refreshPending = true;
-      return;
+      return refreshInFlight;
     }
-    refreshInFlight = true;
-    try {
+    refreshInFlight = (async () => {
       do {
         refreshPending = false;
         tasks = sortStatusBarTasks(await options.listTodayTasks());
@@ -106,11 +109,14 @@ export function createStatusBarController(
         }
         await postCurrent();
       } while (refreshPending && effectiveActive());
-    } catch {
-      // 读取/发布失败静默：下次数据变更或进前台时自然重试。
-    } finally {
-      refreshInFlight = false;
-    }
+    })().finally(() => {
+      refreshInFlight = null;
+    });
+    return refreshInFlight;
+  }
+
+  function reportRefreshFailure(error: unknown): void {
+    console.warn('[status-bar] refresh failed:', error);
   }
 
   function scheduleRefresh(): void {
@@ -118,7 +124,7 @@ export function createStatusBarController(
     if (debounceTimer !== null) clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => {
       debounceTimer = null;
-      void refreshNow();
+      void refreshNow().catch(reportRefreshFailure);
     }, debounceMs);
   }
 
@@ -132,12 +138,13 @@ export function createStatusBarController(
       void options
         .createTask(title)
         .catch(() => undefined)
-        .then(() => void refreshNow());
+        .then(() => refreshNow())
+        .catch(reportRefreshFailure);
     } else if (event.actionId === 'next') {
       if (tasks.length === 0) return;
       index = (index + 1) % tasks.length;
       persistIndex();
-      void postCurrent();
+      void postCurrent().catch(reportRefreshFailure);
     }
     // 'tap'：系统已拉起 Activity，无操作。'dismiss'：尊重用户，不重发。
   });
@@ -150,11 +157,23 @@ export function createStatusBarController(
         if (!granted) {
           granted = await options.shell.requestPermission().catch(() => false);
         }
-        if (!granted) return false;
+        if (!granted) {
+          enabled = false;
+          storage?.setItem(STATUS_BAR_ENABLED_KEY, '0');
+          await options.shell.clear().catch(() => undefined);
+          return false;
+        }
         enabled = true;
-        storage?.setItem(STATUS_BAR_ENABLED_KEY, '1');
-        if (effectiveActive()) void refreshNow();
-        return true;
+        try {
+          if (effectiveActive()) await refreshNow();
+          storage?.setItem(STATUS_BAR_ENABLED_KEY, enabled ? '1' : '0');
+          return enabled;
+        } catch (error) {
+          enabled = false;
+          storage?.setItem(STATUS_BAR_ENABLED_KEY, '0');
+          await options.shell.clear().catch(() => undefined);
+          throw error;
+        }
       }
       enabled = false;
       storage?.setItem(STATUS_BAR_ENABLED_KEY, '0');
@@ -171,7 +190,7 @@ export function createStatusBarController(
         }
         void options.shell.clear().catch(() => undefined);
       } else if (effectiveActive()) {
-        void refreshNow();
+        void refreshNow().catch(reportRefreshFailure);
       }
     },
     scheduleRefresh,

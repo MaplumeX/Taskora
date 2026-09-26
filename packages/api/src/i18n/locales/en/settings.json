@@ -6,6 +6,7 @@
   "launchAtLoginFailed": "Failed to change launch-at-login",
   "statusBar": "Status bar quick add",
   "statusBarHint": "Keep today’s open tasks in the notification shade and quick-add by typing a title without opening the app.",
+  "statusBarFailed": "Could not show the status bar notification. Check that Taskora notifications and the Status bar channel are enabled in system settings, then retry.",
   "statusBarPermissionDenied": "Notification permission denied. Allow Taskora notifications in system settings, then try again.",
   "groupTasksByParent": "Group tasks by project/area in time views",
   "groupTasksByParentHint": "When on, tasks in Today, Anytime, and Someday cluster under their project or area. Turn off to return to the flat list.",

@@ -128,6 +128,77 @@ describe('createStatusBarController', () => {
     expect(h.shell.posted.at(-1)).toEqual({ title: '9/24 · 逾期 (1/3)' });
   });
 
+  it('开启等待原生发布成功后才保存已开启状态', async () => {
+    const h = installHarness();
+    h.controller.syncSession(true);
+    let finish!: () => void;
+    vi.spyOn(h.shell, 'post').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const settled = vi.fn();
+    const enabling = h.controller.setEnabled(true).then(settled);
+    await flush();
+    expect(settled).not.toHaveBeenCalled();
+    expect(globalThis.localStorage?.getItem(STATUS_BAR_ENABLED_KEY)).not.toBe('1');
+
+    finish();
+    await enabling;
+    expect(settled).toHaveBeenCalledWith(true);
+    expect(globalThis.localStorage?.getItem(STATUS_BAR_ENABLED_KEY)).toBe('1');
+  });
+
+  it('发布失败回滚开关并允许再次开启', async () => {
+    const h = installHarness();
+    h.controller.syncSession(true);
+    vi.spyOn(h.shell, 'post').mockRejectedValueOnce(new Error('native failure'));
+
+    await expect(h.controller.setEnabled(true)).rejects.toThrow('native failure');
+    expect(h.controller.isEnabled()).toBe(false);
+    expect(globalThis.localStorage?.getItem(STATUS_BAR_ENABLED_KEY)).toBe('0');
+    expect(h.shell.cleared).toBeGreaterThan(0);
+
+    expect(await h.controller.setEnabled(true)).toBe(true);
+    expect(h.shell.posted.at(-1)).toEqual({ title: '快速添加任务' });
+  });
+
+  it('后台发布失败保留偏好，下次刷新可重试', async () => {
+    const h = installHarness({ enabledInStorage: true });
+    const warning = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    vi.spyOn(h.shell, 'post').mockRejectedValueOnce(new Error('native failure'));
+    h.controller.syncSession(true);
+    await flush();
+    expect(warning).toHaveBeenCalled();
+    expect(h.controller.isEnabled()).toBe(true);
+
+    h.controller.scheduleRefresh();
+    await flush();
+    expect(h.shell.posted.at(-1)).toEqual({ title: '快速添加任务' });
+    warning.mockRestore();
+  });
+
+  it('关闭发生在发布期间时，在飞通知完成后再次撤下', async () => {
+    const h = installHarness();
+    h.controller.syncSession(true);
+    let finish!: () => void;
+    vi.spyOn(h.shell, 'post').mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const enabling = h.controller.setEnabled(true);
+    await flush();
+    await h.controller.setEnabled(false);
+    const clearedBefore = h.shell.cleared;
+    finish();
+    expect(await enabling).toBe(false);
+    expect(h.shell.cleared).toBe(clearedBefore + 1);
+    expect(globalThis.localStorage?.getItem(STATUS_BAR_ENABLED_KEY)).toBe('0');
+  });
+
   it('无任务：发布快速添加入口标题', async () => {
     const h = installHarness({ enabledInStorage: true, tasks: [] });
     h.controller.syncSession(true);
