@@ -1,11 +1,20 @@
 import React from 'react';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { toast } from 'sonner';
 
 import SettingsGeneral from './SettingsGeneral';
-import { usePreferencesStore } from '@taskora/api';
+import {
+  createStatusBarController,
+  registerStatusBarController,
+  setClientKind,
+  usePreferencesStore,
+  type StatusBarController,
+} from '@taskora/api';
+
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 const mutationMocks = vi.hoisted(() => ({
   updatePreferences: vi.fn(),
@@ -76,5 +85,76 @@ describe('SettingsGeneral — 时间视图分组开关', () => {
   it('hides the desktop-only launch-at-login section off the desktop runtime', () => {
     renderPage();
     expect(screen.queryByText(/launch at login/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('SettingsGeneral — Android status bar', () => {
+  let controller: StatusBarController;
+  const post = vi.fn(async () => {});
+
+  beforeEach(() => {
+    localStorage.clear();
+    post.mockReset().mockResolvedValue(undefined);
+    vi.mocked(toast.error).mockClear();
+    setClientKind('mobile');
+    controller = createStatusBarController({
+      shell: {
+        isPermissionGranted: async () => true,
+        requestPermission: async () => true,
+        post,
+        clear: async () => {},
+        onAction: () => {},
+        openSettings: async () => {},
+      },
+      t: (key) => key,
+      listTodayTasks: async () => [],
+      createTask: async () => {},
+    });
+    controller.syncSession(true);
+    registerStatusBarController(controller);
+  });
+
+  afterEach(() => {
+    controller.destroy();
+    registerStatusBarController(null);
+    setClientKind('web');
+    localStorage.clear();
+    vi.restoreAllMocks();
+  });
+
+  it('shows a retryable error and keeps the switch off when native posting fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    post.mockRejectedValueOnce(new Error('native failure'));
+    renderPage();
+    const toggle = screen.getByRole('switch', { name: /status bar quick add/i });
+    await userEvent.click(toggle);
+    await waitFor(() =>
+      expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/could not show/i)),
+    );
+    expect(toggle).not.toBeChecked();
+    expect(toggle).toBeEnabled();
+
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).toBeChecked());
+  });
+
+  it('keeps the switch pending until native posting completes', async () => {
+    let finish!: () => void;
+    post.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    renderPage();
+    const toggle = screen.getByRole('switch', { name: /status bar quick add/i });
+    await userEvent.click(toggle);
+    expect(toggle).toBeDisabled();
+    expect(toggle).not.toBeChecked();
+    await act(async () => {
+      finish();
+    });
+    expect(toggle).toBeChecked();
+    expect(toggle).toBeEnabled();
   });
 });

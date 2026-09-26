@@ -59,8 +59,11 @@ export default function SettingsGeneral() {
         toast.error(t('settings:statusBarPermissionDenied'));
         return;
       }
-      setStatusBarEnabled(next);
+    } catch (error) {
+      console.warn('[status-bar] setting failed:', error);
+      toast.error(t('settings:statusBarFailed'));
     } finally {
+      setStatusBarEnabled(statusBar.isEnabled());
       setStatusBarPending(false);
     }
   };
