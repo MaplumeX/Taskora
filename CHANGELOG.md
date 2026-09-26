@@ -11,6 +11,20 @@ project adheres to [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixes
+
+- **desktop**: Reminder notifications were silent — the desktop
+  notification shell never passed a `sound`, and
+  tauri-plugin-notification turns a missing sound into notify-rust's
+  `sound_name: None`, which is not "let the OS decide": winrt then
+  writes `<audio silent="true"/>` on Windows and mac-notification-sys
+  writes an empty soundName on macOS, so the toast appeared without a
+  sound. `fireNow` now passes the platform's default-sound literal
+  ("Default" for the winrt enum on Windows, "default" — the value of
+  `NSUserNotificationDefaultSoundName` — on macOS; Linux is left
+  untouched because notify-rust's XDG backend ignores `sound_name`),
+  pinned by a shell test.
+
 ## [0.5.2] - 2026-09-26
 
 ### Added
