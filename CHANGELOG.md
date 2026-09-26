@@ -9,11 +9,72 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
-## [Unreleased]
+## [0.5.3] - 2026-09-26
+
+### Added
+
+- **api/backend**: Account time zone for calendar dates and reminders
+  (#95) — Scheduled Date and Deadline are calendar dates, not instants,
+  so new clients write `YYYY-MM-DD` (the REST DateTime columns keep
+  encoding those dates at UTC midnight) and no reader applies the
+  device offset anymore; this fixes "scheduled today + daily repeat
+  produces another instance still on today", which came from mixing a
+  local-midnight ISO with a UTC day key. An account-level IANA zone —
+  initialized to the first device's zone and persisted with
+  preferences, with a Settings entry to change it — now drives every
+  calendar consumer: Today/Upcoming for tasks, projects and the event
+  cache, the date quick-picks and calendar highlight, deadline
+  countdowns, Logbook grouping and badges, completion-anchored Repeat
+  Rules and their previews, reminder scheduling/wording and
+  rescheduling on zone change, the Android status bar, the assistant's
+  per-conversation current date, and export filenames. Legacy
+  non-midnight values are decoded through a server-managed
+  `legacyDateTimeZone` captured once at first initialization so old
+  dates do not move when the setting changes (a UTC-midnight encoding
+  is indistinguishable from a stored calendar date and keeps its UTC
+  date); real instants (`createdAt`/`updatedAt`/`settledAt`/`trashedAt`,
+  token expiry, sync HLC) stay absolute. Date math is pure and takes
+  the zone explicitly — servers never use their own local zone. See
+  [ADR-0013](docs/adr/0013-calendar-dates-and-account-time-zone.md).
+
+### Changed
+
+- **ui**: Full-screen settings panel on mobile (#93) — below the
+  desktop breakpoint settings now open as a full-screen page (title bar
+  with a top-right close button, horizontal tab strip, content scrolls
+  the panel) instead of a cramped centered modal; a new `useMediaQuery`
+  hook picks the layout, the dialog gains a `mobileFullscreen` variant
+  that drops the centering transform and stretches to the viewport, and
+  the panel height follows `--kb-inset` so the keyboard keeps the
+  focused field visible, with safe-area padding for the notch and home
+  indicator. The desktop centered modal with its left nav column is
+  unchanged.
+- **mobile**: Full-bleed Android launcher icons (#92) — a new
+  `scripts/generate-android-icons.py` renders adaptive-icon
+  foreground/legacy/round mipmaps across all five densities so the
+  artwork fills the launcher mask instead of sitting in a padded
+  square, with `scripts/sync-android-icons.mjs` wiring it into the
+  sync step.
 
 ### Fixes
 
-- **desktop**: Reminder notifications were silent — the desktop
+- **mobile**: Android status bar notifications never appeared (#94) —
+  with the toggle on, the notification was missing from the shade
+  because the locked `@tauri-apps/plugin-notification@2.4.0` calls
+  `plugin:notification|listChannels` while the default ACL only allows
+  `list_channels`, and Tauri checks the ACL before its camelCase
+  conversion, so channel setup was rejected; the shell swallowed that
+  error, cached the channel as ready and kept posting to a
+  non-existent channel, while `sendNotification()`'s void return made
+  the failure uncatchable. The mobile shell now uses a narrow shared
+  bridge with the ACL-correct `list_channels` plus an awaitable
+  `notify` command (same fix for the Reminder shell, no ACL widening
+  and no dependency change), channel/action init failures are no
+  longer cached and propagate, enabling now awaits the post and rolls
+  the toggle back with a "check system notification settings" toast on
+  failure, and regression tests exercise the real plugin JS API at the
+  IPC boundary instead of mocking the shell.
+- **desktop**: Reminder notifications were silent (#96) — the desktop
   notification shell never passed a `sound`, and
   tauri-plugin-notification turns a missing sound into notify-rust's
   `sound_name: None`, which is not "let the OS decide": winrt then
