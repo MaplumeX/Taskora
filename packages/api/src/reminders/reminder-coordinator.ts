@@ -12,18 +12,18 @@
  * 跨天滚动与启动后的首次对齐）。
  */
 
+import { currentTimeZone, currentLegacyDateTimeZone } from '@/utils/date';
+import { usePreferencesStore } from '@/stores/preferences.store';
 import type { Engine } from '@taskora/engine';
 
 import {
   computeReminderPlan,
+  reminderFireAt,
   diffReminderRegistration,
   isReminderEligible,
   type ReminderNotification,
 } from './reminder-scheduler';
-import {
-  reminderInputFromReplicaRow,
-  type ReminderNotificationShell,
-} from './notification-shell';
+import { reminderInputFromReplicaRow, type ReminderNotificationShell } from './notification-shell';
 
 export interface ReminderCoordinatorOptions {
   engine: Engine;
@@ -47,7 +47,9 @@ export interface ReminderCoordinator {
 const DEFAULT_TICK_MS = 30_000;
 const noop = () => undefined;
 
-export function createReminderCoordinator(options: ReminderCoordinatorOptions): ReminderCoordinator {
+export function createReminderCoordinator(
+  options: ReminderCoordinatorOptions,
+): ReminderCoordinator {
   const { engine, shell, mode } = options;
   const tickMs = options.tickMs ?? DEFAULT_TICK_MS;
   const now = options.now ?? (() => new Date());
@@ -59,17 +61,23 @@ export function createReminderCoordinator(options: ReminderCoordinatorOptions): 
   const meta = new Map<string, ReminderNotification>();
   let timer: ReturnType<typeof setInterval> | null = null;
   let unsubscribe: (() => void) | null = null;
+  let unsubscribeZone: (() => void) | null = null;
   let chain: Promise<unknown> = Promise.resolve();
 
   async function tick(): Promise<void> {
     const rows = await engine.list('task');
     const tasks = rows.map(reminderInputFromReplicaRow);
     const nowMs = now().getTime();
-    const desired = computeReminderPlan(tasks, now());
+    const desired = computeReminderPlan(
+      tasks,
+      now(),
+      currentTimeZone(),
+      currentLegacyDateTimeZone(),
+    );
     const diff = diffReminderRegistration(registered, desired);
     const tasksById = new Map(tasks.map((t) => [t.id, t]));
     // 同 key 改期会在同一批同时出现 cancel + register（新 fireAt），
- // 此时旧时刻的补发跳过——用户意图是改到新时刻，不是补旧钟。
+    // 此时旧时刻的补发跳过——用户意图是改到新时刻，不是补旧钟。
     const reRegistering = new Set(diff.register.map((n) => n.key));
 
     // 先注销后注册：同一 key 改期时 cancel 先落到系统侧，随后的
@@ -85,7 +93,13 @@ export function createReminderCoordinator(options: ReminderCoordinatorOptions): 
         m.fireAt <= nowMs &&
         !reRegistering.has(key) &&
         tasksById.get(m.taskId) != null &&
-        isReminderEligible(tasksById.get(m.taskId)!)
+        isReminderEligible(tasksById.get(m.taskId)!) &&
+        reminderFireAt(
+          tasksById.get(m.taskId)!.scheduledDate!,
+          tasksById.get(m.taskId)!.reminderTime!,
+          currentTimeZone(),
+          currentLegacyDateTimeZone(),
+        ) === m.fireAt
       ) {
         const { title, body } = texts(m);
         void shell.fireNow(title, body).catch(noop);
@@ -124,6 +138,13 @@ export function createReminderCoordinator(options: ReminderCoordinatorOptions): 
     start() {
       if (timer !== null) return;
       unsubscribe = engine.onChange(() => void reschedule());
+      unsubscribeZone = usePreferencesStore.subscribe((state, previous) => {
+        if (
+          state.timeZone !== previous.timeZone ||
+          state.legacyDateTimeZone !== previous.legacyDateTimeZone
+        )
+          void reschedule();
+      });
       timer = setInterval(() => void reschedule(), tickMs);
       void reschedule();
     },
@@ -133,6 +154,8 @@ export function createReminderCoordinator(options: ReminderCoordinatorOptions): 
         timer = null;
       }
       unsubscribe?.();
+      unsubscribeZone?.();
+      unsubscribeZone = null;
       unsubscribe = null;
       // system 模式停止（登出/装配失败）时注销全部系统注册，避免残留
       // 孤儿通知；runtime 模式系统侧本无注册，只清内存表。
@@ -149,8 +172,11 @@ export function createReminderCoordinator(options: ReminderCoordinatorOptions): 
 }
 
 function defaultTexts(n: ReminderNotification): { title: string; body: string } {
-  const d = new Date(n.fireAt);
-  const hh = String(d.getHours()).padStart(2, '0');
-  const mm = String(d.getMinutes()).padStart(2, '0');
-  return { title: n.taskTitle, body: `${hh}:${mm}` };
+  const body = new Intl.DateTimeFormat('en-GB', {
+    timeZone: currentTimeZone(),
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(n.fireAt));
+  return { title: n.taskTitle, body };
 }

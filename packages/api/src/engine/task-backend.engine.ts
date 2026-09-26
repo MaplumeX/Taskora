@@ -10,6 +10,7 @@
  * feed.service.ts / tasks.service.ts / subtasks.service.ts。
  */
 
+import { currentTimeZone, currentLegacyDateTimeZone, toDateKey, todayDateKey } from '@/utils/date';
 import type { Engine, ReplicaRow } from '@taskora/engine';
 import { positionAfter, positionsBetween } from '@taskora/engine';
 import {
@@ -94,6 +95,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     const occurrence = nextOccurrenceDate(rule, {
       scheduledDate: (f.scheduledDate as string | null) ?? null,
       settledAt,
+      timeZone: currentTimeZone(),
+      legacyDateTimeZone: currentLegacyDateTimeZone(),
     });
     if (occurrence === null) return null; // 到达 until / 无锚：链终结，不派生
 
@@ -170,6 +173,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     const occurrence = nextOccurrenceDate(rule, {
       scheduledDate: (f.scheduledDate as string | null) ?? null,
       settledAt: (f.settledAt as string | null) ?? null,
+      timeZone: currentTimeZone(),
+      legacyDateTimeZone: currentLegacyDateTimeZone(),
     });
     if (occurrence === null) return;
     const instanceId = deriveRepeatInstanceId(taskId, rule, occurrence);
@@ -233,11 +238,13 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         title: data.title,
         notes: data.notes ?? null,
         scheduledDate:
-          scheduledType === ScheduledType.DATE && data.scheduledDate ? data.scheduledDate : null,
+          scheduledType === ScheduledType.DATE && data.scheduledDate
+            ? toDateKey(data.scheduledDate)
+            : null,
         scheduledType,
         reminderTime: null,
         repeatRule: null,
-        dueDate: data.dueDate ?? null,
+        dueDate: data.dueDate ? toDateKey(data.dueDate) : null,
         bucket,
         status: TaskStatus.ACTIVE,
         settledAt: null,
@@ -267,7 +274,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       if (newScheduledType === ScheduledType.SOMEDAY || newScheduledType === ScheduledType.NONE) {
         effectiveScheduledDate = null;
       } else if (data.scheduledDate !== undefined) {
-        effectiveScheduledDate = data.scheduledDate ?? null;
+        effectiveScheduledDate = data.scheduledDate ? toDateKey(data.scheduledDate) : null;
       } else {
         effectiveScheduledDate = (fields.scheduledDate as string | null) ?? null;
       }
@@ -319,7 +326,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
           patch.repeatRule = normalized;
         }
       }
-      if (data.dueDate !== undefined) patch.dueDate = data.dueDate;
+      if (data.dueDate !== undefined) patch.dueDate = data.dueDate ? toDateKey(data.dueDate) : null;
       if (data.bucket !== undefined || 'scheduledType' in patch) patch.bucket = bucket;
       if (data.projectId !== undefined) patch.projectId = data.projectId;
       if (data.areaId !== undefined) patch.areaId = data.areaId;
@@ -669,6 +676,7 @@ function taskMatchesView(row: ReplicaRow, view: TaskQuery['view'], now: Date): b
       return (
         active &&
         f.scheduledType === ScheduledType.DATE &&
+        f.scheduledDate != null &&
         !isDateLte(f.scheduledDate, now) &&
         f.trashedAt == null
       );
@@ -692,8 +700,11 @@ function taskMatchesView(row: ReplicaRow, view: TaskQuery['view'], now: Date): b
 
 function isDateLte(value: unknown, now: Date): boolean {
   if (typeof value !== 'string') return false;
-  const date = new Date(value);
-  return !Number.isNaN(date.getTime()) && date.getTime() <= now.getTime();
+  try {
+    return toDateKey(value) <= todayDateKey(now);
+  } catch {
+    return false;
+  }
 }
 
 /** getTasks 过滤（语义对齐 TasksService.findAll）。 */
@@ -765,6 +776,7 @@ function projectMatchesView(row: ReplicaRow, view: FeedView, now: Date): boolean
       return (
         active &&
         f.scheduledType === ScheduledType.DATE &&
+        f.scheduledDate != null &&
         !isDateLte(f.scheduledDate, now) &&
         f.trashedAt == null
       );

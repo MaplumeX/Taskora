@@ -1,8 +1,11 @@
+import { isValidTimeZone } from '@taskora/shared';
+
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type Language = 'zh' | 'en';
 export type WeekStartsOn = 0 | 1;
 
 export interface ValidPreferences {
+  timeZone: string;
   theme: ThemeMode;
   language: Language;
   weekStartsOn: WeekStartsOn;
@@ -10,6 +13,7 @@ export interface ValidPreferences {
 }
 
 export interface PreferencesDefaults {
+  timeZone?: string;
   theme: ThemeMode;
   language: Language;
   weekStartsOn: WeekStartsOn;
@@ -28,7 +32,10 @@ const LANGUAGES: readonly Language[] = ['zh', 'en'];
  * hand-written localStorage / dirty Json column values) — accepted and
  * converted to numbers.
  */
-export function normalizePreferences(raw: unknown, defaults: PreferencesDefaults): ValidPreferences {
+export function normalizePreferences(
+  raw: unknown,
+  defaults: PreferencesDefaults,
+): ValidPreferences {
   const obj = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
 
   const themeRaw = obj.theme;
@@ -53,10 +60,10 @@ export function normalizePreferences(raw: unknown, defaults: PreferencesDefaults
 
   // 只接受真布尔值；缺失/脏值回落到调用方给的默认（本地现状或 true）。
   const groupingRaw = obj.bucketGrouping;
-  const bucketGrouping =
-    typeof groupingRaw === 'boolean' ? groupingRaw : defaults.bucketGrouping;
+  const bucketGrouping = typeof groupingRaw === 'boolean' ? groupingRaw : defaults.bucketGrouping;
 
-  return { theme, language, weekStartsOn, bucketGrouping };
+  const timeZone = isValidTimeZone(obj.timeZone) ? obj.timeZone : (defaults.timeZone ?? 'UTC');
+  return { theme, language, weekStartsOn, bucketGrouping, timeZone };
 }
 
 /** Whether a raw value is a valid theme mode. */

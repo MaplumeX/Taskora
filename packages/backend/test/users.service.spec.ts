@@ -1,16 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import bcrypt from 'bcryptjs';
-import {
-  NotFoundException,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { NotFoundException, UnauthorizedException } from '@nestjs/common';
 
 import { PrismaService } from '../src/prisma/prisma.service';
 import { UsersService } from '../src/users/users.service';
-import type {
-  UpdatePreferencesDto,
-  DeleteAccountDto,
-} from '../src/users/dto/users.dto';
+import type { UpdatePreferencesDto, DeleteAccountDto } from '../src/users/dto/users.dto';
 
 describe('UsersService', () => {
   let service: UsersService;
@@ -141,6 +135,18 @@ describe('UsersService', () => {
   });
 
   describe('updatePreferences', () => {
+    it('changing account zone preserves the decoding zone for legacy dates', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({ preferences: { timeZone: 'Asia/Shanghai' } });
+      mockPrisma.user.update.mockResolvedValue(baseUser);
+      await service.updatePreferences(userId, { timeZone: 'America/New_York' });
+      expect(mockPrisma.user.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: {
+            preferences: { timeZone: 'America/New_York', legacyDateTimeZone: 'Asia/Shanghai' },
+          },
+        }),
+      );
+    });
     it('merges dto fields into existing preferences', async () => {
       mockPrisma.user.findUnique.mockResolvedValue({
         preferences: { theme: 'dark' },
@@ -197,9 +203,9 @@ describe('UsersService', () => {
     it('throws NotFoundException when user does not exist', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.updatePreferences(userId, { theme: 'dark' }),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.updatePreferences(userId, { theme: 'dark' })).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -222,9 +228,9 @@ describe('UsersService', () => {
       const hash = await bcrypt.hash('correct-password', 10);
       mockPrisma.user.findUnique.mockResolvedValue({ passwordHash: hash });
 
-      await expect(
-        service.deleteAccount(userId, { password: 'wrong-password' }),
-      ).rejects.toThrow(UnauthorizedException);
+      await expect(service.deleteAccount(userId, { password: 'wrong-password' })).rejects.toThrow(
+        UnauthorizedException,
+      );
 
       expect(mockPrisma.user.delete).not.toHaveBeenCalled();
     });
@@ -232,9 +238,9 @@ describe('UsersService', () => {
     it('throws NotFoundException when user does not exist', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
-      await expect(
-        service.deleteAccount(userId, { password: 'whatever' }),
-      ).rejects.toThrow(NotFoundException);
+      await expect(service.deleteAccount(userId, { password: 'whatever' })).rejects.toThrow(
+        NotFoundException,
+      );
     });
   });
 
@@ -307,9 +313,7 @@ describe('UsersService', () => {
     it('throws NotFoundException when user does not exist', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
-      await expect(service.exportData(userId)).rejects.toThrow(
-        NotFoundException,
-      );
+      await expect(service.exportData(userId)).rejects.toThrow(NotFoundException);
     });
   });
 });

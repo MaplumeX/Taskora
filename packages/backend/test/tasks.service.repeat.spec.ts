@@ -47,6 +47,7 @@ describe('TasksService — Repeat Rule（recurring-tasks spec）', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      user: { findUnique: vi.fn().mockResolvedValue({ preferences: { timeZone: 'UTC' } }) },
       task: {
         findFirst: vi.fn(),
         update: vi.fn(),
@@ -128,6 +129,30 @@ describe('TasksService — Repeat Rule（recurring-tasks spec）', () => {
   });
 
   describe('complete：服务端派生（web 客户端路径）', () => {
+    it('旧北京时间零点计划完成后派生明天，而非今天', async () => {
+      (mockPrisma.user.findUnique as ReturnType<typeof vi.fn>).mockResolvedValue({
+        preferences: { timeZone: 'Asia/Shanghai' },
+      });
+      (mockPrisma.task.findFirst as ReturnType<typeof vi.fn>)
+        .mockResolvedValueOnce({
+          ...repeatingTask,
+          scheduledDate: new Date('2026-09-23T16:00Z'),
+          tags: [],
+          subtasks: [],
+        })
+        .mockResolvedValueOnce(null);
+      (mockPrisma.task.update as ReturnType<typeof vi.fn>).mockResolvedValue(repeatingTask);
+      (mockPrisma.task.aggregate as ReturnType<typeof vi.fn>).mockResolvedValue({
+        _max: { sortOrder: 0 },
+      });
+      await service.complete(userId, 'task-1');
+      expect(mockPrisma.task.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ scheduledDate: new Date('2026-09-25T00:00Z') }),
+        }),
+      );
+    });
+
     it('派生下一实例：确定性 id、复制集完整、子任务重置 ACTIVE', async () => {
       (mockPrisma.task.findFirst as ReturnType<typeof vi.fn>)
         .mockResolvedValueOnce({

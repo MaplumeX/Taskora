@@ -1,11 +1,12 @@
+import { useCalendarDay, useFeedQuery, todayDateKey } from '@taskora/api';
 import { useTranslation } from 'react-i18next';
 
-import { useFeedQuery } from '@taskora/api';
 import { TimeViewFeedList } from '@/components/feed/TimeViewFeedList';
 
-const todayISO = () => new Date().toISOString().slice(0, 10);
+const todayISO = todayDateKey;
 
 export default function Today() {
+  useCalendarDay();
   const { t } = useTranslation();
   const { data: items = [], isLoading, isError } = useFeedQuery('today');
 

@@ -1,3 +1,4 @@
+import { toDateKey, todayDateKey, parseCalendarDate } from '@/utils/date';
 /**
  * 状态栏常驻通知的内容组装（android-status-bar，滴答清单形态）。
  *
@@ -13,20 +14,21 @@ export interface StatusBarTaskInput {
   sortOrder: number;
 }
 
-/** 逾期 = 计划日期的日历日早于今天（本地时区口径，与 Today 视图同源）。 */
+/** 逾期 = 计划日期的日历日早于今天（账号时区口径，与 Today 视图同源）。 */
 function isOverdueDate(scheduledDate: string | null, now: Date): boolean {
   if (!scheduledDate) return false;
-  const date = new Date(scheduledDate);
-  if (Number.isNaN(date.getTime())) return false;
-  const dayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  return date.getTime() < dayStart.getTime();
+  try {
+    return toDateKey(scheduledDate) < todayDateKey(now);
+  } catch {
+    return false;
+  }
 }
 
 /** Today 口径任务按展示顺序排序：日期升序（逾期在前）、同日 sortOrder。 */
 export function sortStatusBarTasks(tasks: StatusBarTaskInput[]): StatusBarTaskInput[] {
   return [...tasks].sort((a, b) => {
-    const da = a.scheduledDate ?? '';
-    const db = b.scheduledDate ?? '';
+    const da = a.scheduledDate ? toDateKey(a.scheduledDate) : '';
+    const db = b.scheduledDate ? toDateKey(b.scheduledDate) : '';
     if (da !== db) {
       if (!da) return 1;
       if (!db) return -1;
@@ -39,7 +41,7 @@ export function sortStatusBarTasks(tasks: StatusBarTaskInput[]): StatusBarTaskIn
 /** 单条任务的标题文本：逾期带 M/d 前缀。 */
 export function taskLine(task: StatusBarTaskInput, now: Date): string {
   if (!isOverdueDate(task.scheduledDate, now)) return task.title;
-  const date = new Date(task.scheduledDate!);
+  const date = parseCalendarDate(task.scheduledDate!);
   return `${date.getMonth() + 1}/${date.getDate()} · ${task.title}`;
 }
 

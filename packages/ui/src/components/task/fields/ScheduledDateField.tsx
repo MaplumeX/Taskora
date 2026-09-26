@@ -1,16 +1,22 @@
+import {
+  useCalendarDay,
+  parseCalendarDate,
+  toInputDateValue,
+  usePreferencesStore,
+  startOfToday,
+  startOfTomorrow,
+  useReminderPermissionStore,
+} from '@taskora/api';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { ScheduledFieldCurrent, ScheduledFieldPatch } from './fieldProps';
 import { ScheduledType } from '@taskora/shared';
-import { usePreferencesStore } from '@taskora/api';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
-import { startOfToday, startOfTomorrow } from '@taskora/api';
-import { useReminderPermissionStore } from '@taskora/api';
 
-import { getCalendarLocale, startOfLocalDay } from './calendarFieldUtils';
+import { getCalendarLocale } from './calendarFieldUtils';
 
 interface FieldProps {
   current: ScheduledFieldCurrent;
@@ -33,6 +39,7 @@ export function ScheduledDateField({
   onClose,
   showReminder = false,
 }: FieldProps) {
+  useCalendarDay();
   const { t, i18n } = useTranslation();
   const weekStartsOn = usePreferencesStore((s) => s.weekStartsOn);
   const permission = useReminderPermissionStore((s) => s.permission);
@@ -44,7 +51,7 @@ export function ScheduledDateField({
   const scheduledType = current.scheduledType ?? ScheduledType.NONE;
   const selectedDate =
     scheduledType === ScheduledType.DATE && current.scheduledDate
-      ? new Date(current.scheduledDate)
+      ? parseCalendarDate(current.scheduledDate)
       : undefined;
 
   const locale = getCalendarLocale(i18n.language);
@@ -61,7 +68,7 @@ export function ScheduledDateField({
     if (!date) return;
     onPatch({
       scheduledType: ScheduledType.DATE,
-      scheduledDate: startOfLocalDay(date).toISOString(),
+      scheduledDate: toInputDateValue(date),
     });
     onClose?.();
   };
@@ -69,7 +76,7 @@ export function ScheduledDateField({
   const handleToday = () => {
     onPatch({
       scheduledType: ScheduledType.DATE,
-      scheduledDate: startOfToday().toISOString(),
+      scheduledDate: toInputDateValue(startOfToday()),
     });
     onClose?.();
   };
@@ -77,7 +84,7 @@ export function ScheduledDateField({
   const handleTomorrow = () => {
     onPatch({
       scheduledType: ScheduledType.DATE,
-      scheduledDate: startOfTomorrow().toISOString(),
+      scheduledDate: toInputDateValue(startOfTomorrow()),
     });
     onClose?.();
   };

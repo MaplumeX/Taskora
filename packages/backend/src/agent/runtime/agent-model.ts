@@ -1,5 +1,5 @@
 import type { Model } from '@earendil-works/pi-ai';
-import { AGENT_THINKING_LEVELS } from '@taskora/shared';
+import { AGENT_THINKING_LEVELS, instantDateKey } from '@taskora/shared';
 import type { ResolvedAgentConfig } from '../byok/agent-config.service';
 import { normalizeBaseUrl } from '../byok/agent-config.service';
 
@@ -41,8 +41,11 @@ Guidelines:
 - Never invent ids: look them up with list/search tools first.`;
 
 /** Fill the system prompt with the current date. */
-export function renderSystemPrompt(now = new Date()): string {
-  return AGENT_SYSTEM_PROMPT.replace('{currentDate}', now.toISOString().slice(0, 10));
+export function renderSystemPrompt(now = new Date(), timeZone = 'UTC'): string {
+  return AGENT_SYSTEM_PROMPT.replace(
+    '{currentDate}',
+    `${instantDateKey(now, timeZone)} (${timeZone})`,
+  );
 }
 
 /**

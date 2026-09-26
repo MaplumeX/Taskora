@@ -1,6 +1,7 @@
 import axios from 'axios';
 import type { AuthResponseDto } from '@taskora/shared';
 
+import { hydrateFromServer } from '@/stores/preferences.store';
 import { useAuthStore } from '@/stores/auth.store';
 import { getTokenStore, readRefreshToken } from '@/token-store';
 
@@ -85,6 +86,8 @@ export function refreshSession(): Promise<AuthResponseDto> {
           refreshRequestBody(),
           { timeout: 15_000 },
         );
+        // Apply the account calendar before waking engine/session listeners.
+        hydrateFromServer(data.user.preferences ?? null);
         // Commit rotating credentials before exposing the new session.
         await useAuthStore.getState().setAuth(data.accessToken, data.user, data.refreshToken);
         return data;

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-import type { UserPreferences } from '@taskora/shared';
+import { deviceTimeZone, isValidTimeZone, type UserPreferences } from '@taskora/shared';
 
 import { i18n } from '@/i18n/config';
 import {
@@ -44,6 +44,9 @@ function initialLanguage(): Language {
 }
 
 interface PreferencesState {
+  timeZone: string;
+  legacyDateTimeZone: string;
+  setTimeZone: (zone: string) => void;
   theme: ThemeMode;
   language: Language;
   weekStartsOn: WeekStartsOn;
@@ -107,6 +110,11 @@ function applyLanguageSideEffect(language: Language) {
 export const usePreferencesStore = create<PreferencesState>()(
   persist(
     (set, get) => ({
+      timeZone: deviceTimeZone(),
+      legacyDateTimeZone: deviceTimeZone(),
+      setTimeZone: (zone) => {
+        if (isValidTimeZone(zone)) set({ timeZone: zone });
+      },
       theme: 'system',
       language: initialLanguage(),
       weekStartsOn: 1,
@@ -134,20 +142,39 @@ export const usePreferencesStore = create<PreferencesState>()(
         // against the same whitelists used for localStorage rehydration.
         // Missing fields fall back to the current local values so partial
         // server payloads never clobber local preferences.
-        const { theme, language, weekStartsOn, bucketGrouping } = normalizePreferences(prefs, {
-          theme: get().theme,
-          language: get().language,
-          weekStartsOn: get().weekStartsOn,
-          bucketGrouping: get().bucketGrouping,
-        });
+        const { theme, language, weekStartsOn, bucketGrouping, timeZone } = normalizePreferences(
+          prefs,
+          {
+            timeZone: get().timeZone,
+            theme: get().theme,
+            language: get().language,
+            weekStartsOn: get().weekStartsOn,
+            bucketGrouping: get().bucketGrouping,
+          },
+        );
         applyTheme(theme);
         applyLanguageSideEffect(language);
-        set({ theme, language, weekStartsOn, bucketGrouping, resolved: resolveTheme(theme) });
+        const legacyZone = isValidTimeZone(prefs.legacyDateTimeZone)
+          ? prefs.legacyDateTimeZone
+          : isValidTimeZone(prefs.timeZone)
+            ? prefs.timeZone
+            : get().legacyDateTimeZone;
+        set({
+          theme,
+          language,
+          weekStartsOn,
+          bucketGrouping,
+          timeZone,
+          legacyDateTimeZone: legacyZone,
+          resolved: resolveTheme(theme),
+        });
       },
     }),
     {
       name: STORAGE_KEY,
       partialize: (state) => ({
+        timeZone: state.timeZone,
+        legacyDateTimeZone: state.legacyDateTimeZone,
         theme: state.theme,
         language: state.language,
         weekStartsOn: state.weekStartsOn,
@@ -157,14 +184,22 @@ export const usePreferencesStore = create<PreferencesState>()(
         // When the unified key is absent (first load after upgrade), fall back
         // to the legacy keys so existing users migrate transparently.
         const raw = persisted ?? readLegacyState();
-        const { theme, language, weekStartsOn, bucketGrouping } = normalizePreferences(raw, {
-          theme: current.theme,
-          language: current.language,
-          weekStartsOn: current.weekStartsOn,
-          bucketGrouping: current.bucketGrouping,
-        });
+        const { theme, language, weekStartsOn, bucketGrouping, timeZone } = normalizePreferences(
+          raw,
+          {
+            timeZone: current.timeZone,
+            theme: current.theme,
+            language: current.language,
+            weekStartsOn: current.weekStartsOn,
+            bucketGrouping: current.bucketGrouping,
+          },
+        );
         return {
           ...current,
+          timeZone,
+          legacyDateTimeZone: isValidTimeZone((raw as Partial<PreferencesState>).legacyDateTimeZone)
+            ? (raw as PreferencesState).legacyDateTimeZone
+            : timeZone,
           theme,
           language,
           weekStartsOn,
