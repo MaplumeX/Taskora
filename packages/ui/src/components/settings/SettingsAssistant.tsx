@@ -165,7 +165,7 @@ export default function SettingsAssistant() {
         <p className="text-xs text-muted-foreground">{t('settings:assistantModelIdHint')}</p>
       </section>
 
-      <section className="flex items-start justify-between gap-4 rounded-xl border border-border bg-muted/30 px-4 py-3">
+      <section className="flex items-start justify-between gap-4 rounded-xl border border-border bg-muted/30 px-4 py-3 max-md:flex-col">
         <div className="space-y-1">
           <Label htmlFor="agent-thinking">{t('settings:assistantThinking')}</Label>
           <p className="text-xs text-muted-foreground">{t('settings:assistantThinkingHint')}</p>
