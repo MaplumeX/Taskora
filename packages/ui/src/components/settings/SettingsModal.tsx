@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { SunMedium, User, Download, Info, Bot, SlidersHorizontal, type LucideIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import { useIsDesktop } from '@/lib/use-media-query';
+import { useIsDesktop } from '../../lib/use-media-query';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
