@@ -16,5 +16,7 @@ if (!existsSync(resources)) {
 
 // Tauri's generated Android project contains its template launcher icon.
 // The checked-in icons are the source of truth; bundle.icon only covers desktop.
+// Regenerate them with `python3 scripts/generate-android-icons.py` — never
+// with `tauri icon`, which shrinks the artwork into the adaptive safe zone.
 cpSync(icons, resources, { recursive: true, force: true })
 console.log(`Synced Taskora Android launcher icons to ${resources}`)
