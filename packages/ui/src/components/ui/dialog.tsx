@@ -26,14 +26,26 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = React.forwardRef<
   React.ElementRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    /**
+     * 移动端全屏变体：去掉居中 transform 与最大宽度，让内容铺开成整页。
+     *
+     * 为何需要：fixed 定位的 containing block 由最近的 transform 祖先决定。
+     * 基础样式用 translate(-50%,-50%) 居中，任何想相对 viewport 全屏的
+     * 子面板都会被拉进弹窗盒。全屏变体在 <md 下去掉 transform，同时切回
+     * 静态流式布局，子面板即可正确铺满视口；md 起恢复居中弹窗。
+     */
+    mobileFullscreen?: boolean;
+  }
+>(({ className, children, mobileFullscreen = false, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-border/50 bg-background p-6 shadow-lift duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-xl max-md:max-w-[calc(100vw-1.5rem)]',
+        mobileFullscreen
+          ? 'fixed inset-0 z-50 flex w-full flex-col border-0 bg-background shadow-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 md:left-[50%] md:top-[50%] md:grid md:max-w-lg md:translate-x-[-50%] md:translate-y-[-50%] md:gap-4 md:border md:border-border/50 md:p-6 md:shadow-lift md:sm:rounded-xl'
+          : 'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 border border-border/50 bg-background p-6 shadow-lift duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 sm:rounded-xl max-md:max-w-[calc(100vw-1.5rem)]',
         className,
       )}
       {...props}
