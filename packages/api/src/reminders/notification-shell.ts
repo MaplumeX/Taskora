@@ -44,17 +44,18 @@ export function getNotificationShell(): ReminderNotificationShell | null {
 }
 
 /**
- * 字符串 key → 稳定 32 位数字通知 id（tauri-plugin-notification 的
- * Options.id 要求数字）。FNV-1a：同 key 恒等映射，跨进程重启后注销
- * 仍能命中同一系统通知。
+ * 字符串 key → 稳定有符号 32 位数字通知 id（tauri-plugin-notification
+ * 的 Rust/原生 Notification id 均为 i32/Int）。FNV-1a 的结果解释为
+ * 有符号值：同 key 恒等映射，跨进程重启后注销仍能命中同一系统通知；
+ * 不改写历史中已注册成功的正数 id。
  */
 export function notificationIdForKey(key: string): number {
   let hash = 0x811c9dc5;
   for (let i = 0; i < key.length; i++) {
     hash ^= key.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193) >>> 0;
+    hash = Math.imul(hash, 0x01000193);
   }
-  return hash >>> 0;
+  return hash | 0;
 }
 
 /** Engine ReplicaRow → 调度输入（字段级取值，缺省按 null/ACTIVE 处理）。 */
