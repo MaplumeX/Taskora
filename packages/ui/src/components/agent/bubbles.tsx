@@ -11,7 +11,7 @@ export function UserBubble({ text }: { text: string }) {
   const { t } = useTranslation(['agent']);
   return (
     <div className="flex justify-end">
-      <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-3xl rounded-br-lg bg-primary px-4 py-2.5 text-sm text-primary-foreground">
+      <div className="max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md bg-primary px-4 py-2.5 text-sm text-primary-foreground">
         <span className="sr-only">{t('you')}: </span>
         {text}
       </div>
@@ -155,7 +155,7 @@ export function ToolCallCard({ item }: { item: Extract<ChatItem, { kind: 'tool' 
           <div className="space-y-2 border-t border-border/60 px-3 py-2">
             {argSummary ? (
               <div>
-                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                <p className="mb-1 text-meta font-medium text-muted-foreground">
                   {t('toolArgs')}
                 </p>
                 <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-background/70 p-2 font-mono text-[11px] leading-relaxed text-foreground/90">
@@ -165,7 +165,7 @@ export function ToolCallCard({ item }: { item: Extract<ChatItem, { kind: 'tool' 
             ) : null}
             {item.resultText && item.status !== 'running' ? (
               <div>
-                <p className="mb-1 text-[11px] font-medium uppercase tracking-wide text-muted-foreground/80">
+                <p className="mb-1 text-meta font-medium text-muted-foreground">
                   {t('toolResult')}
                 </p>
                 <pre

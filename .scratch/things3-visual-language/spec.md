@@ -1,6 +1,6 @@
 # 视觉语言改版：Things 3 式「纸面安静感」
 
-Status: in progress (01–08 done)
+Status: in progress (01–09 done)
 
 把 Web / 桌面 / 手机三端的视觉语言从「暖米色 + 柔紫 + 颗粒纹理」统一改为 Things 3 式的安静界面：白纸内容区、浅灰侧边栏、蓝色只做选中与交互、黄 / 红 / 绿只承载 CONTEXT.md 已定义的语义（今天 / Deadline / 了结）。改版覆盖 token、基础组件、业务组件与动效，不改数据模型与交互流程。相关：`.scratch/things3-when-display/`、`.scratch/things3-ownership-display/`（行内信息结构）、`.scratch/calendar-dense-grid/spec.md`（日历网格）。
 

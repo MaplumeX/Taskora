@@ -22,6 +22,7 @@ import { toast } from 'sonner';
 import type { FeedItem, TaskResponseDto } from '@taskora/shared';
 import { cn } from '@/lib/utils';
 import { EmptyState } from '@/components/common/EmptyState';
+import { PageHeading } from '@/components/layout/PageHeading';
 
 export default function Trash() {
   const { t } = useTranslation();
@@ -47,7 +48,7 @@ export default function Trash() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-title-1">{t('nav:trash')}</h1>
+        <PageHeading nav="/trash">{t('nav:trash')}</PageHeading>
         <Button
           variant="ghost"
           size="sm"

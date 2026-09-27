@@ -87,7 +87,7 @@ export function CalendarMonthGrid({
         {weekdayLabels.map((label, i) => (
           <span
             key={label}
-            className="pb-1 text-center text-[11px] font-medium text-muted-foreground md:pb-1.5 md:text-xs md:uppercase md:tracking-wide"
+            className="pb-1 text-center text-[11px] font-medium text-muted-foreground md:pb-1.5 md:text-meta"
           >
             <span className="md:hidden" aria-hidden>
               {weekdayLabelsNarrow[i]}

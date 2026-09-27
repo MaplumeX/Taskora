@@ -1,7 +1,7 @@
-import { SquareCheckBig, Trash2 } from 'lucide-react';
+import { SquareCheckBig } from 'lucide-react';
 import { useInRouterContext, useLocation } from 'react-router-dom';
 
-import { mainNav } from '@/components/layout/navItems';
+import { mainNav, trashNav } from '@/components/layout/navItems';
 import { cn } from '@/lib/utils';
 
 const ICON_CLASS = 'h-12 w-12 text-muted-foreground/35';
@@ -31,8 +31,7 @@ export function EmptyState({ hint, className }: { hint: string; className?: stri
 
 function RouteBucketIcon() {
   const { pathname } = useLocation();
-  const Icon = pathname.startsWith('/trash')
-    ? Trash2
-    : (mainNav.find((n) => pathname.startsWith(n.to))?.icon ?? SquareCheckBig);
+  const Icon =
+    [...mainNav, trashNav].find((n) => pathname.startsWith(n.to))?.icon ?? SquareCheckBig;
   return <Icon aria-hidden className={ICON_CLASS} strokeWidth={1.25} />;
 }

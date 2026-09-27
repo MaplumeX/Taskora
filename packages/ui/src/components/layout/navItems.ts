@@ -5,6 +5,7 @@ import {
   CloudSun,
   Inbox,
   Notebook,
+  Trash2,
   Sun,
   type LucideIcon,
 } from 'lucide-react';
@@ -27,3 +28,11 @@ export const mainNav: NavItem[] = [
   { to: '/someday', labelKey: 'nav:someday', icon: CloudSun, colorClass: 'text-nav-someday' },
   { to: '/logbook', labelKey: 'nav:logbook', icon: Notebook, colorClass: 'text-nav-logbook' },
 ];
+
+/** 废纸篓（不属于主导航；侧边栏工具组 / 页面标题 / 空状态共用）。 */
+export const trashNav: NavItem = {
+  to: '/trash',
+  labelKey: 'nav:trash',
+  icon: Trash2,
+  colorClass: 'text-muted-foreground',
+};

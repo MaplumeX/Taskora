@@ -3,7 +3,6 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   ChevronDown,
   Tags as TagsIcon,
-  Trash2,
   Settings,
   Notebook,
   Bot,
@@ -19,7 +18,7 @@ import { useLogout } from '@taskora/api';
 import { ProjectStatus } from '@taskora/shared';
 import { SidebarBottomBar } from '@/components/layout/SidebarBottomBar';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
-import { mainNav, type NavItem } from '@/components/layout/navItems';
+import { mainNav, trashNav, type NavItem } from '@/components/layout/navItems';
 import { sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import { useBucketCounts } from '@/components/layout/useBucketCounts';
 
@@ -38,7 +37,7 @@ const SIDEBAR_ASSISTANT_NAV: NavItem[] = [
 /** 日志 + 废纸篓：位于主导航与区域之间的中间分组 */
 const SIDEBAR_UTILITIES_NAV: NavItem[] = [
   { to: '/logbook', labelKey: 'nav:logbook', icon: Notebook, colorClass: 'text-nav-logbook' },
-  { to: '/trash', labelKey: 'nav:trash', icon: Trash2, colorClass: 'text-muted-foreground' },
+  trashNav,
 ];
 import { useUiInteractionStore } from '@taskora/api';
 import { useProjectsQuery } from '@taskora/api';
