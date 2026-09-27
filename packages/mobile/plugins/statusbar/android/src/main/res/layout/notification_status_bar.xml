@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 状态栏常驻通知的单行布局（issue 02，滴答清单形态）：
+     任务标题（单行截断）+ 大点击区的「▸」「＋」图标按钮。
+     高度 48dp 是 Android 折叠态通知的官方保守值（research.md §3.5-10）。
+     文本样式用系统通知外观，自动跟随亮暗主题。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:gravity="center_vertical"
+    android:orientation="horizontal">
+
+    <TextView
+        android:id="@+id/status_bar_task_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:ellipsize="end"
+        android:singleLine="true"
+        android:textAppearance="@style/TextAppearance.Compat.Notification.Title" />
+
+    <ImageView
+        android:id="@+id/status_bar_btn_next"
+        android:layout_width="44dp"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/status_bar_next_task"
+        android:padding="10dp"
+        android:src="@drawable/ic_status_bar_next" />
+
+    <ImageView
+        android:id="@+id/status_bar_btn_add"
+        android:layout_width="44dp"
+        android:layout_height="match_parent"
+        android:contentDescription="@string/status_bar_quick_add"
+        android:padding="10dp"
+        android:src="@drawable/ic_status_bar_add" />
+</LinearLayout>

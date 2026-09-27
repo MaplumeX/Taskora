@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="quick_add_card_bg">#FFFFFF</color>
+    <color name="quick_add_text">#DE000000</color>
+    <color name="quick_add_text_hint">#61000000</color>
+    <color name="quick_add_accent">#3B82C4</color>
+</resources>

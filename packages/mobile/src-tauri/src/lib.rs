@@ -102,6 +102,8 @@ pub fn run() {
     tauri::Builder::default()
         // 系统通知（Reminders spec）：系统级定时通知（App 关闭仍触发）。
         .plugin(tauri_plugin_notification::init())
+        // 状态栏快速添加（android-status-bar issue 02）：单行自定义布局。
+        .plugin(tauri_plugin_statusbar::init())
         .setup(|app| {
             // Local Replica 目录注册（ADR-0007）。Builder 的 setup 与
             // invoke_handler 都是「替换」语义，全部命令集中在下方唯一的
