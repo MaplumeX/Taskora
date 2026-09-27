@@ -3,5 +3,8 @@
   "previous": "Previous",
   "next": "Next",
   "monthGridLabel": "Month grid",
-  "overflowMore": "+{{count}} more"
+  "overflowMore": "+{{count}} more",
+  "dayCellLabel_one": "{{date}}, {{count}} task",
+  "dayCellLabel_other": "{{date}}, {{count}} tasks",
+  "dayEmpty": "No tasks on this day"
 }

@@ -8,7 +8,8 @@ import { cn } from '@/lib/utils';
  * Canvas-style pages break out of the narrow `max-w-2xl` list container and
  * fill the main content area (full width + viewport height; the page content
  * itself stretches to fill, scrolling only as a short-viewport fallback).
- * `/calendar` keeps a small inset; the Assistant chat (`/agent`) goes full
+ * `/calendar` keeps a small inset on wide screens and goes edge-to-edge on
+ * small ones (its dense month grid needs every pixel; the page pads its header); the Assistant chat (`/agent`) goes full
  * bleed like ChatGPT — the page manages its own padding and scroll.
  * On small screens these h-full containers must clear the bottom safe-area
  * inset (gesture bar), otherwise the calendar's last grid row / the chat
@@ -46,7 +47,7 @@ export function MainContent() {
           fullBleed
             ? 'h-full max-md:pb-[env(safe-area-inset-bottom)]'
             : canvas
-              ? 'h-full px-3 pt-2 md:px-6 md:pt-4 max-md:pb-[env(safe-area-inset-bottom)]'
+              ? 'h-full pt-2 md:px-6 md:pt-4 max-md:pb-[env(safe-area-inset-bottom)]'
               : 'max-w-2xl px-4 pb-24 pt-2 md:px-6 md:pb-12 md:pt-8',
         )}
       >
