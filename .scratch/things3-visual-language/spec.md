@@ -73,7 +73,7 @@ Bucket 图标色（新增 `--nav-inbox` / `--nav-today` / `--nav-upcoming` / `--
 
 ### 动效
 
-- 曲线：`--ease-spring: cubic-bezier(0.32, 0.72, 0, 1)`（弹出类：菜单、Switch、勾选）；`--ease-expand: cubic-bezier(0.45, 0, 0.2, 1)`（展开 / 收起，前后均匀，spring 过于前倾会显得一闪而过）。时长 `--dur-fast: 120ms`、`--dur-base: 200ms`、`--dur-slow: 320ms`、`--dur-expand: 450ms`，Tailwind 中用 `duration-fast/base/slow/expand`（不要写 `duration-[var(...)]`：与 tailwindcss-animate 冲突，不生成 CSS）。
+- 曲线：`--ease-spring: cubic-bezier(0.32, 0.72, 0, 1)`（弹出类：菜单、Switch、勾选）；`--ease-expand: cubic-bezier(0.45, 0, 0.2, 1)`（展开 / 收起，前后均匀，spring 过于前倾会显得一闪而过）。时长 `--dur-fast: 120ms`、`--dur-base: 200ms`、`--dur-slow: 320ms`、`--dur-expand: 300ms`，Tailwind 中用 `duration-fast/base/slow/expand`（不要写 `duration-[var(...)]`：与 tailwindcss-animate 冲突，不生成 CSS）。
 - 移除按钮 `active:scale`；按压反馈改为背景加深。
 - `prefers-reduced-motion` 下所有位移 / 缩放动画降级为瞬时或纯透明度变化。
 

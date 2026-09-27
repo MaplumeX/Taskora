@@ -28,7 +28,7 @@ import { TaskRowExpanded } from './TaskRowExpanded';
 import { useCompletionRhythm } from './useCompletionRhythm';
 
 /** 展开 / 收起详情的时长，与 tokens.css 的 --dur-expand 一致。 */
-const EXPAND_MS = 450;
+const EXPAND_MS = 300;
 import type { SelectionState } from '@taskora/api';
 
 interface Props {
