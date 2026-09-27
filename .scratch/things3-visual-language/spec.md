@@ -85,7 +85,7 @@ Bucket 图标色（亮色下深色调以在侧边栏底上 ≥ 3:1；黄色 Toda
 - **Input / Textarea**：默认为表单样式（1px `--input` 边框、聚焦时蓝边 + 3px 蓝色光晕）；任务内编辑沿用调用点的无边框覆盖（`border-0 shadow-none focus-visible:ring-0`），不另设变体。
 - **Popover / DropdownMenu / Tooltip**：`--popover` 底 + `backdrop-blur-xl` + 90% 不透明；`shadow-popover`；圆角 10px；菜单项高 28px、圆角 6px、hover / 键盘高亮为 `bg-primary text-primary-foreground`（macOS 菜单式），破坏性项高亮为红底白字；分隔线上下 4px。
 - **Dialog / Drawer**：圆角 12px；遮罩 `black/20`（亮）/ `black/50`（暗）；出现为 opacity + scale(0.97→1)，200ms spring。
-- **Switch**：iOS 式，开启为 `--success` 绿（Things 设置页一致）。
+- **Switch**：开启为主题色（窄屏按 Material 3 尺寸放大，见 `.scratch/mobile-settings-material/spec.md`）。
 - **Separator**：默认 0.5px（高 DPR 下 `scaleY(0.5)`）。
 
 ### 任务行（`TaskItem` / `TaskCheckbox`）

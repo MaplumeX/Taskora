@@ -128,7 +128,6 @@ export default function SettingsAssistant() {
           <SettingsRow
             label={t('settings:assistantProvider')}
             value={providerLabel}
-            chevron
             onClick={() =>
               mobileNav.push({
                 title: t('settings:assistantProvider'),
