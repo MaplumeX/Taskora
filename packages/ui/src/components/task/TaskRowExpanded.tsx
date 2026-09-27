@@ -1,5 +1,14 @@
 import * as React from 'react';
-import { Calendar, CircleSlash, Clock, ListPlus, Repeat, Tag, Trash2 } from 'lucide-react';
+import {
+  Calendar,
+  CircleSlash,
+  Flag,
+  ListPlus,
+  Repeat,
+  Star,
+  Tag,
+  Trash2,
+} from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
@@ -10,14 +19,19 @@ import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { Input } from '@/components/ui/input';
 import { MarkdownNotesEditor } from '@/components/common/MarkdownNotesEditor';
-import { Separator } from '@/components/ui/separator';
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { FieldPicker } from '@/components/common/FieldPicker';
 import { MenuRow } from '@/components/common/MenuRow';
 import { useLongPress } from '../../lib/useLongPress';
 import { cn } from '@/lib/utils';
 import {
+  formatDeadlineCountdown,
+  formatShortDate,
   getClientKind,
+  isOverdue,
+  isToday,
+  parseCalendarDate,
+  startOfTomorrow,
   taskKeys,
   useCancelSubtask,
   useCompleteSubtask,
@@ -98,8 +112,27 @@ export function TaskRowExpanded({ task, current }: Props) {
     requestAnimationFrame(() => subtaskInputRef.current?.focus());
   };
 
+  // 已设值字段在左下显示为 chip（点击打开同一编辑器），未设值字段在右下为图标
+  // （Things 3 展开任务的底栏）。
+  const scheduledChip = (() => {
+    if (scheduledType === ScheduledType.SOMEDAY) return { text: t('nav:someday') };
+    if (scheduledType !== ScheduledType.DATE || !current.scheduledDate) return null;
+    const date = parseCalendarDate(current.scheduledDate);
+    const onOrBeforeToday = date < startOfTomorrow();
+    const label = onOrBeforeToday ? t('common:today') : formatShortDate(date);
+    return {
+      text: current.reminderTime ? `${label} ${current.reminderTime}` : label,
+      icon: onOrBeforeToday ? <Star className="h-3.5 w-3.5 fill-today text-today" /> : undefined,
+    };
+  })();
+  const dueDate = current.dueDate ? parseCalendarDate(current.dueDate) : null;
+  const tags = current.tags ?? [];
+
   return (
-    <div className="flex flex-col gap-3 px-2 pb-3 pt-1" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="flex flex-col gap-3 px-2 pb-2 pl-[2.375rem] pt-1 animate-in fade-in-0 slide-in-from-top-2 duration-[var(--dur-slow)] ease-spring max-md:pl-2"
+      onClick={(e) => e.stopPropagation()}
+    >
       <MarkdownNotesEditor
         value={notes}
         onChange={setNotes}
@@ -107,17 +140,15 @@ export function TaskRowExpanded({ task, current }: Props) {
         placeholder={t('task:notePlaceholder')}
       />
 
-      <Separator />
-
       {subtasksOpen && (
-        <div className="flex flex-col gap-2">
-          <h3 className="text-xs font-medium text-muted-foreground">
+        <div className="flex flex-col gap-1">
+          <h3 className="text-meta font-medium text-muted-foreground">
             {subtasks.length > 0
               ? `${t('task:subtasks')} (${subtasks.length})`
               : t('task:subtasks')}
           </h3>
           {subtasks.length > 0 && (
-            <ul className="flex flex-col gap-0.5">
+            <ul className="flex flex-col">
               {subtasks.map((c) => (
                 <SubtaskRow key={c.id} subtask={c} taskId={task.id} onMutated={invalidateParent} />
               ))}
@@ -137,85 +168,153 @@ export function TaskRowExpanded({ task, current }: Props) {
             }}
             onClick={(e) => e.stopPropagation()}
             placeholder={t('task:addSubtask')}
-            className="mt-1 h-8 text-sm"
+            className="h-7 border-0 bg-transparent px-0 text-body shadow-none placeholder:text-muted-foreground/70 focus-visible:ring-0"
           />
         </div>
       )}
 
       <div className="flex flex-wrap items-center gap-1">
-        <IconPopover
-          label={t('task:scheduledDate')}
-          icon={<Calendar className="h-4 w-4" />}
-          active={scheduledType !== ScheduledType.NONE}
-        >
-          {(close) => (
-            <ScheduledDateField
-              current={current}
-              onPatch={patch}
-              onClose={close}
-              showReminder={getClientKind() !== 'web'}
-            />
-          )}
-        </IconPopover>
-
-        {/* 重复规则是独立入口（不内嵌于计划 popover）：仅 DATE 型任务
-            显示（规则需要计划日期作锚点，Someday/NONE 不提供该选项）。 */}
-        {scheduledType === ScheduledType.DATE && (
-          <IconPopover
-            label={t('task:repeat')}
-            icon={<Repeat className="h-4 w-4" />}
-            active={!!current.repeatRule}
+        {scheduledChip && (
+          <FieldChip
+            label={t('task:scheduledDate')}
+            icon={scheduledChip.icon ?? <Calendar />}
+            text={scheduledChip.text}
           >
+            {(close) => (
+              <ScheduledDateField
+                current={current}
+                onPatch={patch}
+                onClose={close}
+                showReminder={getClientKind() !== 'web'}
+              />
+            )}
+          </FieldChip>
+        )}
+        {current.repeatRule && scheduledType === ScheduledType.DATE && (
+          <FieldChip label={t('task:repeat')} icon={<Repeat />} text={t('task:repeat')}>
             <RepeatRuleField current={current} onPatch={patch} />
-          </IconPopover>
+          </FieldChip>
+        )}
+        {tags.length > 0 && (
+          <FieldChip
+            label={t('task:tags')}
+            icon={<Tag />}
+            text={tags.map((tag) => tag.title).join(', ')}
+          >
+            <TagsField current={current} onPatch={patch} />
+          </FieldChip>
+        )}
+        {dueDate && (
+          <FieldChip
+            label={t('task:dueDate')}
+            icon={<Flag />}
+            text={formatDeadlineCountdown(dueDate)}
+            urgent={isOverdue(dueDate) || isToday(dueDate)}
+          >
+            {(close) => <DueDateField current={current} onPatch={patch} onClose={close} />}
+          </FieldChip>
         )}
 
-        <IconPopover
-          label={t('task:dueDate')}
-          icon={<Clock className="h-4 w-4" />}
-          active={!!current.dueDate}
-        >
-          {(close) => <DueDateField current={current} onPatch={patch} onClose={close} />}
-        </IconPopover>
+        <div className="ml-auto flex items-center gap-0.5">
+          {!scheduledChip && (
+            <IconPopover label={t('task:scheduledDate')} icon={<Calendar className="h-4 w-4" />}>
+              {(close) => (
+                <ScheduledDateField
+                  current={current}
+                  onPatch={patch}
+                  onClose={close}
+                  showReminder={getClientKind() !== 'web'}
+                />
+              )}
+            </IconPopover>
+          )}
 
-        <IconPopover
-          label={t('task:tags')}
-          icon={<Tag className="h-4 w-4" />}
-          active={(current.tags ?? []).length > 0}
-        >
-          <TagsField current={current} onPatch={patch} />
-        </IconPopover>
+          {/* 重复规则是独立入口（不内嵌于计划 popover）：仅 DATE 型任务
+              显示（规则需要计划日期作锚点，Someday/NONE 不提供该选项）。 */}
+          {scheduledType === ScheduledType.DATE && !current.repeatRule && (
+            <IconPopover label={t('task:repeat')} icon={<Repeat className="h-4 w-4" />}>
+              <RepeatRuleField current={current} onPatch={patch} />
+            </IconPopover>
+          )}
 
-        {subtasks.length === 0 && (
-          <Hint label={t('task:addSubtask')}>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground max-md:h-11 max-md:w-11"
-              aria-label={t('task:addSubtask')}
-              onClick={(e) => {
-                e.stopPropagation();
-                openSubtasks();
-              }}
-            >
-              <ListPlus className="h-4 w-4" />
-            </Button>
-          </Hint>
-        )}
+          {tags.length === 0 && (
+            <IconPopover label={t('task:tags')} icon={<Tag className="h-4 w-4" />}>
+              <TagsField current={current} onPatch={patch} />
+            </IconPopover>
+          )}
+
+          {subtasks.length === 0 && (
+            <Hint label={t('task:addSubtask')}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground max-md:h-11 max-md:w-11"
+                aria-label={t('task:addSubtask')}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openSubtasks();
+                }}
+              >
+                <ListPlus className="h-4 w-4" />
+              </Button>
+            </Hint>
+          )}
+
+          {!dueDate && (
+            <IconPopover label={t('task:dueDate')} icon={<Flag className="h-4 w-4" />}>
+              {(close) => <DueDateField current={current} onPatch={patch} onClose={close} />}
+            </IconPopover>
+          )}
+        </div>
       </div>
     </div>
+  );
+}
+
+/** 已设值字段的 chip：图标 + 值文案，点击打开字段编辑器。 */
+function FieldChip({
+  label,
+  icon,
+  text,
+  urgent,
+  children,
+}: {
+  label: string;
+  icon: React.ReactNode;
+  text: string;
+  urgent?: boolean;
+  children: React.ReactNode | ((close: () => void) => React.ReactNode);
+}) {
+  return (
+    <FieldPicker
+      label={label}
+      tooltip
+      trigger={
+        <button
+          type="button"
+          aria-label={label}
+          className={cn(
+            'inline-flex h-7 max-w-[14rem] items-center gap-1.5 rounded-md bg-muted px-2 text-meta font-medium transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 max-md:h-9 [&_svg]:h-3.5 [&_svg]:w-3.5 [&_svg]:shrink-0',
+            urgent ? 'text-deadline' : 'text-foreground [&_svg]:text-muted-foreground',
+          )}
+        >
+          {icon}
+          <span className="truncate">{text}</span>
+        </button>
+      }
+    >
+      {children}
+    </FieldPicker>
   );
 }
 
 function IconPopover({
   label,
   icon,
-  active,
   children,
 }: {
   label: string;
   icon: React.ReactNode;
-  active?: boolean;
   children: React.ReactNode | ((close: () => void) => React.ReactNode);
 }) {
   return (
@@ -226,10 +325,7 @@ function IconPopover({
         <Button
           variant="ghost"
           size="icon"
-          className={cn(
-            'h-8 w-8 max-md:h-11 max-md:w-11',
-            active ? 'text-primary' : 'text-muted-foreground',
-          )}
+          className="h-7 w-7 text-muted-foreground max-md:h-11 max-md:w-11"
           aria-label={label}
         >
           {icon}
@@ -315,8 +411,13 @@ function SubtaskRow({
   };
 
   return (
-    <li className="flex items-center gap-2 text-sm" onContextMenu={onContextMenu} {...longPress}>
+    <li
+      className="group/subtask flex min-h-7 items-center gap-2 text-body max-md:min-h-11"
+      onContextMenu={onContextMenu}
+      {...longPress}
+    >
       <TaskCheckbox
+        className="h-3 w-3 rounded-full"
         checked={completed}
         cancelled={cancelled}
         onToggle={() =>
@@ -343,7 +444,7 @@ function SubtaskRow({
               setEditing(false);
             }
           }}
-          className="h-8 flex-1 border-0 px-0 text-sm font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
+          className="h-7 flex-1 border-0 bg-transparent px-0 text-body font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0"
         />
       ) : (
         <button
@@ -353,7 +454,11 @@ function SubtaskRow({
             setDraft(subtask.title);
             setEditing(true);
           }}
-          className={cn('flex-1 text-left', settled && 'text-muted-foreground', cancelled && 'line-through')}
+          className={cn(
+            'flex-1 text-left',
+            settled && 'text-muted-foreground',
+            cancelled && 'line-through',
+          )}
         >
           {subtask.title}
         </button>
@@ -372,7 +477,7 @@ function SubtaskRow({
         <Button
           variant="ghost"
           size="icon"
-          className="ml-auto h-8 w-8 text-muted-foreground hover:text-destructive max-md:h-11 max-md:w-11"
+          className="ml-auto h-7 w-7 text-muted-foreground opacity-0 hover:text-destructive focus-visible:opacity-100 group-hover/subtask:opacity-100 max-md:h-11 max-md:w-11 max-md:opacity-100"
           aria-label={t('common:delete')}
           onClick={(e) => {
             e.stopPropagation();

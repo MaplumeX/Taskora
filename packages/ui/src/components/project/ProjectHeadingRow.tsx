@@ -160,7 +160,7 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
                 })
               }
             >
-              <FolderInput className="mr-2 h-4 w-4" />
+              <FolderInput className="h-4 w-4" />
               {t('project:convertToProject')}
             </DropdownMenuItem>
             {archived ? (
@@ -173,7 +173,7 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
                   })
                 }
               >
-                <RotateCcw className="mr-2 h-4 w-4" />
+                <RotateCcw className="h-4 w-4" />
                 {t('project:unarchive')}
               </DropdownMenuItem>
             ) : (
@@ -186,15 +186,15 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
                   })
                 }
               >
-                <Archive className="mr-2 h-4 w-4" />
+                <Archive className="h-4 w-4" />
                 {t('project:archive')}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem
-              className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+              className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
               onSelect={() => setConfirmOpen(true)}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="h-4 w-4" />
               {t('project:deleteHeading')}
             </DropdownMenuItem>
           </DropdownMenuContent>

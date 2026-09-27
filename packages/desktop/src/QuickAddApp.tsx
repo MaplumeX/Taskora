@@ -98,7 +98,7 @@ export function QuickAddApp() {
   };
 
   return (
-    <div className="flex h-screen items-center justify-center bg-background px-3 shadow-lift">
+    <div className="flex h-screen items-center justify-center bg-background px-3 shadow-popover">
       <form onSubmit={handleSubmit} className="w-full">
         <input
           ref={inputRef}

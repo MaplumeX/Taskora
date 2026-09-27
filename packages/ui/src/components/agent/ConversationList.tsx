@@ -101,7 +101,7 @@ export function ConversationList({
                   {t('agent:renameConversation')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
-                  className="text-destructive focus:text-destructive"
+                  className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
                   onClick={() => setDeleting(conversation)}
                 >
                   <Trash2 className="h-3.5 w-3.5" />

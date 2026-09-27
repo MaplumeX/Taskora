@@ -46,7 +46,7 @@ export default function Trash() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-3xl font-semibold tracking-tight">{t('nav:trash')}</h1>
+        <h1 className="text-title-1">{t('nav:trash')}</h1>
         <Button
           variant="ghost"
           size="sm"
@@ -61,7 +61,7 @@ export default function Trash() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : items.length === 0 ? (
-        <p className="py-8 text-center font-display text-base font-semibold text-muted-foreground">
+        <p className="py-8 text-center text-base font-semibold text-muted-foreground">
           {t('task:trashEmpty')}
         </p>
       ) : (

@@ -138,7 +138,7 @@ function MetaBadge({
     <span
       className={cn(
         'inline-flex items-center gap-1 text-xs tabular-nums',
-        urgent ? 'text-destructive' : 'text-muted-foreground',
+        urgent ? 'text-deadline' : 'text-muted-foreground',
       )}
     >
       {icon}

@@ -32,7 +32,7 @@ export default function TagDetail() {
               style={{ backgroundColor: tag.color }}
             />
           )}
-          <h1 className="truncate font-display text-3xl font-semibold tracking-tight">
+          <h1 className="truncate text-title-1">
             {tag?.title ?? t('tag:defaultTitle')}
           </h1>
         </div>

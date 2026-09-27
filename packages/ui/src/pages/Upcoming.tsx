@@ -88,7 +88,7 @@ export default function Upcoming() {
     return (
       <div key={day.dateKey} className="flex flex-col gap-1">
         <div className="flex items-center gap-3">
-          <span className="font-display text-3xl font-semibold tabular-nums leading-none">
+          <span className="text-title-1 tabular-nums leading-none">
             {day.numberLabel}
           </span>
           <span className="text-sm tabular-nums text-muted-foreground">{label}</span>
@@ -109,7 +109,7 @@ export default function Upcoming() {
           {layout.week.map(renderDay)}
           {layout.later.map((month) => (
             <div key={`${month.year}-${month.month}`} className="flex flex-col gap-1">
-              <h2 className="pt-4 font-display text-lg font-semibold tracking-tight">
+              <h2 className="pt-4 text-title-2">
                 {month.headingKind === 'range'
                   ? `${month.month}/${month.rangeStartDay}-${month.month}/${month.rangeEndDay}`
                   : new Intl.DateTimeFormat(

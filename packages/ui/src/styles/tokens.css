@@ -1,0 +1,288 @@
+/*
+ * 三端（frontend / desktop / mobile）共享的主题：Tailwind 入口、设计 token、
+ * base 层与 utilities。各壳的 index.css 只 @import 本文件并追加壳专属样式。
+ */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /*
+   * Things 3 式「纸面安静感」（.scratch/things3-visual-language/spec.md）：
+   * 白纸内容区 + 浅灰侧边栏；蓝色只做交互 / 选中；黄（今天）、红（Deadline）、
+   * 绿（Logbook）只承载语义。
+   */
+  :root {
+    --background: 0 0% 100%;
+    --foreground: 220 9% 15%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 9% 15%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 9% 15%;
+
+    --primary: 213 94% 52%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 9% 15%;
+
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 6% 46%;
+
+    --accent: 220 14% 95%;
+    --accent-foreground: 220 9% 15%;
+
+    --destructive: 3 90% 56%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 220 13% 90%;
+    --input: 220 13% 88%;
+    --ring: 213 94% 52%;
+
+    --sidebar: 220 14% 96%;
+    --sidebar-accent: 220 10% 90%;
+    --selection: 213 100% 94%;
+
+    /* 语义色：今天（黄星）/ Deadline 到期逾期（红，只属于 Deadline）/ 了结 / 提醒警示 */
+    --today: 44 96% 50%;
+    --deadline: 3 90% 56%;
+    --success: 145 58% 40%;
+    --warning: 36 95% 50%;
+
+    /* Bucket 图标色（每个 Bucket 一色） */
+    --nav-inbox: 205 90% 52%;
+    --nav-today: 44 96% 50%;
+    --nav-upcoming: 350 80% 56%;
+    --nav-calendar: 235 70% 60%;
+    --nav-anytime: 175 60% 40%;
+    --nav-someday: 36 70% 48%;
+    --nav-logbook: 145 58% 40%;
+
+    --radius: 0.5rem;
+
+    --ease-spring: cubic-bezier(0.32, 0.72, 0, 1);
+    --dur-fast: 120ms;
+    --dur-base: 200ms;
+    --dur-slow: 320ms;
+
+    /* 阴影色：亮色用前景色，暗色用纯黑 */
+    --shadow-color: 220 9% 15%;
+    --shadow-strength: 1;
+  }
+
+  .dark {
+    --background: 225 6% 13%;
+    --foreground: 220 9% 92%;
+
+    --card: 225 6% 17%;
+    --card-foreground: 220 9% 92%;
+
+    --popover: 225 6% 18%;
+    --popover-foreground: 220 9% 92%;
+
+    --primary: 213 94% 62%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 225 6% 18%;
+    --secondary-foreground: 220 9% 92%;
+
+    --muted: 225 6% 20%;
+    --muted-foreground: 220 6% 62%;
+
+    --accent: 225 6% 20%;
+    --accent-foreground: 220 9% 92%;
+
+    --destructive: 3 85% 62%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 225 6% 24%;
+    --input: 225 6% 26%;
+    --ring: 213 94% 62%;
+
+    --sidebar: 225 6% 16%;
+    --sidebar-accent: 225 6% 23%;
+    --selection: 213 45% 28%;
+
+    --today: 44 96% 56%;
+    --deadline: 3 85% 62%;
+    --success: 145 50% 50%;
+    --warning: 36 95% 56%;
+
+    --nav-inbox: 205 90% 62%;
+    --nav-today: 44 96% 56%;
+    --nav-upcoming: 350 80% 66%;
+    --nav-calendar: 235 80% 72%;
+    --nav-anytime: 175 55% 50%;
+    --nav-someday: 36 75% 58%;
+    --nav-logbook: 145 50% 50%;
+
+    --shadow-color: 0 0% 0%;
+    --shadow-strength: 3;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+    @apply font-sans;
+    font-feature-settings: 'rlig' 1, 'calt' 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /*
+   * 滚动条美化（Things3 风格）：细圆角、平时几乎隐身、悬停时加深。
+   * 颜色取自 --foreground（含透明度），亮/暗主题自动适配。
+   * - Firefox：scrollbar-width/scrollbar-color（不支持 thumb hover 变色）。
+   * - Chromium/WebKit：透明轨道 + padding-box 裁切出细 thumb。
+   */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: hsl(var(--foreground) / 0.18) transparent;
+  }
+  *::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+  *::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--foreground) / 0.18);
+    border-radius: 9999px;
+    /* 透明描边 + padding-box 裁切：10px 槽位里视觉 thumb 只有 6px */
+    border: 2px solid transparent;
+    background-clip: padding-box;
+  }
+  *::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--foreground) / 0.32);
+    border-width: 1px;
+  }
+  *::-webkit-scrollbar-thumb:active {
+    background-color: hsl(var(--foreground) / 0.4);
+  }
+}
+
+@layer utilities {
+  /* Apply tabular figures to data-dense areas */
+  .tabular-nums {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* 展开任务卡片：界面中唯一「浮起」的行 */
+  .shadow-row-lift {
+    box-shadow:
+      0 1px 3px hsl(var(--shadow-color) / calc(0.08 * var(--shadow-strength))),
+      0 8px 24px hsl(var(--shadow-color) / calc(0.12 * var(--shadow-strength)));
+  }
+
+  /* 浮层：Popover、菜单、Dialog、Toast。0.5px 环代替边框 */
+  .shadow-popover {
+    box-shadow:
+      0 0 0 0.5px hsl(var(--shadow-color) / calc(0.1 * var(--shadow-strength))),
+      0 10px 30px hsl(var(--shadow-color) / calc(0.16 * var(--shadow-strength)));
+  }
+
+  /*
+   * 侧边栏条目 hover 高亮（Things3 风格）：进入 hover 即时高亮（transition: none），
+   * 离开时以 150ms 淡出，消除快速滑动时高亮"追不上"光标的滞后感。
+   * reduced-motion 下不做任何渐变。
+   */
+  .hover-instant {
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+  .hover-instant:hover {
+    transition: none;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .hover-instant,
+    .hover-instant:hover {
+      transition: none;
+    }
+  }
+
+  /*
+   * Notes WYSIWYG editor prose overrides.
+   * Tiptap renders rich text inside .notes-prose; we override the
+   * typography plugin's gray-scale defaults with project CSS variables so
+   * headings, links, code, and borders match the Things3 theme.
+   */
+  .notes-prose {
+    --tw-prose-body: hsl(var(--foreground));
+    --tw-prose-headings: hsl(var(--foreground));
+    --tw-prose-links: hsl(var(--primary));
+    --tw-prose-bold: hsl(var(--foreground));
+    --tw-prose-quotes: hsl(var(--muted-foreground));
+    --tw-prose-quote-borders: hsl(var(--border));
+    --tw-prose-code: hsl(var(--foreground));
+    --tw-prose-pre-bg: hsl(var(--muted));
+    --tw-prose-pre-code: hsl(var(--foreground));
+    --tw-prose-hr: hsl(var(--border));
+    --tw-prose-bullets: hsl(var(--muted-foreground));
+    --tw-prose-counters: hsl(var(--muted-foreground));
+  }
+  /*
+   * Placeholder for the empty WYSIWYG editor. Tiptap renders a non-empty
+   * `.ProseMirror > <p><br/></p>` even when the document is empty, so `:empty`
+   * never matches. The component toggles `data-empty="true"` on the wrapper
+   * via `useEditorState`; `data-placeholder` is applied directly to the
+   * `.ProseMirror` element (via `editorProps.attributes`) so that `attr()` in
+   * the `::before` pseudo reads from the pseudo's own host element.
+   */
+  .notes-prose[data-empty="true"] .ProseMirror::before {
+    content: attr(data-placeholder);
+    color: hsl(var(--muted-foreground));
+    pointer-events: none;
+    float: left;
+    height: 0;
+  }
+  .notes-prose .ProseMirror {
+    /* The wrapper div carries min-h-[60px]; the editable element itself must
+       fill it, otherwise the empty area below the first line shows the default
+       cursor and clicks there never reach the contenteditable. */
+    min-height: inherit;
+  }
+  .notes-prose .ProseMirror:focus {
+    outline: none;
+  }
+
+  /* 勾选：勾号按笔画画出（TaskCheckbox，pathLength=1） */
+  .checkbox-draw path {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: checkbox-draw var(--dur-fast) var(--ease-spring) forwards;
+  }
+  @keyframes checkbox-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+}
+
+@layer utilities {
+  /* 发丝线：高 DPR 屏上把 1px 分割线压成 0.5px 物理像素 */
+  @media (min-resolution: 2dppx) {
+    .hairline-y {
+      transform: scaleY(0.5);
+    }
+    .hairline-x {
+      transform: scaleX(0.5);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      transition-duration: 1ms !important;
+    }
+  }
+}

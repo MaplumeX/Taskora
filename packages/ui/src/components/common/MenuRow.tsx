@@ -11,7 +11,7 @@ interface MenuRowProps {
 }
 
 const BASE_CLASS =
-  'relative flex w-full cursor-default select-none items-center gap-2 rounded-md px-2 py-1.5 text-sm outline-none transition-colors max-md:py-2.5';
+  'relative flex h-7 w-full cursor-default select-none items-center gap-2 rounded-md px-2 text-sm outline-none max-md:h-11';
 export const MenuRow = React.forwardRef<HTMLButtonElement, MenuRowProps>(
   ({ icon: Icon, destructive, onClick, children }, ref) => {
     return (
@@ -22,8 +22,8 @@ export const MenuRow = React.forwardRef<HTMLButtonElement, MenuRowProps>(
         className={cn(
           BASE_CLASS,
           destructive
-            ? 'text-destructive hover:bg-destructive/10 hover:text-destructive'
-            : 'hover:bg-accent hover:text-accent-foreground',
+            ? 'text-destructive hover:bg-destructive hover:text-destructive-foreground focus-visible:bg-destructive focus-visible:text-destructive-foreground'
+            : 'hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground',
         )}
       >
         <Icon className="h-4 w-4 shrink-0" />

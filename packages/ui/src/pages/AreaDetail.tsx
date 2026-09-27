@@ -117,7 +117,7 @@ export default function AreaDetail() {
               }}
             />
           ) : (
-            <h1 className="font-display text-3xl font-semibold tracking-tight">{t('area:defaultTitle')}</h1>
+            <h1 className="text-title-1">{t('area:defaultTitle')}</h1>
           )}
         </div>
         {area && <AreaMoreMenu area={area} />}

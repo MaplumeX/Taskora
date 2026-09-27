@@ -93,7 +93,7 @@ describe('ProjectMetaRow', () => {
     expect(container.querySelector('svg')).toBeNull();
   });
 
-  it('does not mark an overdue scheduled date as destructive（When 永不逾期）', () => {
+  it('does not mark an overdue scheduled date as deadline-red（When 永不逾期）', () => {
     const project: ProjectResponseDto = {
       ...baseProject,
       scheduledType: ScheduledType.DATE,
@@ -101,17 +101,17 @@ describe('ProjectMetaRow', () => {
     };
     const { container } = render(<ProjectMetaRow project={project} />);
 
-    expect(container.querySelector('.text-destructive')).toBeNull();
+    expect(container.querySelector('.text-deadline')).toBeNull();
   });
 
-  it('marks an overdue due date as destructive', () => {
+  it('marks an overdue due date as deadline-red', () => {
     const project: ProjectResponseDto = {
       ...baseProject,
       dueDate: '2000-01-01T00:00:00.000Z',
     };
     const { container } = render(<ProjectMetaRow project={project} />);
 
-    expect(container.querySelector('.text-destructive')).not.toBeNull();
+    expect(container.querySelector('.text-deadline')).not.toBeNull();
   });
 
   it('opens the due date popover and commits a picked date', async () => {

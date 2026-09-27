@@ -11,8 +11,7 @@ interface Props {
 }
 
 /**
- * Bucket 页面的大标题。手机端（Things 3 iOS）标题前带与首页列表同色的
- * 图标；桌面端侧边栏已承担图标识别，保持纯文字。
+ * Bucket 页面的大标题（Things 3）：标题前带与侧边栏 / 首页列表同色的图标。
  */
 export function PageHeading({ nav, className, children }: Props) {
   const item = nav ? mainNav.find((n) => n.to === nav) : undefined;
@@ -21,12 +20,12 @@ export function PageHeading({ nav, className, children }: Props) {
   return (
     <h1
       className={cn(
-        'flex items-center gap-2.5 font-display text-3xl font-semibold tracking-tight',
+        'flex items-center gap-2.5 text-title-1',
         className,
       )}
     >
       {Icon && (
-        <Icon aria-hidden className={cn('h-7 w-7 shrink-0 md:hidden', item.colorClass)} />
+        <Icon aria-hidden className={cn('h-7 w-7 shrink-0', item.colorClass)} />
       )}
       {children}
     </h1>

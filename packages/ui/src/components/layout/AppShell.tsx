@@ -11,7 +11,7 @@ export function AppShell() {
   // h-[calc(100dvh-var(--kb-inset,0px))]：Android 键盘避让（mobile 壳的
   // visualViewport 驱动，其余端未设置 → 0px，等价 h-dvh）。
   return (
-    <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] w-full noise-overlay">
+    <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] w-full">
       {/* 桌面侧边栏（手机端隐藏） */}
       <div className="hidden md:flex">
         <Sidebar />

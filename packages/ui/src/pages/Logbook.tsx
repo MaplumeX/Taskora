@@ -104,7 +104,7 @@ export default function Logbook() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : !hasAny ? (
-        <p className="py-8 text-center font-display text-base font-semibold text-muted-foreground">
+        <p className="py-8 text-center text-base font-semibold text-muted-foreground">
           {t('task:logbookEmpty')}
         </p>
       ) : (

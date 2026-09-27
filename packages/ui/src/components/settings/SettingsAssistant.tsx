@@ -222,7 +222,7 @@ export default function SettingsAssistant() {
   return (
     <div className="space-y-6">
       <section className="space-y-1.5">
-        <h2 className="font-display text-lg font-semibold">{t('settings:assistantSettings')}</h2>
+        <h2 className="text-title-2">{t('settings:assistantSettings')}</h2>
         <p className="text-sm text-muted-foreground">
           {config.configured
             ? `${t('settings:assistantConfigured')}${config.apiKeyMasked ? ` · ${config.apiKeyMasked}` : ''}`

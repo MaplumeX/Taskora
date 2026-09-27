@@ -8,6 +8,7 @@ import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 
 import { cn } from '@/lib/utils';
+import { sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import { SortableProjectItem } from '@/components/layout/SortableProjectItem';
 import {
   projectContainerDndId,
@@ -50,18 +51,15 @@ export function SidebarAreaRow({
   );
 
   return (
-    <div className="flex flex-col gap-0.5">
-      <div className="relative flex items-center">
+    <div className="mt-2 flex flex-col gap-px">
+      <div className="group/area relative flex items-center">
         <NavLink
           to={`/areas/${area.id}`}
           className={({ isActive }) =>
-            cn(
-              'flex min-w-0 flex-1 items-center gap-2.5 rounded-full px-3 py-1.5 text-sm text-muted-foreground hover-instant hover:bg-accent/60 hover:text-accent-foreground',
-              isActive && 'bg-accent font-medium text-foreground',
-            )
+            sidebarRowClass(isActive, 'flex-1 font-semibold')
           }
         >
-          <Layers className="h-4 w-4" />
+          <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
           <span
             className={cn(
               'flex-1 truncate',
@@ -81,7 +79,7 @@ export function SidebarAreaRow({
           aria-label={
             open ? t('nav:collapse', { label }) : t('nav:expand', { label })
           }
-          className="absolute right-1 flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent"
+          className="absolute right-1 flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-0 hover:bg-sidebar-accent focus-visible:opacity-100 group-hover/area:opacity-100 max-md:opacity-100"
         >
           <ChevronDown
             className={cn(
@@ -100,7 +98,7 @@ export function SidebarAreaRow({
             ref={setProjectContainerRef}
             data-project-container={area.id}
             className={cn(
-              'ml-4 flex flex-col gap-0.5 border-l pl-2',
+              'flex flex-col gap-px',
               projectDragActive && projects.length === 0 && 'min-h-8',
             )}
           >
@@ -113,7 +111,7 @@ export function SidebarAreaRow({
           items={[projectDndId(projects[0].id)]}
           strategy={verticalListSortingStrategy}
         >
-          <div className="ml-4 border-l pl-2">{renderProject(projects[0])}</div>
+          <div>{renderProject(projects[0])}</div>
         </SortableContext>
       )}
     </div>
