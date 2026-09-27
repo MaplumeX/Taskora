@@ -31,7 +31,7 @@ describe('TaskDateBadge / TaskTodayBadge — When 的「今天」语义（参考
     expect(chip).not.toBeNull();
     expect(chip!.textContent).toBe(formatShortDate(new Date(iso)));
     // 未来日期不再携带警示色（红色只属于 Deadline）。
-    expect(container.querySelector('.text-destructive')).toBeNull();
+    expect(container.querySelector('.text-deadline')).toBeNull();
   });
 
   it('今天的日期不渲染日期 chip（由黄星/列表语境表达）', () => {
@@ -49,10 +49,10 @@ describe('TaskDateBadge / TaskTodayBadge — When 的「今天」语义（参考
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('黄星徽标渲染 amber 星形图标（≤ 今天的「今天」语义）', () => {
+  it('黄星徽标渲染 today 色星形图标（≤ 今天的「今天」语义）', () => {
     const { container } = render(<TaskTodayBadge />);
     const star = container.querySelector('svg');
     expect(star).not.toBeNull();
-    expect(star!.classList.contains('text-amber-400')).toBe(true);
+    expect(star!.classList.contains('text-today')).toBe(true);
   });
 });

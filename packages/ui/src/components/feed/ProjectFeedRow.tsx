@@ -9,6 +9,7 @@ import type { ProjectFeedItem, ProjectResponseDto } from '@taskora/shared';
 import { cn } from '@/lib/utils';
 import { TaskDateBadge } from '@/components/task/TaskDateBadge';
 import { TaskDueDateBadge } from '@/components/task/TaskDueDateBadge';
+import { TaskTagCapsules } from '@/components/task/TaskTagCapsules';
 import { TaskTodayBadge } from '@/components/task/TaskTodayBadge';
 import { ProjectContextMenu } from '@/components/project/ProjectContextMenu';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
@@ -64,9 +65,9 @@ export function ProjectFeedRow({
         tabIndex={selectionState !== 'idle' ? 0 : -1}
         aria-selected={selectionState !== 'idle' || undefined}
         className={cn(
-          'group flex h-10 items-center gap-3 rounded-lg px-2 transition-colors hover:bg-accent/40 cursor-pointer',
+          'group flex h-8 cursor-pointer items-center gap-2.5 rounded-md px-2 hover:bg-accent/60 max-md:h-11',
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
-          selectionState !== 'idle' && 'bg-accent focus-visible:ring-0 hover:bg-accent',
+          selectionState !== 'idle' && 'bg-selection focus-visible:ring-0 hover:bg-selection',
         )}
         onClick={(e) => {
           e.stopPropagation();
@@ -99,7 +100,7 @@ export function ProjectFeedRow({
             ))}
         <span
           className={cn(
-            'flex-1 truncate text-left text-sm',
+            'flex-1 truncate text-left text-body font-semibold',
             settled || trashed
               ? plainSettledTitle && !trashed
                 ? cancelled
@@ -116,18 +117,7 @@ export function ProjectFeedRow({
           {item.title || t('project:newItemPlaceholder')}
         </span>
         <div className="flex items-center gap-2">
-          {item.tags.length > 0 && (
-            <div className="hidden items-center gap-1 md:flex">
-              {item.tags.slice(0, 5).map((tag) => (
-                <span
-                  key={tag.id}
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: tag.color }}
-                  title={tag.title}
-                />
-              ))}
-            </div>
-          )}
+          <TaskTagCapsules tags={item.tags} />
           <TaskDueDateBadge dueDate={item.dueDate} />
         </div>
       </div>

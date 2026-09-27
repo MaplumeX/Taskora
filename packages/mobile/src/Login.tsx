@@ -32,9 +32,9 @@ export function Login({ onBack }: { onBack: () => Promise<void> }) {
   };
 
   return (
-    <div className="flex h-dvh items-center justify-center bg-secondary/40 px-4 noise-overlay">
-      <div className="relative w-full max-w-sm rounded-2xl border border-border/50 bg-card p-8 shadow-lift max-md:p-6">
-        <h1 className="mb-1 text-center font-display text-3xl font-semibold tracking-tight">
+    <div className="flex h-dvh items-center justify-center bg-sidebar px-4">
+      <div className="relative w-full max-w-sm rounded-xl bg-card p-8 shadow-popover max-md:p-6">
+        <h1 className="mb-1 text-center text-title-1">
           Taskora
         </h1>
         <p className="mb-6 text-center text-sm text-muted-foreground">{t('auth:loginSubtitle')}</p>

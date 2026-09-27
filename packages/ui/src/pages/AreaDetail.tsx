@@ -1,3 +1,4 @@
+import { Layers } from 'lucide-react';
 import * as React from 'react';
 import { useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
@@ -100,7 +101,8 @@ export default function AreaDetail() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between gap-2">
-        <div className="min-w-0 flex-1">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <Layers aria-hidden className="h-7 w-7 shrink-0 text-muted-foreground" />
           {area ? (
             <InlineTitleEdit
               value={area.title}
@@ -117,7 +119,7 @@ export default function AreaDetail() {
               }}
             />
           ) : (
-            <h1 className="font-display text-3xl font-semibold tracking-tight">{t('area:defaultTitle')}</h1>
+            <h1 className="text-title-1">{t('area:defaultTitle')}</h1>
           )}
         </div>
         {area && <AreaMoreMenu area={area} />}

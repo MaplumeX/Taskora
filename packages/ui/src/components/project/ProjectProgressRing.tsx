@@ -9,10 +9,14 @@ interface Props {
   projectStatus: ProjectStatus;
   onToggle: () => void;
   disabled?: boolean;
+  /** 边长（px）；默认 20，侧边栏用 16。 */
+  size?: number;
 }
 
 const RADIUS = 8;
-const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+/** 进度饼（Things 3）：粗描边小圆画扇形，半径 PIE_RADIUS、线宽 2×PIE_RADIUS。 */
+const PIE_RADIUS = 3.25;
+const PIE_CIRCUMFERENCE = 2 * Math.PI * PIE_RADIUS;
 
 export function ProjectProgressRing({
   total,
@@ -20,6 +24,7 @@ export function ProjectProgressRing({
   projectStatus,
   onToggle,
   disabled,
+  size = 20,
 }: Props) {
   const { t } = useTranslation('task');
 
@@ -27,7 +32,7 @@ export function ProjectProgressRing({
   // 取消不属于项目模型（ADR 0006 out of scope）；作防御性呈现，与未来扩展兼容。
   const isCancelled = projectStatus === ('CANCELLED' as ProjectStatus);
   const ratio = total > 0 ? completed / total : 0;
-  const offset = CIRCUMFERENCE * (1 - ratio);
+  const offset = PIE_CIRCUMFERENCE * (1 - ratio);
 
   return (
     <button
@@ -41,11 +46,12 @@ export function ProjectProgressRing({
         onToggle();
       }}
       className={cn(
-        'flex h-[20px] w-[20px] shrink-0 items-center justify-center rounded-full transition-all duration-200 active:scale-90',
-        disabled && 'opacity-50',
+        'flex shrink-0 items-center justify-center rounded-full transition-opacity',
+        disabled && 'opacity-40',
       )}
+      style={{ width: size, height: size }}
     >
-      <svg viewBox="0 0 20 20" className="h-[20px] w-[20px]">
+      <svg viewBox="0 0 20 20" width={size} height={size}>
         {/* 轨道圆 */}
         <circle
           cx="10"
@@ -53,25 +59,22 @@ export function ProjectProgressRing({
           r={RADIUS}
           fill="none"
           stroke="currentColor"
-          strokeWidth="2"
-          className={
-            isChecked || isCancelled ? 'text-primary' : 'text-muted-foreground/30'
-          }
+          strokeWidth="1.5"
+          className="text-primary"
         />
-        {/* 进度弧（进行中且有进度时，满环时满圈无实心无勾） */}
+        {/* 进度饼（进行中且有进度时；满饼时仍无勾，勾只属于已完成） */}
         {!isChecked && !isCancelled && ratio > 0 && (
           <circle
             cx="10"
             cy="10"
-            r={RADIUS}
+            r={PIE_RADIUS}
             fill="none"
             stroke="currentColor"
-            strokeWidth="2"
+            strokeWidth={PIE_RADIUS * 2}
             className="text-primary"
-            strokeDasharray={CIRCUMFERENCE}
+            strokeDasharray={PIE_CIRCUMFERENCE}
             strokeDashoffset={offset}
             transform="rotate(-90 10 10)"
-            strokeLinecap="round"
           />
         )}
         {/* 已完成时实心填充 */}

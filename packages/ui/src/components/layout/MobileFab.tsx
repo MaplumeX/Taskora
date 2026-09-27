@@ -51,7 +51,7 @@ export function MobileFab() {
         if (hasMenu) return; // 由 DropdownMenuTrigger 处理
         handleAddTask();
       }}
-      className="h-14 w-14 rounded-full shadow-lift"
+      className="h-14 w-14 rounded-full shadow-popover"
       size="icon"
     >
       <Plus className="h-6 w-6" />
@@ -69,7 +69,7 @@ export function MobileFab() {
                 disabled={addTaskPending}
                 onClick={() => handleAddTask()}
               >
-                <Plus className="mr-2 h-4 w-4" />
+                <Plus className="h-4 w-4" />
                 {t('task:addTask')}
               </DropdownMenuItem>
             )}
@@ -78,7 +78,7 @@ export function MobileFab() {
                 disabled={addProjectPending}
                 onClick={() => handleAddProject()}
               >
-                <FolderPlus className="mr-2 h-4 w-4" />
+                <FolderPlus className="h-4 w-4" />
                 {t('project:addProject')}
               </DropdownMenuItem>
             )}
@@ -87,7 +87,7 @@ export function MobileFab() {
                 disabled={addHeadingPending}
                 onClick={() => handleAddHeading()}
               >
-                <Heading className="mr-2 h-4 w-4" />
+                <Heading className="h-4 w-4" />
                 {t('project:addHeading')}
               </DropdownMenuItem>
             )}

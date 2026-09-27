@@ -94,9 +94,10 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
         data-selection-row={heading.id}
         tabIndex={selected ? 0 : -1}
         className={cn(
-          'group flex h-10 items-center gap-1.5 rounded-lg border-b border-border pt-2',
+          // Project Heading（Things 3）：蓝色小节标题 + 下方 1px 细线。
+          'group flex h-9 items-center gap-1.5 rounded-t-md border-b border-border pt-1 max-md:h-11',
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
-          selected && 'bg-accent focus-visible:ring-0',
+          selected && 'bg-selection focus-visible:ring-0',
         )}
       >
         {!archived && (
@@ -127,13 +128,13 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
                 setEditing(false);
               }
             }}
-            className="min-w-0 flex-1 border-0 bg-transparent text-sm font-semibold tracking-wide text-foreground outline-none placeholder:text-muted-foreground"
+            className="min-w-0 flex-1 border-0 bg-transparent text-section text-primary outline-none placeholder:text-muted-foreground"
           />
         ) : (
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="min-w-0 flex-1 truncate text-left text-sm font-semibold tracking-wide text-foreground"
+            className="min-w-0 flex-1 truncate text-left text-section text-primary"
           >
             {heading.title || t('project:headingPlaceholder')}
           </button>
@@ -160,7 +161,7 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
                 })
               }
             >
-              <FolderInput className="mr-2 h-4 w-4" />
+              <FolderInput className="h-4 w-4" />
               {t('project:convertToProject')}
             </DropdownMenuItem>
             {archived ? (
@@ -173,7 +174,7 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
                   })
                 }
               >
-                <RotateCcw className="mr-2 h-4 w-4" />
+                <RotateCcw className="h-4 w-4" />
                 {t('project:unarchive')}
               </DropdownMenuItem>
             ) : (
@@ -186,15 +187,15 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
                   })
                 }
               >
-                <Archive className="mr-2 h-4 w-4" />
+                <Archive className="h-4 w-4" />
                 {t('project:archive')}
               </DropdownMenuItem>
             )}
             <DropdownMenuItem
-              className="text-destructive focus:bg-destructive/10 focus:text-destructive"
+              className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
               onSelect={() => setConfirmOpen(true)}
             >
-              <Trash2 className="mr-2 h-4 w-4" />
+              <Trash2 className="h-4 w-4" />
               {t('project:deleteHeading')}
             </DropdownMenuItem>
           </DropdownMenuContent>

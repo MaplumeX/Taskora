@@ -24,9 +24,10 @@ export function GroupHeaderRowShell({ parentId, selectionState = 'idle', onOpen,
       tabIndex={selectionState !== 'idle' ? 0 : -1}
       aria-selected={selectionState !== 'idle' || undefined}
       className={cn(
-        'group flex h-10 cursor-pointer items-center gap-3 rounded-lg border-b-2 border-border/80 px-2 pt-2 transition-colors hover:bg-accent/40',
+        // Things 3 小节标题：半粗体 + 下方 1px 细线；圆角只在上方，保证细线笔直到两端。
+        'group flex h-9 cursor-pointer items-center gap-2.5 rounded-t-md border-b border-border px-2 pt-1 hover:bg-accent/60 max-md:h-11',
         'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
-        selectionState !== 'idle' && 'bg-accent focus-visible:ring-0 hover:bg-accent',
+        selectionState !== 'idle' && 'bg-selection focus-visible:ring-0 hover:bg-selection',
       )}
       onClick={(e) => {
         e.stopPropagation();

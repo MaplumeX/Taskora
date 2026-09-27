@@ -3,7 +3,6 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import {
   ChevronDown,
   Tags as TagsIcon,
-  Trash2,
   Settings,
   Notebook,
   Bot,
@@ -13,14 +12,14 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@taskora/api';
 import { useLogout } from '@taskora/api';
 import { ProjectStatus } from '@taskora/shared';
 import { SidebarBottomBar } from '@/components/layout/SidebarBottomBar';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
-import { mainNav, type NavItem } from '@/components/layout/navItems';
+import { mainNav, trashNav, type NavItem } from '@/components/layout/navItems';
+import { sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import { useBucketCounts } from '@/components/layout/useBucketCounts';
 
 /** 侧边栏主导航（日志移至与废纸篓同一分组） */
@@ -31,12 +30,14 @@ const SIDEBAR_MAIN_NAV = mainNav.filter((item) => item.to !== '/logbook');
  * 它是横跨所有视图的行动者，不属于任何 Bucket 视图，也不属于
  * Logbook/Trash 那类被动回顾/删除工具组。
  */
-const SIDEBAR_ASSISTANT_NAV: NavItem[] = [{ to: '/agent', labelKey: 'nav:assistant', icon: Bot }];
+const SIDEBAR_ASSISTANT_NAV: NavItem[] = [
+  { to: '/agent', labelKey: 'nav:assistant', icon: Bot, colorClass: 'text-primary' },
+];
 
 /** 日志 + 废纸篓：位于主导航与区域之间的中间分组 */
 const SIDEBAR_UTILITIES_NAV: NavItem[] = [
-  { to: '/logbook', labelKey: 'nav:logbook', icon: Notebook },
-  { to: '/trash', labelKey: 'nav:trash', icon: Trash2 },
+  { to: '/logbook', labelKey: 'nav:logbook', icon: Notebook, colorClass: 'text-nav-logbook' },
+  trashNav,
 ];
 import { useUiInteractionStore } from '@taskora/api';
 import { useProjectsQuery } from '@taskora/api';
@@ -57,17 +58,12 @@ const NavRow = ({ item, count }: { item: NavItem; count?: number }) => {
   return (
     <NavLink
       to={item.to}
-      className={({ isActive }) =>
-        cn(
-          'flex items-center gap-2.5 rounded-full px-3 py-1.5 text-sm text-muted-foreground hover-instant hover:bg-accent/60 hover:text-accent-foreground',
-          isActive && 'bg-accent font-medium text-foreground',
-        )
-      }
+      className={({ isActive }) => sidebarRowClass(isActive)}
     >
-      <Icon className="h-4 w-4" />
-      {t(item.labelKey)}
+      <Icon className={cn('h-4 w-4 shrink-0', item.colorClass)} />
+      <span className="truncate">{t(item.labelKey)}</span>
       {count !== undefined && count > 0 && (
-        <span className="ml-auto pl-1 text-xs tabular-nums text-muted-foreground/70">
+        <span className="ml-auto pl-1 text-meta font-normal tabular-nums text-muted-foreground">
           {count > 99 ? '99+' : count}
         </span>
       )}
@@ -94,46 +90,33 @@ function CollapsibleSection({
   const [open, setOpen] = React.useState(true);
   const label = t(labelKey);
   return (
-    <div className="flex flex-col gap-0.5">
-      <div className="relative flex items-center">
-        <NavLink
-          to={to}
-          className={({ isActive }) =>
-            cn(
-              'flex min-w-0 flex-1 items-center gap-2.5 rounded-full px-3 py-1.5 text-sm text-muted-foreground hover-instant hover:bg-accent/60 hover:text-accent-foreground',
-              isActive && 'bg-accent font-medium text-foreground',
-            )
-          }
-        >
-          <Icon className="h-4 w-4" />
-          {label}
+    <div className="flex flex-col gap-px">
+      <div className="group/section relative flex items-center">
+        <NavLink to={to} className={({ isActive }) => sidebarRowClass(isActive, 'flex-1')}>
+          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <span className="truncate">{label}</span>
         </NavLink>
         <button
           type="button"
           onClick={() => setOpen((v) => !v)}
           aria-label={open ? t('nav:collapse', { label }) : t('nav:expand', { label })}
-          className="absolute right-1 flex h-6 w-6 items-center justify-center rounded text-muted-foreground hover:bg-accent"
+          className="absolute right-1 flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-0 hover:bg-sidebar-accent focus-visible:opacity-100 group-hover/section:opacity-100 max-md:opacity-100"
         >
           <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', !open && '-rotate-90')} />
         </button>
       </div>
       {open && (
-        <div className="ml-4 flex flex-col gap-0.5 border-l pl-2">
+        <div className="flex flex-col gap-px pl-6">
           {items.length === 0 ? (
-            <span className="px-3 py-1 text-xs text-muted-foreground/70">{t(emptyHintKey)}</span>
+            <span className="px-2 py-1 text-meta text-muted-foreground">{t(emptyHintKey)}</span>
           ) : (
             items.map((item) => (
               <NavLink
                 key={item.id}
                 to={item.href}
-                className={({ isActive }) =>
-                  cn(
-                    'truncate rounded-full px-3 py-1 text-sm text-muted-foreground hover-instant hover:bg-accent/60 hover:text-accent-foreground',
-                    isActive && 'bg-accent font-medium text-foreground',
-                  )
-                }
+                className={({ isActive }) => sidebarRowClass(isActive)}
               >
-                {item.title || t(emptyTitlePlaceholderKey)}
+                <span className="truncate">{item.title || t(emptyTitlePlaceholderKey)}</span>
               </NavLink>
             ))
           )}
@@ -162,11 +145,14 @@ export function Sidebar() {
   const projects = allProjects.filter((p) => p.status !== ProjectStatus.COMPLETED);
 
   return (
-    <aside className="flex h-screen w-60 flex-col border-r bg-secondary/60 backdrop-blur-sm">
-      <div className="px-4 pb-2 pt-4">
+    <aside className="flex h-screen w-60 flex-col bg-sidebar">
+      <div className="px-2 pb-2 pt-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="w-full justify-start gap-2 px-2 font-medium">
+            <Button
+              variant="ghost"
+              className="w-full justify-start gap-2 px-2 font-semibold hover:bg-sidebar-accent/60"
+            >
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
                 {user?.avatarUrl ? (
                   <img src={user.avatarUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
@@ -185,7 +171,7 @@ export function Sidebar() {
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => openSettings('account')}>
-              <Settings className="mr-2 h-4 w-4" />
+              <Settings className="h-4 w-4" />
               {t('auth:accountSettings')}
             </DropdownMenuItem>
             <DropdownMenuItem
@@ -199,42 +185,32 @@ export function Sidebar() {
         </DropdownMenu>
       </div>
 
-      <Separator className="mb-2" />
-
       <ScrollArea className="flex-1 px-2">
         {/* 助手：顶部独立分组 */}
-        <div className="flex flex-col gap-0.5">
+        <div className="flex flex-col gap-px">
           {SIDEBAR_ASSISTANT_NAV.map((item) => (
             <NavRow key={item.to} item={item} />
           ))}
         </div>
 
-        <Separator className="my-3" />
-
-        <div className="flex flex-col gap-0.5">
+        <div className="mt-4 flex flex-col gap-px">
           {SIDEBAR_MAIN_NAV.map((item) => (
             <NavRow key={item.to} item={item} count={countByRoute[item.to]} />
           ))}
         </div>
 
-        <Separator className="my-3" />
-
         {/* 日志 / 废纸篓 */}
-        <div className="flex flex-col gap-0.5">
+        <div className="mt-4 flex flex-col gap-px">
           {SIDEBAR_UTILITIES_NAV.map((item) => (
             <NavRow key={item.to} item={item} />
           ))}
         </div>
 
-        <Separator className="my-3" />
-
-        <div className="flex flex-col gap-1">
+        <div className="mt-4 flex flex-col">
           <SidebarProjectSection projects={projects} areas={areas} />
         </div>
 
-        <Separator className="my-3" />
-
-        <div className="flex flex-col gap-1">
+        <div className="mb-3 mt-4 flex flex-col">
           <CollapsibleSection
             labelKey="nav:tags"
             icon={TagsIcon}
@@ -244,8 +220,6 @@ export function Sidebar() {
             items={tags.map((t) => ({ id: t.id, title: t.title, href: `/tags/${t.id}` }))}
           />
         </div>
-
-        <Separator className="my-3" />
       </ScrollArea>
 
       <SidebarBottomBar />

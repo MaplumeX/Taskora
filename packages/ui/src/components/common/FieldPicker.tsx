@@ -45,7 +45,9 @@ export function FieldPicker({ label, tooltip = false, trigger, children }: Props
     return (
       <Popover open={open} onOpenChange={setOpen}>
         {tooltip ? <Hint label={label}>{popoverTrigger}</Hint> : popoverTrigger}
-        <PopoverContent align="start">{body}</PopoverContent>
+        <PopoverContent align="start" className="p-1.5">
+          {body}
+        </PopoverContent>
       </Popover>
     );
   }

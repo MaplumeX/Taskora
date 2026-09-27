@@ -4,9 +4,12 @@ import {
   toInputDateValue,
   startOfToday,
   startOfTomorrow,
+  isToday,
+  isTomorrow,
   usePreferencesStore,
 } from '@taskora/api';
 import { useTranslation } from 'react-i18next';
+import { Flag, Sunrise } from 'lucide-react';
 
 import type { DueDateFieldCurrent, DueDateFieldPatch } from './fieldProps';
 
@@ -17,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { FOOTER_BUTTON_CLASS } from './ScheduledDateField';
 
 import { getCalendarLocale } from './calendarFieldUtils';
+import { DateShortcutList } from './DateShortcutList';
 
 interface FieldProps {
   current: DueDateFieldCurrent;
@@ -54,25 +58,37 @@ export function DueDateField({ current, onPatch, onClose }: FieldProps) {
 
   return (
     <div className="flex flex-col">
+      <DateShortcutList
+        items={[
+          {
+            key: 'today',
+            label: t('common:today'),
+            icon: <Flag className="text-deadline" />,
+            active: selectedDate !== undefined && isToday(selectedDate),
+            onSelect: handleToday,
+          },
+          {
+            key: 'tomorrow',
+            label: t('common:tomorrow'),
+            icon: <Sunrise className="text-nav-upcoming" />,
+            active: selectedDate !== undefined && isTomorrow(selectedDate),
+            onSelect: handleTomorrow,
+          },
+        ]}
+      />
       <Calendar
         selected={selectedDate}
         onSelect={handleDaySelect}
         locale={getCalendarLocale(i18n.language)}
         weekStartsOn={weekStartsOn}
       />
-      <div className="flex items-center gap-1 border-t border-border/50 p-2">
-        <Button variant="ghost" size="sm" className={FOOTER_BUTTON_CLASS} onClick={handleToday}>
-          {t('common:today')}
-        </Button>
-        <Button variant="ghost" size="sm" className={FOOTER_BUTTON_CLASS} onClick={handleTomorrow}>
-          {t('common:tomorrow')}
-        </Button>
+      <div className="flex items-center border-t border-border/50 px-1 pt-1">
         <Button
           variant="ghost"
           size="sm"
           disabled={!current.dueDate}
           onClick={handleClear}
-          className={cn('ml-auto', FOOTER_BUTTON_CLASS)}
+          className={cn('w-full', FOOTER_BUTTON_CLASS)}
         >
           {t('common:clear')}
         </Button>

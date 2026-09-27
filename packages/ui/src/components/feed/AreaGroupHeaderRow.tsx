@@ -35,7 +35,7 @@ export function AreaGroupHeaderRow({ area, selectionState = 'idle' }: Props) {
       </span>
       <span
         className={cn(
-          'flex-1 truncate text-left text-sm font-semibold tracking-wide',
+          'flex-1 truncate text-left text-body font-semibold',
           area.title ? 'text-foreground' : 'text-muted-foreground',
         )}
       >

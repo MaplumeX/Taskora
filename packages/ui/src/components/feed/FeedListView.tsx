@@ -27,6 +27,7 @@ import { useAreasQuery } from '@taskora/api';
 import { useSelectionScope } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
 import { toast } from 'sonner';
+import { EmptyState } from '@/components/common/EmptyState';
 
 interface Props {
   items: FeedItem[];
@@ -38,25 +39,7 @@ interface Props {
 
 /** 时间视图共享的空态展示（平铺 FeedListView 与 GroupedFeedListView 共用）。 */
 export function FeedEmptyHint({ hint }: { hint: string }) {
-  return (
-    <div className="mt-12 flex flex-col items-center justify-center gap-3 py-16 text-center">
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-        <svg
-          className="h-5 w-5 text-muted-foreground"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M9 11l3 3L22 4" />
-          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
-        </svg>
-      </div>
-      <p className="font-display text-base font-semibold text-muted-foreground">{hint}</p>
-    </div>
-  );
+  return <EmptyState hint={hint} />;
 }
 
 interface SortableFeedItemRowProps {
