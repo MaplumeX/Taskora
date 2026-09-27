@@ -10,9 +10,9 @@ import { cn } from '@/lib/utils';
  * itself stretches to fill, scrolling only as a short-viewport fallback).
  * `/calendar` keeps a small inset; the Assistant chat (`/agent`) goes full
  * bleed like ChatGPT — the page manages its own padding and scroll.
- * These h-full containers must clear the fixed MobileTabBar on small screens
- * (3.5rem content height + safe-area inset), otherwise the calendar's last
- * grid row / the chat composer is occluded by it.
+ * On small screens these h-full containers must clear the bottom safe-area
+ * inset (gesture bar), otherwise the calendar's last grid row / the chat
+ * composer sits under it.
  */
 const CANVAS_ROUTES = ['/calendar'];
 const FULL_BLEED_ROUTES = ['/agent'];
@@ -44,10 +44,10 @@ export function MainContent() {
         className={cn(
           'relative z-10 mx-auto w-full',
           fullBleed
-            ? 'h-full max-md:pb-[calc(3.5rem+env(safe-area-inset-bottom))]'
+            ? 'h-full max-md:pb-[env(safe-area-inset-bottom)]'
             : canvas
-              ? 'h-full px-3 pt-2 md:px-6 md:pt-4 max-md:pb-[calc(3.5rem+env(safe-area-inset-bottom))]'
-              : 'max-w-2xl px-4 pb-20 pt-8 md:px-6 md:pb-12',
+              ? 'h-full px-3 pt-2 md:px-6 md:pt-4 max-md:pb-[env(safe-area-inset-bottom)]'
+              : 'max-w-2xl px-4 pb-24 pt-2 md:px-6 md:pb-12 md:pt-8',
         )}
       >
         <Suspense

@@ -12,6 +12,9 @@ import type { DueDateFieldCurrent, DueDateFieldPatch } from './fieldProps';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
+
+import { FOOTER_BUTTON_CLASS } from './ScheduledDateField';
 
 import { getCalendarLocale } from './calendarFieldUtils';
 
@@ -58,10 +61,10 @@ export function DueDateField({ current, onPatch, onClose }: FieldProps) {
         weekStartsOn={weekStartsOn}
       />
       <div className="flex items-center gap-1 border-t border-border/50 p-2">
-        <Button variant="ghost" size="sm" onClick={handleToday}>
+        <Button variant="ghost" size="sm" className={FOOTER_BUTTON_CLASS} onClick={handleToday}>
           {t('common:today')}
         </Button>
-        <Button variant="ghost" size="sm" onClick={handleTomorrow}>
+        <Button variant="ghost" size="sm" className={FOOTER_BUTTON_CLASS} onClick={handleTomorrow}>
           {t('common:tomorrow')}
         </Button>
         <Button
@@ -69,7 +72,7 @@ export function DueDateField({ current, onPatch, onClose }: FieldProps) {
           size="sm"
           disabled={!current.dueDate}
           onClick={handleClear}
-          className="ml-auto"
+          className={cn('ml-auto', FOOTER_BUTTON_CLASS)}
         >
           {t('common:clear')}
         </Button>

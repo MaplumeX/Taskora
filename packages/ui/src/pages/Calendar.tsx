@@ -22,6 +22,7 @@ import type { TaskResponseDto } from '@taskora/shared';
 import { CalendarMonthGrid } from '@/components/calendar/CalendarMonthGrid';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
+import { PageHeading } from '@/components/layout/PageHeading';
 
 export default function Calendar() {
   const calendarDay = useCalendarDay();
@@ -82,7 +83,7 @@ export default function Calendar() {
   return (
     <div className="flex h-full flex-col gap-3 pb-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="font-display text-3xl font-semibold tracking-tight">{t('nav:calendar')}</h1>
+        <PageHeading nav="/calendar">{t('nav:calendar')}</PageHeading>
       </div>
 
       <div className="flex items-center justify-between gap-2">

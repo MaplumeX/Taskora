@@ -13,6 +13,7 @@ import {
 } from '@taskora/api';
 
 import { AgentChatView } from '@/components/agent/AgentChatView';
+import { MobileBackButton } from '@/components/layout/MobileTopBar';
 import { ConversationList } from '@/components/agent/ConversationList';
 
 /**
@@ -41,8 +42,9 @@ export default function AgentPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* 极简 header：会话抽屉入口 + 当前标题 + 新建 */}
+      {/* 极简 header：（手机端返回）+ 会话抽屉入口 + 当前标题 + 新建 */}
       <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border px-2 md:px-3">
+        <MobileBackButton className="-ml-1" />
         <Button
           variant="ghost"
           size="sm"

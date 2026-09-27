@@ -9,6 +9,7 @@
   "cancel": "取消",
   "confirm": "确认",
   "back": "返回",
+  "close": "关闭",
   "backTo": "‹ 返回{{label}}",
   "save": "保存",
   "saveFailed": "保存失败",

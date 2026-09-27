@@ -15,6 +15,7 @@ import { ScheduledType } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 
 import { getCalendarLocale } from './calendarFieldUtils';
 
@@ -32,6 +33,12 @@ interface FieldProps {
 
 /** 首次开启提醒的默认时刻（spec：固定 09:00，非偏好项）。 */
 export const DEFAULT_REMINDER_TIME = '09:00';
+
+/**
+ * 底部快捷按钮：宽屏收窄内边距（四个英文按钮在 w-72 popover 内放得下），
+ * 窄屏（居中卡片）放大到触控尺寸。
+ */
+export const FOOTER_BUTTON_CLASS = 'px-2 max-md:h-10 max-md:px-3 max-md:text-sm';
 
 export function ScheduledDateField({
   current,
@@ -132,22 +139,22 @@ export function ScheduledDateField({
       />
       {reminderVisible && (
         <div
-          className="flex items-center gap-2 border-t border-border/50 px-2 py-1.5"
+          className="flex items-center gap-2 border-t border-border/50 px-2 py-1.5 max-md:py-2.5"
           data-reminder-section
         >
           <input
             type="checkbox"
             role="switch"
             aria-label={t('task:reminder')}
-            className="h-4 w-4 accent-primary"
+            className="h-4 w-4 accent-primary max-md:h-5 max-md:w-5"
             checked={current.reminderTime != null}
             onChange={(e) => handleReminderToggle(e.target.checked)}
           />
-          <span className="select-none text-sm">{t('task:reminder')}</span>
+          <span className="select-none text-sm max-md:text-[15px]">{t('task:reminder')}</span>
           <input
             type="time"
             aria-label={t('task:reminderTime')}
-            className="h-7 rounded-md border border-input bg-transparent px-2 text-sm tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+            className="h-7 rounded-md border border-input bg-transparent px-2 text-sm tabular-nums max-md:ml-auto max-md:h-9 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
             value={current.reminderTime ?? ''}
             disabled={current.reminderTime == null}
             onChange={(e) => handleReminderTimeChange(e.target.value)}
@@ -168,15 +175,16 @@ export function ScheduledDateField({
         </div>
       )}
       <div className="flex items-center gap-1 border-t border-border/50 p-2">
-        <Button variant="ghost" size="sm" onClick={handleToday}>
+        <Button variant="ghost" size="sm" className={FOOTER_BUTTON_CLASS} onClick={handleToday}>
           {t('common:today')}
         </Button>
-        <Button variant="ghost" size="sm" onClick={handleTomorrow}>
+        <Button variant="ghost" size="sm" className={FOOTER_BUTTON_CLASS} onClick={handleTomorrow}>
           {t('common:tomorrow')}
         </Button>
         <Button
           variant={scheduledType === ScheduledType.SOMEDAY ? 'secondary' : 'ghost'}
           size="sm"
+          className={FOOTER_BUTTON_CLASS}
           onClick={handleSomeday}
         >
           {t('task:somedayLabel')}
@@ -186,7 +194,7 @@ export function ScheduledDateField({
           size="sm"
           disabled={scheduledType === ScheduledType.NONE}
           onClick={handleClear}
-          className="ml-auto"
+          className={cn('ml-auto', FOOTER_BUTTON_CLASS)}
         >
           {t('common:clear')}
         </Button>

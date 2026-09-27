@@ -36,8 +36,10 @@ const DialogContent = React.forwardRef<
      * 静态流式布局，子面板即可正确铺满视口；md 起恢复居中弹窗。
      */
     mobileFullscreen?: boolean;
+    /** 不渲染右上角默认关闭按钮（调用方自带更大的触控关闭入口时使用）。 */
+    hideClose?: boolean;
   }
->(({ className, children, mobileFullscreen = false, ...props }, ref) => (
+>(({ className, children, mobileFullscreen = false, hideClose = false, ...props }, ref) => (
   <DialogPortal>
     <DialogOverlay />
     <DialogPrimitive.Content
@@ -51,10 +53,12 @@ const DialogContent = React.forwardRef<
       {...props}
     >
       {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
-        <X className="h-4 w-4" />
-        <span className="sr-only">Close</span>
-      </DialogPrimitive.Close>
+      {!hideClose && (
+        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-sm opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:pointer-events-none">
+          <X className="h-4 w-4" />
+          <span className="sr-only">Close</span>
+        </DialogPrimitive.Close>
+      )}
     </DialogPrimitive.Content>
   </DialogPortal>
 ));

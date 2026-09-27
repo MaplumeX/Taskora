@@ -9,6 +9,7 @@
   "cancel": "Cancel",
   "confirm": "Confirm",
   "back": "Back",
+  "close": "Close",
   "backTo": "‹ Back to {{label}}",
   "save": "Save",
   "saveFailed": "Failed to save",

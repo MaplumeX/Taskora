@@ -16,7 +16,7 @@ Taskora 目前只有 Web 与 Windows 桌面端。Local-first 架构（ADR-0007�
 
 新建 `packages/mobile`：Tauri v2 的 Android 薄壳（与 `packages/desktop` 平级），复用 `@taskora/ui` 的页面与 `@taskora/engine` 的本地副本机制。
 
-- **完整平价**：Areas / Projects / Tasks / Subtasks / Tags / Buckets / 日历 / 搜索全部可用，不是伴侣应用。网页端已落地的移动交互层（MobileTabBar、MobileNavDrawer、MobileFab、`useLongPress`）直接继承。
+- **完整平价**：Areas / Projects / Tasks / Subtasks / Tags / Buckets / 日历 / 搜索全部可用，不是伴侣应用。网页端已落地的移动交互层（MobileFab、`useLongPress`）直接继承；窄屏导航采用 Things 3 iOS 结构：首页列表（`/home`）+ push 进入各列表，不设底部标签栏。
 - **全量 Local Replica**：与桌面端同语义。存储走 Engine 的 `SqlStorage` 接口，Android 侧为 rusqlite Tauri IPC 适配器（镜像 desktop 的 Rust command 模式）。
 - **前台同步**：启动 pull、本地写后 push、回前台 pull、下拉刷新；不引入 FCM 推送与后台周期同步（Outbox 保证断网写不丢）。
 - **会话安全**：登录令牌经 Android Keystore 密钥加密后落盘，对齐 ADR-0002 的威胁模型。
@@ -29,9 +29,9 @@ Taskora 目前只有 Web 与 Windows 桌面端。Local-first 架构（ADR-0007�
 3. As a Taskora 用户, I want 登录令牌被安全存储在设备上, so that root 设备或备份提取也无法读取我的会话
 4. As a Taskora 用户, I want 手机持有全量 Local Replica, so that 断网时所有功能仍然可用
 5. As a Taskora 用户, I want 在地铁里添加任务到 Inbox, so that 想法即时捕获、联网后自动同步
-6. As a Taskora 用户, I want 打开 App 就看到 Today, so that 我能立刻开始今天的工作
-7. As a Taskora 用户, I want 通过底部标签栏在 Today / Inbox / Calendar / Anytime 间切换, so that 单手拇指即可完成主导航
-8. As a Taskora 用户, I want 通过「更多」抽屉进入 Upcoming / Someday / Logbook / Trash / Tags / Agent 等次级视图, so that 完整功能在小屏上也可达
+6. As a Taskora 用户, I want 打开 App 先看到首页列表（带 Inbox / Today 数量）, so that 我一眼掌握全局并一步进入任何列表
+7. As a Taskora 用户, I want 在首页列表点进 Inbox / Today / Upcoming / Calendar / Anytime / Someday / Logbook / Trash / 区域 / 项目 / Tags, 并用顶栏返回键回到首页, so that 导航结构与 Things 3 一致、层级清晰
+8. As a Taskora 用户, I want 首页顶部有快速查找与助手入口、底部有设置与登出, so that 完整功能在小屏上也可达
 9. As a Taskora 用户, I want 点击任务打开详情, so that 移动端的浏览-查看路径符合直觉（触控端无 Selection）
 10. As a Taskora 用户, I want 用专用 checkbox 勾选完成任务, so that 一条最常用操作不需要进入详情
 11. As a Taskora 用户, I want 长按任务弹出行内菜单（与桌面右键同一菜单）, so that 重命名、移动、删除等次级操作在触屏上可达
@@ -43,7 +43,7 @@ Taskora 目前只有 Web 与 Windows 桌面端。Local-first 架构（ADR-0007�
 17. As a Taskora 用户, I want 在手机上恢复或永久删除 Trash 中的任务, so that 删除流程在移动端闭环
 18. As a Taskora 用户, I want 在手机上使用 Agent 对话（含 SSE 流式回复与批准卡片）, so that 完整平价包含助手功能
 19. As a Taskora 用户, I want 在手机上修改设置（语言、主题、BYOK）, so that 不必回到桌面端调整偏好
-20. As a Taskora 用户, I want 系统返回手势先关闭打开的抽屉/弹层，全部关闭后才路由返回，根页面再返回才退出, so that 符合标准 Android 导航语义
+20. As a Taskora 用户, I want 系统返回手势先关闭打开的弹层，全部关闭后才路由返回，首页（根页面）再返回才退出, so that 符合标准 Android 导航语义
 21. As a Taskora 用户, I want 下拉刷新手动触发同步, so that 我能主动确认服务器上的最新变更
 22. As a Taskora 用户, I want 回到前台时自动拉取增量, so that 多设备场景下手机总能看到较新的状态
 23. As a Taskora 用户, I want 同步状态（离线/Outbox 排队数）可见, so that 我知道哪些写操作还没收敛
@@ -59,12 +59,13 @@ Taskora 目前只有 Web 与 Windows 桌面端。Local-first 架构（ADR-0007�
 
 - **平台与框架**：Android 独占，Tauri v2 mobile（ADR-0010）。React 壳 + Rust 侧自定义 command，与 desktop 同构。iOS 明确不做。
 - **包结构**：新建 `packages/mobile`，与 `packages/desktop` 平级薄壳：Vite 入口、路由、boot 流程、Tauri Android 工程。页面与业务组件全部来自 `@taskora/ui`；不新建 `ui-mobile` 包。
-- **UI 复用**：原地响应式。网页端既有移动层（MobileTabBar / MobileNavDrawer / MobileFab / MobileTopBar / `useLongPress`）是起点；移动端工作以查漏补缺为主（返回手势、键盘避让、虚拟滚动视口），不是重写。触控端无 Selection：点击 = 打开详情（CONTEXT.md 已更新）。
+- **UI 复用**：原地响应式。网页端既有移动层（MobileFab / MobileTopBar / `useLongPress`）是起点；移动端工作以查漏补缺为主（返回手势、键盘避让、虚拟滚动视口），不是重写。
+- **窄屏导航（Things 3 iOS 结构）**：所有窄屏（< md，含 Android 与手机网页）共用。`/` 在窄屏落地首页列表 `/home`（宽屏仍落地 `/today`，`/home` 在宽屏重定向到 `/today`）。首页分组：快速查找 + 助手 → Inbox → Today / Upcoming / Calendar / Anytime / Someday → Logbook / Trash → 区域与项目（复用侧边栏组件，含拖拽排序）→ Tags → 设置 / 登出。各列表 push 进入；MobileTopBar 左返回（有历史则后退，冷启动直达某列表时替换为 `/home`）、右搜索；Agent 页在自身 header 内放返回键。Bucket 页标题在窄屏前置与首页同色的图标。首页不显示 FAB（Things 的首页 + 录入 Inbox 另行设计）。触控端无 Selection：点击 = 打开详情（CONTEXT.md 已更新）。
 - **存储适配器**：Engine 的 `SqlStorage` 接口不动。Rust 侧把 desktop 的 rusqlite command 层搬进 mobile 的 Tauri 工程（bundled feature 交叉编译 Android NDK）；TS 侧新增 Tauri `invoke` 的 `SqlStorage` 适配器，实现 `exec/all/run/close` 契约。不引入 `tauri-plugin-sql`/sqlx。
 - **Engine 接入**：`@taskora/engine` 按桌面端方式接入（boot 时建库、replica 初始化、变更订阅）。数据读取不走 REST。
 - **会话存储**：Android Keystore 生成的密钥（不可导出）AES 加密令牌后写入应用私有目录；解锁/解密在 Rust 侧经 JNI 或等价机制完成（ADR-0009）。TokenStore 抽象与 desktop 的注入模式一致。
 - **同步触发**：前台同步模型——启动 pull、每次本地写后 push、切回前台 pull、下拉刷新手动触发。不引入 FCM、不做 WorkManager 后台周期同步（后续可选）。Outbox 语义照常。
-- **返回手势**：Tauri back-navigation 事件桥接到「关闭 MobileNavDrawer / dialog / sheet → `history.back()` → 根页退出」的级联。
+- **返回手势**：Tauri back-navigation 事件桥接到「关闭 dialog / sheet → `history.back()` → 根页（首页）退出」的级联。
 - **分发与签名**：GitHub Actions Android 构建矩阵，release keystore 经 secrets 注入，tag 推触发自动构建并发布 GitHub Releases APK。签名密钥不轮换（升级安装依赖同一签名）。
 - **版本**：沿用 monorepo 统一版本号（`pnpm-workspace` 同步，`scripts/release.mjs` 扩展）。
 
@@ -72,7 +73,7 @@ Taskora 目前只有 Web 与 Windows 桌面端。Local-first 架构（ADR-0007�
 
 - **好测试的标准**：只测外部行为（用户可见的导航、数据可见性、契约），不测实现细节。
 - **存储适配器**：复用 Engine 既有接缝——在 jsdom/mock `invoke` 环境下对 TS 适配器跑 `SqlStorage` 契约（exec/all/run 语义、参数绑定）；Rust 侧直接搬 desktop 已验证的 `sqlite.rs`，不新增 Rust 测试。
-- **壳层导航**：镜像 desktop 的 `MainApp.test.tsx` 模式——渲染 mobile 壳 + mock 数据 hooks，断言移动布局（TabBar 可见、抽屉开合、初始落地 Today、返回级联顺序）。`@taskora/ui` 既有移动组件单测不动。
+- **壳层导航**：镜像 desktop 的 `MainApp.test.tsx` 模式——渲染 mobile 壳 + mock 数据 hooks，断言移动布局（初始落地首页列表且各列表可达、push 进入后顶栏返回回到首页、冷启动直达列表时返回落到首页、返回级联顺序）。`@taskora/ui` 既有移动组件单测不动。
 - **Prior art**：`packages/desktop/src/MainApp.test.tsx`、`packages/engine/src/*.test.ts`（replica/merger/position）、`packages/ui/src/components/layout/*.test.tsx`。
 
 ## Out of Scope

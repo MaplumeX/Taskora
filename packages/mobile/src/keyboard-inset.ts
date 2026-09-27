@@ -4,7 +4,7 @@
  * Android WebView 默认没有 adjustResize（Tauri 生成的 AndroidManifest
  * 未设置 windowSoftInputMode），`dvh` 不随 IME 变化。用 visualViewport
  * API 把「被键盘遮住的高度」写进 `--kb-inset` CSS 变量：
- * - ui 的 AppShell / MobileTabBar / MobileFab 消费该变量（默认 0，web /
+ * - ui 的 AppShell / MobileFab / SyncIndicator 消费该变量（默认 0，web /
  *   desktop 不受影响）；
  * - 若宿主确实配置了 adjustResize（布局视口同步收缩），公式自然归零，
  *   不会双重避让。

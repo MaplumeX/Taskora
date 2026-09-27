@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 
 import {
@@ -19,6 +19,7 @@ import { TaskStatus, TaskBucket, ScheduledType } from '@taskora/shared';
 
 import { useUiInteractionStore } from '@taskora/api';
 import { TaskItem } from './TaskItem';
+import { mockDesktop } from '@/test/media';
 
 vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -189,7 +190,12 @@ describe('TaskRowExpanded — DnD keyboard stuck regression', () => {
 });
 
 describe('TaskRowExpanded — icon button hints', () => {
+  // hover 提示只在宽屏（Popover 形态）挂载；窄屏为居中卡片、无 hover。
+  let restoreMedia: () => void;
+  afterEach(() => restoreMedia());
+
   beforeEach(() => {
+    restoreMedia = mockDesktop(true);
     vi.clearAllMocks();
     useUiInteractionStore.setState({ expandedId: null, pendingAutoEditId: null });
   });
