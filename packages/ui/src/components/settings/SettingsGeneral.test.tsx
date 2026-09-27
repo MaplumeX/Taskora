@@ -134,6 +134,14 @@ describe('SettingsGeneral — Android status bar', () => {
     setClientKind('web');
     localStorage.clear();
     vi.restoreAllMocks();
+    vi.unstubAllGlobals();
+  });
+
+  it('hides the desktop-only launch-at-login section on the Tauri mobile shell', () => {
+    // 移动端也是 Tauri 运行时：__TAURI_INTERNALS__ 存在，但开关仍应隐藏。
+    vi.stubGlobal('__TAURI_INTERNALS__', {});
+    renderPage();
+    expect(screen.queryByText(/launch at login/i)).not.toBeInTheDocument();
   });
 
   it('shows a retryable error and keeps the switch off when native posting fails', async () => {

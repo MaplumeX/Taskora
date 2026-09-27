@@ -10,16 +10,19 @@
  * - 动作回调：插件 trigger('action')，载荷 { action: 'next' } 或
  *   { action: 'quick-add', input }（「＋」拉起 QuickAddActivity 浮层，
  *   提交文本经 input 带回；冷启动输入由原生落盘补发）；
- * - 权限请求仍走 tauri-plugin-notification 的既有命令（其 ACL 已在
- *   default capability 中），渠道被用户在系统设置关闭时 show 会 reject，
+ * - 权限请求走 notification-bridge 的实时原生复查（不缓存 web 权限，
+ *   与 reminders 同一口径）；渠道被用户在系统设置关闭时 show 会 reject，
  *   控制器据此回滚开关（issue 01 行为保留）。
  */
 
 import { addPluginListener, invoke } from '@tauri-apps/api/core';
-import { requestPermission } from '@tauri-apps/plugin-notification';
 import { i18n } from '@taskora/api';
 
 import type { StatusBarActionEvent, StatusBarShell } from '@taskora/api';
+import {
+  isNativeNotificationPermissionGranted,
+  requestNativeNotificationPermission,
+} from '../notification-bridge';
 
 /** 插件 trigger('action') 的载荷（见 StatusBarPlugin.kt）。 */
 interface StatusBarActionPayload {
@@ -29,22 +32,8 @@ interface StatusBarActionPayload {
 
 export function createTauriStatusBarShell(): StatusBarShell {
   return {
-    async isPermissionGranted() {
-      try {
-        // 不使用插件缓存的 window.Notification.permission：系统授权可在
-        // 本会话内被用户撤回/恢复。
-        return (await invoke<boolean | null>('plugin:notification|is_permission_granted')) === true;
-      } catch {
-        return false;
-      }
-    },
-    async requestPermission() {
-      try {
-        return (await requestPermission()) === 'granted';
-      } catch {
-        return false;
-      }
-    },
+    isPermissionGranted: isNativeNotificationPermissionGranted,
+    requestPermission: requestNativeNotificationPermission,
     async post(content) {
       await invoke('plugin:statusbar|show', {
         args: {

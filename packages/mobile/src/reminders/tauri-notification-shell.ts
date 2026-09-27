@@ -8,70 +8,38 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import {
-  cancel,
-  createChannel,
-  isPermissionGranted,
-  requestPermission,
-  Importance,
-  Schedule,
-} from '@tauri-apps/plugin-notification';
+import { cancel, Importance, Schedule } from '@tauri-apps/plugin-notification';
 
 import { notificationIdForKey, type ReminderNotificationShell } from '@taskora/api';
-import { listNotificationChannels, postNotification } from '../notification-bridge';
+import {
+  ensureNotificationChannel,
+  isNativeNotificationPermissionGranted,
+  postNotification,
+  requestNativeNotificationPermission,
+} from '../notification-bridge';
 
 const CHANNEL_ID = 'reminders';
 
-let channelReady: Promise<void> | null = null;
-
 /**
- * Android 8+：通知必须归属已存在的 Channel，否则静默不触发。
- * 失败不缓存（典型诱因：授权未授予时 channels() 拒绝）——缓存失败会让
- * 本会话内渠道永远建不起来、后续通知全部被系统静默丢弃；下次调用重试，
- * 授权恢复后自愈。
+ * Android 8+：通知必须归属已存在且未关闭的 Channel，否则静默不触发。
+ * 每次检查（不缓存成功），才能感知用户在系统设置中关闭/恢复渠道；
+ * 失败不缓存，授权或渠道恢复后自愈。
  */
 function ensureChannel(): Promise<void> {
-  if (channelReady === null) {
-    channelReady = (async () => {
-      const existing = await listNotificationChannels();
-      if (!existing.some((channel) => channel.id === CHANNEL_ID)) {
-        await createChannel({
-          id: CHANNEL_ID,
-          name: 'Taskora',
-          importance: Importance.High,
-        });
-      }
-    })();
-    channelReady.catch(() => {
-      channelReady = null;
-    });
-  }
-  return channelReady;
+  return ensureNotificationChannel(CHANNEL_ID, 'Taskora', Importance.High);
 }
 
 export function createMobileNotificationShell(): ReminderNotificationShell {
   return {
     isSupported: () => true,
-    async isPermissionGranted() {
-      try {
-        return await isPermissionGranted();
-      } catch {
-        return false;
-      }
-    },
-    async requestPermission() {
-      try {
-        return (await requestPermission()) === 'granted';
-      } catch {
-        return false;
-      }
-    },
+    isPermissionGranted: isNativeNotificationPermissionGranted,
+    requestPermission: requestNativeNotificationPermission,
     async schedule(key, title, body, fireAt) {
       try {
         // 授权未授予时系统侧注册必然失败（Android 13+ 运行时授权；
         // 多设备同步来的提醒本机可能从未弹过授权框）。显式预检让失败
         // 原因可观测，rethrow 交给 coordinator 下 tick 重试。
-        if (!(await isPermissionGranted())) {
+        if (!(await isNativeNotificationPermissionGranted())) {
           throw new Error('notification permission not granted');
         }
         await ensureChannel();

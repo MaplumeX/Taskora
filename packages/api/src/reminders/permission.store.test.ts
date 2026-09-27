@@ -52,6 +52,16 @@ describe('useReminderPermissionStore — 未询问 ≠ 被拒', () => {
     expect(useReminderPermissionStore.getState().permission).toBe('granted');
   });
 
+  it('系统侧重新授权后，refresh 从 denied 恢复到 granted', async () => {
+    installShell(false, false);
+    await useReminderPermissionStore.getState().request();
+    expect(useReminderPermissionStore.getState().permission).toBe('denied');
+
+    installShell(true, true);
+    await useReminderPermissionStore.getState().refresh();
+    expect(useReminderPermissionStore.getState().permission).toBe('granted');
+  });
+
   it('询问后被拒（asked 已持久化）→ denied；跨会话 refresh 仍 denied', async () => {
     installShell(false, false);
     await useReminderPermissionStore.getState().request();

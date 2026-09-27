@@ -94,8 +94,10 @@ export function computeReminderPlan(
 export interface ReminderRegistrationDiff {
   /** 需要（重新）注册的通知。 */
   register: ReminderNotification[];
-  /** 需要注销的 key。 */
+  /** 因数据变更需要注销的 key。 */
   cancel: string[];
+  /** 自然到点、等待系统触发而不再期望注册的 key。 */
+  due: string[];
 }
 
 /**
@@ -107,10 +109,12 @@ export interface ReminderRegistrationDiff {
 export function diffReminderRegistration(
   registered: Map<string, number>,
   desired: ReminderNotification[],
+  nowMs = Date.now(),
 ): ReminderRegistrationDiff {
   const desiredByKey = new Map(desired.map((n) => [n.key, n]));
   const register: ReminderNotification[] = [];
   const cancel: string[] = [];
+  const due: string[] = [];
   for (const n of desired) {
     const current = registered.get(n.key);
     if (current === undefined || current !== n.fireAt) {
@@ -118,10 +122,17 @@ export function diffReminderRegistration(
       if (current !== undefined) cancel.push(n.key);
     }
   }
-  for (const key of registered.keys()) {
-    if (!desiredByKey.has(key)) cancel.push(key);
+  for (const [key, fireAt] of registered) {
+    if (!desiredByKey.has(key)) {
+      if (fireAt <= nowMs) {
+        // 自然到点：系统侧可能仍在排队触发，绝不能取消；仅本地退役。
+        due.push(key);
+      } else {
+        cancel.push(key);
+      }
+    }
   }
-  return { register, cancel };
+  return { register, cancel, due };
 }
 
 /** 计划日期 + HH:mm → 账号时区当天该时刻的 epoch ms；解析失败返回 null。 */

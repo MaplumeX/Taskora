@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { invoke } from '@tauri-apps/api/core';
+import { Importance, type Channel } from '@tauri-apps/plugin-notification';
 
 import { createTauriStatusBarShell } from './tauri-shell';
 import { createMobileNotificationShell } from '../reminders/tauri-notification-shell';
@@ -12,11 +13,13 @@ const invokeMock = vi.fn<typeof invoke>();
 let failCommand: string | null;
 let channelCallbacks: Map<number, (raw: { index: number; message: unknown }) => void>;
 let nextCallbackId: number;
+let existingChannels: Channel[];
 
 beforeEach(() => {
   failCommand = null;
   channelCallbacks = new Map();
   nextCallbackId = 1;
+  existingChannels = [];
   invokeMock.mockReset();
   vi.stubGlobal('__TAURI_INTERNALS__', {
     invoke: (command: string, args: Record<string, unknown>) =>
@@ -33,7 +36,7 @@ beforeEach(() => {
       case 'plugin:notification|is_permission_granted':
         return true;
       case 'plugin:notification|list_channels':
-        return [];
+        return existingChannels;
       case 'plugin:notification|create_channel':
         return;
       case 'plugin:notification|notify':
@@ -127,5 +130,20 @@ describe('Android status bar plugin shell', () => {
     expect(invokeMock).toHaveBeenCalledWith('plugin:notification|notify', {
       options: { channelId: 'reminders', title: 'Reminder', body: 'Task' },
     });
+  });
+
+  it('reminder channel closure rejects posting and recovers when restored', async () => {
+    const shell = createMobileNotificationShell();
+    const channel = { id: 'reminders', name: 'Taskora', importance: Importance.High };
+    existingChannels = [channel];
+    await shell.fireNow('Reminder', 'Task');
+
+    channel.importance = Importance.None;
+    await shell.fireNow('Blocked', 'Task');
+    expect(invokeMock.mock.calls.filter(([cmd]) => cmd === 'plugin:notification|notify')).toHaveLength(1);
+
+    channel.importance = Importance.High;
+    await shell.fireNow('Restored', 'Task');
+    expect(invokeMock.mock.calls.filter(([cmd]) => cmd === 'plugin:notification|notify')).toHaveLength(2);
   });
 });

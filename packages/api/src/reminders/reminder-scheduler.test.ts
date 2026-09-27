@@ -99,13 +99,15 @@ describe('diffReminderRegistration — 期望集 vs 已注册集 的注册/注�
   });
 
   it('消失的注册（关闭提醒/了结/进 Trash）→ cancel', () => {
+    const future = new Date(Date.UTC(2026, 1, 5, 10, 0, 0)).getTime();
     const registered = new Map([
-      ['reminder:t1', 1],
-      [reminderNotificationKey('t2'), new Date(Date.UTC(2026, 1, 5, 10, 0, 0)).getTime()],
+      ['reminder:t1', future],
+      [reminderNotificationKey('t2'), future],
     ]);
-    const diff = diffReminderRegistration(registered, computeReminderPlan([other], NOW));
+    const diff = diffReminderRegistration(registered, computeReminderPlan([other], NOW), NOW.getTime());
     expect(diff.register).toEqual([]);
     expect(diff.cancel).toEqual(['reminder:t1']);
+    expect(diff.due).toEqual([]);
   });
 
   it('fireAt 变化（改时刻/改日期）→ 先 cancel 再 register 同一 key', () => {
@@ -132,5 +134,26 @@ describe('diffReminderRegistration — 期望集 vs 已注册集 的注册/注�
     );
     expect(diff.register).toEqual([]);
     expect(diff.cancel).toEqual([]);
+    expect(diff.due).toEqual([]);
+  });
+
+  it('注册时间已到且未来不再期望：due 而非 cancel（系统排程不能被撤销）', () => {
+    const fireAt = new Date(Date.UTC(2026, 1, 5, 9, 0, 0)).getTime();
+    const registered = new Map([[reminderNotificationKey('t1'), fireAt]]);
+    const diff = diffReminderRegistration(registered, [], fireAt + 30_000);
+
+    expect(diff.register).toEqual([]);
+    expect(diff.cancel).toEqual([]);
+    expect(diff.due).toEqual([reminderNotificationKey('t1')]);
+  });
+
+  it('注册时间在将来且未来不再期望：仍是 cancel（用户变更/任务终态）', () => {
+    const fireAt = new Date(Date.UTC(2026, 1, 5, 9, 0, 0)).getTime();
+    const registered = new Map([[reminderNotificationKey('t1'), fireAt]]);
+    const diff = diffReminderRegistration(registered, [], fireAt - 30_000);
+
+    expect(diff.register).toEqual([]);
+    expect(diff.cancel).toEqual([reminderNotificationKey('t1')]);
+    expect(diff.due).toEqual([]);
   });
 });
