@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
 
 import { AppShell } from '@taskora/ui/components/layout/AppShell';
+import { RootRedirect } from '@taskora/ui/components/layout/RootRedirect';
 import { ProtectedRoute } from './ProtectedRoute';
 
 function PageFallback() {
@@ -16,6 +17,7 @@ const AgentPage = lazy(() => import('@taskora/ui/pages/Agent'));
 const Anytime = lazy(() => import('@taskora/ui/pages/Anytime'));
 const AreaDetail = lazy(() => import('@taskora/ui/pages/AreaDetail'));
 const Calendar = lazy(() => import('@taskora/ui/pages/Calendar'));
+const Home = lazy(() => import('@taskora/ui/pages/Home'));
 const Inbox = lazy(() => import('@taskora/ui/pages/Inbox'));
 const Logbook = lazy(() => import('@taskora/ui/pages/Logbook'));
 const ProjectDetail = lazy(() => import('@taskora/ui/pages/ProjectDetail'));
@@ -38,7 +40,8 @@ export function MainApp() {
         <Routes>
           <Route element={<ProtectedRoute />}>
             <Route element={<AppShell />}>
-              <Route path="/" element={<Navigate to="/today" replace />} />
+              <Route path="/" element={<RootRedirect />} />
+              <Route path="/home" element={<Home />} />
               <Route path="/inbox" element={<Inbox />} />
               <Route path="/today" element={<Today />} />
               <Route path="/upcoming" element={<Upcoming />} />

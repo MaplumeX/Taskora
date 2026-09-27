@@ -13,7 +13,7 @@ import { useAreasQuery } from '@/hooks/useAreas';
 
 /** Views where the "add task" action must not appear. */
 /** 不显示「添加任务」的视图（agent 有自己的聊天输入框，底部动作不适用） */
-const HIDE_ADD_TASK_VIEWS = ['upcoming', 'calendar', 'logbook', 'trash', 'agent'];
+const HIDE_ADD_TASK_VIEWS = ['upcoming', 'calendar', 'logbook', 'trash', 'agent', 'home'];
 
 /** Route context supplied by the host navigation shell. */
 export interface BottomActionsRouteContext {

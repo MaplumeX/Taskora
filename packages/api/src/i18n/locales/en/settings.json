@@ -1,6 +1,8 @@
 {
   "timeZone": "Account time zone",
   "timeZoneHint": "Use the same day, repeat schedule and reminder times on every device. Changing this does not move scheduled dates or deadlines.",
+  "timeZoneSearch": "Search time zones",
+  "noMatches": "No matches",
   "general": "General",
   "generalSettings": "General Settings",
   "launchAtLogin": "Launch at login",

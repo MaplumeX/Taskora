@@ -78,14 +78,18 @@ export function Calendar({
       locale={locale}
       weekStartsOn={weekStartsOn}
       autoFocus={autoFocus}
-      className={cn('p-3 rounded-lg', className)}
+      // relative：翻月按钮（nav）绝对定位锚定日历自身，而非外层容器
+      // （居中 Dialog 卡片里会飘到卡片顶部，与标题 / 关闭按钮重叠）。
+      className={cn('relative p-3 rounded-lg', className)}
       classNames={{
         root: 'text-foreground',
         months: 'flex flex-col sm:flex-row gap-2',
         month: 'flex flex-col gap-2.5',
         month_caption: 'flex justify-center items-center h-8',
         caption_label: 'text-sm font-semibold tracking-wide',
-        nav: 'flex items-center justify-between absolute inset-x-1 top-3',
+        // 与 month_caption 同高同顶（h-8 / top-3），按钮垂直居中于标题行；
+        // 窄屏 44px 按钮在 h-8 行内对称溢出，仍与标题居中对齐。
+        nav: 'flex h-8 items-center justify-between absolute inset-x-1 top-3',
         button_previous:
           'inline-flex items-center justify-center rounded-md size-8 text-muted-foreground hover:text-foreground hover:bg-accent transition-colors disabled:opacity-30 disabled:pointer-events-none max-md:size-11 max-md:rounded-full',
         button_next:

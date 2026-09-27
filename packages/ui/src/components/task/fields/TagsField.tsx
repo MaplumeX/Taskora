@@ -16,9 +16,9 @@ export function TagsField({ current, onPatch }: FieldProps) {
   const { data: tags = [] } = useTagsQuery();
 
   return (
-    <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto">
+    <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto max-md:max-h-none">
       {tags.length === 0 ? (
-        <span className="px-2 py-1.5 text-xs text-muted-foreground/60">
+        <span className="px-2 py-1.5 text-xs text-muted-foreground/60 max-md:py-3 max-md:text-sm">
           {t('task:noTagsHint')}
         </span>
       ) : (
@@ -36,7 +36,7 @@ export function TagsField({ current, onPatch }: FieldProps) {
                 onPatch({ tagIds: next });
               }}
               className={cn(
-                'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent max-md:py-2.5',
+                'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent max-md:min-h-11 max-md:gap-2.5 max-md:py-2.5 max-md:text-[15px]',
                 selected ? 'opacity-100' : 'opacity-50',
               )}
               style={{ color: tag.color }}

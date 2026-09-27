@@ -21,6 +21,7 @@ import {
 } from '@taskora/api';
 import { buildUpcomingLayout, type UpcomingDay } from '@taskora/api';
 import { toast } from 'sonner';
+import { PageHeading } from '@/components/layout/PageHeading';
 
 export default function Upcoming() {
   const calendarDay = useCalendarDay();
@@ -100,7 +101,7 @@ export default function Upcoming() {
 
   return (
     <div className="flex flex-col gap-4" onClick={handleBlankClick}>
-      <h1 className="font-display text-3xl font-semibold tracking-tight">{t('nav:upcoming')}</h1>
+      <PageHeading nav="/upcoming">{t('nav:upcoming')}</PageHeading>
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (

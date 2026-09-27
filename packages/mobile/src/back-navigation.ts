@@ -17,7 +17,7 @@ import { useEffect } from 'react';
 import { onBackButtonPress } from '@tauri-apps/api/app';
 import { invoke } from '@tauri-apps/api/core';
 
-/** 打开中的 Radix 浮层选择器：Dialog（含 MobileNavDrawer / 详情 sheet）、菜单、下拉列表。 */
+/** 打开中的 Radix 浮层选择器：Dialog（含详情 sheet / 设置）、菜单、下拉列表。 */
 const OPEN_OVERLAY_SELECTOR = [
   '[role="dialog"][data-state="open"]',
   '[role="menu"][data-state="open"]',

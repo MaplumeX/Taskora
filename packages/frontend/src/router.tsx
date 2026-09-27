@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
 import { AppShell } from '@taskora/ui/components/layout/AppShell';
+import { RootRedirect } from '@taskora/ui/components/layout/RootRedirect';
 import { ProtectedRoute } from './components/ProtectedRoute';
 
 function PageFallback() {
@@ -16,6 +17,7 @@ const AgentPage = lazy(() => import('@taskora/ui/pages/Agent'));
 const Anytime = lazy(() => import('@taskora/ui/pages/Anytime'));
 const AreaDetail = lazy(() => import('@taskora/ui/pages/AreaDetail'));
 const Calendar = lazy(() => import('@taskora/ui/pages/Calendar'));
+const Home = lazy(() => import('@taskora/ui/pages/Home'));
 const Inbox = lazy(() => import('@taskora/ui/pages/Inbox'));
 const Logbook = lazy(() => import('@taskora/ui/pages/Logbook'));
 const Login = lazy(() => import('@/pages/Login'));
@@ -51,7 +53,8 @@ export const router = createBrowserRouter([
       {
         element: <AppShell />,
         children: [
-          { index: true, path: '/', element: <Navigate to="/today" replace /> },
+          { index: true, path: '/', element: <RootRedirect /> },
+          { path: '/home', element: <Home /> },
           { path: '/inbox', element: <Inbox /> },
           { path: '/today', element: <Today /> },
           { path: '/upcoming', element: <Upcoming /> },

@@ -13,6 +13,15 @@ import {
 } from '@taskora/shared';
 import { useAgentConfig, useTestAgentConfig, useUpdateAgentConfig } from '@taskora/api';
 
+import {
+  SettingsGroup,
+  SettingsInputRow,
+  SettingsOptionGroup,
+  SettingsPage,
+  SettingsRow,
+  useSettingsNav,
+} from './SettingsList';
+
 /**
  * BYOK settings for the Assistant: provider preset + base URL + API key +
  * model id. The key is stored encrypted server-side (AES-256-GCM) and never
@@ -23,6 +32,7 @@ export default function SettingsAssistant() {
   const { data: config, isLoading } = useAgentConfig();
   const update = useUpdateAgentConfig();
   const test = useTestAgentConfig();
+  const mobileNav = useSettingsNav();
 
   const [provider, setProvider] = useState('custom');
   const [baseUrl, setBaseUrl] = useState('');
@@ -94,6 +104,118 @@ export default function SettingsAssistant() {
       <div className="flex items-center justify-center py-12">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-muted border-t-transparent" />
       </div>
+    );
+  }
+
+  if (mobileNav) {
+    // 窄屏：服务商推入 ✓ 选项页；输入框为单元格，说明作分组脚注
+    const providerLabel =
+      AGENT_PROVIDER_PRESETS.find((p) => p.id === provider)?.label ?? provider;
+    return (
+      <SettingsPage>
+        <SettingsGroup>
+          <SettingsRow
+            label={t('settings:assistantSettings')}
+            value={
+              config.configured
+                ? `${t('settings:assistantConfigured')}${config.apiKeyMasked ? ` · ${config.apiKeyMasked}` : ''}`
+                : t('settings:assistantNotConfigured')
+            }
+          />
+        </SettingsGroup>
+
+        <SettingsGroup>
+          <SettingsRow
+            label={t('settings:assistantProvider')}
+            value={providerLabel}
+            chevron
+            onClick={() =>
+              mobileNav.push({
+                title: t('settings:assistantProvider'),
+                render: () => (
+                  <SettingsOptionGroup
+                    options={AGENT_PROVIDER_PRESETS.map((p) => ({ value: p.id, label: p.label }))}
+                    value={provider}
+                    onChange={(id) => {
+                      applyPreset(id);
+                      mobileNav.pop();
+                    }}
+                  />
+                ),
+              })
+            }
+          />
+        </SettingsGroup>
+
+        <SettingsGroup footer={t('settings:assistantBaseUrlHint')}>
+          <SettingsInputRow
+            id="agent-base-url"
+            label={t('settings:assistantBaseUrl')}
+            value={baseUrl}
+            onChange={(e) => setBaseUrl(e.target.value)}
+            placeholder="https://api.deepseek.com/v1"
+            inputMode="url"
+            autoCapitalize="off"
+          />
+        </SettingsGroup>
+
+        <SettingsGroup footer={t('settings:assistantApiKeyHint')}>
+          <SettingsInputRow
+            id="agent-api-key"
+            type="password"
+            label={t('settings:assistantApiKey')}
+            value={apiKey}
+            onChange={(e) => setApiKey(e.target.value)}
+            placeholder={config.apiKeyMasked ?? 'sk-…'}
+            autoComplete="off"
+          />
+        </SettingsGroup>
+
+        <SettingsGroup footer={t('settings:assistantModelIdHint')}>
+          <SettingsInputRow
+            id="agent-model"
+            label={t('settings:assistantModelId')}
+            value={modelId}
+            onChange={(e) => setModelId(e.target.value)}
+            placeholder="deepseek-chat"
+            autoCapitalize="off"
+          />
+        </SettingsGroup>
+
+        <SettingsOptionGroup
+          header={t('settings:assistantThinking')}
+          footer={t('settings:assistantThinkingHint')}
+          options={AGENT_THINKING_LEVELS.map((level) => ({
+            value: level,
+            label: t(`agent:thinkingLevel_${level}`),
+          }))}
+          value={thinkingLevel}
+          onChange={setThinkingLevel}
+        />
+
+        <SettingsGroup
+          footer={
+            testResult ? (
+              <span className={testResult.ok ? undefined : 'text-destructive'}>
+                {testResult.message}
+              </span>
+            ) : undefined
+          }
+        >
+          <SettingsRow
+            action
+            disabled={update.isPending}
+            onClick={handleSave}
+            label={update.isPending ? t('settings:assistantSaving') : t('settings:assistantSave')}
+          />
+          <SettingsRow
+            action
+            disabled={test.isPending}
+            onClick={handleTest}
+            label={test.isPending ? t('settings:assistantTesting') : t('settings:assistantTest')}
+          />
+        </SettingsGroup>
+      </SettingsPage>
     );
   }
 

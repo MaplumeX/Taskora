@@ -5,9 +5,12 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 
+import { SettingsGroup, SettingsPage, SettingsRow, useSettingsNav } from './SettingsList';
+
 export default function SettingsData() {
   const { t } = useTranslation(['settings', 'common']);
   const exportMutation = useExportData();
+  const mobileNav = useSettingsNav();
 
   const handleExport = async () => {
     try {
@@ -26,6 +29,21 @@ export default function SettingsData() {
       toast.error(t('settings:exportFailed'));
     }
   };
+
+  if (mobileNav) {
+    return (
+      <SettingsPage>
+        <SettingsGroup header={t('settings:exportData')} footer={t('settings:exportDescription')}>
+          <SettingsRow
+            action
+            disabled={exportMutation.isPending}
+            onClick={() => void handleExport()}
+            label={exportMutation.isPending ? t('settings:exporting') : t('settings:exportButton')}
+          />
+        </SettingsGroup>
+      </SettingsPage>
+    );
+  }
 
   return (
     <div className="flex max-w-lg flex-col gap-4">
