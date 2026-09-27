@@ -134,4 +134,19 @@ describe('Android status bar notification bridge', () => {
       options: { channelId: 'reminders', title: 'Reminder', body: 'Task' },
     });
   });
+
+  it('reminder channel closure rejects posting and recovers when restored', async () => {
+    const shell = createMobileNotificationShell();
+    const channel = { id: 'reminders', name: 'Taskora', importance: Importance.High };
+    existingChannels = [channel];
+    await shell.fireNow('Reminder', 'Task');
+
+    channel.importance = Importance.None;
+    await shell.fireNow('Blocked', 'Task');
+    expect(invokeMock.mock.calls.filter(([cmd]) => cmd === 'plugin:notification|notify')).toHaveLength(1);
+
+    channel.importance = Importance.High;
+    await shell.fireNow('Restored', 'Task');
+    expect(invokeMock.mock.calls.filter(([cmd]) => cmd === 'plugin:notification|notify')).toHaveLength(2);
+  });
 });

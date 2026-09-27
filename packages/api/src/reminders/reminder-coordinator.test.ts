@@ -272,6 +272,46 @@ describe('ReminderCoordinator — system（移动）模式', () => {
     await engine.close();
   });
 
+  it('自然到点后不取消系统排程；重新排期后任务终态仍注销', async () => {
+    const taskId = await seedTask(engine);
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(shell.schedule).toHaveBeenCalledTimes(1);
+
+    // 已到点（模拟系统排程稍慢）：不调用原生 cancel，交给 OS 触发。
+    clock.advance(dayAt(5, 9, 0) - dayAt(4, 12) + 30_000);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(shell.cancel).not.toHaveBeenCalled();
+
+    // 触发后同一 key 仍应可再次排期（改到明天）。
+    await engine.update('task', taskId, { scheduledDate: '2026-02-06' });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(shell.schedule).toHaveBeenCalledTimes(2);
+
+    // 重新排期后任务完成：未触发的排程必须注销。
+    await engine.update('task', taskId, {
+      status: TaskStatus.COMPLETED,
+      settledAt: new Date(clock.now()).toISOString(),
+    });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(shell.cancel).toHaveBeenCalledWith(`reminder:${taskId}`);
+
+    coordinator.stop();
+    await engine.close();
+  });
+
+  it('自然到点后立即登出：仍注销等待系统触发的排程', async () => {
+    const taskId = await seedTask(engine);
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+    clock.advance(dayAt(5, 9, 0) - dayAt(4, 12) + 30_000);
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    coordinator.stop();
+    expect(shell.cancel).toHaveBeenCalledWith(`reminder:${taskId}`);
+    await engine.close();
+  });
+
   it('App 未运行期间错过的提醒：启动对齐时不再注册（系统侧由 OS 决定）', async () => {
     await seedTask(engine);
     clock.advance(dayAt(6, 10) - dayAt(4, 12));
