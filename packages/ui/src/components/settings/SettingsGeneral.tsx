@@ -17,8 +17,13 @@ type AutoStartApi = {
   disable: () => Promise<void>;
 };
 
-/** 桌面端专属系统设置（如开机自启）只在 Tauri 运行时出现，Web 版不渲染。 */
-const isDesktopRuntime = () => '__TAURI_INTERNALS__' in globalThis;
+/**
+ * 桌面端专属系统设置（如开机自启）只在桌面 Tauri 运行时出现。
+ * 注意：移动端同样是 Tauri shell（webview 里也会注入 __TAURI_INTERNALS__），
+ * 所以仅靠 __TAURI_INTERNALS__ 无法区分桌面与移动，必须同时校验 clientKind。
+ */
+const isDesktopRuntime = () =>
+  '__TAURI_INTERNALS__' in globalThis && getClientKind() === 'desktop';
 
 /** 状态栏常驻通知（android-status-bar）：仅 Android 渲染，且控制器已注册。 */
 const getStatusBar = () => (getClientKind() === 'mobile' ? currentStatusBarController() : null);
