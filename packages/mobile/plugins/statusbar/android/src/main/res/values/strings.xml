@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 无障碍描述（非用户语言文案；用户可见文案全部由 JS 注入快照）。 -->
+    <string name="status_bar_next_task" translatable="false">Next task</string>
+    <string name="status_bar_quick_add" translatable="false">Quick add</string>
+</resources>

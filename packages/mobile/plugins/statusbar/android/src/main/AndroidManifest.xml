@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+
+    <application>
+        <!--
+            常驻通知由前台服务持有：进程被回收时通知上的「▸」「＋」才不会
+            变死（广播接收器与插件实例随之存活）。类型必须是 specialUse：
+            dataSync 在 Android 15 起有 6h/24h 超时且禁开机自启
+            （research.md §3.4-7）。侧载分发，无 Play 申报环节。
+        -->
+        <service
+            android:name="app.taskora.mobile.statusbar.StatusBarService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Persistent status bar entry showing the current task with next-task and quick-add actions" />
+        </service>
+
+        <receiver
+            android:name="app.taskora.mobile.statusbar.StatusBarActionReceiver"
+            android:exported="false" />
+
+        <activity
+            android:name="app.taskora.mobile.statusbar.QuickAddActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:theme="@style/TaskoraQuickAddTheme"
+            android:windowSoftInputMode="stateVisible|adjustResize" />
+    </application>
+</manifest>

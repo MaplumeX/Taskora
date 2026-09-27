@@ -1,7 +1,6 @@
 {
   "quickAddEntry": "Quick add task",
-  "quickAdd": "＋",
   "quickAddPlaceholder": "Task title",
-  "nextTask": "＞",
+  "quickAddSubmit": "Add",
   "channelName": "Status bar"
 }
