@@ -103,3 +103,13 @@ action 按钮行（「＞」「＋」两个文字按钮），且带 RemoteInput 
 QuickAddActivity 透明浮层（立即 finish、零 UI），彻底绕开进程拉主界
 面，但会让「▸」点击产生一次 Activity 启停的开销与闪烁风险，暂不采
 用，留作热路径修复无效时的回退方案。
+
+## 后续修复：「＋」拉起主界面（task 归属）
+
+用户实测反馈：点「＋」时整个应用被顶到前台，而不是只出现浮层。根因：
+QuickAddActivity 未声明 `taskAffinity`，默认归属应用主 task；透明窗口
+会让同 task 下层的 MainActivity 保持可见并 resume，于是浮层背后透出完
+整主界面。修复：manifest 加 `android:taskAffinity=""` + `singleTask`，
+浮层自立 task，透明窗口透出的是用户原来所在的应用/桌面。与「▸」的
+热路径修复同理；冷路径（进程被杀后 Tauri 启动顺带拉起 MainActivity）
+仍是已知边界。

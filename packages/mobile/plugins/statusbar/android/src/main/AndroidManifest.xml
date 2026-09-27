@@ -23,10 +23,18 @@
             android:name="app.taskora.mobile.statusbar.StatusBarActionReceiver"
             android:exported="false" />
 
+        <!--
+            空 taskAffinity + singleTask：浮层自立 task，不归入主 task。
+            否则透明窗口会把同 task 的 MainActivity 一并顶到前台，点「＋」
+            看起来像打开了应用（透明 Activity 会让同 task 下层 Activity
+            保持可见）；独立 task 下透出的是用户原来所在的应用/桌面。
+        -->
         <activity
             android:name="app.taskora.mobile.statusbar.QuickAddActivity"
             android:excludeFromRecents="true"
             android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
             android:theme="@style/TaskoraQuickAddTheme"
             android:windowSoftInputMode="stateVisible|adjustResize" />
     </application>
