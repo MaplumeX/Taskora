@@ -1,16 +1,42 @@
 /**
  * 系统通知薄壳接口（reminders spec）。
  *
- * Reminder Scheduler 的纯计算（reminder-scheduler.ts）只产出「应注册/
- * 应注销」的通知集合；真正落到系统通知 API（tauri-plugin-notification）
- * 的部分收敛在本接口后面，由 Desktop / Mobile 应用在 boot 时注册实现
- * （web 前端不注册 → 不支持，符合 spec 的范围划定）。
+ * Reminder Scheduler 的纯计算（reminder-scheduler.ts）只产出期望的提醒
+ * 集合；真正落到系统的部分收敛在本接口后面，由 Desktop / Mobile 应用在
+ * boot 时注册实现（web 前端不注册 → 不支持，符合 spec 的范围划定）：
+ * - 桌面（runtime 模式）：协调器到点调用 fireNow；
+ * - Android（system 模式）：协调器把完整期望集交给 sync，由原生插件
+ *   持久化、设置闹钟并投递（ADR-0014）。
  */
 
 import type { ReplicaRow } from '@taskora/engine';
 import { ScheduledType, TaskStatus } from '@taskora/shared';
 
 import type { ReminderTaskInput } from './reminder-scheduler';
+
+/** 交付给原生的一条提醒：规则已在 JS 侧算完，文案已按当前语言组装。 */
+export interface ReminderDelivery {
+  key: string;
+  /** 触发时刻（epoch ms）。 */
+  fireAt: number;
+  title: string;
+  body: string;
+}
+
+/** 投递可靠性状态（Android 设置页「提醒可靠性」区）。 */
+export interface ReminderReliabilityStatus {
+  /** 应用级通知开关 / Android 13+ 运行时授权。 */
+  notifications: boolean;
+  /** reminders 渠道未被用户关闭。 */
+  channelEnabled: boolean;
+  /** 可以设置精确闹钟（否则最多晚到约 1 小时）。 */
+  exactAlarms: boolean;
+  /** 已豁免电池优化。 */
+  batteryUnrestricted: boolean;
+}
+
+/** 可跳转的系统设置页（通知设置页走 openSettings）。 */
+export type ReminderSettingsTarget = 'exact-alarm' | 'battery' | 'autostart';
 
 export interface ReminderNotificationShell {
   /** 平台是否支持本地通知。 */
@@ -19,14 +45,21 @@ export interface ReminderNotificationShell {
   isPermissionGranted(): Promise<boolean>;
   /** 请求授权；返回是否 granted（拒绝后仍可保存 reminderTime）。 */
   requestPermission(): Promise<boolean>;
-  /** 注册/更新一条系统级定时通知（移动端：App 关闭后仍按系统排程触发）。 */
-  schedule(key: string, title: string, body: string, fireAt: number): Promise<void>;
-  /** 注销一条已注册的系统通知。 */
-  cancel(key: string): Promise<void>;
-  /** 立即发出一条通知（桌面运行时调度路径：到点即发）。 */
-  fireNow(title: string, body: string): Promise<void>;
+  /** runtime 模式（桌面）：到点立即发出一条通知。 */
+  fireNow?(title: string, body: string): Promise<void>;
+  /**
+   * system 模式（Android）：交付完整期望集（不是增量）。原生侧自行与
+   * 持久化计划比对，调用方不维护任何注册状态。
+   */
+  sync?(plan: ReminderDelivery[]): Promise<void>;
+  /** system 模式：注销全部提醒并清空原生计划（登出）。 */
+  clear?(): Promise<void>;
   /** 跳转到系统通知设置页（授权被拒后的引导入口）。 */
   openSettings(): Promise<void>;
+  /** 投递可靠性诊断（仅 Android 实现）。 */
+  reliability?(): Promise<ReminderReliabilityStatus>;
+  /** 跳转到影响投递可靠性的系统设置页（仅 Android 实现）。 */
+  openSystemSettings?(target: ReminderSettingsTarget): Promise<void>;
 }
 
 let shell: ReminderNotificationShell | null = null;
@@ -41,21 +74,6 @@ export function setNotificationShell(next: ReminderNotificationShell | null): vo
 
 export function getNotificationShell(): ReminderNotificationShell | null {
   return shell;
-}
-
-/**
- * 字符串 key → 稳定有符号 32 位数字通知 id（tauri-plugin-notification
- * 的 Rust/原生 Notification id 均为 i32/Int）。FNV-1a 的结果解释为
- * 有符号值：同 key 恒等映射，跨进程重启后注销仍能命中同一系统通知；
- * 不改写历史中已注册成功的正数 id。
- */
-export function notificationIdForKey(key: string): number {
-  let hash = 0x811c9dc5;
-  for (let i = 0; i < key.length; i++) {
-    hash ^= key.charCodeAt(i);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return hash | 0;
 }
 
 /** Engine ReplicaRow → 调度输入（字段级取值，缺省按 null/ACTIVE 处理）。 */

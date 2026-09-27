@@ -35,7 +35,7 @@ Status: ready-for-agent
 
 ### Domain model
 
-- New Task field `reminderTime` — a time-of-day (HH:mm), no date, no timezone. It attaches to the Task's Scheduled Date and is interpreted in the device's local timezone.
+- New Task field `reminderTime` — a time-of-day (HH:mm), no date, no timezone. It attaches to the Task's Scheduled Date and is interpreted in the Account Time Zone (ADR-0013).
 - Term **Reminder** is defined in CONTEXT.md: a time-of-day on a Task, attached to its Scheduled Date, triggering local client notifications; only Tasks with ScheduledType DATE can have one. Projects do not support Reminders.
 - Reminder is cleared when: the Task is settled (Completed/Cancelled) or trashed; or ScheduledType changes away from DATE (Someday/NONE).
 - Changing the Scheduled Date keeps reminderTime unchanged (fires at the same time on the new day).
@@ -85,7 +85,7 @@ Status: ready-for-agent
 
 ## Further Notes
 
-- Timezone semantics: Scheduled Date + reminderTime interpreted in device local timezone; no timezone stored. Cross-timezone travel may shift the wall-clock firing time; accepted for this version.
+- Timezone semantics: Scheduled Date + reminderTime are interpreted in the Account Time Zone (ADR-0013), not the device zone; the Task stores no timezone. Changing the account zone re-resolves every Reminder immediately; travelling with an unchanged account zone keeps firing at the account-zone wall time. DST follows ADR-0013's compatible policy.
 - Duplicate notifications across multiple devices are expected and accepted (matches Things 3).
 - CONTEXT.md has been updated with the Reminder term during the design session.
 
@@ -109,3 +109,24 @@ on two deliberate deviations from the letter of the spec:
 Also noted: opening system notification settings on Linux desktops has
 no standard URI — the action returns an error there and is silently
 ignored (the notice still shows).
+
+### 2026-09-27 — Android delivery redesign (issue 03, ADR-0014)
+
+Android Reminder delivery moves to a native plugin (`plugins/reminders`):
+JS computes the full plan and calls `sync(plan)`; native persists it, arms
+exact alarms, and re-arms after reboot, package replacement and app start.
+The imperative `schedule` / `cancel` path through `tauri-plugin-notification`
+and its in-memory registration map are retired on mobile. Product decisions
+from the design discussion:
+
+- **Missed while powered off → dropped** on Android too (same rule as story 12
+  on desktop); no burst of stale notifications after boot.
+- **Story 13 is qualified on Android**: a phone fires only reminders that it
+  synced the last time the app was opened. A reminder set on another device
+  while the phone app is never opened does not fire on the phone. Server-side
+  push (vendor channels / FCM) is deferred to a separate spec.
+- **OEM process killing**: on ROMs where swiping the app away force-stops it,
+  alarms survive only if the user allows autostart and unrestricted battery
+  use. An Android-only "reminder reliability" settings section shows the
+  status and links to those system pages; delivery cannot be guaranteed
+  otherwise.

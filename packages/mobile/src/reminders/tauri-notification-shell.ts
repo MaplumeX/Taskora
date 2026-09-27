@@ -1,81 +1,43 @@
 /**
- * 移动端通知薄壳（Reminders spec）：tauri-plugin-notification 的适配层。
+ * 移动端通知薄壳（Reminders spec，ADR-0014）：仓库内 reminders 插件的
+ * 适配层。
  *
- * 移动走 system 模式（ReminderCoordinator 经 shell 注册系统级定时通知，
- * App 关闭/离线仍按系统排程触发）。Android 通知必须归属 Channel：首次
- * 注册前确保 reminders 渠道存在。字符串 key → 稳定 32 位数字 id
- * （notificationIdForKey），注销与重启后的重复注册都命中同一系统通知。
+ * 移动走 system 模式：ReminderCoordinator 每次重算把完整期望集交给
+ * sync，原生插件持久化计划、自行差量、设置精确闹钟、开机/启动后重设，
+ * 并在到点时投递——App 关闭或进程被回收后仍按时触发。JS 侧不保存任何
+ * 注册状态，也不再做权限预检：未授权时原生照样落盘计划，授权恢复后
+ * 后续提醒自动投递。
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import { cancel, Importance, Schedule } from '@tauri-apps/plugin-notification';
 
-import { notificationIdForKey, type ReminderNotificationShell } from '@taskora/api';
+import { i18n, type ReminderNotificationShell, type ReminderReliabilityStatus } from '@taskora/api';
 import {
-  ensureNotificationChannel,
   isNativeNotificationPermissionGranted,
-  postNotification,
   requestNativeNotificationPermission,
 } from '../notification-bridge';
-
-const CHANNEL_ID = 'reminders';
-
-/**
- * Android 8+：通知必须归属已存在且未关闭的 Channel，否则静默不触发。
- * 每次检查（不缓存成功），才能感知用户在系统设置中关闭/恢复渠道；
- * 失败不缓存，授权或渠道恢复后自愈。
- */
-function ensureChannel(): Promise<void> {
-  return ensureNotificationChannel(CHANNEL_ID, 'Taskora', Importance.High);
-}
 
 export function createMobileNotificationShell(): ReminderNotificationShell {
   return {
     isSupported: () => true,
     isPermissionGranted: isNativeNotificationPermissionGranted,
     requestPermission: requestNativeNotificationPermission,
-    async schedule(key, title, body, fireAt) {
-      try {
-        // 授权未授予时系统侧注册必然失败（Android 13+ 运行时授权；
-        // 多设备同步来的提醒本机可能从未弹过授权框）。显式预检让失败
-        // 原因可观测，rethrow 交给 coordinator 下 tick 重试。
-        if (!(await isNativeNotificationPermissionGranted())) {
-          throw new Error('notification permission not granted');
-        }
-        await ensureChannel();
-        // 必须 await：未 await 的 rejection 逃逸 try/catch，注册失败
-        // 完全无迹可循（本 bug 的排查黑洞）。
-        await postNotification({
-          id: notificationIdForKey(key),
-          channelId: CHANNEL_ID,
-          title,
-          body,
-          // App 关闭仍按时触发；allowWhileIdle 降低 Doze 模式下的延迟。
-          // （Schedule.at 签名：(date, repeating, allowWhileIdle)）
-          schedule: Schedule.at(new Date(fireAt), false, true),
-        });
-      } catch (error) {
-        console.warn('[reminders] schedule failed:', error);
-        throw error;
-      }
+    async sync(plan) {
+      await invoke('plugin:reminders|sync', {
+        args: { reminders: plan, channelName: i18n.t('task:reminderChannelName') },
+      });
     },
-    async cancel(key) {
-      try {
-        await cancel([notificationIdForKey(key)]);
-      } catch {
-        // 无对应注册时忽略
-      }
-    },
-    async fireNow(title, body) {
-      try {
-        await ensureChannel();
-        await postNotification({ channelId: CHANNEL_ID, title, body });
-      } catch (error) {
-        console.warn('[reminders] fireNow failed:', error);
-      }
+    async clear() {
+      await invoke('plugin:reminders|clear');
     },
     async openSettings() {
       await invoke('open_notification_settings');
+    },
+    reliability() {
+      return invoke<ReminderReliabilityStatus>('plugin:reminders|status');
+    },
+    async openSystemSettings(target) {
+      await invoke('plugin:reminders|open_settings', { target });
     },
   };
 }

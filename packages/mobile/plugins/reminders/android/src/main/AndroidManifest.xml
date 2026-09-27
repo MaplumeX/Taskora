@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!--
+        精确闹钟（ADR-0014）：Android 13+ 声明 USE_EXACT_ALARM 即授予（侧载
+        分发，无 Play 审核）；Android 12/12L 只有 SCHEDULE_EXACT_ALARM，声明
+        即默认授予。未声明时 Android 12+ 只能设非精确闹钟，最多晚约 1 小时。
+    -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission
+        android:name="android.permission.SCHEDULE_EXACT_ALARM"
+        android:maxSdkVersion="32" />
+    <!-- 设置页「提醒可靠性」里直接弹出电池优化豁免对话框。 -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <application>
+        <receiver
+            android:name="app.taskora.mobile.reminders.ReminderAlarmReceiver"
+            android:exported="false" />
+
+        <!-- 系统广播不受 exported=false 限制（system uid 豁免）。 -->
+        <receiver
+            android:name="app.taskora.mobile.reminders.ReminderRestoreReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

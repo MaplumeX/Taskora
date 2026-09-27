@@ -18,10 +18,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }
 tempfile = "3"
-tauri-plugin-notification = "2"
 # 状态栏快速添加（android-status-bar issue 02）：仓库内本地插件，单行
 # RemoteViews 布局 + specialUse 前台服务，替代 notification 插件的标准模板。
 tauri-plugin-statusbar = { path = "../plugins/statusbar" }
+# Reminder 投递（ADR-0014）：仓库内本地插件，持久化计划 + 精确闹钟 +
+# 开机恢复，替代 tauri-plugin-notification 的定时通知。
+tauri-plugin-reminders = { path = "../plugins/reminders" }
 
 # 通知设置页跳转（Reminders spec）：经 tao 初始化的 ndk-context 拿
 # Application Context，JNI 发 APP_NOTIFICATION_SETTINGS intent。

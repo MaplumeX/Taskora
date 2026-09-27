@@ -5,8 +5,9 @@
  * 两种模式（reminders spec）：
  * - runtime（桌面）：不注册系统级排程，由内部 tick 到点 fireNow；
  *   App 未运行期间错过的提醒静默丢弃，绝不补发。
- * - system（移动）：经 shell 注册系统级定时通知，App 关闭/离线仍按
- *   系统排程触发；数据每次变更后重算差量，消失或改期的注册被注销。
+ * - system（Android，ADR-0014）：每次重算把完整期望集交给 shell.sync，
+ *   由原生插件持久化、差量、设置闹钟与投递。协调器不保存任何注册状态
+ *   ——进程会被回收，系统闹钟却持续存在，对账只能在原生侧做。
  *
  * 触发时机：Engine 副本变更（本地写或应用远端写）+ 周期 tick（兜底
  * 跨天滚动与启动后的首次对齐）。
@@ -23,7 +24,11 @@ import {
   isReminderEligible,
   type ReminderNotification,
 } from './reminder-scheduler';
-import { reminderInputFromReplicaRow, type ReminderNotificationShell } from './notification-shell';
+import {
+  reminderInputFromReplicaRow,
+  type ReminderDelivery,
+  type ReminderNotificationShell,
+} from './notification-shell';
 
 export interface ReminderCoordinatorOptions {
   engine: Engine;
@@ -55,12 +60,15 @@ export function createReminderCoordinator(
   const now = options.now ?? (() => new Date());
   const texts = options.texts ?? defaultTexts;
 
-  /** key → 当前注册的 fireAt（runtime 为内存表，system 对应系统注册）。 */
+  /** runtime：key → 当前登记的 fireAt（内存表，到点 fireNow）。 */
   let registered = new Map<string, number>();
-  /** key → 最近一次注册的完整信息（runtime 触发时要用的文案）。 */
+  /** runtime：key → 最近一次登记的完整信息（触发时要用的文案）。 */
   const meta = new Map<string, ReminderNotification>();
-  /** system 模式：已自然到点但仍由系统排程持有的 key。 */
-  const due = new Set<string>();
+  /**
+   * system：最近一次成功交付的期望集签名。期望集未变时跳过 sync（周期
+   * tick 不反复打扰原生）；交付失败不记录，下个 tick 自动重试。
+   */
+  let lastSynced: string | null = null;
   let timer: ReturnType<typeof setInterval> | null = null;
   let unsubscribe: (() => void) | null = null;
   let unsubscribeZone: (() => void) | null = null;
@@ -76,61 +84,62 @@ export function createReminderCoordinator(
       currentTimeZone(),
       currentLegacyDateTimeZone(),
     );
+    if (mode === 'system') {
+      await deliver(desired);
+      return;
+    }
+
     const diff = diffReminderRegistration(registered, desired, nowMs);
     const tasksById = new Map(tasks.map((t) => [t.id, t]));
 
-    // 先注销后注册：同一 key 改期时 cancel 先落到系统侧，随后的
-    // schedule 重新登记（否则先 set 后 delete 会把注册表清丢）。
-    // 自然到点：system 排程交给系统触发（原生 cancel 会同时撤销待
-    // 触发排程和已显示通知，绝不能调用）；runtime 模式仍由本协调器
-    // 补发跨越 tick 边界的提醒。
+    // 自然到点：补发跨越 tick 边界的提醒——前提是任务仍符合条件且时刻
+    // 未被改动（到点后才了结/改期的不补发）。
     for (const key of diff.due) {
       const m = meta.get(key);
+      const task = m ? tasksById.get(m.taskId) : undefined;
       if (
-        mode === 'runtime' &&
         m &&
-        tasksById.get(m.taskId) != null &&
-        isReminderEligible(tasksById.get(m.taskId)!) &&
+        task != null &&
+        isReminderEligible(task) &&
         reminderFireAt(
-          tasksById.get(m.taskId)!.scheduledDate!,
-          tasksById.get(m.taskId)!.reminderTime!,
+          task.scheduledDate!,
+          task.reminderTime!,
           currentTimeZone(),
           currentLegacyDateTimeZone(),
         ) === m.fireAt
       ) {
         const { title, body } = texts(m);
-        void shell.fireNow(title, body).catch(noop);
+        void shell.fireNow?.(title, body).catch(noop);
       }
       registered.delete(key);
       meta.delete(key);
-      if (mode === 'system') due.add(key);
     }
 
+    // 先注销后登记：同一 key 改期时同时出现在 cancel 与 register。
     for (const key of diff.cancel) {
-      if (mode === 'system') {
-        await shell.cancel(key).catch(noop);
-      }
       registered.delete(key);
       meta.delete(key);
     }
-
     for (const n of diff.register) {
-      // 用户重新排到期key：它不再属于「待系统自然触发」集合；随后以新
-      // fireAt 注册/恢复跟踪。
-      due.delete(n.key);
-      if (mode === 'system') {
-        const { title, body } = texts(n);
-        const ok = await shell.schedule(n.key, title, body, n.fireAt).then(
-          () => true,
-          () => false,
-        );
-        // 注册失败不落表：否则内存注册表与系统侧脱节，失败后永不再试
-        // （仅数据变更才重算差量）。不落表则下个 tick 自动重试——授权
-        // 或渠道恢复后自愈。
-        if (!ok) continue;
-      }
       registered.set(n.key, n.fireAt);
       meta.set(n.key, n);
+    }
+  }
+
+  async function deliver(desired: ReminderNotification[]): Promise<void> {
+    if (!shell.sync) return;
+    const plan: ReminderDelivery[] = desired.map((n) => ({
+      key: n.key,
+      fireAt: n.fireAt,
+      ...texts(n),
+    }));
+    const signature = JSON.stringify(plan);
+    if (signature === lastSynced) return;
+    try {
+      await shell.sync(plan);
+      lastSynced = signature;
+    } catch (error) {
+      console.warn('[reminders] sync failed:', error);
     }
   }
 
@@ -163,16 +172,14 @@ export function createReminderCoordinator(
       unsubscribeZone?.();
       unsubscribeZone = null;
       unsubscribe = null;
-      // system 模式停止（登出/装配失败）时注销全部系统注册与待触发的
-      // 已到期排程，避免残留孤儿通知；runtime 模式系统侧本无注册。
+      // system 模式停止（登出/装配失败）时清空原生计划与全部闹钟，避免
+      // 残留孤儿通知；runtime 模式系统侧本无注册。
       if (mode === 'system') {
-        for (const key of [...registered.keys(), ...due]) {
-          void shell.cancel(key).catch(noop);
-        }
+        void shell.clear?.().catch(noop);
       }
       registered = new Map();
       meta.clear();
-      due.clear();
+      lastSynced = null;
     },
     reschedule,
   };
