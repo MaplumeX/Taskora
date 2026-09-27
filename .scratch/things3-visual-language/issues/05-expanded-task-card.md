@@ -17,3 +17,4 @@ Blocked by: 04
 
 - 2026-09-27：完成。卡片 `bg-card` + 10px 圆角 + `shadow-row-lift` + 上下 12px。底栏：已设字段（计划日期含提醒时刻 / 重复 / 标签 / Deadline）为左侧 chip，未设字段为右侧图标（Things 式「已设即显值」）；chip 点击打开同一 FieldPicker。展开时标题行不再显示日期 / 标签 / Deadline 等行内徽标（由 chip 承担）。子任务 12px 圆形勾选框、删除按钮 hover 显示。内联编辑输入统一 `bg-transparent`（Input 默认底色改为 background 后暗色下会露出色块）。
 - 偏离：高度展开动画用 tailwindcss-animate 的 fade + slide-in（展开内容挂载即播放），未做 grid 0fr→1fr 高度过渡（组件挂载 / 卸载模型下无法对高度做过渡）；chip 上不做 hover ✕ 清除（清除入口在各字段编辑器内）。
+- 2026-09-27：按反馈放慢并统一展开 / 收起：改为真正的高度过渡（挂载后下一帧 0fr→1fr；收起先 1fr→0fr，450ms 后卸载），新增 `--dur-expand` 450ms 与 `--ease-expand`。同时发现 `duration-[var(--dur-*)]` 因与 tailwindcss-animate 的 `duration-*` 歧义而从未生成 CSS，改为 preset 注册的 `duration-fast/base/slow/expand`。

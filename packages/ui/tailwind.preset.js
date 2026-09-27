@@ -95,8 +95,17 @@ export default {
         md: 'calc(var(--radius) - 2px)',
         sm: 'calc(var(--radius) - 4px)',
       },
+      // 动效时长 token（tokens.css 的 --dur-*）。用命名键而非 duration-[var(...)]：
+      // tailwindcss-animate 也注册了 duration-*，任意值会因歧义不生成 CSS。
+      transitionDuration: {
+        fast: 'var(--dur-fast)',
+        base: 'var(--dur-base)',
+        slow: 'var(--dur-slow)',
+        expand: 'var(--dur-expand)',
+      },
       transitionTimingFunction: {
         spring: 'var(--ease-spring)',
+        expand: 'var(--ease-expand)',
       },
     },
   },

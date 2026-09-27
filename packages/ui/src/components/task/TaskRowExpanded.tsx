@@ -130,7 +130,7 @@ export function TaskRowExpanded({ task, current }: Props) {
 
   return (
     <div
-      className="flex flex-col gap-3 px-2 pb-2 pl-[2.375rem] pt-1 animate-in fade-in-0 slide-in-from-top-2 duration-[var(--dur-slow)] ease-spring max-md:pl-2"
+      className="flex flex-col gap-3 px-2 pb-2 pl-[2.375rem] pt-1 max-md:pl-2"
       onClick={(e) => e.stopPropagation()}
     >
       <MarkdownNotesEditor

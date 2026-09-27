@@ -35,7 +35,7 @@ export function TaskCheckbox({ checked, onToggle, disabled, cancelled, className
       }}
       className={cn(
         // Things 3 式：14px 圆角方框、1.5px 描边、无阴影；勾上后蓝底白勾。
-        'flex shrink-0 items-center justify-center rounded-[4px] border-[1.5px] transition-colors duration-[var(--dur-fast)]',
+        'flex shrink-0 items-center justify-center rounded-[4px] border-[1.5px] transition-colors duration-fast',
         checked || cancelled
           ? 'border-primary bg-primary text-primary-foreground'
           : 'border-muted-foreground/50 bg-background text-transparent hover:border-primary',

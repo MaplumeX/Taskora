@@ -26,6 +26,9 @@ import { TaskRepeatBadge } from './TaskRepeatBadge';
 import { TaskSubtasksBadge } from './TaskSubtasksBadge';
 import { TaskRowExpanded } from './TaskRowExpanded';
 import { useCompletionRhythm } from './useCompletionRhythm';
+
+/** 展开 / 收起详情的时长，与 tokens.css 的 --dur-expand 一致。 */
+const EXPAND_MS = 450;
 import type { SelectionState } from '@taskora/api';
 
 interface Props {
@@ -64,6 +67,26 @@ export function TaskItem({
   // Logbook 场景（plainSettledTitle）例外：不置灰，仅取消态保留删除线。
   const settled = completed || cancelled;
   const expanded = selectionState === 'expanded';
+  // 详情区的挂载与开合分离：展开时先以 0fr 挂载、下一帧过渡到 1fr；收起时先过渡
+  // 到 0fr，结束后再卸载。展开与收起共用 EXPAND_MS 与同一缓动曲线。
+  const [detailsMounted, setDetailsMounted] = React.useState(expanded);
+  const [detailsOpen, setDetailsOpen] = React.useState(expanded);
+  React.useEffect(() => {
+    if (expanded) {
+      setDetailsMounted(true);
+      let inner = 0;
+      const outer = requestAnimationFrame(() => {
+        inner = requestAnimationFrame(() => setDetailsOpen(true));
+      });
+      return () => {
+        cancelAnimationFrame(outer);
+        cancelAnimationFrame(inner);
+      };
+    }
+    setDetailsOpen(false);
+    const id = window.setTimeout(() => setDetailsMounted(false), EXPAND_MS);
+    return () => window.clearTimeout(id);
+  }, [expanded]);
   // When ≤ 今天（含逾期）视为「今天」语义：非语境视图显示黄星（参考
   // Things 3 的 Anytime 黄星），语境视图（Today/Upcoming）由列表本身
   // 表达语境、行上不再标记。When 永不逾期，红色只属于 Deadline。
@@ -128,10 +151,10 @@ export function TaskItem({
       }
       className={cn(
         // 完成收起：grid-template-rows 1fr → 0fr + 淡出（useCompletionRhythm）。
-        // 展开浮起（外边距 / 阴影）用 slow；完成收起用 base（与 COMPLETE_EXIT_MS 一致）。
+        // 展开浮起（外边距 / 阴影）用 expand；完成收起用 base（与 COMPLETE_EXIT_MS 一致）。
         // 底色不过渡：选中高亮即时出现（同侧边栏 hover-instant）。
-        'group grid rounded-md transition-[grid-template-rows,opacity,margin,box-shadow] ease-spring',
-        exiting ? 'duration-[var(--dur-base)]' : 'duration-[var(--dur-slow)]',
+        'group grid rounded-md transition-[grid-template-rows,opacity,margin,box-shadow] ease-expand',
+        exiting ? 'duration-base' : 'duration-expand',
         exiting ? 'grid-rows-[0fr] opacity-0' : 'grid-rows-[1fr]',
         selectionState === 'selected' && 'bg-selection',
         // 展开：浮起卡片，上下推开相邻行。
@@ -312,7 +335,16 @@ export function TaskItem({
           </div>
         </TaskContextMenu>
 
-        {expanded && <TaskRowExpanded task={task} current={current} />}
+        <div
+          className={cn(
+            'grid transition-[grid-template-rows,opacity] duration-expand ease-expand',
+            detailsOpen ? 'grid-rows-[1fr] opacity-100' : 'grid-rows-[0fr] opacity-0',
+          )}
+        >
+          <div className="min-h-0 overflow-hidden">
+            {detailsMounted && <TaskRowExpanded task={task} current={current} />}
+          </div>
+        </div>
       </div>
     </div>
   );

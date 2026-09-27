@@ -73,7 +73,7 @@ Bucket 图标色（新增 `--nav-inbox` / `--nav-today` / `--nav-upcoming` / `--
 
 ### 动效
 
-- 曲线：`--ease-spring: cubic-bezier(0.32, 0.72, 0, 1)`；时长 `--dur-fast: 120ms`、`--dur-base: 200ms`、`--dur-slow: 320ms`。
+- 曲线：`--ease-spring: cubic-bezier(0.32, 0.72, 0, 1)`（弹出类：菜单、Switch、勾选）；`--ease-expand: cubic-bezier(0.45, 0, 0.2, 1)`（展开 / 收起，前后均匀，spring 过于前倾会显得一闪而过）。时长 `--dur-fast: 120ms`、`--dur-base: 200ms`、`--dur-slow: 320ms`、`--dur-expand: 450ms`，Tailwind 中用 `duration-fast/base/slow/expand`（不要写 `duration-[var(...)]`：与 tailwindcss-animate 冲突，不生成 CSS）。
 - 移除按钮 `active:scale`；按压反馈改为背景加深。
 - `prefers-reduced-motion` 下所有位移 / 缩放动画降级为瞬时或纯透明度变化。
 
@@ -99,7 +99,7 @@ Bucket 图标色（新增 `--nav-inbox` / `--nav-today` / `--nav-upcoming` / `--
 
 ### 展开的任务（`TaskRowExpanded`）
 
-- 展开时整个任务（标题行 + 详情）变为一张浮起卡片：`bg-card`、圆角 10px、`shadow-row-lift`、上下各 12px 外边距推开相邻行；详情区 200ms 淡入下滑。标题行隐藏日期 / 标签 / Deadline 徽标。
+- 展开时整个任务（标题行 + 详情）变为一张浮起卡片：`bg-card`、圆角 10px、`shadow-row-lift`、上下各 12px 外边距推开相邻行。展开与收起对称：详情区高度（grid 0fr↔1fr）、透明度、外边距与阴影统一 `duration-expand` + `ease-expand`，收起结束后才卸载详情。标题行隐藏日期 / 标签 / Deadline 徽标。
 - 卡片内：标题 `body` 600；备注区无边框、placeholder 为「备注」；Subtasks 为 12px 圆形 checkbox 的紧凑列表。
 - 底栏：已设值字段在左侧显示为 chip（图标 + 值，点击打开编辑器），未设值字段在右侧为图标按钮（日期 / 重复 / 标签 / 子任务 / Deadline）。
 
