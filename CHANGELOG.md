@@ -9,6 +9,84 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.6.0] - 2026-09-27
+
+### Changed
+
+- **ui**: Things 3-style visual language and shared design tokens across
+  all three shells (#105) — the theme duplicated in every shell is
+  consolidated into `packages/ui` (`styles/tokens.css` +
+  `tailwind.preset.js`), which the shells now import. A new light/dark
+  token palette (white canvas, gray sidebar, blue interaction color,
+  semantic today/deadline/success/warning and per-bucket nav colors)
+  replaces the old colors, the system font stack replaces Google Fonts,
+  and a type scale is registered with tailwind-merge. Primitives are
+  restyled (macOS-style glass menus, quieter buttons/inputs, iOS switch,
+  hairline separators, a global reduced-motion fallback); task rows
+  become 32px with a selection color, tag capsules and a Things-style
+  checkbox whose completion holds briefly before collapsing (undoable
+  during the hold, `useCompletionRhythm`); the expanded task becomes a
+  lifted card with set fields as chips and unset fields as toolbar
+  icons; sidebars use colored bucket icons, 28px rows and spacing
+  instead of separators; group headers, project feed rows and one shared
+  `EmptyState` (replacing five ad-hoc implementations) follow the same
+  rules. Scheduled/deadline pickers gain a vertical shortcut list
+  (today/tomorrow/someday, current value checkmarked) above the month
+  calendar with a single full-width Clear; login/register/server-setup
+  cards flatten to a borderless rounded-xl card. A final contrast and
+  motion pass tunes tokens to WCAG AA (icons to 3:1) and routes
+  durations through `--dur-fast`.
+- **mobile**: Things 3-style navigation, dense calendar grid and
+  Material settings (#104) — the bottom tab bar is replaced by a
+  Things 3-style home list, and the scheduling/deadline/repeat/tag
+  entries of an expanded task open as centered modal cards on narrow
+  screens (`FieldPicker`) instead of anchored popovers, so the calendar
+  is fully visible wherever the task sits; picking a day keeps the
+  card open so a reminder can be set right away. The Calendar month
+  view becomes a dense chip grid (10px chips and no in-cell checkbox on
+  narrow, 12px with ellipsis on wide, `+N` overflow) where the whole
+  cell is a button opening that day's full task list in a bottom sheet
+  (a 28rem centered card on wide screens). Settings gain two-level push
+  navigation with list rows and a Material (Android) treatment:
+  back-arrow top bar with a left-aligned title, monochrome icons,
+  leading radio buttons, primary-colored section headers, 16px/56px
+  rows and a primary switch sized 52×32 on narrow screens.
+
+### Fixes
+
+- **api/mobile**: Android Reminder delivery moved into a repo-local
+  native plugin (#103, ADR-0014) — JS stays the single source of
+  Reminder rules and computes the whole desired plan (key, epoch
+  `fireAt` in the account time zone, title, body), handing it over
+  through one idempotent `sync(plan)` call; the new
+  `packages/mobile/plugins/reminders` owns everything stateful: it
+  persists the plan, diffs against its own copy, arms
+  `setExactAndAllowWhileIdle` alarms, re-arms on `BOOT_COMPLETED`,
+  `MY_PACKAGE_REPLACED` and every app start, posts the notification when
+  an alarm fires, and manages the `reminders` channel and permission
+  state. This removes root causes the previous JS call chain could not
+  reach: `tauri-plugin-notification` 2.4.0 never persisted notifications
+  created through `notify` (so nothing survived a reboot), silently fell
+  back to inexact alarms without exact-alarm permission on Android 12+
+  (firing up to an hour late), and the coordinator's in-memory
+  `registered` map vanished with the process so alarms for Tasks
+  completed, trashed or reminder-disabled elsewhere were never
+  cancelled. Reminders missed while the device is off are dropped,
+  matching the desktop rule. A new Reminder reliability settings
+  section surfaces notification permission, channel state, exact-alarm
+  capability and battery-optimization exemption with jumps to the
+  relevant system pages (including OEM autostart screens). Desktop keeps
+  its runtime scheduler and `tauri-plugin-notification`.
+- **mobile**: The Android status-bar QuickAdd overlay pulled the whole
+  app to the foreground (#102) — tapping "＋" opened the entry overlay
+  but also brought the main activity forward, because the transparent
+  `QuickAddActivity` defaulted to the app's main task and made the
+  underlying MainActivity visible/resumed behind it. The activity now
+  declares `android:taskAffinity=""` and `launchMode="singleTask"`, so
+  the overlay lives in its own task and whatever app was in front stays
+  behind it. The cold-start path (process killed, Tauri start brings
+  MainActivity up) remains a known edge.
+
 ## [0.5.5] - 2026-09-27
 
 ### Changed
