@@ -17,18 +17,16 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import {
-  cancel,
-  createChannel,
-  onAction,
-  registerActionTypes,
-  requestPermission,
-  Importance,
-} from '@tauri-apps/plugin-notification';
+import { cancel, onAction, registerActionTypes, Importance } from '@tauri-apps/plugin-notification';
 import { i18n } from '@taskora/api';
 
 import type { StatusBarActionEvent, StatusBarShell } from '@taskora/api';
-import { listNotificationChannels, postNotification } from '../notification-bridge';
+import {
+  ensureNotificationChannel,
+  isNativeNotificationPermissionGranted,
+  postNotification,
+  requestNativeNotificationPermission,
+} from '../notification-bridge';
 
 const CHANNEL_ID = 'status-bar';
 const ACTION_TYPE_ID = 'taskora-status-bar';
@@ -38,19 +36,8 @@ const NEXT_ACTION_ID = 'next';
 const NOTIFICATION_ID = 620001;
 
 /** 每次检查渠道，才能感知用户在系统设置中关闭/恢复渠道。 */
-async function ensureChannel(): Promise<void> {
-  const existing = await listNotificationChannels();
-  const channel = existing.find((channel) => channel.id === CHANNEL_ID);
-  if (channel?.importance === Importance.None) {
-    throw new Error('status bar notification channel is disabled');
-  }
-  if (!channel) {
-    await createChannel({
-      id: CHANNEL_ID,
-      name: i18n.t('statusbar:channelName'),
-      importance: Importance.Low,
-    });
-  }
+function ensureChannel(): Promise<void> {
+  return ensureNotificationChannel(CHANNEL_ID, i18n.t('statusbar:channelName'), Importance.Low);
 }
 
 /** 插件 onAction 原始载荷（d.ts 标为 Options，实际见 Kotlin 源码）。 */
@@ -86,22 +73,8 @@ export function createTauriStatusBarShell(): StatusBarShell {
   }
 
   return {
-    async isPermissionGranted() {
-      try {
-        // 不使用插件缓存的 window.Notification.permission：系统授权可在
-        // 本会话内被用户撤回/恢复。
-        return (await invoke<boolean | null>('plugin:notification|is_permission_granted')) === true;
-      } catch {
-        return false;
-      }
-    },
-    async requestPermission() {
-      try {
-        return (await requestPermission()) === 'granted';
-      } catch {
-        return false;
-      }
-    },
+    isPermissionGranted: isNativeNotificationPermissionGranted,
+    requestPermission: requestNativeNotificationPermission,
     async post(content) {
       await ensureChannel();
       await ensureActionTypes();

@@ -34,6 +34,7 @@ import {
   setProjectHeadingBackend,
   createEngineProjectHeadingBackend,
   setSyncStatus,
+  useReminderPermissionStore,
 } from '@taskora/api';
 import { openEngine, type Engine, type SyncEntity } from '@taskora/engine';
 import { createReminderCoordinator, type ReminderCoordinator } from '@taskora/api';
@@ -41,6 +42,7 @@ import { createReminderCoordinator, type ReminderCoordinator } from '@taskora/ap
 import { createHttpSyncTransport, registerDevice } from './http-transport';
 import { createTauriSqlStorage, isTauriRuntime, useUserReplicaDb } from './tauri-storage';
 import { createMobileNotificationShell } from '../reminders/tauri-notification-shell';
+import { isNativeNotificationPermissionGranted } from '../notification-bridge';
 import { scheduleStatusBarRefresh } from '../status-bar';
 
 const DEVICE_ID_KEY = 'taskora.deviceId';
@@ -154,7 +156,15 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     // 单独触发（厂商 WebView 行为不一），syncNow 自身并发合并。
     unsubscribeForeground?.();
     const onVisible = () => {
-      if (document.visibilityState === 'visible') void syncNow();
+      if (document.visibilityState !== 'visible') return;
+      void syncNow();
+      // 用户可能刚在系统设置中恢复通知权限：实时确认后重排 Reminders
+      // （schedule 自身也会预检，但这里让恢复路径不依赖数据再次变更）。
+      void isNativeNotificationPermissionGranted().then((granted) => {
+        // 设置页的禁用/恢复提示与协调器使用同一份实时状态。
+        useReminderPermissionStore.setState({ permission: granted ? 'granted' : 'denied' });
+        if (granted) void reminderCoordinator?.reschedule();
+      });
     };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
