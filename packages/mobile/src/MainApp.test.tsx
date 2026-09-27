@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 // All data hooks return empty data; auth is signed in.
 vi.mock('@taskora/api', async (importOriginal) => ({
@@ -35,51 +35,57 @@ function renderApp() {
 }
 
 describe('MainApp (android navigation shell)', () => {
-  it('renders the mobile tab bar with the four primary destinations', async () => {
+  beforeEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('lands on the home list with every list reachable', async () => {
     renderApp();
 
+    // 桌面 Sidebar 因 CSS 隐藏但仍在 DOM 中，故限定在 main 内断言首页列表
+    const main = await screen.findByRole('main');
     await waitFor(() => {
-      expect(screen.getAllByRole('link', { name: /Today/ }).length).toBeGreaterThan(0);
+      expect(within(main).getByRole('link', { name: 'Today' })).toHaveAttribute('href', '/today');
     });
-    for (const label of ['Inbox', 'Calendar', 'Anytime']) {
-      expect(screen.getAllByRole('link', { name: new RegExp(label) }).length).toBeGreaterThan(0);
+    for (const [label, href] of [
+      ['Inbox', '/inbox'],
+      ['Upcoming', '/upcoming'],
+      ['Calendar', '/calendar'],
+      ['Anytime', '/anytime'],
+      ['Someday', '/someday'],
+      ['Logbook', '/logbook'],
+      ['Trash', '/trash'],
+      ['Tags', '/tags'],
+    ]) {
+      expect(within(main).getByRole('link', { name: label })).toHaveAttribute('href', href);
     }
-    // 「更多」抽屉入口
-    expect(screen.getByRole('button', { name: /More/ })).toBeInTheDocument();
+    // 首页不再有底部标签栏
+    expect(screen.queryByRole('navigation', { name: 'Main navigation' })).not.toBeInTheDocument();
   });
 
-  it('lands on the Today view after boot', async () => {
-    renderApp();
-
-    await waitFor(() => {
-      // Today page renders its heading + date line (feed hook returns empty).
-      expect(screen.getByRole('heading', { name: 'Today' })).toBeInTheDocument();
-    });
-  });
-
-  it('opens the more drawer from the tab bar and closes it again', async () => {
+  it('pushes into a list and returns to home with the back button', async () => {
     const user = userEvent.setup();
     renderApp();
 
+    const main = await screen.findByRole('main');
+    await user.click(await within(main).findByRole('link', { name: 'Today' }));
+    expect(await screen.findByRole('heading', { name: 'Today' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+    expect(await within(main).findByRole('link', { name: 'Inbox' })).toBeInTheDocument();
+    expect(window.location.pathname).toBe('/home');
+  });
+
+  it('falls back to home when a list was opened without history', async () => {
+    window.history.replaceState(null, '', '/today');
+    const user = userEvent.setup();
+    renderApp();
+
+    expect(await screen.findByRole('heading', { name: 'Today' })).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Back' }));
+
     await waitFor(() => {
-      expect(screen.getByRole('heading', { name: 'Today' })).toBeInTheDocument();
-    });
-
-    // 抽屉未开：无 dialog，更多导航不可达（桌面 Sidebar 因 CSS 隐藏但仍在
-    // DOM 中，故用 dialog 角色判定抽屉而非链接存在性）
-    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /More/ }));
-
-    // 抽屉打开：出现「更多导航」dialog，次级入口可达
-    const drawer = await screen.findByRole('dialog');
-    expect(drawer).toHaveAccessibleName('More navigation');
-    expect(within(drawer).getByRole('link', { name: /Upcoming/ })).toBeInTheDocument();
-
-    // 关闭后消失（Escape 即 Dialog 的 onOpenChange(false)）
-    await user.keyboard('[Escape]');
-    await waitFor(() => {
-      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(window.location.pathname).toBe('/home');
     });
   });
 });

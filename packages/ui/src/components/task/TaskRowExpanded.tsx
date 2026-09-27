@@ -11,7 +11,8 @@ import { Hint } from '@/components/ui/hint';
 import { Input } from '@/components/ui/input';
 import { MarkdownNotesEditor } from '@/components/common/MarkdownNotesEditor';
 import { Separator } from '@/components/ui/separator';
-import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import { FieldPicker } from '@/components/common/FieldPicker';
 import { MenuRow } from '@/components/common/MenuRow';
 import { useLongPress } from '../../lib/useLongPress';
 import { cn } from '@/lib/utils';
@@ -217,28 +218,26 @@ function IconPopover({
   active?: boolean;
   children: React.ReactNode | ((close: () => void) => React.ReactNode);
 }) {
-  const [open, setOpen] = React.useState(false);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <Hint label={label}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className={cn(
-              'h-8 w-8 max-md:h-11 max-md:w-11',
-              active ? 'text-primary' : 'text-muted-foreground',
-            )}
-            aria-label={label}
-          >
-            {icon}
-          </Button>
-        </PopoverTrigger>
-      </Hint>
-      <PopoverContent align="start">
-        {typeof children === 'function' ? children(() => setOpen(false)) : children}
-      </PopoverContent>
-    </Popover>
+    <FieldPicker
+      label={label}
+      tooltip
+      trigger={
+        <Button
+          variant="ghost"
+          size="icon"
+          className={cn(
+            'h-8 w-8 max-md:h-11 max-md:w-11',
+            active ? 'text-primary' : 'text-muted-foreground',
+          )}
+          aria-label={label}
+        >
+          {icon}
+        </Button>
+      }
+    >
+      {children}
+    </FieldPicker>
   );
 }
 

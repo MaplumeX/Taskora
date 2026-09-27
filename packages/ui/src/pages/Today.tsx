@@ -2,6 +2,7 @@ import { useCalendarDay, useFeedQuery, todayDateKey } from '@taskora/api';
 import { useTranslation } from 'react-i18next';
 
 import { TimeViewFeedList } from '@/components/feed/TimeViewFeedList';
+import { PageHeading } from '@/components/layout/PageHeading';
 
 const todayISO = todayDateKey;
 
@@ -12,7 +13,7 @@ export default function Today() {
 
   return (
     <div className="flex flex-col gap-4">
-      <h1 className="font-display text-3xl font-semibold tracking-tight">{t('nav:today')}</h1>
+      <PageHeading nav="/today">{t('nav:today')}</PageHeading>
       <p className="text-sm text-muted-foreground tabular-nums">{todayISO()}</p>
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>

@@ -2,103 +2,109 @@ import { useTranslation } from 'react-i18next';
 
 import type { TaskResponseDto } from '@taskora/shared';
 
-import { CalendarTaskRow } from './CalendarTaskRow';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { isToday, toInputDateValue } from '@taskora/api';
-import { i18n } from '@taskora/api';
+import { i18n, isOverdue, isToday, parseCalendarDate, toInputDateValue } from '@taskora/api';
 
-interface CalendarDayCellProps {
+interface Props {
   date: Date;
   tasks: TaskResponseDto[];
-  /** Max visible task rows before the "+N more" overflow indicator; 0/null = show all */
-  maxRows?: number;
+  /** 格内最多可放的色块行数（含「+N」行）。 */
+  capacity: number;
   outOfMonth?: boolean;
-  onToggleComplete: (task: TaskResponseDto) => void;
-  /** 键盘 Selection 当前选中的行 id（跨格共享）。 */
+  /** 键盘 Selection 当前选中的任务 id（色块描边高亮）。 */
   selectedIds?: string[];
-  onRowClick?: (taskId: string) => void;
+  onOpen: (date: Date) => void;
 }
 
+/** 截止日期 ≤ 今天（到期 / 逾期）的未了结任务：红色语义只属于 Deadline。 */
+function isDeadlineUrgent(task: TaskResponseDto): boolean {
+  if (!task.dueDate || task.status !== 'ACTIVE') return false;
+  const due = parseCalendarDate(task.dueDate);
+  return isOverdue(due) || isToday(due);
+}
+
+/**
+ * 月网格日格（滴答清单式）：日期 + 浅底任务色块，超长截断。整格是一个
+ * 按钮，点击打开当天的完整列表（CalendarDaySheet）；格内不承担单条任务
+ * 的操作。窄屏 10px 小字、不加省略号以多挤一个字；宽屏 12px 并加省略号。
+ * 尺寸需与 CalendarMonthGrid 的容量常量保持一致。
+ */
 export function CalendarDayCell({
   date,
   tasks,
-  maxRows,
+  capacity,
   outOfMonth = false,
-  onToggleComplete,
   selectedIds = [],
-  onRowClick,
-}: CalendarDayCellProps) {
+  onOpen,
+}: Props) {
   const { t } = useTranslation();
+  const todayCell = isToday(date);
 
-  const isTodayCell = isToday(date);
+  const overflow = tasks.length > capacity;
+  const visible = overflow ? tasks.slice(0, Math.max(0, capacity - 1)) : tasks;
+  const hiddenCount = tasks.length - visible.length;
 
-  const visibleTasks = maxRows ? tasks.slice(0, maxRows) : tasks;
-  const overflowCount = maxRows ? Math.max(0, tasks.length - visibleTasks.length) : 0;
-
-  const popoverDateLabel = new Intl.DateTimeFormat(i18n.language, {
-    month: 'short',
+  const dateLabel = new Intl.DateTimeFormat(i18n.language, {
+    month: 'long',
     day: 'numeric',
     weekday: 'long',
   }).format(date);
 
   return (
-    <div
+    <button
+      type="button"
       data-calendar-date={toInputDateValue(date)}
-      className={cn(
-        'flex min-h-16 max-w-full flex-col gap-1 overflow-hidden rounded-lg border border-border/40 bg-card p-1.5 transition-colors hover:bg-accent/30 md:min-h-20 md:p-2',
-        outOfMonth && 'opacity-50',
-      )}
+      data-out-of-month={outOfMonth || undefined}
+      aria-label={t('calendar:dayCellLabel', { date: dateLabel, count: tasks.length })}
+      onClick={() => onOpen(date)}
+      className="flex min-h-0 min-w-0 flex-col items-stretch overflow-hidden border-t border-border/60 px-px pb-px pt-0.5 text-left transition-colors hover:bg-accent/30 active:bg-accent/60 md:px-1 md:pb-1 md:pt-1"
     >
-      <div className="flex items-center justify-between">
-        <span
-          className={cn(
-            'inline-flex min-w-5 justify-center rounded-full px-1 text-xs tabular-nums text-muted-foreground',
-            isTodayCell && 'bg-primary font-semibold text-primary-foreground',
-          )}
-        >
-          {date.getDate()}
+      {/* 非本月只弱化内容，分隔线保持连续 */}
+      <span
+        className={cn('flex min-h-0 flex-col gap-px md:gap-0.5', outOfMonth && 'opacity-40')}
+      >
+        <span className="flex h-[18px] shrink-0 items-center justify-center md:h-6">
+          <span
+            className={cn(
+              'inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1 text-[11px] tabular-nums text-muted-foreground md:h-6 md:min-w-6 md:text-xs',
+              todayCell && 'bg-primary font-semibold text-primary-foreground',
+            )}
+          >
+            {date.getDate()}
+          </span>
         </span>
-      </div>
 
-      {visibleTasks.map((task) => (
-        <CalendarTaskRow
-          key={task.id}
-          task={task}
-          onToggleComplete={onToggleComplete}
-          selected={selectedIds.includes(task.id)}
-          onRowClick={onRowClick ? () => onRowClick(task.id) : undefined}
-        />
-      ))}
-
-      {overflowCount > 0 && (
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              type="button"
-              className="rounded-sm px-1 text-left text-[11px] font-medium text-primary hover:bg-accent/60"
+        {visible.map((task) => {
+          const completed = task.status === 'COMPLETED';
+          const cancelled = task.status === 'CANCELLED';
+          return (
+            <span
+              key={task.id}
+              data-calendar-chip
+              aria-selected={selectedIds.includes(task.id) || undefined}
+              className={cn(
+                'block h-[14px] shrink-0 overflow-hidden whitespace-nowrap rounded-[3px] px-0.5 text-[10px] leading-[14px] text-foreground',
+                'md:h-5 md:text-ellipsis md:rounded md:px-1.5 md:text-xs md:leading-5',
+                isDeadlineUrgent(task) ? 'bg-destructive/15' : 'bg-primary/10',
+                (completed || cancelled) && 'bg-muted text-muted-foreground',
+                cancelled && 'line-through',
+                selectedIds.includes(task.id) && 'ring-1 ring-inset ring-primary',
+              )}
             >
-              {t('calendar:overflowMore', { count: overflowCount })}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="flex max-h-80 w-64 flex-col gap-1 p-3">
-            <p className="px-1 pb-1 text-sm font-semibold text-foreground">
-              {popoverDateLabel}
-            </p>
-            <div className="flex flex-col gap-0.5 overflow-y-auto">
-              {tasks.map((task) => (
-                <CalendarTaskRow
-                  key={task.id}
-                  task={task}
-                  onToggleComplete={onToggleComplete}
-                  selected={selectedIds.includes(task.id)}
-                  onRowClick={onRowClick ? () => onRowClick(task.id) : undefined}
-                />
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
-      )}
-    </div>
+              {task.title || t('common:empty')}
+            </span>
+          );
+        })}
+
+        {hiddenCount > 0 && (
+          <span className="block h-[14px] shrink-0 px-0.5 text-[10px] font-medium leading-[14px] text-muted-foreground md:h-5 md:px-1.5 md:text-xs md:leading-5">
+            <span className="md:hidden">+{hiddenCount}</span>
+            <span className="hidden md:inline">
+              {t('calendar:overflowMore', { count: hiddenCount })}
+            </span>
+          </span>
+        )}
+      </span>
+    </button>
   );
 }

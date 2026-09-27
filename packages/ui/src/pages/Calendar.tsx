@@ -1,43 +1,39 @@
 import {
   useCalendarDay,
   useScheduledTasksQuery,
-  useCompleteTask,
   useSelectionScope,
   useTaskRowSelection,
-  useUncancelTask,
-  useUncompleteTask,
   usePreferencesStore,
   addMonths,
   groupByScheduledDate,
   i18n,
   startOfToday,
+  toInputDateValue,
 } from '@taskora/api';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { CalendarRange, ChevronLeft, ChevronRight } from 'lucide-react';
-import { toast } from 'sonner';
 
-import type { TaskResponseDto } from '@taskora/shared';
-
+import { CalendarDaySheet } from '@/components/calendar/CalendarDaySheet';
 import { CalendarMonthGrid } from '@/components/calendar/CalendarMonthGrid';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
+import { PageHeading } from '@/components/layout/PageHeading';
 
 export default function Calendar() {
   const calendarDay = useCalendarDay();
   const { t } = useTranslation();
   const { data: tasks = [], isLoading, isError } = useScheduledTasksQuery();
-  const completeTask = useCompleteTask();
-  const uncompleteTask = useUncompleteTask();
-  const uncancelTask = useUncancelTask();
   const weekStartsOn = usePreferencesStore((s) => s.weekStartsOn);
 
   const [anchor, setAnchor] = useState(() => startOfToday());
+  // 点日格打开当天的完整列表（窄屏底部面板 / 宽屏居中卡片）。
+  const [openDay, setOpenDay] = useState<Date | null>(null);
 
   const tasksByDate = useMemo(() => groupByScheduledDate(tasks), [tasks, calendarDay]);
 
   // 注册可遍历行（按当前月网格顺序；键盘动作经全局 keymap 生效）。
-  const { selectedIds, handleRowClick } = useTaskRowSelection();
+  const { selectedIds } = useTaskRowSelection();
   const rows = useMemo(
     () =>
       tasks.map((t) => ({
@@ -49,23 +45,6 @@ export default function Calendar() {
     [tasks],
   );
   useSelectionScope(rows);
-
-  const handleToggleComplete = (task: TaskResponseDto) => {
-    if (task.status === 'COMPLETED') {
-      uncompleteTask.mutate(task.id, {
-        onError: () => toast.error(t('common:operationFailed')),
-      });
-    } else if (task.status === 'CANCELLED') {
-      // 取消态点击圆圈 = 撤销取消（与 Logbook 一致）。
-      uncancelTask.mutate(task.id, {
-        onError: () => toast.error(t('common:operationFailed')),
-      });
-    } else {
-      completeTask.mutate(task.id, {
-        onError: () => toast.error(t('common:operationFailed')),
-      });
-    }
-  };
 
   const step = (direction: 1 | -1) => {
     setAnchor((prev) => addMonths(prev, direction));
@@ -80,12 +59,13 @@ export default function Calendar() {
   }, [anchor, i18n.language]);
 
   return (
-    <div className="flex h-full flex-col gap-3 pb-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="font-display text-3xl font-semibold tracking-tight">{t('nav:calendar')}</h1>
+    <div className="flex h-full flex-col gap-3 pb-4 max-md:gap-2 max-md:pb-2">
+      {/* 窄屏网格贴边（MainContent 不给左右内边距），页头自行补齐 */}
+      <div className="flex flex-wrap items-center justify-between gap-2 max-md:px-4">
+        <PageHeading nav="/calendar">{t('nav:calendar')}</PageHeading>
       </div>
 
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex items-center justify-between gap-2 max-md:px-2">
         <div className="flex items-center gap-1">
           <Hint label={t('calendar:previous')}>
             <Button
@@ -117,7 +97,7 @@ export default function Calendar() {
             {t('calendar:today')}
           </Button>
         </div>
-        <span className="font-display text-lg font-semibold tracking-tight text-foreground">
+        <span className="font-display text-lg font-semibold tracking-tight text-foreground max-md:pr-2">
           {periodLabel}
         </span>
       </div>
@@ -130,11 +110,16 @@ export default function Calendar() {
           tasksByDate={tasksByDate}
           weekStartsOn={weekStartsOn}
           locale={i18n.language}
-          onToggleComplete={handleToggleComplete}
           selectedIds={selectedIds}
-          onRowClick={handleRowClick}
+          onOpenDay={setOpenDay}
         />
       )}
+
+      <CalendarDaySheet
+        date={openDay}
+        tasks={openDay ? (tasksByDate.get(toInputDateValue(openDay)) ?? []) : []}
+        onClose={() => setOpenDay(null)}
+      />
     </div>
   );
 }

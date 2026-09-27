@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import SettingsAppearance from './SettingsAppearance';
+import { MobileSettingsHarness } from '@/test/settingsNav';
 import { usePreferencesStore } from '@taskora/api';
 
 const mutationMocks = vi.hoisted(() => ({
@@ -97,5 +98,31 @@ describe('SettingsAppearance rollback on save failure', () => {
     await userEvent.click(sunday);
 
     expect(usePreferencesStore.getState().weekStartsOn).toBe(0);
+  });
+});
+
+describe('SettingsAppearance — 窄屏 ✓ 选项组', () => {
+  beforeEach(() => {
+    mutationMocks.updatePreferences.mockReset();
+    usePreferencesStore.setState({ theme: 'system', language: 'en', weekStartsOn: 1, resolved: 'light' });
+  });
+
+  it('选中主题后 ✓ 移到新选项并同步偏好', async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MobileSettingsHarness>
+          <SettingsAppearance />
+        </MobileSettingsHarness>
+      </QueryClientProvider>,
+    );
+
+    expect(screen.getByRole('radio', { name: 'System' })).toHaveAttribute('aria-checked', 'true');
+    await user.click(screen.getByRole('radio', { name: 'Dark' }));
+
+    expect(screen.getByRole('radio', { name: 'Dark' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'System' })).toHaveAttribute('aria-checked', 'false');
+    expect(mutationMocks.updatePreferences).toHaveBeenCalledWith({ theme: 'dark' }, expect.anything());
   });
 });

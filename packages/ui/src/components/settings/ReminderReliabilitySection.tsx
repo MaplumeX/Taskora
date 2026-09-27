@@ -10,6 +10,8 @@ import {
   type ReminderReliabilityStatus,
 } from '@taskora/api';
 
+import { SettingsGroup, SettingsRow, useSettingsNav } from './SettingsList';
+
 interface ReliabilityRow {
   id: string;
   label: string;
@@ -28,6 +30,7 @@ export default function ReminderReliabilitySection({
   shell: ReminderNotificationShell;
 }) {
   const { t } = useTranslation('settings');
+  const mobileNav = useSettingsNav();
   const [status, setStatus] = useState<ReminderReliabilityStatus | null>(null);
 
   const refresh = useCallback(() => {
@@ -93,6 +96,40 @@ export default function ReminderReliabilitySection({
       fix: () => shell.openSystemSettings!('battery'),
     },
   ];
+
+  if (mobileNav) {
+    // 窄屏：分组单元格，正常项右侧灰字，异常项右侧「去设置」
+    const fixButton = (onClick: () => void, label: string) => (
+      <Button variant="secondary" size="sm" className="h-8 rounded-full px-3" onClick={onClick}>
+        {label}
+      </Button>
+    );
+    return (
+      <SettingsGroup header={t('reminderReliability')} footer={t('reminderReliabilityHint')}>
+        {rows.map((row) => (
+          <div key={row.id} data-testid={`reliability-${row.id}`}>
+            <SettingsRow
+              label={row.label}
+              value={row.ok ? t('reminderStatusOk') : undefined}
+              control={
+                row.ok ? undefined : fixButton(() => void run(row.fix), t('reminderStatusFix'))
+              }
+            />
+          </div>
+        ))}
+        <div data-testid="reliability-autostart">
+          <SettingsRow
+            label={t('reminderAutostart')}
+            description={t('reminderAutostartHint')}
+            control={fixButton(
+              () => void run(() => shell.openSystemSettings!('autostart')),
+              t('reminderOpen'),
+            )}
+          />
+        </div>
+      </SettingsGroup>
+    );
+  }
 
   return (
     <div className="flex flex-col gap-2">

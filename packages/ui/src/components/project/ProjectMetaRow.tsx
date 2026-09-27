@@ -16,7 +16,7 @@ import {
   useUpdateProject,
 } from '@taskora/api';
 
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { FieldPicker } from '@/components/common/FieldPicker';
 import { ScheduledDateField } from '@/components/task/fields/ScheduledDateField';
 import { DueDateField } from '@/components/task/fields/DueDateField';
 import { TagsField } from '@/components/task/fields/TagsField';
@@ -29,7 +29,7 @@ interface Props {
 /**
  * 项目详情头部的元数据行：计划日期 / 截止日期 / 标签。
  * 展示风格与任务条目的徽章一致（图标 + 小字，过期/今天为警示色），
- * 点击徽章打开 Popover 编辑，复用任务侧的字段组件。
+ * 点击徽章打开字段选择器编辑，复用任务侧的字段组件。
  */
 export function ProjectMetaRow({ project }: Props) {
   useCalendarDay();
@@ -149,7 +149,7 @@ function MetaBadge({
 
 /**
  * 可点击的元数据徽章：trigger 内渲染徽章内容（无值时退化为图标按钮），
- * Popover 内容复用任务字段组件。
+ * 选择器（宽屏 Popover / 窄屏居中卡片）内容复用任务字段组件。
  */
 function MetaPopover({
   label,
@@ -160,10 +160,10 @@ function MetaPopover({
   children: React.ReactNode | ((close: () => void) => React.ReactNode);
   trigger: React.ReactNode;
 }) {
-  const [open, setOpen] = React.useState(false);
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
+    <FieldPicker
+      label={label}
+      trigger={
         <button
           type="button"
           aria-label={label}
@@ -172,10 +172,9 @@ function MetaPopover({
         >
           {trigger}
         </button>
-      </PopoverTrigger>
-      <PopoverContent align="start">
-        {typeof children === 'function' ? children(() => setOpen(false)) : children}
-      </PopoverContent>
-    </Popover>
+      }
+    >
+      {children}
+    </FieldPicker>
   );
 }

@@ -4,8 +4,23 @@ import { getAppVersion } from '@taskora/api';
 
 import { Label } from '@/components/ui/label';
 
+import { SettingsGroup, SettingsPage, SettingsRow, useSettingsNav } from './SettingsList';
+
 export default function SettingsAbout() {
   const { t } = useTranslation('settings');
+  const mobileNav = useSettingsNav();
+
+  if (mobileNav) {
+    return (
+      <SettingsPage>
+        <SettingsGroup>
+          <SettingsRow label={t('appName')} value="Taskora" />
+          <SettingsRow label={t('appVersion')} value={getAppVersion()} />
+          <SettingsRow label={t('techStack')} description={t('techStackValue')} />
+        </SettingsGroup>
+      </SettingsPage>
+    );
+  }
 
   return (
     <div className="flex max-w-lg flex-col gap-6">

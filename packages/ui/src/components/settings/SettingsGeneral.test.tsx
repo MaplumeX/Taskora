@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { toast } from 'sonner';
 
 import SettingsGeneral from './SettingsGeneral';
+import { MobileSettingsHarness } from '@/test/settingsNav';
 import {
   createStatusBarController,
   registerStatusBarController,
@@ -213,5 +214,42 @@ describe('SettingsGeneral — reminder reliability (Android)', () => {
     });
     renderPage();
     expect(await screen.findByText('Reminder reliability')).toBeInTheDocument();
+  });
+});
+
+describe('SettingsGeneral — 窄屏时区选项页', () => {
+  beforeEach(() => {
+    mutationMocks.updatePreferences.mockReset();
+    usePreferencesStore.setState({ timeZone: 'Asia/Shanghai', bucketGrouping: true });
+    delete (globalThis as Record<string, unknown>).__TAURI_INTERNALS__;
+  });
+
+  it('推入可搜索的时区列表，选中后返回并保存', async () => {
+    const user = userEvent.setup();
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MobileSettingsHarness>
+          <SettingsGeneral />
+        </MobileSettingsHarness>
+      </QueryClientProvider>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /Asia\/Shanghai/ }));
+    const search = screen.getByRole('searchbox');
+    await user.type(search, 'tokyo');
+
+    expect(screen.getByRole('radio', { name: 'Asia/Tokyo' })).toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: 'Asia/Shanghai' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: 'Asia/Tokyo' }));
+
+    expect(usePreferencesStore.getState().timeZone).toBe('Asia/Tokyo');
+    expect(mutationMocks.updatePreferences).toHaveBeenCalledWith(
+      { timeZone: 'Asia/Tokyo' },
+      expect.anything(),
+    );
+    // 已返回通用页
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument();
   });
 });

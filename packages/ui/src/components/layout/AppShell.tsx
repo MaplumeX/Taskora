@@ -1,19 +1,13 @@
-import { useState } from 'react';
-
 import { Sidebar } from './Sidebar';
 import { MainContent } from './MainContent';
 import { ContentBottomBar } from '@/components/layout/ContentBottomBar';
 import { KeyboardShortcuts } from '@/components/keyboard/KeyboardShortcuts';
-import { MobileTabBar } from '@/components/layout/MobileTabBar';
-import { MobileNavDrawer } from '@/components/layout/MobileNavDrawer';
 import { MobileTopBar } from '@/components/layout/MobileTopBar';
 import { MobileFab } from '@/components/layout/MobileFab';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { SyncIndicator } from './SyncIndicator';
 
 export function AppShell() {
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
   // h-[calc(100dvh-var(--kb-inset,0px))]：Android 键盘避让（mobile 壳的
   // visualViewport 驱动，其余端未设置 → 0px，等价 h-dvh）。
   return (
@@ -27,8 +21,6 @@ export function AppShell() {
         <MainContent />
         <ContentBottomBar />
       </div>
-      <MobileTabBar onOpenDrawer={() => setDrawerOpen(true)} />
-      <MobileNavDrawer open={drawerOpen} onOpenChange={setDrawerOpen} />
       <MobileFab />
       <SettingsModal />
       <KeyboardShortcuts />

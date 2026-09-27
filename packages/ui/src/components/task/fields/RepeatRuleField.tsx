@@ -118,22 +118,22 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
     : null;
 
   return (
-    <div className="flex flex-col gap-1.5 px-2 py-1.5" data-repeat-section>
+    <div className="flex flex-col gap-1.5 px-2 py-1.5 max-md:gap-3 max-md:py-2" data-repeat-section>
       <div className="flex items-center gap-2">
         <input
           type="checkbox"
           role="switch"
           aria-label={t('task:repeat')}
-          className="h-4 w-4 accent-primary"
+          className="h-4 w-4 accent-primary max-md:h-5 max-md:w-5"
           checked={rule != null}
           onChange={(e) => patchRule(e.target.checked ? { ...DEFAULT_REPEAT_RULE } : null)}
         />
-        <span className="select-none text-sm">{t('task:repeat')}</span>
+        <span className="select-none text-sm max-md:text-[15px]">{t('task:repeat')}</span>
         <div className="ml-auto flex items-center gap-1" aria-label={t('task:repeatInterval')}>
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 w-6 px-0"
+            className="h-6 w-6 px-0 max-md:h-10 max-md:w-10 max-md:text-base"
             aria-label={t('task:repeatIntervalMinus')}
             disabled={!rule || rule.interval <= 1}
             onClick={() => changeInterval(-1)}
@@ -146,7 +146,7 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 w-6 px-0"
+            className="h-6 w-6 px-0 max-md:h-10 max-md:w-10 max-md:text-base"
             aria-label={t('task:repeatIntervalPlus')}
             disabled={!rule || rule.interval >= 999}
             onClick={() => changeInterval(1)}
@@ -155,7 +155,7 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
           </Button>
           <select
             aria-label={t('task:repeatUnit')}
-            className="h-7 rounded-md border border-input bg-transparent px-1 text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+            className="h-7 rounded-md border border-input bg-transparent px-1 text-sm max-md:h-10 max-md:px-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
             value={rule?.unit ?? 'week'}
             disabled={!rule}
             onChange={(e) => changeUnit(e.target.value as RepeatUnit)}
@@ -170,7 +170,7 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
       </div>
 
       {rule?.unit === 'week' && (
-        <div className="flex items-center gap-1" role="group" aria-label={t('task:repeatWeekdays')}>
+        <div className="flex items-center gap-1 max-md:gap-1.5" role="group" aria-label={t('task:repeatWeekdays')}>
           {weekdayOrder.map((day) => {
             const active = rule.weekdays?.includes(day) ?? false;
             return (
@@ -182,7 +182,7 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
                 disabled={!rule}
                 onClick={() => toggleWeekday(day)}
                 className={
-                  'h-6 w-6 rounded-md border text-xs select-none disabled:opacity-50 ' +
+                  'h-6 w-6 rounded-md border text-xs select-none disabled:opacity-50 max-md:h-10 max-md:w-auto max-md:flex-1 max-md:text-sm ' +
                   (active
                     ? 'border-primary bg-primary text-primary-foreground'
                     : 'border-input text-muted-foreground hover:bg-accent')
@@ -195,23 +195,23 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
         </div>
       )}
 
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+      <div className="flex flex-wrap items-center gap-2 max-md:gap-3">
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground max-md:min-h-10 max-md:gap-2 max-md:text-sm">
           <input
             type="checkbox"
-            className="h-3.5 w-3.5 accent-primary"
+            className="h-3.5 w-3.5 accent-primary max-md:h-5 max-md:w-5"
             checked={rule?.anchor === 'completion'}
             disabled={!rule}
             onChange={(e) => toggleAnchor(e.target.checked)}
           />
           {t('task:repeatAfterCompletion')}
         </label>
-        <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground">
+        <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground max-md:gap-2 max-md:text-sm">
           {t('task:repeatUntil')}
           <input
             type="date"
             aria-label={t('task:repeatUntil')}
-            className="h-6 rounded-md border border-input bg-transparent px-1 text-xs tabular-nums focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
+            className="h-6 rounded-md border border-input bg-transparent px-1 text-xs tabular-nums max-md:h-10 max-md:px-2 max-md:text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
             value={rule?.until ?? ''}
             disabled={!rule}
             onChange={(e) => changeUntil(e.target.value)}
@@ -220,7 +220,7 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
       </div>
 
       {rule && current.scheduledDate && (
-        <p className="text-xs text-muted-foreground" data-repeat-preview>
+        <p className="text-xs text-muted-foreground max-md:text-sm" data-repeat-preview>
           {previewLabel
             ? t('task:repeatNextPreview', { date: previewLabel })
             : t('task:repeatEnded')}
