@@ -1,11 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { invoke } from '@tauri-apps/api/core';
-import { Importance, type Channel } from '@tauri-apps/plugin-notification';
 
 import { createTauriStatusBarShell } from './tauri-shell';
-import { createMobileNotificationShell } from '../reminders/tauri-notification-shell';
 
-// 保留真实的 @tauri-apps/api 与 notification JS API，才能捕获 invoke 命令
+// 保留真实的 @tauri-apps/api，才能捕获 invoke 命令
 // 名与 ACL 不匹配、addPluginListener 注册路径等跨层回归（issue 01 的传统）。
 // transformCallback 是 addPluginListener 的 Channel 注册点：stub 成回调表，
 // 测试借此模拟原生 trigger('action') 的真实投递路径。
@@ -13,13 +11,11 @@ const invokeMock = vi.fn<typeof invoke>();
 let failCommand: string | null;
 let channelCallbacks: Map<number, (raw: { index: number; message: unknown }) => void>;
 let nextCallbackId: number;
-let existingChannels: Channel[];
 
 beforeEach(() => {
   failCommand = null;
   channelCallbacks = new Map();
   nextCallbackId = 1;
-  existingChannels = [];
   invokeMock.mockReset();
   vi.stubGlobal('__TAURI_INTERNALS__', {
     invoke: (command: string, args: Record<string, unknown>) =>
@@ -33,14 +29,15 @@ beforeEach(() => {
   invokeMock.mockImplementation(async (command) => {
     if (command === failCommand) throw new Error(`failed: ${command}`);
     switch (command) {
-      case 'plugin:notification|is_permission_granted':
+      case 'plugin:reminders|status':
+        return {
+          notifications: true,
+          channelEnabled: true,
+          exactAlarms: true,
+          batteryUnrestricted: true,
+        };
+      case 'plugin:reminders|request_permission':
         return true;
-      case 'plugin:notification|list_channels':
-        return existingChannels;
-      case 'plugin:notification|create_channel':
-        return;
-      case 'plugin:notification|notify':
-        return;
       case 'plugin:statusbar|show':
       case 'plugin:statusbar|cancel':
       case 'plugin:statusbar|register_listener':
@@ -120,30 +117,15 @@ describe('Android status bar plugin shell', () => {
   });
 
   it('checks native permission instead of the cached Web Notification permission', async () => {
-    expect(await createTauriStatusBarShell().isPermissionGranted()).toBe(true);
-    expect(invokeMock).toHaveBeenCalledWith('plugin:notification|is_permission_granted');
+    const shell = createTauriStatusBarShell();
+    expect(await shell.isPermissionGranted()).toBe(true);
+    expect(invokeMock).toHaveBeenCalledWith('plugin:reminders|status');
+    expect(await shell.requestPermission()).toBe(true);
+    expect(invokeMock).toHaveBeenCalledWith('plugin:reminders|request_permission');
   });
 
-  it('keeps the corrected channel bridge for mobile reminders', async () => {
-    await createMobileNotificationShell().fireNow('Reminder', 'Task');
-    expect(invokeMock).toHaveBeenCalledWith('plugin:notification|list_channels');
-    expect(invokeMock).toHaveBeenCalledWith('plugin:notification|notify', {
-      options: { channelId: 'reminders', title: 'Reminder', body: 'Task' },
-    });
-  });
-
-  it('reminder channel closure rejects posting and recovers when restored', async () => {
-    const shell = createMobileNotificationShell();
-    const channel = { id: 'reminders', name: 'Taskora', importance: Importance.High };
-    existingChannels = [channel];
-    await shell.fireNow('Reminder', 'Task');
-
-    channel.importance = Importance.None;
-    await shell.fireNow('Blocked', 'Task');
-    expect(invokeMock.mock.calls.filter(([cmd]) => cmd === 'plugin:notification|notify')).toHaveLength(1);
-
-    channel.importance = Importance.High;
-    await shell.fireNow('Restored', 'Task');
-    expect(invokeMock.mock.calls.filter(([cmd]) => cmd === 'plugin:notification|notify')).toHaveLength(2);
+  it('treats a failing permission query as not granted', async () => {
+    failCommand = 'plugin:reminders|status';
+    expect(await createTauriStatusBarShell().isPermissionGranted()).toBe(false);
   });
 });

@@ -10,6 +10,7 @@ import {
   createStatusBarController,
   registerStatusBarController,
   setClientKind,
+  setNotificationShell,
   usePreferencesStore,
   type StatusBarController,
 } from '@taskora/api';
@@ -178,5 +179,39 @@ describe('SettingsGeneral — Android status bar', () => {
     });
     expect(toggle).toBeChecked();
     expect(toggle).toBeEnabled();
+  });
+});
+
+describe('SettingsGeneral — reminder reliability (Android)', () => {
+  beforeEach(() => {
+    delete (globalThis as Record<string, unknown>).__TAURI_INTERNALS__;
+  });
+
+  afterEach(() => setNotificationShell(null));
+
+  it('renders the section only for a shell that reports delivery status', async () => {
+    const base = {
+      isSupported: () => true,
+      isPermissionGranted: async () => true,
+      requestPermission: async () => true,
+      openSettings: async () => {},
+    };
+    setNotificationShell(base);
+    const { unmount } = renderPage();
+    expect(screen.queryByText('Reminder reliability')).not.toBeInTheDocument();
+    unmount();
+
+    setNotificationShell({
+      ...base,
+      reliability: async () => ({
+        notifications: true,
+        channelEnabled: true,
+        exactAlarms: true,
+        batteryUnrestricted: true,
+      }),
+      openSystemSettings: async () => {},
+    });
+    renderPage();
+    expect(await screen.findByText('Reminder reliability')).toBeInTheDocument();
   });
 });

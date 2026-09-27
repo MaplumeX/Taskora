@@ -1,0 +1,11 @@
+"$schema" = "schemas/schema.json"
+
+[default]
+description = "Allows syncing the reminder plan, querying delivery status, requesting notification permission and opening the related system settings."
+permissions = [
+  "allow-sync",
+  "allow-clear",
+  "allow-status",
+  "allow-request-permission",
+  "allow-open-settings",
+]

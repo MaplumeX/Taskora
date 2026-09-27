@@ -43,6 +43,7 @@
   "reminderTime": "提醒时间",
   "reminderDisabledNotice": "系统通知已禁用",
   "reminderOpenSettings": "打开设置",
+  "reminderChannelName": "任务提醒",
   "repeat": "重复",
   "repeatUnit-day": "天",
   "repeatUnit-week": "周",

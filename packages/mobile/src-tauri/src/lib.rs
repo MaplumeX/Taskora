@@ -100,8 +100,8 @@ fn app_exit(app: tauri::AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        // 系统通知（Reminders spec）：系统级定时通知（App 关闭仍触发）。
-        .plugin(tauri_plugin_notification::init())
+        // Reminder 投递（ADR-0014）：持久化计划 + 精确闹钟 + 开机恢复。
+        .plugin(tauri_plugin_reminders::init())
         // 状态栏快速添加（android-status-bar issue 02）：单行自定义布局。
         .plugin(tauri_plugin_statusbar::init())
         .setup(|app| {
