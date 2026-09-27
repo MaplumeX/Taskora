@@ -138,9 +138,11 @@ export {
 export {
   setNotificationShell,
   getNotificationShell,
-  notificationIdForKey,
   reminderInputFromReplicaRow,
+  type ReminderDelivery,
   type ReminderNotificationShell,
+  type ReminderReliabilityStatus,
+  type ReminderSettingsTarget,
 } from './reminders/notification-shell';
 export {
   createReminderCoordinator,

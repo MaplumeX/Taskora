@@ -43,6 +43,7 @@
   "reminderTime": "Reminder time",
   "reminderDisabledNotice": "Notifications are disabled",
   "reminderOpenSettings": "Open Settings",
+  "reminderChannelName": "Task reminders",
   "repeat": "Repeat",
   "repeatUnit-day": "days",
   "repeatUnit-week": "weeks",

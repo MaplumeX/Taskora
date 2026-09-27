@@ -1,12 +1,12 @@
 /**
  * 桌面端通知薄壳（Reminders spec）：tauri-plugin-notification 的适配层。
  *
- * 桌面走 runtime 模式（ReminderCoordinator 到点 fireNow），schedule/
- * cancel 不会被调用（系统级排程是移动端路径）；openSettings 走壳层
- * Rust 命令 open_notification_settings。
+ * 桌面走 runtime 模式（ReminderCoordinator 到点 fireNow；App 未运行
+ * 期间错过的提醒静默丢弃，spec 定案），不实现系统级 sync（Android
+ * 路径）；openSettings 走壳层 Rust 命令 open_notification_settings。
  *
  * 权限检测与发通知绕过插件 guest-js、直调原生命令，与移动端
- * notification-bridge 同一口径。guest-js 的 isPermissionGranted/
+ * notification-bridge 同一口径（实时查询，不读缓存）。guest-js 的 isPermissionGranted/
  * requestPermission 读写的是 window.Notification.permission——插件 init
  * 脚本注入的会话内缓存，并非系统实时状态：Windows 上 init 脚本启动时
  * 不查原生就把缓存初始化成 'denied'，guest-js 此后恒报未授权，而通知
@@ -69,13 +69,6 @@ export function createDesktopNotificationShell(): ReminderNotificationShell {
     isSupported: () => true,
     isPermissionGranted: isNativePermissionGranted,
     requestPermission: requestNativePermission,
-    async schedule() {
-      // runtime 模式不注册系统排程；到点由 ReminderCoordinator 触发
-      // fireNow（App 未运行期间错过的提醒静默丢弃，spec 定案）。
-    },
-    async cancel() {
-      // 同上：runtime 模式没有系统注册。
-    },
     async fireNow(title: string, body: string) {
       try {
         // 显式给 sound：桌面端缺省即静音（见 defaultSound 注释）。

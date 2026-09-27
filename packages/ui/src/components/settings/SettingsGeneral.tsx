@@ -4,9 +4,11 @@ import { toast } from 'sonner';
 
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
+import ReminderReliabilitySection from './ReminderReliabilitySection';
 import {
   currentStatusBarController,
   getClientKind,
+  getNotificationShell,
   usePreferencesStore,
   useUpdatePreferences,
 } from '@taskora/api';
@@ -27,6 +29,12 @@ const isDesktopRuntime = () =>
 
 /** 状态栏常驻通知（android-status-bar）：仅 Android 渲染，且控制器已注册。 */
 const getStatusBar = () => (getClientKind() === 'mobile' ? currentStatusBarController() : null);
+
+/** 提醒可靠性（ADR-0014）：仅实现了投递诊断的通知薄壳（Android）渲染。 */
+const getReliabilityShell = () => {
+  const shell = getNotificationShell();
+  return shell?.reliability && shell.openSystemSettings ? shell : null;
+};
 
 /**
  * 「通用」设置页。
@@ -83,6 +91,7 @@ export default function SettingsGeneral() {
     statusBar ? statusBar.isEnabled() : null,
   );
   const [statusBarPending, setStatusBarPending] = useState(false);
+  const reliabilityShell = getReliabilityShell();
 
   const handleStatusBarChange = async (next: boolean) => {
     if (!statusBar || statusBarPending) return;
@@ -201,6 +210,9 @@ export default function SettingsGeneral() {
           <p className="text-sm text-muted-foreground">{t('settings:statusBarHint')}</p>
         </div>
       )}
+
+      {/* 提醒可靠性（仅 Android） */}
+      {reliabilityShell && <ReminderReliabilitySection shell={reliabilityShell} />}
 
       {/* 登录时自动启动（仅桌面端） */}
       {desktop && (

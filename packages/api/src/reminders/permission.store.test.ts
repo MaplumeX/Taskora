@@ -18,9 +18,6 @@ function installShell(granted: boolean, requestResult: boolean) {
     isSupported: () => true,
     isPermissionGranted: vi.fn(async () => granted),
     requestPermission: vi.fn(async () => requestResult),
-    schedule: vi.fn(async () => {}),
-    cancel: vi.fn(async () => {}),
-    fireNow: vi.fn(async () => {}),
     openSettings: vi.fn(async () => {}),
   };
   setNotificationShell(shell);

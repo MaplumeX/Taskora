@@ -110,7 +110,7 @@ describe('createDesktopNotificationShell fireNow', () => {
     setUserAgent('Mozilla/5.0 (Windows NT 10.0; Win64; x64)');
     mocks.invoke.mockResolvedValue(undefined);
     const shell = createDesktopNotificationShell();
-    await shell.fireNow('标题', '正文');
+    await shell.fireNow!('标题', '正文');
     expect(mocks.invoke).toHaveBeenCalledWith('plugin:notification|notify', {
       options: { title: '标题', body: '正文', sound: 'Default' },
     });
@@ -120,7 +120,7 @@ describe('createDesktopNotificationShell fireNow', () => {
     setUserAgent('Mozilla/5.0 (X11; Linux x86_64)');
     mocks.invoke.mockResolvedValue(undefined);
     const shell = createDesktopNotificationShell();
-    await shell.fireNow('标题', '正文');
+    await shell.fireNow!('标题', '正文');
     expect(mocks.invoke).toHaveBeenCalledWith('plugin:notification|notify', {
       options: { title: '标题', body: '正文' },
     });
@@ -130,7 +130,7 @@ describe('createDesktopNotificationShell fireNow', () => {
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     mocks.invoke.mockRejectedValue(new Error('notify failed'));
     const shell = createDesktopNotificationShell();
-    await expect(shell.fireNow('标题', '正文')).resolves.toBeUndefined();
+    await expect(shell.fireNow!('标题', '正文')).resolves.toBeUndefined();
     expect(warn).toHaveBeenCalled();
     warn.mockRestore();
   });

@@ -6,7 +6,7 @@ import { ScheduledType, TaskStatus } from '@taskora/shared';
 
 import { usePreferencesStore } from '@/stores/preferences.store';
 import { createReminderCoordinator, type ReminderCoordinator } from './reminder-coordinator';
-import type { ReminderNotificationShell } from './notification-shell';
+import type { ReminderDelivery, ReminderNotificationShell } from './notification-shell';
 
 const USER = 'user-1';
 
@@ -15,13 +15,16 @@ function makeShell() {
     isSupported: vi.fn(() => true),
     isPermissionGranted: vi.fn(async () => true),
     requestPermission: vi.fn(async () => true),
-    schedule: vi.fn<(key: string, title: string, body: string, fireAt: number) => Promise<void>>(
-      async () => {},
-    ),
-    cancel: vi.fn<(key: string) => Promise<void>>(async () => {}),
     fireNow: vi.fn<(title: string, body: string) => Promise<void>>(async () => {}),
+    sync: vi.fn<(plan: ReminderDelivery[]) => Promise<void>>(async () => {}),
+    clear: vi.fn<() => Promise<void>>(async () => {}),
     openSettings: vi.fn(async () => {}),
   } satisfies ReminderNotificationShell & Record<string, ReturnType<typeof vi.fn>>;
+}
+
+/** 最近一次交付给原生的完整期望集。 */
+function lastPlan(shell: ReturnType<typeof makeShell>): ReminderDelivery[] | undefined {
+  return shell.sync.mock.calls.at(-1)?.[0];
 }
 
 /** 可控时钟：nowMs 手动推进。 */
@@ -70,34 +73,6 @@ async function seedTask(
 }
 
 describe('ReminderCoordinator — runtime（桌面）模式', () => {
-  it('账号时区修改立即注销旧提醒并在新时区重排，不误补发', async () => {
-    const previous = usePreferencesStore.getState().timeZone;
-    usePreferencesStore.getState().setTimeZone('Asia/Shanghai');
-    const localEngine = await makeEngine();
-    const localShell = makeShell();
-    const localCoordinator = createReminderCoordinator({
-      engine: localEngine,
-      shell: localShell,
-      mode: 'system',
-      now: () => new Date('2026-02-04T00:00Z'),
-    });
-    try {
-      await seedTask(localEngine);
-      localCoordinator.start();
-      await localCoordinator.reschedule();
-      expect(localShell.schedule.mock.calls.at(-1)?.[3]).toBe(Date.parse('2026-02-05T01:00Z'));
-      usePreferencesStore.getState().setTimeZone('America/New_York');
-      await localCoordinator.reschedule();
-      expect(localShell.cancel).toHaveBeenCalled();
-      expect(localShell.schedule.mock.calls.at(-1)?.[3]).toBe(Date.parse('2026-02-05T14:00Z'));
-      expect(localShell.schedule.mock.calls.at(-1)?.[2]).toBe('09:00');
-      expect(localShell.fireNow).not.toHaveBeenCalled();
-    } finally {
-      localCoordinator.stop();
-      await localEngine.close();
-      usePreferencesStore.getState().setTimeZone(previous);
-    }
-  });
   let engine: Engine;
   let shell: ReturnType<typeof makeShell>;
   let clock: ReturnType<typeof makeClock>;
@@ -122,7 +97,7 @@ describe('ReminderCoordinator — runtime（桌面）模式', () => {
     coordinator.start();
     await vi.advanceTimersByTimeAsync(10); // 首次对齐 reschedule
 
-    expect(shell.schedule).not.toHaveBeenCalled(); // runtime 模式不注册系统排程
+    expect(shell.sync).not.toHaveBeenCalled(); // runtime 模式不交付系统计划
     // 推进到 2月5日 08:59 + tick
     clock.advance(dayAt(5, 8, 59) - dayAt(4, 12));
     await vi.advanceTimersByTimeAsync(30_000);
@@ -211,7 +186,7 @@ describe('ReminderCoordinator — runtime（桌面）模式', () => {
   });
 });
 
-describe('ReminderCoordinator — system（移动）模式', () => {
+describe('ReminderCoordinator — system（Android）模式', () => {
   let engine: Engine;
   let shell: ReturnType<typeof makeShell>;
   let clock: ReturnType<typeof makeClock>;
@@ -231,115 +206,152 @@ describe('ReminderCoordinator — system（移动）模式', () => {
     });
   });
 
-  it('新提醒注册到系统；数据变更后差量更新（改期注销+重注册）', async () => {
+  it('启动时交付完整期望集；数据变更后再次交付完整集（非增量）', async () => {
     const taskId = await seedTask(engine);
+    const otherId = await seedTask(engine, { title: '另一个', day: 6, time: '10:30' });
     coordinator.start();
     await vi.advanceTimersByTimeAsync(10);
 
-    expect(shell.schedule).toHaveBeenCalledTimes(1);
-    const [key, title, , fireAt] = shell.schedule.mock.calls[0];
-    expect(key).toBe(`reminder:${taskId}`);
-    expect(title).toBe('提醒任务');
-    expect(fireAt).toBe(dayAt(5, 9));
+    expect(lastPlan(shell)).toEqual(
+      expect.arrayContaining([
+        { key: `reminder:${taskId}`, fireAt: dayAt(5, 9), title: '提醒任务', body: '09:00' },
+        { key: `reminder:${otherId}`, fireAt: dayAt(6, 10, 30), title: '另一个', body: '10:30' },
+      ]),
+    );
+    expect(lastPlan(shell)).toHaveLength(2);
 
-    // 改时刻 → 同 key 先 cancel 再 schedule
     await engine.update('task', taskId, { reminderTime: '14:30' });
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(shell.cancel).toHaveBeenCalledWith(`reminder:${taskId}`);
-    expect(shell.schedule).toHaveBeenCalledTimes(2);
-    expect(shell.schedule.mock.calls[1][3]).toBe(dayAt(5, 14, 30));
-
-    coordinator.stop();
-    await engine.close();
-  });
-
-  it('取消提醒/进 Trash → 注销系统通知；stop 注销全部残留', async () => {
-    const taskId = await seedTask(engine);
-    coordinator.start();
     await vi.advanceTimersByTimeAsync(10);
-    expect(shell.schedule).toHaveBeenCalledTimes(1);
-
-    await engine.update('task', taskId, { reminderTime: null });
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(shell.cancel).toHaveBeenCalledWith(`reminder:${taskId}`);
-
-    // stop（登出）：注销当前全部注册
-    await engine.update('task', taskId, { reminderTime: '15:00' });
-    await vi.advanceTimersByTimeAsync(30_000);
-    shell.cancel.mockClear();
-    coordinator.stop();
-    expect(shell.cancel).toHaveBeenCalledWith(`reminder:${taskId}`);
-    await engine.close();
-  });
-
-  it('自然到点后不取消系统排程；重新排期后任务终态仍注销', async () => {
-    const taskId = await seedTask(engine);
-    coordinator.start();
-    await vi.advanceTimersByTimeAsync(10);
-    expect(shell.schedule).toHaveBeenCalledTimes(1);
-
-    // 已到点（模拟系统排程稍慢）：不调用原生 cancel，交给 OS 触发。
-    clock.advance(dayAt(5, 9, 0) - dayAt(4, 12) + 30_000);
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(shell.cancel).not.toHaveBeenCalled();
-
-    // 触发后同一 key 仍应可再次排期（改到明天）。
-    await engine.update('task', taskId, { scheduledDate: '2026-02-06' });
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(shell.schedule).toHaveBeenCalledTimes(2);
-
-    // 重新排期后任务完成：未触发的排程必须注销。
-    await engine.update('task', taskId, {
-      status: TaskStatus.COMPLETED,
-      settledAt: new Date(clock.now()).toISOString(),
+    expect(lastPlan(shell)).toHaveLength(2);
+    expect(lastPlan(shell)).toContainEqual({
+      key: `reminder:${taskId}`,
+      fireAt: dayAt(5, 14, 30),
+      title: '提醒任务',
+      body: '14:30',
     });
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(shell.cancel).toHaveBeenCalledWith(`reminder:${taskId}`);
+    expect(shell.fireNow).not.toHaveBeenCalled();
 
     coordinator.stop();
     await engine.close();
   });
 
-  it('自然到点后立即登出：仍注销等待系统触发的排程', async () => {
+  it('期望集未变时周期 tick 不重复交付；标题变更会重新交付', async () => {
     const taskId = await seedTask(engine);
     coordinator.start();
     await vi.advanceTimersByTimeAsync(10);
-    clock.advance(dayAt(5, 9, 0) - dayAt(4, 12) + 30_000);
-    await vi.advanceTimersByTimeAsync(30_000);
+    await vi.advanceTimersByTimeAsync(90_000);
+    expect(shell.sync).toHaveBeenCalledTimes(1);
+
+    await engine.update('task', taskId, { title: '改名后' });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(shell.sync).toHaveBeenCalledTimes(2);
+    expect(lastPlan(shell)?.[0].title).toBe('改名后');
 
     coordinator.stop();
-    expect(shell.cancel).toHaveBeenCalledWith(`reminder:${taskId}`);
     await engine.close();
   });
 
-  it('App 未运行期间错过的提醒：启动对齐时不再注册（系统侧由 OS 决定）', async () => {
+  it('关提醒 / 了结 / 进 Trash → 从期望集中消失', async () => {
+    const a = await seedTask(engine, { title: 'A' });
+    const b = await seedTask(engine, { title: 'B' });
+    const c = await seedTask(engine, { title: 'C' });
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(lastPlan(shell)).toHaveLength(3);
+
+    await engine.update('task', a, { reminderTime: null });
+    await engine.update('task', b, {
+      status: TaskStatus.COMPLETED,
+      settledAt: '2026-02-04T12:00:00.000Z',
+    });
+    await engine.update('task', c, { trashedAt: '2026-02-04T12:00:00.000Z' });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(lastPlan(shell)).toEqual([]);
+
+    coordinator.stop();
+    await engine.close();
+  });
+
+  it('自然到点后提醒从期望集消失（在途投递由原生保留），且不走 fireNow', async () => {
+    await seedTask(engine);
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(lastPlan(shell)).toHaveLength(1);
+
+    clock.advance(dayAt(5, 9, 0) - dayAt(4, 12) + 1_000);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(lastPlan(shell)).toEqual([]);
+    expect(shell.fireNow).not.toHaveBeenCalled();
+    expect(shell.clear).not.toHaveBeenCalled();
+
+    coordinator.stop();
+    await engine.close();
+  });
+
+  it('启动时已错过的提醒不进入期望集（不补发）', async () => {
     await seedTask(engine);
     clock.advance(dayAt(6, 10) - dayAt(4, 12));
     coordinator.start();
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(shell.schedule).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(lastPlan(shell)).toEqual([]);
     coordinator.stop();
     await engine.close();
   });
 
-  it('系统注册失败不落表：下 tick 自动重试，恢复后注册成功且不再重复', async () => {
+  it('stop（登出）清空原生计划', async () => {
     await seedTask(engine);
-    // 首次注册失败（典型诱因：本机授权未授予——多设备同步来的提醒）
-    shell.schedule.mockRejectedValueOnce(new Error('notification permission not granted'));
     coordinator.start();
-    await vi.advanceTimersByTimeAsync(10); // 首次对齐：schedule 失败
-    expect(shell.schedule).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(10);
+    coordinator.stop();
+    expect(shell.clear).toHaveBeenCalledTimes(1);
+    await engine.close();
+  });
 
-    // 下 tick：失败未落表 → 同一 key 重试注册并成功
+  it('交付失败不记账：下个 tick 以同一期望集重试，成功后不再重复', async () => {
+    await seedTask(engine);
+    shell.sync.mockRejectedValueOnce(new Error('plugin unavailable'));
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(shell.sync).toHaveBeenCalledTimes(1);
+
     await vi.advanceTimersByTimeAsync(30_000);
-    expect(shell.schedule).toHaveBeenCalledTimes(2);
-    expect(shell.schedule.mock.calls[1][0]).toBe(shell.schedule.mock.calls[0][0]);
+    expect(shell.sync).toHaveBeenCalledTimes(2);
+    expect(shell.sync.mock.calls[1][0]).toEqual(shell.sync.mock.calls[0][0]);
 
-    // 已落表后不再重复注册
     await vi.advanceTimersByTimeAsync(30_000);
-    expect(shell.schedule).toHaveBeenCalledTimes(2);
+    expect(shell.sync).toHaveBeenCalledTimes(2);
 
+    warn.mockRestore();
     coordinator.stop();
     await engine.close();
+  });
+
+  it('账号时区修改立即按新时区交付，不误补发', async () => {
+    const previous = usePreferencesStore.getState().timeZone;
+    usePreferencesStore.getState().setTimeZone('Asia/Shanghai');
+    const localEngine = await makeEngine();
+    const localShell = makeShell();
+    const localCoordinator = createReminderCoordinator({
+      engine: localEngine,
+      shell: localShell,
+      mode: 'system',
+      now: () => new Date('2026-02-04T00:00Z'),
+    });
+    try {
+      await seedTask(localEngine);
+      localCoordinator.start();
+      await localCoordinator.reschedule();
+      expect(lastPlan(localShell)?.[0].fireAt).toBe(Date.parse('2026-02-05T01:00Z'));
+      usePreferencesStore.getState().setTimeZone('America/New_York');
+      await localCoordinator.reschedule();
+      expect(lastPlan(localShell)?.[0].fireAt).toBe(Date.parse('2026-02-05T14:00Z'));
+      expect(lastPlan(localShell)?.[0].body).toBe('09:00');
+      expect(localShell.fireNow).not.toHaveBeenCalled();
+    } finally {
+      localCoordinator.stop();
+      await localEngine.close();
+      usePreferencesStore.getState().setTimeZone(previous);
+    }
   });
 });

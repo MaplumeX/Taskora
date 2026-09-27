@@ -158,13 +158,12 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     const onVisible = () => {
       if (document.visibilityState !== 'visible') return;
       void syncNow();
-      // 用户可能刚在系统设置中恢复通知权限：实时确认后重排 Reminders
-      // （schedule 自身也会预检，但这里让恢复路径不依赖数据再次变更）。
+      // 用户可能刚在系统设置中撤回/恢复通知权限：刷新提醒区的实时
+      // 状态（投递本身不依赖此处——原生计划一直在，授权后照常送达）。
       void isNativeNotificationPermissionGranted().then((granted) => {
-        // 设置页的禁用/恢复提示与协调器使用同一份实时状态。
         useReminderPermissionStore.setState({ permission: granted ? 'granted' : 'denied' });
-        if (granted) void reminderCoordinator?.reschedule();
       });
+      void reminderCoordinator?.reschedule();
     };
     document.addEventListener('visibilitychange', onVisible);
     window.addEventListener('focus', onVisible);
@@ -179,9 +178,9 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     if (!(await syncNow()) && (await engine.cursor()) === 0) {
       await retryUntilFirstSync();
     }
-    // Reminders：副本变更 + 周期 tick 驱动，注册系统级定时通知
-    // （system 模式：App 关闭/离线仍触发）。首次对齐在启动时补齐系统
-    // 侧注册（设备重启后系统排程清空，重启 App 重新登记）。
+    // Reminders（ADR-0014）：副本变更 + 周期 tick 驱动，把完整期望集
+    // 交给原生 reminders 插件（system 模式：App 关闭/进程回收/重启后
+    // 仍由原生按持久化计划触发）。
     reminderCoordinator = createReminderCoordinator({
       engine,
       shell: createMobileNotificationShell(),

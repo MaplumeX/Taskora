@@ -5,7 +5,7 @@
   "windows": ["main"],
   "permissions": [
     "core:default",
-    "notification:default",
-    "statusbar:default"
+    "statusbar:default",
+    "reminders:default"
   ]
 }
