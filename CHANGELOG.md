@@ -9,6 +9,61 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.5.5] - 2026-09-27
+
+### Changed
+
+- **mobile**: Status bar notification switched to a single-line custom
+  layout (#100) — the ongoing notification no longer uses the
+  notification plugin's standard template (task title plus a separate
+  system action row); a new in-repo Kotlin plugin
+  `tauri-plugin-statusbar` (`packages/mobile/plugins/statusbar`, a path
+  dependency modeled on `tauri-plugin-timer`) backs a `RemoteViews`
+  layout with the single-line task title and two larger vector icon
+  buttons, matching the TickTick form. A `specialUse` foreground
+  service (`START_STICKY`) holds the notification and snapshots its
+  content to `SharedPreferences` so a sticky restart can rebuild it;
+  "▸" cycles to the next task through a manifest-registered receiver
+  that forwards to JS via `plugin.trigger` (now returning early with
+  `goAsync()` so the main activity is not pulled forward), and "＋"
+  opens a translucent `QuickAddActivity` overlay whose submitted title
+  reaches JS the same way (buffered in `SharedPreferences` and flushed
+  on plugin load when the process was cold). The notification is no
+  longer expandable (no `BigContentView`). The platform-agnostic
+  `StatusBarShell` interface and controller are unchanged.
+
+### Fixes
+
+- **api/mobile**: Android Task Reminders could stay silent even with
+  the app in the foreground (#98) — notification IDs were generated as
+  unsigned 32-bit numbers while the plugin's Rust/native notification
+  IDs are signed `i32`/`Int`, so some stable task IDs always overflowed
+  and registration failed every time; IDs are now stable signed 32-bit
+  integers (previously working positive IDs are unchanged). The
+  scheduler's diff now distinguishes `due` (naturally elapsed) from
+  `cancel` (rescheduled/disabled/terminal) so a naturally-due reminder
+  on mobile no longer has its pending system schedule revoked; logout
+  and stop still clear pending items, and the desktop runtime keeps
+  firing at the due time. A shared `notification-bridge` now provides
+  live native permission query/request and channel checks for both
+  reminders and the status bar, refreshing permission state and
+  rescheduling future reminders on return to the foreground.
+- **desktop**: Notification permission was misreported as disabled and
+  changes made in system settings were not picked up (#101) — the
+  desktop shell now calls the native `plugin:notification|*` commands
+  directly instead of going through the plugin's guest-js, whose
+  `isPermissionGranted`/`requestPermission` read the session-local
+  `window.Notification.permission` cache (on Windows that cache is
+  initialized to `denied` at startup without querying the OS, so
+  notifications fired fine yet the app always claimed they were
+  disabled). Permission failures now return `false` instead of
+  throwing, matching the mobile `notification-bridge` behavior.
+- **ui**: Launch-at-login was shown on the mobile shell (#99) — the
+  General settings tab only checked for `__TAURI_INTERNALS__`, but the
+  mobile app is also a Tauri shell, so Android displayed a desktop-only
+  toggle. The desktop check now also requires
+  `getClientKind() === 'desktop'`.
+
 ## [0.5.4] - 2026-09-26
 
 ### Fixes
