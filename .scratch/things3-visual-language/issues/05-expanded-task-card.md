@@ -19,3 +19,4 @@ Blocked by: 04
 - 偏离：高度展开动画用 tailwindcss-animate 的 fade + slide-in（展开内容挂载即播放），未做 grid 0fr→1fr 高度过渡（组件挂载 / 卸载模型下无法对高度做过渡）；chip 上不做 hover ✕ 清除（清除入口在各字段编辑器内）。
 - 2026-09-27：按反馈放慢并统一展开 / 收起：改为真正的高度过渡（挂载后下一帧 0fr→1fr；收起先 1fr→0fr，450ms 后卸载），新增 `--dur-expand` 450ms 与 `--ease-expand`。同时发现 `duration-[var(--dur-*)]` 因与 tailwindcss-animate 的 `duration-*` 歧义而从未生成 CSS，改为 preset 注册的 `duration-fast/base/slow/expand`。
 - 2026-09-27：按反馈 450ms 偏慢，`--dur-expand` / `EXPAND_MS` 调为 300ms。
+- 2026-09-27：再调快为 240ms。
