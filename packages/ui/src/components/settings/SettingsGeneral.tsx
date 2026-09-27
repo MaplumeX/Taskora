@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { Check } from 'lucide-react';
 
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -11,6 +10,7 @@ import {
   SettingsPage,
   SettingsRow,
   useSettingsNav,
+  SettingsRadio,
 } from './SettingsList';
 import {
   currentStatusBarController,
@@ -73,7 +73,7 @@ function TimeZonePicker({
         onChange={(e) => setQuery(e.target.value)}
         placeholder={t('timeZoneSearch')}
         aria-label={t('timeZoneSearch')}
-        className="h-10 w-full rounded-xl bg-card px-3 text-[15px] outline-none placeholder:text-muted-foreground"
+        className="h-12 w-full rounded-full bg-card px-5 text-base outline-none placeholder:text-muted-foreground"
       />
       <SettingsGroup>
         {filtered.length === 0 ? (
@@ -87,10 +87,10 @@ function TimeZonePicker({
               role="radio"
               aria-checked={zone === current}
               onClick={() => onSelect(zone)}
-              className="flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left text-[15px] transition-colors active:bg-accent"
+              className="flex min-h-14 w-full items-center gap-4 px-4 py-2 text-left text-base transition-colors active:bg-accent"
             >
+              <SettingsRadio checked={zone === current} />
               <span className="min-w-0 flex-1 truncate">{formatZone(zone)}</span>
-              {zone === current && <Check aria-hidden className="h-4 w-4 shrink-0 text-primary" />}
             </button>
           ))
         )}
@@ -234,7 +234,6 @@ export default function SettingsGeneral() {
           <SettingsRow
             label={t('settings:timeZone')}
             value={formatZone(timeZone)}
-            chevron
             onClick={() =>
               mobileNav.push({
                 title: t('settings:timeZone'),

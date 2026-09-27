@@ -36,7 +36,7 @@ function CalendarDayButton({ modifiers, className, ...props }: DayButtonProps) {
       className={cn(
         // 选中态自带 hover 覆盖，避免与通用 hover 的 accent 背景冲突。
         selected
-          ? 'bg-primary font-semibold text-primary-foreground shadow-sm hover:bg-primary/90'
+          ? 'bg-primary font-semibold text-primary-foreground hover:bg-primary/90'
           : today
             ? cn(
                 'font-semibold text-primary hover:bg-accent hover:text-accent-foreground',
@@ -86,7 +86,7 @@ export function Calendar({
         months: 'flex flex-col sm:flex-row gap-2',
         month: 'flex flex-col gap-2.5',
         month_caption: 'flex justify-center items-center h-8',
-        caption_label: 'text-sm font-semibold tracking-wide',
+        caption_label: 'text-body font-semibold',
         // 与 month_caption 同高同顶（h-8 / top-3），按钮垂直居中于标题行；
         // 窄屏 44px 按钮在 h-8 行内对称溢出，仍与标题居中对齐。
         nav: 'flex h-8 items-center justify-between absolute inset-x-1 top-3',
@@ -97,8 +97,8 @@ export function Calendar({
         month_grid: 'w-full border-collapse',
         weekdays: 'flex pb-1',
         weekday:
-          'flex-1 text-center text-muted-foreground text-xs font-medium uppercase tracking-wide',
-        week: 'flex w-full mt-2',
+          'flex-1 text-center text-muted-foreground text-meta font-medium',
+        week: 'flex w-full mt-1',
         day: 'flex-1 p-0 text-center',
         day_button: dayButtonClassNames,
         // modifier 类只会挂到 td 上，视觉状态统一在 CalendarDayButton 里处理，

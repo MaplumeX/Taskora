@@ -48,7 +48,7 @@ export function MainContent() {
             ? 'h-full max-md:pb-[env(safe-area-inset-bottom)]'
             : canvas
               ? 'h-full pt-2 md:px-6 md:pt-4 max-md:pb-[env(safe-area-inset-bottom)]'
-              : 'max-w-2xl px-4 pb-24 pt-2 md:px-6 md:pb-12 md:pt-8',
+              : 'max-w-3xl px-4 pb-24 pt-2 md:px-12 md:pb-12 md:pt-10',
         )}
       >
         <Suspense

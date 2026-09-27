@@ -1,5 +1,5 @@
 import { ChevronRight } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useMatch, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -7,6 +7,7 @@ import { ProjectStatus } from '@taskora/shared';
 import type { ProjectResponseDto } from '@taskora/shared';
 
 import { cn } from '@/lib/utils';
+import { sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import { ProjectContextMenu } from '@/components/project/ProjectContextMenu';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
 import {
@@ -24,6 +25,8 @@ interface Props {
    * 选中行作为唯一 tab 停靠点）。侧边栏不传，保持普通 tabIndex={0}
    * 行为，避免与列表页同名行冲突。 */
   selectionRow?: boolean;
+  /** 侧边栏紧凑行：28px 行高、16px 进度环（与图标同宽）、当前项目高亮。 */
+  variant?: 'list' | 'sidebar';
 }
 
 export function ProjectItem({
@@ -32,9 +35,12 @@ export function ProjectItem({
   showChevron = true,
   selected = false,
   selectionRow = false,
+  variant = 'list',
 }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const sidebar = variant === 'sidebar';
+  const isCurrent = useMatch(`/projects/${project.id}`) !== null;
   const completeProject = useCompleteProject();
   const uncompleteProject = useUncompleteProject();
 
@@ -61,20 +67,29 @@ export function ProjectItem({
           e.preventDefault();
           navigate(`/projects/${project.id}`);
         }}
-        className={cn(
-          'flex w-full cursor-pointer items-center gap-2.5 rounded-lg px-3 py-1.5 text-left hover-instant hover:bg-accent max-md:py-2.5',
-          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
-          selected && 'bg-accent focus-visible:ring-0',
-        )}
+        className={
+          sidebar
+            ? sidebarRowClass(
+                isCurrent,
+                'w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
+              )
+            : cn(
+                'flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2 py-1.5 text-left hover-instant hover:bg-accent/60 max-md:py-2.5',
+                'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
+                selected && 'bg-selection hover:bg-selection focus-visible:ring-0',
+              )
+        }
       >
         <ProjectProgressRing
+          size={sidebar ? 16 : 20}
           total={project.taskTotalCount}
           completed={project.taskCompletedCount}
           projectStatus={project.status}
           onToggle={handleToggle}
         />
         <span className={cn(
-          'flex-1 truncate text-sm',
+          'flex-1 truncate',
+          !sidebar && 'text-body font-semibold',
           !project.title && 'text-muted-foreground',
           isCompleted && 'text-muted-foreground',
         )}>

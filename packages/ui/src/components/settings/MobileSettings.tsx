@@ -1,6 +1,6 @@
 import { Suspense, lazy, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Bot, ChevronLeft, Download, Info, SlidersHorizontal, SunMedium } from 'lucide-react';
+import { ArrowLeft, Bot, Download, Info, SlidersHorizontal, SunMedium } from 'lucide-react';
 
 import { DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
@@ -78,7 +78,6 @@ function SettingsRoot({ open }: { open: (tab: SettingsTab) => void }) {
       <SettingsGroup>
         <SettingsRow
           onClick={() => open('account')}
-          chevron
           leading={
             <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-lg font-medium text-primary-foreground">
               {user?.avatarUrl ? (
@@ -88,7 +87,7 @@ function SettingsRoot({ open }: { open: (tab: SettingsTab) => void }) {
               )}
             </span>
           }
-          label={<span className="text-[17px] font-medium">{name}</span>}
+          label={<span className="text-lg font-medium">{name}</span>}
           description={user?.displayName ? user.email : t('settings:account')}
         />
       </SettingsGroup>
@@ -96,14 +95,12 @@ function SettingsRoot({ open }: { open: (tab: SettingsTab) => void }) {
       <SettingsGroup>
         <SettingsRow
           onClick={() => open('general')}
-          chevron
-          leading={<SettingsIcon icon={SlidersHorizontal} className="bg-slate-500" />}
+          leading={<SettingsIcon icon={SlidersHorizontal} />}
           label={t('settings:general')}
         />
         <SettingsRow
           onClick={() => open('appearance')}
-          chevron
-          leading={<SettingsIcon icon={SunMedium} className="bg-indigo-500" />}
+          leading={<SettingsIcon icon={SunMedium} />}
           label={t('settings:appearance')}
           value={t(`theme:${theme}`)}
         />
@@ -112,8 +109,7 @@ function SettingsRoot({ open }: { open: (tab: SettingsTab) => void }) {
       <SettingsGroup>
         <SettingsRow
           onClick={() => open('assistant')}
-          chevron
-          leading={<SettingsIcon icon={Bot} className="bg-violet-500" />}
+          leading={<SettingsIcon icon={Bot} />}
           label={t('settings:assistant')}
           value={
             agentConfig
@@ -125,8 +121,7 @@ function SettingsRoot({ open }: { open: (tab: SettingsTab) => void }) {
         />
         <SettingsRow
           onClick={() => open('data')}
-          chevron
-          leading={<SettingsIcon icon={Download} className="bg-emerald-500" />}
+          leading={<SettingsIcon icon={Download} />}
           label={t('settings:data')}
         />
       </SettingsGroup>
@@ -134,8 +129,7 @@ function SettingsRoot({ open }: { open: (tab: SettingsTab) => void }) {
       <SettingsGroup>
         <SettingsRow
           onClick={() => open('about')}
-          chevron
-          leading={<SettingsIcon icon={Info} className="bg-sky-500" />}
+          leading={<SettingsIcon icon={Info} />}
           label={t('settings:about')}
           value={getAppVersion()}
         />
@@ -185,7 +179,6 @@ export function MobileSettingsContent() {
 
   const current = stack[stack.length - 1];
   const title = current?.title ?? t('common:settings');
-  const backLabel = stack.length > 1 ? stack[stack.length - 2].title : t('common:settings');
 
   return (
     <DialogContent
@@ -199,35 +192,20 @@ export function MobileSettingsContent() {
         e.preventDefault();
         nav.pop();
       }}
-      className="h-[calc(100dvh-var(--kb-inset,0px))] bg-muted pt-[env(safe-area-inset-top)]"
+      className="h-[calc(100dvh-var(--kb-inset,0px))] bg-muted pt-[env(safe-area-inset-top)] dark:bg-background"
     >
-      {/* 顶栏：左返回（非首页）、居中标题、右「完成」（首页） */}
-      <header className="grid h-12 shrink-0 grid-cols-[1fr_auto_1fr] items-center px-1">
-        <div className="min-w-0">
-          {stack.length > 0 && (
-            <button
-              type="button"
-              onClick={nav.pop}
-              aria-label={t('common:back')}
-              className="flex h-11 max-w-full items-center gap-0.5 rounded-lg pr-2 text-[15px] text-primary active:bg-accent"
-            >
-              <ChevronLeft className="h-6 w-6 shrink-0" />
-              <span className="truncate">{backLabel}</span>
-            </button>
-          )}
-        </div>
-        <DialogTitle className="truncate px-2 text-[17px] font-semibold">{title}</DialogTitle>
-        <div className="flex justify-end">
-          {stack.length === 0 && (
-            <button
-              type="button"
-              onClick={closeSettings}
-              className="h-11 rounded-lg px-3 text-[15px] font-semibold text-primary active:bg-accent"
-            >
-              {t('common:done')}
-            </button>
-          )}
-        </div>
+      {/* 顶栏（Material small top app bar）：左侧 ← 返回（首页即关闭设置）、标题靠左，
+          无「完成」按钮——Android 靠返回键 / 返回手势离开。 */}
+      <header className="flex h-16 shrink-0 items-center gap-1 px-1">
+        <button
+          type="button"
+          onClick={stack.length > 0 ? nav.pop : closeSettings}
+          aria-label={stack.length > 0 ? t('common:back') : t('common:close')}
+          className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full text-foreground active:bg-accent"
+        >
+          <ArrowLeft className="h-6 w-6" />
+        </button>
+        <DialogTitle className="min-w-0 truncate text-xl font-normal">{title}</DialogTitle>
       </header>
 
       {/*
@@ -246,7 +224,7 @@ export function MobileSettingsContent() {
                 top &&
                   depth > 0 &&
                   pushedRef.current &&
-                  'duration-200 animate-in fade-in-0 slide-in-from-right-8',
+                  'duration-base animate-in fade-in-0 slide-in-from-right-8',
               )}
             >
               <Suspense fallback={<PageFallback />}>

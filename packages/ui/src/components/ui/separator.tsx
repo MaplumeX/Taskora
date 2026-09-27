@@ -13,7 +13,9 @@ const Separator = React.forwardRef<
     orientation={orientation}
     className={cn(
       'shrink-0 bg-border',
-      orientation === 'horizontal' ? 'h-[1px] w-full' : 'h-full w-[1px]',
+      orientation === 'horizontal' ? 'h-px w-full' : 'h-full w-px',
+      // 高 DPR 屏上压成 0.5px 发丝线
+      orientation === 'horizontal' ? 'hairline-y' : 'hairline-x',
       className,
     )}
     {...props}

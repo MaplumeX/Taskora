@@ -82,7 +82,7 @@ function StandaloneProjectContainer({
         ref={setNodeRef}
         data-project-container={STANDALONE_PROJECT_CONTAINER}
         className={cn(
-          'flex flex-col gap-0.5',
+          'flex flex-col gap-px',
           projectDragActive && projectIds.length === 0 && 'min-h-8',
         )}
       >
@@ -389,8 +389,8 @@ export function SidebarProjectSection({ projects, areas }: Props) {
   const projectDragActive = activeProject !== null;
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="px-3 py-1.5 text-sm font-medium text-muted-foreground">
+    <div className="flex flex-col">
+      <div className="px-2 pb-1 text-meta font-semibold text-muted-foreground">
         {t('nav:projects')}
       </div>
       <DndContext
@@ -413,7 +413,7 @@ export function SidebarProjectSection({ projects, areas }: Props) {
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
-        <div className="ml-2 flex flex-col gap-0.5">
+        <div className="flex flex-col gap-px">
           <StandaloneProjectContainer
             projectIds={
               layout.containers[STANDALONE_PROJECT_CONTAINER] ?? []
@@ -448,11 +448,11 @@ export function SidebarProjectSection({ projects, areas }: Props) {
         <DragOverlay>
           {activeProject ? (
             <div
-              className="pointer-events-none w-56 overflow-hidden rounded-lg border border-border/70 bg-card shadow-md"
+              className="pointer-events-none w-56 overflow-hidden rounded-md bg-sidebar shadow-popover"
               aria-hidden="true"
               {...{ inert: '' }}
             >
-              <ProjectItem project={activeProject} showChevron={false} />
+              <ProjectItem project={activeProject} showChevron={false} variant="sidebar" />
             </div>
           ) : null}
         </DragOverlay>

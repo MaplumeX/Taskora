@@ -23,5 +23,5 @@ export function SettledDateBadge({ date, className }: Props) {
     ...(sameYear ? {} : { year: 'numeric' }),
   }).format(d);
 
-  return <span className={cn('shrink-0 text-xs text-muted-foreground', className)}>{label}</span>;
+  return <span className={cn('shrink-0 text-meta text-muted-foreground', className)}>{label}</span>;
 }

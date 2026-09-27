@@ -85,7 +85,7 @@ export function CalendarDayCell({
               className={cn(
                 'block h-[14px] shrink-0 overflow-hidden whitespace-nowrap rounded-[3px] px-0.5 text-[10px] leading-[14px] text-foreground',
                 'md:h-5 md:text-ellipsis md:rounded md:px-1.5 md:text-xs md:leading-5',
-                isDeadlineUrgent(task) ? 'bg-destructive/15' : 'bg-primary/10',
+                isDeadlineUrgent(task) ? 'bg-deadline/15' : 'bg-primary/10',
                 (completed || cancelled) && 'bg-muted text-muted-foreground',
                 cancelled && 'line-through',
                 selectedIds.includes(task.id) && 'ring-1 ring-inset ring-primary',

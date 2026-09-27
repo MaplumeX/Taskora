@@ -29,7 +29,7 @@ export function TaskDueDateBadge({ dueDate, className }: Props) {
     <span
       className={cn(
         'inline-flex items-center gap-1 text-xs tabular-nums',
-        overdue || today ? 'text-destructive' : 'text-muted-foreground',
+        overdue || today ? 'text-deadline' : 'text-muted-foreground',
         className,
       )}
     >

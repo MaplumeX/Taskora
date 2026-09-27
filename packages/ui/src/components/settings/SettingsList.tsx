@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Check, ChevronRight, type LucideIcon } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 
@@ -30,7 +30,13 @@ export function useSettingsNav(): SettingsNav | null {
 
 /* ───────────────────────── 列表基础组件 ───────────────────────── */
 
-/** 分组：可选的小标题（header）与分组下方说明（footer）。 */
+/*
+ * 窄屏设置采用 Material（Android 系统设置）写法：主题色分组小标题、单色图标、
+ * 行首单选圆点、16px 正文、无 `›`、危险 / 主操作行左对齐。分组仍为圆角卡片
+ * （Android 12+ 系统设置同样使用分组容器）。
+ */
+
+/** 分组：可选的小标题（header，主题色）与分组下方说明（footer）。 */
 export function SettingsGroup({
   header,
   footer,
@@ -45,24 +51,32 @@ export function SettingsGroup({
   return (
     <section className={cn('flex flex-col gap-1.5', className)}>
       {header && (
-        <h3 className="px-4 text-[13px] font-medium text-muted-foreground">{header}</h3>
+        <h3 className="px-4 pt-1 text-sm font-medium text-primary">{header}</h3>
       )}
-      <div className="flex flex-col divide-y divide-border/60 overflow-hidden rounded-xl bg-card">
+      <div className="flex flex-col divide-y divide-border/60 overflow-hidden rounded-2xl bg-card">
         {children}
       </div>
-      {footer && <p className="px-4 text-[13px] leading-snug text-muted-foreground">{footer}</p>}
+      {footer && <p className="px-4 text-sm leading-snug text-muted-foreground">{footer}</p>}
     </section>
   );
 }
 
-/** 首页分类行前的彩色圆角图标（iOS 设置风格）。 */
-export function SettingsIcon({ icon: Icon, className }: { icon: LucideIcon; className: string }) {
+/** 分类行前的单色线性图标（Material：24px、次要文字色、无底色块）。 */
+export function SettingsIcon({ icon: Icon }: { icon: LucideIcon }) {
+  return <Icon aria-hidden className="h-6 w-6 shrink-0 text-muted-foreground" />;
+}
+
+/** 行首单选圆点（Material radio）。 */
+export function SettingsRadio({ checked }: { checked: boolean }) {
   return (
     <span
       aria-hidden
-      className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white', className)}
+      className={cn(
+        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 transition-colors',
+        checked ? 'border-primary' : 'border-muted-foreground',
+      )}
     >
-      <Icon className="h-4 w-4" />
+      {checked && <span className="h-2.5 w-2.5 rounded-full bg-primary" />}
     </span>
   );
 }
@@ -79,11 +93,9 @@ interface SettingsRowProps {
   control?: React.ReactNode;
   /** 点击行（推入下一页 / 执行动作）。 */
   onClick?: () => void;
-  /** 显示 `›`（推入下一页）。 */
-  chevron?: boolean;
-  /** 危险操作：红字、居中。 */
+  /** 危险操作：红字。 */
   destructive?: boolean;
-  /** 主操作按钮行：主题色字、居中。 */
+  /** 主操作按钮行：主题色字。 */
   action?: boolean;
   disabled?: boolean;
   /** 作为表单提交按钮（保留 required / minLength 等原生校验）。 */
@@ -92,7 +104,7 @@ interface SettingsRowProps {
   htmlFor?: string;
 }
 
-const ROW_CLASS = 'flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left text-[15px]';
+const ROW_CLASS = 'flex min-h-14 w-full items-center gap-4 px-4 py-2 text-left text-base';
 
 export function SettingsRow({
   label,
@@ -101,14 +113,12 @@ export function SettingsRow({
   value,
   control,
   onClick,
-  chevron = false,
   destructive = false,
   action = false,
   disabled = false,
   submit = false,
   htmlFor,
 }: SettingsRowProps) {
-  const centered = destructive || action;
   const labelNode = htmlFor ? (
     <label htmlFor={htmlFor}>{label}</label>
   ) : (
@@ -120,21 +130,19 @@ export function SettingsRow({
       <span
         className={cn(
           'flex min-w-0 flex-1 flex-col',
-          centered && 'items-center',
           destructive && 'text-destructive',
           action && 'font-medium text-primary',
         )}
       >
         {labelNode}
         {description && (
-          <span className="text-[13px] leading-snug text-muted-foreground">{description}</span>
+          <span className="text-sm leading-snug text-muted-foreground">{description}</span>
         )}
       </span>
       {value !== undefined && (
-        <span className="max-w-[55%] truncate text-[15px] text-muted-foreground">{value}</span>
+        <span className="max-w-[55%] truncate text-sm text-muted-foreground">{value}</span>
       )}
       {control}
-      {chevron && <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground/60" />}
     </>
   );
 
@@ -162,13 +170,13 @@ export function SettingsInputRow({
 }: { id: string; label: React.ReactNode } & React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <div className="flex flex-col gap-0.5 px-4 py-2">
-      <label htmlFor={id} className="text-[13px] text-muted-foreground">
+      <label htmlFor={id} className="text-sm text-muted-foreground">
         {label}
       </label>
       <input
         id={id}
         className={cn(
-          'h-8 w-full bg-transparent text-[15px] outline-none placeholder:text-muted-foreground/60',
+          'h-8 w-full bg-transparent text-base outline-none placeholder:text-muted-foreground/60',
           className,
         )}
         {...inputProps}
@@ -177,7 +185,7 @@ export function SettingsInputRow({
   );
 }
 
-/** ✓ 选项组：每个选项一行，选中项末尾打勾。 */
+/** 单选组：每个选项一行，行首单选圆点（Material）。 */
 export function SettingsOptionGroup<T extends string | number>({
   header,
   footer,
@@ -205,8 +213,8 @@ export function SettingsOptionGroup<T extends string | number>({
               onClick={() => onChange(opt.value)}
               className={cn(ROW_CLASS, 'transition-colors active:bg-accent')}
             >
+              <SettingsRadio checked={selected} />
               <span className="min-w-0 flex-1 truncate">{opt.label}</span>
-              {selected && <Check aria-hidden className="h-4 w-4 shrink-0 text-primary" />}
             </button>
           );
         })}

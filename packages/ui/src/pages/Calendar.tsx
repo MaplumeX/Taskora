@@ -97,7 +97,7 @@ export default function Calendar() {
             {t('calendar:today')}
           </Button>
         </div>
-        <span className="font-display text-lg font-semibold tracking-tight text-foreground max-md:pr-2">
+        <span className="text-title-2 text-foreground max-md:pr-2">
           {periodLabel}
         </span>
       </div>

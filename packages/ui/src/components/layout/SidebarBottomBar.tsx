@@ -48,7 +48,10 @@ export function SidebarBottomBar() {
       {/* 新增按钮 */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" className="gap-1.5 px-2 text-sm text-muted-foreground">
+          <Button
+            variant="ghost"
+            className="gap-1.5 px-2 text-sm text-muted-foreground hover:bg-sidebar-accent/60"
+          >
             <Plus className="h-4 w-4" />
             {t('common:add')}
           </Button>
@@ -65,14 +68,14 @@ export function SidebarBottomBar() {
             disabled={createProject.isPending}
             onClick={handleNewProject}
           >
-            <FolderPlus className="mr-2 h-4 w-4" />
+            <FolderPlus className="h-4 w-4" />
             {t('common:newProject')}
           </DropdownMenuItem>
           <DropdownMenuItem
             disabled={createArea.isPending}
             onClick={handleNewArea}
           >
-            <Layers className="mr-2 h-4 w-4" />
+            <Layers className="h-4 w-4" />
             {t('common:newArea')}
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -83,7 +86,7 @@ export function SidebarBottomBar() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-8 w-8 text-muted-foreground"
+          className="h-8 w-8 text-muted-foreground hover:bg-sidebar-accent/60"
           aria-label={t('common:settings')}
           onClick={() => openSettings('appearance')}
         >

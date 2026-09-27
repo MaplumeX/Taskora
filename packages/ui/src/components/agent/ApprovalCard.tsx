@@ -42,9 +42,9 @@ export function ApprovalCard({
 
   return (
     <div className="flex justify-start">
-      <div className="w-full max-w-[85%] rounded-2xl border border-amber-500/50 bg-amber-500/10 px-4 py-3">
+      <div className="w-full max-w-[85%] rounded-2xl border border-warning/50 bg-warning/10 px-4 py-3">
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
-          <AlertTriangle className="h-4 w-4 shrink-0 text-amber-500" />
+          <AlertTriangle className="h-4 w-4 shrink-0 text-warning" />
           {t('agent:approvalTitle')}
         </div>
         <p className="mt-1 text-xs text-muted-foreground">{t('agent:approvalDescription')}</p>

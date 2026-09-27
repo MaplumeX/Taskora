@@ -629,7 +629,7 @@ export function GroupedFeedListView({ items, emptyHint, showScheduledBadge }: Pr
         <DragOverlay>
           {activeTask ? (
             <div
-              className="pointer-events-none w-[min(36rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border/70 bg-card shadow-lift"
+              className="pointer-events-none w-[min(36rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border/70 bg-card shadow-popover"
               aria-hidden="true"
               {...{ inert: '' }}
             >

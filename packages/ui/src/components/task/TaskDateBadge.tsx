@@ -21,7 +21,7 @@ export function TaskDateBadge({ scheduledDate, className }: Props) {
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-md bg-muted px-1.5 py-0.5 text-xs tabular-nums text-muted-foreground',
+        'inline-flex items-center rounded bg-muted px-1.5 text-meta font-medium tabular-nums text-muted-foreground',
         className,
       )}
     >

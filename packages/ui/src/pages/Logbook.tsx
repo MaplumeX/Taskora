@@ -21,6 +21,7 @@ import {
 } from '@taskora/api';
 import { toast } from 'sonner';
 import { PageHeading } from '@/components/layout/PageHeading';
+import { EmptyState } from '@/components/common/EmptyState';
 
 export default function Logbook() {
   const calendarDay = useCalendarDay();
@@ -104,9 +105,7 @@ export default function Logbook() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : !hasAny ? (
-        <p className="py-8 text-center font-display text-base font-semibold text-muted-foreground">
-          {t('task:logbookEmpty')}
-        </p>
+        <EmptyState hint={t('task:logbookEmpty')} />
       ) : (
         groups.map((group, i) => renderGroup(group.label, group.items, i === 0))
       )}

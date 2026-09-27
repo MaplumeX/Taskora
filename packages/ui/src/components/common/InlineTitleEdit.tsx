@@ -96,7 +96,7 @@ export function InlineTitleEdit({
       <h1
         onClick={enterEdit}
         className={cn(
-          'cursor-text break-words font-display text-3xl font-semibold tracking-tight',
+          'cursor-text break-words text-title-1',
           !value && 'text-muted-foreground',
           className,
         )}
@@ -123,7 +123,7 @@ export function InlineTitleEdit({
         }
       }}
       className={cn(
-        'border-0 bg-transparent px-0 py-0 font-display text-3xl font-semibold tracking-tight shadow-none focus-visible:ring-0 w-full outline-none placeholder:text-muted-foreground',
+        'border-0 bg-transparent px-0 py-0 text-title-1 shadow-none focus-visible:ring-0 w-full outline-none placeholder:text-muted-foreground',
         inputClassName,
         className,
       )}

@@ -21,6 +21,8 @@ import { toast } from 'sonner';
 
 import type { FeedItem, TaskResponseDto } from '@taskora/shared';
 import { cn } from '@/lib/utils';
+import { EmptyState } from '@/components/common/EmptyState';
+import { PageHeading } from '@/components/layout/PageHeading';
 
 export default function Trash() {
   const { t } = useTranslation();
@@ -46,7 +48,7 @@ export default function Trash() {
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center justify-between">
-        <h1 className="font-display text-3xl font-semibold tracking-tight">{t('nav:trash')}</h1>
+        <PageHeading nav="/trash">{t('nav:trash')}</PageHeading>
         <Button
           variant="ghost"
           size="sm"
@@ -61,9 +63,7 @@ export default function Trash() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : items.length === 0 ? (
-        <p className="py-8 text-center font-display text-base font-semibold text-muted-foreground">
-          {t('task:trashEmpty')}
-        </p>
+        <EmptyState hint={t('task:trashEmpty')} />
       ) : (
         <div className="flex flex-col" onClick={handleBlankClick}>
           {items.map((item) =>

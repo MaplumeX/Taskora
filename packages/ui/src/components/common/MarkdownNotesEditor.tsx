@@ -129,7 +129,7 @@ export function MarkdownNotesEditor({
           e.stopPropagation();
         }
       }}
-      className="prose prose-sm dark:prose-invert notes-prose min-h-[60px] resize-none border-0 px-0 shadow-none focus-visible:ring-0"
+      className="prose prose-sm dark:prose-invert notes-prose min-h-[60px] resize-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
     />
   );
 }
