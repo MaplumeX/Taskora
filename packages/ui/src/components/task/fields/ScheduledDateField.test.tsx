@@ -21,10 +21,16 @@ function renderField(
   options: { onPatch?: ReturnType<typeof vi.fn>; showReminder?: boolean } = {},
 ) {
   const onPatch = options.onPatch ?? vi.fn();
+  const onClose = vi.fn();
   render(
-    <ScheduledDateField current={current} onPatch={onPatch} showReminder={options.showReminder} />,
+    <ScheduledDateField
+      current={current}
+      onPatch={onPatch}
+      onClose={onClose}
+      showReminder={options.showReminder}
+    />,
   );
-  return { onPatch };
+  return { onPatch, onClose };
 }
 
 /* ------------- tests ------------- */
@@ -221,5 +227,48 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
       { showReminder: true },
     );
     await waitFor(() => expect(refresh).toHaveBeenCalled());
+  });
+});
+
+describe('ScheduledDateField — 选定日期后是否关闭', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useReminderPermissionStore.setState({ permission: 'unknown', supported: false });
+  });
+
+  it('可设提醒（showReminder）：选今天 / 明天后不关闭，留给提醒区', async () => {
+    const user = userEvent.setup();
+    const { onPatch, onClose } = renderField(
+      { scheduledType: ScheduledType.NONE },
+      { showReminder: true },
+    );
+
+    await user.click(screen.getByRole('button', { name: /^(Today|今天)$/ }));
+    await user.click(screen.getByRole('button', { name: /^(Tomorrow|明天)$/ }));
+
+    expect(onPatch).toHaveBeenCalledTimes(2);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('无提醒上下文（web / Project）：选今天后立即关闭', async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderField({ scheduledType: ScheduledType.NONE });
+
+    await user.click(screen.getByRole('button', { name: /^(Today|今天)$/ }));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('将来 / 清除不涉及提醒：即使可设提醒也关闭', async () => {
+    const user = userEvent.setup();
+    const { onClose } = renderField(
+      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-05' },
+      { showReminder: true },
+    );
+
+    await user.click(screen.getByRole('button', { name: /^(Someday|将来)$/ }));
+    await user.click(screen.getByRole('button', { name: /^(Clear|清除)$/ }));
+
+    expect(onClose).toHaveBeenCalledTimes(2);
   });
 });

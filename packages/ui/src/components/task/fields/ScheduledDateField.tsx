@@ -71,13 +71,20 @@ export function ScheduledDateField({
     if (reminderVisible) void refreshPermission();
   }, [reminderVisible, refreshPermission]);
 
+  // 可设提醒的端（Desktop / Mobile）：选定日期后不关闭，提醒区就地出现，
+  // 接着即可设提醒（Things 3 的 When 卡片同样常驻「添加提醒」）。无提醒的
+  // 上下文（web / Project）选完即关。Someday / 清除不涉及提醒，照常关闭。
+  const closeAfterDate = () => {
+    if (!showReminder) onClose?.();
+  };
+
   const handleDaySelect = (date: Date | undefined) => {
     if (!date) return;
     onPatch({
       scheduledType: ScheduledType.DATE,
       scheduledDate: toInputDateValue(date),
     });
-    onClose?.();
+    closeAfterDate();
   };
 
   const handleToday = () => {
@@ -85,7 +92,7 @@ export function ScheduledDateField({
       scheduledType: ScheduledType.DATE,
       scheduledDate: toInputDateValue(startOfToday()),
     });
-    onClose?.();
+    closeAfterDate();
   };
 
   const handleTomorrow = () => {
@@ -93,7 +100,7 @@ export function ScheduledDateField({
       scheduledType: ScheduledType.DATE,
       scheduledDate: toInputDateValue(startOfTomorrow()),
     });
-    onClose?.();
+    closeAfterDate();
   };
 
   const handleSomeday = () => {

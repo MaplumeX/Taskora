@@ -18,7 +18,7 @@ Status: implemented — awaiting device acceptance
 
 1. As a Taskora 手机用户, I want 点展开任务的日历图标弹出居中卡片, so that 日历无论任务在屏幕哪里都完整可见
 2. As a Taskora 手机用户, I want 卡片背景变暗、点遮罩 / 右上角关闭 / 系统返回手势都能关闭, so that 关闭方式明确
-3. As a Taskora 手机用户, I want 选中日期或点「今天 / 明天 / 将来 / 清除」后卡片自动关闭, so that 设置计划一步完成（与原 Popover 语义一致）
+3. As a Taskora 手机用户, I want 选中日期或点「今天 / 明天」后卡片保持打开、提醒区就地出现（可设提醒的端：Android / 桌面；web 与 Project 无提醒，选完即关），点「将来 / 清除」后关闭, so that 设日期后能接着设提醒，不必重开卡片（对齐 Things 3 的 When 卡片）
 4. As a Taskora 手机用户, I want 卡片内按钮、开关、星期按钮都足够大, so that 单手也能准确点中
 5. As a Taskora 手机用户, I want 卡片打开时不自动弹出键盘, so that 视线不被键盘打断；编辑提醒时刻 / 重复截止日时卡片避让键盘
 6. As a Taskora 手机用户, I want 在卡片内按 Escape / 关闭卡片不会收起背后的展开任务, so that 连续编辑多个字段
