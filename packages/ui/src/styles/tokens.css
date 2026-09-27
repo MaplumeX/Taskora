@@ -69,7 +69,7 @@
     --dur-base: 200ms;
     --dur-slow: 320ms;
     /* 展开 / 收起任务详情（TaskItem 的 EXPAND_MS） */
-    --dur-expand: 240ms;
+    --dur-expand: 200ms;
 
     /* 阴影色：亮色用前景色，暗色用纯黑 */
     --shadow-color: 220 9% 15%;

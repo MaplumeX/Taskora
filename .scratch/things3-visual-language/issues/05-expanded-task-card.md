@@ -20,3 +20,4 @@ Blocked by: 04
 - 2026-09-27：按反馈放慢并统一展开 / 收起：改为真正的高度过渡（挂载后下一帧 0fr→1fr；收起先 1fr→0fr，450ms 后卸载），新增 `--dur-expand` 450ms 与 `--ease-expand`。同时发现 `duration-[var(--dur-*)]` 因与 tailwindcss-animate 的 `duration-*` 歧义而从未生成 CSS，改为 preset 注册的 `duration-fast/base/slow/expand`。
 - 2026-09-27：按反馈 450ms 偏慢，`--dur-expand` / `EXPAND_MS` 调为 300ms。
 - 2026-09-27：再调快为 240ms。
+- 2026-09-27：定为 200ms。
