@@ -4,16 +4,42 @@
  * 桌面走 runtime 模式（ReminderCoordinator 到点 fireNow），schedule/
  * cancel 不会被调用（系统级排程是移动端路径）；openSettings 走壳层
  * Rust 命令 open_notification_settings。
+ *
+ * 权限检测与发通知绕过插件 guest-js、直调原生命令，与移动端
+ * notification-bridge 同一口径。guest-js 的 isPermissionGranted/
+ * requestPermission 读写的是 window.Notification.permission——插件 init
+ * 脚本注入的会话内缓存，并非系统实时状态：Windows 上 init 脚本启动时
+ * 不查原生就把缓存初始化成 'denied'，guest-js 此后恒报未授权，而通知
+ * 实际能正常发出（「已禁用」误报的来源）；且用户在系统设置里改动后
+ * 缓存不更新。原生命令 desktop 侧恒返回 Granted（插件桌面端没有真实
+ * 的 OS 级权限查询），直调至少与 macOS/Linux 旧行为一致且消灭误报。
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import {
-  isPermissionGranted,
-  requestPermission,
-  sendNotification,
-} from '@tauri-apps/plugin-notification';
+import type { Options } from '@tauri-apps/plugin-notification';
 
 import type { ReminderNotificationShell } from '@taskora/api';
+
+/** 实时查询原生授权状态；命令返回 Option<bool>（Prompt 时为 null）。 */
+async function isNativePermissionGranted(): Promise<boolean> {
+  try {
+    return (await invoke<boolean | null>('plugin:notification|is_permission_granted')) === true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * 请求授权。直读原生命令返回值（native PermissionState），不经过
+ * guest-js 的 web 缓存，无需像移动端那样事后复查。
+ */
+async function requestNativePermission(): Promise<boolean> {
+  try {
+    return (await invoke<string>('plugin:notification|request_permission')) === 'granted';
+  } catch {
+    return false;
+  }
+}
 
 /**
  * 系统默认提示音的平台字面量（返回 undefined = 不传 sound）。
@@ -41,20 +67,8 @@ export function defaultSound(): string | undefined {
 export function createDesktopNotificationShell(): ReminderNotificationShell {
   return {
     isSupported: () => true,
-    async isPermissionGranted() {
-      try {
-        return await isPermissionGranted();
-      } catch {
-        return false;
-      }
-    },
-    async requestPermission() {
-      try {
-        return (await requestPermission()) === 'granted';
-      } catch {
-        return false;
-      }
-    },
+    isPermissionGranted: isNativePermissionGranted,
+    requestPermission: requestNativePermission,
     async schedule() {
       // runtime 模式不注册系统排程；到点由 ReminderCoordinator 触发
       // fireNow（App 未运行期间错过的提醒静默丢弃，spec 定案）。
@@ -65,9 +79,11 @@ export function createDesktopNotificationShell(): ReminderNotificationShell {
     async fireNow(title: string, body: string) {
       try {
         // 显式给 sound：桌面端缺省即静音（见 defaultSound 注释）。
-        // await：未 await 的 rejection 逃逸调用方 catch，失败无迹可查。
+        // 直调 notify 命令而非 guest-js sendNotification：后者返回 void，
+        // 内部丢弃异步 notify 结果，调用方的 catch 永远接不到失败。
         const sound = defaultSound();
-        await sendNotification(sound === undefined ? { title, body } : { title, body, sound });
+        const options: Options = sound === undefined ? { title, body } : { title, body, sound };
+        await invoke('plugin:notification|notify', { options });
       } catch (error) {
         console.warn('[reminders] fireNow failed:', error);
       }
