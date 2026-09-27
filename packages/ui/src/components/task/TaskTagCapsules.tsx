@@ -6,7 +6,11 @@ const MAX_VISIBLE = 3;
  * 行尾 Tag 胶囊（Things 3）：灰描边 + 名称，前缀用户色点；最多 3 个，余下 +N。
  * 仅宽屏显示（窄屏行宽留给标题）。Task 行与 Project 行共用。
  */
-export function TaskTagCapsules({ tags }: { tags: Pick<TagResponseDto, 'id' | 'title' | 'color'>[] | undefined }) {
+export function TaskTagCapsules({
+  tags,
+}: {
+  tags: Pick<TagResponseDto, 'id' | 'title' | 'color'>[] | undefined;
+}) {
   if (!tags || tags.length === 0) return null;
   return (
     <div className="hidden min-w-0 items-center gap-1 md:flex">

@@ -5,10 +5,13 @@ import {
   usePreferencesStore,
   startOfToday,
   startOfTomorrow,
+  isToday,
+  isTomorrow,
   useReminderPermissionStore,
 } from '@taskora/api';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
+import { Archive, Star, Sunrise } from 'lucide-react';
 
 import type { ScheduledFieldCurrent, ScheduledFieldPatch } from './fieldProps';
 import { ScheduledType } from '@taskora/shared';
@@ -18,6 +21,7 @@ import { Calendar } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 
 import { getCalendarLocale } from './calendarFieldUtils';
+import { DateShortcutList } from './DateShortcutList';
 
 interface FieldProps {
   current: ScheduledFieldCurrent;
@@ -138,6 +142,31 @@ export function ScheduledDateField({
 
   return (
     <div className="flex flex-col">
+      <DateShortcutList
+        items={[
+          {
+            key: 'today',
+            label: t('common:today'),
+            icon: <Star className="fill-today text-today" />,
+            active: selectedDate !== undefined && isToday(selectedDate),
+            onSelect: handleToday,
+          },
+          {
+            key: 'tomorrow',
+            label: t('common:tomorrow'),
+            icon: <Sunrise className="text-nav-upcoming" />,
+            active: selectedDate !== undefined && isTomorrow(selectedDate),
+            onSelect: handleTomorrow,
+          },
+          {
+            key: 'someday',
+            label: t('task:somedayLabel'),
+            icon: <Archive className="text-nav-someday" />,
+            active: scheduledType === ScheduledType.SOMEDAY,
+            onSelect: handleSomeday,
+          },
+        ]}
+      />
       <Calendar
         selected={selectedDate}
         onSelect={handleDaySelect}
@@ -181,27 +210,13 @@ export function ScheduledDateField({
           </Button>
         </div>
       )}
-      <div className="flex items-center gap-1 border-t border-border/50 p-2">
-        <Button variant="ghost" size="sm" className={FOOTER_BUTTON_CLASS} onClick={handleToday}>
-          {t('common:today')}
-        </Button>
-        <Button variant="ghost" size="sm" className={FOOTER_BUTTON_CLASS} onClick={handleTomorrow}>
-          {t('common:tomorrow')}
-        </Button>
-        <Button
-          variant={scheduledType === ScheduledType.SOMEDAY ? 'secondary' : 'ghost'}
-          size="sm"
-          className={FOOTER_BUTTON_CLASS}
-          onClick={handleSomeday}
-        >
-          {t('task:somedayLabel')}
-        </Button>
+      <div className="flex items-center border-t border-border/50 px-1 pt-1">
         <Button
           variant="ghost"
           size="sm"
           disabled={scheduledType === ScheduledType.NONE}
           onClick={handleClear}
-          className={cn('ml-auto', FOOTER_BUTTON_CLASS)}
+          className={cn('w-full', FOOTER_BUTTON_CLASS)}
         >
           {t('common:clear')}
         </Button>

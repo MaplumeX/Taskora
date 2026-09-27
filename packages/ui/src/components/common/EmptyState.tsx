@@ -19,7 +19,11 @@ export function EmptyState({ hint, className }: { hint: string; className?: stri
         className,
       )}
     >
-      {inRouter ? <RouteBucketIcon /> : <SquareCheckBig aria-hidden className={ICON_CLASS} strokeWidth={1.25} />}
+      {inRouter ? (
+        <RouteBucketIcon />
+      ) : (
+        <SquareCheckBig aria-hidden className={ICON_CLASS} strokeWidth={1.25} />
+      )}
       <p className="text-body text-muted-foreground">{hint}</p>
     </div>
   );
@@ -27,9 +31,8 @@ export function EmptyState({ hint, className }: { hint: string; className?: stri
 
 function RouteBucketIcon() {
   const { pathname } = useLocation();
-  const Icon =
-    pathname.startsWith('/trash')
-      ? Trash2
-      : (mainNav.find((n) => pathname.startsWith(n.to))?.icon ?? SquareCheckBig);
+  const Icon = pathname.startsWith('/trash')
+    ? Trash2
+    : (mainNav.find((n) => pathname.startsWith(n.to))?.icon ?? SquareCheckBig);
   return <Icon aria-hidden className={ICON_CLASS} strokeWidth={1.25} />;
 }

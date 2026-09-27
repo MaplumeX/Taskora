@@ -1,6 +1,6 @@
 # 视觉语言改版：Things 3 式「纸面安静感」
 
-Status: in progress (01–07 done)
+Status: in progress (01–08 done)
 
 把 Web / 桌面 / 手机三端的视觉语言从「暖米色 + 柔紫 + 颗粒纹理」统一改为 Things 3 式的安静界面：白纸内容区、浅灰侧边栏、蓝色只做选中与交互、黄 / 红 / 绿只承载 CONTEXT.md 已定义的语义（今天 / Deadline / 了结）。改版覆盖 token、基础组件、业务组件与动效，不改数据模型与交互流程。相关：`.scratch/things3-when-display/`、`.scratch/things3-ownership-display/`（行内信息结构）、`.scratch/calendar-dense-grid/spec.md`（日历网格）。
 
@@ -122,9 +122,9 @@ Bucket 图标色（新增 `--nav-inbox` / `--nav-today` / `--nav-upcoming` / `--
 
 ### 日期选择（When 弹层 / `FieldPicker`）
 
-- 顶部快捷项纵列：★ 今天 / ☾ 今晚（若无该概念则省略）/ 明天 / 某天（Someday）；图标沿用语义色。
-- 下方月历：日期 28px 圆形命中区，今天为蓝字、选中为蓝底白字，过去日期灰。
-- 底部「清除」为 ghost 文字按钮。
+- 顶部快捷项纵列：★ 今天 / 明天 / 将来（Someday）；Deadline 弹层为 今天 / 明天；图标沿用语义色，当前值右侧打勾。
+- 下方月历：日期 32px 圆形命中区（窄屏 36px），今天为蓝字 + 小圆点、选中为蓝底白字。
+- 底部整宽「清除」ghost 按钮。
 
 ## User Stories
 
