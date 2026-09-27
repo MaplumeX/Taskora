@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import {
   Bot,
-  LogOut,
   Search,
   Settings,
   Tags as TagsIcon,
@@ -14,7 +13,6 @@ import {
 import { ProjectStatus } from '@taskora/shared';
 import {
   useAreasQuery,
-  useLogout,
   useProjectsQuery,
   useUiInteractionStore,
 } from '@taskora/api';
@@ -82,7 +80,6 @@ export default function Home() {
   const { t } = useTranslation();
   const isDesktop = useIsDesktop();
   const navigate = useNavigate();
-  const logout = useLogout();
   const openSettings = useUiInteractionStore((s) => s.openSettings);
   const { inboxCount, todayCount } = useBucketCounts();
   const { data: allProjects = [] } = useProjectsQuery();
@@ -159,26 +156,16 @@ export default function Home() {
         />
       </HomeGroup>
 
-      <div className="flex items-center justify-between border-t pt-3">
+      {/* 设置（登出在 设置 › 账户 内） */}
+      <div className="border-t pt-3">
         <Button
           variant="ghost"
           size="sm"
           className="h-11 gap-2 text-muted-foreground"
-          onClick={() => openSettings('appearance')}
+          onClick={() => openSettings()}
         >
           <Settings className="h-4 w-4" />
           {t('common:settings')}
-        </Button>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="h-11 gap-2 text-muted-foreground"
-          onClick={() => {
-            void logout().then(() => navigate('/login', { replace: true }));
-          }}
-        >
-          <LogOut className="h-4 w-4" />
-          {t('common:logout')}
         </Button>
       </div>
     </div>

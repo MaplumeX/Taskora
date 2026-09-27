@@ -1,10 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { Check } from 'lucide-react';
 
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import ReminderReliabilitySection from './ReminderReliabilitySection';
+import {
+  SettingsGroup,
+  SettingsPage,
+  SettingsRow,
+  useSettingsNav,
+} from './SettingsList';
 import {
   currentStatusBarController,
   getClientKind,
@@ -36,6 +43,62 @@ const getReliabilityShell = () => {
   return shell?.reliability && shell.openSystemSettings ? shell : null;
 };
 
+const formatZone = (zone: string) => zone.replaceAll('_', ' ');
+
+/** 窄屏时区选项页：顶部搜索框 + ✓ 列表，选中后返回上一级。 */
+function TimeZonePicker({
+  zones,
+  onSelect,
+}: {
+  zones: string[];
+  onSelect: (zone: string) => void;
+}) {
+  const { t } = useTranslation('settings');
+  const current = usePreferencesStore((s) => s.timeZone);
+  const [query, setQuery] = useState('');
+  const q = query.trim().toLowerCase().replaceAll(' ', '_');
+  const filtered = q ? zones.filter((z) => z.toLowerCase().includes(q)) : zones;
+
+  // 打开时把当前时区滚到视口中间（列表按字母序有数百项）。
+  const currentRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    currentRef.current?.scrollIntoView?.({ block: 'center' });
+  }, []);
+
+  return (
+    <SettingsPage>
+      <input
+        type="search"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder={t('timeZoneSearch')}
+        aria-label={t('timeZoneSearch')}
+        className="h-10 w-full rounded-xl bg-card px-3 text-[15px] outline-none placeholder:text-muted-foreground"
+      />
+      <SettingsGroup>
+        {filtered.length === 0 ? (
+          <SettingsRow label={<span className="text-muted-foreground">{t('noMatches')}</span>} />
+        ) : (
+          filtered.map((zone) => (
+            <button
+              key={zone}
+              ref={zone === current ? currentRef : undefined}
+              type="button"
+              role="radio"
+              aria-checked={zone === current}
+              onClick={() => onSelect(zone)}
+              className="flex min-h-12 w-full items-center gap-3 px-4 py-2 text-left text-[15px] transition-colors active:bg-accent"
+            >
+              <span className="min-w-0 flex-1 truncate">{formatZone(zone)}</span>
+              {zone === current && <Check aria-hidden className="h-4 w-4 shrink-0 text-primary" />}
+            </button>
+          ))
+        )}
+      </SettingsGroup>
+    </SettingsPage>
+  );
+}
+
 /**
  * 「通用」设置页。
  *
@@ -46,6 +109,7 @@ const getReliabilityShell = () => {
  */
 export default function SettingsGeneral() {
   const { t } = useTranslation(['settings', 'common']);
+  const mobileNav = useSettingsNav();
   const desktop = isDesktopRuntime();
   // null = 初始加载中（开关禁用）；boolean = 系统登录项当前状态。
   const [enabled, setEnabled] = useState<boolean | null>(null);
@@ -162,6 +226,68 @@ export default function SettingsGeneral() {
     );
   };
 
+  if (mobileNav) {
+    // 窄屏：列表单元格（时区推入搜索选项页，开关放行内，说明作分组脚注）
+    return (
+      <SettingsPage>
+        <SettingsGroup footer={t('settings:timeZoneHint')}>
+          <SettingsRow
+            label={t('settings:timeZone')}
+            value={formatZone(timeZone)}
+            chevron
+            onClick={() =>
+              mobileNav.push({
+                title: t('settings:timeZone'),
+                render: () => (
+                  <TimeZonePicker
+                    zones={zones}
+                    onSelect={(zone) => {
+                      handleTimeZoneChange(zone);
+                      mobileNav.pop();
+                    }}
+                  />
+                ),
+              })
+            }
+          />
+        </SettingsGroup>
+
+        <SettingsGroup footer={t('settings:groupTasksByParentHint')}>
+          <SettingsRow
+            label={t('settings:groupTasksByParent')}
+            htmlFor="bucket-grouping"
+            control={
+              <Switch
+                id="bucket-grouping"
+                checked={bucketGrouping}
+                onCheckedChange={handleGroupingChange}
+              />
+            }
+          />
+        </SettingsGroup>
+
+        {statusBar && statusBarEnabled !== null && (
+          <SettingsGroup footer={t('settings:statusBarHint')}>
+            <SettingsRow
+              label={t('settings:statusBar')}
+              htmlFor="status-bar"
+              control={
+                <Switch
+                  id="status-bar"
+                  checked={statusBarEnabled}
+                  disabled={statusBarPending}
+                  onCheckedChange={handleStatusBarChange}
+                />
+              }
+            />
+          </SettingsGroup>
+        )}
+
+        {reliabilityShell && <ReminderReliabilitySection shell={reliabilityShell} />}
+      </SettingsPage>
+    );
+  }
+
   return (
     <div className="flex max-w-lg flex-col gap-6">
       <div className="flex flex-col gap-2">
@@ -175,7 +301,7 @@ export default function SettingsGeneral() {
         >
           {zones.map((zone) => (
             <option key={zone} value={zone}>
-              {zone.replaceAll('_', ' ')}
+              {formatZone(zone)}
             </option>
           ))}
         </select>

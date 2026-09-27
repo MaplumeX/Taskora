@@ -31,7 +31,7 @@ Taskora 目前只有 Web 与 Windows 桌面端。Local-first 架构（ADR-0007�
 5. As a Taskora 用户, I want 在地铁里添加任务到 Inbox, so that 想法即时捕获、联网后自动同步
 6. As a Taskora 用户, I want 打开 App 先看到首页列表（带 Inbox / Today 数量）, so that 我一眼掌握全局并一步进入任何列表
 7. As a Taskora 用户, I want 在首页列表点进 Inbox / Today / Upcoming / Calendar / Anytime / Someday / Logbook / Trash / 区域 / 项目 / Tags, 并用顶栏返回键回到首页, so that 导航结构与 Things 3 一致、层级清晰
-8. As a Taskora 用户, I want 首页顶部有快速查找与助手入口、底部有设置与登出, so that 完整功能在小屏上也可达
+8. As a Taskora 用户, I want 首页顶部有快速查找与助手入口、底部有设置入口（登出在 设置 › 账户，见 `.scratch/mobile-settings/spec.md`）, so that 完整功能在小屏上也可达
 9. As a Taskora 用户, I want 点击任务打开详情, so that 移动端的浏览-查看路径符合直觉（触控端无 Selection）
 10. As a Taskora 用户, I want 用专用 checkbox 勾选完成任务, so that 一条最常用操作不需要进入详情
 11. As a Taskora 用户, I want 长按任务弹出行内菜单（与桌面右键同一菜单）, so that 重命名、移动、删除等次级操作在触屏上可达
@@ -60,7 +60,7 @@ Taskora 目前只有 Web 与 Windows 桌面端。Local-first 架构（ADR-0007�
 - **平台与框架**：Android 独占，Tauri v2 mobile（ADR-0010）。React 壳 + Rust 侧自定义 command，与 desktop 同构。iOS 明确不做。
 - **包结构**：新建 `packages/mobile`，与 `packages/desktop` 平级薄壳：Vite 入口、路由、boot 流程、Tauri Android 工程。页面与业务组件全部来自 `@taskora/ui`；不新建 `ui-mobile` 包。
 - **UI 复用**：原地响应式。网页端既有移动层（MobileFab / MobileTopBar / `useLongPress`）是起点；移动端工作以查漏补缺为主（返回手势、键盘避让、虚拟滚动视口），不是重写。
-- **窄屏导航（Things 3 iOS 结构）**：所有窄屏（< md，含 Android 与手机网页）共用。`/` 在窄屏落地首页列表 `/home`（宽屏仍落地 `/today`，`/home` 在宽屏重定向到 `/today`）。首页分组：快速查找 + 助手 → Inbox → Today / Upcoming / Calendar / Anytime / Someday → Logbook / Trash → 区域与项目（复用侧边栏组件，含拖拽排序）→ Tags → 设置 / 登出。各列表 push 进入；MobileTopBar 左返回（有历史则后退，冷启动直达某列表时替换为 `/home`）、右搜索；Agent 页在自身 header 内放返回键。Bucket 页标题在窄屏前置与首页同色的图标。首页不显示 FAB（Things 的首页 + 录入 Inbox 另行设计）。触控端无 Selection：点击 = 打开详情（CONTEXT.md 已更新）。
+- **窄屏导航（Things 3 iOS 结构）**：所有窄屏（< md，含 Android 与手机网页）共用。`/` 在窄屏落地首页列表 `/home`（宽屏仍落地 `/today`，`/home` 在宽屏重定向到 `/today`）。首页分组：快速查找 + 助手 → Inbox → Today / Upcoming / Calendar / Anytime / Someday → Logbook / Trash → 区域与项目（复用侧边栏组件，含拖拽排序）→ Tags → 设置（登出在 设置 › 账户）。各列表 push 进入；MobileTopBar 左返回（有历史则后退，冷启动直达某列表时替换为 `/home`）、右搜索；Agent 页在自身 header 内放返回键。Bucket 页标题在窄屏前置与首页同色的图标。首页不显示 FAB（Things 的首页 + 录入 Inbox 另行设计）。触控端无 Selection：点击 = 打开详情（CONTEXT.md 已更新）。
 - **存储适配器**：Engine 的 `SqlStorage` 接口不动。Rust 侧把 desktop 的 rusqlite command 层搬进 mobile 的 Tauri 工程（bundled feature 交叉编译 Android NDK）；TS 侧新增 Tauri `invoke` 的 `SqlStorage` 适配器，实现 `exec/all/run/close` 契约。不引入 `tauri-plugin-sql`/sqlx。
 - **Engine 接入**：`@taskora/engine` 按桌面端方式接入（boot 时建库、replica 初始化、变更订阅）。数据读取不走 REST。
 - **会话存储**：Android Keystore 生成的密钥（不可导出）AES 加密令牌后写入应用私有目录；解锁/解密在 Rust 侧经 JNI 或等价机制完成（ADR-0009）。TokenStore 抽象与 desktop 的注入模式一致。

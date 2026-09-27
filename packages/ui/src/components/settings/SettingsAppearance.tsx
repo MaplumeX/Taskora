@@ -13,6 +13,8 @@ import {
 } from '@taskora/api';
 import { useUpdatePreferences } from '@taskora/api';
 
+import { SettingsOptionGroup, SettingsPage, useSettingsNav } from './SettingsList';
+
 function OptionButton({
   active,
   onClick,
@@ -47,6 +49,7 @@ export default function SettingsAppearance() {
   const setLanguage = usePreferencesStore((s) => s.setLanguage);
   const setWeekStartsOn = usePreferencesStore((s) => s.setWeekStartsOn);
   const updatePreferences = useUpdatePreferences();
+  const mobileNav = useSettingsNav();
 
   const themes: { value: ThemeMode; labelKey: string }[] = [
     { value: 'light', labelKey: 'theme:light' },
@@ -94,6 +97,32 @@ export default function SettingsAppearance() {
   const handleChangeWeekStartsOn = (value: WeekStartsOn) => {
     withRollback(() => setWeekStartsOn(value), { weekStartsOn: value });
   };
+
+  if (mobileNav) {
+    // 窄屏：每项设置一组 ✓ 选项
+    return (
+      <SettingsPage>
+        <SettingsOptionGroup
+          header={t('settings:theme')}
+          options={themes.map((o) => ({ value: o.value, label: t(o.labelKey) }))}
+          value={theme}
+          onChange={handleChangeTheme}
+        />
+        <SettingsOptionGroup
+          header={t('settings:language')}
+          options={languages}
+          value={language}
+          onChange={handleChangeLanguage}
+        />
+        <SettingsOptionGroup
+          header={t('settings:weekStartsOn')}
+          options={weekOptions.map((o) => ({ value: o.value, label: t(o.labelKey) }))}
+          value={weekStartsOn}
+          onChange={handleChangeWeekStartsOn}
+        />
+      </SettingsPage>
+    );
+  }
 
   return (
     <div className="flex max-w-lg flex-col gap-6">
