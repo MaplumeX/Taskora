@@ -1,6 +1,6 @@
 # 视觉语言改版：Things 3 式「纸面安静感」
 
-Status: in progress (01–06 done)
+Status: in progress (01–07 done)
 
 把 Web / 桌面 / 手机三端的视觉语言从「暖米色 + 柔紫 + 颗粒纹理」统一改为 Things 3 式的安静界面：白纸内容区、浅灰侧边栏、蓝色只做选中与交互、黄 / 红 / 绿只承载 CONTEXT.md 已定义的语义（今天 / Deadline / 了结）。改版覆盖 token、基础组件、业务组件与动效，不改数据模型与交互流程。相关：`.scratch/things3-when-display/`、`.scratch/things3-ownership-display/`（行内信息结构）、`.scratch/calendar-dense-grid/spec.md`（日历网格）。
 
@@ -118,7 +118,7 @@ Bucket 图标色（新增 `--nav-inbox` / `--nav-today` / `--nav-upcoming` / `--
 - **Project 行（Feed 中）**：进度环 14px + `body` 600 标题。
 - **Logbook**：已了结行 `muted-foreground`，了结日期 `meta`；Checkbox 保持实心蓝。
 - **空状态**：居中 48px 线性灰色 Bucket 图标 + 一行 `muted-foreground` 文案，不加插画。
-- **快速新建 / MobileFab**：圆形 48px 蓝底白「+」，`shadow-popover`；桌面 ContentBottomBar 为 ghost 图标按钮。
+- **快速新建 / MobileFab**：圆形 56px 蓝底白「+」，`shadow-popover`；桌面 ContentBottomBar 为 ghost 图标按钮。
 
 ### 日期选择（When 弹层 / `FieldPicker`）
 

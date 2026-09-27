@@ -91,10 +91,11 @@ export default function Upcoming() {
           <span className="text-title-1 tabular-nums leading-none">
             {day.numberLabel}
           </span>
-          <span className="text-sm tabular-nums text-muted-foreground">{label}</span>
+          <span className="text-body tabular-nums text-muted-foreground">{label}</span>
           <div className="min-w-4 flex-1 border-t border-border" aria-hidden="true" />
         </div>
-        <div className="flex min-h-12 flex-col gap-1">{day.items.map(renderItem)}</div>
+        {/* 空日期只留一行高度（仍是放置目标），避免一周空档把列表拉得过长。 */}
+        <div className="flex min-h-6 flex-col">{day.items.map(renderItem)}</div>
       </div>
     );
   };
@@ -105,7 +106,7 @@ export default function Upcoming() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        <div className="flex flex-col gap-6">
+        <div className="flex flex-col gap-5">
           {layout.week.map(renderDay)}
           {layout.later.map((month) => (
             <div key={`${month.year}-${month.month}`} className="flex flex-col gap-1">

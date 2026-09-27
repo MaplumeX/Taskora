@@ -33,6 +33,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { TaskItem } from '@/components/task/TaskItem';
+import { EmptyState } from '@/components/common/EmptyState';
 import { useCompleteTask, useUncompleteTask } from '@taskora/api';
 import { useSelectionScope } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
@@ -636,7 +637,7 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
   return (
     <div className="flex flex-col" onClick={handleBlankClick}>
       {!hasContent ? (
-        <div className="mt-12 py-16 text-center text-sm text-muted-foreground">{emptyHint}</div>
+        <EmptyState hint={emptyHint} />
       ) : (
         <DndContext
           sensors={sensors}

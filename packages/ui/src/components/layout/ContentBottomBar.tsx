@@ -31,7 +31,7 @@ export function ContentBottomBar() {
 
   return (
     <>
-      <footer className="hidden h-11 shrink-0 items-center justify-center gap-2 border-t bg-background px-4 md:flex">
+      <footer className="hidden h-11 shrink-0 items-center justify-center gap-2 bg-background px-4 md:flex">
         <Hint label={t('task:searchTasks')} action="search">
           <Button
             variant="ghost"

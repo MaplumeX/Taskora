@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 
 import type { FeedItem, TaskResponseDto } from '@taskora/shared';
 import { cn } from '@/lib/utils';
+import { EmptyState } from '@/components/common/EmptyState';
 
 export default function Trash() {
   const { t } = useTranslation();
@@ -61,9 +62,7 @@ export default function Trash() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : items.length === 0 ? (
-        <p className="py-8 text-center text-base font-semibold text-muted-foreground">
-          {t('task:trashEmpty')}
-        </p>
+        <EmptyState hint={t('task:trashEmpty')} />
       ) : (
         <div className="flex flex-col" onClick={handleBlankClick}>
           {items.map((item) =>

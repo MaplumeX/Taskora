@@ -24,6 +24,7 @@ import { TaskNotesBadge } from './TaskNotesBadge';
 import { TaskReminderBadge } from './TaskReminderBadge';
 import { TaskRepeatBadge } from './TaskRepeatBadge';
 import { TaskSubtasksBadge } from './TaskSubtasksBadge';
+import { TaskTagCapsules } from './TaskTagCapsules';
 import { TaskRowExpanded } from './TaskRowExpanded';
 import { useCompletionRhythm } from './useCompletionRhythm';
 
@@ -300,32 +301,7 @@ export function TaskItem({
             </div>
 
             <div className={cn('flex min-w-0 shrink items-center gap-2', expanded && 'hidden')}>
-              {/* Tag 胶囊（Things 3）：灰描边 + 名称，前缀用户色点；最多 3 个，余下 +N。 */}
-              {current.tags && current.tags.length > 0 && (
-                <div className="hidden min-w-0 items-center gap-1 md:flex">
-                  {current.tags.slice(0, 3).map((tag) => (
-                    <span
-                      key={tag.id}
-                      className="inline-flex max-w-[8rem] items-center gap-1 rounded-full border border-border px-1.5 text-meta text-muted-foreground"
-                      title={tag.title}
-                    >
-                      {tag.color && (
-                        <span
-                          aria-hidden
-                          className="h-1.5 w-1.5 shrink-0 rounded-full"
-                          style={{ backgroundColor: tag.color }}
-                        />
-                      )}
-                      <span className="truncate">{tag.title}</span>
-                    </span>
-                  ))}
-                  {current.tags.length > 3 && (
-                    <span className="text-meta text-muted-foreground">
-                      +{current.tags.length - 3}
-                    </span>
-                  )}
-                </div>
-              )}
+              <TaskTagCapsules tags={current.tags} />
               {/* 提醒徽标不受 showScheduledBadge 限制：Today/Scheduled 等视图
               不展示日期徽标时仍能看到提醒时刻（reminders spec）。 */}
               <TaskReminderBadge reminderTime={current.reminderTime} className="shrink-0" />
