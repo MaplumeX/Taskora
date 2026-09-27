@@ -246,7 +246,7 @@ export function MobileSettingsContent() {
                 top &&
                   depth > 0 &&
                   pushedRef.current &&
-                  'duration-200 animate-in fade-in-0 slide-in-from-right-8',
+                  'duration-base animate-in fade-in-0 slide-in-from-right-8',
               )}
             >
               <Suspense fallback={<PageFallback />}>

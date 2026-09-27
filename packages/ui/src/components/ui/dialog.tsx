@@ -46,8 +46,8 @@ const DialogContent = React.forwardRef<
       ref={ref}
       className={cn(
         mobileFullscreen
-          ? 'fixed inset-0 z-50 flex w-full flex-col border-0 bg-background shadow-none duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 md:left-[50%] md:top-[50%] md:grid md:max-w-lg md:translate-x-[-50%] md:translate-y-[-50%] md:gap-4 md:border-0 md:p-6 md:shadow-popover md:rounded-xl'
-          : 'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 bg-popover p-6 shadow-popover duration-200 ease-spring data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-[0.97] data-[state=open]:zoom-in-[0.97] rounded-xl max-md:max-w-[calc(100vw-1.5rem)]',
+          ? 'fixed inset-0 z-50 flex w-full flex-col border-0 bg-background shadow-none duration-base data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 md:left-[50%] md:top-[50%] md:grid md:max-w-lg md:translate-x-[-50%] md:translate-y-[-50%] md:gap-4 md:border-0 md:p-6 md:shadow-popover md:rounded-xl'
+          : 'fixed left-[50%] top-[50%] z-50 grid w-full max-w-lg translate-x-[-50%] translate-y-[-50%] gap-4 bg-popover p-6 shadow-popover duration-base ease-spring data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-[0.97] data-[state=open]:zoom-in-[0.97] rounded-xl max-md:max-w-[calc(100vw-1.5rem)]',
         className,
       )}
       {...props}

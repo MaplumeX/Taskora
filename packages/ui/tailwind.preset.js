@@ -98,6 +98,8 @@ export default {
       // 动效时长 token（tokens.css 的 --dur-*）。用命名键而非 duration-[var(...)]：
       // tailwindcss-animate 也注册了 duration-*，任意值会因歧义不生成 CSS。
       transitionDuration: {
+        // 未显式指定时长的 transition-*（hover 变色等）统一为 fast。
+        DEFAULT: 'var(--dur-fast)',
         fast: 'var(--dur-fast)',
         base: 'var(--dur-base)',
         slow: 'var(--dur-slow)',

@@ -22,42 +22,44 @@
     --popover: 0 0% 100%;
     --popover-foreground: 220 9% 15%;
 
-    --primary: 213 94% 52%;
+    --primary: 213 94% 48%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 220 14% 96%;
     --secondary-foreground: 220 9% 15%;
 
     --muted: 220 14% 96%;
-    --muted-foreground: 220 6% 46%;
+    --muted-foreground: 220 6% 42%;
 
     --accent: 220 14% 95%;
     --accent-foreground: 220 9% 15%;
 
-    --destructive: 3 90% 56%;
+    --destructive: 3 90% 48%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 220 13% 90%;
     --input: 220 13% 88%;
-    --ring: 213 94% 52%;
+    --ring: 213 94% 48%;
 
     --sidebar: 220 14% 96%;
     --sidebar-accent: 220 10% 90%;
     --selection: 213 100% 94%;
 
-    /* 语义色：今天（黄星）/ Deadline 到期逾期（红，只属于 Deadline）/ 了结 / 提醒警示 */
+    /* 语义色：今天（黄星）/ Deadline 到期逾期（红，只属于 Deadline）/ 了结 / 提醒警示。
+     * 对比度（10 号 issue 验收）：文字类 ≥ 4.5:1；图标类 ≥ 3:1；黄星例外（实心形状 +
+     * 旁侧文案承担语义，黄色在白底上无法达到 3:1）。 */
     --today: 44 96% 50%;
-    --deadline: 3 90% 56%;
+    --deadline: 3 90% 48%;
     --success: 145 58% 40%;
-    --warning: 36 95% 50%;
+    --warning: 36 90% 40%;
 
     /* Bucket 图标色（每个 Bucket 一色） */
-    --nav-inbox: 205 90% 52%;
+    --nav-inbox: 205 90% 44%;
     --nav-today: 44 96% 50%;
     --nav-upcoming: 350 80% 56%;
     --nav-calendar: 235 70% 60%;
-    --nav-anytime: 175 60% 40%;
-    --nav-someday: 36 70% 48%;
+    --nav-anytime: 175 60% 33%;
+    --nav-someday: 36 70% 40%;
     --nav-logbook: 145 58% 40%;
 
     --radius: 0.5rem;
@@ -86,7 +88,7 @@
     --popover: 225 6% 18%;
     --popover-foreground: 220 9% 92%;
 
-    --primary: 213 94% 62%;
+    --primary: 213 94% 53%;
     --primary-foreground: 0 0% 100%;
 
     --secondary: 225 6% 18%;
@@ -98,19 +100,19 @@
     --accent: 225 6% 20%;
     --accent-foreground: 220 9% 92%;
 
-    --destructive: 3 85% 62%;
+    --destructive: 3 85% 66%;
     --destructive-foreground: 0 0% 100%;
 
     --border: 225 6% 24%;
     --input: 225 6% 26%;
-    --ring: 213 94% 62%;
+    --ring: 213 94% 53%;
 
     --sidebar: 225 6% 16%;
     --sidebar-accent: 225 6% 23%;
-    --selection: 213 45% 28%;
+    --selection: 213 45% 22%;
 
     --today: 44 96% 56%;
-    --deadline: 3 85% 62%;
+    --deadline: 3 85% 66%;
     --success: 145 50% 50%;
     --warning: 36 95% 56%;
 

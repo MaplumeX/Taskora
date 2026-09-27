@@ -1,6 +1,6 @@
 # 视觉语言改版：Things 3 式「纸面安静感」
 
-Status: in progress (01–09 done)
+Status: implemented — awaiting device acceptance (Android / Windows)
 
 把 Web / 桌面 / 手机三端的视觉语言从「暖米色 + 柔紫 + 颗粒纹理」统一改为 Things 3 式的安静界面：白纸内容区、浅灰侧边栏、蓝色只做选中与交互、黄 / 红 / 绿只承载 CONTEXT.md 已定义的语义（今天 / Deadline / 了结）。改版覆盖 token、基础组件、业务组件与动效，不改数据模型与交互流程。相关：`.scratch/things3-when-display/`、`.scratch/things3-ownership-display/`（行内信息结构）、`.scratch/calendar-dense-grid/spec.md`（日历网格）。
 
@@ -35,20 +35,20 @@ Status: in progress (01–09 done)
 | `--sidebar` | `220 14% 96%` | `225 6% 16%` | 侧边栏底色（新增） |
 | `--sidebar-accent` | `220 10% 90%` | `225 6% 22%` | 侧边栏选中项（新增） |
 | `--card` / `--popover` | `0 0% 100%` | `225 6% 18%` | 展开任务卡片 / 弹层 |
-| `--primary` | `213 94% 52%` | `213 94% 62%` | 交互蓝 |
-| `--selection` | `213 100% 94%` | `213 50% 26%` | 行选中底色（新增） |
+| `--primary` | `213 94% 48%` | `213 94% 53%` | 交互蓝 |
+| `--selection` | `213 100% 94%` | `213 45% 22%` | 行选中底色（新增） |
 | `--muted` | `220 14% 96%` | `225 6% 20%` | 次级表面 |
-| `--muted-foreground` | `220 6% 46%` | `220 6% 62%` | 元信息、归属小字 |
+| `--muted-foreground` | `220 6% 42%` | `220 6% 62%` | 元信息、归属小字 |
 | `--accent` | `220 14% 95%` | `225 6% 20%` | hover 底色 |
 | `--border` / `--input` | `220 13% 90%` | `225 6% 24%` | 仅在必须时使用 |
 | `--today` | `44 96% 54%` | `44 96% 58%` | 黄星（新增） |
-| `--deadline` | `3 90% 56%` | `3 85% 62%` | Deadline 到期 / 逾期（新增，取代 `--destructive` 在 Deadline 上的使用） |
-| `--destructive` | `3 90% 56%` | `3 85% 62%` | 删除等破坏性操作 |
+| `--deadline` | `3 90% 48%` | `3 85% 66%` | Deadline 到期 / 逾期（新增，取代 `--destructive` 在 Deadline 上的使用） |
+| `--destructive` | `3 90% 48%` | `3 85% 66%` | 删除等破坏性操作 |
 | `--success` | `145 58% 40%` | `145 50% 50%` | Logbook（新增） |
-| `--warning` | `36 95% 50%` | `36 95% 56%` | Agent 审批等警示（新增） |
+| `--warning` | `36 90% 40%` | `36 95% 56%` | Agent 审批等警示（新增） |
 | `--ring` | 同 `--primary` | 同 `--primary` | 聚焦环 |
 
-Bucket 图标色（新增 `--nav-inbox` / `--nav-today` / `--nav-upcoming` / `--nav-calendar` / `--nav-anytime` / `--nav-someday` / `--nav-logbook`），`navItems.ts` 的 `colorClass` 改用 `text-nav-*`，亮 / 暗各自调校。
+Bucket 图标色（亮色下深色调以在侧边栏底上 ≥ 3:1；黄色 Today 例外）（新增 `--nav-inbox` / `--nav-today` / `--nav-upcoming` / `--nav-calendar` / `--nav-anytime` / `--nav-someday` / `--nav-logbook`），`navItems.ts` 的 `colorClass` 改用 `text-nav-*`，亮 / 暗各自调校。
 
 ### 字体
 
