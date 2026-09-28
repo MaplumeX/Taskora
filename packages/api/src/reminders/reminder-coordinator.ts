@@ -15,9 +15,10 @@
 
 import { currentTimeZone, currentLegacyDateTimeZone } from '@/utils/date';
 import { usePreferencesStore } from '@/stores/preferences.store';
-import type { TaskBackend } from '@/api/task-backend';
-import { createEngineTaskBackend } from '@/engine/task-backend.engine';
 import type { Engine } from '@taskora/engine';
+
+import type { TaskBackend } from '../api/task-backend';
+import { createEngineTaskBackend } from '../engine/task-backend.engine';
 
 import {
   computeReminderPlan,
