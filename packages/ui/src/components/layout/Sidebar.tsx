@@ -15,7 +15,6 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@taskora/api';
 import { useLogout } from '@taskora/api';
-import { ProjectStatus } from '@taskora/shared';
 import { SidebarBottomBar } from '@/components/layout/SidebarBottomBar';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
 import { mainNav, trashNav, type NavItem } from '@/components/layout/navItems';
@@ -141,9 +140,6 @@ export function Sidebar() {
     '/today': todayCount,
   };
 
-  // 侧边栏仅展示 ACTIVE 项目，已完成项目不参与侧边栏导航树
-  const projects = allProjects.filter((p) => p.status !== ProjectStatus.COMPLETED);
-
   return (
     <aside className="flex h-screen w-60 flex-col bg-sidebar">
       <div className="px-2 pb-2 pt-3">
@@ -207,7 +203,7 @@ export function Sidebar() {
         </div>
 
         <div className="mt-4 flex flex-col">
-          <SidebarProjectSection projects={projects} areas={areas} />
+          <SidebarProjectSection projects={allProjects} areas={areas} />
         </div>
 
         <div className="mb-3 mt-4 flex flex-col">

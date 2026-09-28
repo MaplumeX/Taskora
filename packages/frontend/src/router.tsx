@@ -24,6 +24,7 @@ const Login = lazy(() => import('@/pages/Login'));
 const ProjectDetail = lazy(() => import('@taskora/ui/pages/ProjectDetail'));
 const Register = lazy(() => import('@/pages/Register'));
 const Someday = lazy(() => import('@taskora/ui/pages/Someday'));
+const LaterProjects = lazy(() => import('@taskora/ui/pages/LaterProjects'));
 const TagDetail = lazy(() => import('@taskora/ui/pages/TagDetail'));
 const Tags = lazy(() => import('@taskora/ui/pages/Tags'));
 const Today = lazy(() => import('@taskora/ui/pages/Today'));
@@ -61,6 +62,7 @@ export const router = createBrowserRouter([
           { path: '/calendar', element: <Calendar /> },
           { path: '/anytime', element: <Anytime /> },
           { path: '/someday', element: <Someday /> },
+          { path: '/later-projects', element: <LaterProjects /> },
           { path: '/logbook', element: <Logbook /> },
           { path: '/projects/:id', element: <ProjectDetail /> },
           { path: '/areas/:id', element: <AreaDetail /> },

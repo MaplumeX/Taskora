@@ -23,11 +23,19 @@ import { CSS } from '@dnd-kit/utilities';
 import type { ProjectResponseDto } from '@taskora/shared';
 
 import { useAreasQuery, useSelectionScope, useTaskRowSelection, useUpdateArea } from '@taskora/api';
-import { useProjectsQuery, useReorderProjects } from '@taskora/api';
+import {
+  currentLegacyDateTimeZone,
+  useLaterProjectKind,
+  useProjectsQuery,
+  useReorderProjects,
+} from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
 import { useTasksQuery } from '@taskora/api';
 import { Separator } from '@/components/ui/separator';
 import { ProjectItem } from '@/components/project/ProjectItem';
+import { LaterProjectSections } from '@/components/project/LaterProjectSections';
+import { groupLaterProjects } from '@/components/project/laterProjectLayout';
+import { mergeVisibleProjectOrder } from '@/components/layout/sidebarProjectLayout';
 import { TaskListView } from '@/components/task/TaskListView';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { AreaMoreMenu } from '@/components/area/AreaMoreMenu';
@@ -71,7 +79,16 @@ export default function AreaDetail() {
   const { data: areas = [] } = useAreasQuery();
   const area = areas.find((a) => a.id === id);
   const { data: allProjects = [] } = useProjectsQuery();
-  const projects = allProjects.filter((p) => p.areaId === id);
+  const kindOf = useLaterProjectKind();
+  const areaProjects = useMemo(
+    () => allProjects.filter((p) => p.areaId === id),
+    [allProjects, id],
+  );
+  // 活跃项目可拖拽排序；稍后项目放在下方「计划」/「Someday」小节。
+  const projects = useMemo(
+    () => areaProjects.filter((p) => kindOf(p) === null),
+    [areaProjects, kindOf],
+  );
   const reorderProjects = useReorderProjects();
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ areaId: id });
   const updateArea = useUpdateArea();
@@ -88,14 +105,20 @@ export default function AreaDetail() {
     if (!over || active.id === over.id) return;
     const ids = projects.map((p) => p.id);
     const reordered = arrayMove(ids, ids.indexOf(active.id as string), ids.indexOf(over.id as string));
-    reorderProjects.mutate(reordered);
+    // 以全量顺序为底写回，避免与其他区域 / 隐藏项目的 sortOrder 撞号。
+    reorderProjects.mutate(mergeVisibleProjectOrder(allProjects, reordered));
   };
 
-  // 注册项目段可遍历行（Project 行仅作遍历停留点，⌘K/⌫ 对其无效）。
-  const projectRows = useMemo(
-    () => projects.map((p) => ({ id: p.id, kind: 'project' as const, completed: false })),
-    [projects],
-  );
+  // 注册项目段可遍历行（Project 行仅作遍历停留点，⌘K/⌫ 对其无效）：
+  // 活跃项目 → 计划 → Someday，与渲染顺序一致。
+  const projectRows = useMemo(() => {
+    const later = groupLaterProjects(areaProjects, kindOf, currentLegacyDateTimeZone());
+    return [...projects, ...later.scheduled, ...later.someday].map((p) => ({
+      id: p.id,
+      kind: 'project' as const,
+      completed: false,
+    }));
+  }, [projects, areaProjects, kindOf]);
   useSelectionScope(projectRows);
 
   return (
@@ -126,7 +149,7 @@ export default function AreaDetail() {
         </div>
 
       <h2 className="text-sm font-medium text-muted-foreground">{t('area:projectsLabel')}</h2>
-      {projects.length === 0 ? (
+      {areaProjects.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('area:noProjects')}</p>
       ) : (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
@@ -139,6 +162,7 @@ export default function AreaDetail() {
           </SortableContext>
         </DndContext>
       )}
+      <LaterProjectSections projects={areaProjects} registerSelection={false} />
 
       <Separator />
 

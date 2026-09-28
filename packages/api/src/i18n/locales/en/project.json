@@ -30,5 +30,9 @@
   "archiveFailed": "Failed to archive",
   "unarchiveSuccess": "Unarchived",
   "unarchiveFailed": "Failed to unarchive",
-  "archivedHeadingCount": "{{count}} archived headings"
+  "archivedHeadingCount": "{{count}} archived headings",
+  "laterProjects": "Later Projects",
+  "laterProjectsEmpty": "No later projects",
+  "laterProjectCount_one": "{{count}} later project",
+  "laterProjectCount_other": "{{count}} later projects"
 }

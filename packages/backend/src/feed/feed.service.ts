@@ -3,7 +3,13 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncHubService } from '../sync/sync-hub.service';
 import { registerCompacted } from '../sync/compact-registry';
-import { buildTaskViewWhere, SETTLED_STATUSES, type TaskView } from '../tasks/views';
+import {
+  buildTaskViewWhere,
+  hidesTasksInLaterProjects,
+  laterProjectIds,
+  SETTLED_STATUSES,
+  type TaskView,
+} from '../tasks/views';
 import { buildProjectViewWhere, type ProjectView } from '../projects/views';
 import { parseRepeatRule } from '../tasks/task-dto.mapper';
 import {
@@ -133,6 +139,7 @@ export class FeedService {
     // they only surface in schedule/terminal views (today, upcoming,
     // someday, logbook, trash).
     const includeProjects = ['today', 'upcoming', 'someday', 'logbook', 'trash'].includes(view);
+    const hideLaterProjectTasks = hidesTasksInLaterProjects(view);
 
     const [tasks, projects] = await Promise.all([
       this.prisma.task.findMany({
@@ -156,11 +163,17 @@ export class FeedService {
     ]);
 
     const zones =
-      view === 'today' || view === 'upcoming'
+      view === 'today' || view === 'upcoming' || hideLaterProjectTasks
         ? await userCalendarZones(this.prisma, userId)
         : { timeZone: 'UTC', legacyDateTimeZone: 'UTC' };
     const now = new Date();
+    const hiddenProjectIds = hideLaterProjectTasks
+      ? await laterProjectIds(this.prisma, userId, zones, now)
+      : new Set<string>();
+    const activeParent = (task: { projectId: string | null }) =>
+      !task.projectId || !hiddenProjectIds.has(task.projectId);
     const taskItems: TaskFeedItem[] = tasks
+      .filter(activeParent)
       .filter((task) =>
         matchesCalendarView(
           task.scheduledDate,

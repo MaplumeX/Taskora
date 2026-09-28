@@ -1,4 +1,9 @@
+export { hidesTasksInLaterProjects } from '@taskora/shared';
+
 import {
+  instantDateKey,
+  isLaterProject,
+  ProjectStatus,
   TaskBucket,
   TaskStatus,
   ScheduledType,
@@ -6,6 +11,7 @@ import {
   WITH_SETTLED_TASK_STATUSES,
 } from '@taskora/shared';
 import { Prisma } from '@prisma/client';
+import type { PrismaService } from '../prisma/prisma.service';
 
 export type TaskView = 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
 
@@ -63,4 +69,31 @@ export function buildTaskViewWhere(view: TaskView): Prisma.TaskWhereInput {
       break;
   }
   return where;
+}
+
+/**
+ * 稍后项目（Later Project，见 CONTEXT.md）id 集合：Anytime / Someday 中其内任务随父项目休眠。
+ * 「未来日期」依赖账号时区，故在内存中按共享判定函数计算。
+ */
+export async function laterProjectIds(
+  prisma: PrismaService,
+  userId: string,
+  zones: { timeZone: string; legacyDateTimeZone: string },
+  now = new Date(),
+): Promise<Set<string>> {
+  const candidates = await prisma.project.findMany({
+    where: {
+      userId,
+      status: ProjectStatus.ACTIVE,
+      trashedAt: null,
+      scheduledType: { in: [ScheduledType.SOMEDAY, ScheduledType.DATE] },
+    },
+    select: { id: true, status: true, trashedAt: true, scheduledType: true, scheduledDate: true },
+  });
+  const today = instantDateKey(now, zones.timeZone);
+  return new Set(
+    candidates
+      .filter((project) => isLaterProject(project, today, zones.legacyDateTimeZone))
+      .map((project) => project.id),
+  );
 }

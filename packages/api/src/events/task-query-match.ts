@@ -1,5 +1,11 @@
 import { toDateKey, todayDateKey } from '@/utils/date';
-import { ScheduledType, TaskBucket, TaskStatus, SETTLED_TASK_STATUSES } from '@taskora/shared';
+import {
+  hidesTasksInLaterProjects,
+  ScheduledType,
+  TaskBucket,
+  TaskStatus,
+  SETTLED_TASK_STATUSES,
+} from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import type { TaskQuery } from '@/api/tasks.api';
@@ -23,10 +29,15 @@ export function taskMatchesQuery(
   task: TaskResponseDto,
   params: unknown,
   now: Date = new Date(),
+  isLaterProjectId: (projectId: string) => boolean = () => false,
 ): boolean {
   const query = (params ?? {}) as TaskQuery;
 
   if (query.view) {
+    // 稍后项目内的任务在 Anytime / Someday 中随父项目休眠（Later Project）。
+    if (hidesTasksInLaterProjects(query.view) && task.projectId && isLaterProjectId(task.projectId)) {
+      return false;
+    }
     return taskMatchesView(task, query.view, now);
   }
 

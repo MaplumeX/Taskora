@@ -1,0 +1,88 @@
+import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import type { ProjectResponseDto } from '@taskora/shared';
+
+import {
+  currentLegacyDateTimeZone,
+  useLaterProjectKind,
+  useSelectionScope,
+  useTaskRowSelection,
+} from '@taskora/api';
+import { mainNav, type NavItem } from '@/components/layout/navItems';
+import { ProjectItem } from '@/components/project/ProjectItem';
+import { groupLaterProjects } from '@/components/project/laterProjectLayout';
+import { cn } from '@/lib/utils';
+
+// 小节标题沿用侧边栏对应 Bucket 的名称、图标与颜色（计划 = Upcoming，将来 = Someday）。
+const navItem = (to: string) => mainNav.find((item) => item.to === to) as NavItem;
+const SCHEDULED_NAV = navItem('/upcoming');
+const SOMEDAY_NAV = navItem('/someday');
+
+interface Props {
+  /** 候选项目；非稍后项目会被忽略。 */
+  projects: ProjectResponseDto[];
+  /** 注册键盘 Selection 行。页面已把这些行并入自己的 scope 时传 false，
+   * 以保证遍历顺序（子组件的 effect 先于父组件注册）。 */
+  registerSelection?: boolean;
+}
+
+/**
+ * 稍后项目的「计划」/「Someday」两个小节（Later Projects 页与区域页共用）。
+ * 空小节不显示；两节都不支持拖拽排序（计划按日期，Someday 沿用手动顺序）。
+ */
+export function LaterProjectSections({ projects, registerSelection = true }: Props) {
+  const { t } = useTranslation();
+  const kindOf = useLaterProjectKind();
+  const { selectedIds } = useTaskRowSelection();
+  const groups = useMemo(
+    () => groupLaterProjects(projects, kindOf, currentLegacyDateTimeZone()),
+    [projects, kindOf],
+  );
+
+  const rows = useMemo(
+    () =>
+      registerSelection
+        ? [...groups.scheduled, ...groups.someday].map((p) => ({
+            id: p.id,
+            kind: 'project' as const,
+            completed: false,
+          }))
+        : [],
+    [groups, registerSelection],
+  );
+  useSelectionScope(rows);
+
+  const sections = [
+    { key: 'scheduled', nav: SCHEDULED_NAV, items: groups.scheduled },
+    { key: 'someday', nav: SOMEDAY_NAV, items: groups.someday },
+  ].filter((section) => section.items.length > 0);
+
+  return (
+    <>
+      {sections.map((section) => {
+        const Icon = section.nav.icon;
+        const title = t(section.nav.labelKey);
+        return (
+          <section key={section.key} aria-label={title} className="flex flex-col">
+            <h2 className="flex items-center gap-1.5 border-b border-border pb-1 text-section text-foreground">
+              <Icon aria-hidden className={cn('h-4 w-4 shrink-0', section.nav.colorClass)} />
+              {title}
+            </h2>
+            <div className="flex flex-col pt-1">
+              {section.items.map((p) => (
+                <ProjectItem
+                  key={p.id}
+                  project={p}
+                  selected={selectedIds.includes(p.id)}
+                  selectionRow
+                  showScheduledBadge={section.key === 'scheduled'}
+                />
+              ))}
+            </div>
+          </section>
+        );
+      })}
+    </>
+  );
+}

@@ -1,7 +1,8 @@
-import { useEffect, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { usePreferencesStore } from '@/stores/preferences.store';
-import { todayDateKey } from '@/utils/date';
+import type { LaterProjectFields, LaterProjectKind } from '@taskora/shared';
+import { projectLaterKind, todayDateKey } from '@/utils/date';
 import { currentStatusBarController } from '../status-bar/controller';
 
 const listeners = new Set<() => void>();
@@ -41,4 +42,11 @@ export function useCalendarQueryRefresh(): void {
     });
     currentStatusBarController()?.scheduleRefresh();
   }, [key, queryClient]);
+}
+
+/** 客户端 Later Project 判定（`projectLaterKind`），跨天 / 换时区后返回新的函数引用。 */
+export function useLaterProjectKind(): (project: LaterProjectFields) => LaterProjectKind | null {
+  const day = useCalendarDay();
+  // 依赖 day：跨天 / 换时区时换新引用，让下游 useMemo 重新分组。
+  return useCallback((project: LaterProjectFields) => projectLaterKind(project), [day]);
 }

@@ -10,7 +10,13 @@
  * feed.service.ts / tasks.service.ts / subtasks.service.ts。
  */
 
-import { currentTimeZone, currentLegacyDateTimeZone, toDateKey, todayDateKey } from '@/utils/date';
+import {
+  currentTimeZone,
+  currentLegacyDateTimeZone,
+  projectLaterKind,
+  toDateKey,
+  todayDateKey,
+} from '@/utils/date';
 import type { Engine, ReplicaRow } from '@taskora/engine';
 import { positionAfter, positionsBetween } from '@taskora/engine';
 import {
@@ -20,6 +26,7 @@ import {
   normalizeRepeatRule,
 } from '@taskora/engine';
 import {
+  hidesTasksInLaterProjects,
   ProjectStatus,
   ScheduledType,
   TaskStatus,
@@ -181,11 +188,19 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     await engine.delete('task', [instanceId]); // 幂等：不存在则无操作
   }
 
+  /** 需要隐藏其内任务的稍后项目 id（仅 Anytime / Someday，语义对齐 backend views.ts）。 */
+  async function laterProjectIdsFor(view: string | undefined): Promise<ReadonlySet<string>> {
+    if (!hidesTasksInLaterProjects(view)) return NO_PROJECT_IDS;
+    const rows = await engine.list('project');
+    return new Set(rows.filter((row) => isLaterProjectRow(row)).map((row) => row.id));
+  }
+
   return {
     async getTasks(params?: TaskQuery): Promise<TaskResponseDto[]> {
       const rows = await engine.list('task');
       const index = await tagIndex();
-      return filterTasks(rows, params).map((row) => taskRowToDto(row, index));
+      const laterIds = await laterProjectIdsFor(params?.view);
+      return filterTasks(rows, params, laterIds).map((row) => taskRowToDto(row, index));
     },
 
     async getTask(id: string): Promise<TaskResponseDto> {
@@ -197,7 +212,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     async getFeed(view: FeedView): Promise<FeedItem[]> {
       const index = await tagIndex();
       const allTasks = await engine.list('task');
-      const taskItems: TaskFeedItem[] = filterFeedTasks(allTasks, view).map((row) => {
+      const laterIds = await laterProjectIdsFor(view);
+      const taskItems: TaskFeedItem[] = filterFeedTasks(allTasks, view, laterIds).map((row) => {
         const dto = taskRowToDto(row, index);
         return { ...dto, type: 'task' as const, tags: dto.tags ?? [] };
       });
@@ -707,8 +723,33 @@ function isDateLte(value: unknown, now: Date): boolean {
   }
 }
 
+const NO_PROJECT_IDS: ReadonlySet<string> = new Set();
+
+function isLaterProjectRow(row: ReplicaRow): boolean {
+  const f = row.fields;
+  return (
+    projectLaterKind({
+      status: f.status as string,
+      trashedAt: (f.trashedAt as string | null) ?? null,
+      scheduledType: f.scheduledType as string,
+      scheduledDate: (f.scheduledDate as string | null) ?? null,
+    }) !== null
+  );
+}
+
+function notInLaterProject(laterIds: ReadonlySet<string>): (row: ReplicaRow) => boolean {
+  return (row) => {
+    const projectId = row.fields.projectId;
+    return typeof projectId !== 'string' || !laterIds.has(projectId);
+  };
+}
+
 /** getTasks 过滤（语义对齐 TasksService.findAll）。 */
-function filterTasks(rows: ReplicaRow[], params?: TaskQuery): ReplicaRow[] {
+function filterTasks(
+  rows: ReplicaRow[],
+  params?: TaskQuery,
+  laterIds: ReadonlySet<string> = NO_PROJECT_IDS,
+): ReplicaRow[] {
   if (!params || Object.keys(params).length === 0) {
     return rows.filter(
       (row) => row.fields.status === TaskStatus.ACTIVE && row.fields.trashedAt == null,
@@ -725,7 +766,7 @@ function filterTasks(rows: ReplicaRow[], params?: TaskQuery): ReplicaRow[] {
   }
   if (params.view) {
     filtered = filtered.filter((row) => taskMatchesView(row, params.view, new Date()));
-    return filtered;
+    return filtered.filter(notInLaterProject(laterIds));
   }
   if (params.projectId)
     filtered = filtered.filter((row) => row.fields.projectId === params.projectId);
@@ -757,8 +798,13 @@ function filterTasks(rows: ReplicaRow[], params?: TaskQuery): ReplicaRow[] {
 }
 
 /** getFeed 的 task 过滤（buildTaskViewWhere 同语义）。 */
-function filterFeedTasks(rows: ReplicaRow[], view: FeedView): ReplicaRow[] {
-  return rows.filter((row) => taskMatchesView(row, view, new Date()));
+function filterFeedTasks(
+  rows: ReplicaRow[],
+  view: FeedView,
+  laterIds: ReadonlySet<string> = NO_PROJECT_IDS,
+): ReplicaRow[] {
+  const inActiveProject = notInLaterProject(laterIds);
+  return rows.filter((row) => taskMatchesView(row, view, new Date()) && inActiveProject(row));
 }
 
 function projectMatchesView(row: ReplicaRow, view: FeedView, now: Date): boolean {

@@ -1,12 +1,14 @@
 import { QueryClient } from '@tanstack/react-query';
-import { HeadingStatus } from '@taskora/shared';
+import { hidesTasksInLaterProjects, HeadingStatus } from '@taskora/shared';
 import type {
   ChangeEvent,
   ProjectHeadingResponseDto,
+  ProjectResponseDto,
   SubtaskResponseDto,
   TaskResponseDto,
 } from '@taskora/shared';
 
+import { projectLaterKind } from '@/utils/date';
 import { taskMatchesQuery } from './task-query-match';
 
 /**
@@ -78,6 +80,14 @@ export function applyChangeEvents(queryClient: QueryClient, batch: ChangeEvent[]
           overwriteDetail(queryClient, ['project', event.id], event.data);
         }
         invalidate.add('feed');
+        // 项目进出「稍后」会改变其下任务在 Anytime / Someday 列表中的归属。
+        void queryClient.invalidateQueries({
+          predicate: (query) =>
+            query.queryKey[0] === 'tasks' &&
+            hidesTasksInLaterProjects(
+              (query.queryKey[1] as { view?: string } | undefined)?.view,
+            ),
+        });
         break;
       }
       case 'project-heading': {
@@ -174,10 +184,17 @@ export function dedupeEvents(batch: ChangeEvent[]): ChangeEvent[] {
 // ---------- task surgery ----------
 
 function upsertTaskLists(queryClient: QueryClient, task: TaskResponseDto): void {
+  const isLaterProjectId = (projectId: string) => {
+    for (const cache of listCaches(queryClient, 'projects')) {
+      const project = (cache.data as ProjectResponseDto[]).find((p) => p.id === projectId);
+      if (project) return projectLaterKind(project) !== null;
+    }
+    return false;
+  };
   for (const cache of listCaches(queryClient, 'tasks')) {
     const list = cache.data as TaskResponseDto[];
     const params = cache.key[1];
-    const matches = taskMatchesQuery(task, params);
+    const matches = taskMatchesQuery(task, params, new Date(), isLaterProjectId);
     const without = list.filter((t) => t.id !== task.id);
     const next = matches ? [...without, task] : without;
     // logbook lists are ordered by completedAt desc server-side; every
