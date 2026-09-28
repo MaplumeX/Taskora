@@ -63,7 +63,7 @@ export function LaterProjectSections({ projects, selectionRank }: Props) {
         const title = t(section.nav.labelKey);
         return (
           <section key={section.key} aria-label={title} className="flex flex-col">
-            <h2 className="flex items-center gap-1.5 border-b border-border pb-1 text-section text-foreground">
+            <h2 className="flex items-center gap-1.5 border-b border-border pb-1 text-section font-bold text-foreground">
               <Icon aria-hidden className={cn('h-4 w-4 shrink-0', section.nav.colorClass)} />
               {title}
             </h2>
