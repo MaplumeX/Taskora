@@ -1,5 +1,11 @@
 import { i18n } from '@/i18n/config';
-import { calendarDateKey, instantDateKey } from '@taskora/shared';
+import {
+  calendarDateKey,
+  instantDateKey,
+  laterProjectKind,
+  type LaterProjectFields,
+  type LaterProjectKind,
+} from '@taskora/shared';
 import { usePreferencesStore } from '@/stores/preferences.store';
 
 export function currentTimeZone(): string {
@@ -12,6 +18,11 @@ export function currentLegacyDateTimeZone(): string {
 
 export function todayDateKey(now = new Date()): string {
   return instantDateKey(now, currentTimeZone());
+}
+
+/** 客户端 Later Project 判定：按账号时区的今天（见 CONTEXT.md）。 */
+export function projectLaterKind(project: LaterProjectFields, now = new Date()): LaterProjectKind | null {
+  return laterProjectKind(project, todayDateKey(now), currentLegacyDateTimeZone());
 }
 
 /** UI calendar carrier: local Date components encode a day, not an instant. */

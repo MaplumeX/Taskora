@@ -20,6 +20,7 @@ import type {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { taskKeys } from '@/hooks/useTasks';
+import { projectKeys } from '@/hooks/useProjects';
 import { applyChangeEvents, dedupeEvents, EventStreamApplier } from './event-applier';
 
 function makeTask(overrides: Partial<TaskResponseDto> = {}): TaskResponseDto {
@@ -515,5 +516,63 @@ describe('EventStreamApplier', () => {
 
     const list = queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list());
     expect(list?.map((t) => t.id).sort()).toEqual(['t1', 't2', 't3']);
+  });
+});
+
+describe('applyChangeEvents — 稍后项目（spec: later-projects）', () => {
+  let queryClient: QueryClient;
+  beforeEach(() => {
+    queryClient = new QueryClient();
+  });
+  afterEach(() => {
+    queryClient.clear();
+  });
+
+  const makeProject = (overrides: Partial<ProjectResponseDto> = {}): ProjectResponseDto => ({
+    id: 'p1',
+    title: 'P',
+    notes: null,
+    sortOrder: 0,
+    areaId: null,
+    status: ProjectStatus.ACTIVE,
+    bucket: ProjectBucket.SCHEDULED,
+    taskTotalCount: 0,
+    taskCompletedCount: 0,
+    scheduledType: ScheduledType.SOMEDAY,
+    scheduledDate: null,
+    dueDate: null,
+    completedAt: null,
+    trashedAt: null,
+    tags: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  });
+
+  it('稍后项目内的任务不进 Anytime 列表，但仍进项目列表', () => {
+    queryClient.setQueryData(projectKeys.all, [makeProject()]);
+    queryClient.setQueryData(taskKeys.list({ view: 'anytime' }), []);
+    queryClient.setQueryData(taskKeys.list({ projectId: 'p1' }), []);
+
+    applyChangeEvents(queryClient, [
+      event('task', 't1', 'created', makeTask({ id: 't1', projectId: 'p1', bucket: TaskBucket.ANYTIME })),
+    ]);
+
+    expect(queryClient.getQueryData(taskKeys.list({ view: 'anytime' }))).toEqual([]);
+    expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ projectId: 'p1' }))).toHaveLength(1);
+  });
+
+  it('项目变更使 Anytime / Someday 任务列表失效，其他任务列表不受影响', () => {
+    queryClient.setQueryData(taskKeys.list({ view: 'anytime' }), []);
+    queryClient.setQueryData(taskKeys.list({ view: 'someday' }), []);
+    queryClient.setQueryData(taskKeys.list({ view: 'today' }), []);
+
+    applyChangeEvents(queryClient, [event('project', 'p1', 'updated', makeProject())]);
+
+    const invalidated = (params: object) =>
+      queryClient.getQueryState(taskKeys.list(params))?.isInvalidated;
+    expect(invalidated({ view: 'anytime' })).toBe(true);
+    expect(invalidated({ view: 'someday' })).toBe(true);
+    expect(invalidated({ view: 'today' })).toBe(false);
   });
 });

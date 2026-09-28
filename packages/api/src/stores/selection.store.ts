@@ -42,8 +42,10 @@ interface SelectionState {
   scopes: Record<string, SelectionRow[]>;
   /** scope 注册顺序（DOM 渲染顺序），用于拼接完整行序列。 */
   scopeOrder: string[];
+  /** scope 显式排序号（默认 0）：同页多个列表挂载时机不定时，按它确定先后，同号按注册顺序。 */
+  scopeRank: Record<string, number>;
   setSelection: (ids: string[]) => void;
-  registerScope: (key: string, rows: SelectionRow[]) => void;
+  registerScope: (key: string, rows: SelectionRow[], rank?: number) => void;
   unregisterScope: (key: string) => void;
   /** 清空 selection（页面切换、点击空白时）。 */
   clearSelection: () => void;
@@ -53,13 +55,16 @@ export const useSelectionStore = create<SelectionState>()((set) => ({
   selectedIds: [],
   scopes: {},
   scopeOrder: [],
+  scopeRank: {},
   setSelection: (ids) => set({ selectedIds: ids }),
-  registerScope: (key, rows) =>
+  registerScope: (key, rows, rank = 0) =>
     set((state) => {
       const known = key in state.scopes;
       return {
         scopes: { ...state.scopes, [key]: rows },
         scopeOrder: known ? state.scopeOrder : [...state.scopeOrder, key],
+        scopeRank:
+          state.scopeRank[key] === rank ? state.scopeRank : { ...state.scopeRank, [key]: rank },
       };
     }),
   unregisterScope: (key) =>
@@ -67,12 +72,17 @@ export const useSelectionStore = create<SelectionState>()((set) => ({
       if (!(key in state.scopes)) return state;
       const scopes = { ...state.scopes };
       delete scopes[key];
-      return { scopes, scopeOrder: state.scopeOrder.filter((k) => k !== key) };
+      const scopeRank = { ...state.scopeRank };
+      delete scopeRank[key];
+      return { scopes, scopeRank, scopeOrder: state.scopeOrder.filter((k) => k !== key) };
     }),
   clearSelection: () => set({ selectedIds: [] }),
 }));
 
-/** 按注册顺序拼接所有 scope 的行，得到当前页面的完整可遍历行序列。 */
+/** 按排序号（同号按注册顺序）拼接所有 scope 的行，得到当前页面的完整可遍历行序列。 */
 export function flattenSelectionRows(state: SelectionState): SelectionRow[] {
-  return state.scopeOrder.flatMap((key) => state.scopes[key] ?? []);
+  const rank = (key: string) => state.scopeRank?.[key] ?? 0;
+  return [...state.scopeOrder]
+    .sort((a, b) => rank(a) - rank(b))
+    .flatMap((key) => state.scopes[key] ?? []);
 }

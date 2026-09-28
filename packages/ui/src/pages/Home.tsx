@@ -10,7 +10,6 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
-import { ProjectStatus } from '@taskora/shared';
 import {
   useAreasQuery,
   useProjectsQuery,
@@ -87,8 +86,6 @@ export default function Home() {
   const [searchOpen, setSearchOpen] = useState(false);
 
   if (isDesktop) return <Navigate to="/today" replace />;
-
-  const projects = allProjects.filter((p) => p.status !== ProjectStatus.COMPLETED);
   const countByRoute: Record<string, number> = {
     '/inbox': inboxCount,
     '/today': todayCount,
@@ -145,7 +142,7 @@ export default function Home() {
       ))}
 
       {/* 区域 / 项目：与桌面侧边栏同一组件（含长按拖拽排序） */}
-      <SidebarProjectSection projects={projects} areas={areas} />
+      <SidebarProjectSection projects={allProjects} areas={areas} />
 
       <HomeGroup>
         <HomeRow

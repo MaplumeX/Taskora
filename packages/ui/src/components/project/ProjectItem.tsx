@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import { ProjectContextMenu } from '@/components/project/ProjectContextMenu';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
+import { TaskDateBadge } from '@/components/task/TaskDateBadge';
 import {
   useCompleteProject,
   useUncompleteProject,
@@ -27,6 +28,8 @@ interface Props {
   selectionRow?: boolean;
   /** 侧边栏紧凑行：28px 行高、16px 进度环（与图标同宽）、当前项目高亮。 */
   variant?: 'list' | 'sidebar';
+  /** 在标题前显示未来计划日期 chip（稍后项目的「计划」小节）。 */
+  showScheduledBadge?: boolean;
 }
 
 export function ProjectItem({
@@ -36,6 +39,7 @@ export function ProjectItem({
   selected = false,
   selectionRow = false,
   variant = 'list',
+  showScheduledBadge = false,
 }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -87,6 +91,7 @@ export function ProjectItem({
           projectStatus={project.status}
           onToggle={handleToggle}
         />
+        {showScheduledBadge && <TaskDateBadge scheduledDate={project.scheduledDate} />}
         <span className={cn(
           'flex-1 truncate',
           !sidebar && 'text-body font-semibold',

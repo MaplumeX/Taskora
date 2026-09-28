@@ -22,7 +22,12 @@ import { registerCompacted } from '../sync/compact-registry';
 import { synthPosition } from '../sync/entity-codec';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
 import { Prisma } from '@prisma/client';
-import { buildTaskViewWhere, WITH_SETTLED_STATUSES } from './views';
+import {
+  buildTaskViewWhere,
+  hidesTasksInLaterProjects,
+  laterProjectIds,
+  WITH_SETTLED_STATUSES,
+} from './views';
 import { parseRepeatRule, settledToCompletedAt, withRepeatRuleDto } from './task-dto.mapper';
 
 /** 派生路径需要的 Task 行形状（含标签关系与子任务）。 */
@@ -240,17 +245,24 @@ export class TasksService {
         ? [{ settledAt: 'desc' as const }]
         : [{ sortOrder: 'asc' as const }, { createdAt: 'desc' as const }];
 
+    const hideLaterProjectTasks = hidesTasksInLaterProjects(query.view);
     const tasks = await this.prisma.task.findMany({
       where,
       orderBy,
       include: { tags: { include: { tag: true } } },
     });
     const zones =
-      query.view === 'today' || query.view === 'upcoming'
+      query.view === 'today' || query.view === 'upcoming' || hideLaterProjectTasks
         ? await userCalendarZones(this.prisma, userId)
         : { timeZone: 'UTC', legacyDateTimeZone: 'UTC' };
     const now = new Date();
+    const hiddenProjectIds = hideLaterProjectTasks
+      ? await laterProjectIds(this.prisma, userId, zones, now)
+      : new Set<string>();
+    const activeParent = (task: { projectId: string | null }) =>
+      !task.projectId || !hiddenProjectIds.has(task.projectId);
     return tasks
+      .filter(activeParent)
       .filter((task) =>
         matchesCalendarView(
           task.scheduledDate,

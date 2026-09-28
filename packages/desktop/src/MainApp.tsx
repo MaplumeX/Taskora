@@ -22,6 +22,7 @@ const Inbox = lazy(() => import('@taskora/ui/pages/Inbox'));
 const Logbook = lazy(() => import('@taskora/ui/pages/Logbook'));
 const ProjectDetail = lazy(() => import('@taskora/ui/pages/ProjectDetail'));
 const Someday = lazy(() => import('@taskora/ui/pages/Someday'));
+const LaterProjects = lazy(() => import('@taskora/ui/pages/LaterProjects'));
 const TagDetail = lazy(() => import('@taskora/ui/pages/TagDetail'));
 const Tags = lazy(() => import('@taskora/ui/pages/Tags'));
 const Today = lazy(() => import('@taskora/ui/pages/Today'));
@@ -48,6 +49,7 @@ export function MainApp() {
               <Route path="/calendar" element={<Calendar />} />
               <Route path="/anytime" element={<Anytime />} />
               <Route path="/someday" element={<Someday />} />
+              <Route path="/later-projects" element={<LaterProjects />} />
               <Route path="/logbook" element={<Logbook />} />
               <Route path="/projects/:id" element={<ProjectDetail />} />
               <Route path="/areas/:id" element={<AreaDetail />} />
