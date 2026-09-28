@@ -20,10 +20,14 @@ import {
   useUpdatePreferences,
 } from '@taskora/api';
 
-type AutoStartApi = {
-  isEnabled: () => Promise<boolean>;
-  enable: () => Promise<void>;
-  disable: () => Promise<void>;
+/**
+ * 开机自启走桌面壳 Rust 命令（launch_at_login.rs）而非 autostart 插件
+ * guest-js：壳层会持久化用户意图，启动时补回被安装包覆盖安装删掉的
+ * 登录项。invoke 按需动态 import，不进入 web 端运行路径。
+ */
+const invokeShell = async <T,>(cmd: string, args?: Record<string, unknown>) => {
+  const { invoke } = await import('@tauri-apps/api/core');
+  return invoke<T>(cmd, args);
 };
 
 /**
@@ -31,8 +35,7 @@ type AutoStartApi = {
  * 注意：移动端同样是 Tauri shell（webview 里也会注入 __TAURI_INTERNALS__），
  * 所以仅靠 __TAURI_INTERNALS__ 无法区分桌面与移动，必须同时校验 clientKind。
  */
-const isDesktopRuntime = () =>
-  '__TAURI_INTERNALS__' in globalThis && getClientKind() === 'desktop';
+const isDesktopRuntime = () => '__TAURI_INTERNALS__' in globalThis && getClientKind() === 'desktop';
 
 /** 状态栏常驻通知（android-status-bar）：仅 Android 渲染，且控制器已注册。 */
 const getStatusBar = () => (getClientKind() === 'mobile' ? currentStatusBarController() : null);
@@ -104,8 +107,8 @@ function TimeZonePicker({
  *
  * - 「在时间视图中按项目/领域分组任务」：全平台可见，随用户偏好跨设备同步
  *   （与主题/语言同一管线）。
- * - 「登录时自动启动」：仅桌面端（Tauri）渲染，autostart 插件按需动态
- *   import，不进入 web 端运行路径。
+ * - 「登录时自动启动」：仅桌面端（Tauri）渲染，经壳层 launch_at_login
+ *   命令读写（见 invokeShell）。
  */
 export default function SettingsGeneral() {
   const { t } = useTranslation(['settings', 'common']);
@@ -179,8 +182,7 @@ export default function SettingsGeneral() {
   useEffect(() => {
     if (!desktop) return;
     let cancelled = false;
-    import('@tauri-apps/plugin-autostart')
-      .then((m: AutoStartApi) => m.isEnabled())
+    invokeShell<boolean>('launch_at_login_get')
       .then((v) => {
         if (!cancelled) setEnabled(v);
       })
@@ -197,12 +199,7 @@ export default function SettingsGeneral() {
     if (pending) return;
     setPending(true);
     try {
-      const m = (await import('@tauri-apps/plugin-autostart')) as AutoStartApi;
-      if (next) {
-        await m.enable();
-      } else {
-        await m.disable();
-      }
+      await invokeShell('launch_at_login_set', { enabled: next });
       setEnabled(next);
     } catch {
       toast.error(t('settings:launchAtLoginFailed'));
