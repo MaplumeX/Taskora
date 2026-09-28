@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import React from 'react';
@@ -79,7 +79,7 @@ describe('RepeatRuleField — 独立重复规则编辑字段（recurring-tasks s
     });
 
     // 单位 → week（携带 weekdays 编辑入口）
-    fireEvent.change(screen.getByLabelText(/Repeat unit|重复单位/), { target: { value: 'week' } });
+    await user.click(screen.getByRole('radio', { name: /^(weeks|周)$/ }));
     expect(onPatch).toHaveBeenLastCalledWith({
       repeatRule: { unit: 'week', interval: 3, anchor: 'scheduled' },
     });
@@ -96,16 +96,26 @@ describe('RepeatRuleField — 独立重复规则编辑字段（recurring-tasks s
       repeatRule: { unit: 'week', interval: 3, weekdays: [1], anchor: 'completion' },
     });
 
-    // until 日期
-    fireEvent.change(screen.getByLabelText(/Until|直到/), { target: { value: '2026-06-30' } });
+    // until 日期：点开日历选当月 20 号
+    await user.click(screen.getByRole('button', { name: /^(Until|直到)$/ }));
+    const today = new Date();
+    const until = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-20`;
+    await user.click(screen.getByRole('button', { name: new RegExp(`\\b20(th)?\\b|20日`) }));
     expect(onPatch).toHaveBeenLastCalledWith({
       repeatRule: {
         unit: 'week',
         interval: 3,
         weekdays: [1],
         anchor: 'completion',
-        until: '2026-06-30',
+        until,
       },
+    });
+
+    // 清除 until
+    await user.click(screen.getByRole('button', { name: /^(Until|直到)$/ }));
+    await user.click(screen.getByRole('button', { name: /^(Clear|清除)$/ }));
+    expect(onPatch).toHaveBeenLastCalledWith({
+      repeatRule: { unit: 'week', interval: 3, weekdays: [1], anchor: 'completion' },
     });
   });
 

@@ -19,6 +19,8 @@ import { ScheduledType } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
+import { Switch } from '@/components/ui/switch';
+import { TimePicker } from '@/components/ui/time-picker';
 import { cn } from '@/lib/utils';
 
 import { getCalendarLocale } from './calendarFieldUtils';
@@ -191,22 +193,20 @@ export function ScheduledDateField({
           className="flex items-center gap-2 border-t border-border/50 px-2 py-1.5 max-md:py-2.5"
           data-reminder-section
         >
-          <input
-            type="checkbox"
-            role="switch"
-            aria-label={t('task:reminder')}
-            className="h-4 w-4 accent-primary max-md:h-5 max-md:w-5"
-            checked={current.reminderTime != null}
-            onChange={(e) => handleReminderToggle(e.target.checked)}
-          />
           <span className="select-none text-sm max-md:text-[15px]">{t('task:reminder')}</span>
-          <input
-            type="time"
+          <TimePicker
             aria-label={t('task:reminderTime')}
-            className="h-7 rounded-md border border-input bg-transparent px-2 text-sm tabular-nums max-md:ml-auto max-md:h-9 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-            value={current.reminderTime ?? ''}
+            hourLabel={t('task:reminderHour')}
+            minuteLabel={t('task:reminderMinute')}
+            className="ml-auto"
+            value={current.reminderTime ?? DEFAULT_REMINDER_TIME}
             disabled={current.reminderTime == null}
-            onChange={(e) => handleReminderTimeChange(e.target.value)}
+            onChange={handleReminderTimeChange}
+          />
+          <Switch
+            aria-label={t('task:reminder')}
+            checked={current.reminderTime != null}
+            onCheckedChange={handleReminderToggle}
           />
         </div>
       )}

@@ -4,7 +4,6 @@ import {
   CircleSlash,
   Flag,
   ListPlus,
-  Repeat,
   Star,
   Tag,
   Trash2,
@@ -45,7 +44,6 @@ import {
 import { toast } from 'sonner';
 import { ScheduledDateField } from './fields/ScheduledDateField';
 import { DueDateField } from './fields/DueDateField';
-import { RepeatRuleField } from './fields/RepeatRuleField';
 import { TagsField } from './fields/TagsField';
 import { TaskCheckbox } from './TaskCheckbox';
 
@@ -190,11 +188,6 @@ export function TaskRowExpanded({ task, current }: Props) {
             )}
           </FieldChip>
         )}
-        {current.repeatRule && scheduledType === ScheduledType.DATE && (
-          <FieldChip label={t('task:repeat')} icon={<Repeat />} text={t('task:repeat')}>
-            <RepeatRuleField current={current} onPatch={patch} />
-          </FieldChip>
-        )}
         {tags.length > 0 && (
           <FieldChip
             label={t('task:tags')}
@@ -226,14 +219,6 @@ export function TaskRowExpanded({ task, current }: Props) {
                   showReminder={getClientKind() !== 'web'}
                 />
               )}
-            </IconPopover>
-          )}
-
-          {/* 重复规则是独立入口（不内嵌于计划 popover）：仅 DATE 型任务
-              显示（规则需要计划日期作锚点，Someday/NONE 不提供该选项）。 */}
-          {scheduledType === ScheduledType.DATE && !current.repeatRule && (
-            <IconPopover label={t('task:repeat')} icon={<Repeat className="h-4 w-4" />}>
-              <RepeatRuleField current={current} onPatch={patch} />
             </IconPopover>
           )}
 

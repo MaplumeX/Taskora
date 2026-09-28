@@ -4,6 +4,7 @@ import {
   normalizeRepeatRule,
   currentLegacyDateTimeZone,
   parseCalendarDate,
+  toInputDateValue,
   usePreferencesStore,
 } from '@taskora/api';
 import React from 'react';
@@ -13,6 +14,12 @@ import type { ScheduledFieldCurrent, ScheduledFieldPatch } from './fieldProps';
 import { RepeatUnit } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
+import { Calendar } from '@/components/ui/calendar';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Switch } from '@/components/ui/switch';
+
+import { getCalendarLocale } from './calendarFieldUtils';
 
 /** 首次开启重复的默认规则（spec 未规定缺省）：每周、从计划日期算。 */
 export const DEFAULT_REPEAT_RULE = {
@@ -120,16 +127,20 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
   return (
     <div className="flex flex-col gap-1.5 px-2 py-1.5 max-md:gap-3 max-md:py-2" data-repeat-section>
       <div className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          role="switch"
-          aria-label={t('task:repeat')}
-          className="h-4 w-4 accent-primary max-md:h-5 max-md:w-5"
-          checked={rule != null}
-          onChange={(e) => patchRule(e.target.checked ? { ...DEFAULT_REPEAT_RULE } : null)}
-        />
         <span className="select-none text-sm max-md:text-[15px]">{t('task:repeat')}</span>
-        <div className="ml-auto flex items-center gap-1" aria-label={t('task:repeatInterval')}>
+        <Switch
+          aria-label={t('task:repeat')}
+          className="ml-auto"
+          checked={rule != null}
+          onCheckedChange={(checked) => patchRule(checked ? { ...DEFAULT_REPEAT_RULE } : null)}
+        />
+      </div>
+
+      <div className="flex items-center gap-2">
+        <div className="flex items-center gap-0.5" aria-label={t('task:repeatInterval')}>
+          <span className="mr-1 select-none text-xs text-muted-foreground max-md:text-sm">
+            {t('task:repeatEvery')}
+          </span>
           <Button
             variant="ghost"
             size="sm"
@@ -153,19 +164,33 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
           >
             +
           </Button>
-          <select
-            aria-label={t('task:repeatUnit')}
-            className="h-7 rounded-md border border-input bg-transparent px-1 text-sm max-md:h-10 max-md:px-2 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-            value={rule?.unit ?? 'week'}
-            disabled={!rule}
-            onChange={(e) => changeUnit(e.target.value as RepeatUnit)}
-          >
-            {REPEAT_UNITS.map((unit) => (
-              <option key={unit} value={unit}>
+        </div>
+        <div
+          role="radiogroup"
+          aria-label={t('task:repeatUnit')}
+          className="ml-auto flex rounded-md bg-muted p-0.5 max-md:flex-1"
+        >
+          {REPEAT_UNITS.map((unit) => {
+            const active = (rule?.unit ?? 'week') === unit;
+            return (
+              <button
+                key={unit}
+                type="button"
+                role="radio"
+                aria-checked={active}
+                disabled={!rule}
+                onClick={() => changeUnit(unit)}
+                className={
+                  'h-6 min-w-8 rounded-[5px] px-1.5 text-xs select-none transition-colors duration-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:opacity-50 max-md:h-9 max-md:flex-1 max-md:text-sm ' +
+                  (active
+                    ? 'bg-background font-medium text-foreground shadow-[0_1px_2px_hsl(0_0%_0%/0.12)]'
+                    : 'text-muted-foreground hover:text-foreground')
+                }
+              >
                 {t(`task:repeatUnit-${unit}`)}
-              </option>
-            ))}
-          </select>
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -197,26 +222,22 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
 
       <div className="flex flex-wrap items-center gap-2 max-md:gap-3">
         <label className="flex items-center gap-1.5 text-xs text-muted-foreground max-md:min-h-10 max-md:gap-2 max-md:text-sm">
-          <input
-            type="checkbox"
-            className="h-3.5 w-3.5 accent-primary max-md:h-5 max-md:w-5"
+          <Checkbox
+            className="max-md:h-5 max-md:w-5"
             checked={rule?.anchor === 'completion'}
             disabled={!rule}
-            onChange={(e) => toggleAnchor(e.target.checked)}
+            onCheckedChange={(checked) => toggleAnchor(checked === true)}
           />
           {t('task:repeatAfterCompletion')}
         </label>
-        <label className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground max-md:gap-2 max-md:text-sm">
-          {t('task:repeatUntil')}
-          <input
-            type="date"
-            aria-label={t('task:repeatUntil')}
-            className="h-6 rounded-md border border-input bg-transparent px-1 text-xs tabular-nums max-md:h-10 max-md:px-2 max-md:text-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:opacity-50"
-            value={rule?.until ?? ''}
+        <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground max-md:gap-2 max-md:text-sm">
+          <span className="select-none">{t('task:repeatUntil')}</span>
+          <UntilPicker
+            value={rule?.until ?? null}
             disabled={!rule}
-            onChange={(e) => changeUntil(e.target.value)}
+            onChange={changeUntil}
           />
-        </label>
+        </div>
       </div>
 
       {rule && current.scheduledDate && (
@@ -227,5 +248,66 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
         </p>
       )}
     </div>
+  );
+}
+
+/** 「直到」日期：trigger 显示日期（未设为「无」），点开为日历 + 清除。 */
+function UntilPicker({
+  value,
+  disabled,
+  onChange,
+}: {
+  value: string | null;
+  disabled: boolean;
+  onChange: (value: string) => void;
+}) {
+  const { t, i18n } = useTranslation();
+  const weekStartsOn = usePreferencesStore((s) => s.weekStartsOn);
+  const [open, setOpen] = React.useState(false);
+  const selected = value ? parseCalendarDate(value) : undefined;
+
+  const pick = (next: string) => {
+    onChange(next);
+    setOpen(false);
+  };
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button
+          type="button"
+          aria-label={t('task:repeatUntil')}
+          disabled={disabled}
+          className="inline-flex h-6 items-center rounded-md bg-muted px-2 text-xs tabular-nums text-foreground transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-40 data-[state=open]:bg-sidebar-accent max-md:h-9 max-md:px-3 max-md:text-sm"
+        >
+          {selected
+            ? new Intl.DateTimeFormat(i18n.language, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+              }).format(selected)
+            : t('common:none')}
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="bg-popover p-1.5 backdrop-blur-none max-md:p-1.5">
+        <Calendar
+          selected={selected}
+          onSelect={(date) => date && pick(toInputDateValue(date))}
+          locale={getCalendarLocale(i18n.language)}
+          weekStartsOn={weekStartsOn}
+        />
+        <div className="flex border-t border-border/50 px-1 pt-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto max-md:h-10 max-md:px-3 max-md:text-sm"
+            disabled={!value}
+            onClick={() => pick('')}
+          >
+            {t('common:clear')}
+          </Button>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }

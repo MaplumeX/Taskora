@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -97,13 +97,24 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
       { showReminder: true },
     );
 
-    const timeInput = screen.getByLabelText(/Reminder time|提醒时间/) as HTMLInputElement;
-    expect(timeInput.value).toBe('09:00');
-    expect(timeInput).toBeEnabled();
+    const timeTrigger = screen.getByRole('button', { name: /Reminder time|提醒时间/ });
+    expect(timeTrigger).toHaveTextContent('09:00');
+    expect(timeTrigger).toBeEnabled();
 
-    // jsdom 对 <input type=time> 的逐键输入支持不稳，直接改值断言 patch 流
-    fireEvent.change(timeInput, { target: { value: '18:30' } });
-    expect(onPatch).toHaveBeenLastCalledWith({ reminderTime: '18:30' });
+    // 点小时：保留分钟即时写入；点分钟：写入（组件无状态回灌，仍基于 09:00）
+    await user.click(timeTrigger);
+    await user.click(
+      within(screen.getByRole('listbox', { name: /^(Hour|小时)$/ })).getByRole('option', {
+        name: '18',
+      }),
+    );
+    expect(onPatch).toHaveBeenLastCalledWith({ reminderTime: '18:00' });
+    await user.click(
+      within(screen.getByRole('listbox', { name: /^(Minute|分钟)$/ })).getByRole('option', {
+        name: '37',
+      }),
+    );
+    expect(onPatch).toHaveBeenLastCalledWith({ reminderTime: '09:37' });
 
     await user.click(screen.getByRole('switch', { name: /Reminder|提醒/ }));
     expect(onPatch).toHaveBeenLastCalledWith({ reminderTime: null });
@@ -134,12 +145,15 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
       { showReminder: true },
     );
 
-    fireEvent.change(screen.getByLabelText(/Reminder time|提醒时间/), {
-      target: { value: '18:30' },
-    });
+    await user.click(screen.getByRole('button', { name: /Reminder time|提醒时间/ }));
+    await user.click(
+      within(screen.getByRole('listbox', { name: /^(Minute|分钟)$/ })).getByRole('option', {
+        name: '37',
+      }),
+    );
     expect(onPatch).toHaveBeenLastCalledWith({
       scheduledDate: '2026-02-04',
-      reminderTime: '18:30',
+      reminderTime: '09:37',
     });
 
     await user.click(screen.getByRole('switch', { name: /Reminder|提醒/ }));
