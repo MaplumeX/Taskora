@@ -4,6 +4,11 @@ export type SettingsTab = 'general' | 'appearance' | 'account' | 'data' | 'about
 
 interface UiInteractionState {
   expandedId: string | null;
+  /**
+   * 待滚入视野的行（Reveal Task：点通知定位任务）。行挂载并展开后自行
+   * 滚动到视野中央并清除；与 expandedId 分离，普通点击展开不触发滚动。
+   */
+  revealId: string | null;
   pendingAutoEditId: string | null;
   settingsOpen: boolean;
   settingsTab: SettingsTab;
@@ -16,6 +21,7 @@ interface UiInteractionState {
   searchOpen: boolean;
   setSearchOpen: (open: boolean) => void;
   setExpandedId: (id: string | null) => void;
+  setRevealId: (id: string | null) => void;
   setPendingAutoEditId: (id: string | null) => void;
   clearPendingAutoEditId: () => void;
   openSettings: (tab?: SettingsTab) => void;
@@ -25,6 +31,7 @@ interface UiInteractionState {
 
 export const useUiInteractionStore = create<UiInteractionState>()((set) => ({
   expandedId: null,
+  revealId: null,
   pendingAutoEditId: null,
   settingsOpen: false,
   settingsTab: 'appearance',
@@ -32,6 +39,7 @@ export const useUiInteractionStore = create<UiInteractionState>()((set) => ({
   searchOpen: false,
   setSearchOpen: (open) => set({ searchOpen: open }),
   setExpandedId: (id) => set({ expandedId: id }),
+  setRevealId: (id) => set({ revealId: id }),
   setPendingAutoEditId: (id) => set({ pendingAutoEditId: id }),
   clearPendingAutoEditId: () => set({ pendingAutoEditId: null }),
   openSettings: (tab) =>

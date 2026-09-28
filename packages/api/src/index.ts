@@ -106,11 +106,14 @@ export * from './hooks/useAgent';
 export * from './hooks/useContentBottomActions';
 export * from './hooks/useContentBottomActionsRoute';
 export * from './hooks/useTaskRowSelection';
+export { useRevealTask, useTaskRevealListener } from './hooks/useRevealTask';
 export * from './hooks/useSelectionScope';
 export * from './hooks/usePageTaskContext';
 
 // UI-agnostic UI state stores
 export { useUiInteractionStore, type SettingsTab } from './stores/uiInteraction.store';
+export { requestTaskReveal, useTaskRevealStore } from './stores/taskReveal.store';
+export { revealRouteFor, type RevealTarget } from './utils/revealRoute';
 export { useSyncStatusStore, setSyncStatus, type SyncStatus } from './stores/sync-status.store';
 export {
   useSelectionStore,
@@ -149,6 +152,20 @@ export {
   type ReminderCoordinator,
   type ReminderCoordinatorOptions,
 } from './reminders/reminder-coordinator';
+export {
+  resolveReminderAction,
+  snoozeTarget,
+  type ReminderActionKind,
+  type ReminderActionRequest,
+  type ReminderActionResolution,
+} from './reminders/reminder-action';
+export {
+  buildReminderTexts,
+  reminderActionLabels,
+  type ReminderActionLabels,
+  type ReminderTextContext,
+  type ReminderTexts,
+} from './reminders/reminder-texts';
 export {
   useReminderPermissionStore,
   type ReminderPermissionState,

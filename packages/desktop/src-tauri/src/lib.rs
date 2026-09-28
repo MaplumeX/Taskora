@@ -1,4 +1,5 @@
 mod launch_at_login;
+mod reminder_notification;
 mod session;
 mod sqlite;
 use tauri::{
@@ -45,7 +46,7 @@ fn open_notification_settings() -> Result<(), String> {
 const QUICK_ADD_SHORTCUT: &str = "CmdOrCtrl+Shift+Space";
 
 /// Bring the (possibly hidden) main window to the front.
-fn show_main_window(app: &tauri::AppHandle) {
+pub(crate) fn show_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
         let _ = window.show();
         let _ = window.unminimize();
@@ -110,7 +111,8 @@ pub fn run() {
                 })
                 .build(),
         )
-        // 系统通知（Reminders spec）：到点本地提醒的发送通道。
+        // 系统通知（Reminders spec）：权限查询。reminder 本身带操作按钮，
+        // 走 reminder_notification::show_reminder（插件桌面端无按钮/回调）。
         .plugin(tauri_plugin_notification::init())
         .setup(|app| {
             // System tray (desktop shell hardening): re-entry point for a
@@ -192,6 +194,7 @@ pub fn run() {
             sqlite::sql_run,
             sqlite::sql_use_db,
             open_notification_settings,
+            reminder_notification::show_reminder,
             launch_at_login::launch_at_login_get,
             launch_at_login::launch_at_login_set
         ])

@@ -45,6 +45,10 @@ _Avoid_: due date（一词两义）、通知日期、DDL
 Task 上的一个时刻（HH:mm），依附于计划日期（Scheduled Date），到账号时区对应时刻由各客户端触发系统通知；仅 ScheduledType 为 DATE 的 Task 可设。Project 不设 Reminder。按存储的计划日期一次性触发，错过不补发、不随 Today 顺延；在计划日期已过的 Task 上开启或修改 Reminder 时，计划日期一并改写为今天（参考 Things 3：提醒经 When 设置）。
 _Avoid_: 闹钟、alarm、通知时间（Reminder 是数据，通知是其触发效果）
 
+**Snooze（稍后提醒）**:
+在 Reminder 通知上把提醒顺延到目标时刻（15 分钟后 / 1 小时后 / 明天同一时刻）的动作；实现为对 Task 的普通字段改写——计划日期改为目标时刻在账号时区的日历日、Reminder 改为其 HH:mm，原提醒时刻被覆盖，经字段级 LWW 同步到各设备。不新增字段或实体。若任务在别处已被改期、改提醒、了结或删除（当前提醒时刻与通知不一致），迟到的 Snooze 被丢弃。
+_Avoid_: 延后、推迟提醒（口语可用）、本机临时推迟（Snooze 不是设备本地状态）
+
 **Repeat Rule（重复规则）**:
 Task 上的一个结构化规则字段（单位 × 间隔 × 周模式的星期几集合），声明该 Task 完成后按规则再现；锚点默认从计划日期推算，可选从完成日期推算。仅 ScheduledType 为 DATE 的 Task 可设；移入 Someday/NONE 时自动清除。Project 不设 Repeat Rule。
 _Avoid_: 循环、周期任务、RRULE、模板（无独立模板实体）

@@ -15,6 +15,8 @@
 
 import { currentTimeZone, currentLegacyDateTimeZone } from '@/utils/date';
 import { usePreferencesStore } from '@/stores/preferences.store';
+import type { TaskBackend } from '@/api/task-backend';
+import { createEngineTaskBackend } from '@/engine/task-backend.engine';
 import type { Engine } from '@taskora/engine';
 
 import {
@@ -23,7 +25,14 @@ import {
   diffReminderRegistration,
   isReminderEligible,
   type ReminderNotification,
+  type ReminderTaskInput,
 } from './reminder-scheduler';
+import {
+  resolveReminderAction,
+  type ReminderActionRequest,
+  type ReminderActionResolution,
+} from './reminder-action';
+import { buildReminderTexts, type ReminderTextContext, type ReminderTexts } from './reminder-texts';
 import {
   reminderInputFromReplicaRow,
   type ReminderDelivery,
@@ -38,8 +47,10 @@ export interface ReminderCoordinatorOptions {
   tickMs?: number;
   /** 可注入的时钟（测试确定性）。 */
   now?: () => Date;
-  /** 通知文案组装（默认：标题=任务名，正文=HH:mm）。 */
-  texts?: (notification: ReminderNotification) => { title: string; body: string };
+  /** 通知文案组装（默认 buildReminderTexts：标题=任务名，正文=HH:mm · 归属 + 备注首行）。 */
+  texts?: (notification: ReminderNotification, context: ReminderTextContext) => ReminderTexts;
+  /** 通知操作的写入口（默认基于同一 engine 的 Task 传输层）。 */
+  tasks?: Pick<TaskBackend, 'completeTask' | 'updateTask'>;
 }
 
 export interface ReminderCoordinator {
@@ -47,6 +58,11 @@ export interface ReminderCoordinator {
   stop(): void;
   /** 立即重算一次（启动对齐、测试与显式触发用）。 */
   reschedule(): Promise<void>;
+  /**
+   * 应用一次通知操作（完成 / Snooze，reminder-actions spec）：按 Reminder
+   * Action 规则校验并写入任务，随后重算。返回判定结果（丢弃时不写入）。
+   */
+  applyAction(request: ReminderActionRequest): Promise<ReminderActionResolution>;
 }
 
 const DEFAULT_TICK_MS = 30_000;
@@ -58,7 +74,11 @@ export function createReminderCoordinator(
   const { engine, shell, mode } = options;
   const tickMs = options.tickMs ?? DEFAULT_TICK_MS;
   const now = options.now ?? (() => new Date());
-  const texts = options.texts ?? defaultTexts;
+  const texts =
+    options.texts ??
+    ((n: ReminderNotification, context: ReminderTextContext) =>
+      buildReminderTexts(n, context, currentTimeZone()));
+  const tasksBackend = options.tasks ?? createEngineTaskBackend({ engine });
 
   /** runtime：key → 当前登记的 fireAt（内存表，到点 fireNow）。 */
   let registered = new Map<string, number>();
@@ -72,9 +92,15 @@ export function createReminderCoordinator(
   let timer: ReturnType<typeof setInterval> | null = null;
   let unsubscribe: (() => void) | null = null;
   let unsubscribeZone: (() => void) | null = null;
+  let unsubscribeActions: (() => void) | null = null;
   let chain: Promise<unknown> = Promise.resolve();
 
   async function tick(): Promise<void> {
+    // system：先应用原生排队的通知操作，再按写入后的数据交付计划——否则
+    // 这次 sync 会把原生为 Snooze 临时设置的闹钟当作「已消失」注销。
+    if (mode === 'system' && shell.takePendingActions) {
+      await drainPendingActions(shell.takePendingActions);
+    }
     const rows = await engine.list('task');
     const tasks = rows.map(reminderInputFromReplicaRow);
     const nowMs = now().getTime();
@@ -85,12 +111,13 @@ export function createReminderCoordinator(
       currentLegacyDateTimeZone(),
     );
     if (mode === 'system') {
-      await deliver(desired);
+      await deliver(desired, new Map(tasks.map((t) => [t.id, t])));
       return;
     }
 
     const diff = diffReminderRegistration(registered, desired, nowMs);
     const tasksById = new Map(tasks.map((t) => [t.id, t]));
+    const contextOf = diff.due.length > 0 ? await textContexts() : null;
 
     // 自然到点：补发跨越 tick 边界的提醒——前提是任务仍符合条件且时刻
     // 未被改动（到点后才了结/改期的不补发）。
@@ -108,8 +135,15 @@ export function createReminderCoordinator(
           currentLegacyDateTimeZone(),
         ) === m.fireAt
       ) {
-        const { title, body } = texts(m);
-        void shell.fireNow?.(title, body).catch(noop);
+        void shell
+          .fireNow?.({
+            key: m.key,
+            taskId: m.taskId,
+            fireAt: m.fireAt,
+            snoozeTomorrowAt: m.snoozeTomorrowAt,
+            ...texts(m, contextOf!(task)),
+          })
+          .catch(noop);
       }
       registered.delete(key);
       meta.delete(key);
@@ -126,12 +160,18 @@ export function createReminderCoordinator(
     }
   }
 
-  async function deliver(desired: ReminderNotification[]): Promise<void> {
+  async function deliver(
+    desired: ReminderNotification[],
+    tasksById: Map<string, ReminderTaskInput>,
+  ): Promise<void> {
     if (!shell.sync) return;
+    const contextOf = desired.length > 0 ? await textContexts() : null;
     const plan: ReminderDelivery[] = desired.map((n) => ({
       key: n.key,
+      taskId: n.taskId,
       fireAt: n.fireAt,
-      ...texts(n),
+      snoozeTomorrowAt: n.snoozeTomorrowAt,
+      ...texts(n, contextOf!(tasksById.get(n.taskId)!)),
     }));
     const signature = JSON.stringify(plan);
     if (signature === lastSynced) return;
@@ -140,6 +180,59 @@ export function createReminderCoordinator(
       lastSynced = signature;
     } catch (error) {
       console.warn('[reminders] sync failed:', error);
+    }
+  }
+
+  /** 文案上下文查找：Project 名优先，其次 Area 名（仅在需要文案时读取）。 */
+  async function textContexts(): Promise<(task: ReminderTaskInput) => ReminderTextContext> {
+    const [projects, areas] = await Promise.all([engine.list('project'), engine.list('area')]);
+    const titleOf = (rows: typeof projects) =>
+      new Map(rows.map((row) => [row.id, (row.fields.title as string | undefined) ?? '']));
+    const projectTitles = titleOf(projects);
+    const areaTitles = titleOf(areas);
+    return (task) => ({
+      parentName:
+        (task.projectId ? projectTitles.get(task.projectId) : undefined) ??
+        (task.areaId ? areaTitles.get(task.areaId) : undefined) ??
+        null,
+      notes: task.notes ?? null,
+    });
+  }
+
+  async function applyAction(request: ReminderActionRequest): Promise<ReminderActionResolution> {
+    const row = await engine.get('task', request.taskId);
+    const resolution = resolveReminderAction(
+      row ? reminderInputFromReplicaRow(row) : null,
+      request,
+      currentTimeZone(),
+      currentLegacyDateTimeZone(),
+    );
+    if (resolution.kind === 'complete') {
+      await tasksBackend.completeTask(request.taskId, { settledAt: resolution.settledAt });
+    } else if (resolution.kind === 'snooze') {
+      await tasksBackend.updateTask(request.taskId, {
+        scheduledDate: resolution.scheduledDate,
+        reminderTime: resolution.reminderTime,
+      });
+    }
+    return resolution;
+  }
+
+  async function drainPendingActions(take: () => Promise<ReminderActionRequest[]>): Promise<void> {
+    let actions: ReminderActionRequest[];
+    try {
+      actions = await take();
+    } catch (error) {
+      console.warn('[reminders] take pending actions failed:', error);
+      return;
+    }
+    // 按点击顺序应用：同一任务先 Snooze 再对新通知点完成，快照依次吻合。
+    for (const action of actions) {
+      try {
+        await applyAction(action);
+      } catch (error) {
+        console.warn('[reminders] apply action failed:', error);
+      }
     }
   }
 
@@ -161,6 +254,19 @@ export function createReminderCoordinator(
           void reschedule();
       });
       timer = setInterval(() => void reschedule(), tickMs);
+      if (mode === 'system' && shell.onActionsAvailable) {
+        let stopped = false;
+        void shell
+          .onActionsAvailable(() => void reschedule())
+          .then((off) => {
+            if (stopped) off();
+            else unsubscribeActions = off;
+          })
+          .catch(noop);
+        unsubscribeActions = () => {
+          stopped = true;
+        };
+      }
       void reschedule();
     },
     stop() {
@@ -171,6 +277,8 @@ export function createReminderCoordinator(
       unsubscribe?.();
       unsubscribeZone?.();
       unsubscribeZone = null;
+      unsubscribeActions?.();
+      unsubscribeActions = null;
       unsubscribe = null;
       // system 模式停止（登出/装配失败）时清空原生计划与全部闹钟，避免
       // 残留孤儿通知；runtime 模式系统侧本无注册。
@@ -182,15 +290,14 @@ export function createReminderCoordinator(
       lastSynced = null;
     },
     reschedule,
+    async applyAction(request) {
+      // 与重算同一串行链：写入与计划重算不交错；返回前等计划按写入结果
+      // 重算完成（调用方随后看到的计划/已注册集一定已反映本次操作）。
+      const result = chain.then(() => applyAction(request));
+      chain = result.catch(noop);
+      const resolution = await result;
+      await reschedule();
+      return resolution;
+    },
   };
-}
-
-function defaultTexts(n: ReminderNotification): { title: string; body: string } {
-  const body = new Intl.DateTimeFormat('en-GB', {
-    timeZone: currentTimeZone(),
-    hour: '2-digit',
-    minute: '2-digit',
-    hourCycle: 'h23',
-  }).format(new Date(n.fireAt));
-  return { title: n.taskTitle, body };
 }

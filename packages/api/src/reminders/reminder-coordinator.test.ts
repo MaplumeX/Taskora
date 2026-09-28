@@ -6,6 +6,7 @@ import { ScheduledType, TaskStatus } from '@taskora/shared';
 
 import { usePreferencesStore } from '@/stores/preferences.store';
 import { createReminderCoordinator, type ReminderCoordinator } from './reminder-coordinator';
+import type { ReminderActionRequest } from './reminder-action';
 import type { ReminderDelivery, ReminderNotificationShell } from './notification-shell';
 
 const USER = 'user-1';
@@ -15,7 +16,7 @@ function makeShell() {
     isSupported: vi.fn(() => true),
     isPermissionGranted: vi.fn(async () => true),
     requestPermission: vi.fn(async () => true),
-    fireNow: vi.fn<(title: string, body: string) => Promise<void>>(async () => {}),
+    fireNow: vi.fn<(reminder: ReminderDelivery) => Promise<void>>(async () => {}),
     sync: vi.fn<(plan: ReminderDelivery[]) => Promise<void>>(async () => {}),
     clear: vi.fn<() => Promise<void>>(async () => {}),
     openSettings: vi.fn(async () => {}),
@@ -93,7 +94,7 @@ describe('ReminderCoordinator — runtime（桌面）模式', () => {
   });
 
   it('开启提醒后到点 fireNow；随后不再重复触发', async () => {
-    await seedTask(engine);
+    const taskId = await seedTask(engine);
     coordinator.start();
     await vi.advanceTimersByTimeAsync(10); // 首次对齐 reschedule
 
@@ -106,7 +107,10 @@ describe('ReminderCoordinator — runtime（桌面）模式', () => {
     clock.advance(60_000); // 09:00
     await vi.advanceTimersByTimeAsync(30_000);
     expect(shell.fireNow).toHaveBeenCalledTimes(1);
-    expect(shell.fireNow).toHaveBeenCalledWith('提醒任务', '09:00');
+    // 携带 taskId / fireAt：通知按钮与点击回传据此定位与做过期校验
+    expect(shell.fireNow).toHaveBeenCalledWith(
+      expect.objectContaining({ taskId, fireAt: dayAt(5, 9), title: '提醒任务', body: '09:00' }),
+    );
 
     // 再过数分钟不重复
     clock.advance(120_000);
@@ -180,7 +184,9 @@ describe('ReminderCoordinator — runtime（桌面）模式', () => {
     clock.advance(dayAt(5, 15, 0) - (dayAt(5, 9, 0) + 5_000));
     await vi.advanceTimersByTimeAsync(60_000);
     expect(shell.fireNow).toHaveBeenCalledTimes(1);
-    expect(shell.fireNow).toHaveBeenCalledWith('提醒任务', '15:00');
+    expect(shell.fireNow).toHaveBeenCalledWith(
+      expect.objectContaining({ title: '提醒任务', body: '15:00' }),
+    );
     coordinator.stop();
     await engine.close();
   });
@@ -214,8 +220,22 @@ describe('ReminderCoordinator — system（Android）模式', () => {
 
     expect(lastPlan(shell)).toEqual(
       expect.arrayContaining([
-        { key: `reminder:${taskId}`, fireAt: dayAt(5, 9), title: '提醒任务', body: '09:00' },
-        { key: `reminder:${otherId}`, fireAt: dayAt(6, 10, 30), title: '另一个', body: '10:30' },
+        {
+          key: `reminder:${taskId}`,
+          taskId,
+          fireAt: dayAt(5, 9),
+          snoozeTomorrowAt: dayAt(6, 9),
+          title: '提醒任务',
+          body: '09:00',
+        },
+        {
+          key: `reminder:${otherId}`,
+          taskId: otherId,
+          fireAt: dayAt(6, 10, 30),
+          snoozeTomorrowAt: dayAt(7, 10, 30),
+          title: '另一个',
+          body: '10:30',
+        },
       ]),
     );
     expect(lastPlan(shell)).toHaveLength(2);
@@ -225,7 +245,9 @@ describe('ReminderCoordinator — system（Android）模式', () => {
     expect(lastPlan(shell)).toHaveLength(2);
     expect(lastPlan(shell)).toContainEqual({
       key: `reminder:${taskId}`,
+      taskId,
       fireAt: dayAt(5, 14, 30),
+      snoozeTomorrowAt: dayAt(6, 14, 30),
       title: '提醒任务',
       body: '14:30',
     });
@@ -353,5 +375,231 @@ describe('ReminderCoordinator — system（Android）模式', () => {
       await localEngine.close();
       usePreferencesStore.getState().setTimeZone(previous);
     }
+  });
+});
+
+describe('ReminderCoordinator — 通知操作（reminder-actions spec）', () => {
+  let engine: Engine;
+  let shell: ReturnType<typeof makeShell>;
+  let clock: ReturnType<typeof makeClock>;
+  let coordinator: ReminderCoordinator;
+
+  beforeEach(async () => {
+    vi.useFakeTimers();
+    engine = await makeEngine();
+    shell = makeShell();
+    clock = makeClock(dayAt(5, 8, 59));
+    coordinator = createReminderCoordinator({
+      engine,
+      shell,
+      mode: 'runtime',
+      tickMs: 30_000,
+      now: clock.now,
+    });
+  });
+
+  it('完成：任务了结、了结时间为点击时刻、提醒清除', async () => {
+    const taskId = await seedTask(engine);
+    const tappedAt = dayAt(5, 9, 2);
+    const result = await coordinator.applyAction({
+      taskId,
+      action: 'complete',
+      firedFireAt: dayAt(5, 9),
+      tappedAt,
+    });
+
+    expect(result).toEqual({ kind: 'complete', settledAt: new Date(tappedAt).toISOString() });
+    const row = await engine.get('task', taskId);
+    expect(row?.fields).toMatchObject({
+      status: TaskStatus.COMPLETED,
+      settledAt: new Date(tappedAt).toISOString(),
+      reminderTime: null,
+    });
+    await engine.close();
+  });
+
+  it('完成重复任务：照常派生下一实例并携带提醒时刻', async () => {
+    const taskId = await seedTask(engine);
+    await engine.update('task', taskId, {
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+    });
+    await coordinator.applyAction({
+      taskId,
+      action: 'complete',
+      firedFireAt: dayAt(5, 9),
+      tappedAt: dayAt(5, 9, 1),
+    });
+
+    const instances = (await engine.list('task')).filter(
+      (row) => row.id !== taskId && row.fields.status === TaskStatus.ACTIVE,
+    );
+    expect(instances).toHaveLength(1);
+    expect(instances[0].fields).toMatchObject({
+      scheduledDate: '2026-02-06',
+      reminderTime: '09:00',
+    });
+    await engine.close();
+  });
+
+  it('Snooze 15 分钟：改写计划日期与提醒时刻，并在新时刻触发', async () => {
+    const taskId = await seedTask(engine);
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+    clock.advance(dayAt(5, 9) - dayAt(5, 8, 59));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(shell.fireNow).toHaveBeenCalledTimes(1);
+
+    const result = await coordinator.applyAction({
+      taskId,
+      action: 'snooze15',
+      firedFireAt: dayAt(5, 9),
+      tappedAt: dayAt(5, 9, 1),
+    });
+    expect(result).toEqual({ kind: 'snooze', scheduledDate: '2026-02-05', reminderTime: '09:16' });
+
+    clock.advance(dayAt(5, 9, 16) - dayAt(5, 9));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(shell.fireNow).toHaveBeenCalledTimes(2);
+    expect(shell.fireNow).toHaveBeenLastCalledWith(
+      expect.objectContaining({ title: '提醒任务', body: '09:16' }),
+    );
+
+    coordinator.stop();
+    await engine.close();
+  });
+
+  it('过期的操作（别处已改提醒）被丢弃，不写入', async () => {
+    const taskId = await seedTask(engine);
+    await engine.update('task', taskId, { reminderTime: '10:00' });
+
+    const result = await coordinator.applyAction({
+      taskId,
+      action: 'complete',
+      firedFireAt: dayAt(5, 9),
+      tappedAt: dayAt(5, 9, 1),
+    });
+    expect(result).toEqual({ kind: 'discard', reason: 'stale' });
+    expect((await engine.get('task', taskId))?.fields.status).toBe(TaskStatus.ACTIVE);
+    await engine.close();
+  });
+
+  it('通知正文带上所属 Project 名与备注首行', async () => {
+    const projectId = await engine.create('project', { title: '工作' });
+    const taskId = await seedTask(engine);
+    await engine.update('task', taskId, { projectId, notes: '先看数据\n再写结论' });
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+    clock.advance(dayAt(5, 9) - dayAt(5, 8, 59));
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    expect(shell.fireNow).toHaveBeenCalledWith(
+      expect.objectContaining({ title: '提醒任务', body: '09:00 · 工作\n先看数据' }),
+    );
+    coordinator.stop();
+    await engine.close();
+  });
+});
+
+describe('ReminderCoordinator — Android 原生动作队列', () => {
+  it('先应用排队操作再交付计划：Snooze 后的新时刻进入同一次 sync', async () => {
+    vi.useFakeTimers();
+    const engine = await makeEngine();
+    const taskId = await seedTask(engine);
+    const queue: ReminderActionRequest[] = [
+      { taskId, action: 'snooze15', firedFireAt: dayAt(5, 9), tappedAt: dayAt(5, 9, 1) },
+    ];
+    const shell = {
+      ...makeShell(),
+      takePendingActions: vi.fn(async () => queue.splice(0)),
+    };
+    const coordinator = createReminderCoordinator({
+      engine,
+      shell,
+      mode: 'system',
+      now: () => new Date(dayAt(5, 9, 2)),
+    });
+
+    await coordinator.reschedule();
+
+    expect(shell.sync).toHaveBeenCalledTimes(1);
+    expect(lastPlan(shell)).toEqual([
+      expect.objectContaining({ key: `reminder:${taskId}`, fireAt: dayAt(5, 9, 16) }),
+    ]);
+    expect((await engine.get('task', taskId))?.fields.reminderTime).toBe('09:16');
+    coordinator.stop();
+    await engine.close();
+  });
+
+  it('按点击顺序应用：先 Snooze 再对新通知点完成', async () => {
+    vi.useFakeTimers();
+    const engine = await makeEngine();
+    const taskId = await seedTask(engine);
+    const shell = {
+      ...makeShell(),
+      takePendingActions: vi.fn(async () => [
+        { taskId, action: 'snooze15' as const, firedFireAt: dayAt(5, 9), tappedAt: dayAt(5, 9) },
+        {
+          taskId,
+          action: 'complete' as const,
+          firedFireAt: dayAt(5, 9, 15),
+          tappedAt: dayAt(5, 9, 16),
+        },
+      ]),
+    };
+    const coordinator = createReminderCoordinator({
+      engine,
+      shell,
+      mode: 'system',
+      now: () => new Date(dayAt(5, 9, 20)),
+    });
+
+    await coordinator.reschedule();
+
+    expect((await engine.get('task', taskId))?.fields).toMatchObject({
+      status: TaskStatus.COMPLETED,
+      settledAt: new Date(dayAt(5, 9, 16)).toISOString(),
+    });
+    expect(lastPlan(shell)).toEqual([]);
+    coordinator.stop();
+    await engine.close();
+  });
+
+  it('原生通知「有新操作」时立即重算并应用；stop 后注销监听', async () => {
+    vi.useFakeTimers();
+    const engine = await makeEngine();
+    const taskId = await seedTask(engine);
+    let notify: () => void = () => {};
+    const off = vi.fn();
+    const queue: ReminderActionRequest[] = [];
+    const shell = {
+      ...makeShell(),
+      takePendingActions: vi.fn(async () => queue.splice(0)),
+      onActionsAvailable: vi.fn(async (listener: () => void) => {
+        notify = listener;
+        return off;
+      }),
+    };
+    const coordinator = createReminderCoordinator({
+      engine,
+      shell,
+      mode: 'system',
+      now: () => new Date(dayAt(5, 9, 1)),
+    });
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+
+    queue.push({
+      taskId,
+      action: 'complete',
+      firedFireAt: dayAt(5, 9),
+      tappedAt: dayAt(5, 9, 1),
+    });
+    notify();
+    await vi.advanceTimersByTimeAsync(10);
+    expect((await engine.get('task', taskId))?.fields.status).toBe(TaskStatus.COMPLETED);
+
+    coordinator.stop();
+    expect(off).toHaveBeenCalled();
+    await engine.close();
   });
 });

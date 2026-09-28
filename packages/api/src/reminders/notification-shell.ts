@@ -12,13 +12,17 @@
 import type { ReplicaRow } from '@taskora/engine';
 import { ScheduledType, TaskStatus } from '@taskora/shared';
 
+import type { ReminderActionRequest } from './reminder-action';
 import type { ReminderTaskInput } from './reminder-scheduler';
 
 /** 交付给原生的一条提醒：规则已在 JS 侧算完，文案已按当前语言组装。 */
 export interface ReminderDelivery {
   key: string;
+  taskId: string;
   /** 触发时刻（epoch ms）。 */
   fireAt: number;
+  /** 触发日 + 1 的同一时刻：原生在 App 未运行时临时重设「明天」闹钟用。 */
+  snoozeTomorrowAt: number;
   title: string;
   body: string;
 }
@@ -45,8 +49,11 @@ export interface ReminderNotificationShell {
   isPermissionGranted(): Promise<boolean>;
   /** 请求授权；返回是否 granted（拒绝后仍可保存 reminderTime）。 */
   requestPermission(): Promise<boolean>;
-  /** runtime 模式（桌面）：到点立即发出一条通知。 */
-  fireNow?(title: string, body: string): Promise<void>;
+  /**
+   * runtime 模式（桌面）：到点立即发出一条通知。携带 taskId / fireAt，
+   * 供通知按钮与点击回传（reminder-actions spec）。
+   */
+  fireNow?(reminder: ReminderDelivery): Promise<void>;
   /**
    * system 模式（Android）：交付完整期望集（不是增量）。原生侧自行与
    * 持久化计划比对，调用方不维护任何注册状态。
@@ -54,6 +61,13 @@ export interface ReminderNotificationShell {
   sync?(plan: ReminderDelivery[]): Promise<void>;
   /** system 模式：注销全部提醒并清空原生计划（登出）。 */
   clear?(): Promise<void>;
+  /**
+   * system 模式：取走原生排队的通知操作（完成 / Snooze，取出即删）。
+   * App 进程不在时点通知按钮，操作先落原生队列，JS 下次运行时应用。
+   */
+  takePendingActions?(): Promise<ReminderActionRequest[]>;
+  /** system 模式：原生有新排队操作时回调（进程存活时立即应用）；返回注销函数。 */
+  onActionsAvailable?(listener: () => void): Promise<() => void>;
   /** 跳转到系统通知设置页（授权被拒后的引导入口）。 */
   openSettings(): Promise<void>;
   /** 投递可靠性诊断（仅 Android 实现）。 */
@@ -87,5 +101,8 @@ export function reminderInputFromReplicaRow(row: ReplicaRow): ReminderTaskInput 
     reminderTime: typeof f.reminderTime === 'string' ? f.reminderTime : null,
     status: (f.status as ReminderTaskInput['status']) ?? TaskStatus.ACTIVE,
     trashedAt: typeof f.trashedAt === 'string' ? f.trashedAt : null,
+    notes: typeof f.notes === 'string' ? f.notes : null,
+    projectId: typeof f.projectId === 'string' ? f.projectId : null,
+    areaId: typeof f.areaId === 'string' ? f.areaId : null,
   };
 }
