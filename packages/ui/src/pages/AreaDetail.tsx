@@ -32,7 +32,6 @@ import {
 } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
 import { useTasksQuery } from '@taskora/api';
-import { Separator } from '@/components/ui/separator';
 import { ProjectFeedRow } from '@/components/feed/ProjectFeedRow';
 import { LaterProjectSections } from '@/components/project/LaterProjectSections';
 import { mergeVisibleProjectOrder } from '@/components/layout/sidebarProjectLayout';
@@ -144,7 +143,6 @@ export default function AreaDetail() {
         {area && <AreaMoreMenu area={area} />}
         </div>
 
-      <h2 className="text-sm font-medium text-muted-foreground">{t('area:projectsLabel')}</h2>
       {areaProjects.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t('area:noProjects')}</p>
       ) : (
@@ -163,9 +161,6 @@ export default function AreaDetail() {
         </DndContext>
       )}
 
-      <Separator />
-
-      <h2 className="text-sm font-medium text-muted-foreground">{t('area:tasksLabel')}</h2>
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
