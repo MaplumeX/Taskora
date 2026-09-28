@@ -24,7 +24,6 @@ import type { ProjectResponseDto } from '@taskora/shared';
 
 import { useAreasQuery, useSelectionScope, useTaskRowSelection, useUpdateArea } from '@taskora/api';
 import {
-  currentLegacyDateTimeZone,
   useLaterProjectKind,
   useProjectsQuery,
   useReorderProjects,
@@ -34,7 +33,6 @@ import { useTasksQuery } from '@taskora/api';
 import { Separator } from '@/components/ui/separator';
 import { ProjectItem } from '@/components/project/ProjectItem';
 import { LaterProjectSections } from '@/components/project/LaterProjectSections';
-import { groupLaterProjects } from '@/components/project/laterProjectLayout';
 import { mergeVisibleProjectOrder } from '@/components/layout/sidebarProjectLayout';
 import { TaskListView } from '@/components/task/TaskListView';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
@@ -109,17 +107,13 @@ export default function AreaDetail() {
     reorderProjects.mutate(mergeVisibleProjectOrder(allProjects, reordered));
   };
 
-  // 注册项目段可遍历行（Project 行仅作遍历停留点，⌘K/⌫ 对其无效）：
-  // 活跃项目 → 计划 → Someday，与渲染顺序一致。
-  const projectRows = useMemo(() => {
-    const later = groupLaterProjects(areaProjects, kindOf, currentLegacyDateTimeZone());
-    return [...projects, ...later.scheduled, ...later.someday].map((p) => ({
-      id: p.id,
-      kind: 'project' as const,
-      completed: false,
-    }));
-  }, [projects, areaProjects, kindOf]);
-  useSelectionScope(projectRows);
+  // 注册项目段可遍历行（Project 行仅作遍历停留点，⌘K/⌫ 对其无效）。
+  // 键盘遍历顺序与页面一致：活跃项目（0）→ 任务（1）→ 稍后项目（2）。
+  const projectRows = useMemo(
+    () => projects.map((p) => ({ id: p.id, kind: 'project' as const, completed: false })),
+    [projects],
+  );
+  useSelectionScope(projectRows, 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -162,7 +156,6 @@ export default function AreaDetail() {
           </SortableContext>
         </DndContext>
       )}
-      <LaterProjectSections projects={areaProjects} registerSelection={false} />
 
       <Separator />
 
@@ -170,8 +163,11 @@ export default function AreaDetail() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        <TaskListView tasks={tasks} emptyHint={t('area:noTasks')} />
+        <TaskListView tasks={tasks} emptyHint={t('area:noTasks')} selectionRank={1} />
       )}
+
+      {/* 稍后项目放在页面最下方（活跃项目与任务之后）。 */}
+      <LaterProjectSections projects={areaProjects} selectionRank={2} />
 
       </div>
   );

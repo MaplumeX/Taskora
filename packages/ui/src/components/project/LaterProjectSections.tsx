@@ -22,16 +22,15 @@ const SOMEDAY_NAV = navItem('/someday');
 interface Props {
   /** 候选项目；非稍后项目会被忽略。 */
   projects: ProjectResponseDto[];
-  /** 注册键盘 Selection 行。页面已把这些行并入自己的 scope 时传 false，
-   * 以保证遍历顺序（子组件的 effect 先于父组件注册）。 */
-  registerSelection?: boolean;
+  /** 同页多个列表时，本组件在键盘遍历中的先后（见 useSelectionScope）。 */
+  selectionRank?: number;
 }
 
 /**
  * 稍后项目的「计划」/「Someday」两个小节（Later Projects 页与区域页共用）。
  * 空小节不显示；两节都不支持拖拽排序（计划按日期，Someday 沿用手动顺序）。
  */
-export function LaterProjectSections({ projects, registerSelection = true }: Props) {
+export function LaterProjectSections({ projects, selectionRank }: Props) {
   const { t } = useTranslation();
   const kindOf = useLaterProjectKind();
   const { selectedIds } = useTaskRowSelection();
@@ -42,16 +41,14 @@ export function LaterProjectSections({ projects, registerSelection = true }: Pro
 
   const rows = useMemo(
     () =>
-      registerSelection
-        ? [...groups.scheduled, ...groups.someday].map((p) => ({
-            id: p.id,
-            kind: 'project' as const,
-            completed: false,
-          }))
-        : [],
-    [groups, registerSelection],
+      [...groups.scheduled, ...groups.someday].map((p) => ({
+        id: p.id,
+        kind: 'project' as const,
+        completed: false,
+      })),
+    [groups],
   );
-  useSelectionScope(rows);
+  useSelectionScope(rows, selectionRank);
 
   const sections = [
     { key: 'scheduled', nav: SCHEDULED_NAV, items: groups.scheduled },
