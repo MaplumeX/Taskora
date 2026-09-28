@@ -249,6 +249,13 @@ export function schemaDdl(): string[] {
       fields TEXT NOT NULL,
       revision INTEGER NOT NULL DEFAULT 0
     )`,
+    // Compact 登记（ADR-0008）：已被物理删除的实体 id，跨会话持久。
+    // 只有 id，没有值与时钟——与 hub 的 CompactedEntity 同构。
+    `CREATE TABLE IF NOT EXISTS _compacted (
+      entity TEXT NOT NULL,
+      entity_id TEXT NOT NULL,
+      PRIMARY KEY (entity, entity_id)
+    )`,
   );
   return statements;
 }

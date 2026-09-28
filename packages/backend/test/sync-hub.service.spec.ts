@@ -380,9 +380,10 @@ describe('SyncHubService（合并器集成）', () => {
       expect(buffer.pull(USER, cursorBefore).changes).toHaveLength(0);
     });
 
-    it('Compact 永久获胜：已 compact 的实体，迟到字段写被静默丢弃', async () => {
+    it('Compact 永久获胜：已 compact 的实体，迟到字段写被丢弃并重发 Compact Event', async () => {
       mockPrisma.task.findUnique.mockResolvedValue(null);
       mockPrisma.compactedEntity.findUnique.mockResolvedValue({ id: 'cx-1' });
+      const cursorBefore = buffer.currentSeq(USER);
 
       await service.push(USER, [
         {
@@ -393,7 +394,12 @@ describe('SyncHubService（合并器集成）', () => {
       ]);
 
       expect(mockPrisma.task.create).not.toHaveBeenCalled();
-      expect(buffer.pull(USER, 0).changes.every((c) => c.kind !== 'entity')).toBe(true);
+      const changes = buffer.pull(USER, cursorBefore).changes;
+      expect(changes.every((c) => c.kind !== 'entity')).toBe(true);
+      // 推送方仍持有这行（幽灵行）：重发 Compact Event 让它收敛
+      expect(changes).toContainEqual(
+        expect.objectContaining({ kind: 'compact', entity: 'task', ids: ['task-1'] }),
+      );
     });
   });
 

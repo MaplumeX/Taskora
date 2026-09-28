@@ -7,9 +7,13 @@
  * 语义（断网期间的写在 flush 后不丢）。
  */
 
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
-import { openEngine, positionBetween, type Engine } from '../src/index';
+import { MAX_PUSH_BATCH_BYTES, openEngine, positionBetween, type Engine } from '../src/index';
 import { HybridClock } from '../src/hlc';
 import { InMemorySyncHub } from '../src/hub';
 import { formatHlc } from '../src/hlc';
@@ -956,5 +960,107 @@ describe('Position re-balance（sync 后台摊平超长键）', () => {
     expect(await a.get('task', task)).toBeNull();
     await a.close();
     await b.close();
+  });
+});
+
+describe('Compact 登记跨会话持久与 Outbox 因果序', () => {
+  it('重启后仍认得已 compact 的 id（Repeat 重派生不复用死 id）', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'taskora-engine-'));
+    const path = join(dir, 'replica.db');
+    const hub = new InMemorySyncHub();
+    const transport = hub.transportFor(USER);
+    try {
+      const first = await openEngine({
+        storage: await createNodeSqliteStorage(path),
+        deviceId: 'A',
+        transport,
+      });
+      await first.sync();
+      await createTask(first, '派生实例', { id: 'derived-1' });
+      await first.sync();
+      await first.delete('task', ['derived-1']);
+      await first.sync();
+      await first.close();
+
+      const restarted = await openEngine({
+        storage: await createNodeSqliteStorage(path),
+        deviceId: 'A',
+        transport,
+      });
+      expect(restarted.isCompacted('task', 'derived-1')).toBe(true);
+      await restarted.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('推给已 compact id 的迟到写会收到重发的 Compact Event，本地幽灵行被移除', async () => {
+    const hub = new InMemorySyncHub();
+    const storage = await createNodeSqliteStorage(':memory:');
+    const engine = await openEngine({ storage, deviceId: 'A', transport: hub.transportFor(USER) });
+    await engine.sync();
+    await createTask(engine, '实例', { id: 'derived-1' });
+    await engine.sync();
+    await engine.delete('task', ['derived-1']);
+    await engine.sync();
+    // 模拟旧版本：compact 登记只在内存，重启后丢失，复用死 id 再建
+    await storage.exec('DELETE FROM _compacted');
+    const reopened = await openEngine({ storage, deviceId: 'A', transport: hub.transportFor(USER) });
+    await createTask(reopened, '实例（幽灵）', { id: 'derived-1' });
+    await reopened.sync();
+    expect(hub.entityState(USER, 'task', 'derived-1')).toBeNull();
+    expect(await reopened.get('task', 'derived-1')).toBeNull();
+    expect(await reopened.pendingCount()).toBe(0);
+    await reopened.close();
+  });
+
+  it('跨批次的前向引用不会让同步永久卡死（Outbox 保持因果序）', async () => {
+    const hub = new InMemorySyncHub({ enforceReferences: true });
+    const engine = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'A',
+      transport: hub.transportFor(USER),
+    });
+    await engine.sync();
+    const early = await createTask(engine, '早建的任务');
+    for (let index = 0; index < 600; index += 1) {
+      await createTask(engine, `填充 ${index}`);
+    }
+    const area = await engine.create('area', { title: '晚建的区域' });
+    // 旧实现把这条写合并进第 1 行 → 排到 area 创建之前、不同批 → 永久 FK 失败
+    await engine.update('task', early, { areaId: area });
+    await engine.sync();
+    expect(hub.entityState(USER, 'task', early)?.fields.areaId).toBe(area);
+    expect(await engine.pendingCount()).toBe(0);
+    await engine.close();
+  });
+
+  it('push 按体积分批，单批不超过 MAX_PUSH_BATCH_BYTES', async () => {
+    const hub = new InMemorySyncHub();
+    const inner = hub.transportFor(USER);
+    const sizes: number[] = [];
+    const transport: SyncTransport = {
+      push: (request) => {
+        sizes.push(JSON.stringify(request).length);
+        return inner.push(request);
+      },
+      pull: (request) => inner.pull(request),
+      bootstrap: () => inner.bootstrap(),
+    };
+    const engine = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'A',
+      transport,
+    });
+    await engine.sync();
+    for (let index = 0; index < 400; index += 1) {
+      await createTask(engine, `离线新建 ${index}`);
+    }
+    await engine.sync();
+    expect(sizes.length).toBeGreaterThan(1);
+    // 请求外壳（deviceId 等）只多几十字节
+    for (const size of sizes) expect(size).toBeLessThan(MAX_PUSH_BATCH_BYTES + 1024);
+    expect(await engine.pendingCount()).toBe(0);
+    await engine.close();
   });
 });

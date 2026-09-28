@@ -11,7 +11,7 @@
  * 由 onChange 通知驱动，UI 层自行选择失效策略。
  */
 
-import { LocalReplica, type EngineChange, type ReplicaRow } from './replica';
+import { LocalReplica, type EngineChange, type OutboxEntry, type ReplicaRow } from './replica';
 import { HybridClock } from './hlc';
 import { positionBetween, rebalancePositions, synthPosition } from './position';
 import type { SyncEntity, WireRow } from './entities';
@@ -64,6 +64,23 @@ export interface Engine {
   close(): Promise<void>;
 }
 
+/**
+ * 单次 push 的序列化体积上限。hub 的请求体有上限，超限请求被整批拒绝
+ * 后设备会原样重放——永远同一批、永远失败。按体积截断批次（至少带一条），
+ * 余下留给 flush 循环的下一轮；Outbox 是因果序，任意前缀都可独立提交。
+ */
+export const MAX_PUSH_BATCH_BYTES = 256 * 1024;
+
+function limitBatchBytes(batch: OutboxEntry[]): OutboxEntry[] {
+  let bytes = 0;
+  for (let index = 0; index < batch.length; index += 1) {
+    const entry = batch[index];
+    bytes += entry.kind === 'write' ? JSON.stringify(entry.event).length : 128;
+    if (bytes > MAX_PUSH_BATCH_BYTES && index > 0) return batch.slice(0, index);
+  }
+  return batch;
+}
+
 export async function openEngine(options: EngineOptions): Promise<Engine> {
   const replica = new LocalReplica(options.storage, {
     deviceId: options.deviceId,
@@ -82,7 +99,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
   const flush = async (): Promise<void> => {
     const transport = requireTransport();
     for (;;) {
-      const batch = await replica.takeOutbox();
+      const batch = limitBatchBytes(await replica.takeOutbox());
       if (batch.length === 0) return;
       const events: OutboxEvent[] = [];
       const deletesByEntity = new Map<SyncEntity, string[]>();

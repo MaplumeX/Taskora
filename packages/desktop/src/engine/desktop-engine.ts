@@ -131,6 +131,10 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     // 停用 EventStreamApplier 的缓存手术——失效由 engine.onChange 驱动，
     // 避免回声/远端事件的双重失效与 sortOrder/position 双权威打架。
     setEventStreamCacheSurgery(false);
+    // 装配期间 UI 已经渲染、首屏查询走的是 REST（离线时失败，在线时缺
+    // 本地未推送的编辑）。注入完成后全量失效，改从本地副本重读——不能
+    // 指望首次同步触发 onChange：没有远端变更时它根本不会触发。
+    invalidateEntities(queryClient);
 
     // 副本变更 → UI 缓存失效（本地读，立即生效；按实体粒度），
     // 仅本地写需要防抖调度同步——远端写应用后无新 Outbox，再拉是空转。

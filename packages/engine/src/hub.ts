@@ -42,29 +42,42 @@ export interface InMemorySyncHubOptions {
   bufferSize?: number;
   /** 墙钟（测试确定性）。 */
   wallClock?: () => number;
+  /**
+   * 模拟 Postgres 外键：合并结果引用尚未到达（pending）的实体时，该事件
+   * 失败。与 NestJS hub 相同，同批后续事件照常尝试，最后整个 push 失败。
+   */
+  enforceReferences?: boolean;
 }
 
 export class InMemorySyncHub {
   private readonly bufferSize: number;
   private readonly wallClock: () => number;
+  private readonly enforceReferences: boolean;
   private readonly users = new Map<string, UserState>();
 
   constructor(options: InMemorySyncHubOptions = {}) {
     this.bufferSize = options.bufferSize ?? 500;
     this.wallClock = options.wallClock ?? (() => Date.now());
+    this.enforceReferences = options.enforceReferences ?? false;
   }
 
   // ---------- 设备侧协议面 ----------
 
   push(userId: string, pushRequest: PushRequest): PushResponse {
     const state = this.stateFor(userId);
+    let firstFailure: unknown = null;
     for (const event of pushRequest.events) {
-      this.mergeEvent(state, event);
+      try {
+        this.mergeEvent(state, event);
+      } catch (error) {
+        firstFailure ??= error;
+      }
     }
     // 先合并字段写、再应用删除（ADR-0008 同序：字段写 → 删除）
     for (const deleteRequest of pushRequest.deletes ?? []) {
       this.applyDeleteRequest(state, deleteRequest);
     }
+    if (firstFailure !== null) throw firstFailure;
     return { acked: pushRequest.events.length };
   }
 
@@ -164,8 +177,11 @@ export class InMemorySyncHub {
   private mergeEvent(state: UserState, event: OutboxEvent): void {
     const key = `${event.entity}:${event.id}`;
     // Compact 永久获胜（ADR-0008）：已 compact 的实体，迟到的字段写
-    // 静默丢弃（不重建、不发事件）。
-    if (state.compacted.has(key)) return;
+    // 丢弃不重建；重发 Compact Event 让仍持有该行的推送方收敛。
+    if (state.compacted.has(key)) {
+      this.publish(state, { kind: 'compact', seq: 0, entity: event.entity, ids: [event.id] });
+      return;
+    }
     // 孤儿 Subtask 防御：父 Task 不存在（含已被 compact）时丢弃，与
     // NestJS hub 的越权拒绝路径同规则。
     if (event.entity === 'subtask' && !state.entities.has(`task:${event.fields.taskId?.value}`)) {
@@ -204,6 +220,19 @@ export class InMemorySyncHub {
         }),
     );
     if (!handled) return;
+    if (this.enforceReferences) {
+      const refs = REFERENCE_FIELDS[event.entity] ?? {};
+      for (const field of outcome.appliedFields) {
+        const ref = refs[field];
+        const value = outcome.fields[field];
+        const ids = ref?.array ? (Array.isArray(value) ? value : []) : [value];
+        for (const id of ids) {
+          if (ref && typeof id === 'string' && referenceStatus(ref.entity, id) === 'pending') {
+            throw new Error(`FK violation: ${event.entity}.${field} → ${ref.entity}:${id}`);
+          }
+        }
+      }
+    }
     if (outcome.appliedFields.length === 0) {
       // 纯重放：合并态未变，不分配 seq、不下发事件
       state.entities.set(key, { fields: outcome.fields, clocks: outcome.clocks });

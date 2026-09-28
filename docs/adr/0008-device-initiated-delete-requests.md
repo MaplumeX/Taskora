@@ -34,8 +34,12 @@ emits them in.
 changes for it — from a device push or a hub merge — are silently dropped.
 The hub keeps a persistent registry of compacted ids per user
 (`CompactedEntity`; ids only, no values, no clocks — not a tombstone in the
-classical sense) so the rule survives hub restarts; replicas keep a
-session-scoped in-memory set. Bootstrap includes this registry as snapshot
+classical sense) so the rule survives hub restarts; replicas persist the
+same ids in a local `_compacted` table. (Originally the replica kept only a
+session-scoped in-memory set; after a restart Repeat re-derivation then
+reused a dead deterministic id and created a local row the hub silently
+dropped forever. As a safety net the hub also re-broadcasts the Compact
+Event whenever a late write hits a compacted id, so such ghost rows converge.) Bootstrap includes this registry as snapshot
 metadata so a device rebuilding its replica cannot replay a pending Outbox
 write into an entity that was deleted while it was offline. If an id appears
 in both the snapshot and the registry, the live snapshot row wins; this makes

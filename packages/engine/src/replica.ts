@@ -74,10 +74,11 @@ export class LocalReplica {
   private listeners = new Set<(change: EngineChange) => void>();
   private changeVersion = 0;
   /**
-   * Compact 登记（ADR-0008，仅内存）：已被 compact 的实体 id。迟到的
-   * 远端字段变更到达这些 id 时被静默丢弃（Compact 永久获胜，副本与
-   * hub 同规则）。不持久化——不是墓碑；正常协议流（seq 顺序 + hub 侧
-   * 同规则丢弃）不会把已 compact 实体的字段变更送到副本。
+   * Compact 登记（ADR-0008）：已被 compact 的实体 id。迟到的远端字段
+   * 变更到达这些 id 时被静默丢弃（Compact 永久获胜，副本与 hub 同规则）。
+   * 内存集合是 `_compacted` 表的读缓存：必须跨会话持久——否则重启后
+   * Repeat 派生会复用已死的确定性 id，本地建出 hub 永远丢弃的幽灵行。
+   * 只有 id，不是墓碑。
    */
   private readonly compacted = new Set<string>();
   /** 写串行化：异步存储下防止并发写的 BEGIN/COMMIT 交错。 */
@@ -124,6 +125,12 @@ export class LocalReplica {
       await this.storage.exec('ALTER TABLE task ADD COLUMN repeatRule TEXT');
     }
     await this.metaSet('deviceId', this.options.deviceId);
+    const compactedRows = await this.storage.all<{ entity: string; entity_id: string }>(
+      'SELECT entity, entity_id FROM _compacted',
+    );
+    for (const row of compactedRows) {
+      this.compacted.add(`${row.entity}:${row.entity_id}`);
+    }
     const saved = await this.metaGet('hlc');
     if (saved) {
       const state = JSON.parse(saved) as { wallMs: number; counter: number };
@@ -327,7 +334,7 @@ export class LocalReplica {
   ): Promise<number> {
     const def = entityDef(entity);
     for (const id of ids) {
-      this.compacted.add(`${entity}:${id}`);
+      await this.registerCompacted(entity, id);
     }
     let removed = 0;
     // 级联（对齐 hub 侧 onDelete: Cascade）：Task → Subtask、
@@ -474,15 +481,19 @@ export class LocalReplica {
   ): Promise<void> {
     const snapshotKeys = new Set(snapshot.map((entry) => `${entry.entity}:${entry.id}`));
     this.compacted.clear();
-    for (const request of compacted) {
-      for (const id of request.ids) {
-        const key = `${request.entity}:${id}`;
-        // Compact intent 可能先于一个最终回滚的删除登记；快照仍有行时以
-        // 快照为准。真正并发删除的 Compact Event 会在 cursor fence 后重放。
-        if (!snapshotKeys.has(key)) this.compacted.add(key);
-      }
-    }
     await inTransaction(this.storage, async () => {
+      // 登记以 hub 的持久登记为准整体替换（未同步的本地删除在下方
+      // Outbox 回放时重新登记）。
+      await this.storage.exec('DELETE FROM _compacted');
+      for (const request of compacted) {
+        for (const id of request.ids) {
+          // Compact intent 可能先于一个最终回滚的删除登记；快照仍有行时以
+          // 快照为准。真正并发删除的 Compact Event 会在 cursor fence 后重放。
+          if (!snapshotKeys.has(`${request.entity}:${id}`)) {
+            await this.registerCompacted(request.entity, id);
+          }
+        }
+      }
       for (const entity of SYNC_ENTITIES) {
         await this.storage.exec(`DELETE FROM ${entityDef(entity).table}`);
       }
@@ -583,6 +594,17 @@ export class LocalReplica {
 
   // ---------- 内部 ----------
 
+  /** 登记一个已 compact 的 id（内存 + `_compacted` 表，调用方负责事务）。 */
+  private async registerCompacted(entity: SyncEntity, id: string): Promise<void> {
+    const key = `${entity}:${id}`;
+    if (this.compacted.has(key)) return;
+    await this.storage.run('INSERT OR IGNORE INTO _compacted (entity, entity_id) VALUES (?, ?)', [
+      entity,
+      id,
+    ]);
+    this.compacted.add(key);
+  }
+
   /**
    * 吸收远端时钟：拉取过远端变更的设备再发号时必然晚于已见过的最大
    * 远端时间戳（HLC 因果性），避免同墙钟设备被旧基线压掉。
@@ -671,8 +693,13 @@ export class LocalReplica {
   }
 
   /**
-   * 追加 Outbox。同类 pending（同实体同 id）就地合并：后写覆盖先写
-   * 的同字段条目（时间戳必然更新），控制重放体积。
+   * 追加 Outbox。仅当队尾正是同实体同 id 的字段写时就地合并（连续编辑
+   * 同一行，如打字），否则追加新行。
+   *
+   * 不能合并进更早的行：那会把新写（可能引用此后才创建的实体）挪到被
+   * 引用实体的创建之前。flush 按 500 条分批，若被引用实体落在后一批，
+   * 前一批在 hub 侧永远 FK 失败，后一批永远发不出去——同步永久卡死。
+   * 只合并队尾保证 Outbox 始终是因果序，任意前缀分批都可独立提交。
    */
   private async appendOutbox(
     entity: SyncEntity,
@@ -680,11 +707,18 @@ export class LocalReplica {
     writes: Record<string, FieldWrite>,
   ): Promise<void> {
     if (Object.keys(writes).length === 0) return;
-    const rows = await this.storage.all<{ id: number; fields: string }>(
-      "SELECT id, fields FROM _outbox WHERE entity = ? AND entity_id = ? AND kind = 'write' ORDER BY id DESC",
-      [entity, id],
-    );
-    const existing = rows[0];
+    const rows = await this.storage.all<{
+      id: number;
+      kind: string;
+      entity: string;
+      entity_id: string;
+      fields: string;
+    }>('SELECT id, kind, entity, entity_id, fields FROM _outbox ORDER BY id DESC LIMIT 1');
+    const tail = rows[0];
+    const existing =
+      tail && tail.kind === 'write' && tail.entity === entity && tail.entity_id === id
+        ? tail
+        : undefined;
     if (existing) {
       const merged = {
         ...(JSON.parse(existing.fields) as Record<string, FieldWrite>),

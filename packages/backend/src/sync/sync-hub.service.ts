@@ -319,14 +319,20 @@ export class SyncHubService implements OnModuleInit {
     }
     if (Object.keys(incoming).length === 0) return;
 
+    let hitCompacted = false;
     const state = await this.prisma.$transaction(async (tx) => {
       await this.lockEntity(tx, userId, event.entity, event.id);
       const row = await loadRow(tx, codec, event.id);
       // 归属校验（story 6 对偶，字段写与 Delete Request 同口径）：行存在
       // 但属于其他用户（Subtask 经父 Task 认领）时静默丢弃。
       if (row && !(await this.ownsRow(tx, userId, event.entity, row))) return null;
-      // Compact 永久获胜：已 compact 的实体不重建、不发事件。
-      if (!row && (await this.isCompacted(tx, userId, event.entity, event.id))) return null;
+      // Compact 永久获胜：已 compact 的实体不重建。推送方显然还持有这行
+      // （如重启前的旧版本复用了已死的确定性 id），事务后重发 Compact
+      // Event 让它收敛，而不是留下永远不同步的本地幽灵行。
+      if (!row && (await this.isCompacted(tx, userId, event.entity, event.id))) {
+        hitCompacted = true;
+        return null;
+      }
       const current = row ? serializeRow(codec, row) : null;
 
       const outcome = mergeFieldWrites(
@@ -406,6 +412,10 @@ export class SyncHubService implements OnModuleInit {
       return serializeRow(codec, { ...fresh, fieldDigests: digests });
     });
 
+    if (hitCompacted) {
+      this.broadcastCompact(userId, event.entity, [event.id]);
+      return;
+    }
     if (state) {
       this.buffer.publish(
         userId,

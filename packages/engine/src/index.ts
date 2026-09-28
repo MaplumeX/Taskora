@@ -45,7 +45,13 @@ export {
   type OutboxEntry,
   type EngineChange,
 } from './replica';
-export { openEngine, positionAfter, type Engine, type EngineOptions } from './engine';
+export {
+  MAX_PUSH_BATCH_BYTES,
+  openEngine,
+  positionAfter,
+  type Engine,
+  type EngineOptions,
+} from './engine';
 export type {
   BootstrapResponse,
   CompactChange,
