@@ -23,11 +23,11 @@ vi.mock('@dnd-kit/core', async () => {
   };
 });
 
-vi.mock('@/components/project/ProjectItem', async () => {
+vi.mock('@/components/feed/ProjectFeedRow', async () => {
   const ReactModule = await import('react');
   return {
-    ProjectItem: ({ project: current }: { project: ProjectResponseDto }) =>
-      ReactModule.createElement('div', { 'data-project-item': current.id }, current.title),
+    ProjectFeedRow: ({ item }: { item: ProjectResponseDto }) =>
+      ReactModule.createElement('div', { 'data-project-item': item.id }, item.title),
   };
 });
 vi.mock('@/components/task/TaskListView', () => ({ TaskListView: () => null }));

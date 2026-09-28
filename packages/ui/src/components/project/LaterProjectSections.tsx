@@ -5,12 +5,13 @@ import type { ProjectResponseDto } from '@taskora/shared';
 
 import {
   currentLegacyDateTimeZone,
+  selectionStateOf,
   useLaterProjectKind,
   useSelectionScope,
   useTaskRowSelection,
 } from '@taskora/api';
 import { mainNav, type NavItem } from '@/components/layout/navItems';
-import { ProjectItem } from '@/components/project/ProjectItem';
+import { ProjectFeedRow } from '@/components/feed/ProjectFeedRow';
 import { groupLaterProjects } from '@/components/project/laterProjectLayout';
 import { cn } from '@/lib/utils';
 
@@ -33,7 +34,7 @@ interface Props {
 export function LaterProjectSections({ projects, selectionRank }: Props) {
   const { t } = useTranslation();
   const kindOf = useLaterProjectKind();
-  const { selectedIds } = useTaskRowSelection();
+  const { selectedIds, expandedId } = useTaskRowSelection();
   const groups = useMemo(
     () => groupLaterProjects(projects, kindOf, currentLegacyDateTimeZone()),
     [projects, kindOf],
@@ -68,11 +69,10 @@ export function LaterProjectSections({ projects, selectionRank }: Props) {
             </h2>
             <div className="flex flex-col pt-1">
               {section.items.map((p) => (
-                <ProjectItem
+                <ProjectFeedRow
                   key={p.id}
-                  project={p}
-                  selected={selectedIds.includes(p.id)}
-                  selectionRow
+                  item={p}
+                  selectionState={selectionStateOf(selectedIds, expandedId, p.id)}
                   showScheduledBadge={section.key === 'scheduled'}
                 />
               ))}
