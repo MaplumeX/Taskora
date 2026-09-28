@@ -9,6 +9,70 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.6.1] - 2026-09-28
+
+### Changed
+
+- **ui**: Native date, time and repeat inputs replaced with custom
+  pickers (#109) — the Reminder time drops `<input type="time">` for a
+  new `TimePicker`: the trigger shows `HH:mm` and opens two scrollable
+  columns (24 hours, 60 minutes) that center the current value, move
+  focus with ↑/↓ and write on pick, on an opaque surface so the
+  calendar underneath does not show through a translucent popover. The
+  Repeat Rule panel swaps its native checkbox and `<select>` for a
+  Switch plus a segmented unit control ("Every N" on its own line,
+  unit as a `radiogroup`), and the repeat entry is removed from the
+  expanded task row — the row's ↻ badge stays, but the context-menu /
+  long-press item is now the only editor, since repeat is a set-once
+  setting. In the date popover, Clear moves from a full-width footer
+  row to a calendar ✕ icon at the end of the shortcut row, and the
+  calendar tightens (28px day buttons and nav, smaller gaps, no footer
+  separator).
+
+### Fixes
+
+- **api**: `Someday` labels were left untranslated in the Chinese
+  locale (#110) — `task:somedayLabel` and `task:somedayEmpty` in
+  `zh/task.json` still read "Someday"; they are now 「将来」 and
+  「没有将来任务」.
+- **desktop**: Launch-at-login was silently switched off by every
+  manual upgrade (#108) — Windows NSIS runs the previous uninstaller
+  without `/UPDATE` when installing a new package over an old one, and
+  its uninstall section deletes
+  `HKCU\...\CurrentVersion\Run`, so the login item vanished on each
+  upgrade while the Settings toggle faithfully reported the system
+  state. The shell now persists the user's intent in
+  `app_data_dir/launch-at-login.json` and reconciles it against the
+  system login item on startup: re-enable and refresh the executable
+  path when the entry is missing, adopt the system state when there is
+  no positive intent (old installs, re-enabling from system settings),
+  and yield when Windows has the Run value but marks it disabled in
+  Task Manager. Reconciliation is skipped in debug builds (dev and
+  release share the login item name, so refreshing would point
+  autostart at `target/debug`). Settings now call the shell's
+  `launch_at_login_get` / `launch_at_login_set` commands; the
+  `@tauri-apps/plugin-autostart` JS dependency and the
+  `autostart:default` capability are removed. One-time caveat: the
+  upgrade to this version is still cleared by the old uninstaller (no
+  intent file exists yet), so the toggle must be turned on once more.
+- **api/ui**: Past Scheduled Dates were pulled into today's Calendar
+  cell (#107) — the calendar applied the "a past When counts as today"
+  rule when grouping tasks, so overdue tasks were painted on today and
+  vanished from the day they were actually planned; grouping now uses
+  the stored date and the Calendar highlights today independently
+  (re-rendering across midnight). The Things 3 semantics stay in the
+  task card: a past date is shown as Today selected, the stored value
+  is not rewritten, and turning on or changing a Reminder now writes
+  the Scheduled Date as today as well, so the reminder is not anchored
+  in the past and never fires.
+- **api**: Remote profile edits stayed invisible until the local
+  Settings form was saved (#106) — the shell avatar and display name
+  read from `useAuthStore.user`, but `useCurrentUser` only hydrated
+  preferences from the polled `/auth/me` response and never the user
+  itself. The fetched profile is now mirrored into the store, guarded
+  by a live token and a matching user id so a cached response cannot
+  resurrect a cleared session.
+
 ## [0.6.0] - 2026-09-27
 
 ### Changed
