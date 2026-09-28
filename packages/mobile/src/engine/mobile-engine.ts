@@ -35,13 +35,18 @@ import {
   createEngineProjectHeadingBackend,
   setSyncStatus,
   useReminderPermissionStore,
+  requestTaskReveal,
 } from '@taskora/api';
 import { openEngine, type Engine, type SyncEntity } from '@taskora/engine';
 import { createReminderCoordinator, type ReminderCoordinator } from '@taskora/api';
 
 import { createHttpSyncTransport, registerDevice } from './http-transport';
 import { createTauriSqlStorage, isTauriRuntime, useUserReplicaDb } from './tauri-storage';
-import { createMobileNotificationShell } from '../reminders/tauri-notification-shell';
+import {
+  createMobileNotificationShell,
+  onOpenTask,
+  takeLaunchTask,
+} from '../reminders/tauri-notification-shell';
 import { isNativeNotificationPermissionGranted } from '../notification-bridge';
 import { scheduleStatusBarRefresh } from '../status-bar';
 
@@ -77,6 +82,7 @@ function invalidateEntities(queryClient: QueryClient, entities?: SyncEntity[]): 
 let engine: Engine | null = null;
 let unsubscribeRemoteChange: (() => void) | null = null;
 let unsubscribeForeground: (() => void) | null = null;
+let unsubscribeOpenTask: (() => void) | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribeAuth: (() => void) | null = null;
 let syncInFlight: Promise<boolean> | null = null;
@@ -187,6 +193,23 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
       mode: 'system',
     });
     reminderCoordinator.start();
+    // 点通知正文（reminder-actions spec）：冷启动时意图早于 JS 就绪，先取
+    // 一次；App 存活时由原生事件触发再取。定位交给 AppShell 内的监听。
+    const revealLaunchTask = () =>
+      void takeLaunchTask()
+        .then((taskId) => {
+          if (taskId) requestTaskReveal(taskId);
+        })
+        .catch(() => undefined);
+    revealLaunchTask();
+    unsubscribeOpenTask?.();
+    unsubscribeOpenTask = null;
+    void onOpenTask(revealLaunchTask)
+      .then((off) => {
+        if (engine) unsubscribeOpenTask = off;
+        else off();
+      })
+      .catch(() => undefined);
   } catch (error) {
     console.error('[mobile-engine] 装配失败，退回 REST 后端', error);
     stopReminderCoordinator();
@@ -221,6 +244,8 @@ function stopEngine(): void {
   unsubscribeRemoteChange = null;
   unsubscribeForeground?.();
   unsubscribeForeground = null;
+  unsubscribeOpenTask?.();
+  unsubscribeOpenTask = null;
   void engine?.close().catch(() => undefined);
   engine = null;
   // 登出丢弃 device id：重新登录分配新 device id（ADR-0007），

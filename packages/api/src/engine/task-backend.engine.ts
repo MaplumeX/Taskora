@@ -361,11 +361,11 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       return taskDto(id);
     },
 
-    async completeTask(id: string): Promise<TaskResponseDto> {
+    async completeTask(id: string, options?: { settledAt?: string }): Promise<TaskResponseDto> {
       const existing = await engine.get('task', id);
       if (existing?.fields.status === TaskStatus.COMPLETED) return taskDto(id);
       // 了结清除提醒（reminders spec）：已完成/取消的工作不再通知。
-      const settledAt = new Date().toISOString();
+      const settledAt = options?.settledAt ?? new Date().toISOString();
       await engine.update('task', id, {
         status: TaskStatus.COMPLETED,
         settledAt,

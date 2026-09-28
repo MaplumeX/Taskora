@@ -14,7 +14,14 @@
  * - 过去的提醒（含错过未发的）静默丢弃，绝不补发。
  */
 
-import { calendarDateKey, calendarTimeInstant, ScheduledType, TaskStatus } from '@taskora/shared';
+import {
+  addCalendarDays,
+  calendarDateKey,
+  calendarTimeInstant,
+  instantWallTime,
+  ScheduledType,
+  TaskStatus,
+} from '@taskora/shared';
 
 /** 调度输入：Task 行上与提醒相关的字段（ReplicaRow / DTO 均可满足）。 */
 export interface ReminderTaskInput {
@@ -25,6 +32,10 @@ export interface ReminderTaskInput {
   reminderTime: string | null;
   status: TaskStatus;
   trashedAt: string | null;
+  /** 通知文案上下文（可选；纯调度不依赖）。 */
+  notes?: string | null;
+  projectId?: string | null;
+  areaId?: string | null;
 }
 
 /** 一条期望存在的提醒通知。 */
@@ -35,6 +46,8 @@ export interface ReminderNotification {
   taskTitle: string;
   /** 触发时刻（epoch ms，账号时区墙上时钟语义）。 */
   fireAt: number;
+  /** 触发日 + 1 的同一时刻：原生侧临时重设「明天」Snooze 闹钟用（reminder-actions spec）。 */
+  snoozeTomorrowAt: number;
 }
 
 /** HH:mm 校验（00:00–23:59）。 */
@@ -85,6 +98,7 @@ export function computeReminderPlan(
       taskId: t.id,
       taskTitle: t.title,
       fireAt,
+      snoozeTomorrowAt: snoozeTomorrowAt(fireAt, timeZone),
     });
   }
   return plan;
@@ -147,4 +161,14 @@ export function reminderFireAt(
   } catch {
     return null;
   }
+}
+
+/**
+ * 通知触发日 + 1 的同一时刻（epoch ms）：随计划下发给原生侧，供 App 进程
+ * 不在时临时重设「明天」闹钟（原生不重写时区规则，ADR-0014）。触发当天点击
+ * 时与 Reminder Action 的「明天」一致；数据改写仍以 JS 应用队列时的结果为准。
+ */
+export function snoozeTomorrowAt(fireAt: number, timeZone: string): number {
+  const { date, time } = instantWallTime(fireAt, timeZone);
+  return calendarTimeInstant(addCalendarDays(date, 1), time, timeZone);
 }

@@ -22,10 +22,52 @@ const PLUGIN_IDENTIFIER: &str = "app.taskora.mobile.reminders";
 pub struct ReminderEntry {
     /// 稳定 key（`reminder:<taskId>`），原生据此分配并复用通知 id。
     pub key: String,
+    /// 所属任务（通知操作与点击跳转用，reminder-actions spec）。
+    pub task_id: String,
     /// 触发时刻（epoch ms，账号时区已在 JS 侧换算）。
     pub fire_at: i64,
+    /// 触发日 + 1 的同一时刻：App 未运行时点「明天」临时重设闹钟用。
+    pub snooze_tomorrow_at: i64,
     pub title: String,
     pub body: String,
+}
+
+/// 通知按钮文案（JS 按当前语言提供，原生随计划持久化）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ActionLabels {
+    pub complete: String,
+    pub snooze: String,
+    pub snooze15: String,
+    pub snooze60: String,
+    pub snooze_tomorrow: String,
+    pub snooze_more: String,
+}
+
+/// 原生排队的一次通知操作（App 进程不在时点按钮，JS 下次运行时应用）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PendingAction {
+    pub task_id: String,
+    /// `complete` | `snooze15` | `snooze60` | `snoozeTomorrow`
+    pub action: String,
+    /// 通知对应的触发时刻（epoch ms），JS 据此做过期校验。
+    pub fired_fire_at: i64,
+    /// 点击时刻（epoch ms）。
+    pub tapped_at: i64,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(desktop, allow(dead_code))]
+struct PendingActionsResponse {
+    actions: Vec<PendingAction>,
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(desktop, allow(dead_code))]
+struct LaunchTaskResponse {
+    task_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +77,7 @@ pub struct SyncArgs {
     pub reminders: Vec<ReminderEntry>,
     /// reminders 渠道名（渠道创建后名字可随语言更新，importance 不变）。
     pub channel_name: String,
+    pub labels: ActionLabels,
 }
 
 /// 投递可靠性状态（设置页「提醒可靠性」区展示）。
@@ -123,6 +166,34 @@ impl<R: Runtime> Reminders<R> {
         }
     }
 
+    pub fn take_pending_actions(&self) -> Result<Vec<PendingAction>, String> {
+        #[cfg(mobile)]
+        {
+            self.handle
+                .run_mobile_plugin::<PendingActionsResponse>("takePendingActions", ())
+                .map(|r| r.actions)
+                .map_err(|e| e.to_string())
+        }
+        #[cfg(desktop)]
+        {
+            Ok(Vec::new())
+        }
+    }
+
+    pub fn take_launch_task(&self) -> Result<Option<String>, String> {
+        #[cfg(mobile)]
+        {
+            self.handle
+                .run_mobile_plugin::<LaunchTaskResponse>("takeLaunchTask", ())
+                .map(|r| r.task_id)
+                .map_err(|e| e.to_string())
+        }
+        #[cfg(desktop)]
+        {
+            Ok(None)
+        }
+    }
+
     pub fn open_settings(&self, target: String) -> Result<(), String> {
         #[cfg(mobile)]
         {
@@ -168,6 +239,20 @@ async fn request_permission<R: Runtime>(app: tauri::AppHandle<R>) -> Result<bool
     app.reminders().request_permission()
 }
 
+/// 取走原生排队的通知操作（取出即删）。
+#[tauri::command]
+async fn take_pending_actions<R: Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<Vec<PendingAction>, String> {
+    app.reminders().take_pending_actions()
+}
+
+/// 取走点通知正文启动/唤回 App 时携带的任务 id（取出即删）。
+#[tauri::command]
+async fn take_launch_task<R: Runtime>(app: tauri::AppHandle<R>) -> Result<Option<String>, String> {
+    app.reminders().take_launch_task()
+}
+
 /// `target`：`exact-alarm` | `battery` | `autostart`（通知设置页仍走壳层的
 /// `open_notification_settings`）。
 #[tauri::command]
@@ -182,7 +267,9 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             clear,
             status,
             request_permission,
-            open_settings
+            open_settings,
+            take_pending_actions,
+            take_launch_task
         ])
         .setup(|app, _api| {
             #[cfg(target_os = "android")]

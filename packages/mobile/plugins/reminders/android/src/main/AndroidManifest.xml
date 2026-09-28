@@ -19,6 +19,23 @@
             android:name="app.taskora.mobile.reminders.ReminderAlarmReceiver"
             android:exported="false" />
 
+        <!-- 通知按钮（完成 / 15 分钟后）：不拉起 App 进程，操作排队等 JS 应用。 -->
+        <receiver
+            android:name="app.taskora.mobile.reminders.ReminderActionReceiver"
+            android:exported="false" />
+
+        <!--
+            通知按钮「稍后…」的选择对话框（1 小时后 / 明天）。独立任务栈、不进
+            最近任务，半透明主题只显示对话框本身。
+        -->
+        <activity
+            android:name="app.taskora.mobile.reminders.ReminderSnoozeActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <!-- 系统广播不受 exported=false 限制（system uid 豁免）。 -->
         <receiver
             android:name="app.taskora.mobile.reminders.ReminderRestoreReceiver"

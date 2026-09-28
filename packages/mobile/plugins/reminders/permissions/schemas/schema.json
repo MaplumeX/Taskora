@@ -319,6 +319,30 @@
           "markdownDescription": "Denies the open_settings command without any pre-configured scope."
         },
         {
+          "description": "Enables the register_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-register-listener",
+          "markdownDescription": "Enables the register_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the register_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-register-listener",
+          "markdownDescription": "Denies the register_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the remove_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-remove-listener",
+          "markdownDescription": "Enables the remove_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the remove_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-remove-listener",
+          "markdownDescription": "Denies the remove_listener command without any pre-configured scope."
+        },
+        {
           "description": "Enables the request_permission command without any pre-configured scope.",
           "type": "string",
           "const": "allow-request-permission",
@@ -355,10 +379,34 @@
           "markdownDescription": "Denies the sync command without any pre-configured scope."
         },
         {
-          "description": "Allows syncing the reminder plan, querying delivery status, requesting notification permission and opening the related system settings.\n#### This default permission set includes:\n\n- `allow-sync`\n- `allow-clear`\n- `allow-status`\n- `allow-request-permission`\n- `allow-open-settings`",
+          "description": "Enables the take_launch_task command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-take-launch-task",
+          "markdownDescription": "Enables the take_launch_task command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the take_launch_task command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-take-launch-task",
+          "markdownDescription": "Denies the take_launch_task command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the take_pending_actions command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-take-pending-actions",
+          "markdownDescription": "Enables the take_pending_actions command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the take_pending_actions command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-take-pending-actions",
+          "markdownDescription": "Denies the take_pending_actions command without any pre-configured scope."
+        },
+        {
+          "description": "Allows syncing the reminder plan, querying delivery status, requesting notification permission, opening the related system settings, and receiving notification actions and taps.\n#### This default permission set includes:\n\n- `allow-sync`\n- `allow-clear`\n- `allow-status`\n- `allow-request-permission`\n- `allow-open-settings`\n- `allow-take-pending-actions`\n- `allow-take-launch-task`\n- `allow-register-listener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Allows syncing the reminder plan, querying delivery status, requesting notification permission and opening the related system settings.\n#### This default permission set includes:\n\n- `allow-sync`\n- `allow-clear`\n- `allow-status`\n- `allow-request-permission`\n- `allow-open-settings`"
+          "markdownDescription": "Allows syncing the reminder plan, querying delivery status, requesting notification permission, opening the related system settings, and receiving notification actions and taps.\n#### This default permission set includes:\n\n- `allow-sync`\n- `allow-clear`\n- `allow-status`\n- `allow-request-permission`\n- `allow-open-settings`\n- `allow-take-pending-actions`\n- `allow-take-launch-task`\n- `allow-register-listener`\n- `allow-remove-listener`"
         }
       ]
     }

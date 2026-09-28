@@ -1,6 +1,6 @@
 ## Default Permission
 
-Allows syncing the reminder plan, querying delivery status, requesting notification permission and opening the related system settings.
+Allows syncing the reminder plan, querying delivery status, requesting notification permission, opening the related system settings, and receiving notification actions and taps.
 
 #### This default permission set includes the following:
 
@@ -9,6 +9,10 @@ Allows syncing the reminder plan, querying delivery status, requesting notificat
 - `allow-status`
 - `allow-request-permission`
 - `allow-open-settings`
+- `allow-take-pending-actions`
+- `allow-take-launch-task`
+- `allow-register-listener`
+- `allow-remove-listener`
 
 ## Permission Table
 
@@ -67,6 +71,58 @@ Enables the open_settings command without any pre-configured scope.
 <td>
 
 Denies the open_settings command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`reminders:allow-register-listener`
+
+</td>
+<td>
+
+Enables the register_listener command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`reminders:deny-register-listener`
+
+</td>
+<td>
+
+Denies the register_listener command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`reminders:allow-remove-listener`
+
+</td>
+<td>
+
+Enables the remove_listener command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`reminders:deny-remove-listener`
+
+</td>
+<td>
+
+Denies the remove_listener command without any pre-configured scope.
 
 </td>
 </tr>
@@ -145,6 +201,58 @@ Enables the sync command without any pre-configured scope.
 <td>
 
 Denies the sync command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`reminders:allow-take-launch-task`
+
+</td>
+<td>
+
+Enables the take_launch_task command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`reminders:deny-take-launch-task`
+
+</td>
+<td>
+
+Denies the take_launch_task command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`reminders:allow-take-pending-actions`
+
+</td>
+<td>
+
+Enables the take_pending_actions command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`reminders:deny-take-pending-actions`
+
+</td>
+<td>
+
+Denies the take_pending_actions command without any pre-configured scope.
 
 </td>
 </tr>

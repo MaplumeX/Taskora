@@ -1,11 +1,16 @@
 /**
- * 桌面端通知薄壳（Reminders spec）：tauri-plugin-notification 的适配层。
+ * 桌面端通知薄壳（Reminders spec）。
  *
  * 桌面走 runtime 模式（ReminderCoordinator 到点 fireNow；App 未运行
  * 期间错过的提醒静默丢弃，spec 定案），不实现系统级 sync（Android
  * 路径）；openSettings 走壳层 Rust 命令 open_notification_settings。
  *
- * 权限检测与发通知绕过插件 guest-js、直调原生命令，与移动端
+ * 发送走壳层命令 show_reminder（reminder-actions spec）：插件桌面端没有
+ * 按钮与点击回调，Rust 侧直接用平台通知 crate 发带按钮的通知，用户的
+ * 选择以 reminder-action 事件回传（onReminderAction）。提示音由 Rust 侧
+ * 按平台显式设置（插件路径下不传 sound 即静音）。
+ *
+ * 权限检测绕过插件 guest-js、直调原生命令，与移动端
  * notification-bridge 同一口径（实时查询，不读缓存）。guest-js 的 isPermissionGranted/
  * requestPermission 读写的是 window.Notification.permission——插件 init
  * 脚本注入的会话内缓存，并非系统实时状态：Windows 上 init 脚本启动时
@@ -16,9 +21,13 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import type { Options } from '@tauri-apps/plugin-notification';
+import { listen } from '@tauri-apps/api/event';
 
-import type { ReminderNotificationShell } from '@taskora/api';
+import {
+  reminderActionLabels,
+  type ReminderActionKind,
+  type ReminderNotificationShell,
+} from '@taskora/api';
 
 /** 实时查询原生授权状态；命令返回 Option<bool>（Prompt 时为 null）。 */
 async function isNativePermissionGranted(): Promise<boolean> {
@@ -41,42 +50,22 @@ async function requestNativePermission(): Promise<boolean> {
   }
 }
 
-/**
- * 系统默认提示音的平台字面量（返回 undefined = 不传 sound）。
- *
- * 桌面端不传 sound 不等于「交给系统决定」，而是**静音**：插件把它落成
- * notify-rust 的 `sound_name: None`，Windows 侧于是写出
- * `<audio silent="true"/>`，macOS 侧写出空 soundName。所以必须显式给值。
- *
- * - Windows：winrt `Sound::from_str` 的枚举名，大小写敏感。解析失败会被
- *   `.ok()` 吞成 `None`（静音且无任何日志），故只能精确写 "Default"。
- * - macOS：notify-rust 把它包成 `Sound::Custom(name)` 写进 soundName；
- *   `NSUserNotificationDefaultSoundName` 的实际值就是 "default"。
- * - Linux：notify-rust 的 XDG 后端不读 `sound_name`（只有手写
- *   `Hint::SoundName` 才生效，而插件不暴露 hints），传任何值都不会响，
- *   故不传。
- */
-export function defaultSound(): string | undefined {
-  if (typeof navigator === 'undefined') return undefined;
-  const ua = navigator.userAgent;
-  if (/Windows/.test(ua)) return 'Default';
-  if (/Mac/.test(ua)) return 'default';
-  return undefined;
-}
-
 export function createDesktopNotificationShell(): ReminderNotificationShell {
   return {
     isSupported: () => true,
     isPermissionGranted: isNativePermissionGranted,
     requestPermission: requestNativePermission,
-    async fireNow(title: string, body: string) {
+    async fireNow(reminder) {
       try {
-        // 显式给 sound：桌面端缺省即静音（见 defaultSound 注释）。
-        // 直调 notify 命令而非 guest-js sendNotification：后者返回 void，
-        // 内部丢弃异步 notify 结果，调用方的 catch 永远接不到失败。
-        const sound = defaultSound();
-        const options: Options = sound === undefined ? { title, body } : { title, body, sound };
-        await invoke('plugin:notification|notify', { options });
+        await invoke('show_reminder', {
+          payload: {
+            taskId: reminder.taskId,
+            fireAt: reminder.fireAt,
+            title: reminder.title,
+            body: reminder.body,
+            labels: reminderActionLabels(),
+          },
+        });
       } catch (error) {
         console.warn('[reminders] fireNow failed:', error);
       }
@@ -85,4 +74,19 @@ export function createDesktopNotificationShell(): ReminderNotificationShell {
       await invoke('open_notification_settings');
     },
   };
+}
+
+/** 通知上的用户选择（Rust reminder_notification::ReminderActionEvent）。 */
+export interface DesktopReminderAction {
+  taskId: string;
+  /** open = 点击正文（Rust 侧已唤出主窗口）。 */
+  action: 'open' | ReminderActionKind;
+  firedFireAt: number;
+  tappedAt: number;
+}
+
+export async function onReminderAction(
+  listener: (event: DesktopReminderAction) => void,
+): Promise<() => void> {
+  return listen<DesktopReminderAction>('reminder-action', (event) => listener(event.payload));
 }

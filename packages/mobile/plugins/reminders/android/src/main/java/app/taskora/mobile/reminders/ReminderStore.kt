@@ -12,6 +12,29 @@ data class StoredReminder(
     val fireAt: Long,
     val title: String,
     val body: String,
+    /** 所属任务；早期版本的记录没有该字段（空串 = 不挂操作按钮）。 */
+    val taskId: String = "",
+    /** 触发日 + 1 的同一时刻（「明天」临时闹钟）；0 = 未知。 */
+    val snoozeTomorrowAt: Long = 0,
+)
+
+/** 通知按钮文案（JS 按当前语言提供）。 */
+data class ActionLabels(
+    val complete: String,
+    val snooze: String,
+    val snooze15: String,
+    val snooze60: String,
+    val snoozeTomorrow: String,
+    val snoozeMore: String,
+)
+
+/** 排队等 JS 应用的一次通知操作（reminder-actions spec）。 */
+data class PendingAction(
+    val key: String,
+    val taskId: String,
+    val action: String,
+    val firedFireAt: Long,
+    val tappedAt: Long,
 )
 
 /**
@@ -27,6 +50,8 @@ internal object ReminderStore {
     private const val KEY_PLAN = "plan"
     private const val KEY_NEXT_ID = "nextId"
     private const val KEY_CHANNEL_NAME = "channelName"
+    private const val KEY_LABELS = "labels"
+    private const val KEY_ACTIONS = "pendingActions"
 
     /** 通知 id 起点：远离状态栏常驻通知的固定 id（620001）。 */
     private const val FIRST_ID = 1_000_000
@@ -47,6 +72,8 @@ internal object ReminderStore {
                     fireAt = o.getLong("fireAt"),
                     title = o.getString("title"),
                     body = o.getString("body"),
+                    taskId = o.optString("taskId", ""),
+                    snoozeTomorrowAt = o.optLong("snoozeTomorrowAt", 0),
                 )
                 plan[reminder.key] = reminder
             }
@@ -66,7 +93,9 @@ internal object ReminderStore {
                     .put("id", reminder.id)
                     .put("fireAt", reminder.fireAt)
                     .put("title", reminder.title)
-                    .put("body", reminder.body),
+                    .put("body", reminder.body)
+                    .put("taskId", reminder.taskId)
+                    .put("snoozeTomorrowAt", reminder.snoozeTomorrowAt),
             )
         }
         prefs(context).edit().putString(KEY_PLAN, array.toString()).commit()
@@ -85,5 +114,71 @@ internal object ReminderStore {
 
     fun setChannelName(context: Context, name: String) {
         prefs(context).edit().putString(KEY_CHANNEL_NAME, name).commit()
+    }
+
+    fun labels(context: Context): ActionLabels? {
+        val raw = prefs(context).getString(KEY_LABELS, null) ?: return null
+        return try {
+            val o = JSONObject(raw)
+            ActionLabels(
+                complete = o.getString("complete"),
+                snooze = o.getString("snooze"),
+                snooze15 = o.getString("snooze15"),
+                snooze60 = o.getString("snooze60"),
+                snoozeTomorrow = o.getString("snoozeTomorrow"),
+                snoozeMore = o.getString("snoozeMore"),
+            )
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    fun setLabels(context: Context, labels: ActionLabels) {
+        val o = JSONObject()
+            .put("complete", labels.complete)
+            .put("snooze", labels.snooze)
+            .put("snooze15", labels.snooze15)
+            .put("snooze60", labels.snooze60)
+            .put("snoozeTomorrow", labels.snoozeTomorrow)
+            .put("snoozeMore", labels.snoozeMore)
+        prefs(context).edit().putString(KEY_LABELS, o.toString()).commit()
+    }
+
+    fun pendingActions(context: Context): MutableList<PendingAction> {
+        val actions = mutableListOf<PendingAction>()
+        val raw = prefs(context).getString(KEY_ACTIONS, null) ?: return actions
+        try {
+            val array = JSONArray(raw)
+            for (i in 0 until array.length()) {
+                val o = array.getJSONObject(i)
+                actions.add(
+                    PendingAction(
+                        key = o.getString("key"),
+                        taskId = o.getString("taskId"),
+                        action = o.getString("action"),
+                        firedFireAt = o.getLong("firedFireAt"),
+                        tappedAt = o.getLong("tappedAt"),
+                    ),
+                )
+            }
+        } catch (_: Exception) {
+            actions.clear()
+        }
+        return actions
+    }
+
+    fun savePendingActions(context: Context, actions: List<PendingAction>) {
+        val array = JSONArray()
+        for (action in actions) {
+            array.put(
+                JSONObject()
+                    .put("key", action.key)
+                    .put("taskId", action.taskId)
+                    .put("action", action.action)
+                    .put("firedFireAt", action.firedFireAt)
+                    .put("tappedAt", action.tappedAt),
+            )
+        }
+        prefs(context).edit().putString(KEY_ACTIONS, array.toString()).commit()
     }
 }

@@ -63,3 +63,15 @@ export function calendarTimeInstant(day: string, time: string, timeZone: string)
     .toPlainDateTime(Temporal.PlainTime.from(time))
     .toZonedDateTime(timeZone, { disambiguation: 'compatible' }).epochMilliseconds;
 }
+
+/** Instant -> wall-clock calendar day and HH:mm in an explicit zone. */
+export function instantWallTime(epochMs: number, timeZone: string): { date: string; time: string } {
+  const zoned = Temporal.Instant.fromEpochMilliseconds(epochMs).toZonedDateTimeISO(timeZone);
+  const time = `${String(zoned.hour).padStart(2, '0')}:${String(zoned.minute).padStart(2, '0')}`;
+  return { date: zoned.toPlainDate().toString(), time };
+}
+
+/** YYYY-MM-DD shifted by whole calendar days. */
+export function addCalendarDays(day: string, days: number): string {
+  return Temporal.PlainDate.from(day).add({ days }).toString();
+}

@@ -3636,6 +3636,8 @@ name = "taskora-desktop"
 version = "0.6.1"
 dependencies = [
  "keyring",
+ "mac-notification-sys",
+ "notify-rust",
  "rusqlite",
  "serde",
  "serde_json",
@@ -3646,6 +3648,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-single-instance",
  "tauri-plugin-window-state",
+ "tauri-winrt-notification",
  "tempfile",
  "windows-sys 0.61.2",
  "winreg 0.55.0",

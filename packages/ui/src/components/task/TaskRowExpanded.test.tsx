@@ -287,3 +287,31 @@ describe('TaskRowExpanded — hide subtask empty state', () => {
     ).not.toBeInTheDocument();
   });
 });
+
+describe('TaskItem — Reveal Task 滚入视野', () => {
+  let scrollIntoView: ReturnType<typeof vi.fn>;
+  beforeEach(() => {
+    scrollIntoView = vi.fn();
+    Element.prototype.scrollIntoView =
+      scrollIntoView as unknown as typeof Element.prototype.scrollIntoView;
+  });
+  afterEach(() => {
+    delete (Element.prototype as Partial<Element>).scrollIntoView;
+  });
+
+  it('被定位的行展开后滚到视野中央，且只滚一次', async () => {
+    useUiInteractionStore.setState({ expandedId: 'task-1', revealId: 'task-1' });
+    withQueryClient(<DndList task={renderTask} />);
+
+    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' }));
+    expect(useUiInteractionStore.getState().revealId).toBeNull();
+    expect(scrollIntoView).toHaveBeenCalledTimes(1);
+  });
+
+  it('普通展开（无定位请求）不滚动', async () => {
+    useUiInteractionStore.setState({ expandedId: 'task-1', revealId: null });
+    withQueryClient(<DndList task={renderTask} />);
+    await new Promise((r) => requestAnimationFrame(() => r(null)));
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+});

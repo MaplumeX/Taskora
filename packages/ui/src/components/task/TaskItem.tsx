@@ -5,6 +5,7 @@ import {
   taskKeys,
   useTaskQuery,
   useUpdateTask,
+  useUiInteractionStore,
 } from '@taskora/api';
 import * as React from 'react';
 import { useQueryClient } from '@tanstack/react-query';
@@ -104,6 +105,17 @@ export function TaskItem({
   React.useEffect(() => {
     setTitle(current.title);
   }, [current.title]);
+
+  // Reveal Task（点通知定位任务）：目标行展开挂载后滚到视野中央，一次性。
+  const revealing = useUiInteractionStore((s) => expanded && s.revealId === task.id);
+  React.useEffect(() => {
+    if (!revealing) return;
+    const id = requestAnimationFrame(() => {
+      rowRef.current?.scrollIntoView?.({ block: 'center' });
+      useUiInteractionStore.getState().setRevealId(null);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [revealing]);
 
   // Auto-focus title on expand (caret at end, no full selection).
   React.useEffect(() => {

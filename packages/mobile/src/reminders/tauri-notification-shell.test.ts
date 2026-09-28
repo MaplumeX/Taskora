@@ -2,13 +2,19 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   invoke: vi.fn(),
+  addPluginListener: vi.fn(),
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({
   invoke: mocks.invoke,
+  addPluginListener: mocks.addPluginListener,
 }));
 
-import { createMobileNotificationShell } from './tauri-notification-shell';
+import {
+  createMobileNotificationShell,
+  onOpenTask,
+  takeLaunchTask,
+} from './tauri-notification-shell';
 
 /**
  * 命令名与参数形状必须与 reminders 插件（lib.rs 的 Rust 命令 + ACL）
@@ -20,14 +26,64 @@ describe('createMobileNotificationShell（reminders 插件）', () => {
     mocks.invoke.mockResolvedValue(undefined);
   });
 
-  it('sync 交付完整期望集与渠道名', async () => {
+  it('sync 交付完整期望集、渠道名与通知按钮文案', async () => {
     const plan = [
-      { key: 'reminder:t1', fireAt: 1_770_000_000_000, title: '写周报', body: '09:00' },
+      {
+        key: 'reminder:t1',
+        taskId: 't1',
+        fireAt: 1_770_000_000_000,
+        snoozeTomorrowAt: 1_770_086_400_000,
+        title: '写周报',
+        body: '09:00',
+      },
     ];
     await createMobileNotificationShell().sync!(plan);
     expect(mocks.invoke).toHaveBeenCalledWith('plugin:reminders|sync', {
-      args: { reminders: plan, channelName: expect.any(String) },
+      args: {
+        reminders: plan,
+        channelName: expect.any(String),
+        labels: {
+          complete: expect.any(String),
+          snooze: expect.any(String),
+          snooze15: expect.any(String),
+          snooze60: expect.any(String),
+          snoozeTomorrow: expect.any(String),
+          snoozeMore: expect.any(String),
+        },
+      },
     });
+  });
+
+  it('取走原生排队的通知操作', async () => {
+    const actions = [{ taskId: 't1', action: 'complete', firedFireAt: 1, tappedAt: 2 }];
+    mocks.invoke.mockResolvedValue(actions);
+    await expect(createMobileNotificationShell().takePendingActions!()).resolves.toEqual(actions);
+    expect(mocks.invoke).toHaveBeenCalledWith('plugin:reminders|take_pending_actions');
+  });
+
+  it('订阅原生事件：actions-available / open-task，注销走 unregister', async () => {
+    const unregister = vi.fn(async () => {});
+    mocks.addPluginListener.mockResolvedValue({ unregister });
+    const listener = vi.fn();
+
+    const offActions = await createMobileNotificationShell().onActionsAvailable!(listener);
+    expect(mocks.addPluginListener).toHaveBeenCalledWith(
+      'reminders',
+      'actions-available',
+      listener,
+    );
+    const offOpen = await onOpenTask(listener);
+    expect(mocks.addPluginListener).toHaveBeenCalledWith('reminders', 'open-task', listener);
+
+    offActions();
+    offOpen();
+    expect(unregister).toHaveBeenCalledTimes(2);
+  });
+
+  it('取走点通知正文启动时携带的任务', async () => {
+    mocks.invoke.mockResolvedValue('t1');
+    await expect(takeLaunchTask()).resolves.toBe('t1');
+    expect(mocks.invoke).toHaveBeenCalledWith('plugin:reminders|take_launch_task');
   });
 
   it('sync 失败向上抛出，交给协调器下个 tick 重试', async () => {

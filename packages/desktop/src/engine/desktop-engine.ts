@@ -28,13 +28,18 @@ import {
   setProjectHeadingBackend,
   createEngineProjectHeadingBackend,
   setSyncStatus,
+  requestTaskReveal,
 } from '@taskora/api';
 import { openEngine, type Engine, type SyncEntity } from '@taskora/engine';
 import { createReminderCoordinator, type ReminderCoordinator } from '@taskora/api';
 
 import { createHttpSyncTransport, registerDevice } from './http-transport';
 import { createTauriSqlStorage, isTauriRuntime, useUserReplicaDb } from './tauri-storage';
-import { createDesktopNotificationShell } from '../reminders/tauri-notification-shell';
+import {
+  createDesktopNotificationShell,
+  onReminderAction,
+  type DesktopReminderAction,
+} from '../reminders/tauri-notification-shell';
 
 const DEVICE_ID_KEY = 'taskora.deviceId';
 const SYNC_INTERVAL_MS = 30_000;
@@ -73,6 +78,7 @@ let unsubscribeAuth: (() => void) | null = null;
 let syncInFlight: Promise<boolean> | null = null;
 /** Reminders（reminders spec）：runtime 模式调度器，随 Engine 生命周期启停。 */
 let reminderCoordinator: ReminderCoordinator | null = null;
+let unsubscribeReminderActions: (() => void) | null = null;
 
 /** 供诊断/测试：当前 Engine 实例。 */
 export function getDesktopEngine(): Engine | null {
@@ -157,6 +163,16 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
       mode: 'runtime',
     });
     reminderCoordinator.start();
+    // 通知上的选择（reminder-actions spec）：点正文定位任务（Rust 侧已唤出
+    // 主窗口），按钮按 Reminder Action 规则写入。
+    unsubscribeReminderActions?.();
+    unsubscribeReminderActions = null;
+    void onReminderAction(handleReminderAction)
+      .then((off) => {
+        if (engine) unsubscribeReminderActions = off;
+        else off();
+      })
+      .catch(() => undefined);
   } catch (error) {
     console.error('[desktop-engine] 装配失败，退回 REST 后端', error);
     stopReminderCoordinator();
@@ -200,7 +216,19 @@ function stopEngine(): void {
   globalThis.localStorage?.removeItem(DEVICE_ID_KEY);
 }
 
+function handleReminderAction({ taskId, action, firedFireAt, tappedAt }: DesktopReminderAction) {
+  if (action === 'open') {
+    requestTaskReveal(taskId);
+    return;
+  }
+  void reminderCoordinator
+    ?.applyAction({ taskId, action, firedFireAt, tappedAt })
+    .catch((error) => console.warn('[reminders] apply action failed:', error));
+}
+
 function stopReminderCoordinator(): void {
+  unsubscribeReminderActions?.();
+  unsubscribeReminderActions = null;
   reminderCoordinator?.stop();
   reminderCoordinator = null;
 }

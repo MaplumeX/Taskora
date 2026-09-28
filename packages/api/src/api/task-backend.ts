@@ -29,7 +29,11 @@ export interface TaskBackend {
   updateTask(id: string, data: UpdateTaskDto): Promise<TaskResponseDto>;
   deleteTask(id: string): Promise<void>;
   restoreTask(id: string): Promise<TaskResponseDto>;
-  completeTask(id: string): Promise<TaskResponseDto>;
+  /**
+   * 完成任务。`settledAt` 仅供延迟应用的操作（通知上的「完成」）指定点击
+   * 时刻为了结时间；缺省为当前时刻。REST 实现忽略它（由服务端取时间）。
+   */
+  completeTask(id: string, options?: { settledAt?: string }): Promise<TaskResponseDto>;
   uncompleteTask(id: string): Promise<TaskResponseDto>;
   cancelTask(id: string): Promise<TaskResponseDto>;
   uncancelTask(id: string): Promise<TaskResponseDto>;
