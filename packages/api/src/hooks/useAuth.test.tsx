@@ -4,8 +4,8 @@ import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { configureTokenStore, noopTokenStore } from '@/token-store';
 import { useAuthStore } from '@/stores/auth.store';
-import { setAuthFlowNavigation, useLogin } from './useAuth';
-import { login } from '@/api/auth.api';
+import { setAuthFlowNavigation, useCurrentUser, useLogin } from './useAuth';
+import { getMe, login } from '@/api/auth.api';
 
 vi.mock('@/api/auth.api', () => ({
   login: vi.fn(),
@@ -78,5 +78,77 @@ describe('login persistence', () => {
     expect(onError).toHaveBeenCalled();
     expect(afterLogin).not.toHaveBeenCalled();
     expect(useAuthStore.getState().token).toBeNull();
+  });
+});
+
+describe('current-user polling mirrors the profile into the auth store', () => {
+  it('applies a profile change made on another device without saving the form', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const queryWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    useAuthStore.setState({
+      token: 'at',
+      user: {
+        id: 'u',
+        email: 'a@example.test',
+        displayName: 'Old',
+        avatarUrl: null,
+        preferences: null,
+      },
+    });
+    vi.mocked(getMe).mockResolvedValue({
+      id: 'u',
+      email: 'a@example.test',
+      displayName: 'New',
+      avatarUrl: 'https://example.test/remote.png',
+      preferences: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    });
+
+    renderHook(() => useCurrentUser(), { wrapper: queryWrapper });
+
+    await waitFor(() =>
+      expect(useAuthStore.getState().user?.avatarUrl).toBe('https://example.test/remote.png'),
+    );
+    expect(useAuthStore.getState().user?.displayName).toBe('New');
+    client.clear();
+  });
+
+  it('does not write a stale cached profile back after the session is cleared', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const queryWrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    useAuthStore.setState({
+      token: 'at',
+      user: {
+        id: 'u',
+        email: 'a@example.test',
+        displayName: 'Old',
+        avatarUrl: null,
+        preferences: null,
+      },
+    });
+    vi.mocked(getMe).mockResolvedValue({
+      id: 'u',
+      email: 'a@example.test',
+      displayName: 'New',
+      avatarUrl: 'https://example.test/remote.png',
+      preferences: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-02T00:00:00.000Z',
+    });
+
+    renderHook(() => useCurrentUser(), { wrapper: queryWrapper });
+    await waitFor(() => expect(useAuthStore.getState().user?.displayName).toBe('New'));
+
+    await act(async () => {
+      useAuthStore.setState({ token: null, user: null });
+    });
+
+    expect(useAuthStore.getState().user).toBeNull();
+    client.clear();
   });
 });
