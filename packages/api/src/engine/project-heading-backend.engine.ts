@@ -7,7 +7,7 @@
  */
 
 import type { Engine } from '@taskora/engine';
-import { positionAfter, positionsBetween } from '@taskora/engine';
+import { positionAfter, repositionMinimal } from '@taskora/engine';
 import {
   HeadingStatus,
   ProjectBucket,
@@ -172,44 +172,51 @@ export function createEngineProjectHeadingBackend(
         'task',
       );
 
-      // 双排序键一起写（对齐 reorderProjects 惯例）：sortOrder 维持 REST
-      // 列惯例（分组内索引）；position 按整页视觉顺序（ungrouped 在前、
-      // 各 heading 分组依次）分配全局等距键——本地副本按 position 读，
-      // 漏写会让桌面端拖拽后弹回旧顺序。
+      // 只写真正变化的字段，一个事务一次通知：heading 的 sortOrder（分组
+      // 顺序）、task 的 headingId（跨组移动）与 position（按整页视觉顺序
+      // ——ungrouped 在前、各分组依次——只给必须移动的行分配新键）。
+      // web 端 REST 同样按 position 读序，task 不再需要稠密 sortOrder。
       const visualTaskIds = [
         ...data.ungroupedTaskIds,
         ...data.groups.flatMap((group) => group.taskIds),
       ];
-      const positionKeys = positionsBetween(null, null, visualTaskIds.length);
-      const positionOf = new Map(visualTaskIds.map((id, index) => [id, positionKeys[index]]));
-      const positionPatch = (taskId: string): Record<string, unknown> => {
-        const position = positionOf.get(taskId);
-        return position !== undefined ? { position } : {};
+      const taskById = new Map(visibleTasks.map((row) => [row.id, row]));
+      const targetHeading = new Map<string, string | null>(
+        data.ungroupedTaskIds.map((id) => [id, null]),
+      );
+      for (const group of data.groups) {
+        for (const id of group.taskIds) targetHeading.set(id, group.headingId);
+      }
+      const patches = new Map<string, Record<string, unknown>>();
+      const patchOf = (id: string) => {
+        const patch = patches.get(id) ?? {};
+        patches.set(id, patch);
+        return patch;
       };
-
-      const writes: Array<Promise<unknown>> = [];
-      for (const [groupIndex, group] of data.groups.entries()) {
-        writes.push(engine.update('project-heading', group.headingId, { sortOrder: groupIndex }));
-        for (const [taskIndex, taskId] of group.taskIds.entries()) {
-          writes.push(
-            engine.update('task', taskId, {
-              headingId: group.headingId,
-              sortOrder: taskIndex,
-              ...positionPatch(taskId),
-            }),
-          );
+      for (const [id, headingId] of targetHeading) {
+        if ((taskById.get(id)?.fields.headingId ?? null) !== headingId) {
+          patchOf(id).headingId = headingId;
         }
       }
-      for (const [taskIndex, taskId] of data.ungroupedTaskIds.entries()) {
-        writes.push(
-          engine.update('task', taskId, {
-            headingId: null,
-            sortOrder: taskIndex,
-            ...positionPatch(taskId),
-          }),
-        );
-      }
-      await Promise.all(writes);
+      const moved = repositionMinimal(
+        visualTaskIds.map((id) => {
+          const position = taskById.get(id)?.fields.position;
+          return { id, position: typeof position === 'string' ? position : null };
+        }),
+      );
+      for (const { id, position } of moved) patchOf(id).position = position;
+
+      const headingById = new Map(headings.map((row) => [row.id, row]));
+      const headingPatches = data.groups.flatMap((group, groupIndex) =>
+        headingById.get(group.headingId)?.fields.sortOrder === groupIndex
+          ? []
+          : [{ id: group.headingId, patch: { sortOrder: groupIndex } }],
+      );
+      await engine.updateMany('project-heading', headingPatches);
+      await engine.updateMany(
+        'task',
+        [...patches].map(([id, patch]) => ({ id, patch })),
+      );
     },
 
     async archiveProjectHeading(id) {

@@ -11,6 +11,7 @@ export {
   positionBetween,
   positionsBetween,
   rebalancePositions,
+  repositionMinimal,
   synthPosition,
   validatePosition,
 } from './position';

@@ -102,27 +102,30 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     expect((await backend.getFeed('inbox')).map((i) => i.title)).toEqual(['要删的']);
   });
 
-  it('拖拽排序：reorder 后 Position/sortOrder 双写生效且不产生多余 Outbox 条目', async () => {
+  it('拖拽排序：reorder 只写被拖动的一行，且只触发一次变更通知', async () => {
     const a = await backend.createTask({ title: 'A' });
     const b = await backend.createTask({ title: 'B' });
     const c = await backend.createTask({ title: 'C' });
-    const pendingBefore = await engine.pendingCount();
+    await engine.sync();
+    // 新任务插在最前：当前顺序 C、B、A
+    expect((await backend.getFeed('inbox')).map((i) => i.title)).toEqual(['C', 'B', 'A']);
+    const positionOf = async (id: string) => (await engine.get('task', id))?.fields.position;
+    const [beforeB, beforeC] = [await positionOf(b.id), await positionOf(c.id)];
 
-    await backend.reorderTasks([c.id, a.id, b.id]);
-    expect((await backend.getFeed('inbox')).map((i) => i.title)).toEqual(['C', 'A', 'B']);
+    let notifications = 0;
+    const off = engine.onChange(() => {
+      notifications += 1;
+    });
+    // 把 A 拖到最前
+    await backend.reorderTasks([a.id, c.id, b.id]);
+    off();
+    expect((await backend.getFeed('inbox')).map((i) => i.title)).toEqual(['A', 'C', 'B']);
 
-    // sortOrder 同步写入（web 端 REST 读序列）；漏写时 web 端不变序
-    for (const [id, index] of [
-      [c.id, 0],
-      [a.id, 1],
-      [b.id, 2],
-    ] as const) {
-      expect((await engine.get('task', id))?.fields.sortOrder).toBe(index);
-    }
-
-    // 只给顺序变化的行追加 Outbox（A、B 换位，C 已在最前不动）
-    const pendingAfter = await engine.pendingCount();
-    expect(pendingAfter - pendingBefore).toBeLessThanOrEqual(2);
+    // 只有 A 换了 Position；B、C 原样，Outbox 只多一条
+    expect(await positionOf(b.id)).toBe(beforeB);
+    expect(await positionOf(c.id)).toBe(beforeC);
+    expect(await engine.pendingCount()).toBe(1);
+    expect(notifications).toBe(1);
   });
 
   it('本地写与 hub 收敛：flush/pull 后两端一致，REST 回声幂等', async () => {

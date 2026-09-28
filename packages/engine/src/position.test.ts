@@ -1,4 +1,10 @@
-import { BASE_62_DIGITS, positionBetween, positionsBetween, rebalancePositions } from './position';
+import {
+  BASE_62_DIGITS,
+  positionBetween,
+  positionsBetween,
+  rebalancePositions,
+  repositionMinimal,
+} from './position';
 
 describe('positionBetween', () => {
   it('首条 Position 是 "a0"，追加在末尾则整数部分递增', () => {
@@ -66,5 +72,47 @@ describe('positionBetween', () => {
     expect(rebalanced![0].length).toBeLessThanOrEqual(4);
     expect(rebalanced![0] < rebalanced![1]).toBe(true);
     expect(BASE_62_DIGITS.length).toBe(62);
+  });
+});
+
+describe('repositionMinimal', () => {
+  const apply = (
+    ordered: Array<{ id: string; position: string | null }>,
+  ): { changes: number; sorted: string[] } => {
+    const changes = repositionMinimal(ordered);
+    const next = new Map(ordered.map((row) => [row.id, row.position]));
+    for (const change of changes) next.set(change.id, change.position);
+    const sorted = [...next].sort((a, b) => ((a[1] as string) < (b[1] as string) ? -1 : 1));
+    return { changes: changes.length, sorted: sorted.map(([id]) => id) };
+  };
+  const keys = positionsBetween(null, null, 6);
+  const rows = ['a', 'b', 'c', 'd', 'e', 'f'].map((id, index) => ({ id, position: keys[index] }));
+
+  it('单次拖动只写被拖的一行', () => {
+    // 把 e 拖到 b 前面
+    const ordered = [rows[0], rows[4], rows[1], rows[2], rows[3], rows[5]];
+    expect(apply(ordered)).toEqual({ changes: 1, sorted: ['a', 'e', 'b', 'c', 'd', 'f'] });
+  });
+
+  it('拖到最前 / 最后', () => {
+    expect(apply([rows[5], ...rows.slice(0, 5)])).toEqual({
+      changes: 1,
+      sorted: ['f', 'a', 'b', 'c', 'd', 'e'],
+    });
+    expect(apply([...rows.slice(1), rows[0]])).toEqual({
+      changes: 1,
+      sorted: ['b', 'c', 'd', 'e', 'f', 'a'],
+    });
+  });
+
+  it('顺序未变不写', () => {
+    expect(apply(rows).changes).toBe(0);
+  });
+
+  it('缺 Position 的行与完全逆序也能排成目标顺序', () => {
+    const withNull = [rows[0], { id: 'x', position: null }, rows[1]];
+    expect(apply(withNull).sorted).toEqual(['a', 'x', 'b']);
+    const reversed = [...rows].reverse();
+    expect(apply(reversed).sorted).toEqual(['f', 'e', 'd', 'c', 'b', 'a']);
   });
 });

@@ -8,7 +8,7 @@
 
 import { toDateKey } from '@/utils/date';
 import type { Engine } from '@taskora/engine';
-import { positionAfter, positionsBetween } from '@taskora/engine';
+import { positionAfter, repositionMinimal } from '@taskora/engine';
 import { ProjectBucket, ProjectStatus, ScheduledType, TaskStatus } from '@taskora/shared';
 import type {
   CreateProjectDto,
@@ -200,18 +200,20 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
     },
 
     async reorderProjects(orderedIds: string[]): Promise<void> {
-      // 为整个有序集重排 Position/sortOrder；未变的行不动（控制 Outbox 体积）
-      const keys = positionsBetween(null, null, orderedIds.length);
+      // 只给必须移动的行分配新 Position，一个事务一次通知（同 reorderTasks）
       const rows = await engine.list('project');
       const byId = new Map(rows.map((row) => [row.id, row]));
-      await Promise.all(
-        orderedIds.map(async (id, index) => {
+      const changes = repositionMinimal(
+        orderedIds.flatMap((id) => {
           const row = byId.get(id);
-          if (!row) return;
-          if (row.fields.position !== keys[index] || row.fields.sortOrder !== index) {
-            await engine.update('project', id, { position: keys[index], sortOrder: index });
-          }
+          if (!row) return [];
+          const position = row.fields.position;
+          return [{ id, position: typeof position === 'string' ? position : null }];
         }),
+      );
+      await engine.updateMany(
+        'project',
+        changes.map(({ id, position }) => ({ id, patch: { position } })),
       );
     },
   };

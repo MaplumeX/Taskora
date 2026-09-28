@@ -25,6 +25,8 @@ export interface FeedItemBase {
   completedAt: string | null;
   trashedAt: string | null;
   sortOrder: number;
+  /** 列表位次（fractional indexing 字符串，ADR-0007）；web 与桌面端共用的排序键。 */
+  position?: string | null;
   createdAt: string;
   updatedAt: string;
   tags: TagResponseDto[];

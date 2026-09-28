@@ -1064,3 +1064,55 @@ describe('Compact 登记跨会话持久与 Outbox 因果序', () => {
     await engine.close();
   });
 });
+
+describe('批量写 / 批量应用 / 事务读闸', () => {
+  it('updateMany 与一次 pull 的多条远端变更各只触发一次变更通知', async () => {
+    const h = await makeHarness();
+    const a = await h.device('A');
+    const b = await h.device('B');
+    await a.sync();
+    await b.sync();
+    const ids: string[] = [];
+    for (let index = 0; index < 20; index += 1) ids.push(await createTask(a, `任务 ${index}`));
+    await a.sync();
+
+    const localEvents: string[] = [];
+    const offA = a.onChange((change) => localEvents.push(change.origin));
+    await a.updateMany(
+      'task',
+      ids.map((id, index) => ({ id, patch: { title: `改 ${index}` } })),
+    );
+    expect(localEvents).toEqual(['local']);
+    offA();
+    await a.sync();
+
+    const remoteEvents: string[] = [];
+    b.onChange((change) => remoteEvents.push(change.origin));
+    await b.sync();
+    expect(remoteEvents.filter((origin) => origin !== 'bootstrap')).toEqual(['remote']);
+    expect((await b.list('task')).map((row) => row.fields.title)).toContain('改 19');
+    await a.close();
+    await b.close();
+  });
+
+  it('bootstrap 重建期间的并发读看不到空表或半份数据', async () => {
+    const h = await makeHarness();
+    const a = await h.device('A');
+    await a.sync();
+    for (let index = 0; index < 50; index += 1) await createTask(a, `任务 ${index}`);
+    await a.sync();
+
+    const counts: number[] = [];
+    let done = false;
+    const rebuilding = a.bootstrap().finally(() => {
+      done = true;
+    });
+    while (!done) {
+      counts.push((await a.list('task')).length);
+    }
+    await rebuilding;
+    expect(counts.length).toBeGreaterThan(0);
+    expect(counts.every((count) => count === 50)).toBe(true);
+    await a.close();
+  });
+});

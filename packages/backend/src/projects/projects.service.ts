@@ -3,6 +3,7 @@ import { userCalendarZones } from '../users/account-time-zone';
 import { calendarDateStorage, ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { synthPosition } from '../sync/entity-codec';
+import { sortByPosition } from '../common/position-order';
 import { SETTLED_STATUSES } from '../tasks/views';
 import { CreateProjectDto, UpdateProjectDto } from './dto/projects.dto';
 import { Prisma } from '@prisma/client';
@@ -114,7 +115,8 @@ export class ProjectsService {
       }
     }
 
-    return projects.map((p) => {
+    // 按有效 Position 排序（与桌面端副本同一口径）
+    return sortByPosition(projects).map((p) => {
       const counts = countMap.get(p.id);
       return {
         ...p,

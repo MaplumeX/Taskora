@@ -34,10 +34,11 @@ import {
   setProjectHeadingBackend,
   createEngineProjectHeadingBackend,
   setSyncStatus,
+  createEngineInvalidator,
   useReminderPermissionStore,
   requestTaskReveal,
 } from '@taskora/api';
-import { openEngine, type Engine, type SyncEntity } from '@taskora/engine';
+import { openEngine, type Engine } from '@taskora/engine';
 import { createReminderCoordinator, type ReminderCoordinator } from '@taskora/api';
 
 import { createHttpSyncTransport, registerDevice } from './http-transport';
@@ -52,33 +53,6 @@ import { scheduleStatusBarRefresh } from '../status-bar';
 
 const DEVICE_ID_KEY = 'taskora.deviceId';
 
-/**
- * 实体 → 需失效的 query root（失效面对齐 event-applier 的口径）：
- * task/project/feed 互相嵌入计数，tag 嵌入一切带标签芯片的缓存。
- * （与 desktop-engine 同表，两侧变更需同步维护。）
- */
-const INVALIDATION_BY_ENTITY: Record<SyncEntity, string[][]> = {
-  task: [['tasks'], ['task'], ['feed'], ['projects'], ['project']],
-  subtask: [['tasks'], ['task']],
-  project: [['projects'], ['project'], ['feed']],
-  'project-heading': [['project-headings']],
-  area: [['areas'], ['area'], ['feed']],
-  tag: [['tags'], ['tag'], ['tag-groups'], ['tasks'], ['projects'], ['areas'], ['feed']],
-  'tag-group': [['tag-groups'], ['tag-group']],
-};
-
-const ALL_QUERY_ROOTS = [...new Set(Object.values(INVALIDATION_BY_ENTITY).flat())];
-
-/** 按变更涉及的实体失效对应域；entities 缺省（bootstrap）时全量。 */
-function invalidateEntities(queryClient: QueryClient, entities?: SyncEntity[]): void {
-  const roots = entities
-    ? [...new Set(entities.flatMap((entity) => INVALIDATION_BY_ENTITY[entity] ?? []))]
-    : ALL_QUERY_ROOTS;
-  for (const root of roots) {
-    queryClient.invalidateQueries({ queryKey: root });
-  }
-}
-
 let engine: Engine | null = null;
 let unsubscribeRemoteChange: (() => void) | null = null;
 let unsubscribeForeground: (() => void) | null = null;
@@ -86,6 +60,8 @@ let unsubscribeOpenTask: (() => void) | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribeAuth: (() => void) | null = null;
 let syncInFlight: Promise<boolean> | null = null;
+/** 在飞期间又有触发（SSE 提示、本地写）：结束后立即补跑一轮，而不是等下个周期。 */
+let syncRequested = false;
 /** Reminders（reminders spec）：system 模式调度器，随 Engine 生命周期启停。 */
 let reminderCoordinator: ReminderCoordinator | null = null;
 
@@ -142,12 +118,13 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     // 装配期间 UI 已经渲染、首屏查询走的是 REST（离线时失败，在线时缺
     // 本地未推送的编辑）。注入完成后全量失效，改从本地副本重读——不能
     // 指望首次同步触发 onChange：没有远端变更时它根本不会触发。
-    invalidateEntities(queryClient);
+    const invalidateEntities = createEngineInvalidator(queryClient);
+    invalidateEntities();
 
     // 副本变更 → UI 缓存失效（本地读，立即生效；按实体粒度），
     // 仅本地写需要防抖调度同步——远端写应用后无新 Outbox，再拉是空转。
     engine.onChange((change) => {
-      invalidateEntities(queryClient, change.entities);
+      invalidateEntities(change.entities);
       // 状态栏常驻通知（android-status-bar）：任务变更后防抖刷新内容
       // （控制器内部判定开关/会话，未开启时为空操作）。
       scheduleStatusBarRefresh();
@@ -265,7 +242,10 @@ function stopReminderCoordinator(): void {
 /** flush + pull；并发调用合并为一个在飞任务。成败驱动同步指示器（V2）。 */
 export function syncNow(): Promise<boolean> {
   if (!engine) return Promise.resolve(false);
-  if (syncInFlight) return syncInFlight;
+  if (syncInFlight) {
+    syncRequested = true;
+    return syncInFlight;
+  }
   setSyncStatus('syncing');
   syncInFlight = engine
     .sync()
@@ -282,6 +262,10 @@ export function syncNow(): Promise<boolean> {
     })
     .finally(() => {
       syncInFlight = null;
+      if (syncRequested) {
+        syncRequested = false;
+        void syncNow();
+      }
     });
   return syncInFlight;
 }

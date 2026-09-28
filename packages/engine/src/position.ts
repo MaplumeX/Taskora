@@ -259,6 +259,64 @@ export function rebalancePositions(
   return positionsBetween(null, null, keys.length);
 }
 
+/**
+ * 按目标顺序重排时，只为「必须移动」的行分配新 Position（CONTEXT.md：
+ * 插队只需在两个邻居间生成新串，无需重排他人）。
+ *
+ * 取现有 Position 沿目标顺序的最长严格递增子序列作为不动的骨架，其余
+ * 行（被拖动的、缺 Position 的）按连续段插进前后骨架邻居之间。单次拖动
+ * 只产生一条写；并发拖动不同行的两台设备各写各的行，LWW 下双方的移动
+ * 都保留，而不是一方的整表顺序覆盖另一方。
+ *
+ * 返回需要写入的 { id, position }（已在位的行不出现）。
+ */
+export function repositionMinimal(
+  ordered: Array<{ id: string; position: string | null | undefined }>,
+): Array<{ id: string; position: string }> {
+  const n = ordered.length;
+  // 最长严格递增子序列（耐心排序，O(n log n)），缺 Position 的行不参与
+  const tailIndex: number[] = [];
+  const prev = new Array<number>(n).fill(-1);
+  for (let i = 0; i < n; i += 1) {
+    const key = ordered[i].position;
+    if (typeof key !== 'string') continue;
+    let lo = 0;
+    let hi = tailIndex.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if ((ordered[tailIndex[mid]].position as string) < key) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo > 0) prev[i] = tailIndex[lo - 1];
+    tailIndex[lo] = i;
+  }
+  const fixed = new Set<number>();
+  for (let i = tailIndex.length > 0 ? tailIndex[tailIndex.length - 1] : -1; i !== -1; i = prev[i]) {
+    fixed.add(i);
+  }
+
+  const changes: Array<{ id: string; position: string }> = [];
+  let lower: string | null = null;
+  let i = 0;
+  while (i < n) {
+    if (fixed.has(i)) {
+      lower = ordered[i].position as string;
+      i += 1;
+      continue;
+    }
+    let end = i;
+    while (end < n && !fixed.has(end)) end += 1;
+    const upper = end < n ? (ordered[end].position as string) : null;
+    const keys = positionsBetween(lower, upper, end - i);
+    for (let k = 0; k < keys.length; k += 1) {
+      changes.push({ id: ordered[i + k].id, position: keys[k] });
+    }
+    lower = keys[keys.length - 1];
+    i = end;
+  }
+  return changes;
+}
+
 // ---------- Legacy 行的 Position 合成（REST 写 / 兜底共用） ----------
 
 const MAX_TS = 4_102_444_800_000; // 2100-01-01，分数编码的值域上界

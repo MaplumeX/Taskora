@@ -20,6 +20,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { registerCompacted } from '../sync/compact-registry';
 import { synthPosition } from '../sync/entity-codec';
+import { sortByPosition } from '../common/position-order';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
 import { Prisma } from '@prisma/client';
 import { buildTaskViewWhere, WITH_SETTLED_STATUSES } from './views';
@@ -250,19 +251,21 @@ export class TasksService {
         ? await userCalendarZones(this.prisma, userId)
         : { timeZone: 'UTC', legacyDateTimeZone: 'UTC' };
     const now = new Date();
-    return tasks
-      .filter((task) =>
-        matchesCalendarView(
-          task.scheduledDate,
-          query.view ?? '',
-          zones.timeZone,
-          now,
-          zones.legacyDateTimeZone,
-        ),
-      )
-      .map((t) =>
-        settledToCompletedAt(withRepeatRuleDto({ ...t, tags: t.tags.map((tt) => tt.tag) })),
-      );
+    const visible = tasks.filter((task) =>
+      matchesCalendarView(
+        task.scheduledDate,
+        query.view ?? '',
+        zones.timeZone,
+        now,
+        zones.legacyDateTimeZone,
+      ),
+    );
+    // 非 logbook 视图按有效 Position 排序（与桌面端副本同一口径）
+    return (query.view === 'logbook' ? visible : sortByPosition(visible)).map((t) =>
+      settledToCompletedAt(
+        withRepeatRuleDto({ ...t, tags: t.tags.map((tt) => tt.tag) }),
+      ),
+    );
   }
 
   async findOne(userId: string, id: string) {

@@ -157,7 +157,7 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
     __resetForTest();
   });
 
-  it('场景 4 — 下拉刷新：requestPullSync 手动触发 pull，且在飞任务合并', async () => {
+  it('场景 4 — 下拉刷新：requestPullSync 手动触发 pull，在飞期间的触发合并为一次补跑', async () => {
     const { initMobileEngine, requestPullSync } = await loadEngine();
     initMobileEngine(renderQueryClient());
 
@@ -166,10 +166,14 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
     });
     fakeEngine.sync.mockClear();
 
-    // 两次手动触发并发合并为一个在飞 sync
-    await Promise.all([requestPullSync(), requestPullSync()]);
-
-    expect(fakeEngine.sync).toHaveBeenCalledTimes(1);
+    // 在飞期间的多次触发合并为一个在飞 sync + 结束后补跑一轮（期间可能
+    // 有新的远端变更或本地写，不能等下个周期）
+    await Promise.all([requestPullSync(), requestPullSync(), requestPullSync()]);
+    await vi.waitFor(() => {
+      expect(fakeEngine.sync).toHaveBeenCalledTimes(2);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(fakeEngine.sync).toHaveBeenCalledTimes(2);
   });
 
   it('断网：sync 失败 → SyncIndicator 显示 offline + Outbox 排队数', async () => {

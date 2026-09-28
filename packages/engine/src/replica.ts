@@ -26,7 +26,7 @@ import {
 } from './entities';
 import { HybridClock } from './hlc';
 import { mergeEntityState, type EntityMergeState, type FieldWrite } from './merger';
-import type { OutboxEvent, SnapshotEntry } from './protocol';
+import type { HubChange, OutboxEvent, SnapshotEntry } from './protocol';
 import { inTransaction, type SqlStorage } from './storage';
 
 export interface ReplicaRow {
@@ -83,6 +83,12 @@ export class LocalReplica {
   private readonly compacted = new Set<string>();
   /** 写串行化：异步存储下防止并发写的 BEGIN/COMMIT 交错。 */
   private writeChain: Promise<unknown> = Promise.resolve();
+  /**
+   * 进行中的写事务。存储是单连接（Tauri IPC 共享同一个 rusqlite 连接），
+   * 事务外的读会读到事务中间态——bootstrap 整表替换期间 UI 读到空表。
+   * 公共读等待它结束；事务体内部只用 getRaw，不经过这道闸。
+   */
+  private activeTx: Promise<void> | null = null;
 
   constructor(
     private readonly storage: SqlStorage,
@@ -169,6 +175,24 @@ export class LocalReplica {
     return run;
   }
 
+  /** 写事务：inTransaction + 标记进行中（公共读据此等待）。 */
+  private async tx<T>(fn: () => Promise<T>): Promise<T> {
+    let release!: () => void;
+    this.activeTx = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    try {
+      return await inTransaction(this.storage, fn);
+    } finally {
+      this.activeTx = null;
+      release();
+    }
+  }
+
+  private async readGate(): Promise<void> {
+    while (this.activeTx) await this.activeTx;
+  }
+
   private notifyChanged(change: EngineChange): void {
     this.changeVersion += 1;
     for (const listener of [...this.listeners]) {
@@ -184,6 +208,12 @@ export class LocalReplica {
 
   /** 实体合并态（字段 + 时钟），不存在返回 null。 */
   async get(entity: SyncEntity, id: string): Promise<EntityMergeState | null> {
+    await this.readGate();
+    return this.getRaw(entity, id);
+  }
+
+  /** 不经读闸的 get（仅供写事务体内部使用）。 */
+  private async getRaw(entity: SyncEntity, id: string): Promise<EntityMergeState | null> {
     const def = entityDef(entity);
     const rows = await this.storage.all<Record<string, unknown>>(
       `SELECT * FROM ${def.table} WHERE id = ?`,
@@ -194,17 +224,19 @@ export class LocalReplica {
 
   /** 全量实体行（UI 查询面），按 Position / sortOrder 排序。 */
   async list(entity: SyncEntity): Promise<ReplicaRow[]> {
+    await this.readGate();
     const def = entityDef(entity);
     const order =
       def.orderField === 'position'
         ? 'ORDER BY position IS NULL ASC, position ASC, createdAt DESC'
         : 'ORDER BY sortOrder ASC, createdAt DESC';
+    // 不取 clocks 列：UI 用不到，整表 JSON 经 IPC 传输再丢弃是纯浪费
+    const columns = ['id', ...def.fields.map((field) => field.name)].join(', ');
     const rows = await this.storage.all<Record<string, unknown>>(
-      `SELECT * FROM ${def.table} ${order}`,
+      `SELECT ${columns} FROM ${def.table} ${order}`,
     );
     return rows.map((row) => {
-      const { id, clocks: _clocks, ...rest } = row;
-      void _clocks;
+      const { id, ...rest } = row;
       return { id: id as string, fields: this.decodeRow(entity, rest) };
     });
   }
@@ -244,7 +276,7 @@ export class LocalReplica {
       writes[field.name] = { value: fields[field.name], hlc };
       clocks[field.name] = hlc;
     }
-    await inTransaction(this.storage, async () => {
+    await this.tx(async () => {
       await this.writeRow(entity, id, fields, clocks, { insert: true });
       await this.appendOutbox(entity, id, writes);
     });
@@ -257,12 +289,29 @@ export class LocalReplica {
    * updatedAt 自动推进（除非补丁显式给出）。
    */
   async update(entity: SyncEntity, id: string, patch: WireRow): Promise<void> {
-    return this.serialized(() => this.updateInternal(entity, id, patch));
+    return this.updateMany(entity, [{ id, patch }]);
   }
 
-  private async updateInternal(entity: SyncEntity, id: string, patch: WireRow): Promise<void> {
+  /**
+   * 批量更新：一个事务、一次变更通知。重排等多行写入不再逐行触发 UI
+   * 失效与重查（逐行时 UI 会渲染出只改了一半的中间顺序）。
+   */
+  async updateMany(entity: SyncEntity, patches: Array<{ id: string; patch: WireRow }>): Promise<void> {
+    if (patches.length === 0) return;
+    return this.serialized(async () => {
+      await this.tx(async () => {
+        for (const { id, patch } of patches) {
+          await this.applyLocalUpdate(entity, id, patch);
+        }
+      });
+      this.notifyChanged({ origin: 'local', entities: [entity] });
+    });
+  }
+
+  /** 单行本地更新（调用方负责事务与通知）。 */
+  private async applyLocalUpdate(entity: SyncEntity, id: string, patch: WireRow): Promise<void> {
     const def = entityDef(entity);
-    const current = await this.get(entity, id);
+    const current = await this.getRaw(entity, id);
     if (!current) {
       throw new Error(`update: ${entity} ${id} 不存在`);
     }
@@ -281,11 +330,8 @@ export class LocalReplica {
       clocks[field.name] = hlc;
       writes[field.name] = { value: fields[field.name], hlc };
     }
-    await inTransaction(this.storage, async () => {
-      await this.writeRow(entity, id, fields, clocks, { insert: false });
-      await this.appendOutbox(entity, id, writes);
-    });
-    this.notifyChanged({ origin: 'local', entities: [entity] });
+    await this.writeRow(entity, id, fields, clocks, { insert: false });
+    await this.appendOutbox(entity, id, writes);
   }
 
   /**
@@ -311,7 +357,7 @@ export class LocalReplica {
 
   private async requestDeleteInternal(entity: SyncEntity, ids: string[]): Promise<void> {
     const affected = new Set<SyncEntity>([entity]);
-    await inTransaction(this.storage, async () => {
+    await this.tx(async () => {
       await this.removeRows(entity, ids, { enqueue: true }, affected);
     });
     this.notifyChanged({ origin: 'local', entities: [...affected] });
@@ -422,45 +468,85 @@ export class LocalReplica {
     id: string,
     remote: EntityMergeState,
   ): Promise<boolean> {
+    const applied = await this.tx(() => this.mergeRemote(entity, id, remote));
+    if (applied) this.notifyChanged({ origin: 'remote', entities: [entity] });
+    return applied;
+  }
+
+  /** 单个远端实体的 LWW 合并落库（调用方负责事务与通知）。 */
+  private async mergeRemote(
+    entity: SyncEntity,
+    id: string,
+    remote: EntityMergeState,
+  ): Promise<boolean> {
     this.absorbRemoteClocks(remote.clocks);
     // Compact 永久获胜（ADR-0008）：已 compact 的实体，迟到的远端字段
     // 变更一律静默丢弃（副本与 hub 同规则），不会「删了又复活」。
     if (this.compacted.has(`${entity}:${id}`)) return false;
-    const current = await this.get(entity, id);
+    const current = await this.getRaw(entity, id);
     const outcome = mergeEntityState(current, remote);
     if (outcome.appliedFields.length === 0) return false;
-    await inTransaction(this.storage, async () => {
-      await this.writeRow(entity, id, outcome.fields, outcome.clocks, {
-        insert: current === null,
-      });
+    await this.writeRow(entity, id, outcome.fields, outcome.clocks, {
+      insert: current === null,
     });
-    this.notifyChanged({ origin: 'remote', entities: [entity] });
     return true;
   }
 
   /** 应用 Compact Event：从副本物理移除一批实体。 */
   async applyCompact(entity: SyncEntity, ids: string[]): Promise<boolean> {
-    return this.serialized(() => this.applyCompactInternal(entity, ids));
+    return this.serialized(async () => {
+      const affected = new Set<SyncEntity>();
+      await this.tx(() => this.compactRows(entity, ids, affected));
+      if (affected.size === 0) return false;
+      this.notifyChanged({ origin: 'remote', entities: [...affected] });
+      return true;
+    });
   }
 
-  private async applyCompactInternal(entity: SyncEntity, ids: string[]): Promise<boolean> {
-    const affected = new Set<SyncEntity>([entity]);
-    let removed = 0;
-    await inTransaction(this.storage, async () => {
-      // 级联与引用清理与设备发起删除同规则（Task → Subtask；SetNull）；
-      // 登记无论本地是否有行——compact 是 hub 的事实。
-      removed = await this.removeRows(entity, ids, { enqueue: false }, affected);
+  /**
+   * 移除一批被 compact 的实体（调用方负责事务与通知）。affected 收集
+   * 真正有变化的实体：行被删，或引用清理（SetNull/tagIds 剔除）波及他实体。
+   */
+  private async compactRows(
+    entity: SyncEntity,
+    ids: string[],
+    affected: Set<SyncEntity>,
+  ): Promise<void> {
+    const touched = new Set<SyncEntity>([entity]);
+    // 级联与引用清理与设备发起删除同规则（Task → Subtask；SetNull）；
+    // 登记无论本地是否有行——compact 是 hub 的事实。
+    const removed = await this.removeRows(entity, ids, { enqueue: false }, touched);
+    if (removed > 0 || touched.size > 1) {
+      for (const item of touched) affected.add(item);
+    }
+  }
+
+  /**
+   * 应用一次 pull 的全部远端变更并推进 Sync Cursor：一个事务、一次通知。
+   * 逐条应用时每条都触发 UI 失效与整表重查，500 条变更就是 500 轮；
+   * 游标与变更同事务提交，中途崩溃不会出现「游标已前进、变更没落库」。
+   */
+  async applyRemoteBatch(changes: HubChange[], cursor: number): Promise<void> {
+    return this.serialized(async () => {
+      const affected = new Set<SyncEntity>();
+      await this.tx(async () => {
+        for (const change of changes) {
+          if (change.kind === 'entity') {
+            const applied = await this.mergeRemote(change.entity, change.id, {
+              fields: change.fields,
+              clocks: change.clocks,
+            });
+            if (applied) affected.add(change.entity);
+          } else {
+            await this.compactRows(change.entity, change.ids, affected);
+          }
+        }
+        await this.metaSet('syncCursor', String(cursor));
+      });
+      if (affected.size > 0) {
+        this.notifyChanged({ origin: 'remote', entities: [...affected] });
+      }
     });
-    if (removed > 0) {
-      this.notifyChanged({ origin: 'remote', entities: [...affected] });
-      return true;
-    }
-    // 行本身不存在，但引用清理（SetNull/tagIds 剔除）仍可能波及他实体
-    if (affected.size > 1) {
-      this.notifyChanged({ origin: 'remote', entities: [...affected] });
-      return true;
-    }
-    return false;
   }
 
   /**
@@ -481,7 +567,7 @@ export class LocalReplica {
   ): Promise<void> {
     const snapshotKeys = new Set(snapshot.map((entry) => `${entry.entity}:${entry.id}`));
     this.compacted.clear();
-    await inTransaction(this.storage, async () => {
+    await this.tx(async () => {
       // 登记以 hub 的持久登记为准整体替换（未同步的本地删除在下方
       // Outbox 回放时重新登记）。
       await this.storage.exec('DELETE FROM _compacted');
@@ -504,31 +590,32 @@ export class LocalReplica {
         });
         this.absorbRemoteClocks(entry.clocks);
       }
-    });
-    // Outbox 回放：本地合并（不重新打时间戳，保留原 HLC）；Delete
-    // Request 照常回放为本地删除（未同步的删除不因重建而丢捔）。
-    const pending = await this.takeOutbox(Number.MAX_SAFE_INTEGER);
-    for (const entry of pending) {
-      if (entry.kind === 'delete') {
-        await this.removeRows(entry.entity, [entry.id], { enqueue: false }, new Set());
-        continue;
+      // Outbox 回放（同一事务内：读者不会看到「快照已换、本地编辑未回放」
+      // 的中间态）：本地合并（不重新打时间戳，保留原 HLC）；Delete
+      // Request 照常回放为本地删除（未同步的删除不因重建而丢失）。
+      const pending = await this.takeOutbox(Number.MAX_SAFE_INTEGER);
+      for (const entry of pending) {
+        if (entry.kind === 'delete') {
+          await this.removeRows(entry.entity, [entry.id], { enqueue: false }, new Set());
+          continue;
+        }
+        const { event } = entry;
+        if (this.compacted.has(`${event.entity}:${event.id}`)) continue;
+        const current = await this.getRaw(event.entity, event.id);
+        const remote: EntityMergeState = {
+          fields: Object.fromEntries(
+            Object.entries(event.fields).map(([field, write]) => [field, write.value]),
+          ),
+          clocks: Object.fromEntries(
+            Object.entries(event.fields).map(([field, write]) => [field, write.hlc]),
+          ),
+        };
+        const outcome = mergeEntityState(current, remote);
+        await this.writeRow(event.entity, event.id, outcome.fields, outcome.clocks, {
+          insert: current === null,
+        });
       }
-      const { event } = entry;
-      if (this.compacted.has(`${event.entity}:${event.id}`)) continue;
-      const current = await this.get(event.entity, event.id);
-      const remote: EntityMergeState = {
-        fields: Object.fromEntries(
-          Object.entries(event.fields).map(([field, write]) => [field, write.value]),
-        ),
-        clocks: Object.fromEntries(
-          Object.entries(event.fields).map(([field, write]) => [field, write.hlc]),
-        ),
-      };
-      const outcome = mergeEntityState(current, remote);
-      await this.writeRow(event.entity, event.id, outcome.fields, outcome.clocks, {
-        insert: current === null,
-      });
-    }
+    });
     this.notifyChanged({ origin: 'bootstrap' });
   }
 
@@ -581,7 +668,7 @@ export class LocalReplica {
    */
   async deleteOutbox(entries: Array<Pick<OutboxEntry, 'rowId' | 'revision'>>): Promise<void> {
     return this.serialized(() =>
-      inTransaction(this.storage, async () => {
+      this.tx(async () => {
         for (const entry of entries) {
           await this.storage.run('DELETE FROM _outbox WHERE id = ? AND revision = ?', [
             entry.rowId,

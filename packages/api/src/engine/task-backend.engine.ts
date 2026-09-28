@@ -12,7 +12,7 @@
 
 import { currentTimeZone, currentLegacyDateTimeZone, toDateKey, todayDateKey } from '@/utils/date';
 import type { Engine, ReplicaRow } from '@taskora/engine';
-import { positionAfter, positionsBetween } from '@taskora/engine';
+import { positionAfter, repositionMinimal } from '@taskora/engine';
 import {
   deriveRepeatInstanceId,
   deriveSubtaskId,
@@ -404,18 +404,19 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     async reorderTasks(orderedIds: string[]): Promise<void> {
       const rows = await engine.list('task');
       const byId = new Map(rows.map((row) => [row.id, row]));
-      // 为整个有序集重新分配等距 Position；与现状相同的行不动（控制
-      // Outbox 体积）。position 供本地副本读（fractional indexing），
-      // sortOrder 供过渡期 web 端 REST 读——两个排序键必须一起写
-      // （对齐 reorderProjects 惯例），否则两端顺序分叉。
-      const keys = positionsBetween(null, null, orderedIds.length);
-      await Promise.all(
-        orderedIds.map(async (id, index) => {
+      // 只给必须移动的行分配新 Position（单次拖动 = 一条写），一个事务
+      // 一次通知。web 端 REST 同样按 Position 读序，不再需要稠密 sortOrder。
+      const changes = repositionMinimal(
+        orderedIds.flatMap((id) => {
           const row = byId.get(id);
-          if (row && (row.fields.position !== keys[index] || row.fields.sortOrder !== index)) {
-            await engine.update('task', id, { position: keys[index], sortOrder: index });
-          }
+          if (!row) return [];
+          const position = row.fields.position;
+          return [{ id, position: typeof position === 'string' ? position : null }];
         }),
+      );
+      await engine.updateMany(
+        'task',
+        changes.map(({ id, position }) => ({ id, patch: { position } })),
       );
     },
 
@@ -629,6 +630,7 @@ function projectRowToFeedItem(
     completedAt: (f.completedAt as string | null) ?? null,
     trashedAt: (f.trashedAt as string | null) ?? null,
     sortOrder: (f.sortOrder as number) ?? 0,
+    position: typeof f.position === 'string' ? f.position : null,
     areaId: (f.areaId as string | null) ?? null,
     createdAt: (f.createdAt as string) ?? new Date().toISOString(),
     updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),

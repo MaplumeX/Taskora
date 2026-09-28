@@ -55,6 +55,7 @@ export * from './api/tags.api';
 export * from './api/tasks.api';
 export { setTaskBackend, currentTaskBackend, type TaskBackend } from './api/task-backend';
 export { createEngineTaskBackend } from './engine/task-backend.engine';
+export { createEngineInvalidator, INVALIDATION_BY_ENTITY } from './engine/engine-invalidation';
 export {
   setProjectBackend,
   currentProjectBackend,

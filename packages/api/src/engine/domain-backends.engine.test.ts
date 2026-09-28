@@ -385,7 +385,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     await other.close();
   });
 
-  it('Heading 布局重排：position/sortOrder 双写，副本读序反映视觉顺序且跨设备收敛', async () => {
+  it('Heading 布局重排：只写变化的 position/headingId，副本读序反映视觉顺序且跨设备收敛', async () => {
     const projectId = (await projects.createProject({ title: '布局' })).id;
     const h1 = await headings.createProjectHeading({ projectId, title: 'H1' });
     const h2 = await headings.createProjectHeading({ projectId, title: 'H2' });
@@ -425,14 +425,26 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
       'a1',
     ]);
 
-    // sortOrder 维持 REST 列惯例：分组内索引
+    // 分组归属不变、分组顺序写进 heading.sortOrder
     const byTitle = new Map(
       (await engine.list('task')).map((row) => [row.fields.title as string, row]),
     );
-    expect(byTitle.get('b1')!.fields.sortOrder).toBe(0);
-    expect(byTitle.get('u1')!.fields.sortOrder).toBe(0);
-    expect(byTitle.get('a2')!.fields.sortOrder).toBe(0);
-    expect(byTitle.get('a1')!.fields.sortOrder).toBe(1);
+    expect(byTitle.get('b1')!.fields.headingId).toBe(h2.id);
+    expect(byTitle.get('a1')!.fields.headingId).toBe(h1.id);
+    expect((await engine.get('project-heading', h2.id))!.fields.sortOrder).toBe(0);
+    expect((await engine.get('project-heading', h1.id))!.fields.sortOrder).toBe(1);
+
+    // 再次提交同一布局：没有任何写（Outbox 不增长）
+    await engine.sync();
+    await headings.reorderProjectHeadingLayout({
+      projectId,
+      ungroupedTaskIds: [u1],
+      groups: [
+        { headingId: h2.id, taskIds: [b1] },
+        { headingId: h1.id, taskIds: [a2, a1] },
+      ],
+    });
+    expect(await engine.pendingCount()).toBe(0);
 
     // 跨设备收敛：另一台设备 bootstrap 后读序一致（hub 快照携带 position）
     await engine.sync();

@@ -20,6 +20,7 @@ import type {
   ProjectFeedItem,
   TagResponseDto,
 } from '@taskora/shared';
+import { sortByPosition } from '../common/position-order';
 
 function mapTag(tag: {
   id: string;
@@ -186,6 +187,7 @@ export class FeedService {
         completedAt: t.settledAt ? t.settledAt.toISOString() : null,
         trashedAt: t.trashedAt ? t.trashedAt.toISOString() : null,
         sortOrder: t.sortOrder,
+        position: t.position,
         projectId: t.projectId,
         headingId: t.headingId,
         areaId: t.areaId,
@@ -259,6 +261,7 @@ export class FeedService {
           completedAt: p.completedAt ? p.completedAt.toISOString() : null,
           trashedAt: p.trashedAt ? p.trashedAt.toISOString() : null,
           sortOrder: p.sortOrder,
+          position: p.position,
           areaId: p.areaId,
           createdAt: p.createdAt.toISOString(),
           updatedAt: p.updatedAt.toISOString(),
@@ -268,7 +271,8 @@ export class FeedService {
         };
       });
 
-    // Merge and sort: default sortOrder asc, createdAt desc; logbook already
+    // Merge and sort: default by effective Position (same order as the desktop
+    // replica; sortOrder alone goes stale once devices move single rows); logbook already
     // sorted by completedAt desc from each query, but since we mix two sources
     // we re-sort the merged list for logbook.
     const items: FeedItem[] = [...taskItems, ...projectItems];
@@ -280,10 +284,7 @@ export class FeedService {
         return bc - ac;
       });
     } else {
-      items.sort((a, b) => {
-        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
+      return sortByPosition(items);
     }
 
     return items;

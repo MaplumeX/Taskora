@@ -3,6 +3,7 @@ import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
 import type {
   CreateSubtaskDto,
   CreateTaskDto,
+  FeedItem,
   SubtaskResponseDto,
   TaskResponseDto,
   UpdateSubtaskDto,
@@ -74,6 +75,78 @@ function removeTaskFromList(
   return list.filter((t) => t.id !== taskId);
 }
 
+// Optimistic updates must cover both list families: ['tasks'] (TaskList
+// views) and ['feed'] (Inbox/Today/Anytime/... — most of the app). Patching
+// only ['tasks'] leaves feed views showing the old state until the refetch
+// lands, e.g. a dropped row snapping back before jumping to its new slot.
+const TASK_LIST_ROOTS = [taskKeys.all, ['feed'] as const];
+
+async function cancelTaskLists(queryClient: ReturnType<typeof useQueryClient>) {
+  await Promise.all(TASK_LIST_ROOTS.map((queryKey) => queryClient.cancelQueries({ queryKey })));
+}
+
+function snapshotTaskLists(
+  queryClient: ReturnType<typeof useQueryClient>,
+): [readonly unknown[], unknown][] {
+  return TASK_LIST_ROOTS.flatMap((queryKey) => queryClient.getQueriesData({ queryKey }));
+}
+
+type ListItem = { id: string; type?: string };
+
+/** Only task rows: feed lists mix tasks and projects that may share nothing but shape. */
+function isTaskRow(item: ListItem): boolean {
+  return item.type === undefined || item.type === 'task';
+}
+
+function patchTaskInLists(
+  queryClient: ReturnType<typeof useQueryClient>,
+  taskId: string,
+  updater: (task: TaskResponseDto) => TaskResponseDto,
+) {
+  queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
+    applyToTaskInList(old, taskId, updater),
+  );
+  queryClient.setQueriesData<FeedItem[]>({ queryKey: ['feed'] }, (old) =>
+    old?.map((item) =>
+      item.type === 'task' && item.id === taskId
+        ? ({ ...updater(item as unknown as TaskResponseDto), type: 'task' } as FeedItem)
+        : item,
+    ),
+  );
+}
+
+function removeTaskFromLists(queryClient: ReturnType<typeof useQueryClient>, taskId: string) {
+  queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
+    removeTaskFromList(old, taskId),
+  );
+  queryClient.setQueriesData<FeedItem[]>({ queryKey: ['feed'] }, (old) =>
+    old?.filter((item) => !(item.type === 'task' && item.id === taskId)),
+  );
+}
+
+/**
+ * Reorder the task rows of a list in place: the slots currently held by
+ * reordered tasks are refilled in the new order; every other row (projects
+ * in feeds, tasks outside the dragged set) keeps its slot. Works for any
+ * list shape, so partial views and mixed feeds get the new order at once.
+ */
+export function reorderInSlots<T extends ListItem>(list: T[], orderedIds: string[]): T[] {
+  const rank = new Map(orderedIds.map((id, index) => [id, index]));
+  const slots: number[] = [];
+  list.forEach((item, index) => {
+    if (isTaskRow(item) && rank.has(item.id)) slots.push(index);
+  });
+  if (slots.length < 2) return list;
+  const members = slots
+    .map((index) => list[index])
+    .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+  const next = [...list];
+  slots.forEach((slot, index) => {
+    next[slot] = members[index];
+  });
+  return next;
+}
+
 // Restore snapshot to queries data (list caches)
 function restoreListSnapshot(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -90,10 +163,8 @@ export function useCreateTask() {
   return useMutation({
     mutationFn: (data: CreateTaskDto) => createTask(data),
     onMutate: async (data) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
       const now = new Date().toISOString();
       const tempId = crypto.randomUUID();
       const tempTask: TaskResponseDto = {
@@ -157,19 +228,15 @@ export function useUpdateTask() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTaskDto }) => updateTask(id, data),
     onMutate: async ({ id, data }) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
       const now = new Date().toISOString();
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        applyToTaskInList(old, id, (task) => ({
+      patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           ...data,
           updatedAt: now,
-        })),
-      );
+        }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, ...data, updatedAt: now } : old,
       );
@@ -197,13 +264,9 @@ export function useDeleteTask() {
   return useMutation({
     mutationFn: (id: string) => deleteTask(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        removeTaskFromList(old, id),
-      );
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
+      removeTaskFromLists(queryClient, id);
       return { snapshot };
     },
     onError: (_err, _id, ctx) => {
@@ -224,19 +287,15 @@ export function useCompleteTask() {
   return useMutation({
     mutationFn: (id: string) => completeTask(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
       const now = new Date().toISOString();
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        applyToTaskInList(old, id, (task) => ({
+      patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           status: TaskStatus.COMPLETED,
           completedAt: now,
-        })),
-      );
+        }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, status: TaskStatus.COMPLETED, completedAt: now } : old,
       );
@@ -264,18 +323,14 @@ export function useUncompleteTask() {
   return useMutation({
     mutationFn: (id: string) => uncompleteTask(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        applyToTaskInList(old, id, (task) => ({
+      patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           status: TaskStatus.ACTIVE,
           completedAt: null,
-        })),
-      );
+        }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, status: TaskStatus.ACTIVE, completedAt: null } : old,
       );
@@ -303,19 +358,15 @@ export function useCancelTask() {
   return useMutation({
     mutationFn: (id: string) => cancelTask(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
       const now = new Date().toISOString();
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        applyToTaskInList(old, id, (task) => ({
+      patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           status: TaskStatus.CANCELLED,
           completedAt: now,
-        })),
-      );
+        }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, status: TaskStatus.CANCELLED, completedAt: now } : old,
       );
@@ -343,18 +394,14 @@ export function useUncancelTask() {
   return useMutation({
     mutationFn: (id: string) => uncancelTask(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        applyToTaskInList(old, id, (task) => ({
+      patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           status: TaskStatus.ACTIVE,
           completedAt: null,
-        })),
-      );
+        }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, status: TaskStatus.ACTIVE, completedAt: null } : old,
       );
@@ -382,19 +429,19 @@ export function useReorderTasks() {
   return useMutation({
     mutationFn: (orderedIds: string[]) => reorderTasks(orderedIds),
     onMutate: async (orderedIds) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) => {
-        if (!old) return old;
-        // 仅对成员完全覆盖的列表（目标视图）做乐观重排；异构过滤参数的
-        // 列表（其它项目/视图）保持原序，避免 comparator 对非成员返回 0
-        // 造成的未定义交错，等 onSettled 拉平。
-        if (!old.every((task) => orderMap.has(task.id))) return old;
-        return [...old].sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
+      // 乐观重排 tasks 与 feed 两类列表（槽位保持：非成员行不动），松手
+      // 即是新顺序，不再先弹回旧顺序等重查。
+      for (const queryKey of TASK_LIST_ROOTS) {
+        queryClient.setQueriesData<ListItem[]>({ queryKey }, (old) =>
+          old ? reorderInSlots(old, orderedIds) : old,
+        );
+      }
+      return { snapshot };
     },
-    onError: () => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+    onError: (_err, _ids, ctx) => {
+      if (ctx?.snapshot) restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
     },
     onSettled: () => {
       void queryClient.invalidateQueries({ queryKey: taskKeys.all });
@@ -408,20 +455,16 @@ export function useRestoreTask() {
   return useMutation({
     mutationFn: (id: string) => restoreTask(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        applyToTaskInList(old, id, (task) => ({
+      patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           trashedAt: null,
           // "从垃圾桶捡回"始终是未了结（spec: task-cancelled story 19）。
           status: TaskStatus.ACTIVE,
           completedAt: null,
-        })),
-      );
+        }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, trashedAt: null, status: TaskStatus.ACTIVE, completedAt: null } : old,
       );

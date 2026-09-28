@@ -38,6 +38,8 @@ export interface Engine {
   create(entity: SyncEntity, values: WireRow): Promise<string>;
   /** 更新实体字段（软删除即更新 trashedAt 等字段）。 */
   update(entity: SyncEntity, id: string, patch: WireRow): Promise<void>;
+  /** 批量更新同一实体的多行：一个事务、一次变更通知（重排等多行写）。 */
+  updateMany(entity: SyncEntity, patches: Array<{ id: string; patch: WireRow }>): Promise<void>;
   /**
    * 设备发起的物理删除（Delete Request，ADR-0008）：立即从副本移除
    * （级联 Subtask、清理引用），并把删除请求排进 Outbox；flush 推给
@@ -132,17 +134,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
       await bootstrap();
       return;
     }
-    for (const change of response.changes) {
-      if (change.kind === 'entity') {
-        await replica.applyRemoteEntity(change.entity, change.id, {
-          fields: change.fields,
-          clocks: change.clocks,
-        });
-      } else {
-        await replica.applyCompact(change.entity, change.ids);
-      }
-    }
-    await replica.setCursor(response.cursor);
+    await replica.applyRemoteBatch(response.changes, response.cursor);
   };
 
   const bootstrap = async (): Promise<void> => {
@@ -165,13 +157,11 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
         .filter((key): key is string => typeof key === 'string');
       const rebalanced = rebalancePositions(keys);
       if (!rebalanced) continue;
-      let index = 0;
-      for (const row of rows) {
-        if (typeof row.fields.position === 'string') {
-          await replica.update(entity, row.id, { position: rebalanced[index] });
-          index += 1;
-        }
-      }
+      const withPosition = rows.filter((row) => typeof row.fields.position === 'string');
+      await replica.updateMany(
+        entity,
+        withPosition.map((row, index) => ({ id: row.id, patch: { position: rebalanced[index] } })),
+      );
     }
   };
 
@@ -185,6 +175,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
     list: (entity) => replica.list(entity),
     create: (entity, values) => replica.create(entity, values),
     update: (entity, id, patch) => replica.update(entity, id, patch),
+    updateMany: (entity, patches) => replica.updateMany(entity, patches),
     delete: (entity, ids) =>
       replica.requestDelete(
         entity,
