@@ -1,9 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 快速添加浮层（QuickAddActivity）：顶部卡片式输入框，半透明透出下层。 -->
+<!-- 快速添加浮层（QuickAddActivity）：全屏遮罩压暗下层，顶部卡片式输入框。 -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/quick_add_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent">
+
+    <!-- 遮罩单独一层，便于和卡片分别做淡入淡出；点击即关闭。 -->
+    <View
+        android:id="@+id/quick_add_scrim"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:alpha="0"
+        android:background="@color/quick_add_scrim" />
 
     <LinearLayout
         android:id="@+id/quick_add_card"
@@ -12,7 +20,9 @@
         android:layout_gravity="top"
         android:layout_marginHorizontal="16dp"
         android:layout_marginTop="96dp"
+        android:alpha="0"
         android:background="@drawable/bg_quick_add_card"
+        android:elevation="8dp"
         android:orientation="vertical"
         android:paddingHorizontal="16dp"
         android:paddingTop="8dp"
