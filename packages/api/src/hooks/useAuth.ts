@@ -63,6 +63,7 @@ export function useRegister() {
 export function useCurrentUser() {
   const token = useAuthStore((s) => s.token);
   const userId = useAuthStore((s) => s.user?.id);
+  const setUser = useAuthStore((s) => s.setUser);
   const query = useQuery({
     queryKey: authKeys.me,
     queryFn: getMe,
@@ -70,13 +71,28 @@ export function useCurrentUser() {
     refetchInterval: 60_000,
   });
 
-  // Rehydrate on refreshed account preferences too: remote time-zone changes
-  // must affect an already-open session, not just the next login.
+  // Mirror the polled profile into the auth store: the shell avatar and
+  // display name read from the store, so a profile edit made on another
+  // device must land there too — otherwise it only appears after this
+  // device saves the settings form itself. React Query's structural
+  // sharing keeps `query.data` referentially stable while the server
+  // payload is unchanged, so this does not write on every poll.
+  // Preferences rehydrate here too: remote time-zone changes must affect an
+  // already-open session, not just the next login.
   useEffect(() => {
-    if (query.data?.id && (!userId || query.data.id === userId)) {
-      hydrateFromServer(query.data.preferences ?? null);
-    }
-  }, [query.data, userId]);
+    const me = query.data;
+    // Require a live session: a cleared store (logout / 401) must not have
+    // its cached `me` write a stale user back in before the query clears.
+    if (!token || !me?.id || (userId && me.id !== userId)) return;
+    hydrateFromServer(me.preferences ?? null);
+    setUser({
+      id: me.id,
+      email: me.email,
+      displayName: me.displayName,
+      avatarUrl: me.avatarUrl,
+      preferences: me.preferences,
+    });
+  }, [query.data, token, userId, setUser]);
 
   return query;
 }
