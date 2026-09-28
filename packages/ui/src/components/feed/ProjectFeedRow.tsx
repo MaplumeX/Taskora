@@ -17,7 +17,9 @@ import { startOfTomorrow, useCompleteProject, useUncompleteProject } from '@task
 import type { SelectionState } from '@taskora/api';
 
 interface Props {
-  item: ProjectFeedItem;
+  /** Feed 视图传 `ProjectFeedItem`；列表页（区域页等）传 `ProjectResponseDto`。
+   * 两者共享本行所需字段（title / status / 计数 / 日期 / tags）。 */
+  item: ProjectFeedItem | ProjectResponseDto;
   showScheduledBadge?: boolean;
   selectionState?: SelectionState;
   /** Logbook 专用：标题后注入的了却日期徽标 */

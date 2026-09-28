@@ -59,11 +59,11 @@ Status: implemented
 - 三处路由都要加：`packages/frontend/src/router.tsx`、`packages/desktop/src/MainApp.tsx`、`packages/mobile/src/MainApp.tsx`。页面放 `packages/ui/src/pages/LaterProjects.tsx`。
 - 标题「稍后项目」（i18n zh / en）。内容：无区域的稍后项目，经共享组件 `LaterProjectSections` 分成「计划」「Someday」两节；空的小节不显示标题；两节都空时显示空态文案。
 - 排序：「计划」按计划日期升序（同日按 sortOrder）；「Someday」按 sortOrder。**两节都不支持拖拽排序**。
-- 项目行复用 `ProjectItem`，「计划」小节的行显示日期 chip；行点击进入项目详情、键盘 Selection（↑/↓）可遍历（`useSelectionScope`，kind: 'project'）。
+- 项目行复用 `ProjectFeedRow`（与 Today/Upcoming 等汇总视图一致；`ProjectItem` 仅服务侧边栏），「计划」小节的行显示日期 chip；行点击进入项目详情、键盘 Selection（↑/↓）可遍历（`useSelectionScope`，kind: 'project'）。
 
 ### 区域页（`AreaDetail.tsx`）
 
-- 现在的「项目」列表只放该区域的活跃项目，保留现有拖拽排序（排序持久化同样要用上面的全量序列化，避免撞号）。
+- 现在的「项目」列表只放该区域的活跃项目，保留现有拖拽排序（排序持久化同样要用上面的全量序列化，避免撞号）。活跃项目行同样复用 `ProjectFeedRow`，外层保留 dnd-kit 拖拽包装。
 - 页面最下方（活跃项目、任务之后）渲染 `LaterProjectSections`（该区域的稍后项目），规则与 Later Projects 页一致。键盘遍历顺序同页面：活跃项目 → 任务 → 计划 → Someday（`useSelectionScope` 新增显式 rank）。
 - 区域页的「任务」段本次不改。
 

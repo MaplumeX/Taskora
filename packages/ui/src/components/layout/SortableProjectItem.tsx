@@ -49,7 +49,7 @@ export function SortableProjectItem({
           <div className="absolute inset-x-2 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-primary" />
         </div>
       ) : (
-        <ProjectItem project={project} showChevron={false} variant="sidebar" />
+        <ProjectItem project={project} />
       )}
     </div>
   );

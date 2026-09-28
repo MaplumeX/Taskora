@@ -494,7 +494,7 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
               aria-hidden="true"
               {...{ inert: '' }}
             >
-              <ProjectItem project={activeProject} showChevron={false} variant="sidebar" />
+              <ProjectItem project={activeProject} />
             </div>
           ) : null}
         </DragOverlay>

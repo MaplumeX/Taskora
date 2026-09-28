@@ -5,20 +5,20 @@ import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
 import type { ProjectResponseDto } from '@taskora/shared';
 import { describe, expect, it, vi } from 'vitest';
 
-vi.mock('@/components/project/ProjectItem', async () => {
+vi.mock('@/components/feed/ProjectFeedRow', async () => {
   const ReactModule = await import('react');
   return {
-    ProjectItem: ({
-      project: current,
+    ProjectFeedRow: ({
+      item,
       showScheduledBadge,
     }: {
-      project: ProjectResponseDto;
+      item: ProjectResponseDto;
       showScheduledBadge?: boolean;
     }) =>
       ReactModule.createElement(
         'div',
-        { 'data-project-item': current.id, 'data-badge': String(!!showScheduledBadge) },
-        current.title,
+        { 'data-project-item': item.id, 'data-badge': String(!!showScheduledBadge) },
+        item.title,
       ),
   };
 });
