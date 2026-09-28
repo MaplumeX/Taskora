@@ -21,8 +21,8 @@ export function createEngineTagGroupBackend(
   const { engine } = options;
 
   async function membersOf(groupId: string) {
-    const tags = await engine.list('tag');
-    return tags.filter((row) => row.fields.tagGroupId === groupId).map((row) => tagRowToDto(row));
+    const tags = await engine.list('tag', { where: { tagGroupId: groupId } });
+    return tags.map((row) => tagRowToDto(row));
   }
 
   async function groupDto(id: string): Promise<TagGroupResponseDto> {

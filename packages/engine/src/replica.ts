@@ -35,6 +35,26 @@ export interface ReplicaRow {
 }
 
 /**
+ * list 的 SQL 预过滤条件（按字段）：相等、IS NULL（null）、IS NOT NULL
+ * （{ notNull: true }）、IN（{ in: [...] }）。字段名按实体定义白名单校验，
+ * JSON 字段不可用。调用方用它先筛掉明显无关的行（如只增不减的 Logbook），
+ * 精确的视图语义仍由调用方在 JS 里判定。
+ */
+export type ListWhereValue =
+  | string
+  | number
+  | null
+  | { notNull: true }
+  | { in: Array<string | number> };
+export type ListWhere = Record<string, ListWhereValue>;
+
+export interface ListOptions {
+  where?: ListWhere;
+  /** 只取按列表序的前 N 行（如取首行位次）。 */
+  limit?: number;
+}
+
+/**
  * 变更通知载荷：来源 + 涉及实体。bootstrap 整表重建时 entities 缺省
  * （表示全部）。UI 据此选择失效粒度，并区分「本地写需要防抖同步」
  * 与「远端写应用后无需再拉」。
@@ -89,6 +109,12 @@ export class LocalReplica {
    * 公共读等待它结束；事务体内部只用 getRaw，不经过这道闸。
    */
   private activeTx: Promise<void> | null = null;
+  /**
+   * HLC 前进后尚未落库。由 tx() 在提交前写入 _engine_meta——与用到这些
+   * 时间戳的行同事务，跨会话时间戳不回退（否则同设备可能发出重复时间戳）。
+   * 以前是事务外 fire-and-forget，可能插进别的事务或在崩溃时丢失。
+   */
+  private clockDirty = false;
 
   constructor(
     private readonly storage: SqlStorage,
@@ -182,7 +208,14 @@ export class LocalReplica {
       release = resolve;
     });
     try {
-      return await inTransaction(this.storage, fn);
+      return await inTransaction(this.storage, async () => {
+        const result = await fn();
+        if (this.clockDirty) {
+          await this.metaSet('hlc', JSON.stringify(this.clock.getState()));
+          this.clockDirty = false;
+        }
+        return result;
+      });
     } finally {
       this.activeTx = null;
       release();
@@ -223,17 +256,40 @@ export class LocalReplica {
   }
 
   /** 全量实体行（UI 查询面），按 Position / sortOrder 排序。 */
-  async list(entity: SyncEntity): Promise<ReplicaRow[]> {
+  async list(entity: SyncEntity, options: ListOptions = {}): Promise<ReplicaRow[]> {
     await this.readGate();
     const def = entityDef(entity);
     const order =
       def.orderField === 'position'
         ? 'ORDER BY position IS NULL ASC, position ASC, createdAt DESC'
         : 'ORDER BY sortOrder ASC, createdAt DESC';
+    const conditions: string[] = [];
+    const params: unknown[] = [];
+    for (const [name, value] of Object.entries(options.where ?? {})) {
+      const field = name === 'id' ? null : def.fields.find((candidate) => candidate.name === name);
+      if (name !== 'id' && (!field || field.json)) {
+        throw new Error(`list: ${entity} 不支持按 ${name} 过滤`);
+      }
+      if (value === null) {
+        conditions.push(`${name} IS NULL`);
+      } else if (typeof value === 'object' && 'notNull' in value) {
+        conditions.push(`${name} IS NOT NULL`);
+      } else if (typeof value === 'object') {
+        if (value.in.length === 0) return [];
+        conditions.push(`${name} IN (${value.in.map(() => '?').join(', ')})`);
+        params.push(...value.in);
+      } else {
+        conditions.push(`${name} = ?`);
+        params.push(value);
+      }
+    }
+    const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+    const limit = options.limit !== undefined ? `LIMIT ${Math.max(0, Math.floor(options.limit))}` : '';
     // 不取 clocks 列：UI 用不到，整表 JSON 经 IPC 传输再丢弃是纯浪费
     const columns = ['id', ...def.fields.map((field) => field.name)].join(', ');
     const rows = await this.storage.all<Record<string, unknown>>(
-      `SELECT ${columns} FROM ${def.table} ${order}`,
+      `SELECT ${columns} FROM ${def.table} ${where} ${order} ${limit}`,
+      params,
     );
     return rows.map((row) => {
       const { id, ...rest } = row;
@@ -271,8 +327,9 @@ export class LocalReplica {
     }
     const writes: Record<string, FieldWrite> = {};
     const clocks: Record<string, string> = {};
+    // 一次写一个时间戳：同一操作的各字段同时发生，逐字段发号只是空耗计数
+    const hlc = this.stamp();
     for (const field of def.fields) {
-      const hlc = this.stamp();
       writes[field.name] = { value: fields[field.name], hlc };
       clocks[field.name] = hlc;
     }
@@ -322,10 +379,10 @@ export class LocalReplica {
     const writes: Record<string, FieldWrite> = {};
     const clocks: Record<string, string> = { ...current.clocks };
     const fields: WireRow = { ...current.fields };
+    const hlc = this.stamp();
     for (const field of def.fields) {
       const value = effective[field.name];
       if (value === undefined) continue;
-      const hlc = this.stamp();
       fields[field.name] = normalizeWriteValue(field, value);
       clocks[field.name] = hlc;
       writes[field.name] = { value: fields[field.name], hlc };
@@ -703,15 +760,13 @@ export class LocalReplica {
     }
     if (max !== null) {
       this.clock.receive(max);
-      this.metaSet('hlc', JSON.stringify(this.clock.getState())).catch(() => undefined);
+      this.clockDirty = true;
     }
   }
 
   private stamp(): string {
-    const stamp = this.clock.now();
-    // HLC 状态持久化：跨会话时间戳不回退（否则同设备可能发出重复时间戳）
-    this.metaSet('hlc', JSON.stringify(this.clock.getState())).catch(() => undefined);
-    return stamp;
+    this.clockDirty = true;
+    return this.clock.now();
   }
 
   private async metaGet(key: string): Promise<string | null> {

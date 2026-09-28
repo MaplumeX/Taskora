@@ -102,7 +102,8 @@ export function createReminderCoordinator(
     if (mode === 'system' && shell.takePendingActions) {
       await drainPendingActions(shell.takePendingActions);
     }
-    const rows = await engine.list('task');
+    // 只有带提醒时刻的任务可能进入计划（isReminderEligible 的必要条件）
+    const rows = await engine.list('task', { where: { reminderTime: { notNull: true } } });
     const tasks = rows.map(reminderInputFromReplicaRow);
     const nowMs = now().getTime();
     const desired = computeReminderPlan(

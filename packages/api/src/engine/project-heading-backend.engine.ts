@@ -43,17 +43,14 @@ export function createEngineProjectHeadingBackend(
 
   /** heading 下的直接 tasks（含 trashed；REST 同口径）。 */
   async function tasksUnderHeading(headingId: string) {
-    const tasks = await engine.list('task');
-    return tasks.filter((row) => row.fields.headingId === headingId);
+    return engine.list('task', { where: { headingId } });
   }
 
   return {
     async getProjectHeadings(projectId, options) {
       await assertProject(projectId);
-      const headings = (await engine.list('project-heading')).filter(
-        (row) =>
-          row.fields.projectId === projectId &&
-          (options?.includeArchived || row.fields.status === HeadingStatus.ACTIVE),
+      const headings = (await engine.list('project-heading', { where: { projectId } })).filter(
+        (row) => options?.includeArchived || row.fields.status === HeadingStatus.ACTIVE,
       );
       // tiebreak 对齐 REST（ProjectHeadingsService：sortOrder asc, createdAt
       // asc）；副本 list 的 createdAt 是 desc（通用 tiebreak）
@@ -69,9 +66,9 @@ export function createEngineProjectHeadingBackend(
 
     async createProjectHeading(data) {
       await assertProject(data.projectId);
-      const siblings = (await engine.list('project-heading')).filter(
-        (row) => row.fields.projectId === data.projectId,
-      );
+      const siblings = await engine.list('project-heading', {
+        where: { projectId: data.projectId },
+      });
       const sortOrder =
         siblings.reduce((max, h) => Math.max(max, (h.fields.sortOrder as number) ?? 0), -1) + 1;
       const id = await engine.create('project-heading', {
@@ -144,16 +141,12 @@ export function createEngineProjectHeadingBackend(
 
     async reorderProjectHeadingLayout(data) {
       await assertProject(data.projectId);
-      const headings = (await engine.list('project-heading')).filter(
-        (row) =>
-          row.fields.projectId === data.projectId && row.fields.status === HeadingStatus.ACTIVE,
-      );
-      const visibleTasks = (await engine.list('task')).filter(
-        (row) =>
-          row.fields.projectId === data.projectId &&
-          row.fields.trashedAt == null &&
-          row.fields.status === TaskStatus.ACTIVE,
-      );
+      const headings = await engine.list('project-heading', {
+        where: { projectId: data.projectId, status: HeadingStatus.ACTIVE },
+      });
+      const visibleTasks = await engine.list('task', {
+        where: { projectId: data.projectId, trashedAt: null, status: TaskStatus.ACTIVE },
+      });
 
       // id 集校验与 REST 同规则（重复/缺失/越权 → 报错要求刷新重试）
       const headingIds = data.groups.map((group) => group.headingId);

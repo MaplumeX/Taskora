@@ -42,6 +42,9 @@ export { inTransaction } from './storage';
 export {
   LocalReplica,
   type ReplicaRow,
+  type ListOptions,
+  type ListWhere,
+  type ListWhereValue,
   type LocalReplicaOptions,
   type OutboxEntry,
   type EngineChange,

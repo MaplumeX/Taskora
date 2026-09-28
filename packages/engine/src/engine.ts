@@ -11,7 +11,13 @@
  * 由 onChange 通知驱动，UI 层自行选择失效策略。
  */
 
-import { LocalReplica, type EngineChange, type OutboxEntry, type ReplicaRow } from './replica';
+import {
+  LocalReplica,
+  type EngineChange,
+  type ListOptions,
+  type OutboxEntry,
+  type ReplicaRow,
+} from './replica';
 import { HybridClock } from './hlc';
 import { positionBetween, rebalancePositions, synthPosition } from './position';
 import type { SyncEntity, WireRow } from './entities';
@@ -32,8 +38,11 @@ export interface Engine {
   readonly deviceId: string;
   /** 取单个实体行（含 id），不存在返回 null。 */
   get(entity: SyncEntity, id: string): Promise<ReplicaRow | null>;
-  /** 列出某实体的全部行（按 Position / sortOrder 排序）。 */
-  list(entity: SyncEntity): Promise<ReplicaRow[]>;
+  /**
+   * 列出某实体的行（按 Position / sortOrder 排序）。options.where 在 SQL
+   * 里预过滤（相等 / IS NULL / IS NOT NULL / IN），options.limit 取前 N 行。
+   */
+  list(entity: SyncEntity, options?: ListOptions): Promise<ReplicaRow[]>;
   /** 创建实体，返回 id。 */
   create(entity: SyncEntity, values: WireRow): Promise<string>;
   /** 更新实体字段（软删除即更新 trashedAt 等字段）。 */
@@ -172,7 +181,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
       if (!state) return null;
       return { id, fields: state.fields };
     },
-    list: (entity) => replica.list(entity),
+    list: (entity, options) => replica.list(entity, options),
     create: (entity, values) => replica.create(entity, values),
     update: (entity, id, patch) => replica.update(entity, id, patch),
     updateMany: (entity, patches) => replica.updateMany(entity, patches),

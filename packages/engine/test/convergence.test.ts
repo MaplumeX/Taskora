@@ -13,7 +13,13 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { MAX_PUSH_BATCH_BYTES, openEngine, positionBetween, type Engine } from '../src/index';
+import {
+  LocalReplica,
+  MAX_PUSH_BATCH_BYTES,
+  openEngine,
+  positionBetween,
+  type Engine,
+} from '../src/index';
 import { HybridClock } from '../src/hlc';
 import { InMemorySyncHub } from '../src/hub';
 import { formatHlc } from '../src/hlc';
@@ -1114,5 +1120,60 @@ describe('批量写 / 批量应用 / 事务读闸', () => {
     expect(counts.length).toBeGreaterThan(0);
     expect(counts.every((count) => count === 50)).toBe(true);
     await a.close();
+  });
+});
+
+describe('list 的 SQL 预过滤', () => {
+  it('支持相等 / IS NULL / IS NOT NULL / IN / limit，并拒绝未知或 JSON 字段', async () => {
+    const engine = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'A',
+    });
+    const project = await engine.create('project', { title: 'P' });
+    const a = await createTask(engine, 'a', { projectId: project, position: 'a0' });
+    const b = await createTask(engine, 'b', { status: 'COMPLETED', position: 'a1' });
+    const c = await createTask(engine, 'c', { trashedAt: '2026-01-01T00:00:00Z', position: 'a2' });
+    const ids = async (options: Parameters<Engine['list']>[1]) =>
+      (await engine.list('task', options)).map((row) => row.id);
+
+    expect(await ids({ where: { projectId: project } })).toEqual([a]);
+    expect(await ids({ where: { status: 'ACTIVE', trashedAt: null } })).toEqual([a]);
+    expect(await ids({ where: { trashedAt: { notNull: true } } })).toEqual([c]);
+    expect(await ids({ where: { id: { in: [c, b] } } })).toEqual([b, c]);
+    expect(await ids({ where: { id: { in: [] } } })).toEqual([]);
+    expect(await ids({ limit: 1 })).toEqual([a]);
+    await expect(engine.list('task', { where: { tagIds: 'x' } })).rejects.toThrow();
+    await expect(engine.list('task', { where: { 'id; DROP TABLE task': 'x' } })).rejects.toThrow();
+    await engine.close();
+  });
+});
+
+describe('HLC 跨会话持久', () => {
+  it('墙钟不动时重启后发号仍严格递增；一次写只用一个时间戳', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'taskora-hlc-'));
+    const path = join(dir, 'replica.db');
+    try {
+      const open = async () =>
+        openEngine({
+          storage: await createNodeSqliteStorage(path),
+          deviceId: 'A',
+          clock: new HybridClock('A', () => 1_000),
+        });
+      const first = await open();
+      const id = await createTask(first, 'x');
+      const replica = new LocalReplica(await createNodeSqliteStorage(path), { deviceId: 'A' });
+      const created = await replica.get('task', id);
+      expect(new Set(Object.values(created!.clocks)).size).toBe(1);
+      const createdStamp = Object.values(created!.clocks)[0];
+      await first.close();
+
+      const second = await open();
+      await second.update('task', id, { title: 'y' });
+      const updated = await replica.get('task', id);
+      expect(updated!.clocks.title > createdStamp).toBe(true);
+      await second.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

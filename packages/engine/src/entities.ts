@@ -249,6 +249,15 @@ export function schemaDdl(): string[] {
       fields TEXT NOT NULL,
       revision INTEGER NOT NULL DEFAULT 0
     )`,
+    // 常用查询路径的索引（list 的 where 预过滤）：外键与状态列
+    'CREATE INDEX IF NOT EXISTS task_status_trashed ON task (status, trashedAt)',
+    'CREATE INDEX IF NOT EXISTS task_project ON task (projectId)',
+    'CREATE INDEX IF NOT EXISTS task_heading ON task (headingId)',
+    'CREATE INDEX IF NOT EXISTS task_area ON task (areaId)',
+    'CREATE INDEX IF NOT EXISTS task_position ON task (position)',
+    'CREATE INDEX IF NOT EXISTS subtask_task ON subtask (taskId)',
+    'CREATE INDEX IF NOT EXISTS project_heading_project ON project_heading (projectId)',
+    'CREATE INDEX IF NOT EXISTS tag_group_member ON tag (tagGroupId)',
     // Compact 登记（ADR-0008）：已被物理删除的实体 id，跨会话持久。
     // 只有 id，没有值与时钟——与 hub 的 CompactedEntity 同构。
     `CREATE TABLE IF NOT EXISTS _compacted (

@@ -159,9 +159,10 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
       window.removeEventListener('focus', onVisible);
     };
 
-    // 触发点 1（启动）：首次装配先 bootstrap（新设备全量快照），此后走
-    // 增量。首次失败且副本尚未同步过（cursor === 0，本地无数据）时
-    // 激进退避重试直到首次成功——否则新设备对着空副本渲染「数据全没了」。
+    // 触发点 1（启动）：新设备 cursor 为 0，pull 必然被 hub 判为 resync，
+    // 由 engine.pull 转走 bootstrap 拉全量快照；此后走增量。首次失败且
+    // 副本尚未同步过（cursor === 0，本地无数据）时激进退避重试直到首次
+    // 成功——否则新设备对着空副本渲染「数据全没了」。
     if (!(await syncNow()) && (await engine.cursor()) === 0) {
       await retryUntilFirstSync();
     }

@@ -29,17 +29,28 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
 
   const tagIndex = (): Promise<Map<string, TagResponseDto>> => tagIndexFor(engine);
 
-  /** 项目统计口径：非 trashed task 总数 / 已了结数（与 ProjectsService 一致）。 */
+  /**
+   * 项目统计口径：非 trashed task 总数 / 已了结数（与 ProjectsService 一致）。
+   * 一次查询覆盖一批项目（列表页逐项目各扫一遍整表是 N 次全表扫描）。
+   */
+  async function projectCountsFor(
+    projectIds: string[],
+  ): Promise<Map<string, { total: number; completed: number }>> {
+    const counts = new Map(projectIds.map((id) => [id, { total: 0, completed: 0 }]));
+    const tasks = await engine.list('task', {
+      where: { projectId: { in: projectIds }, trashedAt: null },
+    });
+    for (const row of tasks) {
+      const entry = counts.get(row.fields.projectId as string);
+      if (!entry) continue;
+      entry.total += 1;
+      if (SETTLED_TASK_STATUSES.has(row.fields.status as TaskStatus)) entry.completed += 1;
+    }
+    return counts;
+  }
+
   async function projectCounts(projectId: string): Promise<{ total: number; completed: number }> {
-    const tasks = await engine.list('task');
-    const own = tasks.filter(
-      (row) => row.fields.projectId === projectId && row.fields.trashedAt == null,
-    );
-    return {
-      total: own.length,
-      completed: own.filter((row) => SETTLED_TASK_STATUSES.has(row.fields.status as TaskStatus))
-        .length,
-    };
+    return (await projectCountsFor([projectId])).get(projectId)!;
   }
 
   async function projectDto(id: string): Promise<ProjectResponseDto> {
@@ -65,13 +76,12 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
   return {
     async getProjects(): Promise<ProjectResponseDto[]> {
       const index = await tagIndex();
-      const projects = (await engine.list('project')).filter((row) => row.fields.trashedAt == null);
-      return Promise.all(
-        projects.map(async (row) => {
-          const counts = await projectCounts(row.id);
-          return projectRowToDto(row, index, counts.total, counts.completed);
-        }),
-      );
+      const projects = await engine.list('project', { where: { trashedAt: null } });
+      const counts = await projectCountsFor(projects.map((row) => row.id));
+      return projects.map((row) => {
+        const { total, completed } = counts.get(row.id)!;
+        return projectRowToDto(row, index, total, completed);
+      });
     },
 
     async getProject(id: string): Promise<ProjectResponseDto> {
@@ -157,11 +167,10 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
       // 软删除级联：Project 与其下 Task 一起进 Trash（与 ProjectsService 一致）
       const now = new Date().toISOString();
       await engine.update('project', id, { trashedAt: now });
-      const tasks = await engine.list('task');
-      await Promise.all(
-        tasks
-          .filter((row) => row.fields.projectId === id)
-          .map((row) => engine.update('task', row.id, { trashedAt: now })),
+      const tasks = await engine.list('task', { where: { projectId: id } });
+      await engine.updateMany(
+        'task',
+        tasks.map((row) => ({ id: row.id, patch: { trashedAt: now } })),
       );
     },
 
@@ -172,16 +181,13 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
       // 只捡回「随项目一起进 Trash」的下属任务（级联时同一时间戳，与
       // REST 同启发式）；项目进 Trash 前后单独删掉的任务保持原状。
       const cascadeTrashedAt = existing.fields.trashedAt ?? null;
-      const tasks = await engine.list('task');
-      await Promise.all(
-        tasks
-          .filter(
-            (row) =>
-              row.fields.projectId === id &&
-              cascadeTrashedAt !== null &&
-              row.fields.trashedAt === cascadeTrashedAt,
-          )
-          .map((row) => engine.update('task', row.id, { trashedAt: null })),
+      const tasks =
+        typeof cascadeTrashedAt === 'string'
+          ? await engine.list('task', { where: { projectId: id, trashedAt: cascadeTrashedAt } })
+          : [];
+      await engine.updateMany(
+        'task',
+        tasks.map((row) => ({ id: row.id, patch: { trashedAt: null } })),
       );
       return projectDto(id);
     },

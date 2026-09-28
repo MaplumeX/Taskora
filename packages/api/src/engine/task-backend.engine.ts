@@ -11,7 +11,7 @@
  */
 
 import { currentTimeZone, currentLegacyDateTimeZone, toDateKey, todayDateKey } from '@/utils/date';
-import type { Engine, ReplicaRow } from '@taskora/engine';
+import type { Engine, ListWhere, ReplicaRow } from '@taskora/engine';
 import { positionAfter, repositionMinimal } from '@taskora/engine';
 import {
   deriveRepeatInstanceId,
@@ -61,8 +61,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
   const tagIndex = (): Promise<Map<string, TagResponseDto>> => tagIndexFor(engine);
 
   async function subtasksOf(taskId: string): Promise<SubtaskResponseDto[]> {
-    const rows = await engine.list('subtask');
-    return rows.filter((row) => row.fields.taskId === taskId).map((row) => subtaskRowToDto(row));
+    const rows = await engine.list('subtask', { where: { taskId } });
+    return rows.map((row) => subtaskRowToDto(row));
   }
   async function taskDto(id: string): Promise<TaskResponseDto> {
     const row = await engine.get('task', id);
@@ -144,7 +144,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       tagIds: Array.isArray(f.tagIds) ? (f.tagIds as string[]) : [],
     });
 
-    const subtasks = (await engine.list('subtask')).filter((row) => row.fields.taskId === parentId);
+    const subtasks = await engine.list('subtask', { where: { taskId: parentId } });
     for (const [index, subtask] of subtasks.entries()) {
       await engine.create('subtask', {
         id: deriveSubtaskId(instanceId, index),
@@ -183,7 +183,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
 
   return {
     async getTasks(params?: TaskQuery): Promise<TaskResponseDto[]> {
-      const rows = await engine.list('task');
+      const rows = await engine.list('task', { where: tasksPrefilter(params) });
       const index = await tagIndex();
       return filterTasks(rows, params).map((row) => taskRowToDto(row, index));
     },
@@ -196,8 +196,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
 
     async getFeed(view: FeedView): Promise<FeedItem[]> {
       const index = await tagIndex();
-      const allTasks = await engine.list('task');
-      const taskItems: TaskFeedItem[] = filterFeedTasks(allTasks, view).map((row) => {
+      const viewTasks = await engine.list('task', { where: viewPrefilter(view) });
+      const taskItems: TaskFeedItem[] = filterFeedTasks(viewTasks, view).map((row) => {
         const dto = taskRowToDto(row, index);
         return { ...dto, type: 'task' as const, tags: dto.tags ?? [] };
       });
@@ -208,14 +208,16 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         const projectRows = (await engine.list('project')).filter((row) =>
           projectMatchesView(row, view, new Date()),
         );
+        // 计数口径：项目下所有非 trashed task（不受视图过滤影响）
+        const countedTasks = await engine.list('task', {
+          where: { projectId: { in: projectRows.map((row) => row.id) }, trashedAt: null },
+        });
         projectItems = projectRows.map((row) => {
-          const tasksOf = allTasks.filter((t) => t.fields.projectId === row.id);
-          const total = tasksOf.filter((t) => t.fields.trashedAt == null).length;
-          const completed = tasksOf.filter(
-            (t) =>
-              t.fields.trashedAt == null && SETTLED_STATUSES.has(t.fields.status as TaskStatus),
+          const tasksOf = countedTasks.filter((t) => t.fields.projectId === row.id);
+          const completed = tasksOf.filter((t) =>
+            SETTLED_STATUSES.has(t.fields.status as TaskStatus),
           ).length;
-          return projectRowToFeedItem(row, index, total, completed);
+          return projectRowToFeedItem(row, index, tasksOf.length, completed);
         });
       }
 
@@ -233,7 +235,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     async createTask(data: CreateTaskDto): Promise<TaskResponseDto> {
       const scheduledType = data.scheduledType ?? ScheduledType.NONE;
       const bucket = resolveBucket(data.bucket, scheduledType, data.projectId, data.areaId);
-      const existing = await engine.list('task');
+      // 插在最前只需要当前首行的位次
+      const existing = await engine.list('task', { limit: 1 });
       const id = await engine.create('task', {
         title: data.title,
         notes: data.notes ?? null,
@@ -402,7 +405,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     },
 
     async reorderTasks(orderedIds: string[]): Promise<void> {
-      const rows = await engine.list('task');
+      const rows = await engine.list('task', { where: { id: { in: orderedIds } } });
       const byId = new Map(rows.map((row) => [row.id, row]));
       // 只给必须移动的行分配新 Position（单次拖动 = 一条写），一个事务
       // 一次通知。web 端 REST 同样按 Position 读序，不再需要稠密 sortOrder。
@@ -549,11 +552,13 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
 
       // Subtask 提升为完整 Task（继承标题/状态/了结时间，落位 INBOX）。
       // 与 REST 同口径：逐条 create、排最前（createdAt desc 观感一致）。
-      const subtasks = (await engine.list('subtask')).filter((row) => row.fields.taskId === id);
-      const allTasks = await engine.list('task');
+      const subtasks = await engine.list('subtask', { where: { taskId: id } });
+      // 逐条插到最前：每条都插在上一条之前（否则同一位次、顺序只能靠 createdAt）
+      let head = await engine.list('task', { limit: 1 });
       for (const subtask of subtasks) {
+        const position = positionAfter(head, null);
         const sf = subtask.fields;
-        await engine.create('task', {
+        const createdId = await engine.create('task', {
           title: (sf.title as string) ?? '',
           notes: null,
           scheduledDate: null,
@@ -563,12 +568,13 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
           status: (sf.status as TaskStatus) ?? TaskStatus.ACTIVE,
           settledAt: (sf.settledAt as string | null) ?? null,
           trashedAt: null,
-          position: positionAfter(allTasks, null),
+          position,
           projectId,
           headingId: null,
           areaId: null,
           tagIds: [],
         });
+        head = [{ id: createdId, fields: { position } }];
       }
 
       // 原 Task 的消失：Delete Request（级联其 Subtask；不在 Trash 留尸体）
@@ -586,19 +592,18 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
      * 口径），批量物理删除；断网可用，联网后收敛。
      */
     async emptyTrash(): Promise<{ deletedTasks: number; deletedProjects: number }> {
-      const projects = await engine.list('project');
       const trashedProjectIds = new Set(
-        projects.filter((row) => row.fields.trashedAt != null).map((row) => row.id),
+        (await engine.list('project', { where: { trashedAt: { notNull: true } } })).map(
+          (row) => row.id,
+        ),
       );
-      const tasks = await engine.list('task');
-      const taskIds = tasks
-        .filter(
-          (row) =>
-            row.fields.trashedAt != null ||
-            (typeof row.fields.projectId === 'string' &&
-              trashedProjectIds.has(row.fields.projectId)),
-        )
-        .map((row) => row.id);
+      const [trashedTasks, tasksOfTrashedProjects] = await Promise.all([
+        engine.list('task', { where: { trashedAt: { notNull: true } } }),
+        engine.list('task', { where: { projectId: { in: [...trashedProjectIds] } } }),
+      ]);
+      const taskIds = [
+        ...new Set([...trashedTasks, ...tasksOfTrashedProjects].map((row) => row.id)),
+      ];
 
       await engine.delete('task', taskIds);
       await engine.delete('project', [...trashedProjectIds]);
@@ -756,6 +761,41 @@ function filterTasks(rows: ReplicaRow[], params?: TaskQuery): ReplicaRow[] {
     filtered = filtered.filter((row) => row.fields.trashedAt == null);
   }
   return filtered;
+}
+
+/**
+ * 视图的 SQL 预过滤：只做粗筛（精确语义仍由 taskMatchesView 判定），
+ * 让活跃视图不再把只增不减的 Logbook 整表读出来。
+ */
+function viewPrefilter(view: string | undefined): ListWhere | undefined {
+  switch (view) {
+    case 'inbox':
+    case 'today':
+    case 'upcoming':
+    case 'anytime':
+    case 'someday':
+      return { status: TaskStatus.ACTIVE, trashedAt: null };
+    case 'trash':
+      return { trashedAt: { notNull: true } };
+    case 'logbook':
+      return { status: { in: [...SETTLED_STATUSES] }, trashedAt: null };
+    default:
+      return undefined;
+  }
+}
+
+/** getTasks 的 SQL 预过滤（filterTasks 各分支的必要条件）。 */
+function tasksPrefilter(params?: TaskQuery): ListWhere | undefined {
+  if (!params || Object.keys(params).length === 0) {
+    return { status: TaskStatus.ACTIVE, trashedAt: null };
+  }
+  if (params.view) return viewPrefilter(params.view);
+  const where: ListWhere = { trashedAt: null };
+  if (params.projectId) where.projectId = params.projectId;
+  if (params.areaId) where.areaId = params.areaId;
+  if (!params.completed) where.status = TaskStatus.ACTIVE;
+  else if (params.q) where.status = { in: [...SETTLED_STATUSES] };
+  return where;
 }
 
 /** getFeed 的 task 过滤（buildTaskViewWhere 同语义）。 */
