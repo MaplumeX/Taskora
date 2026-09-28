@@ -34,7 +34,7 @@ _Avoid_: Section
 _Avoid_: 设备时区、服务器时区（两者都不是账号的日历口径）
 
 **Scheduled Date（计划日期）**:
-Task/Project 上计划哪天开始做的日历日期（不代表某个时刻）（对应 Things 3 的 When），永不逾期。日期已过的任务按「今天」对待：留在 Today 视图，数据层日期保持原值不改写；在非语境视图（Anytime/项目内等）行上以黄色星星标记「今天」语义，在未来日期才显示灰色短日期 chip；Calendar 视图归入今天的格子。红色警示色只属于 Deadline，计划日期不套红。
+Task/Project 上计划哪天开始做的日历日期（不代表某个时刻）（对应 Things 3 的 When），永不逾期。日期已过的任务按「今天」对待：留在 Today 视图，数据层日期保持原值不改写；在非语境视图（Anytime/项目内等）行上以黄色星星标记「今天」语义，在未来日期才显示灰色短日期 chip；Calendar 视图仍按原日期归格，不归入今天的格子。红色警示色只属于 Deadline，计划日期不套红。
 _Avoid_: start date（口语可用，代码用 scheduledDate）、When（Things 原词，仅研究文档引用）
 
 **Deadline（截止日期）**:

@@ -106,7 +106,7 @@ describe('buildMonthCells', () => {
 });
 
 describe('groupByScheduledDate', () => {
-  // 固定「今天」为 2026-09-25（周五），使「逾期归入今天」的行为可断言。
+  // 固定「今天」为 2026-09-25（周五），使「过去日期不归入今天」的行为可断言。
   // 日期 key 一律经 toDateKey 推导（月份参数按人类惯例 1-12），避免手工
   // 写 key 与 JS Date 的 0 基月份错位。
   const todayKey = () => toDateKey(new Date());
@@ -148,17 +148,15 @@ describe('groupByScheduledDate', () => {
     expect(map.has(localNoonKey(2026, 9, 30))).toBe(true);
   });
 
-  it('rolls past dates into today（参考 Things 3：When 永不逾期）', () => {
+  it('keeps past dates on their own day instead of rolling into today', () => {
     const map = groupByScheduledDate([
       task('yesterday', localNoonIso(2026, 9, 24)),
       task('lastWeek', localNoonIso(2026, 9, 18)),
       task('today', localNoonIso(2026, 9, 25)),
-      task('future', localNoonIso(2026, 9, 26)),
     ]);
-    expect(map.get(todayKey())?.map((t) => t.id)).toEqual(['yesterday', 'lastWeek', 'today']);
-    expect(map.get(localNoonKey(2026, 9, 26))?.map((t) => t.id)).toEqual(['future']);
-    expect(map.size).toBe(2);
-    expect(map.has(localNoonKey(2026, 9, 24))).toBe(false);
+    expect(map.get(todayKey())?.map((t) => t.id)).toEqual(['today']);
+    expect(map.get(localNoonKey(2026, 9, 24))?.map((t) => t.id)).toEqual(['yesterday']);
+    expect(map.get(localNoonKey(2026, 9, 18))?.map((t) => t.id)).toEqual(['lastWeek']);
   });
 
   it('returns empty map for empty input', () => {
