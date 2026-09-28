@@ -38,6 +38,8 @@ function renderField(
 describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // 固定今天为 2026-02-04，使 2026-02-05 的计划日期不会随真实时间变成过去。
+    vi.setSystemTime(now);
     useReminderPermissionStore.setState({
       permission: 'unknown',
       supported: false,
@@ -46,6 +48,7 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
 
   it('北京时间今天快捷按钮写入纯日期，每天重复的预览为明天', () => {
     const previous = usePreferencesStore.getState().timeZone;
+    vi.useRealTimers(); // 解除 beforeEach 的 Date mock，才能启用 fake timers
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-23T17:00:00Z'));
     usePreferencesStore.getState().setTimeZone('Asia/Shanghai');
@@ -101,6 +104,43 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
     // jsdom 对 <input type=time> 的逐键输入支持不稳，直接改值断言 patch 流
     fireEvent.change(timeInput, { target: { value: '18:30' } });
     expect(onPatch).toHaveBeenLastCalledWith({ reminderTime: '18:30' });
+
+    await user.click(screen.getByRole('switch', { name: /Reminder|提醒/ }));
+    expect(onPatch).toHaveBeenLastCalledWith({ reminderTime: null });
+  });
+
+  it('计划日期已过：卡片选中今天；开提醒 / 改时刻时一并把计划日期写成今天', async () => {
+    const user = userEvent.setup();
+    const { onPatch } = renderField(
+      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-01' },
+      { showReminder: true },
+    );
+
+    // 「今天」快捷项带勾选标记（图标 + Check 两个 svg）。
+    const todayButton = screen.getByRole('button', { name: /^(Today|今天)$/ });
+    expect(todayButton.querySelectorAll('svg')).toHaveLength(2);
+
+    await user.click(screen.getByRole('switch', { name: /Reminder|提醒/ }));
+    expect(onPatch).toHaveBeenLastCalledWith({
+      scheduledDate: '2026-02-04',
+      reminderTime: '09:00',
+    });
+  });
+
+  it('计划日期已过且已有提醒：改时刻时一并把计划日期写成今天；关提醒不改日期', async () => {
+    const user = userEvent.setup();
+    const { onPatch } = renderField(
+      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-01', reminderTime: '09:00' },
+      { showReminder: true },
+    );
+
+    fireEvent.change(screen.getByLabelText(/Reminder time|提醒时间/), {
+      target: { value: '18:30' },
+    });
+    expect(onPatch).toHaveBeenLastCalledWith({
+      scheduledDate: '2026-02-04',
+      reminderTime: '18:30',
+    });
 
     await user.click(screen.getByRole('switch', { name: /Reminder|提醒/ }));
     expect(onPatch).toHaveBeenLastCalledWith({ reminderTime: null });

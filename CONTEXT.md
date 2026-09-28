@@ -34,7 +34,7 @@ _Avoid_: Section
 _Avoid_: 设备时区、服务器时区（两者都不是账号的日历口径）
 
 **Scheduled Date（计划日期）**:
-Task/Project 上计划哪天开始做的日历日期（不代表某个时刻）（对应 Things 3 的 When），永不逾期。日期已过的任务按「今天」对待：留在 Today 视图，数据层日期保持原值不改写；在非语境视图（Anytime/项目内等）行上以黄色星星标记「今天」语义，在未来日期才显示灰色短日期 chip；Calendar 视图仍按原日期归格，不归入今天的格子。红色警示色只属于 Deadline，计划日期不套红。
+Task/Project 上计划哪天开始做的日历日期（不代表某个时刻）（对应 Things 3 的 When），永不逾期。日期已过的任务按「今天」对待：留在 Today 视图，计划卡片中选中今天，数据层日期保持原值不改写；在非语境视图（Anytime/项目内等）行上以黄色星星标记「今天」语义，在未来日期才显示灰色短日期 chip；Calendar 视图仍按原日期归格，不归入今天的格子。红色警示色只属于 Deadline，计划日期不套红。
 _Avoid_: start date（口语可用，代码用 scheduledDate）、When（Things 原词，仅研究文档引用）
 
 **Deadline（截止日期）**:
@@ -42,7 +42,7 @@ Task/Project 上必须完成的日期，可逾期（Overdue）；与计划日期
 _Avoid_: due date（一词两义）、通知日期、DDL
 
 **Reminder**:
-Task 上的一个时刻（HH:mm），依附于计划日期（Scheduled Date），到账号时区对应时刻由各客户端触发系统通知；仅 ScheduledType 为 DATE 的 Task 可设。Project 不设 Reminder。
+Task 上的一个时刻（HH:mm），依附于计划日期（Scheduled Date），到账号时区对应时刻由各客户端触发系统通知；仅 ScheduledType 为 DATE 的 Task 可设。Project 不设 Reminder。按存储的计划日期一次性触发，错过不补发、不随 Today 顺延；在计划日期已过的 Task 上开启或修改 Reminder 时，计划日期一并改写为今天（参考 Things 3：提醒经 When 设置）。
 _Avoid_: 闹钟、alarm、通知时间（Reminder 是数据，通知是其触发效果）
 
 **Repeat Rule（重复规则）**:
