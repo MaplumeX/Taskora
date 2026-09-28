@@ -5,6 +5,7 @@ import {
   usePreferencesStore,
   startOfToday,
   startOfTomorrow,
+  isOverdue,
   isToday,
   isTomorrow,
   useReminderPermissionStore,
@@ -60,10 +61,14 @@ export function ScheduledDateField({
   const openNotificationSettings = useReminderPermissionStore((s) => s.openSettings);
 
   const scheduledType = current.scheduledType ?? ScheduledType.NONE;
-  const selectedDate =
+  const storedDate =
     scheduledType === ScheduledType.DATE && current.scheduledDate
       ? parseCalendarDate(current.scheduledDate)
       : undefined;
+  // 参考 Things 3：计划日期已过按「今天」对待——卡片选中今天，数据层
+  // 日期不改写；只有在卡片里写提醒时才把计划日期一并落为今天。
+  const pastDate = storedDate !== undefined && isOverdue(storedDate);
+  const selectedDate = pastDate ? startOfToday() : storedDate;
 
   const locale = getCalendarLocale(i18n.language);
 
@@ -124,12 +129,20 @@ export function ScheduledDateField({
     onClose?.();
   };
 
+  // 提醒 = 计划日 + 时刻（Things 3：提醒经 When 设置）。日期已过时一并
+  // 写入今天，否则提醒落在过去、永不触发。
+  const rollPastDateToToday = (): ScheduledFieldPatch =>
+    pastDate ? { scheduledDate: toInputDateValue(startOfToday()) } : {};
+
   const handleReminderToggle = (checked: boolean) => {
     if (checked) {
       // 首次开启提醒时请求通知授权（spec：不在 App 启动时请求）；
       // 拒绝后仍保存 reminderTime，仅提示通知被禁用。
       void requestPermission();
-      onPatch({ reminderTime: current.reminderTime ?? DEFAULT_REMINDER_TIME });
+      onPatch({
+        ...rollPastDateToToday(),
+        reminderTime: current.reminderTime ?? DEFAULT_REMINDER_TIME,
+      });
     } else {
       onPatch({ reminderTime: null });
     }
@@ -137,7 +150,7 @@ export function ScheduledDateField({
 
   const handleReminderTimeChange = (value: string) => {
     if (!value) return; // 清空中间态不产生写
-    onPatch({ reminderTime: value });
+    onPatch({ ...rollPastDateToToday(), reminderTime: value });
   };
 
   return (

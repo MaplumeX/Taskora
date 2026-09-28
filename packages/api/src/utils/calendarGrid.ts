@@ -1,6 +1,6 @@
 import type { TaskResponseDto } from '@taskora/shared';
 
-import { toDateKey, todayDateKey } from '@/utils/date';
+import { toDateKey } from '@/utils/date';
 
 /** Week start index (0=Sunday, 1=Monday) from the user preference store value. */
 export type WeekStartsOn = 0 | 1;
@@ -38,16 +38,14 @@ export function addMonths(anchor: Date, direction: number): Date {
  * Group tasks by their local-date `scheduledDate` key (`yyyy-MM-dd`).
  * Tasks without a `scheduledDate` are skipped.
  *
- * 参考 Things 3：When 是计划开始日、永不逾期——日期已过的任务视为
- * 「今天」，归入今天的格子，而不是沉积在过去的日期里。
+ * 日历按原计划日期归格：「日期已过按今天对待」只作用于 Today 视图的归属，
+ * 不把过去的任务搬进今天的格子。
  */
 export function groupByScheduledDate(tasks: TaskResponseDto[]): Map<string, TaskResponseDto[]> {
-  const todayKey = todayDateKey();
   const map = new Map<string, TaskResponseDto[]>();
   for (const task of tasks) {
     if (!task.scheduledDate) continue;
-    const rawKey = toDateKey(task.scheduledDate);
-    const key = rawKey < todayKey ? todayKey : rawKey;
+    const key = toDateKey(task.scheduledDate);
     const list = map.get(key);
     if (list) {
       list.push(task);

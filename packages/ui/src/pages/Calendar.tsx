@@ -21,7 +21,8 @@ import { Hint } from '@/components/ui/hint';
 import { PageHeading } from '@/components/layout/PageHeading';
 
 export default function Calendar() {
-  const calendarDay = useCalendarDay();
+  // 跨午夜时重渲染，刷新「今天」格的高亮。
+  useCalendarDay();
   const { t } = useTranslation();
   const { data: tasks = [], isLoading, isError } = useScheduledTasksQuery();
   const weekStartsOn = usePreferencesStore((s) => s.weekStartsOn);
@@ -30,7 +31,7 @@ export default function Calendar() {
   // 点日格打开当天的完整列表（窄屏底部面板 / 宽屏居中卡片）。
   const [openDay, setOpenDay] = useState<Date | null>(null);
 
-  const tasksByDate = useMemo(() => groupByScheduledDate(tasks), [tasks, calendarDay]);
+  const tasksByDate = useMemo(() => groupByScheduledDate(tasks), [tasks]);
 
   // 注册可遍历行（按当前月网格顺序；键盘动作经全局 keymap 生效）。
   const { selectedIds } = useTaskRowSelection();
