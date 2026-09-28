@@ -1,6 +1,7 @@
 import type * as React from 'react';
-import { Check } from 'lucide-react';
+import { CalendarX2 } from 'lucide-react';
 
+import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 
 export interface DateShortcut {
@@ -11,39 +12,50 @@ export interface DateShortcut {
   onSelect: () => void;
 }
 
+interface Props {
+  items: DateShortcut[];
+  /** 行尾的清除按钮（取代原先单独一行的底部「清除」）。 */
+  clear: { label: string; disabled?: boolean; onClear: () => void };
+}
+
 /**
- * 日期弹层顶部的快捷项纵列（Things 3 的 When 弹层）：语义色图标 + 文案，
- * hover / 键盘高亮与菜单一致（蓝底白字），当前值右侧打勾。
+ * 日期弹层顶部的快捷项横排（Things 3 的 When 弹层）：语义色图标 + 文案，
+ * 当前值高亮；行尾是图标式清除按钮（日历 ✕，与窄屏卡片的关闭 ✕ 区分）。
+ * 横排而非纵列，压低弹层整体高度。
  */
-export function DateShortcutList({ items }: { items: DateShortcut[] }) {
+export function DateShortcutList({ items, clear }: Props) {
   return (
-    <div className="flex flex-col px-1 pt-1">
+    <div className="flex items-center gap-0.5 pt-0.5 max-md:gap-1 max-md:px-1 max-md:pt-1">
       {items.map((item) => (
         <button
           key={item.key}
           type="button"
+          aria-pressed={!!item.active}
           onClick={item.onSelect}
           className={cn(
-            'group/shortcut flex h-8 w-full items-center gap-2.5 rounded-md px-2 text-left text-body outline-none max-md:h-11',
-            'hover:bg-primary hover:text-primary-foreground focus-visible:bg-primary focus-visible:text-primary-foreground',
-            '[&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0',
+            'flex h-7 min-w-0 flex-auto items-center justify-center gap-1 whitespace-nowrap rounded-md px-1.5 text-meta outline-none transition-colors duration-fast max-md:h-10 max-md:gap-1.5 max-md:text-sm',
+            'focus-visible:ring-2 focus-visible:ring-ring/60',
+            '[&_svg]:h-3.5 [&_svg]:w-3.5 [&_svg]:shrink-0 max-md:[&_svg]:h-4 max-md:[&_svg]:w-4',
+            item.active ? 'bg-primary/10 text-primary' : 'text-foreground hover:bg-accent',
           )}
         >
-          <span
-            aria-hidden
-            className="flex group-hover/shortcut:[&_svg]:text-primary-foreground group-focus-visible/shortcut:[&_svg]:text-primary-foreground"
-          >
+          <span aria-hidden className="flex">
             {item.icon}
           </span>
-          <span className="flex-1">{item.label}</span>
-          {item.active && (
-            <Check
-              aria-hidden
-              className="text-primary group-hover/shortcut:text-primary-foreground"
-            />
-          )}
+          <span className="truncate">{item.label}</span>
         </button>
       ))}
+      <Hint label={clear.label}>
+        <button
+          type="button"
+          aria-label={clear.label}
+          disabled={clear.disabled}
+          onClick={clear.onClear}
+          className="flex h-7 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors duration-fast hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-30 max-md:h-10 max-md:w-10"
+        >
+          <CalendarX2 aria-hidden className="h-3.5 w-3.5 max-md:h-4 max-md:w-4" />
+        </button>
+      </Hint>
     </div>
   );
 }

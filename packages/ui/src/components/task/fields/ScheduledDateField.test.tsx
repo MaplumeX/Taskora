@@ -127,9 +127,9 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
       { showReminder: true },
     );
 
-    // 「今天」快捷项带勾选标记（图标 + Check 两个 svg）。
+    // 「今天」快捷项处于选中态。
     const todayButton = screen.getByRole('button', { name: /^(Today|今天)$/ });
-    expect(todayButton.querySelectorAll('svg')).toHaveLength(2);
+    expect(todayButton).toHaveAttribute('aria-pressed', 'true');
 
     await user.click(screen.getByRole('switch', { name: /Reminder|提醒/ }));
     expect(onPatch).toHaveBeenLastCalledWith({

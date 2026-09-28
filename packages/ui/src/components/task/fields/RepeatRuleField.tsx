@@ -195,7 +195,11 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
       </div>
 
       {rule?.unit === 'week' && (
-        <div className="flex items-center gap-1 max-md:gap-1.5" role="group" aria-label={t('task:repeatWeekdays')}>
+        <div
+          className="flex items-center gap-1 max-md:gap-1.5"
+          role="group"
+          aria-label={t('task:repeatWeekdays')}
+        >
           {weekdayOrder.map((day) => {
             const active = rule.weekdays?.includes(day) ?? false;
             return (
@@ -232,11 +236,7 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
         </label>
         <div className="ml-auto flex items-center gap-1.5 text-xs text-muted-foreground max-md:gap-2 max-md:text-sm">
           <span className="select-none">{t('task:repeatUntil')}</span>
-          <UntilPicker
-            value={rule?.until ?? null}
-            disabled={!rule}
-            onChange={changeUntil}
-          />
+          <UntilPicker value={rule?.until ?? null} disabled={!rule} onChange={changeUntil} />
         </div>
       </div>
 

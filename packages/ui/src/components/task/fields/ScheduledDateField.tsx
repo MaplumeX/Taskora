@@ -21,7 +21,6 @@ import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
 import { Switch } from '@/components/ui/switch';
 import { TimePicker } from '@/components/ui/time-picker';
-import { cn } from '@/lib/utils';
 
 import { getCalendarLocale } from './calendarFieldUtils';
 import { DateShortcutList } from './DateShortcutList';
@@ -40,12 +39,6 @@ interface FieldProps {
 
 /** 首次开启提醒的默认时刻（spec：固定 09:00，非偏好项）。 */
 export const DEFAULT_REMINDER_TIME = '09:00';
-
-/**
- * 底部快捷按钮：宽屏收窄内边距（四个英文按钮在 w-72 popover 内放得下），
- * 窄屏（居中卡片）放大到触控尺寸。
- */
-export const FOOTER_BUTTON_CLASS = 'px-2 max-md:h-10 max-md:px-3 max-md:text-sm';
 
 export function ScheduledDateField({
   current,
@@ -181,6 +174,11 @@ export function ScheduledDateField({
             onSelect: handleSomeday,
           },
         ]}
+        clear={{
+          label: t('common:clear'),
+          disabled: scheduledType === ScheduledType.NONE,
+          onClear: handleClear,
+        }}
       />
       <Calendar
         selected={selectedDate}
@@ -223,17 +221,6 @@ export function ScheduledDateField({
           </Button>
         </div>
       )}
-      <div className="flex items-center border-t border-border/50 px-1 pt-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={scheduledType === ScheduledType.NONE}
-          onClick={handleClear}
-          className={cn('w-full', FOOTER_BUTTON_CLASS)}
-        >
-          {t('common:clear')}
-        </Button>
-      </div>
     </div>
   );
 }
