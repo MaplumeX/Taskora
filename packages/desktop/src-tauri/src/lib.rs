@@ -1,3 +1,4 @@
+mod launch_at_login;
 mod session;
 mod sqlite;
 use tauri::{
@@ -87,8 +88,9 @@ pub fn run() {
             show_main_window(app);
         }))
         // 开机自启（desktop-v1 spec V1.x）：注册系统登录启动项，开关由
-        // 设置「通用」页通过 autostart 插件命令控制。macOS 走 LaunchAgent
-        //（不弹终端、随应用卸载清理），参数传 `--hidden` 供静默启动使用。
+        // 设置「通用」页通过 launch_at_login 命令控制（持久化意图 + 启动
+        // 对账，见 launch_at_login.rs）。macOS 走 LaunchAgent（不弹终端、
+        // 随应用卸载清理），参数传 `--hidden` 供静默启动使用。
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--hidden"]),
@@ -154,6 +156,8 @@ pub fn run() {
                     let _ = window.hide();
                 }
             }
+            // 补回被安装包覆盖安装删掉的自启项，并刷新可执行文件路径。
+            launch_at_login::reconcile(app.handle());
             // Local Replica 状态注册（ADR-0007）。注意：Builder 的 setup /
             // invoke_handler 都是「替换」语义，不能由模块各自链一次 ——
             // v0.4.0 曾因此让 sqlite::install 覆盖掉 session 命令注册与
@@ -187,7 +191,9 @@ pub fn run() {
             sqlite::sql_all,
             sqlite::sql_run,
             sqlite::sql_use_db,
-            open_notification_settings
+            open_notification_settings,
+            launch_at_login::launch_at_login_get,
+            launch_at_login::launch_at_login_set
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

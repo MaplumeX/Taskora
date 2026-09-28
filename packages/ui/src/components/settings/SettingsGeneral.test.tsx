@@ -18,6 +18,9 @@ import {
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
+const invoke = vi.hoisted(() => vi.fn());
+vi.mock('@tauri-apps/api/core', () => ({ invoke }));
+
 const mutationMocks = vi.hoisted(() => ({
   updatePreferences: vi.fn(),
 }));
@@ -101,6 +104,48 @@ describe('SettingsGeneral — 时间视图分组开关', () => {
   it('hides the desktop-only launch-at-login section off the desktop runtime', () => {
     renderPage();
     expect(screen.queryByText(/launch at login/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('SettingsGeneral — 登录时自动启动（桌面）', () => {
+  beforeEach(() => {
+    invoke.mockReset();
+    vi.mocked(toast.error).mockClear();
+    setClientKind('desktop');
+    vi.stubGlobal('__TAURI_INTERNALS__', {});
+  });
+
+  afterEach(() => {
+    setClientKind('web');
+    vi.unstubAllGlobals();
+  });
+
+  it('reads the current state from the shell command', async () => {
+    invoke.mockResolvedValueOnce(true);
+    renderPage();
+    const toggle = screen.getByRole('switch', { name: /launch at login/i });
+    await waitFor(() => expect(toggle).toBeChecked());
+    expect(invoke).toHaveBeenCalledWith('launch_at_login_get', undefined);
+  });
+
+  it('persists the choice through the shell command', async () => {
+    invoke.mockResolvedValueOnce(false).mockResolvedValueOnce(undefined);
+    renderPage();
+    const toggle = screen.getByRole('switch', { name: /launch at login/i });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toggle).toBeChecked());
+    expect(invoke).toHaveBeenLastCalledWith('launch_at_login_set', { enabled: true });
+  });
+
+  it('keeps the switch off and shows an error when enabling fails', async () => {
+    invoke.mockResolvedValueOnce(false).mockRejectedValueOnce(new Error('denied'));
+    renderPage();
+    const toggle = screen.getByRole('switch', { name: /launch at login/i });
+    await waitFor(() => expect(toggle).toBeEnabled());
+    await userEvent.click(toggle);
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    expect(toggle).not.toBeChecked();
   });
 });
 
