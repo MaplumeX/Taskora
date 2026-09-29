@@ -41,11 +41,7 @@ export interface ReplicaRow {
  * 精确的视图语义仍由调用方在 JS 里判定。
  */
 export type ListWhereValue =
-  | string
-  | number
-  | null
-  | { notNull: true }
-  | { in: Array<string | number> };
+  string | number | null | { notNull: true } | { in: Array<string | number> };
 export type ListWhere = Record<string, ListWhereValue>;
 
 export interface ListOptions {
@@ -163,6 +159,8 @@ export class LocalReplica {
     for (const row of compactedRows) {
       this.compacted.add(`${row.entity}:${row.entity_id}`);
     }
+    const offset = Number(await this.metaGet('wallOffset'));
+    if (Number.isFinite(offset)) this.clock.setWallOffset(offset);
     const saved = await this.metaGet('hlc');
     if (saved) {
       const state = JSON.parse(saved) as { wallMs: number; counter: number };
@@ -172,6 +170,23 @@ export class LocalReplica {
 
   get deviceId(): string {
     return this.options.deviceId;
+  }
+
+  /** 未校准的系统时钟读数（Engine 测量校准偏移用）。 */
+  rawWallMs(): number {
+    return this.clock.rawWallMs();
+  }
+
+  /**
+   * 按 hub 回报的服务器时间校准 HLC 墙钟。偏移持久化：离线重启后仍用
+   * 最后一次校准值。变化不足 1 秒的抖动不落库。
+   */
+  async calibrateWall(offsetMs: number): Promise<void> {
+    const previous = this.clock.getWallOffset();
+    this.clock.setWallOffset(offsetMs);
+    if (Math.abs(offsetMs - previous) >= 1000) {
+      await this.metaSet('wallOffset', String(Math.round(offsetMs)));
+    }
   }
 
   async getCursor(): Promise<number> {
@@ -284,7 +299,8 @@ export class LocalReplica {
       }
     }
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
-    const limit = options.limit !== undefined ? `LIMIT ${Math.max(0, Math.floor(options.limit))}` : '';
+    const limit =
+      options.limit !== undefined ? `LIMIT ${Math.max(0, Math.floor(options.limit))}` : '';
     // 不取 clocks 列：UI 用不到，整表 JSON 经 IPC 传输再丢弃是纯浪费
     const columns = ['id', ...def.fields.map((field) => field.name)].join(', ');
     const rows = await this.storage.all<Record<string, unknown>>(
@@ -353,7 +369,10 @@ export class LocalReplica {
    * 批量更新：一个事务、一次变更通知。重排等多行写入不再逐行触发 UI
    * 失效与重查（逐行时 UI 会渲染出只改了一半的中间顺序）。
    */
-  async updateMany(entity: SyncEntity, patches: Array<{ id: string; patch: WireRow }>): Promise<void> {
+  async updateMany(
+    entity: SyncEntity,
+    patches: Array<{ id: string; patch: WireRow }>,
+  ): Promise<void> {
     if (patches.length === 0) return;
     return this.serialized(async () => {
       await this.tx(async () => {

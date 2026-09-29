@@ -18,20 +18,30 @@ export class SyncController {
     return this.syncHub.registerDevice(req.user.id, dto.deviceId, dto.label);
   }
 
+  // 每个响应都回报 serverTime：设备据此校准 HLC 墙钟，以 hub 时间为
+  // 共同基准（与 hub 以虚拟设备 0 合成的时钟可比，ADR-0007）。
+
   @Post('push')
-  push(@Request() req: { user: { id: string } }, @Body() dto: PushRequestDto) {
-    return this.syncHub.push(req.user.id, dto.events, dto.deletes);
+  async push(@Request() req: { user: { id: string } }, @Body() dto: PushRequestDto) {
+    return withServerTime(await this.syncHub.push(req.user.id, dto.events, dto.deletes));
   }
 
   @Get('pull')
-  pull(@Request() req: { user: { id: string } }, @Query('cursor') cursorRaw: string | undefined) {
+  async pull(
+    @Request() req: { user: { id: string } },
+    @Query('cursor') cursorRaw: string | undefined,
+  ) {
     const cursor = Number.parseInt(cursorRaw ?? '0', 10);
     const safeCursor = Number.isSafeInteger(cursor) && cursor >= 0 ? cursor : 0;
-    return this.syncHub.pull(req.user.id, safeCursor);
+    return withServerTime(await this.syncHub.pull(req.user.id, safeCursor));
   }
 
   @Get('bootstrap')
-  bootstrap(@Request() req: { user: { id: string } }) {
-    return this.syncHub.bootstrap(req.user.id);
+  async bootstrap(@Request() req: { user: { id: string } }) {
+    return withServerTime(await this.syncHub.bootstrap(req.user.id));
   }
+}
+
+function withServerTime<T extends object>(response: T): T & { serverTime: number } {
+  return { ...response, serverTime: Date.now() };
 }

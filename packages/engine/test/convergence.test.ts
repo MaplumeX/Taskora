@@ -1177,3 +1177,41 @@ describe('HLC 跨会话持久', () => {
     }
   });
 });
+
+describe('设备时钟按 hub 时间校准（ADR-0007）', () => {
+  it('系统时钟快一天的设备校准后，不再压过其他设备之后的编辑', async () => {
+    let hubNow = 5_000_000_000;
+    const hub = new InMemorySyncHub({ wallClock: () => hubNow, reportServerTime: true });
+    const fast = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'fast',
+      clock: new HybridClock('fast', () => hubNow + 24 * 3600 * 1000),
+      transport: hub.transportFor(USER),
+    });
+    const honest = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'honest',
+      clock: new HybridClock('honest', () => hubNow),
+      transport: hub.transportFor(USER),
+    });
+    await fast.sync();
+    await honest.sync();
+    const id = await createTask(honest, '原标题');
+    await honest.sync();
+    await fast.sync();
+
+    hubNow += 1_000;
+    await fast.update('task', id, { title: '快钟设备的编辑' });
+    await fast.sync();
+    hubNow += 1_000;
+    await honest.sync();
+    await honest.update('task', id, { title: '之后的编辑' });
+    await honest.sync();
+    await fast.sync();
+
+    expect((await fast.get('task', id))?.fields.title).toBe('之后的编辑');
+    expect((await honest.get('task', id))?.fields.title).toBe('之后的编辑');
+    await fast.close();
+    await honest.close();
+  });
+});

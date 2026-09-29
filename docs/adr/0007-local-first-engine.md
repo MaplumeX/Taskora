@@ -58,6 +58,18 @@ Key decisions, in the order they matter:
   privileged writes, no server-clock comparisons against device HLCs. The
   Destructive Operation approval-card flow is unchanged: approval simply
   releases the resulting Change Events.
+- **Device clocks are calibrated to hub time** (amended 2026-09-29). In
+  practice the hub does stamp virtual-device-0 clocks from its own wall clock
+  (REST/web writes, reference scrubbing), so device HLCs are compared against
+  server time after all. To make that comparison fair, every sync response
+  carries `serverTime`; the Engine derives an NTP-style offset (round trips
+  over 5 s are ignored), persists it, and adds it to the HLC wall reading.
+  Remote stamps can advance a local clock by at most one hour beyond the
+  calibrated now (`MAX_CLOCK_DRIFT_MS`), so one device with a clock set into
+  the future cannot drag every other device along. The hub never rejects
+  future stamps — that would turn a bad clock into a permanently failing
+  push. Stamps already written with a future wall time keep winning LWW until
+  real time catches up; they are not rewritten retroactively.
 - **Migration is a vertical slice, desktop first**: Task CRUD in
   Inbox/Today buckets moves to the Engine first; the rest of `packages/api` and
   the old HTTP CRUD surface retire slice by slice. Web follows desktop once

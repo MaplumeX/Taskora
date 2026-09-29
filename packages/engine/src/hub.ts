@@ -47,18 +47,22 @@ export interface InMemorySyncHubOptions {
    * 失败。与 NestJS hub 相同，同批后续事件照常尝试，最后整个 push 失败。
    */
   enforceReferences?: boolean;
+  /** 在 transport 响应里回报 serverTime（取自 wallClock），驱动设备时钟校准。 */
+  reportServerTime?: boolean;
 }
 
 export class InMemorySyncHub {
   private readonly bufferSize: number;
   private readonly wallClock: () => number;
   private readonly enforceReferences: boolean;
+  private readonly reportServerTime: boolean;
   private readonly users = new Map<string, UserState>();
 
   constructor(options: InMemorySyncHubOptions = {}) {
     this.bufferSize = options.bufferSize ?? 500;
     this.wallClock = options.wallClock ?? (() => Date.now());
     this.enforceReferences = options.enforceReferences ?? false;
+    this.reportServerTime = options.reportServerTime ?? false;
   }
 
   // ---------- 设备侧协议面 ----------
@@ -117,10 +121,12 @@ export class InMemorySyncHub {
 
   /** 给测试用的 transport 视图（单用户 harness）。 */
   transportFor(userId: string): SyncTransport {
+    const stamped = <T extends object>(response: T): T =>
+      this.reportServerTime ? { ...response, serverTime: this.wallClock() } : response;
     return {
-      push: (request) => Promise.resolve(this.push(userId, request)),
-      pull: (request) => Promise.resolve(this.pull(userId, request)),
-      bootstrap: () => Promise.resolve(this.bootstrap(userId)),
+      push: async (request) => stamped(this.push(userId, request)),
+      pull: async (request) => stamped(this.pull(userId, request)),
+      bootstrap: async () => stamped(this.bootstrap(userId)),
     };
   }
 

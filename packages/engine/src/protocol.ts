@@ -41,6 +41,11 @@ export interface PushRequest {
 export interface PushResponse {
   /** hub 接受（或已持有）的事件数。 */
   acked: number;
+  /**
+   * hub 处理请求时的服务器时间（毫秒）。设备据此校准 HLC 墙钟，以 hub
+   * 时间为各设备的共同基准（ADR-0007）。
+   */
+  serverTime?: number;
 }
 
 /** hub → 设备：一个实体的合并态变更（完整字段 + 完整时钟）。 */
@@ -75,6 +80,11 @@ export interface PullResponse {
   cursor: number;
   /** 序号缺口超出 hub 缓冲（或 hub 重启）→ 设备必须走 bootstrap 重建。 */
   resync: boolean;
+  /**
+   * hub 处理请求时的服务器时间（毫秒）。设备据此校准 HLC 墙钟，以 hub
+   * 时间为各设备的共同基准（ADR-0007）。
+   */
+  serverTime?: number;
 }
 
 /** hub → 设备：全量快照（新设备 / 重置副本的设备）。 */
@@ -91,6 +101,11 @@ export interface BootstrapResponse {
    * 待同步字段写，避免 bootstrap 把已删除实体在本地复活。
    */
   compacted?: DeleteRequest[];
+  /**
+   * hub 处理请求时的服务器时间（毫秒）。设备据此校准 HLC 墙钟，以 hub
+   * 时间为各设备的共同基准（ADR-0007）。
+   */
+  serverTime?: number;
 }
 
 /** Engine 侧的同步传输层（HTTP/SSE 实现 live in 桌面端；测试用进程内 hub）。 */

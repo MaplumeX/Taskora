@@ -92,6 +92,9 @@ function limitBatchBytes(batch: OutboxEntry[]): OutboxEntry[] {
   return batch;
 }
 
+/** 往返超过此值的响应不用于时钟校准（单程延迟不对称的误差太大）。 */
+const MAX_CALIBRATION_RTT_MS = 5_000;
+
 export async function openEngine(options: EngineOptions): Promise<Engine> {
   const replica = new LocalReplica(options.storage, {
     deviceId: options.deviceId,
@@ -105,6 +108,22 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
       throw new Error('Engine 无同步传输层（离线引擎不能 flush/pull）');
     }
     return options.transport;
+  };
+
+  /**
+   * 调用 hub 并按其回报的服务器时间校准 HLC 墙钟：偏移 = 服务器时间 −
+   * 请求往返的中点（NTP 式估计）。hub 未回报时不动。
+   */
+  const calibrated = async <T extends { serverTime?: number }>(
+    call: () => Promise<T>,
+  ): Promise<T> => {
+    const sentAt = replica.rawWallMs();
+    const response = await call();
+    const receivedAt = replica.rawWallMs();
+    if (typeof response.serverTime === 'number' && receivedAt - sentAt <= MAX_CALIBRATION_RTT_MS) {
+      await replica.calibrateWall(response.serverTime - (sentAt + receivedAt) / 2);
+    }
+    return response;
   };
 
   const flush = async (): Promise<void> => {
@@ -127,18 +146,21 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
         entity,
         ids,
       }));
-      await transport.push({
-        deviceId: options.deviceId,
-        events,
-        ...(deletes.length > 0 ? { deletes } : {}),
-      });
+      await calibrated(() =>
+        transport.push({
+          deviceId: options.deviceId,
+          events,
+          ...(deletes.length > 0 ? { deletes } : {}),
+        }),
+      );
       await replica.deleteOutbox(batch);
     }
   };
 
   const applyPull = async (): Promise<void> => {
     const transport = requireTransport();
-    const response = await transport.pull({ cursor: await replica.getCursor() });
+    const cursor = await replica.getCursor();
+    const response = await calibrated(() => transport.pull({ cursor }));
     if (response.resync) {
       await bootstrap();
       return;
@@ -148,7 +170,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
 
   const bootstrap = async (): Promise<void> => {
     const transport = requireTransport();
-    const response = await transport.bootstrap();
+    const response = await calibrated(() => transport.bootstrap());
     await replica.replaceAll(response.snapshot, response.compacted);
     await replica.setCursor(response.cursor);
   };
