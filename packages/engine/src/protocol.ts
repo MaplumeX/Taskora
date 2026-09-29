@@ -78,8 +78,10 @@ export interface PullResponse {
   changes: HubChange[];
   /** 本次覆盖到的最新 seq（含 resync 时为当前 seq）。 */
   cursor: number;
-  /** 序号缺口超出 hub 缓冲（或 hub 重启）→ 设备必须走 bootstrap 重建。 */
+  /** 序号缺口超出 hub 保留范围（或 cursor 来自别的 hub 世代）→ 设备必须走 bootstrap 重建。 */
   resync: boolean;
+  /** 本页之后还有变更：设备应以新 cursor 继续 pull。 */
+  hasMore?: boolean;
   /**
    * hub 处理请求时的服务器时间（毫秒）。设备据此校准 HLC 墙钟，以 hub
    * 时间为各设备的共同基准（ADR-0007）。

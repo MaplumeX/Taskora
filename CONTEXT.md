@@ -135,7 +135,7 @@ _Avoid_: 整数序号、sortOrder、order index
 _Avoid_: 消息队列（MQ 意义上的）
 
 **Sync Cursor**:
-设备记录的「已拉取到的全局单调序号」位置，增量拉取以此为起点；复用原 Event Stream 的单调 seq 机制。
+设备记录的「已拉取到的每用户单调序号」位置，增量拉取以此为起点。序号由 Sync Hub 的持久化变更日志分配（保留 30 天），hub 重启不失效；早于保留窗口或来自旧世代的 cursor 触发全量 bootstrap。
 _Avoid_: offset、分页游标
 
 **Compact Event（压缩变更）**:

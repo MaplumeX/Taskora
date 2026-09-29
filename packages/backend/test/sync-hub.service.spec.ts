@@ -5,7 +5,7 @@ import type { ChangeEvent } from '@taskora/shared';
 
 import { PrismaService } from '../src/prisma/prisma.service';
 import { ChangeEventHub } from '../src/events/change-event-hub.service';
-import { SyncEventBuffer } from '../src/sync/sync-event-buffer.service';
+import { InMemorySyncChangeLog } from '../src/sync/in-memory-sync-change-log';
 import { SyncHubService } from '../src/sync/sync-hub.service';
 
 const USER = 'user-1';
@@ -41,16 +41,17 @@ function stamp(wallMs: number, counter: number, deviceId: string) {
 
 describe('SyncHubService（合并器集成）', () => {
   let service: SyncHubService;
-  let buffer: SyncEventBuffer;
+  let buffer: InMemorySyncChangeLog;
   let changeEventHub: ChangeEventHub;
   let mockPrisma: {
     task: Record<string, ReturnType<typeof vi.fn>>;
     $transaction: ReturnType<typeof vi.fn>;
+    rawTransaction: ReturnType<typeof vi.fn>;
     $queryRawUnsafe: ReturnType<typeof vi.fn>;
   };
 
   function build() {
-    buffer = new SyncEventBuffer();
+    buffer = new InMemorySyncChangeLog();
     changeEventHub = new ChangeEventHub();
     service = new SyncHubService(mockPrisma as unknown as PrismaService, buffer, changeEventHub);
     service.onModuleInit();
@@ -86,8 +87,12 @@ describe('SyncHubService（合并器集成）', () => {
       },
       $queryRawUnsafe: vi.fn().mockResolvedValue([]),
       $transaction: vi.fn(),
+      rawTransaction: vi.fn(),
     };
     mockPrisma.$transaction.mockImplementation(async (run: (tx: unknown) => Promise<unknown>) =>
+      run(mockPrisma),
+    );
+    mockPrisma.rawTransaction.mockImplementation(async (run: (tx: unknown) => Promise<unknown>) =>
       run(mockPrisma),
     );
     build();
@@ -188,7 +193,7 @@ describe('SyncHubService（合并器集成）', () => {
       fieldDigests: { title: JSON.stringify('设备写过') },
       title: '设备写过',
     });
-    const cursorBefore = buffer.currentSeq(USER);
+    const cursorBefore = await buffer.currentSeq(USER);
 
     await service.push(USER, [
       {
@@ -202,7 +207,7 @@ describe('SyncHubService（合并器集成）', () => {
 
     expect(mockPrisma.task.update).not.toHaveBeenCalled();
     // cursor 取自推送前（pull(USER, 0) 恒为 resync + 空变更，断言形同虚设）
-    const pull = buffer.pull(USER, cursorBefore);
+    const pull = await buffer.pull(USER, cursorBefore);
     expect(pull.resync).toBe(false);
     expect(pull.changes).toHaveLength(0);
   });
@@ -258,7 +263,7 @@ describe('SyncHubService（合并器集成）', () => {
     });
 
     // 已 bootstrap 的设备（cursor = 当前 seq）push 后拉增量
-    const cursorBefore = buffer.currentSeq(USER);
+    const cursorBefore = await buffer.currentSeq(USER);
     await service.push(USER, [
       {
         entity: 'task',
@@ -267,7 +272,7 @@ describe('SyncHubService（合并器集成）', () => {
       },
     ]);
 
-    const { changes, cursor, resync } = buffer.pull(USER, cursorBefore);
+    const { changes, cursor, resync } = await buffer.pull(USER, cursorBefore);
     expect(resync).toBe(false);
     expect(cursor).toBeGreaterThan(cursorBefore);
     const change = changes.find((c) => c.kind === 'entity');
@@ -283,7 +288,7 @@ describe('SyncHubService（合并器集成）', () => {
   it('collector tap：REST 写 → 同步推流（虚拟设备 0 基线），内容去重不重复推', async () => {
     mockPrisma.task.findUnique.mockResolvedValue(taskRow);
 
-    const cursorBefore = buffer.currentSeq(USER);
+    const cursorBefore = await buffer.currentSeq(USER);
     changeEventHub.publish(USER, {
       entity: 'task',
       action: 'updated',
@@ -292,7 +297,7 @@ describe('SyncHubService（合并器集成）', () => {
     // tap 异步处理
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const first = buffer.pull(USER, cursorBefore);
+    const first = await buffer.pull(USER, cursorBefore);
     expect(first.changes).toHaveLength(1);
     const firstSeq = first.cursor;
 
@@ -303,12 +308,12 @@ describe('SyncHubService（合并器集成）', () => {
       id: 'task-1',
     } as ChangeEvent);
     await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(buffer.currentSeq(USER)).toBe(firstSeq);
-    expect(buffer.pull(USER, firstSeq).changes).toHaveLength(0);
+    expect(await buffer.currentSeq(USER)).toBe(firstSeq);
+    expect((await buffer.pull(USER, firstSeq)).changes).toHaveLength(0);
   });
 
   it('collector tap：物理删除 → Compact Event', async () => {
-    const cursorBefore = buffer.currentSeq(USER);
+    const cursorBefore = await buffer.currentSeq(USER);
     changeEventHub.publish(USER, {
       entity: 'task',
       action: 'deleted',
@@ -316,17 +321,17 @@ describe('SyncHubService（合并器集成）', () => {
     } as ChangeEvent);
     await new Promise((resolve) => setTimeout(resolve, 0));
 
-    const { changes } = buffer.pull(USER, cursorBefore);
+    const { changes } = await buffer.pull(USER, cursorBefore);
     expect(changes).toContainEqual(
       expect.objectContaining({ kind: 'compact', entity: 'task', ids: ['task-1'] }),
     );
   });
 
   it('publishCompact：持久登记完成后才下发压缩变更', async () => {
-    const cursorBefore = buffer.currentSeq(USER);
+    const cursorBefore = await buffer.currentSeq(USER);
     await service.publishCompact(USER, 'subtask', ['sub-1', 'sub-2']);
     expect(mockPrisma.compactedEntity.createMany).toHaveBeenCalled();
-    const { changes } = buffer.pull(USER, cursorBefore);
+    const { changes } = await buffer.pull(USER, cursorBefore);
     expect(changes).toContainEqual(
       expect.objectContaining({ kind: 'compact', entity: 'subtask', ids: ['sub-1', 'sub-2'] }),
     );
@@ -342,7 +347,7 @@ describe('SyncHubService（合并器集成）', () => {
       mockPrisma.task.deleteMany.mockResolvedValue({ count: 2 });
       mockPrisma.subtask.deleteMany.mockResolvedValue({ count: 2 });
 
-      const cursorBefore = buffer.currentSeq(USER);
+      const cursorBefore = await buffer.currentSeq(USER);
       await service.push(USER, [], [{ entity: 'task', ids: ['task-1', 'task-2'] }]);
 
       // 归属校验：按 id 批量取行 + userId 过滤
@@ -366,7 +371,7 @@ describe('SyncHubService（合并器集成）', () => {
         }),
       );
       // 广播：级联 Subtask 的 Compact Event（每用户单调 seq）
-      const { changes, cursor } = buffer.pull(USER, cursorBefore);
+      const { changes, cursor } = await buffer.pull(USER, cursorBefore);
       expect(cursor).toBeGreaterThan(cursorBefore);
       expect(changes).toContainEqual(
         expect.objectContaining({ kind: 'compact', entity: 'subtask', ids: ['sub-1', 'sub-2'] }),
@@ -377,17 +382,17 @@ describe('SyncHubService（合并器集成）', () => {
       mockPrisma.task.findMany.mockResolvedValue([{ id: 'task-1', userId: 'someone-else' }]);
       mockPrisma.task.deleteMany.mockResolvedValue({ count: 0 });
 
-      const cursorBefore = buffer.currentSeq(USER);
+      const cursorBefore = await buffer.currentSeq(USER);
       await service.push(USER, [], [{ entity: 'task', ids: ['task-1'] }]);
 
       expect(mockPrisma.task.deleteMany).not.toHaveBeenCalled();
-      expect(buffer.pull(USER, cursorBefore).changes).toHaveLength(0);
+      expect((await buffer.pull(USER, cursorBefore)).changes).toHaveLength(0);
     });
 
     it('Compact 永久获胜：已 compact 的实体，迟到字段写被丢弃并重发 Compact Event', async () => {
       mockPrisma.task.findUnique.mockResolvedValue(null);
       mockPrisma.compactedEntity.findUnique.mockResolvedValue({ id: 'cx-1' });
-      const cursorBefore = buffer.currentSeq(USER);
+      const cursorBefore = await buffer.currentSeq(USER);
 
       await service.push(USER, [
         {
@@ -398,7 +403,7 @@ describe('SyncHubService（合并器集成）', () => {
       ]);
 
       expect(mockPrisma.task.create).not.toHaveBeenCalled();
-      const changes = buffer.pull(USER, cursorBefore).changes;
+      const changes = (await buffer.pull(USER, cursorBefore)).changes;
       expect(changes.every((c) => c.kind !== 'entity')).toBe(true);
       // 推送方仍持有这行（幽灵行）：重发 Compact Event 让它收敛
       expect(changes).toContainEqual(
@@ -414,7 +419,7 @@ describe('SyncHubService（合并器集成）', () => {
         userId: 'someone-else',
       });
 
-      const cursorBefore = buffer.currentSeq(USER);
+      const cursorBefore = await buffer.currentSeq(USER);
       await service.push(USER, [
         {
           entity: 'task',
@@ -426,7 +431,7 @@ describe('SyncHubService（合并器集成）', () => {
       ]);
 
       expect(mockPrisma.task.update).not.toHaveBeenCalled();
-      expect(buffer.pull(USER, cursorBefore).changes).toHaveLength(0);
+      expect((await buffer.pull(USER, cursorBefore)).changes).toHaveLength(0);
     });
 
     it('越权 subtask update（父 Task 属于他人）：被拒绝', async () => {
@@ -496,7 +501,7 @@ describe('SyncHubService（合并器集成）', () => {
     await service.submitVirtualWrite(USER, event);
 
     expect(mockPrisma.task.create).toHaveBeenCalled();
-    const { changes } = buffer.pull(USER, buffer.currentSeq(USER) - 1);
+    const { changes } = await buffer.pull(USER, (await buffer.currentSeq(USER)) - 1);
     expect(changes.some((c) => c.kind === 'entity')).toBe(true);
   });
 
@@ -505,8 +510,8 @@ describe('SyncHubService（合并器集成）', () => {
     for (let i = 0; i < 600; i++) {
       await service.publishCompact(USER, 'task', [`t${i}`]);
     }
-    const firstSeq = buffer.currentSeq(USER) - 600 + 1;
-    const { resync, changes } = buffer.pull(USER, firstSeq - 5);
+    const firstSeq = (await buffer.currentSeq(USER)) - 600 + 1;
+    const { resync, changes } = await buffer.pull(USER, firstSeq - 5);
     expect(resync).toBe(true);
     expect(changes).toHaveLength(0);
   });
@@ -526,26 +531,23 @@ describe('SyncHubService（合并器集成）', () => {
       formatHlc({ wallMs: new Date('2026-01-02T00:00:00Z').getTime(), counter: 0, deviceId: '0' }),
     );
     expect(typeof entry.fields.position).toBe('string');
-    expect(result.cursor).toBe(buffer.currentSeq(USER));
+    expect(result.cursor).toBe(await buffer.currentSeq(USER));
     expect(result.compacted).toEqual([{ entity: 'task', ids: ['task-deleted'] }]);
   });
 
   it('bootstrap 在读取快照前固定 cursor，期间发布的事件会在后续 pull 重放', async () => {
-    const cursorBefore = buffer.currentSeq(USER);
+    const cursorBefore = await buffer.currentSeq(USER);
     mockPrisma.task.findMany.mockImplementationOnce(async () => {
-      buffer.publish(USER, {
-        kind: 'compact',
-        seq: 0,
-        entity: 'task',
-        ids: ['concurrent-delete'],
-      });
+      await buffer.append(null, USER, [
+        { kind: 'compact', entity: 'task', ids: ['concurrent-delete'] },
+      ]);
       return [taskRow];
     });
 
     const result = await service.bootstrap(USER);
 
     expect(result.cursor).toBe(cursorBefore);
-    expect(buffer.pull(USER, result.cursor).changes).toContainEqual(
+    expect((await buffer.pull(USER, result.cursor)).changes).toContainEqual(
       expect.objectContaining({ kind: 'compact', ids: ['concurrent-delete'] }),
     );
   });
@@ -668,11 +670,7 @@ describe('SyncHubService（合并器集成）', () => {
       });
       mockPrisma.project.findUnique.mockResolvedValue(null);
       mockPrisma.compactedEntity.findUnique.mockImplementation(
-        async ({
-          where,
-        }: {
-          where: { userId_entity_entityId?: { entityId?: string } };
-        }) =>
+        async ({ where }: { where: { userId_entity_entityId?: { entityId?: string } } }) =>
           where.userId_entity_entityId?.entityId === 'project-gone'
             ? { entity: 'project', entityId: 'project-gone', userId: USER }
             : null,
@@ -723,11 +721,7 @@ describe('SyncHubService（合并器集成）', () => {
         where.id === 'task-alive' ? { id: 'task-alive', userId: USER } : null,
       );
       mockPrisma.compactedEntity.findUnique.mockImplementation(
-        async ({
-          where,
-        }: {
-          where: { userId_entity_entityId?: { entityId?: string } };
-        }) =>
+        async ({ where }: { where: { userId_entity_entityId?: { entityId?: string } } }) =>
           where.userId_entity_entityId?.entityId === 'task-gone'
             ? { entity: 'task', entityId: 'task-gone', userId: USER }
             : null,

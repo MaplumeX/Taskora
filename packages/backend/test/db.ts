@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import type { PrismaService } from '../src/prisma/prisma.service';
 
 /**
  * Test database helper.
@@ -45,11 +46,38 @@ export async function resetDb(): Promise<void> {
     );
   }
 
-  await testPrisma.$executeRawUnsafe(
-    'TRUNCATE TABLE "TaskTag", "ProjectTag", "AreaTag", "Task", "Project", "Area", "Tag", "TagGroup", "CompactedEntity", "User" CASCADE',
-  );
+  // 上一个用例的 collector tap 可能仍在后台写同步日志（SyncChange 引用
+  // User）：TRUNCATE 与它偶发死锁时重试。
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await testPrisma.$executeRawUnsafe(
+        'TRUNCATE TABLE "TaskTag", "ProjectTag", "AreaTag", "Task", "Project", "Area", "Tag", "TagGroup", "CompactedEntity", "User" CASCADE',
+      );
+      return;
+    } catch (error) {
+      const deadlock = (error as { meta?: { code?: string } }).meta?.code === '40P01';
+      if (!deadlock || attempt >= 4) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
 }
 
 export async function disconnectTestDb(): Promise<void> {
   await testPrisma.$disconnect();
+}
+
+/**
+ * testPrisma 视作 PrismaService：补上 rawTransaction（生产实现走未扩展的
+ * base client；测试客户端本就未挂 collector，直接用 $transaction）。
+ */
+export function testPrismaService(): PrismaService {
+  return new Proxy(testPrisma, {
+    get(target, prop, receiver) {
+      if (prop === 'rawTransaction') {
+        return (run: (tx: unknown) => Promise<unknown>, options?: object) =>
+          target.$transaction(run as never, options as never);
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  }) as unknown as PrismaService;
 }

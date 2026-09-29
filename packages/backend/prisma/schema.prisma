@@ -26,6 +26,8 @@ model User {
   agentConfig     AgentConfig?
   conversations   Conversation[]
   devices         Device[]
+  syncChanges     SyncChange[]
+  syncCounter     SyncCounter?
 }
 
 model RefreshToken {
@@ -389,4 +391,27 @@ model CompactedEntity {
 
   @@unique([userId, entity, entityId])
   @@index([userId])
+}
+
+/// 同步变更日志（ADR-0007）：每用户单调 seq 的 Change Event 序列，设备凭
+/// Sync Cursor 增量拉取。保留 30 天（PrismaSyncChangeLog.prune）。
+model SyncChange {
+  userId    String
+  seq       BigInt
+  /// HubChange（不含 seq）
+  payload   Json
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, seq])
+  @@index([createdAt])
+}
+
+/// 每用户的 seq 分配器。UPSERT ... RETURNING 的行锁持有到写事务提交，
+/// 保证 seq 顺序即提交顺序。prunedThrough：已被保留期清理的最大 seq。
+model SyncCounter {
+  userId        String @id
+  seq           BigInt @default(1)
+  prunedThrough BigInt @default(1)
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

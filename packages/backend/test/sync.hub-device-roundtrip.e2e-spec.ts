@@ -23,10 +23,9 @@ import {
 } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
 
-import { PrismaService } from '../src/prisma/prisma.service';
-import { SyncEventBuffer } from '../src/sync/sync-event-buffer.service';
+import { PrismaSyncChangeLog } from '../src/sync/prisma-sync-change-log.service';
 import { SyncHubService } from '../src/sync/sync-hub.service';
-import { disconnectTestDb, resetDb, testPrisma } from './db';
+import { disconnectTestDb, resetDb, testPrisma, testPrismaService } from './db';
 
 const hasTestDb = !!process.env.TEST_DATABASE_URL;
 
@@ -39,15 +38,15 @@ const stamp = (counter: number) => formatHlc({ wallMs: WALL, counter, deviceId: 
 
 e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
   let hub: SyncHubService;
-  let buffer: SyncEventBuffer;
+  let buffer: PrismaSyncChangeLog;
 
   beforeEach(async () => {
     await resetDb();
     await testPrisma.user.create({
       data: { id: USER, email: 'sync-e2e@test', passwordHash: 'x' },
     });
-    buffer = new SyncEventBuffer();
-    hub = new SyncHubService(testPrisma as unknown as PrismaService, buffer, undefined as never);
+    buffer = new PrismaSyncChangeLog(testPrismaService());
+    hub = new SyncHubService(testPrismaService(), buffer, undefined as never);
   });
 
   afterAll(async () => {
@@ -115,7 +114,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
   });
 
   it('回归：Today 创建 → 后续 title 编辑 → pull 合并后仍在 Today（不落 Inbox）', async () => {
-    const cursorBefore = buffer.currentSeq(USER);
+    const cursorBefore = await buffer.currentSeq(USER);
 
     // 1. Today 界面创建（空标题，全字段）
     const created = fullCreateEvent('task-today-2');
@@ -160,7 +159,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
       });
     }
 
-    const { changes, resync } = buffer.pull(USER, cursorBefore);
+    const { changes, resync } = await buffer.pull(USER, cursorBefore);
     expect(resync).toBe(false);
     const entityChanges = changes.filter((c) => c.kind === 'entity' && c.id === 'task-today-2');
     expect(entityChanges.length).toBeGreaterThan(0);
@@ -255,7 +254,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     expect(before).not.toBeNull();
 
     // 攻击者对该 id 推送字段写
-    const cursorBefore = buffer.currentSeq(attacker.id);
+    const cursorBefore = await buffer.currentSeq(attacker.id);
     await hub.push(attacker.id, [
       {
         entity: 'task',
@@ -271,13 +270,13 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     expect(after!.title).toBe(before!.title);
 
     // 攻击者的增量流里没有他人实体（无数据泄露）
-    const pulled = buffer.pull(attacker.id, cursorBefore);
+    const pulled = await buffer.pull(attacker.id, cursorBefore);
     expect(pulled.resync).toBe(false);
     expect(pulled.changes).toHaveLength(0);
   });
 
   it('回声幂等：设备 pull 自己 push 的变更，任何字段的时钟不被摘要检测重置', async () => {
-    const cursorBefore = buffer.currentSeq(USER);
+    const cursorBefore = await buffer.currentSeq(USER);
 
     // 1. 全字段 create（与 LocalReplica.createInternal 同构）
     const created = fullCreateEvent('task-echo-1');
@@ -306,7 +305,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     await hub.push(USER, [{ entity: 'task', id: 'task-echo-1', fields: edit }]);
 
     // 3. pull 自己的两次回声并逐条合并
-    const { changes, resync } = buffer.pull(USER, cursorBefore);
+    const { changes, resync } = await buffer.pull(USER, cursorBefore);
     expect(resync).toBe(false);
     const echoes = changes.filter((c) => c.kind === 'entity' && c.id === 'task-echo-1');
     expect(echoes.length).toBeGreaterThan(0);
@@ -332,9 +331,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     // 初始：任务携带 tag-1，同步落库
     await testPrisma.tag.create({ data: { id: 'tag-keep', title: '保留', userId: USER } });
     await testPrisma.tag.create({ data: { id: 'tag-doom', title: '将删', userId: USER } });
-    await hub.push(USER, [
-      fullCreateEvent('task-pill-1', { tagIds: ['tag-keep', 'tag-doom'] }),
-    ]);
+    await hub.push(USER, [fullCreateEvent('task-pill-1', { tagIds: ['tag-keep', 'tag-doom'] })]);
     const row = await testPrisma.task.findUnique({
       where: { id: 'task-pill-1' },
       include: { tags: true },
@@ -355,7 +352,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
       title: { value: '离线改名', hlc: stamp(301) },
     };
     void event;
-    const cursorBefore = buffer.currentSeq(USER);
+    const cursorBefore = await buffer.currentSeq(USER);
     await expect(
       hub.push(USER, [{ entity: 'task', id: 'task-pill-1', fields: edited }]),
     ).resolves.toEqual({ acked: 1 });
@@ -369,10 +366,11 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
 
     // 设备 pull 回声后本地收敛（清洗值以虚拟设备 0 的更新时钟胜出）
     // cursor 必须取自推送前：pull(USER, 0) 会被缓冲判为 resync，返回空变更
-    const pull = buffer.pull(USER, cursorBefore);
+    const pull = await buffer.pull(USER, cursorBefore);
     const echo = pull.changes.find(
-      (change) => change.kind === 'entity' && change.id === 'task-pill-1' && 'tagIds' in change.fields,
-    ) as (typeof pull.changes)[number] & { fields: Record<string, unknown> } | undefined;
+      (change) =>
+        change.kind === 'entity' && change.id === 'task-pill-1' && 'tagIds' in change.fields,
+    ) as ((typeof pull.changes)[number] & { fields: Record<string, unknown> }) | undefined;
     expect(echo).toBeDefined();
     expect(echo!.fields.tagIds).toEqual(['tag-keep']);
   });
@@ -380,7 +378,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
   it('真实引擎设备：离线积压超过一批且含前向引用时，推送不会被 FK 永久卡死', async () => {
     const transport: SyncTransport = {
       push: (request) => hub.push(USER, request.events, request.deletes),
-      pull: async (request) => buffer.pull(USER, request.cursor),
+      pull: async (request) => await buffer.pull(USER, request.cursor),
       bootstrap: () => hub.bootstrap(USER),
     };
     const device = await openEngine({

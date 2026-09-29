@@ -49,6 +49,22 @@ Key decisions, in the order they matter:
   in a database transaction guarded by a PostgreSQL advisory lock (and a row
   lock when the row exists). This preserves field-clock LWW under concurrent
   pushes, including concurrent creation of the same id across hub instances.
+- **The pull log is persisted** (amended 2026-09-29; originally an in-memory
+  ring buffer seeded with `Date.now()`, so every hub restart forced every
+  device into a full bootstrap and multiple hub instances could not share a
+  log). Change Events live in `SyncChange`, keyed by a per-user `seq`
+  allocated from a `SyncCounter` row via `UPSERT … RETURNING` inside the
+  writing transaction: the row lock is held until commit, so seq order equals
+  commit order and a reader can never observe seq 11 before 10. Pull reads
+  the counter and the log in one REPEATABLE READ snapshot and pages
+  (`hasMore`). Entries are kept 30 days; the highest pruned seq is recorded
+  as `prunedThrough`, and cursors below it — or above the current seq (a
+  cursor from the old in-memory era) — get `resync`. Seq starts at 1 with no
+  change behind it, so a never-bootstrapped cursor 0 always resyncs. REST
+  writes still reach the log through the post-commit collector tap, in their
+  own small transaction: a crash between the REST commit and that append can
+  drop one Change Event (the row itself is safe and reappears on the next
+  bootstrap).
 - **Bootstrap uses a cursor fence.** The hub captures the current cursor before
   reading the snapshot. Writes racing with the snapshot therefore either
   appear in it or carry a later sequence and are replayed by the next pull;

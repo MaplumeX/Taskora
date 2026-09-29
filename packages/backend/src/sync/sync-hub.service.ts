@@ -41,7 +41,7 @@ import {
   type PrismaRow,
 } from './entity-codec';
 import { registerCompacted } from './compact-registry';
-import { SyncEventBuffer } from './sync-event-buffer.service';
+import { SyncChangeLog, type HubChangeDraft } from './sync-change-log';
 
 const CHANGE_ENTITY_TO_SYNC: Record<ChangeEntity, SyncEntity> = {
   task: 'task',
@@ -71,7 +71,7 @@ const PRISMA_TABLE_NAMES: Record<SyncEntity, string> = {
 export class SyncHubService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly buffer: SyncEventBuffer,
+    private readonly log: SyncChangeLog,
     private readonly changeEventHub: ChangeEventHub,
   ) {}
 
@@ -121,14 +121,14 @@ export class SyncHubService implements OnModuleInit {
 
   /** 设备凭 Sync Cursor 拉取增量。 */
   pull(userId: string, cursor: number) {
-    return this.buffer.pull(userId, cursor);
+    return this.log.pull(userId, cursor);
   }
 
   /** 全量快照（新设备 / 重置副本的设备 bootstrap）。 */
   async bootstrap(userId: string) {
     // 先固定 fence：此后发生的任何发布都带更大 seq，设备应用快照后仍会
     // 在下一次 pull 中重放，不会出现“旧快照 + 新 cursor”的永久漏事件。
-    const cursor = this.buffer.currentSeq(userId);
+    const cursor = await this.log.currentSeq(userId);
     const snapshot: Array<{
       entity: SyncEntity;
       id: string;
@@ -173,11 +173,15 @@ export class SyncHubService implements OnModuleInit {
 
   // ---------- hub 侧写入（GC Compact / 虚拟设备 0 / Delete Request） ----------
 
-  /** hub GC 物理删除后，先持久登记，再下发 Compact Event。 */
+  /** hub GC 物理删除后：持久登记与 Compact Event 同事务写入。 */
   async publishCompact(userId: string, entity: SyncEntity, ids: string[]): Promise<void> {
     if (ids.length === 0) return;
-    await registerCompacted(this.prisma, userId, entity, ids);
-    this.broadcastCompact(userId, entity, ids);
+    // 只写 compact 登记与日志（collector 不观察的表）：走 rawTransaction，
+    // 不在 tap 里重入 collector 的事务作用域。
+    await this.prisma.rawTransaction(async (tx) => {
+      await registerCompacted(tx, userId, entity, ids);
+      await this.log.append(tx, userId, [compactChange(entity, ids)]);
+    });
   }
 
   /** 虚拟设备 0（Assistant）提交字段级写：与设备推送同一合并路径。 */
@@ -197,7 +201,7 @@ export class SyncHubService implements OnModuleInit {
     const ids = [...new Set(request.ids)];
     if (ids.length === 0) return;
     const codec = codecFor(request.entity);
-    const result = await this.prisma.$transaction(async (tx) => {
+    await this.prisma.$transaction(async (tx) => {
       for (const id of [...ids].sort()) await this.lockEntity(tx, userId, request.entity, id);
 
       // 归属校验（story 6）：只删属于该用户的行（Subtask 经父 Task 认领）
@@ -235,19 +239,17 @@ export class SyncHubService implements OnModuleInit {
         }
       }
 
-      // 登记与物理删除同事务提交；登记在前，删除失败会一起回滚。
+      // 登记、物理删除与 Compact Event 同事务提交；登记在前，删除失败会
+      // 一起回滚。collector 随后的重复 Compact 对设备幂等。
       await registerCompacted(tx, userId, request.entity, owned);
       if (owned.length > 0) {
         await delegate(tx, codec.model).deleteMany({ where: { id: { in: owned } } });
       }
-      return { owned, cascaded };
+      const changes: HubChangeDraft[] = [];
+      if (owned.length > 0) changes.push(compactChange(request.entity, owned));
+      for (const group of cascaded) changes.push(compactChange(group.entity, group.ids));
+      await this.log.append(tx, userId, changes);
     });
-
-    // 只在事务提交后发布；collector 的重复 Compact 对设备幂等。
-    this.broadcastCompact(userId, request.entity, result.owned);
-    for (const group of result.cascaded) {
-      this.broadcastCompact(userId, group.entity, group.ids);
-    }
   }
 
   /** 查询某实体 id 是否已被 compact（迟到写丢弃，ADR-0008）。 */
@@ -300,11 +302,17 @@ export class SyncHubService implements OnModuleInit {
     const row = await loadRow(this.prisma, codec, id);
     if (!row) return; // 已被后续删除覆盖
     const state = serializeRow(codec, row);
-    this.buffer.publish(
-      userId,
-      { kind: 'entity', seq: 0, entity, id, fields: state.fields, clocks: state.clocks },
-      fingerprint(state),
-    );
+    // 去重：设备推送的写已在合并事务里入日志，collector 随后的回声内容
+    // 相同，不再重复记一条（尽力而为：指纹只在本进程内）。
+    const key = `${userId}:${entity}:${id}`;
+    const print = fingerprint(state);
+    if (this.lastFingerprint.get(key) === print) return;
+    await this.prisma.rawTransaction(async (tx) => {
+      await this.log.append(tx, userId, [
+        { kind: 'entity', entity, id, fields: state.fields, clocks: state.clocks },
+      ]);
+    });
+    this.rememberFingerprint(key, print);
   }
 
   /** 单事件合并：load → mergeFieldWrites → 写回 → 发布 EntityChange。 */
@@ -319,7 +327,6 @@ export class SyncHubService implements OnModuleInit {
     }
     if (Object.keys(incoming).length === 0) return;
 
-    let hitCompacted = false;
     const state = await this.prisma.$transaction(async (tx) => {
       await this.lockEntity(tx, userId, event.entity, event.id);
       const row = await loadRow(tx, codec, event.id);
@@ -327,10 +334,10 @@ export class SyncHubService implements OnModuleInit {
       // 但属于其他用户（Subtask 经父 Task 认领）时静默丢弃。
       if (row && !(await this.ownsRow(tx, userId, event.entity, row))) return null;
       // Compact 永久获胜：已 compact 的实体不重建。推送方显然还持有这行
-      // （如重启前的旧版本复用了已死的确定性 id），事务后重发 Compact
-      // Event 让它收敛，而不是留下永远不同步的本地幽灵行。
+      // （如重启前的旧版本复用了已死的确定性 id），重发 Compact Event
+      // 让它收敛，而不是留下永远不同步的本地幽灵行。
       if (!row && (await this.isCompacted(tx, userId, event.entity, event.id))) {
-        hitCompacted = true;
+        await this.log.append(tx, userId, [compactChange(event.entity, [event.id])]);
         return null;
       }
       const current = row ? serializeRow(codec, row) : null;
@@ -344,12 +351,7 @@ export class SyncHubService implements OnModuleInit {
       // FK violation，整批 push 反复失败（同步毒丸）。尚未到达的引用
       // （同批后序事件可能创建）保留，由 FK 失败驱动重试收敛（既有
       // 语义）。先批量预加载引用状态，再清洗。
-      const referenceStatuses = await this.loadReferenceStatuses(
-        tx,
-        userId,
-        event.entity,
-        outcome,
-      );
+      const referenceStatuses = await this.loadReferenceStatuses(tx, userId, event.entity, outcome);
       const bumpWall = 1 + Math.max(Date.now(), ...Object.values(outcome.clocks).map(hlcWallMs));
       const handled = scrubReferences(
         event.entity,
@@ -407,28 +409,23 @@ export class SyncHubService implements OnModuleInit {
         where: { id: event.id },
         data: { fieldDigests: digests, updatedAt: fresh.updatedAt as Date },
       });
-      // 写库后的真实序列化态（摘要已回填 → 时钟保持合并结果）；
-      // 事务提交后再发布。
-      return serializeRow(codec, { ...fresh, fieldDigests: digests });
-    });
-
-    if (hitCompacted) {
-      this.broadcastCompact(userId, event.entity, [event.id]);
-      return;
-    }
-    if (state) {
-      this.buffer.publish(
-        userId,
+      // 写库后的真实序列化态（摘要已回填 → 时钟保持合并结果），与数据
+      // 同事务入日志：提交即可被 pull 到，崩溃也不会只丢变更不丢数据。
+      const merged = serializeRow(codec, { ...fresh, fieldDigests: digests });
+      await this.log.append(tx, userId, [
         {
           kind: 'entity',
-          seq: 0,
           entity: event.entity,
           id: event.id,
-          fields: state.fields,
-          clocks: state.clocks,
+          fields: merged.fields,
+          clocks: merged.clocks,
         },
-        fingerprint(state),
-      );
+      ]);
+      return merged;
+    });
+
+    if (state) {
+      this.rememberFingerprint(`${userId}:${event.entity}:${event.id}`, fingerprint(state));
     }
   }
 
@@ -451,11 +448,7 @@ export class SyncHubService implements OnModuleInit {
     if (!refs) return statuses;
     const scalarTargets = new Map<SyncEntity, Set<string>>();
     const arrayTargets = new Map<SyncEntity, Set<string>>();
-    const add = (
-      map: Map<SyncEntity, Set<string>>,
-      target: SyncEntity,
-      ids: string[],
-    ) => {
+    const add = (map: Map<SyncEntity, Set<string>>, target: SyncEntity, ids: string[]) => {
       if (ids.length === 0) return;
       const set = map.get(target) ?? new Set<string>();
       ids.forEach((id) => set.add(id));
@@ -469,9 +462,7 @@ export class SyncHubService implements OnModuleInit {
         add(
           arrayTargets,
           ref.entity,
-          Array.isArray(value)
-            ? value.filter((id): id is string => typeof id === 'string')
-            : [],
+          Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [],
         );
       } else if (typeof value === 'string') {
         add(scalarTargets, ref.entity, [value]);
@@ -543,10 +534,23 @@ export class SyncHubService implements OnModuleInit {
     );
   }
 
-  private broadcastCompact(userId: string, entity: SyncEntity, ids: string[]): void {
-    if (ids.length === 0) return;
-    this.buffer.publish(userId, { kind: 'compact', seq: 0, entity, ids });
+  /** 最近一次入日志的实体内容指纹（collector 回声去重；有界 LRU）。 */
+  private readonly lastFingerprint = new Map<string, string>();
+
+  private rememberFingerprint(key: string, print: string): void {
+    this.lastFingerprint.delete(key);
+    this.lastFingerprint.set(key, print);
+    if (this.lastFingerprint.size > FINGERPRINT_CACHE_SIZE) {
+      const oldest = this.lastFingerprint.keys().next().value;
+      if (oldest !== undefined) this.lastFingerprint.delete(oldest);
+    }
   }
+}
+
+const FINGERPRINT_CACHE_SIZE = 10_000;
+
+function compactChange(entity: SyncEntity, ids: string[]): HubChangeDraft {
+  return { kind: 'compact', entity, ids };
 }
 
 function fingerprint(state: {

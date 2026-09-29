@@ -159,13 +159,17 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
 
   const applyPull = async (): Promise<void> => {
     const transport = requireTransport();
-    const cursor = await replica.getCursor();
-    const response = await calibrated(() => transport.pull({ cursor }));
-    if (response.resync) {
-      await bootstrap();
-      return;
+    // hub 分页返回：hasMore 时继续拉，直到追平
+    for (;;) {
+      const cursor = await replica.getCursor();
+      const response = await calibrated(() => transport.pull({ cursor }));
+      if (response.resync) {
+        await bootstrap();
+        return;
+      }
+      await replica.applyRemoteBatch(response.changes, response.cursor);
+      if (!response.hasMore || response.cursor <= cursor) return;
     }
-    await replica.applyRemoteBatch(response.changes, response.cursor);
   };
 
   const bootstrap = async (): Promise<void> => {
