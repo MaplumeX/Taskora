@@ -405,4 +405,50 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     expect(await testPrisma.task.count({ where: { userId: USER } })).toBe(601);
     await device.close();
   }, 120_000);
+
+  it('hub 剔除的字段值（未知枚举等）以必胜时钟下发实际值，推送方收敛不分叉', async () => {
+    const transport: SyncTransport = {
+      push: (request) => hub.push(USER, request.events, request.deletes),
+      pull: (request) => buffer.pull(USER, request.cursor),
+      bootstrap: () => hub.bootstrap(USER),
+    };
+    const open = async (deviceId: string) =>
+      openEngine({ storage: await createNodeSqliteStorage(':memory:'), deviceId, transport });
+    const a = await open('dev-a');
+    const b = await open('dev-b');
+    await a.sync();
+    await b.sync();
+    const id = await a.create('task', {
+      title: 't',
+      bucket: 'INBOX',
+      status: 'ACTIVE',
+      scheduledType: 'NONE',
+    });
+    await a.sync();
+
+    // 正常写的回声：零应用、零通知（纠正只针对被剔除的字段）
+    const remoteOnA: string[] = [];
+    const off = a.onChange((change) => {
+      if (change.origin === 'remote') remoteOnA.push('remote');
+    });
+    await a.update('task', id, { title: '正常改名', dueDate: '2026-10-01' });
+    await a.sync();
+    expect(remoteOnA).toEqual([]);
+    off();
+
+    // 新版客户端写出服务器不认识的状态值；同批的合法字段照常生效
+    await a.update('task', id, { status: 'SNOOZED', title: 't2' });
+    await a.sync();
+    await a.sync();
+    await b.sync();
+
+    const hubRow = await testPrisma.task.findUnique({ where: { id } });
+    expect(hubRow?.status).toBe('ACTIVE');
+    expect((await a.get('task', id))?.fields.status).toBe('ACTIVE');
+    expect((await b.get('task', id))?.fields.status).toBe('ACTIVE');
+    expect((await a.get('task', id))?.fields.title).toBe('t2');
+    expect((await b.get('task', id))?.fields.title).toBe('t2');
+    await a.close();
+    await b.close();
+  });
 });

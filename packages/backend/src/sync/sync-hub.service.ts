@@ -364,11 +364,13 @@ export class SyncHubService implements OnModuleInit {
       if (outcome.appliedFields.length === 0) return null;
 
       // 新建行走 create 模式：tagIds 只物化为纯 create。
+      const rejected: string[] = [];
       const data = toPrismaData(
         codec,
         outcome.fields,
         outcome.appliedFields,
         row ? 'update' : 'create',
+        rejected,
       );
       data.fieldClocks = outcome.clocks;
       // 补丁未携带 updatedAt 时（如虚拟设备 0 的部分写）才兑底：避免
@@ -402,16 +404,39 @@ export class SyncHubService implements OnModuleInit {
       // 零应用、零通知。
       const fresh = await loadRow(tx, codec, event.id);
       if (!fresh) return null;
-      const digests = digestMap(codec, wireViewOfRow(codec, fresh));
+      const wire = wireViewOfRow(codec, fresh);
+      const digests = digestMap(codec, wire);
+      // 被剔除的字段（新版客户端的未知枚举值、非法日期等）：库里留的是旧值
+      // 或列默认值，时钟却是推送方的。推送方拉回声时时钟持平、保留本地
+      // 非法值，两端永久分叉。与引用清洗同一机制：以虚拟设备 0 的必胜时钟
+      // 下发实际落库值，推送方随之收敛。只看被剔除的字段——已接受字段的
+      // 格式差异（如日期）不能提升时钟，否则每次回声都会被当作远端写。
+      const clocks = { ...outcome.clocks };
+      let corrected = false;
+      for (const field of rejected) {
+        if (JSON.stringify(wire[field] ?? null) === JSON.stringify(outcome.fields[field] ?? null)) {
+          continue;
+        }
+        clocks[field] = formatHlc({ wallMs: bumpWall, counter: 0, deviceId: VIRTUAL_DEVICE_ID });
+        corrected = true;
+      }
       // 显式回写 updatedAt：列是 @updatedAt，否则这次 UPDATE 会把列值
       // 推到真实 now()，重新制造摘要不一致。
       await delegate(tx, codec.model).update({
         where: { id: event.id },
-        data: { fieldDigests: digests, updatedAt: fresh.updatedAt as Date },
+        data: {
+          fieldDigests: digests,
+          updatedAt: fresh.updatedAt as Date,
+          ...(corrected ? { fieldClocks: clocks } : {}),
+        },
       });
       // 写库后的真实序列化态（摘要已回填 → 时钟保持合并结果），与数据
       // 同事务入日志：提交即可被 pull 到，崩溃也不会只丢变更不丢数据。
-      const merged = serializeRow(codec, { ...fresh, fieldDigests: digests });
+      const merged = serializeRow(codec, {
+        ...fresh,
+        fieldDigests: digests,
+        ...(corrected ? { fieldClocks: clocks } : {}),
+      });
       await this.log.append(tx, userId, [
         {
           kind: 'entity',

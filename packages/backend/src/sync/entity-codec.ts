@@ -305,12 +305,17 @@ export function toPrismaData(
   fields: Record<string, unknown>,
   appliedFields: string[],
   mode: 'create' | 'update' = 'update',
+  /** 收集被剔除（无法物化）的字段名，供调用方纠正时钟。 */
+  rejected: string[] = [],
 ): Record<string, unknown> {
   const data: Record<string, unknown> = {};
   for (const fieldName of appliedFields) {
     if (fieldName === 'tagIds' && codec.tagRelation) {
       const tagIds = fields[fieldName];
-      if (!Array.isArray(tagIds) || tagIds.some((id) => typeof id !== 'string')) continue;
+      if (!Array.isArray(tagIds) || tagIds.some((id) => typeof id !== 'string')) {
+        rejected.push(fieldName);
+        continue;
+      }
       const create = tagIds.map((tagId) => ({ tagId }));
       data[codec.tagRelation.relation] =
         mode === 'create' ? { create } : { deleteMany: {}, create };
@@ -318,6 +323,8 @@ export function toPrismaData(
     }
     const value = fields[fieldName];
     // 不可空列不接受 null（sortOrder 等）：剔除，交给 Prisma 列默认值
+    // 不是「剔除」：设备写入时做同样的规整（normalizeWriteValue：sortOrder
+    // null → 0），两端值一致，回声须保持平局，不纠正时钟。
     if (value === null && NON_NULLABLE_COLUMNS.get(codec.model.toLowerCase())?.has(fieldName)) {
       continue;
     }
@@ -327,7 +334,7 @@ export function toPrismaData(
       } else if (typeof value === 'string' && !Number.isNaN(Date.parse(value))) {
         data[fieldName] = new Date(value);
       } else {
-        continue; // 无效日期：剔除
+        rejected.push(fieldName); // 无效日期：剔除
       }
       continue;
     }
@@ -337,12 +344,17 @@ export function toPrismaData(
         data[fieldName] = null;
       } else if (typeof value === 'object' && !Array.isArray(value)) {
         data[fieldName] = JSON.stringify(value);
+      } else {
+        rejected.push(fieldName);
       }
       continue;
     }
     const enumValues = codec.enumFields[fieldName];
     if (enumValues) {
-      if (typeof value !== 'string' || !enumValues.has(value)) continue;
+      if (typeof value !== 'string' || !enumValues.has(value)) {
+        rejected.push(fieldName);
+        continue;
+      }
       data[fieldName] = value;
       continue;
     }
