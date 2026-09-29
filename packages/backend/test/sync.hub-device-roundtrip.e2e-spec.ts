@@ -14,7 +14,14 @@
  */
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { formatHlc, mergeEntityState, type EntityMergeState } from '@taskora/engine';
+import {
+  formatHlc,
+  mergeEntityState,
+  openEngine,
+  type EntityMergeState,
+  type SyncTransport,
+} from '@taskora/engine';
+import { createNodeSqliteStorage } from '@taskora/engine/node';
 
 import { PrismaService } from '../src/prisma/prisma.service';
 import { SyncEventBuffer } from '../src/sync/sync-event-buffer.service';
@@ -348,6 +355,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
       title: { value: '离线改名', hlc: stamp(301) },
     };
     void event;
+    const cursorBefore = buffer.currentSeq(USER);
     await expect(
       hub.push(USER, [{ entity: 'task', id: 'task-pill-1', fields: edited }]),
     ).resolves.toEqual({ acked: 1 });
@@ -360,11 +368,43 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     expect(after!.title).toBe('离线改名');
 
     // 设备 pull 回声后本地收敛（清洗值以虚拟设备 0 的更新时钟胜出）
-    const pull = buffer.pull(USER, 0);
+    // cursor 必须取自推送前：pull(USER, 0) 会被缓冲判为 resync，返回空变更
+    const pull = buffer.pull(USER, cursorBefore);
     const echo = pull.changes.find(
       (change) => change.kind === 'entity' && change.id === 'task-pill-1' && 'tagIds' in change.fields,
     ) as (typeof pull.changes)[number] & { fields: Record<string, unknown> } | undefined;
     expect(echo).toBeDefined();
     expect(echo!.fields.tagIds).toEqual(['tag-keep']);
   });
+
+  it('真实引擎设备：离线积压超过一批且含前向引用时，推送不会被 FK 永久卡死', async () => {
+    const transport: SyncTransport = {
+      push: (request) => hub.push(USER, request.events, request.deletes),
+      pull: async (request) => buffer.pull(USER, request.cursor),
+      bootstrap: () => hub.bootstrap(USER),
+    };
+    const device = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'dev-real',
+      transport,
+    });
+    await device.sync();
+
+    const base = { bucket: 'INBOX', status: 'ACTIVE', scheduledType: 'NONE' };
+    const early = await device.create('task', { title: '早建的任务', ...base });
+    for (let index = 0; index < 600; index += 1) {
+      await device.create('task', { title: `填充 ${index}`, ...base });
+    }
+    const area = await device.create('area', { title: '晚建的区域' });
+    // 旧实现把这条写合并进 early 的第 1 行 → 与 area 的创建不同批 → Postgres
+    // 外键永远失败，Outbox 永久卡死
+    await device.update('task', early, { areaId: area });
+
+    await device.sync();
+    expect(await device.pendingCount()).toBe(0);
+    const row = await testPrisma.task.findUnique({ where: { id: early } });
+    expect(row?.areaId).toBe(area);
+    expect(await testPrisma.task.count({ where: { userId: USER } })).toBe(601);
+    await device.close();
+  }, 120_000);
 });

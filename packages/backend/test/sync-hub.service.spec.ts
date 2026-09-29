@@ -188,6 +188,7 @@ describe('SyncHubService（合并器集成）', () => {
       fieldDigests: { title: JSON.stringify('设备写过') },
       title: '设备写过',
     });
+    const cursorBefore = buffer.currentSeq(USER);
 
     await service.push(USER, [
       {
@@ -200,7 +201,10 @@ describe('SyncHubService（合并器集成）', () => {
     ]);
 
     expect(mockPrisma.task.update).not.toHaveBeenCalled();
-    expect(buffer.pull(USER, 0).changes).toHaveLength(0);
+    // cursor 取自推送前（pull(USER, 0) 恒为 resync + 空变更，断言形同虚设）
+    const pull = buffer.pull(USER, cursorBefore);
+    expect(pull.resync).toBe(false);
+    expect(pull.changes).toHaveLength(0);
   });
 
   it('任一事件写库失败时 push 失败，设备不得清空该批 Outbox', async () => {
