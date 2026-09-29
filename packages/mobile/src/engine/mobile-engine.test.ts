@@ -89,6 +89,26 @@ function renderQueryClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
 }
 
+describe('mobile-engine 冷启动首屏', () => {
+  it('Engine 装配后立即改从本地副本重读，不等同步完成（网络挂起/离线）', async () => {
+    // 同步请求一直挂着：模拟冷启动时网络慢或断网
+    fakeEngine.sync.mockImplementationOnce(() => new Promise<undefined>(() => undefined));
+    const queryClient = renderQueryClient();
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { initMobileEngine } = await loadEngine();
+
+    initMobileEngine(queryClient);
+
+    // 装配前 UI 已经用 REST 发起了首屏查询；注入 Engine 后必须全量失效，
+    // 让 feed / 列表改从本地副本读——而此时同步仍未返回
+    await vi.waitFor(() => {
+      const roots = invalidate.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
+      expect(roots).toEqual(expect.arrayContaining(['["feed"]', '["tasks"]', '["projects"]']));
+    });
+    expect(fakeEngine.sync).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('mobile-engine 前台同步触发（issue 04）', () => {
   it('场景 1 — 启动：Engine 装配后立即 pull（bootstrap/增量）', async () => {
     const { initMobileEngine } = await loadEngine();
