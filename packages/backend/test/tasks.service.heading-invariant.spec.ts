@@ -47,8 +47,8 @@ describe('TasksService heading membership invariant', () => {
     expect(prisma.task.update).toHaveBeenCalledWith(
       expect.objectContaining({
         data: expect.objectContaining({
-          project: { connect: { id: 'project-2' } },
-          heading: { disconnect: true },
+          projectId: 'project-2',
+          headingId: null,
         }),
       }),
     );
@@ -58,6 +58,6 @@ describe('TasksService heading membership invariant', () => {
     await service.update('user-1', 'task-1', { title: 'Renamed' });
 
     const call = prisma.task.update.mock.calls[0][0];
-    expect(call.data).not.toHaveProperty('heading');
+    expect(call.data).not.toHaveProperty('headingId');
   });
 });

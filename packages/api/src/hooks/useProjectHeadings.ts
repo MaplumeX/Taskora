@@ -18,6 +18,7 @@ import {
   updateProjectHeading,
 } from '@/api/project-headings.api';
 import { taskKeys } from './useTasks';
+import { refreshAfterWrite } from './cache-patches';
 
 export const projectHeadingKeys = {
   all: ['project-headings'] as const,
@@ -37,6 +38,14 @@ export function useProjectHeadingsQuery(
   });
 }
 
+/** 写入成功后的刷新：Engine 模式下由 Engine 变更通知负责（见 refreshAfterWrite）。 */
+function refreshProjectData(queryClient: ReturnType<typeof useQueryClient>, projectId: string) {
+  refreshAfterWrite(queryClient, { queryKey: ['project-headings', { projectId }] });
+  refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+  refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+}
+
+/** 失败恢复：无论哪种模式都重新读取（重排的乐观补丁没有快照可恢复）。 */
 function invalidateProjectData(queryClient: ReturnType<typeof useQueryClient>, projectId: string) {
   // Invalidate all heading query variants (active-only + includeArchived) for this project.
   void queryClient.invalidateQueries({
@@ -51,7 +60,7 @@ export function useCreateProjectHeading() {
   return useMutation({
     mutationFn: (data: CreateProjectHeadingDto) => createProjectHeading(data),
     onSuccess: (heading) => {
-      invalidateProjectData(queryClient, heading.projectId);
+      refreshProjectData(queryClient, heading.projectId);
     },
   });
 }
@@ -62,7 +71,7 @@ export function useUpdateProjectHeading(projectId: string) {
     mutationFn: ({ id, data }: { id: string; data: UpdateProjectHeadingDto }) =>
       updateProjectHeading(id, data),
     onSuccess: () => {
-      invalidateProjectData(queryClient, projectId);
+      refreshProjectData(queryClient, projectId);
     },
   });
 }
@@ -72,7 +81,7 @@ export function useDeleteProjectHeading(projectId: string) {
   return useMutation({
     mutationFn: (id: string) => deleteProjectHeading(id),
     onSuccess: () => {
-      invalidateProjectData(queryClient, projectId);
+      refreshProjectData(queryClient, projectId);
     },
   });
 }
@@ -84,8 +93,8 @@ export function useConvertProjectHeadingToProject(projectId: string) {
     onSuccess: () => {
       // Heading list + tasks + feed for the source project, and the sidebar
       // project list so the newly created project appears.
-      invalidateProjectData(queryClient, projectId);
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshProjectData(queryClient, projectId);
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
@@ -95,7 +104,7 @@ export function useArchiveProjectHeading(projectId: string) {
   return useMutation({
     mutationFn: (id: string) => archiveProjectHeading(id),
     onSuccess: () => {
-      invalidateProjectData(queryClient, projectId);
+      refreshProjectData(queryClient, projectId);
     },
   });
 }
@@ -105,7 +114,7 @@ export function useUnarchiveProjectHeading(projectId: string) {
   return useMutation({
     mutationFn: (id: string) => unarchiveProjectHeading(id),
     onSuccess: () => {
-      invalidateProjectData(queryClient, projectId);
+      refreshProjectData(queryClient, projectId);
     },
   });
 }
@@ -178,7 +187,7 @@ export function useReorderProjectHeadingLayout() {
       invalidateProjectData(queryClient, layout.projectId);
     },
     onSettled: (_data, _error, layout) => {
-      invalidateProjectData(queryClient, layout.projectId);
+      refreshProjectData(queryClient, layout.projectId);
     },
   });
 }

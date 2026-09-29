@@ -7,48 +7,19 @@
  * repairEntity，把违反规则的字段纠正为规则允许的值，并以虚拟设备 0 的
  * 必胜时钟下发（与引用清洗同一机制），所有设备收敛到同一结果。
  *
- * 规则与 REST 服务写入时的规则一致（TasksService / ProjectsService /
- * SubtasksService）：冲突时「把状态收紧」的一方获胜——换项目清空分组、
- * 离开 DATE 清空提醒与重复规则。一致的状态返回空：修复只在真的冲突
+ * 规则与写入路径共用 domain/ 的推导（Engine 后端与 REST 服务都调用）：
+ * 冲突时「把状态收紧」的一方获胜——换项目清空分组、离开 DATE 清空提醒
+ * 与重复规则。一致的状态返回空：修复只在真的冲突
  * 时发生。纯函数，设备与 hub 共用。
  */
 
-import {
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
-  TaskBucket,
-  TaskStatus,
-} from '@taskora/shared';
+import { ProjectStatus, ScheduledType, TaskStatus } from '@taskora/shared';
 
 import type { SyncEntity } from './entities';
+import { resolveProjectBucket, resolveTaskBucket } from './domain/bucket';
 
 /** 分组归属探针：返回分组所属项目 id；未知（尚未到达 / 已删除）返回 undefined。 */
 export type HeadingProjectProbe = (headingId: string) => string | undefined;
-
-/** 与 TasksService.resolveBucket 同一推导：NONE 下 INBOX / ANYTIME 是用户选择，保留。 */
-export function resolveTaskBucket(
-  bucket: unknown,
-  scheduledType: unknown,
-  projectId: unknown,
-  areaId: unknown,
-): TaskBucket {
-  if (scheduledType === ScheduledType.DATE || scheduledType === ScheduledType.SOMEDAY) {
-    return TaskBucket.SCHEDULED;
-  }
-  if (bucket === TaskBucket.INBOX || bucket === TaskBucket.ANYTIME) return bucket;
-  return projectId || areaId ? TaskBucket.ANYTIME : TaskBucket.INBOX;
-}
-
-/**
- * 与 ProjectsService.resolveBucket 同一推导：DATE / SOMEDAY 在 Scheduled，
- * 否则在 Anytime（项目不停留在 Inbox，NONE 下 Anytime 是唯一合法值）。
- */
-export function resolveProjectBucket(scheduledType: unknown): ProjectBucket {
-  return scheduledType === ScheduledType.DATE || scheduledType === ScheduledType.SOMEDAY
-    ? ProjectBucket.SCHEDULED
-    : ProjectBucket.ANYTIME;
-}
 
 /**
  * 返回需要纠正的字段 → 值（空对象表示状态一致）。只看 fields 中出现的

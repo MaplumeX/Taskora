@@ -37,6 +37,7 @@ describe('TasksService — convertToProject (subtask promotion)', () => {
 
   beforeEach(() => {
     mockPrisma = {
+      user: { findUnique: vi.fn().mockResolvedValue(null) },
       task: {
         findFirst: vi.fn(),
         delete: vi.fn(),

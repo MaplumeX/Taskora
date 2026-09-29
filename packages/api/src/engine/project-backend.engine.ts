@@ -2,14 +2,24 @@
  * Engine 实现的 Project 传输层 — 桌面端完全体（V2 spec，ADR-0007）。
  *
  * Project 的全部读写直接作用于 Local Replica：断网全功能可用；写操作
- * 进 Outbox。视图口径（软删过滤、bucket 解析、完成/恢复语义、计数）
- * 与 ProjectsService 对齐，排序位次沿 Position（新项目追加末尾）。
+ * 进 Outbox。领域规则（bucket、计划、完成、Trash 级联、进度计数）来自
+ * @taskora/engine 的 domain 纯函数，与 REST 服务共用（local-first-v3
+ * issue 04）；排序位次沿 Position（新项目追加末尾）。
  */
 
-import { toDateKey } from '@/utils/date';
-import type { Engine } from '@taskora/engine';
-import { positionAfter, repositionMinimal } from '@taskora/engine';
-import { ProjectBucket, ProjectStatus, ScheduledType, TaskStatus } from '@taskora/shared';
+import { currentLegacyDateTimeZone, currentTimeZone } from '@/utils/date';
+import type { CalendarZones, Engine } from '@taskora/engine';
+import {
+  countProjectTasks,
+  planProjectCreate,
+  planProjectRestore,
+  planProjectTrash,
+  planProjectUpdate,
+  positionAfter,
+  projectCompletePatch,
+  projectReopenPatch,
+  repositionMinimal,
+} from '@taskora/engine';
 import type {
   CreateProjectDto,
   ProjectResponseDto,
@@ -18,7 +28,11 @@ import type {
 } from '@taskora/shared';
 
 import type { ProjectBackend } from '../api/project-backend';
-import { projectRowToDto, tagIndexFor, SETTLED_TASK_STATUSES } from './mappers';
+import { projectRowToDto, tagIndexFor } from './mappers';
+
+function zones(): CalendarZones {
+  return { timeZone: currentTimeZone(), legacyDateTimeZone: currentLegacyDateTimeZone() };
+}
 
 export interface EngineProjectBackendOptions {
   engine: Engine;
@@ -29,24 +43,21 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
 
   const tagIndex = (): Promise<Map<string, TagResponseDto>> => tagIndexFor(engine);
 
-  /**
-   * 项目统计口径：非 trashed task 总数 / 已了结数（与 ProjectsService 一致）。
-   * 一次查询覆盖一批项目（列表页逐项目各扫一遍整表是 N 次全表扫描）。
-   */
+  /** 一批项目的进度计数（一次查询；逐项目各扫一遍是 N 次全表扫描）。 */
   async function projectCountsFor(
     projectIds: string[],
   ): Promise<Map<string, { total: number; completed: number }>> {
-    const counts = new Map(projectIds.map((id) => [id, { total: 0, completed: 0 }]));
     const tasks = await engine.list('task', {
       where: { projectId: { in: projectIds }, trashedAt: null },
     });
-    for (const row of tasks) {
-      const entry = counts.get(row.fields.projectId as string);
-      if (!entry) continue;
-      entry.total += 1;
-      if (SETTLED_TASK_STATUSES.has(row.fields.status as TaskStatus)) entry.completed += 1;
-    }
-    return counts;
+    return countProjectTasks(
+      projectIds,
+      tasks.map((row) => ({
+        projectId: row.fields.projectId,
+        status: row.fields.status,
+        trashedAt: row.fields.trashedAt,
+      })),
+    );
   }
 
   async function projectCounts(projectId: string): Promise<{ total: number; completed: number }> {
@@ -58,19 +69,6 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
     if (!row) throw new Error(`Project not found: ${id}`);
     const counts = await projectCounts(id);
     return projectRowToDto(row, await tagIndex(), counts.total, counts.completed);
-  }
-
-  /** 与 ProjectsService.resolveBucket 相同（Project 版：不落 INBOX）。 */
-  function resolveBucket(
-    bucket: ProjectBucket | undefined,
-    scheduledType: ScheduledType,
-  ): ProjectBucket {
-    if (scheduledType === ScheduledType.DATE) return ProjectBucket.SCHEDULED;
-    if (scheduledType === ScheduledType.SOMEDAY) return ProjectBucket.SCHEDULED;
-    if (bucket && bucket !== ProjectBucket.SCHEDULED && bucket !== ProjectBucket.INBOX) {
-      return bucket;
-    }
-    return ProjectBucket.ANYTIME;
   }
 
   return {
@@ -89,31 +87,16 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
     },
 
     async createProject(data: CreateProjectDto): Promise<ProjectResponseDto> {
-      const scheduledType = data.scheduledType ?? ScheduledType.NONE;
+      // 新项目排末尾（sortOrder = max + 1，Position 追加）
       const existing = await engine.list('project');
-      const sortOrder =
-        existing.reduce((max, p) => Math.max(max, (p.fields.sortOrder as number) ?? 0), -1) + 1;
       const id = await engine.create('project', {
-        title: data.title,
-        notes: data.notes ?? null,
-        scheduledDate:
-          scheduledType === ScheduledType.DATE && data.scheduledDate
-            ? toDateKey(data.scheduledDate)
-            : null,
-        scheduledType,
-        dueDate: data.dueDate ? toDateKey(data.dueDate) : null,
-        bucket: resolveBucket(data.bucket, scheduledType),
-        status: ProjectStatus.ACTIVE,
-        completedAt: null,
-        trashedAt: null,
-        areaId: data.areaId ?? null,
-        // 新项目排末尾（与 REST 的 sortOrder = max + 1 同观感）
+        ...planProjectCreate(data, zones()),
         position: positionAfter(
           existing,
           existing.length > 0 ? existing[existing.length - 1].id : null,
         ),
-        sortOrder,
-        tagIds: data.tagIds ?? [],
+        sortOrder:
+          existing.reduce((max, p) => Math.max(max, (p.fields.sortOrder as number) ?? 0), -1) + 1,
       });
       return projectDto(id);
     },
@@ -121,87 +104,54 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
     async updateProject(id: string, data: UpdateProjectDto): Promise<ProjectResponseDto> {
       const existing = await engine.get('project', id);
       if (!existing) throw new Error(`Project not found: ${id}`);
-      const fields = existing.fields;
-
-      const newScheduledType =
-        data.scheduledType !== undefined
-          ? data.scheduledType
-          : (fields.scheduledType as ScheduledType);
-
-      let effectiveScheduledDate: string | null;
-      if (newScheduledType === ScheduledType.SOMEDAY || newScheduledType === ScheduledType.NONE) {
-        effectiveScheduledDate = null;
-      } else if (data.scheduledDate !== undefined) {
-        effectiveScheduledDate = data.scheduledDate ? toDateKey(data.scheduledDate) : null;
-      } else {
-        effectiveScheduledDate = (fields.scheduledDate as string | null) ?? null;
-      }
-
-      let bucket = fields.bucket as ProjectBucket;
-      if (
-        data.scheduledType !== undefined ||
-        data.scheduledDate !== undefined ||
-        data.areaId !== undefined ||
-        data.bucket !== undefined
-      ) {
-        bucket = resolveBucket(data.bucket ?? (fields.bucket as ProjectBucket), newScheduledType);
-      }
-
-      const patch: Record<string, unknown> = {};
-      if (data.title !== undefined) patch.title = data.title;
-      if (data.notes !== undefined) patch.notes = data.notes;
-      if (data.scheduledType !== undefined || data.scheduledDate !== undefined) {
-        patch.scheduledType = newScheduledType;
-        patch.scheduledDate = effectiveScheduledDate;
-      }
-      if (data.dueDate !== undefined) patch.dueDate = data.dueDate ? toDateKey(data.dueDate) : null;
-      if (data.bucket !== undefined || 'scheduledType' in patch) patch.bucket = bucket;
-      if (data.areaId !== undefined) patch.areaId = data.areaId;
-      if (data.tagIds !== undefined) patch.tagIds = data.tagIds;
-
-      await engine.update('project', id, patch);
+      const f = existing.fields;
+      const patch = planProjectUpdate(
+        { scheduledType: f.scheduledType, scheduledDate: f.scheduledDate, bucket: f.bucket },
+        data,
+        zones(),
+      );
+      await engine.update('project', id, { ...patch });
       return projectDto(id);
     },
 
     async deleteProject(id: string): Promise<void> {
-      // 软删除级联：Project 与其下 Task 一起进 Trash（与 ProjectsService 一致）
-      const now = new Date().toISOString();
-      await engine.update('project', id, { trashedAt: now });
       const tasks = await engine.list('task', { where: { projectId: id } });
+      const plan = planProjectTrash(
+        new Date().toISOString(),
+        tasks.map((row) => ({ id: row.id, trashedAt: row.fields.trashedAt })),
+      );
+      await engine.update('project', id, { ...plan.project });
       await engine.updateMany(
         'task',
-        tasks.map((row) => ({ id: row.id, patch: { trashedAt: now } })),
+        plan.tasks.map(({ id: taskId, patch }) => ({ id: taskId, patch: { ...patch } })),
       );
     },
 
     async restoreProject(id: string): Promise<ProjectResponseDto> {
       const existing = await engine.get('project', id);
       if (!existing) throw new Error(`Project not found: ${id}`);
-      await engine.update('project', id, { trashedAt: null });
-      // 只捡回「随项目一起进 Trash」的下属任务（级联时同一时间戳，与
-      // REST 同启发式）；项目进 Trash 前后单独删掉的任务保持原状。
-      const cascadeTrashedAt = existing.fields.trashedAt ?? null;
-      const tasks =
-        typeof cascadeTrashedAt === 'string'
-          ? await engine.list('task', { where: { projectId: id, trashedAt: cascadeTrashedAt } })
-          : [];
+      const tasks = await engine.list('task', {
+        where: { projectId: id, trashedAt: { notNull: true } },
+      });
+      const plan = planProjectRestore(
+        existing.fields.trashedAt,
+        tasks.map((row) => ({ id: row.id, trashedAt: row.fields.trashedAt })),
+      );
+      await engine.update('project', id, { ...plan.project });
       await engine.updateMany(
         'task',
-        tasks.map((row) => ({ id: row.id, patch: { trashedAt: null } })),
+        plan.tasks.map(({ id: taskId, patch }) => ({ id: taskId, patch: { ...patch } })),
       );
       return projectDto(id);
     },
 
     async completeProject(id: string): Promise<ProjectResponseDto> {
-      await engine.update('project', id, {
-        status: ProjectStatus.COMPLETED,
-        completedAt: new Date().toISOString(),
-      });
+      await engine.update('project', id, { ...projectCompletePatch(new Date().toISOString()) });
       return projectDto(id);
     },
 
     async uncompleteProject(id: string): Promise<ProjectResponseDto> {
-      await engine.update('project', id, { status: ProjectStatus.ACTIVE, completedAt: null });
+      await engine.update('project', id, { ...projectReopenPatch() });
       return projectDto(id);
     },
 

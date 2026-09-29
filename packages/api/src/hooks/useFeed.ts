@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FeedView } from '@taskora/shared';
 
 import { emptyTrash, getFeed } from '@/api/feed.api';
+import { refreshAfterWrite } from './cache-patches';
 
 export const feedKeys = {
   all: ['feed'] as const,
@@ -21,9 +22,9 @@ export function useEmptyTrash() {
   return useMutation({
     mutationFn: emptyTrash,
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: feedKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: feedKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['tasks'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }

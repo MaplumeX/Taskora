@@ -27,7 +27,10 @@ const fakeEngine = {
   onChange: vi.fn(() => () => undefined),
 };
 
-vi.mock('@taskora/engine', () => ({ openEngine: vi.fn(async () => fakeEngine) }));
+vi.mock('@taskora/engine', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@taskora/engine')>()),
+  openEngine: vi.fn(async () => fakeEngine),
+}));
 
 vi.mock('./tauri-storage', () => ({
   isTauriRuntime: () => true,

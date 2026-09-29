@@ -81,7 +81,9 @@ describe('FeedService', () => {
 
     it('5. trashed project + 下属 active task → project + task 都删', async () => {
       const tasks = [{ id: 't1', projectId: 'p1', trashedAt: null, status: TaskStatus.ACTIVE }];
-      mockPrisma.project.findMany.mockResolvedValue([{ id: 'p1' }]);
+      mockPrisma.project.findMany.mockResolvedValue([
+        { id: 'p1', trashedAt: new Date('2026-01-01T00:00:00Z') },
+      ]);
       mockPrisma.task.findMany.mockResolvedValue(tasks);
       mockPrisma.task.deleteMany.mockResolvedValue({ count: 1 });
       mockPrisma.project.deleteMany.mockResolvedValue({ count: 1 });
@@ -128,7 +130,7 @@ describe('FeedService', () => {
       // project.findMany where 含 userId
       expect(mockPrisma.project.findMany).toHaveBeenCalledWith({
         where: { userId, trashedAt: { not: null } },
-        select: { id: true },
+        select: { id: true, trashedAt: true },
       });
       // task.findMany where 含 userId (no parentId select)
       expect(mockPrisma.task.findMany).toHaveBeenCalledWith({
@@ -219,7 +221,6 @@ describe('FeedService', () => {
           trashedAt: null,
         }),
       );
-      expect(taskCall.orderBy).toEqual([{ settledAt: 'desc' }]);
       expect(result).toHaveLength(2);
       // 按了结时间降序（取消的更晚 → 在前）
       expect(result[0]).toMatchObject({ id: 'task-2' });
@@ -243,7 +244,12 @@ describe('FeedService', () => {
     });
 
     it('项目统计的 completed 计数口径 = 已了结（完成 + 取消）', async () => {
-      mockPrisma.task.findMany.mockResolvedValue([]);
+      // 第一次：视图任务；第二次：进度计数用的项目任务
+      mockPrisma.task.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
+        { projectId: 'p1', status: TaskStatus.ACTIVE, trashedAt: null },
+        { projectId: 'p1', status: TaskStatus.COMPLETED, trashedAt: null },
+        { projectId: 'p1', status: TaskStatus.CANCELLED, trashedAt: null },
+      ]);
       mockPrisma.project.findMany.mockResolvedValue([
         {
           id: 'p1',
@@ -263,16 +269,9 @@ describe('FeedService', () => {
           tags: [],
         },
       ]);
-      mockPrisma.task.groupBy
-        .mockResolvedValueOnce([{ projectId: 'p1', _count: { _all: 3 } }])
-        .mockResolvedValueOnce([{ projectId: 'p1', _count: { _all: 2 } }]);
 
       const result = await service.findAll(userId, 'today');
 
-      const completedCall = mockPrisma.task.groupBy.mock.calls[1][0];
-      expect(completedCall.where.status).toEqual({
-        in: [TaskStatus.COMPLETED, TaskStatus.CANCELLED],
-      });
       expect(result[0]).toMatchObject({
         id: 'p1',
         type: 'project',

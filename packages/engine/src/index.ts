@@ -58,20 +58,34 @@ export {
   type Engine,
   type EngineOptions,
 } from './engine';
-export type {
-  BootstrapResponse,
-  CompactChange,
-  DeleteRequest,
-  EntityChange,
-  HubChange,
-  OutboxEvent,
-  PullRequest,
-  PullResponse,
-  PushRequest,
-  PushResponse,
-  SnapshotEntry,
-  SyncTransport,
+export {
+  SYNC_CLIENT_HEADER,
+  SYNC_PROTOCOL_HEADER,
+  SYNC_PROTOCOL_VERSION,
+  SyncUpgradeRequiredError,
+  type BootstrapResponse,
+  type CompactChange,
+  type DeleteRequest,
+  type EntityChange,
+  type HubChange,
+  type HubVersionInfo,
+  type OutboxEvent,
+  type PullRequest,
+  type PullResponse,
+  type PushRequest,
+  type PushResponse,
+  type RejectedChange,
+  type SnapshotEntry,
+  type SyncTransport,
 } from './protocol';
+export {
+  REPLICA_MIGRATIONS,
+  REPLICA_SCHEMA_VERSION,
+  ReplicaSchemaTooNewError,
+  migrateReplica,
+  readSchemaVersion,
+  type ReplicaMigration,
+} from './migrations';
 export {
   InMemorySyncHub,
   applyRepairs,
@@ -81,9 +95,5 @@ export {
   type ReferenceProbe,
   type ReferenceStatus,
 } from './hub';
-export {
-  repairEntity,
-  resolveProjectBucket,
-  resolveTaskBucket,
-  type HeadingProjectProbe,
-} from './invariants';
+export { repairEntity, type HeadingProjectProbe } from './invariants';
+export * from './domain';

@@ -33,6 +33,13 @@ import {
   updateSubtask,
   updateTask,
 } from '@/api/tasks.api';
+import {
+  type CacheSnapshot,
+  cancelRoots,
+  refreshAfterWrite,
+  restoreSnapshot,
+  snapshotRoots,
+} from './cache-patches';
 
 export const taskKeys = {
   all: ['tasks'] as const,
@@ -79,16 +86,14 @@ function removeTaskFromList(
 // views) and ['feed'] (Inbox/Today/Anytime/... — most of the app). Patching
 // only ['tasks'] leaves feed views showing the old state until the refetch
 // lands, e.g. a dropped row snapping back before jumping to its new slot.
-const TASK_LIST_ROOTS = [taskKeys.all, ['feed'] as const];
+const TASK_LIST_ROOTS = ['tasks', 'feed'];
 
 async function cancelTaskLists(queryClient: ReturnType<typeof useQueryClient>) {
-  await Promise.all(TASK_LIST_ROOTS.map((queryKey) => queryClient.cancelQueries({ queryKey })));
+  await cancelRoots(queryClient, TASK_LIST_ROOTS);
 }
 
-function snapshotTaskLists(
-  queryClient: ReturnType<typeof useQueryClient>,
-): [readonly unknown[], unknown][] {
-  return TASK_LIST_ROOTS.flatMap((queryKey) => queryClient.getQueriesData({ queryKey }));
+function snapshotTaskLists(queryClient: ReturnType<typeof useQueryClient>): CacheSnapshot {
+  return snapshotRoots(queryClient, TASK_LIST_ROOTS);
 }
 
 type ListItem = { id: string; type?: string };
@@ -147,17 +152,6 @@ export function reorderInSlots<T extends ListItem>(list: T[], orderedIds: string
   return next;
 }
 
-// Restore snapshot to queries data (list caches)
-function restoreListSnapshot(
-  queryClient: ReturnType<typeof useQueryClient>,
-  queryKey: readonly string[],
-  snapshot: [readonly unknown[], unknown][],
-) {
-  for (const [key, data] of snapshot) {
-    queryClient.setQueryData(key as readonly string[], data);
-  }
-}
-
 export function useCreateTask() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -199,7 +193,7 @@ export function useCreateTask() {
     },
     onError: (_err, _data, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
     },
     onSuccess: (task, _data, ctx) => {
@@ -216,9 +210,9 @@ export function useCreateTask() {
       });
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
@@ -244,17 +238,17 @@ export function useUpdateTask() {
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, { id }) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
@@ -271,13 +265,13 @@ export function useDeleteTask() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
@@ -303,17 +297,17 @@ export function useCompleteTask() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, id) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
@@ -338,17 +332,17 @@ export function useUncompleteTask() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, id) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
@@ -374,17 +368,17 @@ export function useCancelTask() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, id) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
@@ -409,17 +403,17 @@ export function useUncancelTask() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, id) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
@@ -433,19 +427,19 @@ export function useReorderTasks() {
       const snapshot = snapshotTaskLists(queryClient);
       // 乐观重排 tasks 与 feed 两类列表（槽位保持：非成员行不动），松手
       // 即是新顺序，不再先弹回旧顺序等重查。
-      for (const queryKey of TASK_LIST_ROOTS) {
-        queryClient.setQueriesData<ListItem[]>({ queryKey }, (old) =>
+      for (const root of TASK_LIST_ROOTS) {
+        queryClient.setQueriesData<ListItem[]>({ queryKey: [root] }, (old) =>
           old ? reorderInSlots(old, orderedIds) : old,
         );
       }
       return { snapshot };
     },
     onError: (_err, _ids, ctx) => {
-      if (ctx?.snapshot) restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+      if (ctx?.snapshot) restoreSnapshot(queryClient, ctx.snapshot);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
@@ -472,16 +466,16 @@ export function useRestoreTask() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, id) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
@@ -491,10 +485,10 @@ export function useConvertTaskToProject() {
   return useMutation({
     mutationFn: (id: string) => convertTaskToProject(id),
     onSuccess: (_data, id) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: ['tasks'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
@@ -561,9 +555,9 @@ export function useCreateSubtask() {
       );
     },
     onSettled: (_data, _error, { taskId }) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(taskId) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
@@ -619,12 +613,12 @@ export function useUpdateSubtask() {
     onSettled: (data, _error, _vars, ctx) => {
       const taskId = ctx?.taskId ?? data?.taskId;
       if (taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(taskId),
         });
       }
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
@@ -647,9 +641,9 @@ export function useDeleteSubtask() {
       }
     },
     onSettled: (_data, _error, { taskId }) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(taskId) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
@@ -693,16 +687,16 @@ export function useCompleteSubtask() {
     },
     onSettled: (subtask, _error, _id, ctx) => {
       if (ctx?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(ctx.taskId),
         });
       } else if (subtask?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(subtask.taskId),
         });
       }
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
@@ -746,16 +740,16 @@ export function useUncompleteSubtask() {
     },
     onSettled: (subtask, _error, _id, ctx) => {
       if (ctx?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(ctx.taskId),
         });
       } else if (subtask?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(subtask.taskId),
         });
       }
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
@@ -799,16 +793,16 @@ export function useCancelSubtask() {
     },
     onSettled: (subtask, _error, _id, ctx) => {
       if (ctx?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(ctx.taskId),
         });
       } else if (subtask?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(subtask.taskId),
         });
       }
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
@@ -852,16 +846,16 @@ export function useUncancelSubtask() {
     },
     onSettled: (subtask, _error, _id, ctx) => {
       if (ctx?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(ctx.taskId),
         });
       } else if (subtask?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(subtask.taskId),
         });
       }
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
@@ -872,7 +866,7 @@ export function useReorderSubtasks() {
     mutationFn: ({ taskId, orderedIds }: { taskId: string; orderedIds: string[] }) =>
       reorderSubtasks(taskId, orderedIds),
     onSuccess: (_data, { taskId }) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(taskId) });
     },
   });
 }

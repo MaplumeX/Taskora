@@ -10,7 +10,7 @@
 import { mergeFieldWrites, type EntityMergeState, type MergeOutcome } from './merger';
 import { repairEntity, type HeadingProjectProbe } from './invariants';
 import { formatHlc, hlcWallMs } from './hlc';
-import { DELETE_CASCADES, REFERENCE_FIELDS, type SyncEntity } from './entities';
+import { DELETE_CASCADES, REFERENCE_FIELDS, SYNC_ENTITIES, type SyncEntity } from './entities';
 import type {
   BootstrapResponse,
   DeleteRequest,
@@ -20,9 +20,11 @@ import type {
   PullResponse,
   PushRequest,
   PushResponse,
+  RejectedChange,
   SnapshotEntry,
   SyncTransport,
 } from './protocol';
+import { SYNC_PROTOCOL_VERSION } from './protocol';
 
 type UserState = {
   entities: Map<string, EntityMergeState>; // key: `${entity}:${id}`
@@ -50,12 +52,19 @@ export interface InMemorySyncHubOptions {
   enforceReferences?: boolean;
   /** 在 transport 响应里回报 serverTime（取自 wallClock），驱动设备时钟校准。 */
   reportServerTime?: boolean;
+  /**
+   * hub 认识的实体（缺省为全部）：模拟较旧的 hub。不认识的实体的字段写与
+   * Delete Request 逐条拒绝、在 PushResponse.rejected 里列出（协议 1）。
+   * 按引用保存：测试可在运行中往数组里追加，模拟 hub 升级。
+   */
+  knownEntities?: readonly SyncEntity[];
 }
 
 export class InMemorySyncHub {
   private readonly bufferSize: number;
   private readonly wallClock: () => number;
   private readonly enforceReferences: boolean;
+  private readonly knownEntities: readonly string[];
   private readonly reportServerTime: boolean;
   private readonly users = new Map<string, UserState>();
 
@@ -64,14 +73,20 @@ export class InMemorySyncHub {
     this.wallClock = options.wallClock ?? (() => Date.now());
     this.enforceReferences = options.enforceReferences ?? false;
     this.reportServerTime = options.reportServerTime ?? false;
+    this.knownEntities = options.knownEntities ?? SYNC_ENTITIES;
   }
 
   // ---------- 设备侧协议面 ----------
 
   push(userId: string, pushRequest: PushRequest): PushResponse {
     const state = this.stateFor(userId);
+    const rejected: RejectedChange[] = [];
     let firstFailure: unknown = null;
     for (const event of pushRequest.events) {
+      if (!this.knownEntities.includes(event.entity)) {
+        rejected.push({ kind: 'write', entity: event.entity, id: event.id, reason: 'unknown-entity' });
+        continue;
+      }
       try {
         this.mergeEvent(state, event);
       } catch (error) {
@@ -80,10 +95,19 @@ export class InMemorySyncHub {
     }
     // 先合并字段写、再应用删除（ADR-0008 同序：字段写 → 删除）
     for (const deleteRequest of pushRequest.deletes ?? []) {
+      if (!this.knownEntities.includes(deleteRequest.entity)) {
+        for (const id of deleteRequest.ids) {
+          rejected.push({ kind: 'delete', entity: deleteRequest.entity, id, reason: 'unknown-entity' });
+        }
+        continue;
+      }
       this.applyDeleteRequest(state, deleteRequest);
     }
     if (firstFailure !== null) throw firstFailure;
-    return { acked: pushRequest.events.length };
+    return {
+      acked: pushRequest.events.length - rejected.filter((item) => item.kind === 'write').length,
+      ...(rejected.length > 0 ? { rejected } : {}),
+    };
   }
 
   pull(userId: string, request: PullRequest): PullResponse {
@@ -122,8 +146,12 @@ export class InMemorySyncHub {
 
   /** 给测试用的 transport 视图（单用户 harness）。 */
   transportFor(userId: string): SyncTransport {
-    const stamped = <T extends object>(response: T): T =>
-      this.reportServerTime ? { ...response, serverTime: this.wallClock() } : response;
+    const stamped = <T extends object>(response: T): T => ({
+      ...response,
+      protocolVersion: SYNC_PROTOCOL_VERSION,
+      minProtocolVersion: 0,
+      ...(this.reportServerTime ? { serverTime: this.wallClock() } : {}),
+    });
     return {
       push: async (request) => stamped(this.push(userId, request)),
       pull: async (request) => stamped(this.pull(userId, request)),

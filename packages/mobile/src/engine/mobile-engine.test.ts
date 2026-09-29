@@ -34,7 +34,8 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useAuthStore: fakeAuthStore,
 }));
 
-vi.mock('@taskora/engine', () => ({
+vi.mock('@taskora/engine', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@taskora/engine')>()),
   openEngine: vi.fn(async () => fakeEngine),
 }));
 
@@ -208,6 +209,41 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
       expect(useSyncStatusStore.getState().status).toBe('offline');
     });
     expect(useSyncStatusStore.getState().pendingCount).toBe(4);
+  });
+
+  it('hub 要求升级（426）：显示升级提示，此后不再发起同步，Outbox 保留', async () => {
+    const { useSyncStatusStore } = await import('@taskora/api');
+    const { SyncUpgradeRequiredError } = await import('@taskora/engine');
+    const { initMobileEngine, requestPullSync } = await loadEngine();
+    fakeEngine.sync.mockRejectedValueOnce(new SyncUpgradeRequiredError(2));
+    fakeEngine.pendingCount.mockResolvedValueOnce(3);
+
+    initMobileEngine(renderQueryClient());
+
+    await vi.waitFor(() => {
+      expect(useSyncStatusStore.getState().status).toBe('upgrade-required');
+    });
+    expect(useSyncStatusStore.getState().pendingCount).toBe(3);
+    const calls = fakeEngine.sync.mock.calls.length;
+    await requestPullSync();
+    expect(fakeEngine.sync).toHaveBeenCalledTimes(calls);
+    expect(fakeEngine.close).not.toHaveBeenCalled(); // 本地读写照常
+  });
+
+  it('副本来自更新版本（降级安装）：不打开副本，退回 REST 并提示升级', async () => {
+    const { useSyncStatusStore } = await import('@taskora/api');
+    const engineModule = await import('@taskora/engine');
+    vi.mocked(engineModule.openEngine).mockRejectedValueOnce(
+      new engineModule.ReplicaSchemaTooNewError(9, 4),
+    );
+    const { initMobileEngine, getMobileEngine } = await loadEngine();
+
+    initMobileEngine(renderQueryClient());
+
+    await vi.waitFor(() => {
+      expect(useSyncStatusStore.getState().status).toBe('upgrade-required');
+    });
+    expect(getMobileEngine()).toBeNull();
   });
 
   it('登出：退回 REST 后端并关闭副本', async () => {

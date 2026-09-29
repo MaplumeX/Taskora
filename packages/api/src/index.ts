@@ -55,7 +55,13 @@ export * from './api/tags.api';
 export * from './api/tasks.api';
 export { setTaskBackend, currentTaskBackend, type TaskBackend } from './api/task-backend';
 export { createEngineTaskBackend } from './engine/task-backend.engine';
+export { isEngineMode } from './api/task-backend';
 export { createEngineInvalidator, INVALIDATION_BY_ENTITY } from './engine/engine-invalidation';
+export {
+  createHttpSyncTransport,
+  registerSyncDevice,
+  type SyncClientPlatform,
+} from './engine/http-sync-transport';
 export {
   setProjectBackend,
   currentProjectBackend,

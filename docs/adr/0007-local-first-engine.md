@@ -58,7 +58,9 @@ Key decisions, in the order they matter:
   event may create the dependency the earlier one needs), but any failure makes
   the HTTP request fail and the device retains and idempotently replays the
   whole batch. A partial-success response must never cause the device to drop
-  unmerged writes.
+  unmerged writes. The one partial response is `rejected` (protocol 1, see
+  below): changes the hub cannot understand at all are listed, the device
+  keeps exactly those in the Outbox and acknowledges the rest.
 - **Hub merges are serialized per user/entity/id.** Each read-merge-write runs
   in a database transaction guarded by a PostgreSQL advisory lock (and a row
   lock when the row exists). This preserves field-clock LWW under concurrent
@@ -100,6 +102,36 @@ Key decisions, in the order they matter:
   future stamps — that would turn a bad clock into a permanently failing
   push. Stamps already written with a future wall time keep winning LWW until
   real time catches up; they are not rewritten retroactively.
+- **Replica schema and sync protocol are versioned** (amended 2026-09-29).
+  The Local Replica records its schema version in SQLite `user_version`;
+  migrations are an append-only list, one transaction per step with the
+  version bump inside it. A new replica is created at the latest version; a
+  replica newer than the code (a downgrade install) is refused
+  (`ReplicaSchemaTooNewError`) — the app falls back to online REST and asks
+  for an update rather than writing a schema it does not understand.
+  The sync protocol has an integer version (`SYNC_PROTOCOL_VERSION`), sent as
+  the `x-taskora-sync-protocol` header with a client id in `x-taskora-client`
+  — headers, because the hub's DTO validation rejects unknown body fields and
+  pull/bootstrap have no body. Every sync response carries `protocolVersion`
+  and `minProtocolVersion`. Upgrade rules:
+  - A request below the hub's minimum gets **HTTP 426**; the device stops
+    syncing, keeps its Outbox and shows an update prompt. Missing header
+    means protocol 0 (clients from before versioning).
+  - A client newer than the hub is served by capability: unknown entity types
+    (writes and Delete Requests) and unknown fields are listed in
+    `PushResponse.rejected`; known fields are merged. The device keeps
+    rejected changes in the Outbox and re-pushes them on later syncs, so they
+    land once the hub is upgraded. Nothing is silently dropped on the push
+    side.
+  - Devices skip entity types they do not know in pull and bootstrap. A hub
+    that adds an entity older clients must understand (because they would
+    otherwise corrupt data, not merely not display it) raises
+    `minProtocolVersion` instead.
+  - Bump `SYNC_PROTOCOL_VERSION` when the wire format or its meaning changes
+    incompatibly; new request body fields are only sent once the hub's
+    reported `protocolVersion` says it understands them. Raise the hub's
+    minimum only when old clients would do harm, never just to force updates.
+  See `.scratch/local-first-v3/issues/03`.
 - **Migration is a vertical slice, desktop first**: Task CRUD in
   Inbox/Today buckets moves to the Engine first; the rest of `packages/api` and
   the old HTTP CRUD surface retire slice by slice. Web follows desktop once

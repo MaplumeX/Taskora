@@ -32,8 +32,8 @@ function createPrismaMock() {
     },
     task: {
       findMany: vi.fn().mockResolvedValue([
-        { id: 'task-1', createdAt: TASK_CREATED['task-1'] },
-        { id: 'task-2', createdAt: TASK_CREATED['task-2'] },
+        { id: 'task-1', createdAt: TASK_CREATED['task-1'], status: 'ACTIVE', trashedAt: null },
+        { id: 'task-2', createdAt: TASK_CREATED['task-2'], status: 'ACTIVE', trashedAt: null },
       ]),
       updateMany: vi.fn().mockResolvedValue({ count: 1 }),
     },
@@ -250,20 +250,25 @@ describe('ProjectHeadingsService', () => {
     });
   });
 
-  it('soft-deletes direct heading tasks without changing status', async () => {
+  it('soft-deletes direct heading tasks without changing status（已在 Trash 的不动）', async () => {
     const prisma = createPrismaMock();
     prisma.projectHeading.findFirst.mockResolvedValue({
       id: 'heading-1',
       projectId: 'project-1',
     });
-    prisma.task.findMany.mockResolvedValue([{ id: 'root' }, { id: 'child' }]);
+    prisma.task.findMany.mockResolvedValue([
+      { id: 'root', status: 'ACTIVE', trashedAt: null },
+      { id: 'child', status: 'COMPLETED', trashedAt: null },
+      { id: 'gone', status: 'ACTIVE', trashedAt: new Date('2026-01-01T00:00:00Z') },
+    ]);
     const service = new ProjectHeadingsService(prisma as unknown as PrismaService);
 
     await service.remove('user-1', 'heading-1');
 
     const update = prisma.task.updateMany.mock.calls[0][0];
     expect(new Set(update.where.id.in)).toEqual(new Set(['root', 'child']));
-    expect(Object.keys(update.data)).toEqual(['trashedAt']);
+    // 进 Trash 同时清除提醒（与单个任务进 Trash 同一规则）
+    expect(Object.keys(update.data).sort()).toEqual(['reminderTime', 'trashedAt']);
     expect(prisma.projectHeading.deleteMany).toHaveBeenCalledWith({
       where: {
         id: 'heading-1',

@@ -1,0 +1,118 @@
+/**
+ * Local Replica 的 schema 版本与迁移（local-first-v3 issue 03）。
+ *
+ * 版本号记在 SQLite 的 `PRAGMA user_version`。打开副本时：
+ * - 新库（没有任何 Engine 表）：直接按当前 DDL 建表，版本记为最新；
+ * - 旧库：从记录的版本起顺序执行迁移，每步一个事务，版本号与该步的
+ *   改动一起提交——中途崩溃重开时从失败的那一步重来；
+ * - 版本比代码新（降级安装）：拒绝打开，抛 ReplicaSchemaTooNewError。
+ *   旧代码不认识新 schema 的语义，继续读写会把数据写坏。
+ *
+ * 规则：
+ * - 迁移只追加、不修改已发布的步骤；新增列 / 表同时改 entities.ts 的
+ *   DDL（新库）并追加一步迁移（旧库）。
+ * - 版本号出现之前的安装（user_version 为 0）列集合各不相同：第 1 步
+ *   补齐缺失的表，之后的加列步骤用 addColumnIfMissing，对「DDL 已带该列」
+ *   的库是空操作。以后的加列也沿用它，保证每步可重入。
+ * - 数据迁移（改值而非加列）同样写成一步，拿到的是事务内的 storage。
+ */
+
+import { schemaDdl } from './entities';
+import { inTransaction, type SqlStorage } from './storage';
+
+export type ReplicaMigration = (storage: SqlStorage) => Promise<void>;
+
+async function addColumnIfMissing(
+  storage: SqlStorage,
+  table: string,
+  column: string,
+  definition: string,
+): Promise<void> {
+  const columns = await storage.all<{ name: string }>(
+    `SELECT name FROM pragma_table_info('${table}')`,
+  );
+  if (!columns.some((row) => row.name === column)) {
+    await storage.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+async function createMissingTables(storage: SqlStorage): Promise<void> {
+  for (const statement of schemaDdl()) await storage.exec(statement);
+}
+
+/**
+ * 迁移步骤：下标 i 把副本从版本 i 升到 i + 1。
+ * 只追加；已发布的步骤不可修改。
+ */
+export const REPLICA_MIGRATIONS: readonly ReplicaMigration[] = [
+  // 0 → 1：版本号之前的安装。补齐缺失的实体表、Outbox、Compact 登记与索引。
+  createMissingTables,
+  // 1 → 2：Outbox 增加 kind（Delete Request，ADR-0008）与 revision 列。
+  async (storage) => {
+    await addColumnIfMissing(storage, '_outbox', 'kind', "TEXT NOT NULL DEFAULT 'write'");
+    await addColumnIfMissing(storage, '_outbox', 'revision', 'INTEGER NOT NULL DEFAULT 0');
+  },
+  // 2 → 3：task 增加 reminderTime（reminders spec）。
+  (storage) => addColumnIfMissing(storage, 'task', 'reminderTime', 'TEXT'),
+  // 3 → 4：task 增加 repeatRule（recurring-tasks spec，JSON 文本）。
+  (storage) => addColumnIfMissing(storage, 'task', 'repeatRule', 'TEXT'),
+];
+
+/** 当前代码的副本 schema 版本。 */
+export const REPLICA_SCHEMA_VERSION = REPLICA_MIGRATIONS.length;
+
+/** 副本由更新版本的 Taskora 写入（降级安装）：拒绝打开。 */
+export class ReplicaSchemaTooNewError extends Error {
+  readonly name = 'ReplicaSchemaTooNewError';
+
+  constructor(
+    readonly found: number,
+    readonly supported: number,
+  ) {
+    super(`本地副本 schema 版本 ${found} 高于当前应用支持的 ${supported}，请升级 Taskora`);
+  }
+}
+
+export async function readSchemaVersion(storage: SqlStorage): Promise<number> {
+  const rows = await storage.all<{ user_version: number }>('PRAGMA user_version');
+  return Number(rows[0]?.user_version ?? 0);
+}
+
+async function writeSchemaVersion(storage: SqlStorage, version: number): Promise<void> {
+  // PRAGMA 不接受绑定参数；version 是本模块算出的整数。
+  await storage.exec(`PRAGMA user_version = ${Math.trunc(version)}`);
+}
+
+async function hasEngineTables(storage: SqlStorage): Promise<boolean> {
+  const rows = await storage.all(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = '_engine_meta'",
+  );
+  return rows.length > 0;
+}
+
+/**
+ * 把副本升到 REPLICA_SCHEMA_VERSION。返回迁移前的版本（新库为 null）。
+ * migrations 参数只供测试注入。
+ */
+export async function migrateReplica(
+  storage: SqlStorage,
+  migrations: readonly ReplicaMigration[] = REPLICA_MIGRATIONS,
+): Promise<number | null> {
+  const target = migrations.length;
+  const current = await readSchemaVersion(storage);
+  if (current > target) throw new ReplicaSchemaTooNewError(current, target);
+  if (current === 0 && !(await hasEngineTables(storage))) {
+    await inTransaction(storage, async () => {
+      await createMissingTables(storage);
+      await writeSchemaVersion(storage, target);
+    });
+    return null;
+  }
+  for (let version = current; version < target; version += 1) {
+    await inTransaction(storage, async () => {
+      await migrations[version](storage);
+      await writeSchemaVersion(storage, version + 1);
+    });
+  }
+  return current;
+}

@@ -25,6 +25,7 @@ import {
   type DeleteRequest,
   type OutboxEvent,
   type ReferenceStatus,
+  type RejectedChange,
   type SyncEntity,
 } from '@taskora/engine';
 import type { ChangeAction, ChangeEntity } from '@taskora/shared';
@@ -91,24 +92,50 @@ export class SyncHubService implements OnModuleInit {
    * 设备推送一批变更：先逐事件按字段级 LWW 合并入 Postgres，再应用
    * Delete Request（ADR-0008 同序：字段写 → 删除）。单个事件失败时继续
    * 尝试同批后续事件，但最终让请求失败，使设备保留整批并幂等重试。
+   *
+   * 本 hub 不认识的实体 / 字段（更新版本的客户端，协议 1）逐条拒绝并在
+   * rejected 里列出：设备把它们留在 Outbox，hub 升级后重推即被接受。
+   * 认识的字段照常合并。
    */
   async push(
     userId: string,
-    events: OutboxEvent[],
-    deletes?: DeleteRequest[],
-  ): Promise<{ acked: number }> {
+    events: Array<{ entity: string; id: string; fields: OutboxEvent['fields'] }>,
+    deletes?: Array<{ entity: string; ids: string[] }>,
+  ): Promise<{ acked: number; rejected?: RejectedChange[] }> {
+    const rejected: RejectedChange[] = [];
     let firstFailure: unknown = null;
     for (const event of events) {
+      if (!isSyncEntity(event.entity)) {
+        rejected.push({ kind: 'write', entity: event.entity, id: event.id, reason: 'unknown-entity' });
+        continue;
+      }
+      const known = new Set(codecFor(event.entity).def.fields.map((def) => def.name));
+      const unknownFields = Object.keys(event.fields).filter((field) => !known.has(field));
+      if (unknownFields.length > 0) {
+        rejected.push({
+          kind: 'write',
+          entity: event.entity,
+          id: event.id,
+          reason: 'unknown-fields',
+          fields: unknownFields,
+        });
+      }
       try {
-        await this.applyEvent(userId, event);
+        await this.applyEvent(userId, { ...event, entity: event.entity });
       } catch (error) {
         firstFailure ??= error;
         console.error('[sync-hub] 事件合并失败，将由设备重试', event.entity, event.id, error);
       }
     }
     for (const deleteRequest of deletes ?? []) {
+      if (!isSyncEntity(deleteRequest.entity)) {
+        for (const id of deleteRequest.ids) {
+          rejected.push({ kind: 'delete', entity: deleteRequest.entity, id, reason: 'unknown-entity' });
+        }
+        continue;
+      }
       try {
-        await this.applyDeleteRequest(userId, deleteRequest);
+        await this.applyDeleteRequest(userId, { ...deleteRequest, entity: deleteRequest.entity });
       } catch (error) {
         firstFailure ??= error;
         console.error('[sync-hub] Delete Request 处理失败', deleteRequest.entity, error);
@@ -117,7 +144,16 @@ export class SyncHubService implements OnModuleInit {
     // 同批后续事件仍会尝试执行：它们可能正是前面悬挂引用所依赖的父实体。
     // 只要有一条失败，整个 HTTP 请求失败，设备保留原批次并幂等重放。
     if (firstFailure !== null) throw firstFailure;
-    return { acked: events.length };
+    if (rejected.length > 0) {
+      console.warn('[sync-hub] 拒绝本 hub 不认识的变更（客户端协议更新）', userId, rejected);
+    }
+    const rejectedWrites = rejected.filter(
+      (item) => item.kind === 'write' && item.reason === 'unknown-entity',
+    ).length;
+    return {
+      acked: events.length - rejectedWrites,
+      ...(rejected.length > 0 ? { rejected } : {}),
+    };
   }
 
   /** 设备凭 Sync Cursor 拉取增量。 */

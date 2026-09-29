@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import { repairEntity, resolveTaskBucket } from './invariants';
+import { resolveTaskBucket } from './domain/bucket';
+import { repairEntity } from './invariants';
 
 const task = (overrides: Record<string, unknown> = {}) => ({
   scheduledType: 'NONE',
@@ -122,7 +123,7 @@ describe('repairEntity — project / subtask', () => {
 });
 
 describe('resolveTaskBucket', () => {
-  it('与 REST 同一推导', () => {
+  it('写入路径与合并修复同一推导', () => {
     expect(resolveTaskBucket('INBOX', 'DATE', null, null)).toBe('SCHEDULED');
     expect(resolveTaskBucket('ANYTIME', 'NONE', null, null)).toBe('ANYTIME');
     expect(resolveTaskBucket(undefined, 'NONE', 'p1', null)).toBe('ANYTIME');

@@ -83,6 +83,14 @@ describe('ProjectHeadingsService — convertToProject', () => {
     expect(mockPrisma.project.create).toHaveBeenCalledWith({
       data: {
         title: 'Build',
+        notes: null,
+        scheduledType: 'NONE',
+        scheduledDate: null,
+        dueDate: null,
+        bucket: 'ANYTIME',
+        status: 'ACTIVE',
+        completedAt: null,
+        trashedAt: null,
         areaId: 'area-1',
         sortOrder: 6,
         userId,
@@ -127,6 +135,14 @@ describe('ProjectHeadingsService — convertToProject', () => {
     expect(mockPrisma.project.create).toHaveBeenCalledWith({
       data: {
         title: 'Build',
+        notes: null,
+        scheduledType: 'NONE',
+        scheduledDate: null,
+        dueDate: null,
+        bucket: 'ANYTIME',
+        status: 'ACTIVE',
+        completedAt: null,
+        trashedAt: null,
         areaId: null,
         sortOrder: 0,
         userId,

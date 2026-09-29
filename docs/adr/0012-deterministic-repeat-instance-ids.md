@@ -50,8 +50,11 @@ devices produce two divergent subtask sets under the same converged parent.
 ## Scope note: who derives
 
 The deterministic-id scheme requires only that *whoever* derives uses the
-same pure functions. Three derivation sites exist, and none of them is the
-sync hub's merge path:
+same pure functions. Since local-first-v3 issue 04 both sites call one
+planner — `planRepeatInstance` / `repeatInstanceId` in `@taskora/engine`'s
+`domain` module decide the id, the copied fields and the subtask order; each
+site only checks existence / compaction and writes. The call sites, none of
+them the sync hub's merge path:
 
 - **Devices** (desktop/mobile engine backends) derive locally on complete —
   the primary, offline-first path.

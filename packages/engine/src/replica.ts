@@ -18,13 +18,14 @@ import {
   COMPACT_NULL_REFS,
   DELETE_CASCADES,
   entityDef,
-  schemaDdl,
+  isSyncEntity,
   SYNC_ENTITIES,
   type FieldDef,
   type SyncEntity,
   type WireRow,
 } from './entities';
 import { HybridClock } from './hlc';
+import { migrateReplica } from './migrations';
 import { mergeEntityState, type EntityMergeState, type FieldWrite } from './merger';
 import type { HubChange, OutboxEvent, SnapshotEntry } from './protocol';
 import { inTransaction, type SqlStorage } from './storage';
@@ -125,33 +126,9 @@ export class LocalReplica {
   /** 建表 + 恢复持久化的 HLC 状态；device id 落 meta（设备身份存于
    * Local Replica，ADR-0007：决胜与审计有稳定主体）。 */
   async init(): Promise<void> {
-    for (const statement of schemaDdl()) {
-      await this.storage.exec(statement);
-    }
-    // V1 → V2 迁移：_outbox 增加 kind 列（Delete Request 排队，ADR-0008）。
-    // 新库由 DDL 直接带列；旧库（V1 桌面安装）按需 ALTER。
-    const columns = await this.storage.all<{ name: string }>(
-      "SELECT name FROM pragma_table_info('_outbox')",
-    );
-    if (columns.length > 0 && !columns.some((column) => column.name === 'kind')) {
-      await this.storage.exec("ALTER TABLE _outbox ADD COLUMN kind TEXT NOT NULL DEFAULT 'write'");
-    }
-    if (columns.length > 0 && !columns.some((column) => column.name === 'revision')) {
-      await this.storage.exec('ALTER TABLE _outbox ADD COLUMN revision INTEGER NOT NULL DEFAULT 0');
-    }
-    // Reminders feature（reminders spec）：task 增加 reminderTime 列。
-    // 新库由 DDL 直接带列；旧库（无该列的桌面/移动安装）按需 ALTER。
-    const taskColumns = await this.storage.all<{ name: string }>(
-      "SELECT name FROM pragma_table_info('task')",
-    );
-    if (taskColumns.length > 0 && !taskColumns.some((column) => column.name === 'reminderTime')) {
-      await this.storage.exec('ALTER TABLE task ADD COLUMN reminderTime TEXT');
-    }
-    // Recurring tasks feature（recurring-tasks spec）：task 增加 repeatRule 列
-    // （JSON 文本：规范形规则对象）。新库由 DDL 直接带列；旧库按需 ALTER。
-    if (taskColumns.length > 0 && !taskColumns.some((column) => column.name === 'repeatRule')) {
-      await this.storage.exec('ALTER TABLE task ADD COLUMN repeatRule TEXT');
-    }
+    // schema 版本与迁移（local-first-v3 issue 03）：新建、升级旧库，
+    // 或拒绝打开更新版本写入的副本（ReplicaSchemaTooNewError）。
+    await migrateReplica(this.storage);
     await this.metaSet('deviceId', this.options.deviceId);
     const compactedRows = await this.storage.all<{ entity: string; entity_id: string }>(
       'SELECT entity, entity_id FROM _compacted',
@@ -625,6 +602,9 @@ export class LocalReplica {
       const affected = new Set<SyncEntity>();
       await this.tx(async () => {
         for (const change of changes) {
+          // 更新版本 hub 下发的、本端没有表的实体类型：跳过（协议规则见
+          // ADR-0007「协议版本」——必须理解的新实体由 hub 提高最低版本）。
+          if (!isSyncEntity(change.entity)) continue;
           if (change.kind === 'entity') {
             const applied = await this.mergeRemote(change.entity, change.id, {
               fields: change.fields,
@@ -659,6 +639,9 @@ export class LocalReplica {
     snapshot: SnapshotEntry[],
     compacted: Array<{ entity: SyncEntity; ids: string[] }>,
   ): Promise<void> {
+    // 本端不认识的实体类型（更新版本 hub）跳过，理由同 applyRemoteBatch。
+    snapshot = snapshot.filter((entry) => isSyncEntity(entry.entity));
+    compacted = compacted.filter((request) => isSyncEntity(request.entity));
     const snapshotKeys = new Set(snapshot.map((entry) => `${entry.entity}:${entry.id}`));
     this.compacted.clear();
     await this.tx(async () => {
@@ -715,8 +698,13 @@ export class LocalReplica {
 
   // ---------- Outbox ----------
 
-  /** 取待推送的条目（按入队顺序）：普通字段写与 Delete Request。 */
-  async takeOutbox(limit = 500): Promise<OutboxEntry[]> {
+  /**
+   * 取待推送的条目（按入队顺序）：普通字段写与 Delete Request。
+   * excludeRowIds：跳过的条目（flush 本轮被 hub 拒绝、留在 Outbox 里的）。
+   */
+  async takeOutbox(limit = 500, excludeRowIds: readonly number[] = []): Promise<OutboxEntry[]> {
+    const exclude =
+      excludeRowIds.length > 0 ? `WHERE id NOT IN (${excludeRowIds.map(() => '?').join(', ')}) ` : '';
     const rows = await this.storage.all<{
       id: number;
       revision: number;
@@ -725,8 +713,8 @@ export class LocalReplica {
       entity_id: string;
       fields: string;
     }>(
-      'SELECT id, revision, kind, entity, entity_id, fields FROM _outbox ORDER BY id ASC LIMIT ?',
-      [limit],
+      `SELECT id, revision, kind, entity, entity_id, fields FROM _outbox ${exclude}ORDER BY id ASC LIMIT ?`,
+      [...excludeRowIds, limit],
     );
     return rows.map((row) => {
       if (row.kind === 'delete') {

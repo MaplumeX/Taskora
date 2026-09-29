@@ -58,10 +58,23 @@ describe('sync PushRequestDto under the global ValidationPipe', () => {
     expect(dto.events).toHaveLength(1);
   });
 
-  it('still rejects unknown entities and unknown properties', async () => {
+  it('accepts unknown entities (rejected per event by the hub, protocol 1)', async () => {
+    const dto = await pipe.transform(
+      {
+        ...validBody,
+        events: [{ entity: 'widget', id: 'x', fields: {} }],
+        deletes: [{ entity: 'widget', ids: ['y'] }],
+      } as never,
+      { type: 'body', metatype: PushRequestDto },
+    );
+    expect(dto.events[0].entity).toBe('widget');
+    expect(dto.deletes?.[0].entity).toBe('widget');
+  });
+
+  it('still rejects malformed events and unknown properties', async () => {
     await expect(
       pipe.transform(
-        { ...validBody, events: [{ entity: 'bogus', id: 'x', fields: {} }] } as never,
+        { ...validBody, events: [{ entity: 42, id: 'x', fields: {} }] } as never,
         { type: 'body', metatype: PushRequestDto },
       ),
     ).rejects.toBeInstanceOf(BadRequestException);

@@ -24,7 +24,7 @@ V1/V2（`.scratch/local-first-v1`、`.scratch/local-first-v2`）交付了 Engine
 | # | Issue | 对应问题 | 优先级 |
 |---|---|---|---|
 | 01 | [合并后的确定性修复（跨字段不变量）](issues/01-merge-invariant-repair.md) | 1 | P0，本轮实现 |
-| 02 | [Engine 模式去掉乐观更新](issues/02-drop-optimistic-updates.md) | 4（短期） | P1 |
+| 02 | [Engine 模式的缓存更新：单一刷新来源与完整补丁](issues/02-drop-optimistic-updates.md) | 4（短期） | P1 |
 | 03 | [副本 schema 版本与同步协议版本](issues/03-schema-and-protocol-versioning.md) | 5 | P1 |
 | 04 | [领域规则共享包](issues/04-shared-domain-rules.md) | 3 | P2 |
 | 05 | [web 接入 Engine，退役 REST 写旁路](issues/05-web-on-engine.md) | 2 | P2（大） |

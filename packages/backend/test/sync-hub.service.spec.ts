@@ -147,6 +147,59 @@ describe('SyncHubService（合并器集成）', () => {
     );
   });
 
+  it('push 本 hub 不认识的实体：逐条拒绝并列出，其余照常合并（协议 1）', async () => {
+    mockPrisma.task.findUnique.mockResolvedValue(null);
+    mockPrisma.task.create.mockResolvedValue({ ...taskRow, title: '新任务' });
+
+    const result = await service.push(
+      USER,
+      [
+        { entity: 'widget', id: 'w-1', fields: { name: { value: 'x', hlc: stamp(1, 0, 'dev-a') } } },
+        {
+          entity: 'task',
+          id: 'task-1',
+          fields: { title: { value: '新任务', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') } },
+        },
+      ],
+      [{ entity: 'widget', ids: ['w-2'] }],
+    );
+
+    expect(result).toEqual({
+      acked: 1,
+      rejected: [
+        { kind: 'write', entity: 'widget', id: 'w-1', reason: 'unknown-entity' },
+        { kind: 'delete', entity: 'widget', id: 'w-2', reason: 'unknown-entity' },
+      ],
+    });
+    expect(mockPrisma.task.create).toHaveBeenCalledTimes(1);
+  });
+
+  it('push 带本 hub 不认识的字段：已认识的字段合并，未知字段列出', async () => {
+    mockPrisma.task.findUnique.mockResolvedValue(null);
+    mockPrisma.task.create.mockResolvedValue({ ...taskRow, title: '新任务' });
+
+    const result = await service.push(USER, [
+      {
+        entity: 'task',
+        id: 'task-1',
+        fields: {
+          title: { value: '新任务', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') },
+          energy: { value: 3, hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') },
+        },
+      },
+    ]);
+
+    expect(result).toEqual({
+      acked: 1,
+      rejected: [
+        { kind: 'write', entity: 'task', id: 'task-1', reason: 'unknown-fields', fields: ['energy'] },
+      ],
+    });
+    const createArgs = mockPrisma.task.create.mock.calls[0][0] as { data: Record<string, unknown> };
+    expect(createArgs.data.title).toBe('新任务');
+    expect(createArgs.data).not.toHaveProperty('energy');
+  });
+
   it('push 到已有实体：字段级合并，只有胜出字段进 UPDATE', async () => {
     const existingClocks = { title: stamp(1_000, 0, '0'), notes: stamp(1_000, 1, '0') };
     mockPrisma.task.findUnique.mockResolvedValue({

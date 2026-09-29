@@ -23,11 +23,10 @@ describe('ProjectHeadingsService — archive / unarchive', () => {
         updateMany: vi.fn(),
       },
       task: {
+        findMany: vi.fn().mockResolvedValue([]),
         updateMany: vi.fn(),
       },
-      $transaction: vi.fn(
-        async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma),
-      ),
+      $transaction: vi.fn(async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),
     } as unknown as InstanceType<typeof PrismaService>;
 
     service = new ProjectHeadingsService(mockPrisma);
@@ -62,9 +61,7 @@ describe('ProjectHeadingsService — archive / unarchive', () => {
   it('throws NotFoundException when archiving a non-existent heading', async () => {
     mockPrisma.projectHeading.findFirst.mockResolvedValue(null);
 
-    await expect(service.archive(userId, 'nonexistent')).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(service.archive(userId, 'nonexistent')).rejects.toThrow(NotFoundException);
     expect(mockPrisma.task.updateMany).not.toHaveBeenCalled();
     expect(mockPrisma.projectHeading.updateMany).not.toHaveBeenCalled();
   });
@@ -76,9 +73,7 @@ describe('ProjectHeadingsService — archive / unarchive', () => {
     });
     mockPrisma.project.findFirst.mockResolvedValue(null);
 
-    await expect(service.archive(userId, headingId)).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(service.archive(userId, headingId)).rejects.toThrow(NotFoundException);
   });
 
   it('completes all ACTIVE tasks and marks the heading COMPLETED', async () => {
@@ -91,22 +86,28 @@ describe('ProjectHeadingsService — archive / unarchive', () => {
     mockPrisma.projectHeading.findFirst
       .mockResolvedValueOnce({ id: headingId, projectId })
       .mockResolvedValueOnce(archivedHeading);
-    mockPrisma.task.updateMany.mockResolvedValue({ count: 3 });
+    mockPrisma.task.findMany.mockResolvedValue([
+      { id: 'active-1', status: 'ACTIVE', trashedAt: null },
+      { id: 'active-2', status: 'ACTIVE', trashedAt: null },
+      { id: 'done', status: 'COMPLETED', trashedAt: null },
+      { id: 'trashed', status: 'ACTIVE', trashedAt: new Date('2026-01-01T00:00:00Z') },
+    ]);
+    mockPrisma.task.updateMany.mockResolvedValue({ count: 2 });
     mockPrisma.projectHeading.updateMany.mockResolvedValue({ count: 1 });
 
     await service.archive(userId, headingId);
 
-    // ACTIVE tasks under the heading are completed
+    // 未了结、不在 Trash 的任务完成（清除提醒，与完成单个任务同一规则）
+    expect(mockPrisma.task.findMany).toHaveBeenCalledWith({
+      where: { userId, headingId },
+      select: { id: true, status: true, trashedAt: true },
+    });
     expect(mockPrisma.task.updateMany).toHaveBeenCalledWith({
-      where: {
-        userId,
-        headingId,
-        status: 'ACTIVE',
-        trashedAt: null,
-      },
+      where: { id: { in: ['active-1', 'active-2'] }, userId },
       data: {
         status: 'COMPLETED',
         settledAt: expect.any(Date),
+        reminderTime: null,
       },
     });
 
@@ -127,9 +128,7 @@ describe('ProjectHeadingsService — archive / unarchive', () => {
     });
     mockPrisma.projectHeading.updateMany.mockResolvedValue({ count: 0 });
 
-    await expect(service.archive(userId, headingId)).rejects.toThrow(
-      BadRequestException,
-    );
+    await expect(service.archive(userId, headingId)).rejects.toThrow(BadRequestException);
   });
 
   /* -------------------------------- unarchive -------------------------------- */
@@ -137,9 +136,7 @@ describe('ProjectHeadingsService — archive / unarchive', () => {
   it('throws NotFoundException when unarchiving a non-existent heading', async () => {
     mockPrisma.projectHeading.findFirst.mockResolvedValue(null);
 
-    await expect(service.unarchive(userId, 'nonexistent')).rejects.toThrow(
-      NotFoundException,
-    );
+    await expect(service.unarchive(userId, 'nonexistent')).rejects.toThrow(NotFoundException);
     expect(mockPrisma.task.updateMany).not.toHaveBeenCalled();
   });
 
@@ -176,8 +173,6 @@ describe('ProjectHeadingsService — archive / unarchive', () => {
     });
     mockPrisma.projectHeading.updateMany.mockResolvedValue({ count: 0 });
 
-    await expect(service.unarchive(userId, headingId)).rejects.toThrow(
-      BadRequestException,
-    );
+    await expect(service.unarchive(userId, headingId)).rejects.toThrow(BadRequestException);
   });
 });

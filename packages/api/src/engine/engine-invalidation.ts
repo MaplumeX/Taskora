@@ -13,7 +13,19 @@ export const INVALIDATION_BY_ENTITY: Record<SyncEntity, string[][]> = {
   project: [['projects'], ['project'], ['feed']],
   'project-heading': [['project-headings']],
   area: [['areas'], ['area'], ['feed']],
-  tag: [['tags'], ['tag'], ['tag-groups'], ['tasks'], ['projects'], ['areas'], ['feed']],
+  tag: [
+    ['tags'],
+    ['tag'],
+    ['tag-groups'],
+    ['tag-group'],
+    ['tasks'],
+    ['task'],
+    ['projects'],
+    ['project'],
+    ['areas'],
+    ['area'],
+    ['feed'],
+  ],
   'tag-group': [['tag-groups'], ['tag-group']],
 };
 

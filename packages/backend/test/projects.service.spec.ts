@@ -25,8 +25,7 @@ describe('ProjectsService', () => {
       },
       task: {
         updateMany: vi.fn(),
-        groupBy: vi.fn(),
-        aggregate: vi.fn(),
+        findMany: vi.fn().mockResolvedValue([]),
       },
       projectTag: {
         deleteMany: vi.fn(),
@@ -87,6 +86,9 @@ describe('ProjectsService', () => {
           scheduledDate: null,
           dueDate: null,
           bucket: ProjectBucket.ANYTIME,
+          status: ProjectStatus.ACTIVE,
+          completedAt: null,
+          trashedAt: null,
         },
         include: { tags: { include: { tag: true } } },
       });
@@ -125,14 +127,17 @@ describe('ProjectsService', () => {
       expect(mockPrisma.project.create).toHaveBeenCalledWith({
         data: {
           title: 'First Project',
-          notes: undefined,
-          areaId: undefined,
+          notes: null,
+          areaId: null,
           sortOrder: 0,
           userId,
           scheduledType: ScheduledType.NONE,
           scheduledDate: null,
           dueDate: null,
           bucket: ProjectBucket.ANYTIME,
+          status: ProjectStatus.ACTIVE,
+          completedAt: null,
+          trashedAt: null,
         },
         include: { tags: { include: { tag: true } } },
       });
@@ -148,12 +153,17 @@ describe('ProjectsService', () => {
         { id: 'project-2', title: 'B', notes: null, userId, sortOrder: 1, tags: [] },
       ];
       mockPrisma.project.findMany.mockResolvedValue(expected);
-      mockPrisma.task.groupBy
-        .mockResolvedValueOnce([
-          { projectId: 'project-1', _count: { _all: 5 } },
-          { projectId: 'project-2', _count: { _all: 0 } },
-        ])
-        .mockResolvedValueOnce([{ projectId: 'project-1', _count: { _all: 3 } }]);
+      // 进度计数：非 Trash 任务总数 / 已了结（完成 + 取消）数
+      mockPrisma.task.findMany.mockResolvedValue([
+        ...Array.from({ length: 2 }, () => ({
+          projectId: 'project-1',
+          status: 'ACTIVE',
+          trashedAt: null,
+        })),
+        { projectId: 'project-1', status: 'COMPLETED', trashedAt: null },
+        { projectId: 'project-1', status: 'COMPLETED', trashedAt: null },
+        { projectId: 'project-1', status: 'CANCELLED', trashedAt: null },
+      ]);
 
       const result = await service.findAll(userId);
 
@@ -189,9 +199,11 @@ describe('ProjectsService', () => {
         userId,
         tags: [],
       });
-      mockPrisma.task.aggregate
-        .mockResolvedValueOnce({ _count: { _all: 5 } })
-        .mockResolvedValueOnce({ _count: { _all: 2 } });
+      mockPrisma.task.findMany.mockResolvedValue([
+        ...Array.from({ length: 3 }, () => ({ projectId, status: 'ACTIVE', trashedAt: null })),
+        { projectId, status: 'COMPLETED', trashedAt: null },
+        { projectId, status: 'CANCELLED', trashedAt: null },
+      ]);
 
       const result = await service.findOne(userId, projectId);
 
@@ -216,12 +228,16 @@ describe('ProjectsService', () => {
       await expect(service.remove('user-1', 'nonexistent')).rejects.toThrow(NotFoundException);
     });
 
-    it('trashes project and cascades to下属 tasks', async () => {
+    it('trashes project and cascades to下属 tasks（已在 Trash 的任务不动）', async () => {
       const userId = 'user-1';
       const projectId = 'project-1';
       mockPrisma.project.findFirst.mockResolvedValue({ id: projectId, userId });
       mockPrisma.project.updateMany.mockResolvedValue({ count: 1 });
-      mockPrisma.task.updateMany.mockResolvedValue({ count: 2 });
+      mockPrisma.task.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.task.findMany.mockResolvedValue([
+        { id: 'task-1', trashedAt: null },
+        { id: 'task-2', trashedAt: new Date('2025-12-01T00:00:00Z') },
+      ]);
 
       const result = await service.remove(userId, projectId);
 
@@ -232,9 +248,11 @@ describe('ProjectsService', () => {
       expect(projCall.data.trashedAt).toBeInstanceOf(Date);
       expect(projCall.data).not.toHaveProperty('status');
       // task cascade updateMany
+      expect(mockPrisma.task.updateMany).toHaveBeenCalledTimes(1);
       const taskCall = mockPrisma.task.updateMany.mock.calls[0][0];
-      expect(taskCall.where).toEqual({ projectId, userId });
-      expect(taskCall.data.trashedAt).toBeInstanceOf(Date);
+      expect(taskCall.where).toEqual({ id: { in: ['task-1'] }, userId });
+      expect(taskCall.data.trashedAt).toEqual(projCall.data.trashedAt);
+      expect(taskCall.data.reminderTime).toBeNull();
       expect(taskCall.data).not.toHaveProperty('status');
       expect(taskCall.data).not.toHaveProperty('headingId');
       // transaction used
@@ -259,7 +277,11 @@ describe('ProjectsService', () => {
         trashedAt: cascadeTrashedAt,
       });
       mockPrisma.project.updateMany.mockResolvedValue({ count: 1 });
-      mockPrisma.task.updateMany.mockResolvedValue({ count: 2 });
+      mockPrisma.task.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.task.findMany.mockResolvedValue([
+        { id: 'task-1', trashedAt: new Date(cascadeTrashedAt) },
+        { id: 'task-2', trashedAt: new Date('2025-12-01T00:00:00Z') },
+      ]);
 
       const result = await service.restore(userId, projectId);
 
@@ -268,13 +290,10 @@ describe('ProjectsService', () => {
       expect(projCall.where).toEqual({ id: projectId, userId });
       expect(projCall.data.trashedAt).toBeNull();
       expect(projCall.data).not.toHaveProperty('status');
-      const taskCall = mockPrisma.task.updateMany.mock.calls[0][0];
       // 只捡回级联时间戳相同的任务；单独删掉（不同 trashedAt）的保持原状
-      expect(taskCall.where).toEqual({
-        projectId,
-        userId,
-        trashedAt: cascadeTrashedAt,
-      });
+      expect(mockPrisma.task.updateMany).toHaveBeenCalledTimes(1);
+      const taskCall = mockPrisma.task.updateMany.mock.calls[0][0];
+      expect(taskCall.where).toEqual({ id: { in: ['task-1'] }, userId });
       expect(taskCall.data.trashedAt).toBeNull();
       expect(taskCall.data).not.toHaveProperty('status');
       expect(taskCall.data).not.toHaveProperty('headingId');

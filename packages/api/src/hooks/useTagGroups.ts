@@ -9,6 +9,7 @@ import {
   updateTagGroup,
 } from '@/api/tag-groups.api';
 import { tagKeys } from './useTags';
+import { refreshAfterWrite } from './cache-patches';
 
 export const tagGroupKeys = {
   all: ['tag-groups'] as const,
@@ -27,7 +28,7 @@ export function useCreateTagGroup() {
   return useMutation({
     mutationFn: (data: CreateTagGroupDto) => createTagGroup(data),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: tagGroupKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: tagGroupKeys.all });
     },
   });
 }
@@ -38,8 +39,8 @@ export function useUpdateTagGroup() {
     mutationFn: ({ id, data }: { id: string; data: UpdateTagGroupDto }) =>
       updateTagGroup(id, data),
     onSuccess: (group) => {
-      void queryClient.invalidateQueries({ queryKey: tagGroupKeys.detail(group.id) });
-      void queryClient.invalidateQueries({ queryKey: tagGroupKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: tagGroupKeys.detail(group.id) });
+      refreshAfterWrite(queryClient, { queryKey: tagGroupKeys.all });
     },
   });
 }
@@ -49,9 +50,9 @@ export function useDeleteTagGroup() {
   return useMutation({
     mutationFn: (id: string) => deleteTagGroup(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: tagGroupKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: tagGroupKeys.all });
       // 组删除后标签的 tagGroupId 变 null，需刷新标签列表
-      void queryClient.invalidateQueries({ queryKey: tagKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: tagKeys.all });
     },
   });
 }

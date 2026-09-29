@@ -1,9 +1,11 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { subtaskStatusPatch } from '@taskora/engine';
 import { TaskStatus } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { registerCompacted } from '../sync/compact-registry';
 import { CreateSubtaskDto, UpdateSubtaskDto } from './dto/subtasks.dto';
 import { settledToCompletedAt } from '../tasks/task-dto.mapper';
+import { toPrismaData } from '../common/domain-storage';
 
 @Injectable()
 export class SubtasksService {
@@ -45,19 +47,10 @@ export class SubtasksService {
       throw new NotFoundException('Subtask not found');
     }
 
-    const data: {
-      title?: string;
-      status?: TaskStatus;
-      settledAt?: Date | null;
-    } = {};
+    const data: Record<string, unknown> = {};
     if (dto.title !== undefined) data.title = dto.title;
     if (dto.status !== undefined) {
-      data.status = dto.status;
-      if (dto.status === TaskStatus.COMPLETED || dto.status === TaskStatus.CANCELLED) {
-        data.settledAt = new Date();
-      } else {
-        data.settledAt = null;
-      }
+      Object.assign(data, toPrismaData(subtaskStatusPatch(dto.status, new Date().toISOString())));
     }
 
     const updated = await this.prisma.subtask.update({
@@ -93,10 +86,7 @@ export class SubtasksService {
 
     const updated = await this.prisma.subtask.update({
       where: { id },
-      data: {
-        status: TaskStatus.COMPLETED,
-        settledAt: new Date(),
-      },
+      data: toPrismaData(subtaskStatusPatch(TaskStatus.COMPLETED, new Date().toISOString())),
     });
     return settledToCompletedAt(updated);
   }
@@ -112,10 +102,7 @@ export class SubtasksService {
 
     const updated = await this.prisma.subtask.update({
       where: { id },
-      data: {
-        status: TaskStatus.ACTIVE,
-        settledAt: null,
-      },
+      data: toPrismaData(subtaskStatusPatch(TaskStatus.ACTIVE, new Date().toISOString())),
     });
     return settledToCompletedAt(updated);
   }
@@ -131,10 +118,7 @@ export class SubtasksService {
 
     const updated = await this.prisma.subtask.update({
       where: { id },
-      data: {
-        status: TaskStatus.CANCELLED,
-        settledAt: new Date(),
-      },
+      data: toPrismaData(subtaskStatusPatch(TaskStatus.CANCELLED, new Date().toISOString())),
     });
     return settledToCompletedAt(updated);
   }
@@ -150,10 +134,7 @@ export class SubtasksService {
 
     const updated = await this.prisma.subtask.update({
       where: { id },
-      data: {
-        status: TaskStatus.ACTIVE,
-        settledAt: null,
-      },
+      data: toPrismaData(subtaskStatusPatch(TaskStatus.ACTIVE, new Date().toISOString())),
     });
     return settledToCompletedAt(updated);
   }

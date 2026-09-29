@@ -12,6 +12,57 @@
 import type { EntityMergeState, FieldWrite } from './merger';
 import type { SyncEntity } from './entities';
 
+/**
+ * 同步协议版本（local-first-v3 issue 03）。线上格式或语义有不兼容变化时
+ * 加一；升级规则见 ADR-0007「协议版本」。
+ *
+ * 0：版本号出现之前的客户端（请求不带版本头）。
+ * 1：请求带版本头；hub 响应带版本信息；push 逐条拒绝不认识的实体 / 字段
+ *    （PushResponse.rejected），不再整批 400。
+ */
+export const SYNC_PROTOCOL_VERSION = 1;
+
+/**
+ * 请求头：协议版本（整数）与客户端标识（`desktop/1.2.3`）。用 header
+ * 而不是请求体字段：hub 的 DTO 校验拒绝未知字段，旧 hub 会把带新字段
+ * 的请求整批 400；GET（pull / bootstrap）也没有请求体。
+ */
+export const SYNC_PROTOCOL_HEADER = 'x-taskora-sync-protocol';
+export const SYNC_CLIENT_HEADER = 'x-taskora-client';
+
+/** hub 在每个同步响应里回报的版本信息（协议 1 起）。 */
+export interface HubVersionInfo {
+  /** hub 实现的协议版本。 */
+  protocolVersion?: number;
+  /** hub 仍接受的最低协议版本；低于它的请求得到 HTTP 426。 */
+  minProtocolVersion?: number;
+}
+
+/**
+ * hub 过旧、无法处理的一条变更（协议 1 起）：设备把它留在 Outbox 里，
+ * 以后的同步照常重推，hub 升级后自然接受——不丢、不卡住其余变更。
+ */
+export interface RejectedChange {
+  kind: 'write' | 'delete';
+  entity: string;
+  id: string;
+  /** unknown-entity：整条被拒；unknown-fields：已认识的字段已合并，fields 列出被丢弃的。 */
+  reason: 'unknown-entity' | 'unknown-fields';
+  fields?: string[];
+}
+
+/**
+ * 客户端协议版本低于 hub 的最低版本（HTTP 426）。同步停止、Outbox 保留，
+ * UI 提示升级；本地读写不受影响。
+ */
+export class SyncUpgradeRequiredError extends Error {
+  readonly name = 'SyncUpgradeRequiredError';
+
+  constructor(readonly minProtocolVersion?: number) {
+    super('同步协议版本过旧，请升级 Taskora');
+  }
+}
+
 /** Outbox 中的一条 Change Event：实体 + 字段级时间戳写。 */
 export interface OutboxEvent {
   entity: SyncEntity;
@@ -38,9 +89,11 @@ export interface PushRequest {
   deletes?: DeleteRequest[];
 }
 
-export interface PushResponse {
+export interface PushResponse extends HubVersionInfo {
   /** hub 接受（或已持有）的事件数。 */
   acked: number;
+  /** hub 无法处理的变更（协议 1 起；缺省即全部接受）。 */
+  rejected?: RejectedChange[];
   /**
    * hub 处理请求时的服务器时间（毫秒）。设备据此校准 HLC 墙钟，以 hub
    * 时间为各设备的共同基准（ADR-0007）。
@@ -74,7 +127,7 @@ export interface PullRequest {
   cursor: number;
 }
 
-export interface PullResponse {
+export interface PullResponse extends HubVersionInfo {
   changes: HubChange[];
   /** 本次覆盖到的最新 seq（含 resync 时为当前 seq）。 */
   cursor: number;
@@ -95,7 +148,7 @@ export interface SnapshotEntry extends EntityMergeState {
   id: string;
 }
 
-export interface BootstrapResponse {
+export interface BootstrapResponse extends HubVersionInfo {
   snapshot: SnapshotEntry[];
   cursor: number;
   /**

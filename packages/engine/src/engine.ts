@@ -26,7 +26,14 @@ import {
   synthPosition,
 } from './position';
 import type { SyncEntity, WireRow } from './entities';
-import type { DeleteRequest, OutboxEvent, SyncTransport } from './protocol';
+import {
+  SYNC_PROTOCOL_VERSION,
+  SyncUpgradeRequiredError,
+  type DeleteRequest,
+  type HubVersionInfo,
+  type OutboxEvent,
+  type SyncTransport,
+} from './protocol';
 import type { SqlStorage } from './storage';
 
 export interface EngineOptions {
@@ -119,11 +126,16 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
    * 调用 hub 并按其回报的服务器时间校准 HLC 墙钟：偏移 = 服务器时间 −
    * 请求往返的中点（NTP 式估计）。hub 未回报时不动。
    */
-  const calibrated = async <T extends { serverTime?: number }>(
+  const calibrated = async <T extends HubVersionInfo & { serverTime?: number }>(
     call: () => Promise<T>,
   ): Promise<T> => {
     const sentAt = replica.rawWallMs();
     const response = await call();
+    // 兜底：hub 声明的最低版本高于本端（正常情况下 hub 直接回 426，
+    // transport 抛同一个错误）。
+    if ((response.minProtocolVersion ?? 0) > SYNC_PROTOCOL_VERSION) {
+      throw new SyncUpgradeRequiredError(response.minProtocolVersion);
+    }
     const receivedAt = replica.rawWallMs();
     if (typeof response.serverTime === 'number' && receivedAt - sentAt <= MAX_CALIBRATION_RTT_MS) {
       await replica.calibrateWall(response.serverTime - (sentAt + receivedAt) / 2);
@@ -133,8 +145,11 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
 
   const flush = async (): Promise<void> => {
     const transport = requireTransport();
+    // hub 拒绝的条目（hub 过旧、不认识的实体 / 字段，协议 1 起）留在
+    // Outbox：本轮跳过继续推后面的，以后的同步重推，hub 升级后被接受。
+    const rejectedRowIds: number[] = [];
     for (;;) {
-      const batch = limitBatchBytes(await replica.takeOutbox());
+      const batch = limitBatchBytes(await replica.takeOutbox(500, rejectedRowIds));
       if (batch.length === 0) return;
       const events: OutboxEvent[] = [];
       const deletesByEntity = new Map<SyncEntity, string[]>();
@@ -151,14 +166,29 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
         entity,
         ids,
       }));
-      await calibrated(() =>
+      const response = await calibrated(() =>
         transport.push({
           deviceId: options.deviceId,
           events,
           ...(deletes.length > 0 ? { deletes } : {}),
         }),
       );
-      await replica.deleteOutbox(batch);
+      const rejected = new Set(
+        (response.rejected ?? []).map((item) => `${item.kind}:${item.entity}:${item.id}`),
+      );
+      const accepted: OutboxEntry[] = [];
+      for (const item of batch) {
+        const key =
+          item.kind === 'write'
+            ? `write:${item.event.entity}:${item.event.id}`
+            : `delete:${item.entity}:${item.id}`;
+        if (rejected.has(key)) rejectedRowIds.push(item.rowId);
+        else accepted.push(item);
+      }
+      if (rejected.size > 0) {
+        console.warn('[engine] hub 无法处理部分变更，保留在 Outbox 待 hub 升级后重推', response.rejected);
+      }
+      await replica.deleteOutbox(accepted);
     }
   };
 

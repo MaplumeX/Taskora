@@ -3,6 +3,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { CreateTagDto, TagResponseDto, UpdateTagDto } from '@taskora/shared';
 
 import { createTag, deleteTag, getTags, updateTag } from '@/api/tags.api';
+import {
+  TAG_EMBEDDING_ROOTS,
+  cancelRoots,
+  patchEmbeddedTag,
+  refreshAfterWrite,
+  restoreSnapshot,
+  snapshotRoots,
+} from './cache-patches';
 
 export const tagKeys = {
   all: ['tags'] as const,
@@ -26,6 +34,10 @@ function applyToTagInList(
   return list.map((t) => (t.id === tagId ? updater(t) : t));
 }
 
+// 标签列表之外，任务、项目、区域、feed 行、标签组里都嵌着标签芯片：
+// 更新 / 删除时一并修补并快照，失败时整体恢复（local-first-v3 issue 02）。
+const TAG_ROOTS = ['tags', ...TAG_EMBEDDING_ROOTS];
+
 // Helper: remove a tag from a list array
 function removeTagFromList(
   list: TagResponseDto[] | undefined,
@@ -33,17 +45,6 @@ function removeTagFromList(
 ): TagResponseDto[] | undefined {
   if (!list) return list;
   return list.filter((t) => t.id !== tagId);
-}
-
-// Restore snapshot to queries data (list caches)
-function restoreListSnapshot(
-  queryClient: ReturnType<typeof useQueryClient>,
-  queryKey: readonly string[],
-  snapshot: [readonly unknown[], unknown][],
-) {
-  for (const [key, data] of snapshot) {
-    queryClient.setQueryData(key as readonly string[], data);
-  }
 }
 
 export function useCreateTag() {
@@ -74,7 +75,7 @@ export function useCreateTag() {
     },
     onError: (_err, _data, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, tagKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
     },
     onSuccess: (tag, _data, ctx) => {
@@ -93,7 +94,7 @@ export function useCreateTag() {
       );
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: tagKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: tagKeys.all });
     },
   });
 }
@@ -103,39 +104,36 @@ export function useUpdateTag() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTagDto }) => updateTag(id, data),
     onMutate: async ({ id, data }) => {
-      await queryClient.cancelQueries({ queryKey: tagKeys.all });
-      const snapshot = queryClient.getQueriesData<TagResponseDto[]>({
-        queryKey: tagKeys.all,
-      });
+      await cancelRoots(queryClient, TAG_ROOTS);
+      const snapshot = snapshotRoots(queryClient, TAG_ROOTS);
       const detailSnapshot = queryClient.getQueryData<TagResponseDto>(
         tagKeys.detail(id),
       );
       const now = new Date().toISOString();
-      queryClient.setQueriesData<TagResponseDto[]>(
-        { queryKey: tagKeys.all },
-        (old) =>
-          applyToTagInList(old, id, (tag) => ({
-            ...tag,
-            ...data,
-            updatedAt: now,
-          })),
+      const apply = (tag: TagResponseDto) => ({ ...tag, ...data, updatedAt: now });
+      queryClient.setQueriesData<TagResponseDto[]>({ queryKey: tagKeys.all }, (old) =>
+        applyToTagInList(old, id, apply),
       );
       queryClient.setQueryData<TagResponseDto>(tagKeys.detail(id), (old) =>
-        old ? { ...old, ...data, updatedAt: now } : old,
+        old ? apply(old) : old,
       );
+      patchEmbeddedTag(queryClient, id, apply);
       return { snapshot, detailSnapshot, id };
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, tagKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(tagKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, { id }) => {
-      void queryClient.invalidateQueries({ queryKey: tagKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: tagKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: tagKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: tagKeys.all });
+      for (const root of TAG_EMBEDDING_ROOTS) {
+        refreshAfterWrite(queryClient, { queryKey: [root] });
+      }
     },
   });
 }
@@ -145,25 +143,25 @@ export function useDeleteTag() {
   return useMutation({
     mutationFn: (id: string) => deleteTag(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: tagKeys.all });
-      const snapshot = queryClient.getQueriesData<TagResponseDto[]>({
-        queryKey: tagKeys.all,
-      });
-      queryClient.setQueriesData<TagResponseDto[]>(
-        { queryKey: tagKeys.all },
-        (old) => removeTagFromList(old, id),
+      await cancelRoots(queryClient, TAG_ROOTS);
+      const snapshot = snapshotRoots(queryClient, TAG_ROOTS);
+      queryClient.setQueriesData<TagResponseDto[]>({ queryKey: tagKeys.all }, (old) =>
+        removeTagFromList(old, id),
       );
+      patchEmbeddedTag(queryClient, id, () => null);
       return { snapshot };
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, tagKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: tagKeys.all });
-      // 任务上的标签徽章也需要刷新
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
+      refreshAfterWrite(queryClient, { queryKey: tagKeys.all });
+      // 嵌入的标签芯片也需要刷新
+      for (const root of TAG_EMBEDDING_ROOTS) {
+        refreshAfterWrite(queryClient, { queryKey: [root] });
+      }
     },
   });
 }

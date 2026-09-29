@@ -9,6 +9,7 @@ import {
   reorderAreas,
   updateArea,
 } from '@/api/areas.api';
+import { refreshAfterWrite, restoreSnapshot } from './cache-patches';
 
 export const areaKeys = {
   all: ['areas'] as const,
@@ -41,17 +42,6 @@ function removeAreaFromList(
   return list.filter((a) => a.id !== areaId);
 }
 
-// Restore snapshot to queries data (list caches)
-function restoreListSnapshot(
-  queryClient: ReturnType<typeof useQueryClient>,
-  queryKey: readonly string[],
-  snapshot: [readonly unknown[], unknown][],
-) {
-  for (const [key, data] of snapshot) {
-    queryClient.setQueryData(key as readonly string[], data);
-  }
-}
-
 export function useCreateArea() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -80,7 +70,7 @@ export function useCreateArea() {
     },
     onError: (_err, _data, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, areaKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
     },
     onSuccess: (area, _data, ctx) => {
@@ -99,7 +89,7 @@ export function useCreateArea() {
       queryClient.setQueryData(areaKeys.detail(area.id), area);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: areaKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: areaKeys.all });
     },
   });
 }
@@ -133,15 +123,15 @@ export function useUpdateArea() {
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, areaKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(areaKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, { id }) => {
-      void queryClient.invalidateQueries({ queryKey: areaKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: areaKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: areaKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: areaKeys.all });
     },
   });
 }
@@ -170,7 +160,7 @@ export function useReorderAreas() {
       void queryClient.invalidateQueries({ queryKey: areaKeys.all });
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: areaKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: areaKeys.all });
     },
   });
 }
@@ -192,11 +182,11 @@ export function useDeleteArea() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, areaKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: areaKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: areaKeys.all });
     },
   });
 }

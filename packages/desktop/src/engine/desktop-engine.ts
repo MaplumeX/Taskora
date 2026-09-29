@@ -31,7 +31,12 @@ import {
   createEngineInvalidator,
   requestTaskReveal,
 } from '@taskora/api';
-import { openEngine, type Engine } from '@taskora/engine';
+import {
+  openEngine,
+  ReplicaSchemaTooNewError,
+  SyncUpgradeRequiredError,
+  type Engine,
+} from '@taskora/engine';
 import { createReminderCoordinator, type ReminderCoordinator } from '@taskora/api';
 
 import { createHttpSyncTransport, registerDevice } from './http-transport';
@@ -53,6 +58,11 @@ let unsubscribeAuth: (() => void) | null = null;
 let syncInFlight: Promise<boolean> | null = null;
 /** 在飞期间又有触发（SSE 提示、本地写）：结束后立即补跑一轮，而不是等下个周期。 */
 let syncRequested = false;
+/**
+ * hub 要求更高的同步协议版本（HTTP 426，local-first-v3 issue 03）：停止
+ * 同步直到安装新版本（重新登录会重新尝试）。本地读写照常，Outbox 保留。
+ */
+let upgradeRequired = false;
 /** Reminders（reminders spec）：runtime 模式调度器，随 Engine 生命周期启停。 */
 let reminderCoordinator: ReminderCoordinator | null = null;
 let unsubscribeReminderActions: (() => void) | null = null;
@@ -162,7 +172,9 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     resetBackends();
     setEventStreamCacheSurgery(true);
     engine = null;
-    setSyncStatus('idle');
+    // 副本由更新版本的 Taskora 写入（降级安装）：不打开它，在线走 REST，
+    // 并提示升级——本地未同步的编辑留在副本里，等升级后送出。
+    setSyncStatus(error instanceof ReplicaSchemaTooNewError ? 'upgrade-required' : 'idle');
   }
 }
 
@@ -182,14 +194,8 @@ function stopEngine(): void {
   // 退回 REST 后端：恢复 SSE 缓存手术（web 同款失效路径）
   setEventStreamCacheSurgery(true);
   setSyncStatus('idle');
-  if (syncTimer !== null) {
-    clearInterval(syncTimer);
-    syncTimer = null;
-  }
-  if (debounceTimer !== null) {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-  }
+  upgradeRequired = false;
+  stopSyncTriggers();
   unsubscribeRemoteChange?.();
   unsubscribeRemoteChange = null;
   void engine?.close().catch(() => undefined);
@@ -216,9 +222,21 @@ function stopReminderCoordinator(): void {
   reminderCoordinator = null;
 }
 
+/** 停掉周期与写后防抖同步（登出 / 需要升级）。 */
+function stopSyncTriggers(): void {
+  if (syncTimer !== null) {
+    clearInterval(syncTimer);
+    syncTimer = null;
+  }
+  if (debounceTimer !== null) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+}
+
 /** flush + pull；并发调用合并为一个在飞任务。成败驱动同步指示器（V2）。 */
 function syncNow(): Promise<boolean> {
-  if (!engine) return Promise.resolve(false);
+  if (!engine || upgradeRequired) return Promise.resolve(false);
   if (syncInFlight) {
     syncRequested = true;
     return syncInFlight;
@@ -231,7 +249,13 @@ function syncNow(): Promise<boolean> {
       setSyncStatus('synced');
       return true;
     })
-    .catch(async () => {
+    .catch(async (error: unknown) => {
+      if (error instanceof SyncUpgradeRequiredError) {
+        upgradeRequired = true;
+        stopSyncTriggers();
+        setSyncStatus('upgrade-required', await engine!.pendingCount());
+        return false;
+      }
       // 断网/服务器维护：静默退避，等下个时机；离线·N 条待同步。
       // 不用 navigator.onLine：服务器不可达不应被假在线掩盖。
       setSyncStatus('offline', await engine!.pendingCount());
@@ -253,7 +277,7 @@ function syncNow(): Promise<boolean> {
  */
 async function retryUntilFirstSync(): Promise<void> {
   let delayMs = 2_000;
-  while (engine && (await engine.cursor()) === 0) {
+  while (engine && !upgradeRequired && (await engine.cursor()) === 0) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
     if (!engine) return;
     if (await syncNow()) return;
