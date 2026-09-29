@@ -19,7 +19,12 @@ import {
   type ReplicaRow,
 } from './replica';
 import { HybridClock } from './hlc';
-import { positionBetween, rebalancePositions, synthPosition } from './position';
+import {
+  MAX_POSITION_LENGTH,
+  positionBetween,
+  rebalanceSegments,
+  synthPosition,
+} from './position';
 import type { SyncEntity, WireRow } from './entities';
 import type { DeleteRequest, OutboxEvent, SyncTransport } from './protocol';
 import type { SqlStorage } from './storage';
@@ -180,22 +185,18 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
   };
 
   /**
-   * Position re-balance（ADR-0007）：带 Position 的实体出现超长键
-   * （反复插队的痕迹）时，为整组重新分配短小等距键并作为普通字段写
-   * 入（走 LWW，推送 hub）。仅在真正膨胀时触发，平时零成本。
+   * Position re-balance（ADR-0007）：出现超长键（反复插队的痕迹）时，
+   * 只重排膨胀键所在的那一段，作为普通字段写入（走 LWW，推送 hub）。
+   * 每次同步都会跑：先在 SQLite 里计数，平时不传输任何行；真有膨胀时
+   * 也只取 id / position 两列。
    */
   const rebalanceIfInflated = async (): Promise<void> => {
     for (const entity of ['task', 'project', 'tag'] as SyncEntity[]) {
-      const rows = await replica.list(entity);
-      const keys = rows
-        .map((row) => row.fields.position)
-        .filter((key): key is string => typeof key === 'string');
-      const rebalanced = rebalancePositions(keys);
-      if (!rebalanced) continue;
-      const withPosition = rows.filter((row) => typeof row.fields.position === 'string');
+      if ((await replica.countInflatedPositions(entity, MAX_POSITION_LENGTH)) === 0) continue;
+      const changes = rebalanceSegments(await replica.positionKeys(entity));
       await replica.updateMany(
         entity,
-        withPosition.map((row, index) => ({ id: row.id, patch: { position: rebalanced[index] } })),
+        changes.map(({ id, position }) => ({ id, patch: { position } })),
       );
     }
   };

@@ -313,6 +313,24 @@ export class LocalReplica {
     });
   }
 
+  /** 位次长度超过 maxLength 的行数（SQL 内计数，不传输行）。 */
+  async countInflatedPositions(entity: SyncEntity, maxLength: number): Promise<number> {
+    await this.readGate();
+    const rows = await this.storage.all<{ count: number }>(
+      `SELECT COUNT(*) AS count FROM ${entityDef(entity).table} WHERE length(position) > ?`,
+      [maxLength],
+    );
+    return rows[0]?.count ?? 0;
+  }
+
+  /** 按位次升序的 { id, position }（只取两列，re-balance 用）。 */
+  async positionKeys(entity: SyncEntity): Promise<Array<{ id: string; position: string }>> {
+    await this.readGate();
+    return this.storage.all<{ id: string; position: string }>(
+      `SELECT id, position FROM ${entityDef(entity).table} WHERE position IS NOT NULL ORDER BY position ASC`,
+    );
+  }
+
   // ---------- 本地写（含 Delete Request，ADR-0008） ----------
 
   /**

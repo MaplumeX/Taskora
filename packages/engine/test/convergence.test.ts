@@ -1215,3 +1215,33 @@ describe('设备时钟按 hub 时间校准（ADR-0007）', () => {
     await honest.close();
   });
 });
+
+describe('同步时的局部 re-balance', () => {
+  it('只改写膨胀的那一行，其余行不进 Outbox', async () => {
+    const hub = new InMemorySyncHub();
+    const engine = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'A',
+      transport: hub.transportFor(USER),
+    });
+    await engine.sync();
+    for (const position of ['a0', 'a1', 'a2', 'a3']) {
+      await createTask(engine, position, { position });
+    }
+    const inflated = await createTask(engine, 'inflated', { position: 'a1' + 'V'.repeat(30) });
+    await engine.sync(); // flush → pull → re-balance（写入留待下一轮推送）
+    expect(await engine.pendingCount()).toBe(1);
+    const fixed = (await engine.get('task', inflated))!.fields.position as string;
+    expect(fixed.length).toBeLessThanOrEqual(24);
+    expect((await engine.list('task')).map((row) => row.fields.title)).toEqual([
+      'a0',
+      'a1',
+      'inflated',
+      'a2',
+      'a3',
+    ]);
+    await engine.sync();
+    expect(await engine.pendingCount()).toBe(0);
+    await engine.close();
+  });
+});

@@ -259,6 +259,63 @@ export function rebalancePositions(
   return positionsBetween(null, null, keys.length);
 }
 
+/** Position 超过此长度视为膨胀（反复插队的痕迹），需要局部 re-balance。 */
+export const MAX_POSITION_LENGTH = 24;
+
+/**
+ * 局部 re-balance：只重排膨胀键所在的那一段（CONTEXT.md：Position 需要
+ * 后台偶尔 re-balance 防字符串膨胀）。
+ *
+ * ordered 为按 Position 升序的全部行。每段连续的超长键取其前后的正常
+ * 键为界，在两者之间生成等距短键；若界限太近、生成的键仍然超长，就
+ * 向两侧扩大窗口（把邻居也一起重排），直到键足够短或覆盖整表。
+ * 顺序保持不变，窗口外的行一律不动——不再因为一个膨胀键改写整张表。
+ *
+ * 返回需要写入的 { id, position }。
+ */
+export function rebalanceSegments(
+  ordered: Array<{ id: string; position: string }>,
+  maxLength: number = MAX_POSITION_LENGTH,
+): Array<{ id: string; position: string }> {
+  const n = ordered.length;
+  const changes: Array<{ id: string; position: string }> = [];
+  let index = 0;
+  while (index < n) {
+    if (ordered[index].position.length <= maxLength) {
+      index += 1;
+      continue;
+    }
+    let end = index;
+    while (end < n && ordered[end].position.length > maxLength) end += 1;
+    // 窗口 (lo, hi)：lo / hi 是保持不动的界（-1 / n 表示两端开放）
+    let lo = index - 1;
+    let hi = end;
+    let keys: string[] | null = null;
+    for (;;) {
+      const lower = lo >= 0 ? ordered[lo].position : null;
+      const upper = hi < n ? ordered[hi].position : null;
+      try {
+        const candidate = positionsBetween(lower, upper, hi - lo - 1);
+        if (candidate.every((key) => key.length <= maxLength)) keys = candidate;
+      } catch {
+        // 界限非严格递增（如重复键）：扩大窗口
+      }
+      if (keys || (lo < 0 && hi >= n)) break;
+      if (lo >= 0) lo -= 1;
+      if (hi < n) hi += 1;
+    }
+    // 覆盖整表仍不够短（极端情况）：接受整表等距键
+    keys ??= positionsBetween(null, null, n);
+    const start = keys.length === n ? 0 : lo + 1;
+    for (let k = 0; k < keys.length; k += 1) {
+      const row = ordered[start + k];
+      if (row.position !== keys[k]) changes.push({ id: row.id, position: keys[k] });
+    }
+    index = start + keys.length;
+  }
+  return changes;
+}
+
 /**
  * 按目标顺序重排时，只为「必须移动」的行分配新 Position（CONTEXT.md：
  * 插队只需在两个邻居间生成新串，无需重排他人）。

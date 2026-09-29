@@ -1,8 +1,10 @@
 import {
   BASE_62_DIGITS,
+  MAX_POSITION_LENGTH,
   positionBetween,
   positionsBetween,
   rebalancePositions,
+  rebalanceSegments,
   repositionMinimal,
 } from './position';
 
@@ -114,5 +116,64 @@ describe('repositionMinimal', () => {
     expect(apply(withNull).sorted).toEqual(['a', 'x', 'b']);
     const reversed = [...rows].reverse();
     expect(apply(reversed).sorted).toEqual(['f', 'e', 'd', 'c', 'b', 'a']);
+  });
+});
+
+describe('rebalanceSegments', () => {
+  const apply = (ordered: Array<{ id: string; position: string }>) => {
+    const changes = rebalanceSegments(ordered);
+    const next = new Map(ordered.map((row) => [row.id, row.position]));
+    for (const change of changes) next.set(change.id, change.position);
+    const sorted = [...next].sort((a, b) => (a[1] < b[1] ? -1 : 1)).map(([id]) => id);
+    return { changes, next, sorted };
+  };
+  const long = (prefix: string) => prefix + 'V'.repeat(MAX_POSITION_LENGTH);
+
+  it('没有膨胀键时不写任何行', () => {
+    const rows = ['a0', 'a1', 'a2'].map((position, index) => ({ id: `r${index}`, position }));
+    expect(rebalanceSegments(rows)).toEqual([]);
+  });
+
+  it('只重排膨胀键本身，两侧邻居不动', () => {
+    const rows = [
+      { id: 'a', position: 'a0' },
+      { id: 'b', position: long('a0') },
+      { id: 'c', position: 'a1' },
+      { id: 'd', position: 'a2' },
+    ];
+    const { changes, next, sorted } = apply(rows);
+    expect(changes.map((change) => change.id)).toEqual(['b']);
+    expect(next.get('b')!.length).toBeLessThanOrEqual(MAX_POSITION_LENGTH);
+    expect(sorted).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('连续一段膨胀键（含表头表尾）保持顺序', () => {
+    const rows = [
+      { id: 'a', position: long('Zz') },
+      { id: 'b', position: long('Zz' + 'W') },
+      { id: 'c', position: 'a0' },
+      { id: 'd', position: long('a0') },
+      { id: 'e', position: long('a0W') },
+    ];
+    const { changes, next, sorted } = apply(rows);
+    expect(changes.map((change) => change.id).sort()).toEqual(['a', 'b', 'd', 'e']);
+    expect([...next.values()].every((key) => key.length <= MAX_POSITION_LENGTH)).toBe(true);
+    expect(sorted).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
+
+  it('邻居太近时向两侧扩大窗口，窗口外不动', () => {
+    const near = 'a0' + 'V'.repeat(MAX_POSITION_LENGTH - 3);
+    const rows = [
+      { id: 'far', position: 'Zz' },
+      { id: 'lo', position: near },
+      { id: 'x', position: near + 'V' + 'V'.repeat(MAX_POSITION_LENGTH) },
+      { id: 'hi', position: near + 'W' },
+      { id: 'end', position: 'b0' },
+    ];
+    const { next, sorted } = apply(rows);
+    expect(next.get('far')).toBe('Zz');
+    expect(next.get('end')).toBe('b0');
+    expect([...next.values()].every((key) => key.length <= MAX_POSITION_LENGTH)).toBe(true);
+    expect(sorted).toEqual(['far', 'lo', 'x', 'hi', 'end']);
   });
 });
