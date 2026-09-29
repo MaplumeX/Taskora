@@ -117,6 +117,8 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     // 恢复后项目处于未删状态：项目再入 Trash（级联 now2）期间，任务被
     // 单独捡回又单独删除（时间戳 now3 ≠ now2）→ 恢复项目时不应捡回它
     await projects.deleteProject(project.id);
+    // 级联判定按 trashedAt 时间戳相等：保证 now3 与 now2 不落在同一毫秒
+    await new Promise((resolve) => setTimeout(resolve, 2));
     await tasks.restoreTask(taskId);
     await tasks.deleteTask(taskId);
     await projects.restoreProject(project.id);

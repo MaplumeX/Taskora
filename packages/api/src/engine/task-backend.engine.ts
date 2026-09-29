@@ -486,14 +486,16 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     },
 
     async reorderSubtasks(taskId: string, orderedIds: string[]): Promise<void> {
-      await Promise.all(
-        orderedIds.map(async (id, index) => {
-          const row = await engine.get('subtask', id);
-          // 与 reorderTasks 同惯例：顺序未变的行不动，控制 Outbox 体积
-          if (row && row.fields.taskId === taskId && row.fields.sortOrder !== index) {
-            await engine.update('subtask', id, { sortOrder: index });
-          }
-        }),
+      // 与 reorderTasks 同惯例：顺序未变的行不动，一个事务一次通知
+      const rows = await engine.list('subtask', { where: { taskId } });
+      const sortOrderOf = new Map(rows.map((row) => [row.id, row.fields.sortOrder]));
+      await engine.updateMany(
+        'subtask',
+        orderedIds.flatMap((id, index) =>
+          sortOrderOf.has(id) && sortOrderOf.get(id) !== index
+            ? [{ id, patch: { sortOrder: index } }]
+            : [],
+        ),
       );
     },
 

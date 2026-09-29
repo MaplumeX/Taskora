@@ -97,7 +97,10 @@ export function createEngineProjectHeadingBackend(
       // 生命周期），物理删除 heading（Delete Request，ADR-0008）。
       const now = new Date().toISOString();
       const tasks = await tasksUnderHeading(id);
-      await Promise.all(tasks.map((row) => engine.update('task', row.id, { trashedAt: now })));
+      await engine.updateMany(
+        'task',
+        tasks.map((row) => ({ id: row.id, patch: { trashedAt: now } })),
+      );
       await engine.delete('project-heading', [id]);
     },
 
@@ -128,8 +131,9 @@ export function createEngineProjectHeadingBackend(
       });
 
       const tasks = await tasksUnderHeading(id);
-      await Promise.all(
-        tasks.map((row) => engine.update('task', row.id, { projectId, headingId: null })),
+      await engine.updateMany(
+        'task',
+        tasks.map((row) => ({ id: row.id, patch: { projectId, headingId: null } })),
       );
       await engine.delete('project-heading', [id]);
 
