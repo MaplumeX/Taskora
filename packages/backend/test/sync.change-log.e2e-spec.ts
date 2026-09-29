@@ -20,7 +20,7 @@ const prisma = testPrismaService();
 
 function newHub() {
   const log = new PrismaSyncChangeLog(prisma);
-  return { log, hub: new SyncHubService(prisma, log, undefined as never) };
+  return { log, hub: new SyncHubService(prisma, log) };
 }
 
 function areaEvent(id: string, counter: number): OutboxEvent {
@@ -106,7 +106,7 @@ e2eDescribe('PrismaSyncChangeLog（真实 Postgres）', () => {
 
     await device.pull();
     expect(await device.cursor()).toBe(await log.currentSeq(USER));
-    expect(device.isCompacted('task', `gone-${total - 1}`)).toBe(true);
+    expect(await device.isCompacted('task', `gone-${total - 1}`)).toBe(true);
     await device.close();
   });
 

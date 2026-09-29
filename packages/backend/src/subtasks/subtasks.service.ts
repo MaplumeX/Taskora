@@ -1,18 +1,35 @@
+import { randomUUID } from 'node:crypto';
+
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { subtaskStatusPatch } from '@taskora/engine';
 import { TaskStatus } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
-import { registerCompacted } from '../sync/compact-registry';
+import { SyncHubService } from '../sync/sync-hub.service';
 import { CreateSubtaskDto, UpdateSubtaskDto } from './dto/subtasks.dto';
 import { settledToCompletedAt } from '../tasks/task-dto.mapper';
-import { toPrismaData } from '../common/domain-storage';
+import { toWireFields } from '../common/domain-storage';
 
+/** Subtask 的 REST 写路径：写入经 Sync Hub 的合并器（虚拟设备 0）。 */
 @Injectable()
 export class SubtasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly hub: SyncHubService,
+  ) {}
 
-  async create(userId: string, taskId: string, dto: CreateSubtaskDto) {
-    // Validate task ownership
+  /** 读本用户的 Subtask（经父 Task 认领），不存在即 404。 */
+  private async requireSubtask(userId: string, id: string) {
+    const subtask = await this.prisma.subtask.findFirst({
+      where: { id },
+      include: { task: { select: { userId: true } } },
+    });
+    if (!subtask || subtask.task.userId !== userId) {
+      throw new NotFoundException('Subtask not found');
+    }
+    return subtask;
+  }
+
+  private async requireTask(userId: string, taskId: string) {
     const task = await this.prisma.task.findFirst({
       where: { id: taskId, userId },
       select: { id: true },
@@ -20,134 +37,75 @@ export class SubtasksService {
     if (!task) {
       throw new NotFoundException('Task not found');
     }
+  }
+
+  /** 写一组字段并返回写后的 DTO（settledAt → completedAt）。 */
+  private write(userId: string, id: string, fields: Record<string, unknown>) {
+    return this.hub.writeAsHub(userId, async (batch) => {
+      await batch.write('subtask', id, fields);
+      return settledToCompletedAt(await batch.tx.subtask.findUniqueOrThrow({ where: { id } }));
+    });
+  }
+
+  async create(userId: string, taskId: string, dto: CreateSubtaskDto) {
+    await this.requireTask(userId, taskId);
 
     // Compute next sortOrder (max + 1)
     const max = await this.prisma.subtask.aggregate({
       where: { taskId },
       _max: { sortOrder: true },
     });
-    const sortOrder = (max._max.sortOrder ?? -1) + 1;
-
-    const created = await this.prisma.subtask.create({
-      data: {
-        title: dto.title,
-        taskId,
-        sortOrder,
-      },
+    return this.write(userId, randomUUID(), {
+      title: dto.title,
+      status: TaskStatus.ACTIVE,
+      settledAt: null,
+      sortOrder: (max._max.sortOrder ?? -1) + 1,
+      taskId,
     });
-    return settledToCompletedAt(created);
   }
 
   async update(userId: string, id: string, dto: UpdateSubtaskDto) {
-    const subtask = await this.prisma.subtask.findFirst({
-      where: { id },
-      include: { task: { select: { userId: true } } },
-    });
-    if (!subtask || subtask.task.userId !== userId) {
-      throw new NotFoundException('Subtask not found');
-    }
-
-    const data: Record<string, unknown> = {};
-    if (dto.title !== undefined) data.title = dto.title;
+    await this.requireSubtask(userId, id);
+    const fields: Record<string, unknown> = {};
+    if (dto.title !== undefined) fields.title = dto.title;
     if (dto.status !== undefined) {
-      Object.assign(data, toPrismaData(subtaskStatusPatch(dto.status, new Date().toISOString())));
+      Object.assign(fields, toWireFields(subtaskStatusPatch(dto.status, new Date().toISOString())));
     }
-
-    const updated = await this.prisma.subtask.update({
-      where: { id },
-      data,
-    });
-    return settledToCompletedAt(updated);
+    return this.write(userId, id, fields);
   }
 
   async remove(userId: string, id: string) {
-    const subtask = await this.prisma.subtask.findFirst({
-      where: { id },
-      include: { task: { select: { userId: true } } },
-    });
-    if (!subtask || subtask.task.userId !== userId) {
-      throw new NotFoundException('Subtask not found');
-    }
-
-    await this.prisma.$transaction(async (tx) => {
-      await registerCompacted(tx, userId, 'subtask', [id]);
-      await tx.subtask.delete({ where: { id } });
-    });
+    await this.requireSubtask(userId, id);
+    await this.hub.writeAsHub(userId, (batch) => batch.delete('subtask', [id]));
   }
 
   async complete(userId: string, id: string) {
-    const subtask = await this.prisma.subtask.findFirst({
-      where: { id },
-      include: { task: { select: { userId: true } } },
-    });
-    if (!subtask || subtask.task.userId !== userId) {
-      throw new NotFoundException('Subtask not found');
-    }
-
-    const updated = await this.prisma.subtask.update({
-      where: { id },
-      data: toPrismaData(subtaskStatusPatch(TaskStatus.COMPLETED, new Date().toISOString())),
-    });
-    return settledToCompletedAt(updated);
+    return this.setStatus(userId, id, TaskStatus.COMPLETED);
   }
 
   async uncomplete(userId: string, id: string) {
-    const subtask = await this.prisma.subtask.findFirst({
-      where: { id },
-      include: { task: { select: { userId: true } } },
-    });
-    if (!subtask || subtask.task.userId !== userId) {
-      throw new NotFoundException('Subtask not found');
-    }
-
-    const updated = await this.prisma.subtask.update({
-      where: { id },
-      data: toPrismaData(subtaskStatusPatch(TaskStatus.ACTIVE, new Date().toISOString())),
-    });
-    return settledToCompletedAt(updated);
+    return this.setStatus(userId, id, TaskStatus.ACTIVE);
   }
 
   async cancel(userId: string, id: string) {
-    const subtask = await this.prisma.subtask.findFirst({
-      where: { id },
-      include: { task: { select: { userId: true } } },
-    });
-    if (!subtask || subtask.task.userId !== userId) {
-      throw new NotFoundException('Subtask not found');
-    }
-
-    const updated = await this.prisma.subtask.update({
-      where: { id },
-      data: toPrismaData(subtaskStatusPatch(TaskStatus.CANCELLED, new Date().toISOString())),
-    });
-    return settledToCompletedAt(updated);
+    return this.setStatus(userId, id, TaskStatus.CANCELLED);
   }
 
   async uncancel(userId: string, id: string) {
-    const subtask = await this.prisma.subtask.findFirst({
-      where: { id },
-      include: { task: { select: { userId: true } } },
-    });
-    if (!subtask || subtask.task.userId !== userId) {
-      throw new NotFoundException('Subtask not found');
-    }
+    return this.setStatus(userId, id, TaskStatus.ACTIVE);
+  }
 
-    const updated = await this.prisma.subtask.update({
-      where: { id },
-      data: toPrismaData(subtaskStatusPatch(TaskStatus.ACTIVE, new Date().toISOString())),
-    });
-    return settledToCompletedAt(updated);
+  private async setStatus(userId: string, id: string, status: TaskStatus) {
+    await this.requireSubtask(userId, id);
+    return this.write(
+      userId,
+      id,
+      toWireFields(subtaskStatusPatch(status, new Date().toISOString())),
+    );
   }
 
   async reorder(userId: string, taskId: string, orderedIds: string[]) {
-    // Validate task ownership
-    const task = await this.prisma.task.findFirst({
-      where: { id: taskId, userId },
-      select: { id: true },
-    });
-    if (!task) {
-      throw new NotFoundException('Task not found');
-    }
+    await this.requireTask(userId, taskId);
 
     // Validate all subtask ids belong to this task
     const owned = await this.prisma.subtask.findMany({
@@ -159,13 +117,10 @@ export class SubtasksService {
       throw new NotFoundException('Subtask not found');
     }
 
-    await this.prisma.$transaction(
-      orderedIds.map((id, index) =>
-        this.prisma.subtask.update({
-          where: { id },
-          data: { sortOrder: index },
-        }),
-      ),
-    );
+    await this.hub.writeAsHub(userId, async (batch) => {
+      for (const [index, id] of orderedIds.entries()) {
+        await batch.write('subtask', id, { sortOrder: index });
+      }
+    });
   }
 }

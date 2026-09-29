@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { Prisma } from '@prisma/client';
 
-import { formatHlc, type OutboxEvent } from '@taskora/engine';
-import type { ChangeEvent } from '@taskora/shared';
+import { formatHlc } from '@taskora/engine';
 
 import { PrismaService } from '../src/prisma/prisma.service';
-import { ChangeEventHub } from '../src/events/change-event-hub.service';
 import { InMemorySyncChangeLog } from '../src/sync/in-memory-sync-change-log';
 import { SyncHubService } from '../src/sync/sync-hub.service';
 
@@ -42,7 +41,6 @@ function stamp(wallMs: number, counter: number, deviceId: string) {
 describe('SyncHubService（合并器集成）', () => {
   let service: SyncHubService;
   let buffer: InMemorySyncChangeLog;
-  let changeEventHub: ChangeEventHub;
   let mockPrisma: {
     task: Record<string, ReturnType<typeof vi.fn>>;
     $transaction: ReturnType<typeof vi.fn>;
@@ -52,9 +50,7 @@ describe('SyncHubService（合并器集成）', () => {
 
   function build() {
     buffer = new InMemorySyncChangeLog();
-    changeEventHub = new ChangeEventHub();
-    service = new SyncHubService(mockPrisma as unknown as PrismaService, buffer, changeEventHub);
-    service.onModuleInit();
+    service = new SyncHubService(mockPrisma as unknown as PrismaService, buffer);
   }
 
   beforeEach(() => {
@@ -98,7 +94,7 @@ describe('SyncHubService（合并器集成）', () => {
     build();
   });
 
-  it('push 新实体：create 携带合并列 + fieldClocks，updatedAt 兑底不超过最大时钟；落库后按 wire 视图回填摘要', async () => {
+  it('push 新实体：create 携带合并列 + fieldClocks，updatedAt 兑底不超过最大时钟；不再回填摘要', async () => {
     const createdRow = {
       ...taskRow,
       title: '新任务',
@@ -129,22 +125,9 @@ describe('SyncHubService（合并器集成）', () => {
     // 补丁未携带 updatedAt → 兑底为最大时钟墙钟（不加 1，保持回声平局下两端值一致）
     expect((createArgs.data.updatedAt as Date).getTime()).toBe(LATER_THAN_ROW);
 
-    // 落库后按 wire 视图回填 fieldDigests（回声幂等关键）：不可空列取
-    // Prisma 默认值（sortOrder null → 0）、tagIds 排序，摘要与 serializeRow
-    // 的重算口径一致，时钟不再被摘要检测重置。
-    const backfillArgs = mockPrisma.task.update.mock.calls[0][0] as {
-      where: { id: string };
-      data: Record<string, unknown>;
-    };
-    expect(backfillArgs.where.id).toBe('task-1');
-    expect(backfillArgs.data.fieldDigests).toMatchObject({
-      title: JSON.stringify('新任务'),
-      sortOrder: JSON.stringify(0),
-    });
-    // 显式回写 updatedAt：防 @updatedAt 自动推到 now() 重新制造摘要不一致
-    expect((backfillArgs.data.updatedAt as Date).getTime()).toBe(
-      (createdRow.updatedAt as Date).getTime(),
-    );
+    // 旧版值摘要作废（时钟即权威）；没有被剔除的字段就没有第二次写
+    expect(createArgs.data.fieldDigests).toBe(Prisma.DbNull);
+    expect(mockPrisma.task.update).not.toHaveBeenCalled();
   });
 
   it('push 本 hub 不认识的实体：逐条拒绝并列出，其余照常合并（协议 1）', async () => {
@@ -154,7 +137,11 @@ describe('SyncHubService（合并器集成）', () => {
     const result = await service.push(
       USER,
       [
-        { entity: 'widget', id: 'w-1', fields: { name: { value: 'x', hlc: stamp(1, 0, 'dev-a') } } },
+        {
+          entity: 'widget',
+          id: 'w-1',
+          fields: { name: { value: 'x', hlc: stamp(1, 0, 'dev-a') } },
+        },
         {
           entity: 'task',
           id: 'task-1',
@@ -192,7 +179,13 @@ describe('SyncHubService（合并器集成）', () => {
     expect(result).toEqual({
       acked: 1,
       rejected: [
-        { kind: 'write', entity: 'task', id: 'task-1', reason: 'unknown-fields', fields: ['energy'] },
+        {
+          kind: 'write',
+          entity: 'task',
+          id: 'task-1',
+          reason: 'unknown-fields',
+          fields: ['energy'],
+        },
       ],
     });
     const createArgs = mockPrisma.task.create.mock.calls[0][0] as { data: Record<string, unknown> };
@@ -338,58 +331,6 @@ describe('SyncHubService（合并器集成）', () => {
     });
   });
 
-  it('collector tap：REST 写 → 同步推流（虚拟设备 0 基线），内容去重不重复推', async () => {
-    mockPrisma.task.findUnique.mockResolvedValue(taskRow);
-
-    const cursorBefore = await buffer.currentSeq(USER);
-    changeEventHub.publish(USER, {
-      entity: 'task',
-      action: 'updated',
-      id: 'task-1',
-    } as ChangeEvent);
-    // tap 异步处理
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const first = await buffer.pull(USER, cursorBefore);
-    expect(first.changes).toHaveLength(1);
-    const firstSeq = first.cursor;
-
-    // 同一内容再触发（例如设备 push 的回声）→ 去重，无新事件
-    changeEventHub.publish(USER, {
-      entity: 'task',
-      action: 'updated',
-      id: 'task-1',
-    } as ChangeEvent);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    expect(await buffer.currentSeq(USER)).toBe(firstSeq);
-    expect((await buffer.pull(USER, firstSeq)).changes).toHaveLength(0);
-  });
-
-  it('collector tap：物理删除 → Compact Event', async () => {
-    const cursorBefore = await buffer.currentSeq(USER);
-    changeEventHub.publish(USER, {
-      entity: 'task',
-      action: 'deleted',
-      id: 'task-1',
-    } as ChangeEvent);
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
-    const { changes } = await buffer.pull(USER, cursorBefore);
-    expect(changes).toContainEqual(
-      expect.objectContaining({ kind: 'compact', entity: 'task', ids: ['task-1'] }),
-    );
-  });
-
-  it('publishCompact：持久登记完成后才下发压缩变更', async () => {
-    const cursorBefore = await buffer.currentSeq(USER);
-    await service.publishCompact(USER, 'subtask', ['sub-1', 'sub-2']);
-    expect(mockPrisma.compactedEntity.createMany).toHaveBeenCalled();
-    const { changes } = await buffer.pull(USER, cursorBefore);
-    expect(changes).toContainEqual(
-      expect.objectContaining({ kind: 'compact', entity: 'subtask', ids: ['sub-1', 'sub-2'] }),
-    );
-  });
-
   describe('Delete Request（ADR-0008：设备发起删除）', () => {
     it('归属校验通过：物理删除 + 级联删除 Subtask + 登记 + 广播', async () => {
       mockPrisma.task.findMany.mockResolvedValue([
@@ -533,35 +474,10 @@ describe('SyncHubService（合并器集成）', () => {
     });
   });
 
-  it('虚拟设备 0 提交（Assistant）：与设备推送同一合并路径', async () => {
-    const createdRow = {
-      ...taskRow,
-      title: '助手建的任务',
-      fieldClocks: { title: stamp(LATER_THAN_ROW, 0, '0') },
-    };
-    let created = false;
-    mockPrisma.task.findUnique.mockImplementation(async () => (created ? createdRow : null));
-    mockPrisma.task.create.mockImplementation(async () => {
-      created = true;
-      return createdRow;
-    });
-
-    const event: OutboxEvent = {
-      entity: 'task',
-      id: 'task-1',
-      fields: { title: { value: '助手建的任务', hlc: stamp(LATER_THAN_ROW, 0, '0') } },
-    };
-    await service.submitVirtualWrite(USER, event);
-
-    expect(mockPrisma.task.create).toHaveBeenCalled();
-    const { changes } = await buffer.pull(USER, (await buffer.currentSeq(USER)) - 1);
-    expect(changes.some((c) => c.kind === 'entity')).toBe(true);
-  });
-
   it('pull 缺口超出缓冲 → resync（设备须 bootstrap）', async () => {
     // 一次性灌满缓冲（500+）制造缺口
     for (let i = 0; i < 600; i++) {
-      await service.publishCompact(USER, 'task', [`t${i}`]);
+      await buffer.append(null, USER, [{ kind: 'compact', entity: 'task', ids: [`t${i}`] }]);
     }
     const firstSeq = (await buffer.currentSeq(USER)) - 600 + 1;
     const { resync, changes } = await buffer.pull(USER, firstSeq - 5);

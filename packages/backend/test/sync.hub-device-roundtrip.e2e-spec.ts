@@ -26,6 +26,7 @@ import { createNodeSqliteStorage } from '@taskora/engine/node';
 
 import { PrismaSyncChangeLog } from '../src/sync/prisma-sync-change-log.service';
 import { SyncHubService } from '../src/sync/sync-hub.service';
+import { materializeLegacyClocks } from '../src/sync/legacy-clock-backfill';
 import { disconnectTestDb, resetDb, testPrisma, testPrismaService } from './db';
 
 const hasTestDb = !!process.env.TEST_DATABASE_URL;
@@ -47,7 +48,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
       data: { id: USER, email: 'sync-e2e@test', passwordHash: 'x' },
     });
     buffer = new PrismaSyncChangeLog(testPrismaService());
-    hub = new SyncHubService(testPrismaService(), buffer, undefined as never);
+    hub = new SyncHubService(testPrismaService(), buffer);
   });
 
   afterAll(async () => {
@@ -61,6 +62,8 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
       notes: null,
       scheduledDate: new Date().toISOString(),
       dueDate: null,
+      reminderTime: null,
+      repeatRule: null,
       bucket: 'SCHEDULED',
       scheduledType: 'DATE',
       status: 'ACTIVE',
@@ -276,7 +279,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     expect(pulled.changes).toHaveLength(0);
   });
 
-  it('回声幂等：设备 pull 自己 push 的变更，任何字段的时钟不被摘要检测重置', async () => {
+  it('回声幂等：设备 pull 自己 push 的变更，任何字段都不被当作远端写', async () => {
     const cursorBefore = await buffer.currentSeq(USER);
 
     // 1. 全字段 create（与 LocalReplica.createInternal 同构）
@@ -318,11 +321,9 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
         clocks: change.clocks,
       });
       // 回声不得改写设备本地任何字段（时钟全部持平或更旧 → 零应用）。
-      // 回归前兆：hub 落库的 fieldDigests 按推送值计算，而 updatedAt
-      // 列被覆盖为 maxWall+1（另有 tagIds 排序 / 不可空列默认值），
-      // serializeRow 的摘要检测把合并写误判为 REST 绕过，把字段的时钟
-      // 重置为虚拟设备 0 @ updatedAt —— 回声反而「新」，被设备应用并
-      // 触发 onChange → 全域失效 → 界面「同步后刷新一下」。
+      // 否则回声被设备应用并触发 onChange → 全域失效 → 界面「同步后
+      // 刷新一下」。hub 存下的时钟即权威（不再有摘要检测），列值与推送
+      // 值的格式差异（日期、tagIds 排序、不可空列默认值）不影响时钟。
       expect(outcome.appliedFields).toEqual([]);
       deviceState = { fields: outcome.fields, clocks: outcome.clocks };
     }
@@ -520,5 +521,36 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     expect(byId.get(someday)?.reminderTime).toBeNull();
     await a.close();
     await b.close();
+  });
+
+  it('启动物化旧摘要：REST 改过的字段取基线、其余沿用设备时钟；清空摘要，不改 updatedAt、不入日志', async () => {
+    const deviceStamp = formatHlc({ wallMs: WALL, counter: 1, deviceId: 'dev-e2e' });
+    const updatedAt = new Date('2026-05-01T00:00:00Z');
+    await testPrisma.task.create({
+      data: {
+        id: 'task-legacy',
+        userId: USER,
+        title: 'REST 改过的标题',
+        notes: '设备写的备注',
+        updatedAt,
+        fieldClocks: { title: deviceStamp, notes: deviceStamp },
+        fieldDigests: { title: JSON.stringify('旧标题'), notes: JSON.stringify('设备写的备注') },
+      },
+    });
+    const seqBefore = await buffer.currentSeq(USER);
+
+    expect(await materializeLegacyClocks(testPrismaService())).toBe(1);
+
+    const row = await testPrisma.task.findUniqueOrThrow({ where: { id: 'task-legacy' } });
+    const clocks = row.fieldClocks as Record<string, string>;
+    const baseline = formatHlc({ wallMs: updatedAt.getTime(), counter: 0, deviceId: '0' });
+    expect(clocks.title).toBe(baseline);
+    expect(clocks.notes).toBe(deviceStamp);
+    expect(clocks.bucket).toBe(baseline);
+    expect(row.fieldDigests).toBeNull();
+    expect(row.updatedAt).toEqual(updatedAt);
+    expect(await buffer.currentSeq(USER)).toBe(seqBefore);
+    // 幂等：再跑一次没有可物化的行
+    expect(await materializeLegacyClocks(testPrismaService())).toBe(0);
   });
 });

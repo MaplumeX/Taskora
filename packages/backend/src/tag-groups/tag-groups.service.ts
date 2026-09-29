@@ -1,20 +1,27 @@
+import { randomUUID } from 'node:crypto';
+
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { registerCompacted } from '../sync/compact-registry';
+import { SyncHubService } from '../sync/sync-hub.service';
 import { CreateTagGroupDto, UpdateTagGroupDto } from './dto/tag-groups.dto';
 
+/** TagGroup 的 REST 写路径：写入经 Sync Hub 的合并器（虚拟设备 0）。 */
 @Injectable()
 export class TagGroupsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly hub: SyncHubService,
+  ) {}
+
+  private write(userId: string, id: string, fields: Record<string, unknown>) {
+    return this.hub.writeAsHub(userId, async (batch) => {
+      await batch.write('tag-group', id, fields);
+      return batch.tx.tagGroup.findUniqueOrThrow({ where: { id }, include: { tags: true } });
+    });
+  }
 
   async create(userId: string, dto: CreateTagGroupDto) {
-    return this.prisma.tagGroup.create({
-      data: {
-        title: dto.title,
-        userId,
-      },
-      include: { tags: true },
-    });
+    return this.write(userId, randomUUID(), { title: dto.title, sortOrder: 0 });
   }
 
   async findAll(userId: string) {
@@ -38,19 +45,13 @@ export class TagGroupsService {
 
   async update(userId: string, id: string, dto: UpdateTagGroupDto) {
     await this.findOne(userId, id);
-    return this.prisma.tagGroup.update({
-      where: { id },
-      data: { title: dto.title },
-      include: { tags: true },
-    });
+    return this.write(userId, id, dto.title === undefined ? {} : { title: dto.title });
   }
 
   async remove(userId: string, id: string) {
-    await this.findOne(userId, id);
+    const tagGroup = await this.findOne(userId, id);
     // 删除分组后，其下 Tag 的 tagGroupId 通过 onDelete: SetNull 自动置 null
-    return this.prisma.$transaction(async (tx) => {
-      await registerCompacted(tx, userId, 'tag-group', [id]);
-      return tx.tagGroup.delete({ where: { id } });
-    });
+    await this.hub.writeAsHub(userId, (batch) => batch.delete('tag-group', [id]));
+    return tagGroup;
   }
 }

@@ -7,8 +7,8 @@ import { useSyncStatusStore } from '@taskora/api';
  * 同步状态指示器（V2 spec：离线可见性）。
  *
  * 常驻角落、只呈现状态、不拦截任何操作（无阻塞式 UI、无逐任务标注）。
- * 状态由桌面端 syncNow 的成败驱动；web 端无 Engine，状态恒为 idle →
- * 不渲染。离线时显示 Outbox 中未同步的写操作条数。需要升级（hub 要求
+ * 状态由各端 Engine 同步调度（syncNow）的成败驱动；没有 Engine 时（web
+ * 浏览器不支持 OPFS、退回 REST）状态恒为 idle → 不渲染。离线时显示 Outbox 中未同步的写操作条数。需要升级（hub 要求
  * 更高的同步协议版本，或副本来自更新版本）时常驻提示，直到安装新版本。
  */
 export function SyncIndicator() {
@@ -16,7 +16,7 @@ export function SyncIndicator() {
   const status = useSyncStatusStore((s) => s.status);
   const pendingCount = useSyncStatusStore((s) => s.pendingCount);
 
-  if (status === 'idle') return null; // web：无 Engine，无可指示的状态
+  if (status === 'idle') return null; // 无 Engine（REST 路径），无可指示的状态
 
   if (status === 'offline') {
     return (

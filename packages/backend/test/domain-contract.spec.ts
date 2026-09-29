@@ -66,7 +66,7 @@ describe('领域规则契约 — hub REST 服务', () => {
     project: { findMany: vi.fn().mockResolvedValue(projectRows) },
   } as unknown as PrismaService;
   const feed = new FeedService(prisma, {} as SyncHubService);
-  const tasks = new TasksService(prisma);
+  const tasks = new TasksService(prisma, {} as SyncHubService);
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ['Date'] });

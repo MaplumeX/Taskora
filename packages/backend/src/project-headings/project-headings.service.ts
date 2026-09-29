@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   HeadingLayoutMismatchError,
@@ -10,12 +12,12 @@ import {
   sortHeadings,
 } from '@taskora/engine';
 import { HeadingStatus, TaskStatus } from '@taskora/shared';
-import { Prisma } from '@prisma/client';
+import { synthPosition } from '@taskora/engine';
+import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { groupPatches, toPrismaData } from '../common/domain-storage';
-import { registerCompacted } from '../sync/compact-registry';
-import { synthPosition } from '../sync/entity-codec';
+import { newRowOrder, toWireFields } from '../common/domain-storage';
+import { SyncHubService, type HubWriteBatch } from '../sync/sync-hub.service';
 import {
   CreateProjectHeadingDto,
   ReorderProjectHeadingLayoutDto,
@@ -25,16 +27,20 @@ import {
 /**
  * 分组的 REST 写路径。领域规则（删除 / 归档 / 转项目 / 布局校验与目标
  * 状态、列表顺序）来自 @taskora/engine 的 domain 纯函数，与设备的 Engine
- * 后端共用（local-first-v3 issue 04）。
+ * 后端共用（local-first-v3 issue 04）；写入经 Sync Hub 的合并器（虚拟
+ * 设备 0，issue 05）。
  */
 @Injectable()
 export class ProjectHeadingsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly hub: SyncHubService,
+  ) {}
 
   private async assertProjectOwnership(
     userId: string,
     projectId: string,
-    tx: Pick<PrismaService, 'project'> = this.prisma,
+    tx: Pick<Prisma.TransactionClient, 'project'> = this.prisma,
   ) {
     // 不过滤 trashedAt：废纸篓项目详情页仍需展示/管理 headings，与 ProjectsService.findOne 对齐
     const project = await tx.project.findFirst({
@@ -70,13 +76,16 @@ export class ProjectHeadingsService {
       where: { userId, projectId: dto.projectId },
       _max: { sortOrder: true },
     });
-    return this.prisma.projectHeading.create({
-      data: {
-        userId,
-        projectId: dto.projectId,
+    const id = randomUUID();
+    return this.hub.writeAsHub(userId, async (batch) => {
+      await batch.write('project-heading', id, {
         title: dto.title,
         sortOrder: (max._max.sortOrder ?? -1) + 1,
-      },
+        status: HeadingStatus.ACTIVE,
+        completedAt: null,
+        projectId: dto.projectId,
+      });
+      return batch.tx.projectHeading.findUniqueOrThrow({ where: { id } });
     });
   }
 
@@ -93,140 +102,91 @@ export class ProjectHeadingsService {
     return heading;
   }
 
+  /** 批内读本用户的分组并校验项目归属，不存在即 404。 */
+  private async requireHeading(batch: HubWriteBatch, userId: string, id: string) {
+    const heading = await batch.tx.projectHeading.findFirst({
+      where: { id, userId },
+      include: { project: { select: { areaId: true } } },
+    });
+    if (!heading) {
+      throw new NotFoundException('Heading not found');
+    }
+    await this.assertProjectOwnership(userId, heading.projectId, batch.tx);
+    return heading;
+  }
+
   async convertToProject(userId: string, id: string) {
-    return this.prisma.$transaction(async (tx) => {
-      // Validate heading ownership and read the source project's areaId.
-      const heading = await tx.projectHeading.findFirst({
-        where: { id, userId },
-        include: { project: { select: { areaId: true } } },
-      });
-      if (!heading) {
-        throw new NotFoundException('Heading not found');
-      }
-      await this.assertProjectOwnership(userId, heading.projectId, tx);
+    return this.hub.writeAsHub(userId, async (batch) => {
+      const heading = await this.requireHeading(batch, userId, id);
 
       // New project is appended after the user's last project in the sidebar.
-      const maxSort = await tx.project.aggregate({
+      const maxSort = await batch.tx.project.aggregate({
         where: { userId },
         _max: { sortOrder: true },
       });
-      const nextSortOrder = (maxSort._max.sortOrder ?? -1) + 1;
-
       const plan = planHeadingToProject(heading.title, heading.project.areaId ?? null);
-      const newProject = await tx.project.create({
-        data: {
-          ...(toPrismaData(plan.project) as Prisma.ProjectUncheckedCreateInput),
-          sortOrder: nextSortOrder,
-          userId,
-        },
+      const projectId = randomUUID();
+      await batch.write('project', projectId, {
+        ...toWireFields(plan.project),
+        ...newRowOrder((maxSort._max.sortOrder ?? -1) + 1),
       });
 
       // 分组下的全部任务（含 Trash 里的）移入新项目，只改归属
-      await tx.task.updateMany({
+      const tasks = await batch.tx.task.findMany({
         where: { userId, headingId: id },
-        data: toPrismaData(plan.taskPatch(newProject.id)),
+        select: { id: true },
       });
-
-      await registerCompacted(tx, userId, 'project-heading', [id]);
-      const deleted = await tx.projectHeading.deleteMany({
-        where: { id, userId, projectId: heading.projectId },
-      });
-      if (deleted.count !== 1) {
-        throw new BadRequestException('Heading changed; refresh and retry');
+      for (const task of tasks) {
+        await batch.write('task', task.id, toWireFields(plan.taskPatch(projectId)));
       }
 
-      return { ...newProject, tags: [] };
+      await batch.delete('project-heading', [id]);
+
+      const project = await batch.tx.project.findUniqueOrThrow({ where: { id: projectId } });
+      return { ...project, tags: [] };
     });
   }
 
   async update(userId: string, id: string, dto: UpdateProjectHeadingDto) {
-    return this.prisma.$transaction(async (tx) => {
-      const heading = await tx.projectHeading.findFirst({
-        where: { id, userId },
-        select: { id: true, projectId: true },
-      });
-      if (!heading) {
-        throw new NotFoundException('Heading not found');
-      }
-      await this.assertProjectOwnership(userId, heading.projectId, tx);
-      const updated = await tx.projectHeading.updateMany({
-        where: { id, userId, projectId: heading.projectId },
-        data: dto.title === undefined ? {} : { title: dto.title },
-      });
-      if (updated.count !== 1) {
-        throw new BadRequestException('Heading changed; refresh and retry');
-      }
-      return tx.projectHeading.findFirst({
-        where: { id, userId, projectId: heading.projectId },
-      });
+    return this.hub.writeAsHub(userId, async (batch) => {
+      await this.requireHeading(batch, userId, id);
+      if (dto.title !== undefined) await batch.write('project-heading', id, { title: dto.title });
+      return batch.tx.projectHeading.findFirst({ where: { id, userId } });
     });
   }
 
   async archive(userId: string, id: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const heading = await tx.projectHeading.findFirst({
-        where: { id, userId },
-        select: { id: true, projectId: true },
-      });
-      if (!heading) {
-        throw new NotFoundException('Heading not found');
-      }
-      await this.assertProjectOwnership(userId, heading.projectId, tx);
-
-      const tasks = await tx.task.findMany({
+    return this.hub.writeAsHub(userId, async (batch) => {
+      await this.requireHeading(batch, userId, id);
+      const tasks = await batch.tx.task.findMany({
         where: { userId, headingId: id },
         select: { id: true, status: true, trashedAt: true },
       });
       const plan = planHeadingArchive(new Date().toISOString(), tasks);
-      for (const { ids, data } of groupPatches(plan.tasks)) {
-        await tx.task.updateMany({ where: { id: { in: ids }, userId }, data });
-      }
-
-      const updated = await tx.projectHeading.updateMany({
-        where: { id, userId, projectId: heading.projectId },
-        data: toPrismaData(plan.heading),
-      });
-      if (updated.count !== 1) {
-        throw new BadRequestException('Heading changed; refresh and retry');
-      }
-
-      return tx.projectHeading.findFirst({ where: { id, userId } });
+      for (const task of plan.tasks) await batch.write('task', task.id, toWireFields(task.patch));
+      await batch.write('project-heading', id, toWireFields(plan.heading));
+      return batch.tx.projectHeading.findFirst({ where: { id, userId } });
     });
   }
 
   async unarchive(userId: string, id: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const heading = await tx.projectHeading.findFirst({
-        where: { id, userId },
-        select: { id: true, projectId: true },
-      });
-      if (!heading) {
-        throw new NotFoundException('Heading not found');
-      }
-      await this.assertProjectOwnership(userId, heading.projectId, tx);
-
-      const updated = await tx.projectHeading.updateMany({
-        where: { id, userId, projectId: heading.projectId },
-        data: headingUnarchivePatch(),
-      });
-      if (updated.count !== 1) {
-        throw new BadRequestException('Heading changed; refresh and retry');
-      }
-
-      return tx.projectHeading.findFirst({ where: { id, userId } });
+    return this.hub.writeAsHub(userId, async (batch) => {
+      await this.requireHeading(batch, userId, id);
+      await batch.write('project-heading', id, toWireFields(headingUnarchivePatch()));
+      return batch.tx.projectHeading.findFirst({ where: { id, userId } });
     });
   }
 
   async reorder(userId: string, dto: ReorderProjectHeadingLayoutDto) {
-    return this.prisma.$transaction(async (tx) => {
-      await this.assertProjectOwnership(userId, dto.projectId, tx);
+    return this.hub.writeAsHub(userId, async (batch) => {
+      await this.assertProjectOwnership(userId, dto.projectId, batch.tx);
 
       const [headings, visibleTasks] = await Promise.all([
-        tx.projectHeading.findMany({
+        batch.tx.projectHeading.findMany({
           where: { userId, projectId: dto.projectId, status: HeadingStatus.ACTIVE },
           select: { id: true },
         }),
-        tx.task.findMany({
+        batch.tx.task.findMany({
           where: {
             userId,
             projectId: dto.projectId,
@@ -263,61 +223,33 @@ export class ProjectHeadingsService {
         ...dto.groups.flatMap((group) => group.taskIds.map((id, index) => [id, index] as const)),
       ]);
 
-      const writes = await Promise.all([
-        ...plan.headingOrder.map(({ id, sortOrder }) =>
-          tx.projectHeading.updateMany({
-            where: { id, userId, projectId: dto.projectId },
-            data: { sortOrder },
-          }),
-        ),
-        ...plan.taskHeading.map(({ id, headingId }) =>
-          tx.task.updateMany({
-            where: {
-              id,
-              userId,
-              projectId: dto.projectId,
-              trashedAt: null,
-              status: TaskStatus.ACTIVE,
-            },
-            data: { headingId, sortOrder: sortOrderOf.get(id)!, position: positionOf.get(id)! },
-          }),
-        ),
-      ]);
-      if (writes.some((write) => write.count !== 1)) {
-        throw new BadRequestException('Layout changed; refresh and retry');
+      for (const { id, sortOrder } of plan.headingOrder) {
+        await batch.write('project-heading', id, { sortOrder });
+      }
+      for (const { id, headingId } of plan.taskHeading) {
+        await batch.write('task', id, {
+          headingId,
+          sortOrder: sortOrderOf.get(id)!,
+          position: positionOf.get(id)!,
+        });
       }
     });
   }
 
   async remove(userId: string, id: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const heading = await tx.projectHeading.findFirst({
-        where: { id, userId },
-        select: { id: true, projectId: true },
-      });
-      if (!heading) {
-        throw new NotFoundException('Heading not found');
-      }
-      await this.assertProjectOwnership(userId, heading.projectId, tx);
+    return this.hub.writeAsHub(userId, async (batch) => {
+      await this.requireHeading(batch, userId, id);
 
       // 其下直接任务进 Trash（规则见 domain planHeadingDelete）
-      const directTasks = await tx.task.findMany({
+      const directTasks = await batch.tx.task.findMany({
         where: { userId, headingId: id },
         select: { id: true, status: true, trashedAt: true },
       });
       const trashedAt = new Date();
-      for (const { ids, data } of groupPatches(
-        planHeadingDelete(trashedAt.toISOString(), directTasks),
-      )) {
-        await tx.task.updateMany({ where: { id: { in: ids }, userId }, data });
+      for (const task of planHeadingDelete(trashedAt.toISOString(), directTasks)) {
+        await batch.write('task', task.id, toWireFields(task.patch));
       }
-      await registerCompacted(tx, userId, 'project-heading', [id]);
-      const deleted = await tx.projectHeading.deleteMany({
-        where: { id, userId, projectId: heading.projectId },
-      });
-      if (deleted.count !== 1) {
-        throw new BadRequestException('Heading changed; refresh and retry');
-      }
+      await batch.delete('project-heading', [id]);
       return { id, trashedAt };
     });
   }

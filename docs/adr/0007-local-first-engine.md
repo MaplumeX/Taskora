@@ -77,10 +77,8 @@ Key decisions, in the order they matter:
   as `prunedThrough`, and cursors below it — or above the current seq (a
   cursor from the old in-memory era) — get `resync`. Seq starts at 1 with no
   change behind it, so a never-bootstrapped cursor 0 always resyncs. REST
-  writes still reach the log through the post-commit collector tap, in their
-  own small transaction: a crash between the REST commit and that append can
-  drop one Change Event (the row itself is safe and reappears on the next
-  bootstrap).
+  writes append to the log inside their own transaction too (see below);
+  the earlier post-commit collector tap and its crash window are gone.
 - **Bootstrap uses a cursor fence.** The hub captures the current cursor before
   reading the snapshot. Writes racing with the snapshot therefore either
   appear in it or carry a later sequence and are replayed by the next pull;
@@ -90,6 +88,27 @@ Key decisions, in the order they matter:
   privileged writes, no server-clock comparisons against device HLCs. The
   Destructive Operation approval-card flow is unchanged: approval simply
   releases the resulting Change Events.
+- **REST writes go through the merger** (amended 2026-09-29). The REST
+  services (web and Assistant) no longer write Prisma directly: they read,
+  apply the shared domain rules, and submit field writes and physical deletes
+  through `SyncHubService.writeAsHub`. One REST call is one Postgres
+  transaction: every row is locked, merged, scrubbed and repaired exactly like
+  a device push, and the Change Events are appended to the log before commit.
+  The hub stamps each write as virtual device 0 with an HLC above every clock
+  already on the row (the caller saw those values, so the write is causally
+  later — this also beats a device clock set into the future); fields whose
+  value is unchanged are not written. Physical deletes share the Delete
+  Request path (ownership, `DELETE_CASCADES`, compact registration).
+  Consequences: stored `fieldClocks` are authoritative, so the per-field
+  value digests that inferred "REST changed this field behind the merger's
+  back" are gone from serialization, and so is the collector tap's sync
+  branch (the collector still feeds the legacy SSE stream). On startup the
+  hub materializes the clocks the digests implied for rows that still carry
+  them (`legacy-clock-backfill`) and clears `fieldDigests`; merge writes clear
+  it too. During a rolling deploy an old instance can still write
+  digest-only changes after the backfill; those rows keep their previous
+  clocks until the next write. The column is dropped once no old hub runs.
+  See `.scratch/local-first-v3/issues/05` step 1.
 - **Device clocks are calibrated to hub time** (amended 2026-09-29). In
   practice the hub does stamp virtual-device-0 clocks from its own wall clock
   (REST/web writes, reference scrubbing), so device HLCs are compared against
@@ -137,6 +156,26 @@ Key decisions, in the order they matter:
   the old HTTP CRUD surface retire slice by slice. Web follows desktop once
   OPFS support is validated; the old SSE push stream (ADR-0005) is superseded
   by the bidirectional sync channel along the way.
+- **Web runs the Engine** (amended 2026-09-29). The Local Replica on web is
+  SQLite WASM (`@sqlite.org/sqlite-wasm`) on the OPFS SyncAccessHandle Pool
+  VFS inside a dedicated worker — no COOP/COEP headers needed, one pool
+  directory and database per account. The pool can only be opened by one
+  tab at a time, and the Outbox and HLC must exist once, so a Web Locks
+  leader tab owns the replica, the single Engine and the sync loop; every
+  tab's UI talks to a `TabEngine` that runs calls locally in the leader and
+  forwards them over `BroadcastChannel` otherwise. The leader broadcasts
+  change notifications and sync status. When the leader tab closes, the next
+  queued tab takes the lock and announces itself; unanswered calls are resent
+  (writes are idempotent: creates carry a caller-chosen id). This is why
+  `Engine.isCompacted` became async. While the Engine is active, React Query
+  runs with `networkMode: 'always'` — reads and writes are local, and the
+  default mode pauses queries whenever the browser reports offline. Browsers
+  without OPFS / Web Locks, or a replica that cannot be opened (including
+  one written by a newer version), keep the REST path, which since the change
+  above goes through the merger as well. Offline cold start (reloading the
+  page with no network) needs a service worker for the app shell and a
+  locally cached identity; that is not part of this step. See
+  `.scratch/local-first-v3/issues/05` step 2.
 
 ## Considered Options
 
@@ -161,5 +200,6 @@ Key decisions, in the order they matter:
 - The Local Replica is disposable (rebuildable from a snapshot), but it is not
   a cache: while offline it is the only copy of unsynced edits in the Outbox.
   Device storage loss before a flush loses those edits.
-- Web is second-class until OPFS is validated: expect a period where desktop
-  is local-first and web is still thin-client against the same hub.
+- Web was second-class until OPFS was validated. Since 2026-09-29 web is
+  local-first too where the browser supports it; the REST path remains as the
+  fallback and for the Assistant, both writing through the merger.

@@ -1,39 +1,48 @@
 /**
- * 领域规则（@taskora/engine domain）的 wire 形态 ↔ Postgres 存储形态。
+ * 领域规则（@taskora/engine domain）与 hub 写入 / Postgres 读取之间的
+ * 形态衔接。
  *
- * 规则函数返回的日历日期是 `YYYY-MM-DD` 日期键、时间戳是 ISO 字符串、
- * 重复规则是规范化对象；Prisma 列分别是 UTC 零点的 DateTime、DateTime
- * 与规范 JSON 文本。标签（tagIds）走关系表，由调用方单独写。
+ * 规则函数返回的是 wire 形态（日历日期为 `YYYY-MM-DD` 日期键、时间戳为
+ * ISO 字符串、重复规则为对象），与设备推送同形：REST 服务把它原样交给
+ * SyncHubService.writeAsHub，由 hub 的实体编解码器落成 Postgres 存储形态。
  */
 
-import { canonicalRepeatRule } from '@taskora/engine';
-import { calendarDateStorage, type RepeatRule } from '@taskora/shared';
+import { canonicalRepeatRule, synthPosition } from '@taskora/engine';
+import type { RepeatRule } from '@taskora/shared';
 
 import type { PrismaService } from '../prisma/prisma.service';
 import { userCalendarZones } from '../users/account-time-zone';
 
-const DATE_KEY_FIELDS = new Set(['scheduledDate', 'dueDate']);
-const INSTANT_FIELDS = new Set(['settledAt', 'trashedAt', 'completedAt']);
+/**
+ * 规则补丁 → hub 字段写：去掉 undefined，重复规则换成规范形对象（与
+ * 设备写同一键序，落库的 JSON 文本逐字一致）。
+ */
+export function toWireFields(patch: object): Record<string, unknown> {
+  const fields: Record<string, unknown> = {};
+  for (const [field, value] of Object.entries(patch)) {
+    if (value === undefined) continue;
+    fields[field] =
+      field === 'repeatRule' && value !== null
+        ? JSON.parse(canonicalRepeatRule(value as RepeatRule))
+        : value;
+  }
+  return fields;
+}
 
 /**
- * 字段补丁 → Prisma unchecked data（外键为标量列）。tagIds 被剔除；
- * 其余字段按名换成存储形态。
+ * 按序号排列的行的排序字段：sortOrder 与同口径合成的 Position 一起写
+ * （web 的旧排序键与设备副本的 Position 一致，ADR-0007）。
  */
-export function toPrismaData(patch: object): Record<string, unknown> {
-  const data: Record<string, unknown> = {};
-  for (const [field, value] of Object.entries(patch)) {
-    if (field === 'tagIds' || value === undefined) continue;
-    if (DATE_KEY_FIELDS.has(field)) {
-      data[field] = typeof value === 'string' ? calendarDateStorage(value) : null;
-    } else if (INSTANT_FIELDS.has(field)) {
-      data[field] = typeof value === 'string' ? new Date(value) : null;
-    } else if (field === 'repeatRule') {
-      data[field] = value === null ? null : canonicalRepeatRule(value as RepeatRule);
-    } else {
-      data[field] = value;
-    }
-  }
-  return data;
+export function orderFields(
+  index: number,
+  createdAt: Date,
+): { sortOrder: number; position: string } {
+  return { sortOrder: index, position: synthPosition(index, createdAt) };
+}
+
+/** 新建行的排序字段与创建时间（Position 按同一个 createdAt 合成）。 */
+export function newRowOrder(index: number, now = new Date()) {
+  return { ...orderFields(index, now), createdAt: now.toISOString() };
 }
 
 /** 视图判定的上下文：只有 Today / Upcoming 需要查账户时区。 */
@@ -54,22 +63,4 @@ export function countedTasksOf(prisma: PrismaService, userId: string, projectIds
     where: { userId, projectId: { in: projectIds }, trashedAt: null },
     select: { projectId: true, status: true, trashedAt: true },
   });
-}
-
-/**
- * 规则给出的逐行补丁按内容分组：同一补丁的行合成一次 updateMany
- * （级联操作的补丁通常完全相同）。
- */
-export function groupPatches<P extends object>(
-  items: ReadonlyArray<{ id: string; patch: P }>,
-): Array<{ ids: string[]; data: Record<string, unknown> }> {
-  const groups = new Map<string, { ids: string[]; data: Record<string, unknown> }>();
-  for (const { id, patch } of items) {
-    const data = toPrismaData(patch);
-    const key = JSON.stringify(data);
-    const group = groups.get(key) ?? { ids: [], data };
-    group.ids.push(id);
-    groups.set(key, group);
-  }
-  return [...groups.values()];
 }

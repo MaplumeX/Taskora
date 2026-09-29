@@ -2,7 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import { formatHlc, positionBetween, validatePosition } from '@taskora/engine';
 
-import { serializeRow, synthPosition, toPrismaData, codecFor } from '../src/sync/entity-codec';
+import {
+  serializeRow,
+  sameWireValue,
+  synthPosition,
+  toPrismaData,
+  codecFor,
+} from '../src/sync/entity-codec';
 
 const codec = codecFor('task');
 
@@ -37,41 +43,44 @@ describe('serializeRow（时钟基线 / 合成 Position）', () => {
   it('legacy 行（无 fieldClocks）：所有字段取虚拟设备 0 的基线，tagIds 从关系物化', () => {
     const state = serializeRow(codec, baseRow);
     expect(state.fields.title).toBe('旧标题');
-    expect(state.fields.tagIds).toEqual(['tag-a', 'tag-b']); // 排序保证摘要稳定
+    expect(state.fields.tagIds).toEqual(['tag-a', 'tag-b']); // 排序保证两端比较稳定
     expect(state.clocks.title).toBe(baseline);
     expect(state.clocks.tagIds).toBe(baseline);
     expect(Object.keys(state.clocks).sort()).toEqual(codec.def.fields.map((f) => f.name).sort());
   });
 
-  it('摘要匹配（设备写过、REST 未动）：设备时钟原样保留', () => {
-    const deviceStamp = formatHlc({ wallMs: 1_000, counter: 5, deviceId: 'dev-a' });
+  it('存下的时钟即权威：列值变了也不重置（不再有摘要检测）；缺时钟的字段取基线', () => {
+    const titleStamp = formatHlc({ wallMs: 1_000, counter: 5, deviceId: 'dev-a' });
     const row = {
       ...baseRow,
-      fieldClocks: { title: deviceStamp },
-      fieldDigests: { title: JSON.stringify('旧标题') },
+      title: '与上次合并不同的标题',
+      fieldClocks: { title: titleStamp },
+      fieldDigests: { title: JSON.stringify('旧标题') }, // 旧版遗留，忽略
     };
     const state = serializeRow(codec, row);
-    expect(state.clocks.title).toBe(deviceStamp);
-    // 未背书字段仍取基线
+    expect(state.clocks.title).toBe(titleStamp);
     expect(state.clocks.notes).toBe(baseline);
+    expect(state.fields.title).toBe('与上次合并不同的标题');
   });
 
-  it('REST 改了 title（摘要不匹配）：仅 title 时钟重置，notes 等不受牵连', () => {
-    const titleStamp = formatHlc({ wallMs: 1_000, counter: 5, deviceId: 'dev-a' });
-    const notesStamp = formatHlc({ wallMs: 1_000, counter: 6, deviceId: 'dev-a' });
-    const row = {
-      ...baseRow,
-      title: 'REST 改过的标题',
-      fieldClocks: { title: titleStamp, notes: notesStamp },
-      fieldDigests: {
-        title: JSON.stringify('旧标题'), // 与当前值不匹配 → title 被 REST 改过
-        notes: JSON.stringify('旧备注'), // 匹配 → 保留设备时钟
-      },
-    };
-    const state = serializeRow(codec, row);
-    expect(state.clocks.title).toBe(baseline); // 重置
-    expect(state.clocks.notes).toBe(notesStamp); // 保留
-    expect(state.fields.title).toBe('REST 改过的标题');
+  it('sameWireValue：按落库口径比较（日期键 vs ISO、tagIds 顺序、对象键序）', () => {
+    expect(sameWireValue(codec, 'scheduledDate', '2026-03-05T00:00:00.000Z', '2026-03-05')).toBe(
+      true,
+    );
+    expect(sameWireValue(codec, 'tagIds', ['a', 'b'], ['b', 'a'])).toBe(true);
+    expect(
+      sameWireValue(
+        codec,
+        'repeatRule',
+        { unit: 'day', interval: 1, anchor: 'scheduled' },
+        { anchor: 'scheduled', interval: 1, unit: 'day' },
+      ),
+    ).toBe(true);
+    expect(sameWireValue(codec, 'notes', null, undefined)).toBe(true);
+    expect(sameWireValue(codec, 'title', 'a', 'b')).toBe(false);
+    expect(sameWireValue(codec, 'scheduledDate', '2026-03-05T00:00:00.000Z', '2026-03-06')).toBe(
+      false,
+    );
   });
 
   it('legacy 行合成 Position：与 REST 排序（sortOrder asc, createdAt desc）一致且稳定', () => {

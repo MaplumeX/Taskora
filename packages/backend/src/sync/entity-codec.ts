@@ -183,35 +183,66 @@ export async function loadAllRows(
 export interface SerializedState {
   fields: Record<string, unknown>;
   clocks: FieldClocks;
-  digests: Record<string, string>;
 }
 
 /**
  * Prisma 行 → wire 合并态。
  *
- * 时钟基线（ensureClocks）：
- * - 设备推过的字段有 HLC 时钟 + 值摘要，摘要匹配 → 时钟有效；
- * - REST 写绕过合并器改动某字段 → 摘要不匹配 → 仅该字段以虚拟设备 0
- *   在行 updatedAt 时刻重置基线（值新者胜，字段间互不牵连）；
- * - 全新 legacy 行 → 所有字段取基线。
+ * 所有写都经合并器（设备推送与 REST 的虚拟设备 0 写，local-first-v3
+ * issue 05），存下的 fieldClocks 即权威。没有时钟的字段（hub 从未合并
+ * 过的 legacy 行、种子数据、后加的列）以虚拟设备 0 在行 updatedAt 时刻
+ * 取基线——任何真实写都比它新。
  */
 export function serializeRow(codec: EntityCodec, row: PrismaRow): SerializedState {
-  const rowWall = (row.updatedAt as Date).getTime();
+  const baseline = formatHlc({
+    wallMs: (row.updatedAt as Date).getTime(),
+    counter: 0,
+    deviceId: VIRTUAL_DEVICE_ID,
+  });
   const storedClocks = (row.fieldClocks ?? {}) as FieldClocks;
-  const storedDigests = (row.fieldDigests ?? {}) as Record<string, string>;
-
-  const fields = wireViewOfRow(codec, row);
-  const clocks: FieldClocks = { ...storedClocks };
-  const digests: Record<string, string> = { ...storedDigests };
-
+  const clocks: FieldClocks = {};
   for (const field of codec.def.fields) {
-    const digest = digestOf(fields[field.name]);
-    if (storedDigests[field.name] === digest) continue; // 时钟仍为此值背书
-    clocks[field.name] = formatHlc({ wallMs: rowWall, counter: 0, deviceId: VIRTUAL_DEVICE_ID });
-    digests[field.name] = digest;
+    clocks[field.name] = storedClocks[field.name] ?? baseline;
   }
+  return { fields: wireViewOfRow(codec, row), clocks };
+}
 
-  return { fields, clocks, digests };
+/**
+ * 待写值是否与行上的 wire 值相同（虚拟设备 0 写跳过未变字段）。待写值
+ * 是领域规则的 wire 形态，先按落库口径归一：日期键 / ISO → ISO 时刻、
+ * tagIds 排序、JSON 对象按键序无关比较。
+ */
+export function sameWireValue(
+  codec: EntityCodec,
+  field: string,
+  stored: unknown,
+  next: unknown,
+): boolean {
+  return (
+    canonicalJson(normalizeForCompare(codec, field, stored)) ===
+    canonicalJson(normalizeForCompare(codec, field, next))
+  );
+}
+
+function normalizeForCompare(codec: EntityCodec, field: string, value: unknown): unknown {
+  if (value === undefined || value === null) return null;
+  if (codec.dateFields.has(field) && typeof value === 'string') {
+    const ms = Date.parse(value);
+    return Number.isNaN(ms) ? value : new Date(ms).toISOString();
+  }
+  if (field === 'tagIds' && Array.isArray(value)) return [...value].sort();
+  return value;
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    const entries = Object.entries(value as Record<string, unknown>)
+      .filter(([, item]) => item !== undefined)
+      .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
+    return `{${entries.map(([key, item]) => `${JSON.stringify(key)}:${canonicalJson(item)}`).join(',')}}`;
+  }
+  return JSON.stringify(value) ?? 'null';
 }
 
 function wireValueOf(codec: EntityCodec, row: PrismaRow, fieldName: string): unknown {
@@ -233,11 +264,7 @@ function wireValueOf(codec: EntityCodec, row: PrismaRow, fieldName: string): unk
 
 /**
  * Prisma 行的 wire 字段视图（serializeRow 的字段归一化：tagIds 排序、
- * Date → ISO、legacy Position 合成）。合并写回填 fieldDigests 时必须
- * 按这一视图计算，而非设备推送值——否则列值 ≠ 推送值的字段（updatedAt
- * 覆盖、不可空列的 Prisma 默认值、tagIds 关系表排序）会被 serializeRow
- * 的摘要检测误判为「REST 绕过合并器」而重置时钟，设备自身的回声不再
- * 幂等。
+ * Date → ISO、legacy Position 合成）。
  */
 export function wireViewOfRow(codec: EntityCodec, row: PrismaRow): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
@@ -251,10 +278,6 @@ export function wireViewOfRow(codec: EntityCodec, row: PrismaRow): Record<string
     );
   }
   return fields;
-}
-
-function digestOf(value: unknown): string {
-  return JSON.stringify(value) ?? 'null';
 }
 
 // ---------- Position 合成 ----------
@@ -316,7 +339,8 @@ export function toPrismaData(
         rejected.push(fieldName);
         continue;
       }
-      const create = tagIds.map((tagId) => ({ tagId }));
+      // 去重：关系表主键是 (实体, tagId)，重复 id 会让整条写失败
+      const create = [...new Set(tagIds as string[])].map((tagId) => ({ tagId }));
       data[codec.tagRelation.relation] =
         mode === 'create' ? { create } : { deleteMany: {}, create };
       continue;

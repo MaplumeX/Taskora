@@ -20,9 +20,13 @@ import { TaskStatus } from '@taskora/shared';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { registerCompacted } from '../sync/compact-registry';
-import { synthPosition } from '../sync/entity-codec';
-import { calendarContextFor, toPrismaData } from '../common/domain-storage';
+import { SyncHubService, type HubWriteBatch } from '../sync/sync-hub.service';
+import {
+  calendarContextFor,
+  newRowOrder,
+  orderFields,
+  toWireFields,
+} from '../common/domain-storage';
 import { userCalendarZones } from '../users/account-time-zone';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
 import { buildTaskViewWhere, WITH_SETTLED_STATUSES } from './views';
@@ -33,15 +37,27 @@ type TaskRowWithChildren = Prisma.TaskGetPayload<{
   include: { tags: true; subtasks: { orderBy: { sortOrder: 'asc' } } };
 }>;
 
+const WITH_TAGS = { tags: { include: { tag: true } } } as const;
+
 /**
  * 任务的 REST 写路径（web 与 Agent）。领域规则（bucket、计划、生命周期、
  * 重复派生、转项目、列表过滤）来自 @taskora/engine 的 domain 纯函数，与
- * 设备的 Engine 后端共用（local-first-v3 issue 04）；这里只负责读 Postgres、
- * 调规则、换成存储形态写回。
+ * 设备的 Engine 后端共用（local-first-v3 issue 04）；写入经 Sync Hub 的
+ * 合并器（虚拟设备 0，issue 05），这里只负责读 Postgres、调规则、提交
+ * 字段写。
  */
 @Injectable()
 export class TasksService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly hub: SyncHubService,
+  ) {}
+
+  /** 写后的列表 DTO（标签展开、settledAt → completedAt、规则解析）。 */
+  private async listDto(client: Prisma.TransactionClient | PrismaService, id: string) {
+    const row = await client.task.findUniqueOrThrow({ where: { id }, include: WITH_TAGS });
+    return settledToCompletedAt(withRepeatRuleDto({ ...row, tags: row.tags.map((tt) => tt.tag) }));
+  }
 
   /**
    * Repeat Instance 服务端派生（ADR-0012）：web 无法本地派生，完成路径由
@@ -49,6 +65,7 @@ export class TasksService {
    * 同一确定性 id，经 hub 字段级 LWW 自然收敛。parent 取结算前的状态。
    */
   private async deriveRepeatInstance(
+    batch: HubWriteBatch,
     userId: string,
     parent: TaskRowWithChildren,
     settledAt: string,
@@ -73,47 +90,40 @@ export class TasksService {
       await userCalendarZones(this.prisma, userId),
     );
     if (!plan) return;
-    const existing = await this.prisma.task.findFirst({
+    const existing = await batch.tx.task.findFirst({
       where: { id: plan.id, userId },
       select: { id: true },
     });
     if (existing) return; // 幂等（restore 后重完成 / 并发派生）
     // 确定性 id 已被 compact（重开删除过该实例后重新完成）：设备副本上
     // 无法复活（ADR-0008 Compact 永久获胜），换新 id——唯一的复活路径。
-    const compacted = await this.prisma.compactedEntity.findFirst({
+    const compacted = await batch.tx.compactedEntity.findFirst({
       where: { userId, entity: 'task', entityId: plan.id },
       select: { entityId: true },
     });
     const instanceId = compacted ? randomUUID() : plan.id;
 
-    const maxSort = await this.prisma.task.aggregate({
+    const maxSort = await batch.tx.task.aggregate({
       where: { userId },
       _max: { sortOrder: true },
     });
     // 派生实例进入列表末尾（新位次，不继承父任务位次）
-    await this.prisma.task.create({
-      data: {
-        ...(toPrismaData(plan.task) as Prisma.TaskUncheckedCreateInput),
-        id: instanceId,
-        userId,
-        sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
-        ...(plan.task.tagIds.length > 0
-          ? { tags: { create: plan.task.tagIds.map((tagId) => ({ tagId })) } }
-          : {}),
-      },
+    await batch.write('task', instanceId, {
+      ...toWireFields(plan.task),
+      ...newRowOrder((maxSort._max.sortOrder ?? -1) + 1),
     });
-    for (const subtask of plan.subtasksFor(instanceId)) {
-      await this.prisma.subtask.create({
-        data: toPrismaData(subtask) as Prisma.SubtaskUncheckedCreateInput,
-      });
+    for (const { id, ...subtask } of plan.subtasksFor(instanceId)) {
+      await batch.write('subtask', id, subtask);
     }
   }
 
   /**
-   * 取消派生副作用（ADR-0012）：重开删除其派生实例——Compact 登记 +
-   * 物理删除（Subtask 由 DB 级联）。不存在则无操作（纯取消从未派生）。
+   * 取消派生副作用（ADR-0012）：重开删除其派生实例——与 Delete Request
+   * 同一路径（Compact 登记、级联 Subtask）。不存在则无操作（纯取消从未
+   * 派生）。
    */
   private async deleteDerivedInstance(
+    batch: HubWriteBatch,
     userId: string,
     parent: {
       id: string;
@@ -129,39 +139,30 @@ export class TasksService {
       parent.settledAt ? parent.settledAt.toISOString() : null,
       await userCalendarZones(this.prisma, userId),
     );
-    if (!target) return;
-    await this.prisma.$transaction(async (tx) => {
-      const instance = await tx.task.findFirst({
-        where: { id: target.id, userId },
-        include: { subtasks: { select: { id: true } } },
-      });
-      if (!instance) return;
-      await registerCompacted(tx, userId, 'task', [target.id]);
-      await registerCompacted(
-        tx,
-        userId,
-        'subtask',
-        instance.subtasks.map((s) => s.id),
-      );
-      await tx.task.delete({ where: { id: target.id } });
-    });
+    if (target) await batch.delete('task', [target.id]);
+  }
+
+  /** 读本用户的任务，不存在即 404。 */
+  private async requireTask(
+    client: Prisma.TransactionClient | PrismaService,
+    userId: string,
+    id: string,
+  ) {
+    const task = await client.task.findFirst({ where: { id, userId } });
+    if (!task) {
+      throw new NotFoundException('Task not found');
+    }
+    return task;
   }
 
   async create(userId: string, dto: CreateTaskDto) {
     const fields = planTaskCreate(dto, await userCalendarZones(this.prisma, userId));
-    const created = await this.prisma.task.create({
-      data: {
-        ...(toPrismaData(fields) as Prisma.TaskUncheckedCreateInput),
-        userId,
-        ...(fields.tagIds.length
-          ? { tags: { create: fields.tagIds.map((tagId) => ({ tagId })) } }
-          : {}),
-      },
-      include: { tags: { include: { tag: true } } },
+    const id = randomUUID();
+    return this.hub.writeAsHub(userId, async (batch) => {
+      // 新任务的位次口径不变：sortOrder 0 + 同口径合成的 Position
+      await batch.write('task', id, { ...toWireFields(fields), ...newRowOrder(0) });
+      return this.listDto(batch.tx, id);
     });
-    return settledToCompletedAt(
-      withRepeatRuleDto({ ...created, tags: created.tags.map((tt) => tt.tag) }),
-    );
   }
 
   async findAll(userId: string, query: TaskQueryDto) {
@@ -240,82 +241,42 @@ export class TasksService {
   }
 
   async update(userId: string, id: string, dto: UpdateTaskDto) {
-    const existing = await this.prisma.task.findFirst({
-      where: { id, userId },
-    });
-    if (!existing) {
-      throw new NotFoundException('Task not found');
-    }
+    const existing = await this.requireTask(this.prisma, userId, id);
     const patch = planTaskUpdate(existing, dto, await userCalendarZones(this.prisma, userId));
-
-    // 全量 set 语义：tagIds 传 undefined 不动；传数组则先删旧关联再建新关联
-    if (patch.tagIds !== undefined) {
-      await this.prisma.$transaction([
-        this.prisma.taskTag.deleteMany({ where: { taskId: id } }),
-        ...(patch.tagIds.length > 0
-          ? [
-              this.prisma.taskTag.createMany({
-                data: patch.tagIds.map((tagId) => ({ taskId: id, tagId })),
-                skipDuplicates: true,
-              }),
-            ]
-          : []),
-      ]);
-    }
-
-    const updated = await this.prisma.task.update({
-      where: { id },
-      data: toPrismaData(patch) as Prisma.TaskUncheckedUpdateInput,
-      include: { tags: { include: { tag: true } } },
+    return this.hub.writeAsHub(userId, async (batch) => {
+      // 全量 set 语义：tagIds 传 undefined 不动；传数组则整组替换
+      await batch.write('task', id, toWireFields(patch));
+      return this.listDto(batch.tx, id);
     });
-    return settledToCompletedAt(
-      withRepeatRuleDto({ ...updated, tags: updated.tags.map((tt) => tt.tag) }),
-    );
   }
 
   async remove(userId: string, id: string) {
-    const existing = await this.prisma.task.findFirst({
-      where: { id, userId },
-    });
-    if (!existing) {
-      throw new NotFoundException('Task not found');
-    }
-
+    await this.requireTask(this.prisma, userId, id);
     const now = new Date();
-    await this.prisma.task.updateMany({
-      where: { id, userId },
-      data: toPrismaData(taskTrashPatch(now.toISOString())),
-    });
-
+    await this.hub.writeAsHub(userId, (batch) =>
+      batch.write('task', id, toWireFields(taskTrashPatch(now.toISOString()))),
+    );
     return { id, trashedAt: now };
   }
 
   async restore(userId: string, id: string) {
-    const existing = await this.prisma.task.findFirst({
-      where: { id, userId },
-    });
-    if (!existing) {
-      throw new NotFoundException('Task not found');
-    }
-
-    await this.prisma.task.updateMany({
-      where: { id, userId },
-      data: toPrismaData(taskRestorePatch()),
-    });
-
+    await this.requireTask(this.prisma, userId, id);
+    await this.hub.writeAsHub(userId, (batch) =>
+      batch.write('task', id, toWireFields(taskRestorePatch())),
+    );
     return { id, trashedAt: null };
   }
 
   async convertToProject(userId: string, id: string) {
-    return this.prisma.$transaction(async (tx) => {
-      const existing = await tx.task.findFirst({
+    const zones = await userCalendarZones(this.prisma, userId);
+    return this.hub.writeAsHub(userId, async (batch) => {
+      const existing = await batch.tx.task.findFirst({
         where: { id, userId },
         include: { tags: true, subtasks: { orderBy: { sortOrder: 'asc' } }, project: true },
       });
       if (!existing) {
         throw new NotFoundException('Task not found');
       }
-      const zones = await userCalendarZones(this.prisma, userId);
       const plan = planConvertTaskToProject(
         {
           title: existing.title,
@@ -339,47 +300,33 @@ export class TasksService {
       );
 
       // 新项目排在末尾（sortOrder = max + 1）
-      const maxSort = await tx.project.aggregate({
+      const maxSort = await batch.tx.project.aggregate({
         where: { userId },
         _max: { sortOrder: true },
       });
-      const newProject = await tx.project.create({
-        data: {
-          ...(toPrismaData(plan.project) as Prisma.ProjectUncheckedCreateInput),
-          sortOrder: (maxSort._max.sortOrder ?? -1) + 1,
-          userId,
-          tags: { create: plan.project.tagIds.map((tagId) => ({ tagId })) },
-        },
-        include: { tags: { include: { tag: true } } },
+      const now = new Date();
+      const projectId = randomUUID();
+      await batch.write('project', projectId, {
+        ...toWireFields(plan.project),
+        ...newRowOrder((maxSort._max.sortOrder ?? -1) + 1, now),
       });
 
-      // 提升出的任务逐条 create（collector 按行发 Change Event；createMany 不返回 id）
-      for (const promoted of plan.promotedTasks) {
-        await tx.task.create({
-          data: {
-            ...(toPrismaData({
-              ...promoted,
-              projectId: newProject.id,
-            }) as Prisma.TaskUncheckedCreateInput),
-            userId,
-          },
+      // 提升出的任务保持原 Subtask 的顺序
+      for (const [index, promoted] of plan.promotedTasks.entries()) {
+        await batch.write('task', randomUUID(), {
+          ...toWireFields({ ...promoted, projectId }),
+          ...newRowOrder(index, now),
         });
       }
 
-      // Compact 登记与原 Task/Subtask 的物理删除同事务提交（Subtask + TaskTag 由 DB 级联）
-      await registerCompacted(tx, userId, 'task', [id]);
-      await registerCompacted(
-        tx,
-        userId,
-        'subtask',
-        existing.subtasks.map((subtask) => subtask.id),
-      );
-      await tx.task.delete({ where: { id } });
+      // 原 Task 物理删除（级联 Subtask、Compact 登记），与新项目同事务
+      await batch.delete('task', [id]);
 
-      return {
-        ...newProject,
-        tags: newProject.tags.map((pt) => pt.tag),
-      };
+      const project = await batch.tx.project.findUniqueOrThrow({
+        where: { id: projectId },
+        include: WITH_TAGS,
+      });
+      return { ...project, tags: project.tags.map((pt) => pt.tag) };
     });
   }
 
@@ -404,12 +351,13 @@ export class TasksService {
       void subtasks;
       return settledToCompletedAt(withRepeatRuleDto(row));
     }
-    const updated = await this.prisma.task.update({
-      where: { id },
-      data: toPrismaData(plan.patch),
+    return this.hub.writeAsHub(userId, async (batch) => {
+      await batch.write('task', id, toWireFields(plan.patch));
+      if (plan.deriveRepeat) await this.deriveRepeatInstance(batch, userId, existing, settledAt);
+      return settledToCompletedAt(
+        withRepeatRuleDto(await batch.tx.task.findUniqueOrThrow({ where: { id } })),
+      );
     });
-    if (plan.deriveRepeat) await this.deriveRepeatInstance(userId, existing, settledAt);
-    return settledToCompletedAt(withRepeatRuleDto(updated));
   }
 
   async uncomplete(userId: string, id: string) {
@@ -417,38 +365,30 @@ export class TasksService {
   }
 
   async cancel(userId: string, id: string) {
-    const existing = await this.prisma.task.findFirst({
-      where: { id, userId },
-    });
-    if (!existing) {
-      throw new NotFoundException('Task not found');
-    }
+    await this.requireTask(this.prisma, userId, id);
     // 取消父 Task 不改动其 Subtasks（CONTEXT.md）；不派生，链就此终结
-    const updated = await this.prisma.task.update({
-      where: { id },
-      data: toPrismaData(taskCancelPatch(new Date().toISOString())),
+    return this.hub.writeAsHub(userId, async (batch) => {
+      await batch.write('task', id, toWireFields(taskCancelPatch(new Date().toISOString())));
+      return settledToCompletedAt(
+        withRepeatRuleDto(await batch.tx.task.findUniqueOrThrow({ where: { id } })),
+      );
     });
-    return settledToCompletedAt(withRepeatRuleDto(updated));
   }
 
   async uncancel(userId: string, id: string) {
     return this.reopen(userId, id);
   }
 
-  /** 重开（取消完成 / 取消取消）：先删除已派生的实例（ADR-0012）。 */
+  /** 重开（取消完成 / 取消取消）：先删除已派生的实例（ADR-0012），同一事务。 */
   private async reopen(userId: string, id: string) {
-    const existing = await this.prisma.task.findFirst({
-      where: { id, userId },
+    const existing = await this.requireTask(this.prisma, userId, id);
+    return this.hub.writeAsHub(userId, async (batch) => {
+      await this.deleteDerivedInstance(batch, userId, existing);
+      await batch.write('task', id, toWireFields(taskReopenPatch()));
+      return settledToCompletedAt(
+        withRepeatRuleDto(await batch.tx.task.findUniqueOrThrow({ where: { id } })),
+      );
     });
-    if (!existing) {
-      throw new NotFoundException('Task not found');
-    }
-    await this.deleteDerivedInstance(userId, existing);
-    const updated = await this.prisma.task.update({
-      where: { id },
-      data: toPrismaData(taskReopenPatch()),
-    });
-    return settledToCompletedAt(withRepeatRuleDto(updated));
   }
 
   async reorder(userId: string, orderedIds: string[]) {
@@ -461,22 +401,13 @@ export class TasksService {
       throw new NotFoundException('Task not found');
     }
 
-    // 双排序键一起写：sortOrder 是 web 端 REST 读序列，position 是
-    // 桌面端 Local Replica 读序列（fractional indexing）。漏写 position
-    // 时，已被设备写过真实 position 的行在桌面端不会再变序（hub 对
-    // position null 的 legacy 行才按 sortOrder 合成）。写入值与 hub
-    // 的合成函数完全一致，两端排序口径不漂移。
+    // 双排序键一起写：sortOrder 是 web 端 REST 读序列，position 是设备
+    // 副本读序列（fractional indexing），写入值与 hub 的合成函数一致。
     const createdAtOf = new Map(owned.map((t) => [t.id, t.createdAt]));
-    await this.prisma.$transaction(
-      orderedIds.map((id, index) =>
-        this.prisma.task.updateMany({
-          where: { id, userId },
-          data: {
-            sortOrder: index,
-            position: synthPosition(index, createdAtOf.get(id)!),
-          },
-        }),
-      ),
-    );
+    await this.hub.writeAsHub(userId, async (batch) => {
+      for (const [index, id] of orderedIds.entries()) {
+        await batch.write('task', id, orderFields(index, createdAtOf.get(id)!));
+      }
+    });
   }
 }

@@ -1,5 +1,5 @@
 /**
- * 同步传输层（HTTP）— Engine ↔ Sync Hub 的设备侧实现，桌面端与移动端共用。
+ * 同步传输层（HTTP）— Engine ↔ Sync Hub 的设备侧实现，桌面端、移动端与 web 共用。
  *
  * 推拉式三段（ADR-0007）：push batch / pull since cursor / bootstrap
  * snapshot，全部走 JWT 保护的 /sync 端点。断网时调用抛错，由调用方的
@@ -28,7 +28,7 @@ import {
 import { apiClient } from '@/api/client';
 import { getAppVersion } from '@/utils/appInfo';
 
-export type SyncClientPlatform = 'desktop' | 'mobile';
+export type SyncClientPlatform = 'desktop' | 'mobile' | 'web';
 
 /** 协议版本头 + 客户端标识（版本号在 boot 时异步注入，按请求读取）。 */
 function syncHeaders(platform: SyncClientPlatform): Record<string, string> {

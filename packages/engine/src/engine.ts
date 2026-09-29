@@ -69,8 +69,11 @@ export interface Engine {
   delete(entity: SyncEntity, ids: string[]): Promise<void>;
   /** Outbox 未同步条数（诊断/测试）。 */
   pendingCount(): Promise<number>;
-  /** 该 id 是否已被 compact（ADR-0008；Repeat 派生的死 id 检测）。 */
-  isCompacted(entity: SyncEntity, id: string): boolean;
+  /**
+   * 该 id 是否已被 compact（ADR-0008；Repeat 派生的死 id 检测）。异步：
+   * web 的非 leader 标签页经 leader 代理 Engine（local-first-v3 issue 05）。
+   */
+  isCompacted(entity: SyncEntity, id: string): Promise<boolean>;
   /** 把 Outbox 推给 Sync Hub；成功后清空已推条目。 */
   flush(): Promise<void>;
   /** 凭 Sync Cursor 拉取增量并应用；resync 时自动 bootstrap。 */
@@ -248,7 +251,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
         ids.filter((id) => typeof id === 'string'),
       ),
     pendingCount: () => replica.outboxCount(),
-    isCompacted: (entity, id) => replica.isCompacted(entity, id),
+    isCompacted: async (entity, id) => replica.isCompacted(entity, id),
     flush,
     pull: applyPull,
     async sync() {

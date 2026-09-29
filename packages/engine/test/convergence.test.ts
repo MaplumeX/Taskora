@@ -993,7 +993,7 @@ describe('Compact 登记跨会话持久与 Outbox 因果序', () => {
         deviceId: 'A',
         transport,
       });
-      expect(restarted.isCompacted('task', 'derived-1')).toBe(true);
+      expect(await restarted.isCompacted('task', 'derived-1')).toBe(true);
       await restarted.close();
     } finally {
       rmSync(dir, { recursive: true, force: true });

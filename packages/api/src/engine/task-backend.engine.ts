@@ -173,7 +173,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     // 确定性 id 已被 compact（重开删除过该实例后重新完成）：无法经 hub
     // 复活（ADR-0008 Compact 永久获胜），换新 id——唯一的复活路径。
     const instanceId = await engine.create('task', {
-      ...(engine.isCompacted('task', plan.id) ? {} : { id: plan.id }),
+      ...((await engine.isCompacted('task', plan.id)) ? {} : { id: plan.id }),
       ...plan.task,
       position,
       sortOrder,
