@@ -12,6 +12,7 @@ import { Injectable, OnModuleInit } from '@nestjs/common';
 
 import {
   mergeFieldWrites,
+  applyRepairs,
   hlcWallMs,
   formatHlc,
   scrubReferences,
@@ -353,14 +354,25 @@ export class SyncHubService implements OnModuleInit {
       // 语义）。先批量预加载引用状态，再清洗。
       const referenceStatuses = await this.loadReferenceStatuses(tx, userId, event.entity, outcome);
       const bumpWall = 1 + Math.max(Date.now(), ...Object.values(outcome.clocks).map(hlcWallMs));
+      const bumpClock = () =>
+        formatHlc({ wallMs: bumpWall, counter: 0, deviceId: VIRTUAL_DEVICE_ID });
       const handled = scrubReferences(
         event.entity,
         current ? { fields: current.fields, clocks: current.clocks } : null,
         outcome,
         (target, id) => referenceStatuses.get(`${target}:${id}`) ?? 'pending',
-        () => formatHlc({ wallMs: bumpWall, counter: 0, deviceId: VIRTUAL_DEVICE_ID }),
+        bumpClock,
       );
       if (!handled) return null; // 孤儿 Subtask：整事件丢弃
+      // 跨字段不变量（local-first-v3 issue 01）：合并出的组合违反业务规则
+      // （别的项目的分组、Someday 带提醒……）时纠正，以必胜时钟下发。
+      const headingOwner = await this.loadHeadingOwner(tx, event.entity, outcome.fields);
+      applyRepairs(
+        event.entity,
+        outcome,
+        (headingId) => (headingId === headingOwner?.id ? headingOwner.projectId : undefined),
+        bumpClock,
+      );
       if (outcome.appliedFields.length === 0) return null;
 
       // 新建行走 create 模式：tagIds 只物化为纯 create。
@@ -534,6 +546,19 @@ export class SyncHubService implements OnModuleInit {
       }
     }
     return statuses;
+  }
+
+  /** 任务所挂分组的归属项目（R4 探针；非任务 / 无分组 / 分组不存在时为 null）。 */
+  private async loadHeadingOwner(
+    tx: unknown,
+    entity: SyncEntity,
+    fields: Record<string, unknown>,
+  ): Promise<{ id: string; projectId: string } | null> {
+    if (entity !== 'task' || typeof fields.headingId !== 'string') return null;
+    const heading = await loadRow(tx, codecFor('project-heading'), fields.headingId);
+    return heading && typeof heading.projectId === 'string'
+      ? { id: fields.headingId, projectId: heading.projectId }
+      : null;
   }
 
   /** 同一实体的跨实例事务锁；行存在时再取 FOR UPDATE，与普通 REST 写互斥。 */

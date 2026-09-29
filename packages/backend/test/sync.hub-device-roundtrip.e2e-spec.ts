@@ -16,6 +16,7 @@ import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
 import {
   formatHlc,
+  HybridClock,
   mergeEntityState,
   openEngine,
   type EntityMergeState,
@@ -448,6 +449,75 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     expect((await b.get('task', id))?.fields.status).toBe('ACTIVE');
     expect((await a.get('task', id))?.fields.title).toBe('t2');
     expect((await b.get('task', id))?.fields.title).toBe('t2');
+    await a.close();
+    await b.close();
+  });
+
+  it('并发编辑合并出违反业务规则的组合时，hub 纠正并让两台设备收敛', async () => {
+    const transport: SyncTransport = {
+      push: (request) => hub.push(USER, request.events, request.deletes),
+      pull: (request) => buffer.pull(USER, request.cursor),
+      bootstrap: () => hub.bootstrap(USER),
+    };
+    const a = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'dev-a',
+      transport,
+    });
+    // B 的系统时钟快 1 分钟（在漂移上限内）：它的编辑在 LWW 中胜出
+    const b = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'dev-b',
+      transport,
+      clock: new HybridClock('dev-b', () => Date.now() + 60_000),
+    });
+    await a.sync();
+    const p1 = await a.create('project', { title: 'P1', status: 'ACTIVE', bucket: 'ANYTIME' });
+    const p2 = await a.create('project', { title: 'P2', status: 'ACTIVE', bucket: 'ANYTIME' });
+    const h1 = await a.create('project-heading', { title: 'H1', projectId: p1, status: 'ACTIVE' });
+    const moved = await a.create('task', {
+      title: 'moved',
+      status: 'ACTIVE',
+      scheduledType: 'NONE',
+      bucket: 'ANYTIME',
+      projectId: p1,
+    });
+    const someday = await a.create('task', {
+      title: 'someday',
+      status: 'ACTIVE',
+      scheduledType: 'DATE',
+      scheduledDate: '2026-10-01',
+      bucket: 'SCHEDULED',
+    });
+    await a.sync();
+    await b.sync();
+
+    // 各自离线编辑（本地写，暂不推送）
+    await a.update('task', moved, { projectId: p2, headingId: null });
+    await a.update('task', someday, {
+      scheduledType: 'SOMEDAY',
+      scheduledDate: null,
+      reminderTime: null,
+      repeatRule: null,
+    });
+    await b.update('task', moved, { headingId: h1 });
+    await b.update('task', someday, { reminderTime: '09:00' });
+    await a.sync();
+    await b.sync();
+    await a.sync();
+
+    for (const device of [a, b]) {
+      const task = (await device.get('task', moved))!.fields;
+      expect(task.projectId).toBe(p2);
+      expect(task.headingId).toBeNull();
+      const other = (await device.get('task', someday))!.fields;
+      expect(other.scheduledType).toBe('SOMEDAY');
+      expect(other.reminderTime).toBeNull();
+    }
+    const rows = await testPrisma.task.findMany({ where: { id: { in: [moved, someday] } } });
+    const byId = new Map(rows.map((row) => [row.id, row]));
+    expect(byId.get(moved)?.headingId).toBeNull();
+    expect(byId.get(someday)?.reminderTime).toBeNull();
     await a.close();
     await b.close();
   });

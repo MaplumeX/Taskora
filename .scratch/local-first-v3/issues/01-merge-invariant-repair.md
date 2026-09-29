@@ -1,6 +1,6 @@
 # 01 合并后的确定性修复（跨字段不变量）
 
-Status: in-progress
+Status: done
 
 ## Problem
 
@@ -43,3 +43,12 @@ REST 写路径按规则写入（`TasksService.update`、`heading-invariant` 测�
 - `repairEntity` 有逐条规则的单元测试，包括「一致状态返回空」「NONE 下 INBOX / ANYTIME 保留」「未知分组不动」。
 
 ## Comments
+
+2026-09-29 — 已实现。
+
+- `packages/engine/src/invariants.ts`：`repairEntity`、`resolveTaskBucket`、`resolveProjectBucket`（规则 R1–R5，单元测试 9 个）。
+- `packages/engine/src/hub.ts`：`applyRepairs`（与 `scrubReferences` 并列，两个 hub 共用）；进程内 hub 合并后调用。
+- `packages/backend/src/sync/sync-hub.service.ts`：合并、清洗之后调用 `applyRepairs`，分组归属在事务内预读。
+- 测试：进程内 hub 四个冲突场景 + 「无冲突不修复、回声零应用」；真实 Postgres 端到端（分组与项目、Someday 与提醒）。去掉修复时冲突场景全部失败。
+- 与设计的差异：无。
+

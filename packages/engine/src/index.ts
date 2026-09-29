@@ -74,9 +74,16 @@ export type {
 } from './protocol';
 export {
   InMemorySyncHub,
+  applyRepairs,
   scrubReferences,
   VIRTUAL_DEVICE_ID,
   type InMemorySyncHubOptions,
   type ReferenceProbe,
   type ReferenceStatus,
 } from './hub';
+export {
+  repairEntity,
+  resolveProjectBucket,
+  resolveTaskBucket,
+  type HeadingProjectProbe,
+} from './invariants';

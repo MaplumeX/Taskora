@@ -1245,3 +1245,131 @@ describe('同步时的局部 re-balance', () => {
     await engine.close();
   });
 });
+
+describe('跨字段不变量：并发编辑合并后确定性修复（local-first-v3 01）', () => {
+  /** 两台设备先同步到同一状态，然后各自离线编辑，再先后联网。 */
+  async function concurrently(
+    setup: (a: Engine) => Promise<string>,
+    editA: (a: Engine, id: string) => Promise<void>,
+    editB: (b: Engine, id: string) => Promise<void>,
+  ) {
+    const h = await makeHarness();
+    const a = await h.device('A');
+    // B 的墙钟更晚：它的编辑在字段级 LWW 中一定胜出，冲突组合必然形成
+    const b = await h.device('B', 2_000_000);
+    await a.sync();
+    const id = await setup(a);
+    await a.sync();
+    await b.sync();
+    h.online(a, false);
+    h.online(b, false);
+    await editA(a, id);
+    await editB(b, id);
+    h.online(a, true);
+    h.online(b, true);
+    await a.sync();
+    await b.sync();
+    await a.sync();
+    const fieldsA = (await a.get('task', id))!.fields;
+    const fieldsB = (await b.get('task', id))!.fields;
+    const hub = h.hub.entityState(USER, 'task', id)!.fields;
+    return { a, b, fieldsA, fieldsB, hub };
+  }
+
+  it('A 换项目、B 设了原项目的分组 → 分组被清空，三方一致', async () => {
+    let p2 = '';
+    let h1 = '';
+    const { fieldsA, fieldsB, hub } = await concurrently(
+      async (a) => {
+        const p1 = await a.create('project', { title: 'P1', status: 'ACTIVE', bucket: 'ANYTIME' });
+        p2 = await a.create('project', { title: 'P2', status: 'ACTIVE', bucket: 'ANYTIME' });
+        h1 = await a.create('project-heading', { title: 'H1', projectId: p1, status: 'ACTIVE' });
+        return createTask(a, 't', { projectId: p1, bucket: 'ANYTIME', scheduledType: 'NONE' });
+      },
+      (a, id) => a.update('task', id, { projectId: p2, headingId: null }),
+      (b, id) => b.update('task', id, { headingId: h1 }),
+    );
+    for (const fields of [fieldsA, fieldsB, hub]) {
+      expect(fields.projectId).toBe(p2);
+      expect(fields.headingId).toBeNull();
+    }
+  });
+
+  it('A 移到 Someday、B 设了提醒 → Someday 任务不带提醒', async () => {
+    const { fieldsA, fieldsB, hub } = await concurrently(
+      (a) =>
+        createTask(a, 't', {
+          scheduledType: 'DATE',
+          scheduledDate: '2026-10-01',
+          bucket: 'SCHEDULED',
+        }),
+      (a, id) =>
+        a.update('task', id, {
+          scheduledType: 'SOMEDAY',
+          scheduledDate: null,
+          reminderTime: null,
+          repeatRule: null,
+          bucket: 'SCHEDULED',
+        }),
+      (b, id) => b.update('task', id, { reminderTime: '09:00' }),
+    );
+    for (const fields of [fieldsA, fieldsB, hub]) {
+      expect(fields.scheduledType).toBe('SOMEDAY');
+      expect(fields.reminderTime).toBeNull();
+    }
+  });
+
+  it('A 设日期、B 把任务移到 Anytime → 落在 Scheduled', async () => {
+    const { fieldsA, fieldsB, hub } = await concurrently(
+      (a) => createTask(a, 't', { scheduledType: 'NONE', bucket: 'INBOX' }),
+      (a, id) =>
+        a.update('task', id, {
+          scheduledType: 'DATE',
+          scheduledDate: '2026-10-01',
+          bucket: 'SCHEDULED',
+        }),
+      (b, id) => b.update('task', id, { bucket: 'ANYTIME' }),
+    );
+    for (const fields of [fieldsA, fieldsB, hub]) {
+      expect(fields.scheduledType).toBe('DATE');
+      expect(fields.bucket).toBe('SCHEDULED');
+    }
+  });
+
+  it('A 重开任务、B（旧客户端）只写了结时间 → 未了结且没有了结时间', async () => {
+    const { fieldsA, fieldsB, hub } = await concurrently(
+      (a) =>
+        createTask(a, 't', {
+          scheduledType: 'NONE',
+          status: 'COMPLETED',
+          settledAt: '2026-09-01T00:00:00.000Z',
+        }),
+      (a, id) => a.update('task', id, { status: 'ACTIVE', settledAt: null }),
+      (b, id) => b.update('task', id, { settledAt: '2026-09-02T00:00:00.000Z' }),
+    );
+    for (const fields of [fieldsA, fieldsB, hub]) {
+      expect(fields.status).toBe('ACTIVE');
+      expect(fields.settledAt).toBeNull();
+    }
+  });
+
+  it('没有冲突的并发编辑不触发修复：写入方的回声零应用', async () => {
+    const h = await makeHarness();
+    const a = await h.device('A');
+    await a.sync();
+    const id = await createTask(a, 't', { scheduledType: 'NONE', bucket: 'INBOX' });
+    await a.sync();
+    const remote: string[] = [];
+    a.onChange((change) => {
+      if (change.origin === 'remote') remote.push('remote');
+    });
+    await a.update('task', id, {
+      scheduledType: 'DATE',
+      scheduledDate: '2026-10-01',
+      bucket: 'SCHEDULED',
+      reminderTime: '09:00',
+    });
+    await a.sync();
+    expect(remote).toEqual([]);
+  });
+});

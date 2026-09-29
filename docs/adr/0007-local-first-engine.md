@@ -29,6 +29,20 @@ Key decisions, in the order they matter:
   Task/Project/Tag entities inside the LWW system, not a separate CRDT list.
   Concurrent drags converge without touching other rows' positions; a
   background re-balance keeps strings from growing unboundedly.
+- **Cross-field invariants are repaired after every hub merge** (amended
+  2026-09-29). Field-level LWW can combine two valid edits into an invalid
+  entity (a heading from another project, a Someday task with a reminder, a
+  DATE task in the Anytime bucket). After merging and reference scrubbing,
+  both hubs run the pure `repairEntity` (same rules as the REST services)
+  and write its corrections with a winning virtual-device-0 clock, exactly
+  like reference scrubbing, so every device converges on the repaired
+  value. The tightening side wins (moving to another project clears the
+  heading; leaving DATE clears reminder and repeat rule). Devices do not
+  repair in storage — a local fix under the original clock could tie with a
+  different hub value forever; they converge on the next pull. Field groups
+  with a shared clock were considered and rejected: they turn independent
+  concurrent edits (date on one device, reminder time on another) into
+  conflicts. See `.scratch/local-first-v3/issues/01`.
 - **Soft delete is the only delete on the sync wire.** The existing
   Trash/terminal-state model already encodes deletion as field updates, so it
   merges like any other field. Physical deletion is hub-side GC only, delivered

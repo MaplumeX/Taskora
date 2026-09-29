@@ -8,6 +8,7 @@
  */
 
 import { mergeFieldWrites, type EntityMergeState, type MergeOutcome } from './merger';
+import { repairEntity, type HeadingProjectProbe } from './invariants';
 import { formatHlc, hlcWallMs } from './hlc';
 import { DELETE_CASCADES, REFERENCE_FIELDS, type SyncEntity } from './entities';
 import type {
@@ -206,26 +207,32 @@ export class InMemorySyncHub {
       if (state.entities.has(targetKey)) return 'alive' as const;
       return 'pending' as const;
     };
-    const handled = scrubReferences(
-      event.entity,
-      current,
-      outcome,
-      referenceStatus,
-      () =>
-        formatHlc({
-          // 必胜时钟：晚于已见时钟、hub 墙钟与本事件自身的 HLC 墙钟
-          // （设备时钟可能超前于 hub 墙钟）。
-          wallMs:
-            Math.max(
-              state.seenWallMs,
-              this.wallClock(),
-              ...Object.values(event.fields).map((write) => hlcWallMs(write.hlc)),
-            ) + 1,
-          counter: 0,
-          deviceId: VIRTUAL_DEVICE_ID,
-        }),
-    );
+    // 必胜时钟：晚于已见时钟、hub 墙钟与本事件自身的 HLC 墙钟
+    // （设备时钟可能超前于 hub 墙钟）。
+    const bumpClock = () =>
+      formatHlc({
+        wallMs:
+          Math.max(
+            state.seenWallMs,
+            this.wallClock(),
+            ...Object.values(event.fields).map((write) => hlcWallMs(write.hlc)),
+          ) + 1,
+        counter: 0,
+        deviceId: VIRTUAL_DEVICE_ID,
+      });
+    const handled = scrubReferences(event.entity, current, outcome, referenceStatus, bumpClock);
     if (!handled) return;
+    // 跨字段不变量（local-first-v3 issue 01）：合并出的组合违反业务规则
+    // 时纠正，并以必胜时钟下发，所有设备收敛到同一结果。
+    applyRepairs(
+      event.entity,
+      outcome,
+      (headingId) => {
+        const owner = state.entities.get(`project-heading:${headingId}`)?.fields.projectId;
+        return typeof owner === 'string' ? owner : undefined;
+      },
+      bumpClock,
+    );
     if (this.enforceReferences) {
       const refs = REFERENCE_FIELDS[event.entity] ?? {};
       for (const field of outcome.appliedFields) {
@@ -349,6 +356,30 @@ export type ReferenceProbe = (entity: SyncEntity, id: string) => ReferenceStatus
 
 /** 为被清洗字段生成必胜时钟（晚于推送设备的 HLC）。 */
 export type ClockBump = () => string;
+
+/**
+ * 合并后的确定性修复（local-first-v3 issue 01）：就地修改 outcome，
+ * 把违反跨字段不变量的字段纠正为 repairEntity 给出的值，时钟提升为
+ * bumpClock()（虚拟设备 0 的必胜时钟），推送方与其他设备拉到后都采用
+ * 纠正值。只在这次合并真的改了什么时运行：纯重放保持零事件。
+ * 两个 hub（进程内与 NestJS）共用。
+ */
+export function applyRepairs(
+  entity: SyncEntity,
+  outcome: MergeOutcome,
+  probe: HeadingProjectProbe,
+  bumpClock: ClockBump,
+): string[] {
+  if (outcome.appliedFields.length === 0) return [];
+  const fixes = repairEntity(entity, outcome.fields, probe);
+  const repaired = Object.keys(fixes);
+  for (const field of repaired) {
+    outcome.fields[field] = fixes[field];
+    outcome.clocks[field] = bumpClock();
+    if (!outcome.appliedFields.includes(field)) outcome.appliedFields.push(field);
+  }
+  return repaired;
+}
 
 /**
  * 合并结果中的失效引用清洗（REFERENCE_FIELDS 注册表驱动）。
