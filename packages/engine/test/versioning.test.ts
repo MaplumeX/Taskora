@@ -36,7 +36,7 @@ async function columnsOf(storage: SqlStorage, table: string): Promise<string[]> 
 
 /**
  * 版本号出现之前的安装：user_version 为 0，缺后来加的列与表
- * （_outbox.kind / revision、task.reminderTime / repeatRule、project_heading）。
+ * （_outbox.kind / revision、task.reminderTime / repeatRule / repeatSourceId、project_heading）。
  */
 async function legacyReplica(): Promise<SqlStorage> {
   const storage = await createNodeSqliteStorage(':memory:');
@@ -44,6 +44,7 @@ async function legacyReplica(): Promise<SqlStorage> {
   await storage.exec('DROP TABLE project_heading');
   await storage.exec('ALTER TABLE task DROP COLUMN reminderTime');
   await storage.exec('ALTER TABLE task DROP COLUMN repeatRule');
+  await storage.exec('ALTER TABLE task DROP COLUMN repeatSourceId');
   await storage.exec('ALTER TABLE _outbox DROP COLUMN kind');
   await storage.exec('ALTER TABLE _outbox DROP COLUMN revision');
   await storage.run("INSERT INTO task (id, title, clocks) VALUES ('t1', 'Legacy', '{}')");
@@ -66,7 +67,7 @@ describe('副本 schema 版本', () => {
     const engine = await open(storage);
     expect(await readSchemaVersion(storage)).toBe(REPLICA_SCHEMA_VERSION);
     expect(await columnsOf(storage, 'task')).toEqual(
-      expect.arrayContaining(['reminderTime', 'repeatRule']),
+      expect.arrayContaining(['reminderTime', 'repeatRule', 'repeatSourceId']),
     );
     await engine.close();
   });
@@ -82,6 +83,7 @@ describe('副本 schema 版本', () => {
       expect.arrayContaining(['kind', 'revision']),
     );
     expect(await columnsOf(storage, 'project_heading')).toContain('projectId');
+    expect(await columnsOf(storage, 'task')).toContain('repeatSourceId');
     expect((await engine.get('task', 't1'))?.fields.title).toBe('Legacy');
     expect(await engine.pendingCount()).toBe(1);
     await engine.update('task', 't1', { reminderTime: '09:00' });

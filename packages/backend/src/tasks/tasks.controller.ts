@@ -99,6 +99,14 @@ export class TasksController {
     return this.tasksService.uncancel(req.user.id, id);
   }
 
+  @Post(':id/skip')
+  skip(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.tasksService.skip(req.user.id, id);
+  }
+
   @Post(':id/convert-to-project')
   convertToProject(
     @Request() req: { user: { id: string } },

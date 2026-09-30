@@ -5,7 +5,7 @@
  * REST 写经合并器落库：字段值、变更日志与数据同事务、虚拟设备 0 的
  * 时钟语义、多行操作的原子性。
  */
-import { NotFoundException } from '@nestjs/common';
+import { ConflictException, NotFoundException } from '@nestjs/common';
 import { afterAll, beforeEach, expect, it } from 'vitest';
 
 import {
@@ -389,33 +389,86 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     expect(await testPrisma.task.count()).toBe(5);
   });
 
-  it('uncomplete 删除派生实例（Compact 登记、级联 Subtask、同事务广播）', async () => {
+  it('complete 写入派生来源 repeatSourceId', async () => {
+    await seedRepeating();
+    await h.tasks.complete(USER, 'task-1');
+    const instance = await testPrisma.task.findUniqueOrThrow({ where: { id: expectedInstanceId } });
+    expect(instance.repeatSourceId).toBe('task-1');
+  });
+
+  it('uncomplete / uncancel 不删除派生实例：不登记 Compact，再完成不重复派生', async () => {
     await seedRepeating();
     await testPrisma.subtask.create({ data: { id: 'st-1', taskId: 'task-1', title: '客厅' } });
     await h.tasks.complete(USER, 'task-1');
-    const derivedSubtask = deriveSubtaskId(expectedInstanceId, 0);
 
     const dto = await h.tasks.uncomplete(USER, 'task-1');
     expect(dto.status).toBe(TaskStatus.ACTIVE);
-    expect(await testPrisma.task.findUnique({ where: { id: expectedInstanceId } })).toBeNull();
-    expect(await registeredCompacted('task')).toEqual([expectedInstanceId]);
-    expect(await registeredCompacted('subtask')).toEqual([derivedSubtask]);
-    expect(await compactedIdsInLog('task')).toEqual([expectedInstanceId]);
-    expect(await compactedIdsInLog('subtask')).toEqual([derivedSubtask]);
-
-    // 确定性 id 已死：重新完成换新 uuid 派生（唯一的复活路径）
-    await h.tasks.complete(USER, 'task-1');
-    const reborn = await testPrisma.task.findMany({ where: { id: { not: 'task-1' } } });
-    expect(reborn).toHaveLength(1);
-    expect(reborn[0].id).not.toBe(expectedInstanceId);
-    expect(reborn[0].id).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/);
-  });
-
-  it('uncancel 对从未派生的任务无副作用', async () => {
-    await seedRepeating({ status: 'CANCELLED', settledAt: new Date('2026-02-05T10:00:00Z') });
-    await h.tasks.uncancel(USER, 'task-1');
+    expect(await testPrisma.task.findUnique({ where: { id: expectedInstanceId } })).not.toBeNull();
     expect(await registeredCompacted('task')).toEqual([]);
     expect(await compactedIdsInLog('task')).toEqual([]);
+
+    await h.tasks.complete(USER, 'task-1');
+    await h.tasks.cancel(USER, 'task-1');
+    await h.tasks.uncancel(USER, 'task-1');
+    const instances = await testPrisma.task.findMany({ where: { id: { not: 'task-1' } } });
+    expect(instances.map((task) => task.id)).toEqual([expectedInstanceId]);
+  });
+
+  it('anchor=completion：来源已有派生实例时，换日再完成不重复派生', async () => {
+    await seedRepeating({ repeatRule: JSON.stringify({ ...dailyRule, anchor: 'completion' }) });
+    await seedTask('earlier-instance', { repeatSourceId: 'task-1' });
+    await h.tasks.complete(USER, 'task-1');
+    expect(await testPrisma.task.count()).toBe(2);
+  });
+
+  it('派生实例在 Trash：再完成换新 uuid 派生', async () => {
+    await seedRepeating();
+    await seedTask(expectedInstanceId, {
+      repeatSourceId: 'task-1',
+      trashedAt: new Date('2026-02-05T12:00:00Z'),
+    });
+    await h.tasks.complete(USER, 'task-1');
+    const live = await testPrisma.task.findMany({
+      where: { id: { not: 'task-1' }, trashedAt: null },
+    });
+    expect(live).toHaveLength(1);
+    expect(live[0].id).not.toBe(expectedInstanceId);
+    expect(live[0].repeatSourceId).toBe('task-1');
+  });
+
+  it('skip：计划日推进到今天、截止日平移、Subtask 重置，同一事务入日志', async () => {
+    await seedRepeating({ dueDate: new Date('2026-02-07T00:00:00Z') });
+    await testPrisma.subtask.create({
+      data: { id: 'st-1', taskId: 'task-1', title: '客厅', status: 'COMPLETED' },
+    });
+    const today = new Date().toISOString().slice(0, 10);
+
+    const dto = await h.tasks.skip(USER, 'task-1');
+    expect(dto.scheduledDate).toEqual(new Date(`${today}T00:00:00Z`));
+    const row = await testPrisma.task.findUniqueOrThrow({ where: { id: 'task-1' } });
+    const shift =
+      (Date.parse(`${today}T00:00:00Z`) - Date.parse('2026-02-05T00:00:00Z')) / 86_400_000;
+    expect(row.dueDate).toEqual(new Date(Date.parse('2026-02-07T00:00:00Z') + shift * 86_400_000));
+    expect(row.status).toBe(TaskStatus.ACTIVE);
+    const subtask = await testPrisma.subtask.findUniqueOrThrow({ where: { id: 'st-1' } });
+    expect(subtask.status).toBe(TaskStatus.ACTIVE);
+    expect(await testPrisma.task.count()).toBe(1);
+    await expectLoggedAsStored('task', 'task-1');
+    await expectLoggedAsStored('subtask', 'st-1');
+  });
+
+  it('skip 不可用 → 409（message 为原因）；不存在 → 404', async () => {
+    await seedRepeating();
+    await seedTask('instance', { repeatSourceId: 'task-1' });
+    await expect(h.tasks.skip(USER, 'task-1')).rejects.toMatchObject({
+      constructor: ConflictException,
+      message: 'next-exists',
+    });
+    await seedTask('plain');
+    await expect(h.tasks.skip(USER, 'plain')).rejects.toMatchObject({
+      message: 'not-repeating',
+    });
+    await expect(h.tasks.skip(USER, 'missing')).rejects.toBeInstanceOf(NotFoundException);
   });
 
   // ---------- 转项目 / 重排 ----------

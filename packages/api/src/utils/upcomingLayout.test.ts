@@ -18,6 +18,7 @@ function task(id: string, scheduledDate: string | null): FeedItem {
     scheduledType: scheduledDate ? ScheduledType.DATE : ScheduledType.NONE,
     reminderTime: null,
     repeatRule: null,
+    repeatSourceId: null,
     dueDate: null,
     status: TaskStatus.ACTIVE,
     bucket: TaskBucket.SCHEDULED,
@@ -254,5 +255,37 @@ describe('buildUpcomingLayout', () => {
     const layout = buildUpcomingLayout([first, second], new Date(2026, 7, 26));
 
     expect(layout.week[0].items.map((entry) => entry.id)).toEqual(['first', 'second']);
+  });
+
+  it('places repeat previews by date: week days, later months (preview-only days too), window-bounded', () => {
+    const preview = (sourceTaskId: string, dateKey: string) => ({
+      sourceTaskId,
+      title: sourceTaskId,
+      dateKey,
+      projectId: null,
+      areaId: null,
+    });
+    const layout = buildUpcomingLayout(
+      [task('real', localNoonIso(2026, 8, 27))],
+      new Date(2026, 7, 26),
+      [
+        preview('tomorrow', '2026-08-27'),
+        preview('later', '2026-09-10'),
+        preview('beyond', '2027-03-01'),
+      ],
+    );
+
+    expect(layout.week[0].items.map((entry) => entry.id)).toEqual(['real']);
+    expect(layout.week[0].previews.map((p) => p.sourceTaskId)).toEqual(['tomorrow']);
+    expect(layout.later[0].days).toEqual([
+      expect.objectContaining({
+        dateKey: '2026-09-10',
+        items: [],
+        previews: [preview('later', '2026-09-10')],
+      }),
+    ]);
+    expect(layout.later.flatMap((month) => month.days.flatMap((day) => day.previews))).toHaveLength(
+      1,
+    );
   });
 });

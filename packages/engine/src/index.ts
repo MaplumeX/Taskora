@@ -3,6 +3,7 @@ export {
   normalizeRepeatRule,
   canonicalRepeatRule,
   nextOccurrenceDate,
+  skipOccurrenceDate,
   deriveRepeatInstanceId,
   deriveSubtaskId,
 } from './repeat';

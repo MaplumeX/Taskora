@@ -1,14 +1,16 @@
 import { randomUUID } from 'node:crypto';
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   planConvertTaskToProject,
   planRepeatInstance,
+  planRepeatSkip,
   planTaskComplete,
   planTaskCreate,
   planTaskUpdate,
-  repeatInstanceId,
+  repeatDerivationTarget,
   sortForView,
+  subtaskStatusPatch,
   taskCancelPatch,
   taskMatchesQuery,
   taskReopenPatch,
@@ -95,18 +97,32 @@ export class TasksService {
       await userCalendarZones(this.prisma, userId),
     );
     if (!plan) return;
-    const existing = await batch.tx.task.findFirst({
-      where: { id: plan.id, userId },
+    const linked = await batch.tx.task.findFirst({
+      where: { userId, repeatSourceId: parent.id, trashedAt: null },
       select: { id: true },
     });
-    if (existing) return; // 幂等（restore 后重完成 / 并发派生）
-    // 确定性 id 已被 compact（重开删除过该实例后重新完成）：设备副本上
-    // 无法复活（ADR-0008 Compact 永久获胜），换新 id——唯一的复活路径。
-    const compacted = await batch.tx.compactedEntity.findFirst({
-      where: { userId, entity: 'task', entityId: plan.id },
-      select: { entityId: true },
+    const plannedRow = await batch.tx.task.findFirst({
+      where: { id: plan.id, userId },
+      select: { trashedAt: true },
     });
-    const instanceId = compacted ? randomUUID() : plan.id;
+    const compacted =
+      !plannedRow &&
+      (await batch.tx.compactedEntity.findFirst({
+        where: { userId, entity: 'task', entityId: plan.id },
+        select: { entityId: true },
+      })) !== null;
+    const target = repeatDerivationTarget({
+      hasLinkedInstance: linked !== null,
+      plannedId: plannedRow
+        ? plannedRow.trashedAt
+          ? 'trashed'
+          : 'live'
+        : compacted
+          ? 'compacted'
+          : 'absent',
+    });
+    if (target === 'skip') return;
+    const instanceId = target === 'planned' ? plan.id : randomUUID();
 
     const maxSort = await batch.tx.task.aggregate({
       where: { userId },
@@ -120,31 +136,6 @@ export class TasksService {
     for (const { id, ...subtask } of plan.subtasksFor(instanceId)) {
       await batch.write('subtask', id, subtask);
     }
-  }
-
-  /**
-   * 取消派生副作用（ADR-0012）：重开删除其派生实例——与 Delete Request
-   * 同一路径（Compact 登记、级联 Subtask）。不存在则无操作（纯取消从未
-   * 派生）。
-   */
-  private async deleteDerivedInstance(
-    batch: HubWriteBatch,
-    userId: string,
-    parent: {
-      id: string;
-      repeatRule: string | null;
-      scheduledDate: Date | null;
-      settledAt: Date | null;
-    },
-  ): Promise<void> {
-    const repeatRule = parseRepeatRule(parent.repeatRule);
-    if (!repeatRule) return; // 非重复任务：从未派生
-    const target = repeatInstanceId(
-      { id: parent.id, scheduledDate: parent.scheduledDate, repeatRule },
-      parent.settledAt ? parent.settledAt.toISOString() : null,
-      await userCalendarZones(this.prisma, userId),
-    );
-    if (target) await batch.delete('task', [target.id]);
   }
 
   /** 读本用户的任务，不存在即 404。 */
@@ -395,11 +386,45 @@ export class TasksService {
     return this.reopen(userId, id);
   }
 
-  /** 重开（取消完成 / 取消取消）：先删除已派生的实例（ADR-0012），同一事务。 */
-  private async reopen(userId: string, id: string) {
-    const existing = await this.requireTask(this.prisma, userId, id);
+  /**
+   * 跳过本次（recurring-tasks-v2）：计划日期原地推进到链的下一个出现日、
+   * 截止日同步平移、Subtask 全部置回未完成（规则见 domain planRepeatSkip）。
+   * 不可跳过 → 409，message 为原因（RepeatSkipBlock）。
+   */
+  async skip(userId: string, id: string) {
+    const existing = await this.prisma.task.findFirst({
+      where: { id, userId },
+      include: { subtasks: { select: { id: true, status: true } } },
+    });
+    if (!existing) {
+      throw new NotFoundException('Task not found');
+    }
+    const linked = await this.prisma.task.findFirst({
+      where: { userId, repeatSourceId: id, trashedAt: null },
+      select: { id: true },
+    });
+    const now = new Date().toISOString();
+    const plan = planRepeatSkip(
+      { ...existing, repeatRule: parseRepeatRule(existing.repeatRule) },
+      linked !== null,
+      now,
+      await userCalendarZones(this.prisma, userId),
+    );
+    if ('blocked' in plan) throw new ConflictException(plan.blocked);
     return this.hub.writeAsHub(userId, async (batch) => {
-      await this.deleteDerivedInstance(batch, userId, existing);
+      await batch.write('task', id, toWireFields(plan.patch));
+      for (const subtask of existing.subtasks) {
+        if (subtask.status === TaskStatus.ACTIVE) continue;
+        await batch.write('subtask', subtask.id, subtaskStatusPatch(TaskStatus.ACTIVE, now));
+      }
+      return this.listDto(batch.tx, id);
+    });
+  }
+
+  /** 重开（取消完成 / 取消取消）：已派生的实例独立存活，不随重开删除（recurring-tasks-v2）。 */
+  private async reopen(userId: string, id: string) {
+    await this.requireTask(this.prisma, userId, id);
+    return this.hub.writeAsHub(userId, async (batch) => {
       await batch.write('task', id, toWireFields(taskReopenPatch()));
       return settledToCompletedAt(
         withRepeatRuleDto(await batch.tx.task.findUniqueOrThrow({ where: { id } })),

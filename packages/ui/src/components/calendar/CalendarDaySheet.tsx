@@ -6,13 +6,16 @@ import type { TaskResponseDto } from '@taskora/shared';
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { TaskListView } from '@/components/task/TaskListView';
 import { MultiSelectEnabledContext } from '@/components/task/multiSelectContext';
-import { i18n, useUiInteractionStore } from '@taskora/api';
+import { RepeatPreviewRow } from '@/components/task/RepeatPreviewRow';
+import { i18n, useUiInteractionStore, type RepeatPreview } from '@taskora/api';
 import { cn } from '@/lib/utils';
 
 interface Props {
   /** 打开的日期；null 为关闭。 */
   date: Date | null;
   tasks: TaskResponseDto[];
+  /** 当天的下次预告（只读，排在任务之后）。 */
+  previews?: RepeatPreview[];
   onClose: () => void;
 }
 
@@ -21,7 +24,7 @@ interface Props {
  * 标准任务行（完整标题、勾选、项目归属、原地展开编辑）。基于 Radix
  * Dialog，Escape / 系统返回手势可关。
  */
-export function CalendarDaySheet({ date, tasks, onClose }: Props) {
+export function CalendarDaySheet({ date, tasks, previews = [], onClose }: Props) {
   const { t } = useTranslation();
   const setExpandedId = useUiInteractionStore((s) => s.setExpandedId);
 
@@ -70,8 +73,15 @@ export function CalendarDaySheet({ date, tasks, onClose }: Props) {
         <div className="min-h-0 overflow-y-auto px-2 pb-4">
           {/* 多选工具栏在卡片之下，当天列表不支持左滑多选。 */}
           <MultiSelectEnabledContext.Provider value={false}>
-            <TaskListView tasks={tasks} emptyHint={t('calendar:dayEmpty')} />
+            <TaskListView
+              tasks={tasks}
+              emptyHint={t('calendar:dayEmpty')}
+              hideEmptyState={previews.length > 0}
+            />
           </MultiSelectEnabledContext.Provider>
+          {previews.map((preview) => (
+            <RepeatPreviewRow key={preview.sourceTaskId} preview={preview} />
+          ))}
         </div>
       </DialogContent>
     </Dialog>

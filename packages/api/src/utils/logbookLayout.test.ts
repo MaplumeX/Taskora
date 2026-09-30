@@ -15,6 +15,7 @@ function settledTask(id: string, settledAt: Date): TaskFeedItem {
     scheduledType: 'NONE',
     reminderTime: null,
     repeatRule: null,
+    repeatSourceId: null,
     dueDate: null,
     status: 'COMPLETED',
     bucket: 'LOGBOOK',

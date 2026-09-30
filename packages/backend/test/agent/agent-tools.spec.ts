@@ -1,3 +1,4 @@
+import { ConflictException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AgentToolsService } from '../../src/agent/tools/agent-tools';
@@ -22,6 +23,7 @@ function createService() {
       remove: vi.fn().mockResolvedValue({ id: 't1', trashedAt: new Date() }),
       restore: vi.fn().mockResolvedValue({ id: 't1' }),
       reorder: vi.fn().mockResolvedValue(undefined),
+      skip: vi.fn().mockResolvedValue({ id: 't1', title: 'Task', scheduledDate: '2026-09-18' }),
     },
     projects: {
       findAll: vi.fn().mockResolvedValue([]),
@@ -320,6 +322,120 @@ describe('AgentToolsService', () => {
       groups: [{ headingId: 'h1', taskIds: ['t2', 't3'] }],
     });
     expect((result.content[0] as { text: string }).text).toContain('"groupedTasks": 2');
+  });
+
+  // ---------- 重复规则 / 跳过本次（recurring-tasks-v2 issue 04） ----------
+
+  const textOf = (result: { content: Array<{ type: string }> }) =>
+    JSON.parse((result.content[0] as { type: 'text'; text: string }).text);
+
+  it('create_task with repeatRule creates, then writes the normalized rule', async () => {
+    service.tasks.update.mockResolvedValueOnce({
+      id: 't2',
+      title: 'Report',
+      bucket: 'SCHEDULED',
+      repeatRule: { unit: 'week', interval: 2, weekdays: [3], anchor: 'scheduled' },
+    });
+    const result = await tool('create_task').execute('call-1', {
+      title: 'Report',
+      scheduledType: 'DATE',
+      scheduledDate: '2026-10-07',
+      repeatRule: { unit: 'week', interval: 2, weekdays: [3, 3] },
+    } as never);
+    expect(service.tasks.create).toHaveBeenCalledWith(
+      'user-1',
+      expect.not.objectContaining({ repeatRule: expect.anything() }),
+    );
+    expect(service.tasks.update).toHaveBeenCalledWith('user-1', 't2', {
+      repeatRule: { unit: 'week', interval: 2, weekdays: [3], anchor: 'scheduled' },
+    });
+    expect(textOf(result).repeatRule).toEqual({
+      unit: 'week',
+      interval: 2,
+      weekdays: [3],
+      anchor: 'scheduled',
+    });
+  });
+
+  it('create_task rejects a repeatRule without a scheduled date, and invalid rules', async () => {
+    await expect(
+      tool('create_task').execute('call-1', {
+        title: 'Report',
+        repeatRule: { unit: 'day', interval: 1 },
+      } as never),
+    ).rejects.toThrow(/scheduledType DATE/);
+    await expect(
+      tool('create_task').execute('call-1', {
+        title: 'Report',
+        scheduledType: 'DATE',
+        scheduledDate: '2026-10-07',
+        repeatRule: { unit: 'hour', interval: 1 },
+      } as never),
+    ).rejects.toThrow(/Invalid repeatRule/);
+    expect(service.tasks.create).not.toHaveBeenCalled();
+  });
+
+  it('update_task sets a rule on a dated task, clears with null, and refuses undated tasks', async () => {
+    service.tasks.findOne.mockResolvedValueOnce({ id: 't1', scheduledType: 'DATE' });
+    await tool('update_task').execute('call-1', {
+      id: 't1',
+      repeatRule: { unit: 'month', interval: 1, anchor: 'completion' },
+    } as never);
+    expect(service.tasks.update).toHaveBeenLastCalledWith(
+      'user-1',
+      't1',
+      expect.objectContaining({ repeatRule: { unit: 'month', interval: 1, anchor: 'completion' } }),
+    );
+
+    await tool('update_task').execute('call-1', { id: 't1', repeatRule: null } as never);
+    expect(service.tasks.update).toHaveBeenLastCalledWith(
+      'user-1',
+      't1',
+      expect.objectContaining({ repeatRule: null }),
+    );
+
+    service.tasks.update.mockClear();
+    service.tasks.findOne.mockResolvedValueOnce({ id: 't1', scheduledType: 'NONE' });
+    await expect(
+      tool('update_task').execute('call-1', {
+        id: 't1',
+        repeatRule: { unit: 'day', interval: 1 },
+      } as never),
+    ).rejects.toThrow(/scheduledType DATE/);
+    expect(service.tasks.update).not.toHaveBeenCalled();
+  });
+
+  it('update_task skipOccurrence skips after applying field updates', async () => {
+    const result = await tool('update_task').execute('call-1', {
+      id: 't1',
+      skipOccurrence: true,
+    } as never);
+    expect(service.tasks.skip).toHaveBeenCalledWith('user-1', 't1');
+    expect(service.tasks.update.mock.invocationCallOrder[0]).toBeLessThan(
+      service.tasks.skip.mock.invocationCallOrder[0],
+    );
+    expect(textOf(result).scheduledDate).toBe('2026-09-18');
+  });
+
+  it('update_task skipOccurrence explains why skipping is not possible', async () => {
+    service.tasks.skip.mockRejectedValueOnce(new ConflictException('next-exists'));
+    await expect(
+      tool('update_task').execute('call-1', { id: 't1', skipOccurrence: true } as never),
+    ).rejects.toThrow(/Cannot skip this occurrence: the next occurrence already exists/);
+  });
+
+  it('read tools include the repeat rule', async () => {
+    const rule = { unit: 'day', interval: 1, anchor: 'scheduled' };
+    service.tasks.findOne.mockResolvedValueOnce({
+      id: 't1',
+      title: 'Water',
+      repeatRule: rule,
+      tags: [],
+      subtasks: [],
+    });
+    expect(textOf(await tool('get_task').execute('call-1', { id: 't1' } as never))).toMatchObject({
+      repeatRule: rule,
+    });
   });
 
   it('errors propagate as thrown exceptions, not error text', async () => {

@@ -70,5 +70,10 @@
   "repeatEnded": "已到最后一次重复",
   "repeatUnit": "重复单位",
   "multiSelectCount": "已选择 {{count}} 项",
-  "multiSelectSchedule": "计划"
+  "multiSelectSchedule": "计划",
+  "skipOccurrence": "跳过本次",
+  "skipOccurrenceLast": "已是最后一次，无法跳过",
+  "skipOccurrenceNextExists": "下一次已存在，无法跳过",
+  "skipOccurrenceDone": "已跳到 {{date}}",
+  "repeatPreviewHint": "重复任务的下一次"
 }

@@ -8,7 +8,9 @@ import { describe, expect, it } from 'vitest';
 
 import {
   HeadingLayoutMismatchError,
+  buildRepeatPreviews,
   countProjectTasks,
+  deriveRepeatInstanceId,
   feedIncludesProjects,
   planConvertTaskToProject,
   planEmptyTrash,
@@ -18,10 +20,12 @@ import {
   planProjectRestore,
   planProjectTrash,
   planRepeatInstance,
+  planRepeatSkip,
   planTaskComplete,
   planTaskCreate,
   planTaskUpdate,
   projectMatchesView,
+  repeatDerivationTarget,
   sortFeedItems,
   sortForView,
   taskMatchesQuery,
@@ -169,9 +173,72 @@ describe('任务写入规则', () => {
       { title: 'a-new', sortOrder: 0, createdAt: '2026-01-02T00:00:00Z' },
     ];
     const plan = planRepeatInstance(parent, subtasks, '2026-09-24T08:00:00.000Z', UTC)!;
-    expect(plan.task).toMatchObject({ scheduledDate: '2026-09-25', reminderTime: '09:00' });
+    expect(plan.task).toMatchObject({
+      scheduledDate: '2026-09-25',
+      reminderTime: '09:00',
+      repeatSourceId: 'task-1',
+    });
     expect(plan.subtasksFor(plan.id).map((s) => s.title)).toEqual(['a-new', 'a-old', 'b']);
     expect(planRepeatInstance({ ...parent, repeatRule: null }, [], 'x', UTC)).toBeNull();
+  });
+
+  it('跳过本次：计划日推进、截止日同步平移；各不可跳过条件', () => {
+    const now = '2026-02-10T08:00:00.000Z';
+    const task = {
+      status: 'ACTIVE',
+      trashedAt: null,
+      scheduledType: 'DATE',
+      scheduledDate: '2026-02-05',
+      dueDate: '2026-02-07',
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' } as const,
+    };
+    expect(planRepeatSkip(task, false, now, UTC)).toEqual({
+      patch: { scheduledDate: '2026-02-10', dueDate: '2026-02-12' },
+    });
+    // Postgres 存储形态（UTC 零点 Date）同样适用；无截止日不写 dueDate
+    expect(
+      planRepeatSkip(
+        { ...task, scheduledDate: new Date('2026-02-12T00:00:00Z'), dueDate: null },
+        false,
+        now,
+        UTC,
+      ),
+    ).toEqual({ patch: { scheduledDate: '2026-02-13' } });
+
+    expect(planRepeatSkip({ ...task, repeatRule: null }, false, now, UTC)).toEqual({
+      blocked: 'not-repeating',
+    });
+    expect(planRepeatSkip({ ...task, scheduledType: 'SOMEDAY' }, false, now, UTC)).toEqual({
+      blocked: 'not-repeating',
+    });
+    expect(planRepeatSkip({ ...task, status: 'COMPLETED' }, false, now, UTC)).toEqual({
+      blocked: 'not-active',
+    });
+    expect(planRepeatSkip({ ...task, trashedAt: now }, false, now, UTC)).toEqual({
+      blocked: 'not-active',
+    });
+    expect(planRepeatSkip(task, true, now, UTC)).toEqual({ blocked: 'next-exists' });
+    expect(
+      planRepeatSkip(
+        { ...task, repeatRule: { ...task.repeatRule, until: '2026-02-09' } },
+        false,
+        now,
+        UTC,
+      ),
+    ).toEqual({ blocked: 'no-next' });
+  });
+
+  it('派生落地决策：已有关联实例或确定性 id 存活 → 跳过；在 Trash / 已 compact → 换新 id', () => {
+    const decide = (
+      hasLinkedInstance: boolean,
+      plannedId: Parameters<typeof repeatDerivationTarget>[0]['plannedId'],
+    ) => repeatDerivationTarget({ hasLinkedInstance, plannedId });
+    expect(decide(false, 'absent')).toBe('planned');
+    expect(decide(true, 'absent')).toBe('skip'); // anchor=completion 换日再完成
+    expect(decide(false, 'live')).toBe('skip'); // 并发派生 / 存量实例
+    expect(decide(false, 'trashed')).toBe('fresh');
+    expect(decide(false, 'compacted')).toBe('fresh');
+    expect(decide(true, 'trashed')).toBe('skip');
   });
 });
 
@@ -237,5 +304,79 @@ describe('级联规则', () => {
     expect(() =>
       planHeadingLayout({ ...layout, ungroupedTaskIds: ['t1'] }, ['h1'], ['t1', 't2']),
     ).toThrow('Duplicate task id');
+  });
+});
+
+describe('下次预告（Repeat Preview）', () => {
+  // 今天 = 2026-02-10（UTC）
+  const context = { ...UTC, now: new Date('2026-02-10T08:00:00.000Z') };
+  const daily = { unit: 'day', interval: 1, anchor: 'scheduled' } as const;
+  const source = (id: string, patch: Record<string, unknown> = {}) => ({
+    id,
+    title: id,
+    status: 'ACTIVE',
+    trashedAt: null,
+    scheduledType: 'DATE',
+    scheduledDate: '2026-02-10',
+    repeatRule: daily,
+    repeatSourceId: null,
+    projectId: null,
+    areaId: null,
+    ...patch,
+  });
+
+  it('每条链投影下一次，按日期排序', () => {
+    expect(
+      buildRepeatPreviews(
+        [
+          source('weekly', { repeatRule: { ...daily, unit: 'week' } }),
+          source('daily'),
+          // Postgres 存储形态（UTC 零点 Date）同样适用
+          source('stored', { scheduledDate: new Date('2026-02-12T00:00:00Z') }),
+        ],
+        context,
+      ).map((p) => [p.sourceTaskId, p.dateKey]),
+    ).toEqual([
+      ['daily', '2026-02-11'],
+      ['stored', '2026-02-13'],
+      ['weekly', '2026-02-17'],
+    ]);
+  });
+
+  it('不投影：已了结 / Trash / 非 DATE / 无规则 / completion 锚点 / 链终结 / 下一次不晚于今天', () => {
+    expect(
+      buildRepeatPreviews(
+        [
+          source('done', { status: 'COMPLETED' }),
+          source('trashed', { trashedAt: '2026-02-09T00:00:00.000Z' }),
+          source('someday', { scheduledType: 'SOMEDAY' }),
+          source('plain', { repeatRule: null }),
+          source('gap', { repeatRule: { ...daily, anchor: 'completion' } }),
+          source('ended', { repeatRule: { ...daily, until: '2026-02-10' } }),
+          source('overdue', { scheduledDate: '2026-02-05' }),
+        ],
+        context,
+      ),
+    ).toEqual([]);
+  });
+
+  it('下一次已派生（repeatSourceId 或存量确定性 id）则不投影；实例在 Trash 不算', () => {
+    const legacyId = deriveRepeatInstanceId('legacy', daily, '2026-02-11');
+    expect(
+      buildRepeatPreviews(
+        [
+          source('linked'),
+          source('instance', { scheduledDate: '2026-02-11', repeatSourceId: 'linked' }),
+          source('legacy'),
+          source(legacyId, { scheduledDate: '2026-02-11', status: 'COMPLETED' }),
+          source('discarded'),
+          source('discarded-next', {
+            repeatSourceId: 'discarded',
+            trashedAt: '2026-02-10T00:00:00.000Z',
+          }),
+        ],
+        context,
+      ).map((p) => p.sourceTaskId),
+    ).toEqual(['discarded', 'instance']);
   });
 });

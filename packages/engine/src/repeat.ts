@@ -197,6 +197,48 @@ export function nextOccurrenceDate(
 }
 
 /**
+ * 跳过本次的目标日期（recurring-tasks-v2 issue 02）。
+ *
+ * - anchor=scheduled：从 scheduledDate 沿链反复推进，取第一个晚于原计划日
+ *   且不早于今天（账号时区）的出现日——计划在今天或未来时即严格下一次，
+ *   已逾期多轮时跳过全部错过的；
+ * - anchor=completion：以今天为锚推进一次（等同「今天完成」时的下一次）；
+ * - 链在此之前终结（until）→ null：无可跳到的日期。
+ */
+export function skipOccurrenceDate(
+  rule: RepeatRule,
+  input: {
+    scheduledDate: string | null;
+    now: Date | string;
+    timeZone?: string;
+    legacyDateTimeZone?: string;
+  },
+): string | null {
+  const zone = input.timeZone ?? 'UTC';
+  const now = typeof input.now === 'string' ? input.now : input.now.toISOString();
+  const zones = { timeZone: zone, legacyDateTimeZone: input.legacyDateTimeZone };
+  if (normalizeRepeatRule(rule)?.anchor === 'completion') {
+    return nextOccurrenceDate(rule, {
+      ...zones,
+      scheduledDate: input.scheduledDate,
+      settledAt: now,
+    });
+  }
+  let today: string;
+  try {
+    today = instantDateKey(now, zone);
+  } catch {
+    return null;
+  }
+  // 每步严格前进至少一天，until 或到达今天必然终止
+  let next = nextOccurrenceDate(rule, { ...zones, scheduledDate: input.scheduledDate });
+  while (next !== null && next < today) {
+    next = nextOccurrenceDate(rule, { ...zones, scheduledDate: next });
+  }
+  return next;
+}
+
+/**
  * week 单位的下一次出现：锚点所在周为第 0 周，第 k×interval 周为活跃周；
  * 活跃周内的指定星期几（0=周日…6=周六）都是出现日。取锚点之后（不含）
  * 的最小出现日。无 weekdays 时为「锚点 + interval 周」。

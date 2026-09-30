@@ -64,6 +64,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
       dueDate: null,
       reminderTime: null,
       repeatRule: null,
+      repeatSourceId: null,
       bucket: 'SCHEDULED',
       scheduledType: 'DATE',
       status: 'ACTIVE',
@@ -500,6 +501,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
       scheduledDate: null,
       reminderTime: null,
       repeatRule: null,
+      repeatSourceId: null,
     });
     await b.update('task', moved, { headingId: h1 });
     await b.update('task', someday, { reminderTime: '09:00' });

@@ -13,21 +13,29 @@ import {
   FolderInput,
   Trash2,
   RotateCcw,
+  SkipForward,
 } from 'lucide-react';
 
 import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
-import { ScheduledType } from '@taskora/shared';
+import { ScheduledType, TaskStatus } from '@taskora/shared';
 
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { MenuRow } from '@/components/common/MenuRow';
 import { isTouchContextMenu, useLongPress } from '../../lib/useLongPress';
 import {
+  currentLegacyDateTimeZone,
   getClientKind,
+  i18n,
+  parseCalendarDate,
+  RepeatSkipBlockedError,
+  skipOccurrenceDate,
   useCancelTask,
   useCompleteTask,
   useConvertTaskToProject,
   useDeleteTask,
+  usePreferencesStore,
   useRestoreTask,
+  useSkipTask,
   useUncancelTask,
   useUncompleteTask,
   useUpdateTask,
@@ -59,6 +67,8 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const deleteTask = useDeleteTask();
   const restoreTask = useRestoreTask();
   const convertToProjectTask = useConvertTaskToProject();
+  const skipTask = useSkipTask();
+  const timeZone = usePreferencesStore((s) => s.timeZone);
 
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
@@ -69,6 +79,28 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
 
   const completed = current.status === 'COMPLETED';
   const cancelled = current.status === 'CANCELLED';
+  const isDate = (current.scheduledType ?? ScheduledType.NONE) === ScheduledType.DATE;
+
+  // 跳过本次：仅未了结、未进 Trash 的重复任务；链已到头（until）时禁用。
+  // 「下一次已存在」需查数据，由数据层拒绝后提示。
+  const canOfferSkip =
+    variant === 'default' &&
+    isDate &&
+    !!current.repeatRule &&
+    current.status === TaskStatus.ACTIVE &&
+    !current.trashedAt;
+  const skipTarget = React.useMemo(
+    () =>
+      menuOpen && canOfferSkip && current.repeatRule
+        ? skipOccurrenceDate(current.repeatRule, {
+            scheduledDate: current.scheduledDate,
+            now: new Date(),
+            timeZone,
+            legacyDateTimeZone: currentLegacyDateTimeZone(),
+          })
+        : null,
+    [menuOpen, canOfferSkip, current.repeatRule, current.scheduledDate, timeZone],
+  );
 
   const patch = (data: UpdateTaskDto) =>
     updateTask.mutate(
@@ -92,6 +124,29 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
     closeMenu();
     (cancelled ? uncancelTask : cancelTask).mutate(task.id, {
       onError: () => toast.error(tc('saveFailed')),
+    });
+  };
+
+  const handleSkip = () => {
+    closeMenu();
+    skipTask.mutate(task.id, {
+      onSuccess: (skipped) => {
+        if (!skipped.scheduledDate) return;
+        const date = new Intl.DateTimeFormat(i18n.language, {
+          month: 'short',
+          day: 'numeric',
+          weekday: 'short',
+        }).format(parseCalendarDate(skipped.scheduledDate));
+        toast.success(t('skipOccurrenceDone', { date }));
+      },
+      onError: (error) =>
+        toast.error(
+          error instanceof RepeatSkipBlockedError && error.reason === 'next-exists'
+            ? t('skipOccurrenceNextExists')
+            : error instanceof RepeatSkipBlockedError && error.reason === 'no-next'
+              ? t('skipOccurrenceLast')
+              : tc('saveFailed'),
+        ),
     });
   };
 
@@ -190,9 +245,19 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
             {t('scheduledDate')}
           </MenuRow>
           {/* 重复规则是独立入口：仅 DATE 型任务显示（规则需要计划日期作锚点）。 */}
-          {(current.scheduledType ?? ScheduledType.NONE) === ScheduledType.DATE && (
+          {isDate && (
             <MenuRow icon={Repeat} onClick={() => openPicker('repeat')}>
               {t('repeat')}
+            </MenuRow>
+          )}
+          {canOfferSkip && (
+            <MenuRow
+              icon={SkipForward}
+              disabled={skipTarget === null}
+              title={skipTarget === null ? t('skipOccurrenceLast') : undefined}
+              onClick={handleSkip}
+            >
+              {t('skipOccurrence')}
             </MenuRow>
           )}
           <MenuRow icon={CalendarDays} onClick={() => openPicker('due')}>

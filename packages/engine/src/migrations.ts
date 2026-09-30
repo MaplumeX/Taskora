@@ -64,6 +64,8 @@ export const REPLICA_MIGRATIONS: readonly ReplicaMigration[] = [
       Date.now(),
     ]);
   },
+  // 5 → 6：task 增加 repeatSourceId（recurring-tasks-v2 issue 01，派生来源）。
+  (storage) => addColumnIfMissing(storage, 'task', 'repeatSourceId', 'TEXT'),
 ];
 
 /** 当前代码的副本 schema 版本。 */

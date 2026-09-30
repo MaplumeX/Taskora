@@ -55,10 +55,17 @@ describe('账号时区 Engine 行为', () => {
         scheduledDate: '2026-09-24T00:00:00.000Z',
       });
       expect((await tasks.getFeed('today')).map((t) => t.id)).toContain(parent.id);
-      await tasks.updateTask(parent.id, { repeatRule: { ...rule, anchor: 'completion' } });
-      await tasks.completeTask(parent.id);
+      // 另起一个任务：重开的 parent 已有派生实例，再完成不会重复派生
+      const gap = await tasks.createTask({
+        title: '换床单',
+        scheduledType: ScheduledType.DATE,
+        scheduledDate: '2026-09-24',
+      });
+      await engine.update('task', gap.id, { scheduledDate: '2026-09-24T00:00:00.000Z' });
+      await tasks.updateTask(gap.id, { repeatRule: { ...rule, anchor: 'completion' } });
+      await tasks.completeTask(gap.id);
       const completionId = deriveRepeatInstanceId(
-        parent.id,
+        gap.id,
         { ...rule, anchor: 'completion' },
         '2026-09-25',
       );

@@ -52,6 +52,10 @@ export function uncancelTask(...args: Parameters<typeof import('./tasks.api.rest
   return currentTaskBackend().uncancelTask(...args);
 }
 
+export function skipTask(...args: Parameters<typeof import('./tasks.api.rest').skipTask>) {
+  return currentTaskBackend().skipTask(...args);
+}
+
 export function reorderTasks(
   ...args: Parameters<typeof import('./tasks.api.rest').reorderTasks>
 ) {

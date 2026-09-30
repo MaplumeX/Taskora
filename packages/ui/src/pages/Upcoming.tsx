@@ -4,6 +4,7 @@ import {
   useProjectsQuery,
   useAreasQuery,
   useTaskRowSelection,
+  useRepeatPreviews,
   fromInputDateValue,
   i18n,
 } from '@taskora/api';
@@ -11,8 +12,10 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { FeedItem } from '@taskora/shared';
+import type { RepeatPreview } from '@taskora/api';
 
 import { FeedItemRow } from '@/components/feed/FeedItemRow';
+import { RepeatPreviewRow } from '@/components/task/RepeatPreviewRow';
 import {
   selectionStateOf,
   useCompleteTask,
@@ -29,6 +32,7 @@ export default function Upcoming() {
   const { data: items = [], isLoading, isError } = useFeedQuery('upcoming');
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
+  const previews = useRepeatPreviews();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const { selectedIds, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
@@ -39,7 +43,10 @@ export default function Upcoming() {
   );
   const areaMap = useMemo(() => Object.fromEntries(areas.map((a) => [a.id, a.title])), [areas]);
 
-  const layout = useMemo(() => buildUpcomingLayout(items, new Date()), [items, calendarDay]);
+  const layout = useMemo(
+    () => buildUpcomingLayout(items, new Date(), previews),
+    [items, previews, calendarDay],
+  );
 
   // 注册可遍历行（按渲染顺序：本周每天，之后各月）。
   const rows = useMemo(
@@ -78,6 +85,16 @@ export default function Upcoming() {
     );
   };
 
+  // 下次预告：只读、不进 Selection（rows 只注册真实条目）
+  const renderPreview = (preview: RepeatPreview) => (
+    <RepeatPreviewRow
+      key={`preview:${preview.sourceTaskId}`}
+      preview={preview}
+      projectTitle={preview.projectId ? projectMap[preview.projectId] : undefined}
+      areaTitle={preview.areaId ? areaMap[preview.areaId] : undefined}
+    />
+  );
+
   const renderDay = (day: UpcomingDay) => {
     const label = day.isTomorrow
       ? t('common:tomorrow')
@@ -95,7 +112,10 @@ export default function Upcoming() {
           <div className="min-w-4 flex-1 border-t border-border" aria-hidden="true" />
         </div>
         {/* 空日期只留一行高度（仍是放置目标），避免一周空档把列表拉得过长。 */}
-        <div className="flex min-h-6 flex-col">{day.items.map(renderItem)}</div>
+        <div className="flex min-h-6 flex-col">
+          {day.items.map(renderItem)}
+          {day.previews.map(renderPreview)}
+        </div>
       </div>
     );
   };
@@ -119,7 +139,10 @@ export default function Upcoming() {
                     ).format(new Date(month.year, month.month - 1, 1))}
               </h2>
               <div className="flex min-h-12 flex-col gap-1">
-                {month.days.flatMap((day) => day.items).map(renderItem)}
+                {month.days.flatMap((day) => [
+                  ...day.items.map(renderItem),
+                  ...day.previews.map(renderPreview),
+                ])}
               </div>
             </div>
           ))}
