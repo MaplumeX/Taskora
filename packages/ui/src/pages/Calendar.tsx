@@ -1,6 +1,7 @@
 import {
   useCalendarDay,
   useScheduledTasksQuery,
+  useRepeatPreviews,
   useSelectionScope,
   useTaskRowSelection,
   usePreferencesStore,
@@ -9,6 +10,7 @@ import {
   i18n,
   startOfToday,
   toInputDateValue,
+  type RepeatPreview,
 } from '@taskora/api';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -32,6 +34,17 @@ export default function Calendar() {
   const [openDay, setOpenDay] = useState<Date | null>(null);
 
   const tasksByDate = useMemo(() => groupByScheduledDate(tasks), [tasks]);
+  // 下次预告：只读，排在当天真实任务之后，不进 Selection
+  const previews = useRepeatPreviews();
+  const previewsByDate = useMemo(() => {
+    const map = new Map<string, RepeatPreview[]>();
+    for (const preview of previews) {
+      const list = map.get(preview.dateKey);
+      if (list) list.push(preview);
+      else map.set(preview.dateKey, [preview]);
+    }
+    return map;
+  }, [previews]);
 
   // 注册可遍历行（按当前月网格顺序；键盘动作经全局 keymap 生效）。
   const { selectedIds } = useTaskRowSelection();
@@ -109,6 +122,7 @@ export default function Calendar() {
         <CalendarMonthGrid
           anchor={anchor}
           tasksByDate={tasksByDate}
+          previewsByDate={previewsByDate}
           weekStartsOn={weekStartsOn}
           locale={i18n.language}
           selectedIds={selectedIds}
@@ -119,6 +133,7 @@ export default function Calendar() {
       <CalendarDaySheet
         date={openDay}
         tasks={openDay ? (tasksByDate.get(toInputDateValue(openDay)) ?? []) : []}
+        previews={openDay ? (previewsByDate.get(toInputDateValue(openDay)) ?? []) : []}
         onClose={() => setOpenDay(null)}
       />
     </div>

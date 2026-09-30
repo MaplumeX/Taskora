@@ -30,6 +30,8 @@ export interface TaskFields {
   scheduledDate: string | null;
   reminderTime: string | null;
   repeatRule: RepeatRule | null;
+  /** 派生来源：派生出本实例的重复任务 id（recurring-tasks-v2）；非派生为 null。 */
+  repeatSourceId: string | null;
   dueDate: string | null;
   bucket: TaskBucket;
   status: TaskStatus;
@@ -54,6 +56,7 @@ export function planTaskCreate(input: CreateTaskDto, zones: CalendarZones): Task
       scheduledType === ScheduledType.DATE ? dateKeyOf(input.scheduledDate, zones) : null,
     reminderTime: null,
     repeatRule: null,
+    repeatSourceId: null,
     dueDate: dateKeyOf(input.dueDate, zones),
     bucket: resolveTaskBucket(input.bucket, scheduledType, input.projectId, input.areaId),
     status: TaskStatus.ACTIVE,
@@ -264,6 +267,7 @@ export function planConvertTaskToProject(
     scheduledDate: null,
     reminderTime: null,
     repeatRule: null,
+    repeatSourceId: null,
     dueDate: null,
     bucket: TaskBucket.INBOX,
     status: (subtask.status as TaskStatus) ?? TaskStatus.ACTIVE,

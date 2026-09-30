@@ -27,6 +27,7 @@ import {
   reorderSubtasks,
   reorderTasks,
   restoreTask,
+  skipTask,
   type TaskQuery,
   uncancelSubtask,
   uncancelTask,
@@ -177,6 +178,7 @@ export function useCreateTask() {
         scheduledType: data.scheduledType ?? ScheduledType.NONE,
         reminderTime: null,
         repeatRule: null,
+        repeatSourceId: null,
         dueDate: data.dueDate ?? null,
         bucket: data.bucket ?? TaskBucket.INBOX,
         status: TaskStatus.ACTIVE,
@@ -417,6 +419,23 @@ export function useUncancelTask() {
         queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
+    onSettled: (_data, _error, id) => {
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
+    },
+  });
+}
+
+/**
+ * 跳过本次（recurring-tasks-v2）：计划日期推进、Subtask 重置由数据层完成，
+ * 不做乐观更新——目标日期依赖规则与账号时区，等写入结果刷新即可。
+ */
+export function useSkipTask() {
+  const queryClient = useQueryCache();
+  return useMutation({
+    mutationFn: (id: string) => skipTask(id),
     onSettled: (_data, _error, id) => {
       refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
       refreshAfterWrite(queryClient, { queryKey: taskKeys.all });

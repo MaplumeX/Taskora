@@ -24,12 +24,14 @@ import {
   planConvertTaskToProject,
   planEmptyTrash,
   planRepeatInstance,
+  planRepeatSkip,
   planTaskComplete,
   planTaskCreate,
   planTaskUpdate,
   positionAfter,
   projectMatchesView,
-  repeatInstanceId,
+  repeatDerivationTarget,
+  RepeatSkipBlockedError,
   repositionMinimal,
   sortFeedItems,
   sortForView,
@@ -165,8 +167,22 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       zones(),
     );
     if (!plan) return null;
-    // 幂等：同一逻辑实例已存在（另一设备已派生 / restore 后重完成）→ 跳过
-    if ((await engine.get('task', plan.id)) !== null) return plan.id;
+    const linked = await engine.list('task', {
+      where: { repeatSourceId: parentId, trashedAt: null },
+      limit: 1,
+    });
+    const plannedRow = await engine.get('task', plan.id);
+    const target = repeatDerivationTarget({
+      hasLinkedInstance: linked.length > 0,
+      plannedId: plannedRow
+        ? plannedRow.fields.trashedAt
+          ? 'trashed'
+          : 'live'
+        : (await engine.isCompacted('task', plan.id))
+          ? 'compacted'
+          : 'absent',
+    });
+    if (target === 'skip') return null;
 
     // 派生实例进入目标列表末尾（新位次，不继承父任务位次）
     const allTasks = await engine.list('task');
@@ -176,10 +192,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     );
     const sortOrder =
       allTasks.reduce((max, row) => Math.max(max, (row.fields.sortOrder as number) ?? 0), -1) + 1;
-    // 确定性 id 已被 compact（重开删除过该实例后重新完成）：无法经 hub
-    // 复活（ADR-0008 Compact 永久获胜），换新 id——唯一的复活路径。
     const instanceId = await engine.create('task', {
-      ...((await engine.isCompacted('task', plan.id)) ? {} : { id: plan.id }),
+      ...(target === 'planned' ? { id: plan.id } : {}),
       ...plan.task,
       position,
       sortOrder,
@@ -188,25 +202,6 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       await engine.create('subtask', { ...subtask });
     }
     return instanceId;
-  }
-
-  /**
-   * 取消派生副作用（ADR-0012）：重开删除其派生实例（实例 id 由当前行
-   * 重算）；不存在则无操作（纯取消从未派生）。
-   */
-  async function deleteDerivedInstance(taskId: string): Promise<void> {
-    const row = await engine.get('task', taskId);
-    if (!row) return;
-    const target = repeatInstanceId(
-      {
-        id: taskId,
-        scheduledDate: row.fields.scheduledDate,
-        repeatRule: normalizeRepeatRule(row.fields.repeatRule),
-      },
-      (row.fields.settledAt as string | null) ?? null,
-      zones(),
-    );
-    if (target) await engine.delete('task', [target.id]); // 幂等：不存在则无操作
   }
 
   /** 需要隐藏其内任务的稍后项目 id（仅 Anytime / Someday，语义对齐 backend views.ts）。 */
@@ -324,7 +319,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     },
 
     async uncompleteTask(id: string): Promise<TaskResponseDto> {
-      await deleteDerivedInstance(id);
+      // 已派生的实例独立存活，不随重开删除（recurring-tasks-v2）
       await engine.update('task', id, { ...taskReopenPatch() });
       return taskDto(id);
     },
@@ -335,9 +330,47 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     },
 
     async uncancelTask(id: string): Promise<TaskResponseDto> {
-      // 完成 → 取消 → 重开：删除仍存活的派生实例
-      await deleteDerivedInstance(id);
       await engine.update('task', id, { ...taskReopenPatch() });
+      return taskDto(id);
+    },
+
+    async skipTask(id: string): Promise<TaskResponseDto> {
+      const existing = await engine.get('task', id);
+      if (!existing) throw new Error(`Task not found: ${id}`);
+      const f = existing.fields;
+      const linked = await engine.list('task', {
+        where: { repeatSourceId: id, trashedAt: null },
+        limit: 1,
+      });
+      const now = new Date().toISOString();
+      const plan = planRepeatSkip(
+        {
+          status: f.status,
+          trashedAt: f.trashedAt,
+          scheduledType: f.scheduledType,
+          scheduledDate: f.scheduledDate,
+          dueDate: f.dueDate,
+          repeatRule: normalizeRepeatRule(f.repeatRule),
+        },
+        linked.length > 0,
+        now,
+        zones(),
+      );
+      if ('blocked' in plan) throw new RepeatSkipBlockedError(plan.blocked);
+      await engine.update('task', id, { ...plan.patch });
+      // 新的一轮：Subtask 全部置回未完成
+      const settledSubtasks = (await engine.list('subtask', { where: { taskId: id } })).filter(
+        (row) => row.fields.status !== TaskStatus.ACTIVE,
+      );
+      if (settledSubtasks.length > 0) {
+        await engine.updateMany(
+          'subtask',
+          settledSubtasks.map((row) => ({
+            id: row.id,
+            patch: subtaskStatusPatch(TaskStatus.ACTIVE, now),
+          })),
+        );
+      }
       return taskDto(id);
     },
 
@@ -534,6 +567,7 @@ function projectRowToFeedItem(
     scheduledType: (f.scheduledType as ScheduledType) ?? ScheduledType.NONE,
     reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
     repeatRule: null, // Project 不设 Repeat Rule（CONTEXT.md）
+    repeatSourceId: null,
     dueDate: (f.dueDate as string | null) ?? null,
     status: (f.status as ProjectStatus) ?? ProjectStatus.ACTIVE,
     bucket: (f.bucket as ProjectBucket) ?? ProjectBucket.ANYTIME,

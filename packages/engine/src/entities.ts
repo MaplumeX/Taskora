@@ -53,6 +53,7 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('dueDate'),
       f('reminderTime'),
       f('repeatRule', { json: true }),
+      f('repeatSourceId'),
       f('bucket'),
       f('scheduledType'),
       f('status'),

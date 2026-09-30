@@ -57,6 +57,7 @@ const baseTask = vi.hoisted(() => ({
   scheduledType: 'NONE' as const,
   reminderTime: null,
   repeatRule: null,
+  repeatSourceId: null,
   dueDate: null,
   bucket: 'INBOX' as const,
   status: 'ACTIVE' as const,

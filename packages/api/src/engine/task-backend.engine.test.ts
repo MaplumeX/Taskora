@@ -616,6 +616,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     expect(instance.status).toBe(TaskStatus.ACTIVE);
     expect(instance.reminderTime).toBe('09:00'); // 提醒随实例延续
     expect(instance.repeatRule).toEqual({ unit: 'day', interval: 1, anchor: 'scheduled' });
+    expect(instance.repeatSourceId).toBe(task.id); // 派生来源（recurring-tasks-v2）
     expect(instance.tags?.map((t) => t.id)).toEqual([tagId]);
     // 子任务复制为派生实体并重置 ACTIVE
     expect(instance.subtasks).toHaveLength(2);
@@ -709,7 +710,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     expect((await engine.list('task')).filter((t) => t.id !== task.id)).toHaveLength(0);
   });
 
-  it('重开（uncomplete）取消派生副作用：删除派生实例（含其子任务级联）', async () => {
+  it('重开不删除派生实例：实例上的编辑保留，再完成不重复派生（recurring-tasks-v2）', async () => {
     const task = await backend.createTask({
       title: '浇花',
       scheduledType: ScheduledType.DATE,
@@ -725,16 +726,51 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
       { unit: 'day', interval: 1, anchor: 'scheduled' },
       utcDay(-1),
     );
-    expect(await engine.get('task', instanceId)).not.toBeNull();
-    expect(
-      (await engine.list('subtask')).filter((s) => s.fields.taskId === instanceId),
-    ).toHaveLength(1);
+    await backend.updateTask(instanceId, { notes: '记得换大盆' });
 
+    const reopened = await backend.uncompleteTask(task.id);
+    expect(reopened.status).toBe(TaskStatus.ACTIVE);
+    const kept = await backend.getTask(instanceId);
+    expect(kept.notes).toBe('记得换大盆');
+    expect(kept.subtasks).toHaveLength(1);
+
+    await backend.completeTask(task.id);
+    expect((await engine.list('task')).filter((row) => row.id !== task.id)).toHaveLength(1);
+  });
+
+  it('anchor=completion：重开后隔天再完成不产生第二个实例', async () => {
+    const task = await backend.createTask({
+      title: '换床单',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(-3),
+    });
+    await backend.updateTask(task.id, {
+      repeatRule: { unit: 'week', interval: 1, anchor: 'completion' },
+    });
+    await backend.completeTask(task.id);
     await backend.uncompleteTask(task.id);
-    expect(await engine.get('task', instanceId)).toBeNull();
-    expect(
-      (await engine.list('subtask')).filter((s) => s.fields.taskId === instanceId),
-    ).toHaveLength(0);
+    // 隔天完成：完成日不同 → 确定性 id 不同，靠 repeatSourceId 判定已派生
+    await backend.completeTask(task.id, {
+      settledAt: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+    expect((await engine.list('task')).filter((row) => row.id !== task.id)).toHaveLength(1);
+  });
+
+  it('完成 → 取消 → 重开：派生实例保留', async () => {
+    const task = await backend.createTask({
+      title: '晨跑',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(-1),
+    });
+    await backend.updateTask(task.id, {
+      repeatRule: { unit: 'day', interval: 1, anchor: 'completion' },
+    });
+    await backend.completeTask(task.id);
+    await backend.cancelTask(task.id);
+    await backend.uncancelTask(task.id);
+    const instances = (await engine.list('task')).filter((row) => row.id !== task.id);
+    expect(instances).toHaveLength(1);
+    expect(instances[0].fields.repeatSourceId).toBe(task.id);
   });
 
   it('幂等派生：Logbook 恢复（Trash restore）后重新完成不产生重复实例', async () => {
@@ -820,27 +856,122 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     await b.close();
   });
 
-  it('un-complete → re-complete：确定性 id 已 compact 时换新 id 派生，实例在同步后存活（ADR-0008 复活路径）', async () => {
+  it('跳过本次：逾期多轮落到今天、截止日平移、Subtask 重置；不新建实体', async () => {
     const task = await backend.createTask({
-      title: '手滑党',
+      title: '背单词',
       scheduledType: ScheduledType.DATE,
-      scheduledDate: utcDay(-2),
+      scheduledDate: utcDay(-3),
+      dueDate: utcDay(-1),
+    });
+    await backend.updateTask(task.id, {
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+    });
+    const sub = await backend.createSubtask(task.id, { title: '复习' });
+    await backend.completeSubtask(sub.id);
+
+    const skipped = await backend.skipTask(task.id);
+    expect(skipped.scheduledDate).toBe(utcDay(0));
+    expect(skipped.dueDate).toBe(utcDay(2));
+    expect(skipped.status).toBe(TaskStatus.ACTIVE);
+    expect((await backend.getTask(task.id)).subtasks?.map((s) => s.status)).toEqual([
+      TaskStatus.ACTIVE,
+    ]);
+    expect(await engine.list('task')).toHaveLength(1);
+
+    // 计划日为今天 → 严格下一次
+    expect((await backend.skipTask(task.id)).scheduledDate).toBe(utcDay(1));
+  });
+
+  it('跳过本次不可用：已到最后一次 / 下一次已存在 / 已了结', async () => {
+    const last = await backend.createTask({
+      title: '最后一次',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(1),
+    });
+    await backend.updateTask(last.id, {
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled', until: utcDay(1) },
+    });
+    await expect(backend.skipTask(last.id)).rejects.toMatchObject({ reason: 'no-next' });
+
+    const task = await backend.createTask({
+      title: '手滑',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(-1),
     });
     await backend.updateTask(task.id, {
       repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
     });
     await backend.completeTask(task.id);
-    await backend.uncompleteTask(task.id); // 派生实例删除（Delete Request）
-    await backend.completeTask(task.id); // 重新完成 → 重新派生
+    await expect(backend.skipTask(task.id)).rejects.toMatchObject({ reason: 'not-active' });
+    await backend.uncompleteTask(task.id); // 派生实例保留
+    await expect(backend.skipTask(task.id)).rejects.toMatchObject({ reason: 'next-exists' });
+    expect((await backend.getTask(task.id)).scheduledDate).toBe(utcDay(-1));
+  });
 
-    // 本地立即存在一个实例（确定性 id 已死 → 新 id）
-    const local = (await engine.list('task')).filter((row) => row.id !== task.id);
-    expect(local).toHaveLength(1);
+  it('跳过与另一设备的完成并发：合并后只有一个存活的下一次', async () => {
+    const hub = new InMemorySyncHub();
+    const a = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'dev-a',
+      transport: hub.transportFor(USER),
+    });
+    const b = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'dev-b',
+      transport: hub.transportFor(USER),
+    });
+    const backendA = createEngineTaskBackend({ engine: a });
+    const backendB = createEngineTaskBackend({ engine: b });
+    const task = await backendA.createTask({
+      title: '周报',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(-1),
+    });
+    await backendA.updateTask(task.id, {
+      repeatRule: { unit: 'week', interval: 1, anchor: 'scheduled' },
+    });
+    await a.sync();
+    await b.sync();
 
-    // 同步后仍存活：新 id 不在 compact 登记，hub 正常物化
+    await backendA.skipTask(task.id);
+    await backendB.completeTask(task.id);
+    await a.sync();
+    await b.sync();
+    await a.sync();
+
+    for (const engineX of [a, b]) {
+      const active = (await engineX.list('task')).filter(
+        (row) => row.fields.status === TaskStatus.ACTIVE && !row.fields.trashedAt,
+      );
+      expect(active).toHaveLength(1);
+      expect(active[0].fields.scheduledDate).toBe(utcDay(6));
+    }
+    await a.close();
+    await b.close();
+  });
+
+  it('派生实例在 Trash 中：重开再完成换新 id 重新派生，同步后存活', async () => {
+    const rule = { unit: 'day', interval: 1, anchor: 'scheduled' } as const;
+    const task = await backend.createTask({
+      title: '手滑党',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: utcDay(-2),
+    });
+    await backend.updateTask(task.id, { repeatRule: rule });
+    await backend.completeTask(task.id);
+    const plannedId = deriveRepeatInstanceId(task.id, rule, utcDay(-1));
+    await backend.deleteTask(plannedId); // 用户丢弃了派生实例
+    await backend.uncompleteTask(task.id);
+    await backend.completeTask(task.id);
+
+    const live = (await engine.list('task')).filter(
+      (row) => row.id !== task.id && !row.fields.trashedAt,
+    );
+    expect(live).toHaveLength(1);
+    expect(live[0].id).not.toBe(plannedId);
+    expect(live[0].fields.repeatSourceId).toBe(task.id);
+
     await engine.sync();
-    const after = (await engine.list('task')).filter((row) => row.id !== task.id);
-    expect(after).toHaveLength(1);
-    expect(after[0].fields.scheduledDate).toBe(utcDay(-1));
+    expect(await engine.get('task', live[0].id)).not.toBeNull();
   });
 });

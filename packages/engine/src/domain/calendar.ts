@@ -38,3 +38,17 @@ export function instantMs(value: unknown): number | null {
   const ms = Date.parse(value);
   return Number.isNaN(ms) ? null : ms;
 }
+
+/** 日期键加减整天（UTC 日运算，与运行设备时区无关）。 */
+export function shiftDateKey(key: string, days: number): string {
+  const date = new Date(`${key}T00:00:00.000Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+/** 两个日期键相差的整天数（to − from）。 */
+export function daysBetweenKeys(from: string, to: string): number {
+  return Math.round(
+    (Date.parse(`${to}T00:00:00.000Z`) - Date.parse(`${from}T00:00:00.000Z`)) / 86_400_000,
+  );
+}

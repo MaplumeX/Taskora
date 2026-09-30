@@ -66,6 +66,7 @@ function makeTaskDto(id: string, title: string, projectId: string | null): TaskR
     scheduledType: ScheduledType.NONE,
     reminderTime: null,
     repeatRule: null,
+    repeatSourceId: null,
     dueDate: null,
     bucket: TaskBucket.ANYTIME,
     status: TaskStatus.ACTIVE,
@@ -135,6 +136,9 @@ function makeEngineLikeBackend(client: QueryClient): TaskBackend {
       throw new Error('not needed');
     },
     uncancelTask: async () => {
+      throw new Error('not needed');
+    },
+    skipTask: async () => {
       throw new Error('not needed');
     },
     reorderTasks: async () => {},

@@ -60,6 +60,7 @@ const baseTask: TaskResponseDto = {
   scheduledType: ScheduledType.NONE,
   reminderTime: null,
     repeatRule: null,
+    repeatSourceId: null,
   dueDate: null,
   bucket: TaskBucket.INBOX,
   status: TaskStatus.ACTIVE,

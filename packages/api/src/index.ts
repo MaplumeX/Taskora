@@ -121,6 +121,7 @@ export * from './hooks/useTagGroups';
 export * from './hooks/useTags';
 export * from './hooks/useTasks';
 export * from './hooks/useScheduledTasksQuery';
+export * from './hooks/useRepeatPreviews';
 export * from './hooks/useUsers';
 export * from './hooks/useCalendarDay';
 export * from './hooks/useAgent';
@@ -218,7 +219,14 @@ export * from './utils/date';
 
 // Repeat Rule 纯函数（recurring-tasks spec）：规则编辑器的实时预览与
 // 规范化写入共用 @taskora/engine 的同一实现（跨端派生 id 一致的前提）。
-export { normalizeRepeatRule, nextOccurrenceDate } from '@taskora/engine';
+export {
+  normalizeRepeatRule,
+  nextOccurrenceDate,
+  skipOccurrenceDate,
+  RepeatSkipBlockedError,
+  type RepeatPreview,
+  type RepeatSkipBlock,
+} from '@taskora/engine';
 export { setAppVersion, getAppVersion } from './utils/appInfo';
 export {
   normalizePreferences,

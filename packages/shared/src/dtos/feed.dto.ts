@@ -18,6 +18,8 @@ export interface FeedItemBase {
   reminderTime: string | null;
   /** 重复规则（Repeat Rule）；project 恒为 null（Project 不设 Repeat Rule）。 */
   repeatRule: RepeatRule | null;
+  /** 派生来源（Repeat Instance）；project 恒为 null。 */
+  repeatSourceId: string | null;
   dueDate: string | null;
   status: TaskStatus | ProjectStatus;
   bucket: TaskBucket | ProjectBucket;

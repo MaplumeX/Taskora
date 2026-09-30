@@ -11,6 +11,9 @@ import type {
   UpdateTaskDto,
 } from '@taskora/shared';
 
+import axios from 'axios';
+import { RepeatSkipBlockedError, type RepeatSkipBlock } from '@taskora/engine';
+
 import { apiClient } from './client';
 
 export type TaskView = 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
@@ -67,6 +70,19 @@ export function cancelTask(id: string): Promise<TaskResponseDto> {
 
 export function uncancelTask(id: string): Promise<TaskResponseDto> {
   return apiClient.post<TaskResponseDto>(`/tasks/${id}/uncancel`).then((res) => res.data);
+}
+
+export function skipTask(id: string): Promise<TaskResponseDto> {
+  return apiClient
+    .post<TaskResponseDto>(`/tasks/${id}/skip`)
+    .then((res) => res.data)
+    .catch((error: unknown) => {
+      // 409 的 message 即不可跳过的原因（与 Engine 实现抛同一种错误）
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        throw new RepeatSkipBlockedError(error.response.data?.message as RepeatSkipBlock);
+      }
+      throw error;
+    });
 }
 
 export function reorderTasks(orderedIds: string[]): Promise<void> {

@@ -64,15 +64,14 @@ them the sync hub's merge path:
   no dedup keys, and merges opaquely (ADR-0007 boundary intact). A
   server-derived instance and a device-derived instance of the same
   completion share the same id and converge through ordinary LWW.
-- **Un-complete** deletes the derived instance on the same site that
-  derived it (device → Delete Request; REST → Compact registration in the
-  physical-delete transaction).
-
-When a deterministic id has already been compacted (complete → un-complete →
-re-complete on one device), the re-derivation falls back to a freshly
-generated id: ADR-0008 permits resurrection only with a new id, and
-sequential re-derivation does not need cross-device dedup — only concurrent
-derivations do.
+Both sites also share the landing decision `repeatDerivationTarget`: skip
+when the source already has an un-trashed instance (by `repeatSourceId`, see
+the amendment below) or the deterministic id holds an un-trashed row; use
+the deterministic id when it is free; fall back to a freshly generated id
+when the deterministic row is in Trash or has been compacted (the user
+discarded the previous instance). ADR-0008 permits resurrection only with a
+new id, and sequential re-derivation does not need cross-device dedup —
+only concurrent derivations do.
 
 ## Consequences
 
@@ -88,11 +87,33 @@ derivations do.
   task's id), the rule in a canonical serialized form, and the occurrence
   date. A rule stored in a non-canonical shape would fork the chain, so rule
   normalization happens at write time.
-- Un-complete (= un-settle) of a repeating Task **cancels the derivation side
-  effect**: the derived instance is deleted. This matches the existing
-  "reopen clears the terminal state" semantics from ADR-0006 — the derivation
-  is part of the settlement.
+- ~~Un-complete (= un-settle) of a repeating Task cancels the derivation side
+  effect: the derived instance is deleted.~~ Superseded — see the amendment
+  below.
 - Rule edits fork the chain *by design*: each instance carries its own copy of
   the rule, and LWW applies to the rule field like any other. There is no
   back-propagation to ancestors or forward propagation to already-derived
   descendants.
+
+## Amendment (2026-09-30, recurring-tasks-v2 issue 01): instances outlive their source's reopen
+
+Un-complete / un-cancel no longer delete the derived instance. Once derived,
+an instance is an independent Task; reopening its source only clears the
+source's terminal state.
+
+Deleting on reopen lost user edits made on the instance, and dragged in a
+chain of edge cases: compacted deterministic ids forcing fresh-id
+re-derivation that a later reopen could no longer find, complete → cancel →
+reopen missing the instance under anchor=completion, and races inside an
+unflushed Outbox window. Keeping the instance costs only this: after an
+accidental completion is undone, the next occurrence is already visible and
+the user may delete it by hand.
+
+To keep re-completion idempotent without deletion, a derived instance
+records its source in a new Task field **`repeatSourceId`** (plain string,
+no foreign key; a dangling value after the source is purged is harmless).
+Derivation is skipped when the source already has an un-trashed instance —
+which also covers anchor=completion, where re-completing on another day
+yields a different occurrence date and therefore a different deterministic
+id. Deterministic ids stay: they are still what deduplicates *concurrent*
+derivations across devices; `repeatSourceId` handles *sequential* ones.

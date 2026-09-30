@@ -226,6 +226,9 @@ model Task {
   /// Repeat Rule（recurring-tasks spec）：规范形规则对象的 JSON 文本
   /// （unit/interval/weekdays/anchor/until）。仅 DATE 型任务携带。
   repeatRule    String?
+  /// 派生来源（recurring-tasks-v2）：派生出本实例的重复任务 id。不设外键：
+  /// 来源被物理删除后字段悬空无害，只用于派生幂等。
+  repeatSourceId String?
   bucket        TaskBucket    @default(INBOX)
   scheduledType ScheduledType @default(NONE)
   status        TaskStatus    @default(ACTIVE)
@@ -255,6 +258,7 @@ model Task {
   @@index([userId, settledAt])
   @@index([projectId])
   @@index([headingId])
+  @@index([repeatSourceId])
   @@index([areaId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
   fieldClocks Json?
   /// Position：fractional indexing 排序位次（local-first，ADR-0007）；过渡期与 sortOrder 并存。

@@ -5,12 +5,14 @@ import type { TaskResponseDto } from '@taskora/shared';
 
 import { CalendarDayCell } from './CalendarDayCell';
 import { buildMonthCells, buildWeekdayLabels, type WeekStartsOn } from '@taskora/api';
-import { toInputDateValue } from '@taskora/api';
+import { toInputDateValue, type RepeatPreview } from '@taskora/api';
 import { useIsDesktop } from '../../lib/use-media-query';
 
 interface CalendarMonthGridProps {
   anchor: Date;
   tasksByDate: Map<string, TaskResponseDto[]>;
+  /** 下次预告（按日期键）。 */
+  previewsByDate?: Map<string, RepeatPreview[]>;
   weekStartsOn: WeekStartsOn;
   locale: string;
   /** 键盘 Selection 当前选中的任务 id（跨格共享）。 */
@@ -61,6 +63,7 @@ function useCellCapacity(metrics: { headerPx: number; chipPitchPx: number }) {
 export function CalendarMonthGrid({
   anchor,
   tasksByDate,
+  previewsByDate,
   weekStartsOn,
   locale,
   selectedIds = [],
@@ -106,6 +109,7 @@ export function CalendarMonthGrid({
             key={date.toISOString()}
             date={date}
             tasks={tasksByDate.get(toInputDateValue(date)) ?? []}
+            previews={previewsByDate?.get(toInputDateValue(date))}
             capacity={capacity}
             outOfMonth={date.getMonth() !== anchor.getMonth()}
             selectedIds={selectedIds}

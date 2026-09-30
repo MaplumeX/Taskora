@@ -94,6 +94,7 @@ function task(id: string): TaskResponseDto {
     scheduledType: ScheduledType.NONE,
     reminderTime: null,
     repeatRule: null,
+    repeatSourceId: null,
     dueDate: null,
     bucket: TaskBucket.ANYTIME,
     status: TaskStatus.ACTIVE,

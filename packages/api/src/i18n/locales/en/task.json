@@ -68,5 +68,10 @@
   "repeatUntil": "Until",
   "repeatNextPreview": "Next: {{date}}",
   "repeatEnded": "No further occurrences",
-  "repeatUnit": "Repeat unit"
+  "repeatUnit": "Repeat unit",
+  "skipOccurrence": "Skip Occurrence",
+  "skipOccurrenceLast": "This is the last occurrence",
+  "skipOccurrenceNextExists": "The next occurrence already exists",
+  "skipOccurrenceDone": "Skipped to {{date}}",
+  "repeatPreviewHint": "Next occurrence of a repeating task"
 }

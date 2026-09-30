@@ -7,6 +7,7 @@ import {
   deriveRepeatInstanceId,
   deriveSubtaskId,
   nextOccurrenceDate,
+  skipOccurrenceDate,
   normalizeRepeatRule,
 } from './repeat';
 
@@ -268,6 +269,79 @@ describe('nextOccurrenceDate — 规则 → 下一次出现日期（纯函数）
   it('锚点日期缺失/非法 → null（规则无锚即无派生）', () => {
     expect(nextOccurrenceDate(rule({ unit: 'day' }), { scheduledDate: null })).toBeNull();
     expect(nextOccurrenceDate(rule({ unit: 'day' }), { scheduledDate: 'garbage' })).toBeNull();
+  });
+});
+
+describe('skipOccurrenceDate — 跳过本次的目标日期', () => {
+  // 今天 = 2026-02-10（周二，UTC）
+  const now = '2026-02-10T08:00:00.000Z';
+
+  it('计划日在未来 / 今天：严格下一次', () => {
+    expect(skipOccurrenceDate(rule({ unit: 'week' }), { scheduledDate: '2026-02-12', now })).toBe(
+      '2026-02-19',
+    );
+    expect(skipOccurrenceDate(rule({ unit: 'day' }), { scheduledDate: '2026-02-10', now })).toBe(
+      '2026-02-11',
+    );
+  });
+
+  it('逾期一轮 / 多轮：跳过全部错过的，落在今天或之后', () => {
+    // 每天，逾期 5 天 → 今天
+    expect(skipOccurrenceDate(rule({ unit: 'day' }), { scheduledDate: '2026-02-05', now })).toBe(
+      '2026-02-10',
+    );
+    // 每周一，上周一逾期 → 下周一（今天周二不是出现日）
+    expect(
+      skipOccurrenceDate(rule({ unit: 'week', weekdays: [1] }), {
+        scheduledDate: '2026-02-02',
+        now,
+      }),
+    ).toBe('2026-02-16');
+    // 每 2 周的周一、周三：保持周期对齐
+    expect(
+      skipOccurrenceDate(rule({ unit: 'week', interval: 2, weekdays: [1, 3] }), {
+        scheduledDate: '2026-01-19',
+        now,
+      }),
+    ).toBe('2026-02-16');
+    // 每月 31 号的钳制沿链进行
+    expect(skipOccurrenceDate(rule({ unit: 'month' }), { scheduledDate: '2025-12-31', now })).toBe(
+      '2026-02-28',
+    );
+  });
+
+  it('anchor=completion：以今天为锚推进一次', () => {
+    expect(
+      skipOccurrenceDate(rule({ unit: 'day', interval: 3, anchor: 'completion' }), {
+        scheduledDate: '2026-01-01',
+        now,
+      }),
+    ).toBe('2026-02-13');
+  });
+
+  it('until 在目标之前 → null；until 当天可跳到', () => {
+    expect(
+      skipOccurrenceDate(rule({ unit: 'day', until: '2026-02-09' }), {
+        scheduledDate: '2026-02-05',
+        now,
+      }),
+    ).toBeNull();
+    expect(
+      skipOccurrenceDate(rule({ unit: 'day', until: '2026-02-10' }), {
+        scheduledDate: '2026-02-05',
+        now,
+      }),
+    ).toBe('2026-02-10');
+  });
+
+  it('「今天」取账号时区：UTC 晚间已是上海的次日', () => {
+    expect(
+      skipOccurrenceDate(rule({ unit: 'day' }), {
+        scheduledDate: '2026-02-05',
+        now: '2026-02-10T20:00:00.000Z',
+        timeZone: 'Asia/Shanghai',
+      }),
+    ).toBe('2026-02-11');
   });
 });
 

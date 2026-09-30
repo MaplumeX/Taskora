@@ -1,4 +1,5 @@
 import type { FeedItem } from '@taskora/shared';
+import type { RepeatPreview } from '@taskora/engine';
 
 import { fromInputDateValue, toDateKey, toInputDateValue, instantCalendarDate } from './date';
 
@@ -7,6 +8,8 @@ export type UpcomingDay = {
   numberLabel: string;
   isTomorrow: boolean;
   items: FeedItem[];
+  /** 下次预告（只读，排在当天真实条目之后）。 */
+  previews: RepeatPreview[];
 };
 
 export type UpcomingLaterMonth = {
@@ -50,7 +53,11 @@ function monthEndDate(ym: { year: number; month: number }): Date {
   return new Date(ym.year, ym.month, 0);
 }
 
-export function buildUpcomingLayout(items: FeedItem[], today: Date): UpcomingLayout {
+export function buildUpcomingLayout(
+  items: FeedItem[],
+  today: Date,
+  previews: readonly RepeatPreview[] = [],
+): UpcomingLayout {
   today = instantCalendarDate(today);
   const weekStart = localDay(today, 1);
   const week: UpcomingDay[] = [];
@@ -65,6 +72,7 @@ export function buildUpcomingLayout(items: FeedItem[], today: Date): UpcomingLay
       numberLabel: numberLabel(date, today),
       isTomorrow: i === 0,
       items: [],
+      previews: [],
     });
   }
 
@@ -91,7 +99,15 @@ export function buildUpcomingLayout(items: FeedItem[], today: Date): UpcomingLay
   }
 
   const laterEndKey = toInputDateValue(monthEndDate(later[2]));
-  const laterByDate = new Map<string, FeedItem[]>();
+  const laterByDate = new Map<string, { items: FeedItem[]; previews: RepeatPreview[] }>();
+  const laterDay = (dateKey: string) => {
+    let entry = laterByDate.get(dateKey);
+    if (!entry) {
+      entry = { items: [], previews: [] };
+      laterByDate.set(dateKey, entry);
+    }
+    return entry;
+  };
 
   for (const item of items) {
     if (!item.scheduledDate) continue;
@@ -101,10 +117,17 @@ export function buildUpcomingLayout(items: FeedItem[], today: Date): UpcomingLay
       week[idx].items.push(item);
       continue;
     }
-    if (dateKey > weekEndKey && dateKey <= laterEndKey) {
-      const bucket = laterByDate.get(dateKey);
-      if (bucket) bucket.push(item);
-      else laterByDate.set(dateKey, [item]);
+    if (dateKey > weekEndKey && dateKey <= laterEndKey) laterDay(dateKey).items.push(item);
+  }
+
+  for (const preview of previews) {
+    const idx = weekIndex.get(preview.dateKey);
+    if (idx !== undefined) {
+      week[idx].previews.push(preview);
+      continue;
+    }
+    if (preview.dateKey > weekEndKey && preview.dateKey <= laterEndKey) {
+      laterDay(preview.dateKey).previews.push(preview);
     }
   }
 
@@ -118,7 +141,7 @@ export function buildUpcomingLayout(items: FeedItem[], today: Date): UpcomingLay
       dateKey,
       numberLabel: numberLabel(date, today),
       isTomorrow: false,
-      items: laterByDate.get(dateKey) ?? [],
+      ...laterByDate.get(dateKey)!,
     });
   }
 
