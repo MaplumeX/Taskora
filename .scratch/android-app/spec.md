@@ -43,7 +43,7 @@ Taskora 目前只有 Web 与 Windows 桌面端。Local-first 架构（ADR-0007�
 17. As a Taskora 用户, I want 在手机上恢复或永久删除 Trash 中的任务, so that 删除流程在移动端闭环
 18. As a Taskora 用户, I want 在手机上使用 Agent 对话（含 SSE 流式回复与批准卡片）, so that 完整平价包含助手功能
 19. As a Taskora 用户, I want 在手机上修改设置（语言、主题、BYOK）, so that 不必回到桌面端调整偏好
-20. As a Taskora 用户, I want 系统返回手势先关闭打开的弹层，全部关闭后才路由返回，首页（根页面）再返回才退出, so that 符合标准 Android 导航语义
+20. As a Taskora 用户, I want 系统返回手势先关闭打开的弹层，全部关闭后才路由返回，首页（根页面）再返回才退到后台（回桌面，不终止进程）, so that 符合标准 Android 导航语义
 21. As a Taskora 用户, I want 下拉刷新手动触发同步, so that 我能主动确认服务器上的最新变更
 22. As a Taskora 用户, I want 回到前台时自动拉取增量, so that 多设备场景下手机总能看到较新的状态
 23. As a Taskora 用户, I want 同步状态（离线/Outbox 排队数）可见, so that 我知道哪些写操作还没收敛
@@ -65,7 +65,7 @@ Taskora 目前只有 Web 与 Windows 桌面端。Local-first 架构（ADR-0007�
 - **Engine 接入**：`@taskora/engine` 按桌面端方式接入（boot 时建库、replica 初始化、变更订阅）。数据读取不走 REST。
 - **会话存储**：Android Keystore 生成的密钥（不可导出）AES 加密令牌后写入应用私有目录；解锁/解密在 Rust 侧经 JNI 或等价机制完成（ADR-0009）。TokenStore 抽象与 desktop 的注入模式一致。
 - **同步触发**：前台同步模型——启动 pull、每次本地写后 push、切回前台 pull、下拉刷新手动触发。不引入 FCM、不做 WorkManager 后台周期同步（后续可选）。Outbox 语义照常。
-- **返回手势**：Tauri back-navigation 事件桥接到「关闭 dialog / sheet → `history.back()` → 根页（首页）退出」的级联。
+- **返回手势**：Tauri back-navigation 事件桥接到「关闭 dialog / sheet → `history.back()` → 根页（首页）退到后台（`moveTaskToBack`，不退出进程）」的级联（修正见 `.scratch/android-app/issues/08-back-to-home.md`）。
 - **分发与签名**：GitHub Actions Android 构建矩阵，release keystore 经 secrets 注入，tag 推触发自动构建并发布 GitHub Releases APK。签名密钥不轮换（升级安装依赖同一签名）。
 - **版本**：沿用 monorepo 统一版本号（`pnpm-workspace` 同步，`scripts/release.mjs` 扩展）。
 

@@ -4,8 +4,8 @@
 //! - `sqlite`：Local Replica 的 rusqlite 适配层（自 desktop 平移）；
 //! - `session`：会话令牌的应用私有目录明文存储（ADR-0011；Keystore
 //!   JNI 桥已移除，见 ADR-0011 的取舍记录）；
-//! - `app_exit`：返回手势级联的根页退出（back-navigation.ts 调用）。
-
+//! - `background` 插件：返回手势级联的根页「退到后台」（back-navigation.ts
+//!   调用；moveTaskToBack，不结束进程）。
 mod session;
 mod sqlite;
 
@@ -89,14 +89,6 @@ mod android_settings {
     }
 }
 
-/// 根页返回 = 退出 App（Android 返回手势级联的最后一级）。
-/// onBackButtonPress 注册后 Tauri 不再执行默认返回行为（PR #14133），
-/// 退出路径由壳层显式选择。
-#[tauri::command]
-fn app_exit(app: tauri::AppHandle) {
-    app.exit(0);
-}
-
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -104,6 +96,10 @@ pub fn run() {
         .plugin(tauri_plugin_reminders::init())
         // 状态栏快速添加（android-status-bar issue 02）：单行自定义布局。
         .plugin(tauri_plugin_statusbar::init())
+        // 根页返回退到后台（android-app issue 08）：moveTaskToBack，不结束
+        // 进程（对齐标准 Android 语义；onBackButtonPress 注册即接管默认返回，
+        // 收尾动作由壳层显式选择）。
+        .plugin(tauri_plugin_background::init())
         .setup(|app| {
             // Local Replica 目录注册（ADR-0007）。Builder 的 setup 与
             // invoke_handler 都是「替换」语义，全部命令集中在下方唯一的
@@ -124,8 +120,7 @@ pub fn run() {
             session::session_read,
             session::session_write,
             session::session_clear,
-            open_notification_settings,
-            app_exit
+            open_notification_settings
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
