@@ -38,6 +38,20 @@ data class PendingAction(
 )
 
 /**
+ * 当前原生计划的来源状态（local-first-v3 issue 09）：原生计划有两个写入方
+ * ——App 内的 JS（按副本计算）与后台同步（取回 hub 计算的计划），据此
+ * 判断谁的更新。
+ */
+data class PlanSource(
+    /** JS 每次交付计划 +1：后台取回期间 JS 交付过，取回的计划作废。 */
+    val generation: Long,
+    /** JS 最近一次交付时副本还有未推送的本地写：hub 计划不含它们，后台不覆盖。 */
+    val pendingLocal: Boolean,
+    /** 当前计划来自后台同步时，hub 计算它时的变更日志位置；0 = 来自 JS。 */
+    val backgroundCursor: Long,
+)
+
+/**
  * 提醒计划的持久化（SharedPreferences + JSON）。
  *
  * 这是原生侧的单一事实来源：JS 进程的内存会随进程消失，系统闹钟却会
@@ -52,6 +66,9 @@ internal object ReminderStore {
     private const val KEY_CHANNEL_NAME = "channelName"
     private const val KEY_LABELS = "labels"
     private const val KEY_ACTIONS = "pendingActions"
+    private const val KEY_GENERATION = "generation"
+    private const val KEY_PENDING_LOCAL = "pendingLocal"
+    private const val KEY_BACKGROUND_CURSOR = "backgroundCursor"
 
     /** 通知 id 起点：远离状态栏常驻通知的固定 id（620001）。 */
     private const val FIRST_ID = 1_000_000
@@ -180,5 +197,22 @@ internal object ReminderStore {
             )
         }
         prefs(context).edit().putString(KEY_ACTIONS, array.toString()).commit()
+    }
+
+    fun planSource(context: Context): PlanSource {
+        val prefs = prefs(context)
+        return PlanSource(
+            generation = prefs.getLong(KEY_GENERATION, 0),
+            pendingLocal = prefs.getBoolean(KEY_PENDING_LOCAL, false),
+            backgroundCursor = prefs.getLong(KEY_BACKGROUND_CURSOR, 0),
+        )
+    }
+
+    fun savePlanSource(context: Context, source: PlanSource) {
+        prefs(context).edit()
+            .putLong(KEY_GENERATION, source.generation)
+            .putBoolean(KEY_PENDING_LOCAL, source.pendingLocal)
+            .putLong(KEY_BACKGROUND_CURSOR, source.backgroundCursor)
+            .commit()
     }
 }

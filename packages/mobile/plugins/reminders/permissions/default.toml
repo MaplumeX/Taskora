@@ -1,7 +1,7 @@
 "$schema" = "schemas/schema.json"
 
 [default]
-description = "Allows syncing the reminder plan, querying delivery status, requesting notification permission, opening the related system settings, and receiving notification actions and taps."
+description = "Allows syncing the reminder plan, configuring background plan sync, querying delivery status, requesting notification permission, opening the related system settings, and receiving notification actions and taps."
 permissions = [
   "allow-sync",
   "allow-clear",
@@ -10,6 +10,7 @@ permissions = [
   "allow-open-settings",
   "allow-take-pending-actions",
   "allow-take-launch-task",
+  "allow-configure-background",
   "allow-register-listener",
   "allow-remove-listener",
 ]

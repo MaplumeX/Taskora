@@ -1,4 +1,11 @@
-import { IsArray, IsObject, IsOptional, IsString, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsObject,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 
 import type { OutboxEvent } from '@taskora/engine';
@@ -10,6 +17,14 @@ export class RegisterDeviceDto {
   @IsOptional()
   @IsString()
   label?: string;
+
+  /**
+   * 同时签发后台凭据（Android 后台同步，local-first-v3 issue 09）：轮换
+   * 该设备已有的凭据并续期，明文只在本次响应里出现。
+   */
+  @IsOptional()
+  @IsBoolean()
+  backgroundToken?: boolean;
 }
 
 /**

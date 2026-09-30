@@ -62,7 +62,7 @@ export class SyncController {
 
   @Post('devices')
   registerDevice(@Request() req: { user: { id: string } }, @Body() dto: RegisterDeviceDto) {
-    return this.syncHub.registerDevice(req.user.id, dto.deviceId, dto.label);
+    return this.syncHub.registerDevice(req.user.id, dto.deviceId, dto.label, dto.backgroundToken);
   }
 
   // 每个响应都回报 serverTime：设备据此校准 HLC 墙钟，以 hub 时间为

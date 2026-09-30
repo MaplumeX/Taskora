@@ -11,6 +11,6 @@ import { EventsModule } from '../events/events.module';
   imports: [PrismaModule, EventsModule],
   controllers: [SyncController],
   providers: [SyncHubService, { provide: SyncChangeLog, useClass: PrismaSyncChangeLog }],
-  exports: [SyncHubService],
+  exports: [SyncHubService, SyncChangeLog],
 })
 export class SyncModule {}

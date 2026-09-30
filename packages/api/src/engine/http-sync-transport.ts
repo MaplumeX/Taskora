@@ -74,10 +74,21 @@ export function createHttpSyncTransport(platform: SyncClientPlatform): SyncTrans
   };
 }
 
-/** 登录设备注册（ADR-0007）：device id 分配后上报 hub。 */
+/**
+ * 登录设备注册（ADR-0007）：device id 分配后上报 hub。
+ *
+ * `backgroundToken`（Android 后台同步，local-first-v3 issue 09）：同时向
+ * hub 要一枚只读后台凭据，返回其明文（每次注册轮换）。
+ */
 export async function registerSyncDevice(
   deviceId: string,
   platform: SyncClientPlatform,
-): Promise<void> {
-  await apiClient.post('/sync/devices', { deviceId, label: platform });
+  options: { backgroundToken?: boolean } = {},
+): Promise<{ backgroundToken?: string }> {
+  const response = await apiClient.post<{ backgroundToken?: string }>('/sync/devices', {
+    deviceId,
+    label: platform,
+    ...(options.backgroundToken ? { backgroundToken: true } : {}),
+  });
+  return { backgroundToken: response.data?.backgroundToken };
 }

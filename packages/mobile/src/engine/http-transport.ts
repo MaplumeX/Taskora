@@ -10,7 +10,13 @@ export function createHttpSyncTransport(): SyncTransport {
   return createTransport('mobile');
 }
 
-/** 登录设备注册（ADR-0007）：device id 分配后上报 hub。 */
-export async function registerDevice(deviceId: string): Promise<void> {
-  await registerSyncDevice(deviceId, 'mobile');
+/**
+ * 登录设备注册（ADR-0007）：device id 分配后上报 hub，同时取回后台同步
+ * 用的只读凭据（local-first-v3 issue 09）。
+ */
+export async function registerDevice(deviceId: string): Promise<string | null> {
+  const { backgroundToken } = await registerSyncDevice(deviceId, 'mobile', {
+    backgroundToken: true,
+  });
+  return backgroundToken ?? null;
 }

@@ -1,11 +1,10 @@
 /**
- * Reminder Scheduler — 纯客户端调度计算（reminders spec 新 seam）。
+ * Reminder 规则（reminders spec；local-first-v3 issue 09 移入共享 domain）。
  *
- * 输入：任务集（计划日期 + reminderTime + 终态/Trash 状态）与当前时刻。
- * 输出：期望存在的系统通知集合（register/cancel 差量由
- * diffReminderRegistration 相对已注册集计算）。Tauri 通知 API 在本模块
- * 之外（apps 侧的 NotificationShell 薄壳），保证这段规则可用 vitest
- * 直测外部行为。
+ * 设备（Reminder 协调器，按副本计算）与 hub（`GET /reminders/plan`，供
+ * Android 后台同步按 Postgres 计算）共用这一份：期望集、触发时刻、
+ * 「明天」时刻与通知文案。系统通知 API 在本模块之外（各端的通知薄壳 /
+ * 原生插件），规则可用 vitest 直测外部行为。
  *
  * 清理规则在本层的体现（数据层兜底见 task-backend）：
  * - 了结（COMPLETED/CANCELLED）或 Trash → 不产出（不会注册，已有注册被 cancel）；
@@ -23,7 +22,7 @@ import {
   TaskStatus,
 } from '@taskora/shared';
 
-/** 调度输入：Task 行上与提醒相关的字段（ReplicaRow / DTO 均可满足）。 */
+/** 调度输入：Task 行上与提醒相关的字段（ReplicaRow / Postgres 行均可满足）。 */
 export interface ReminderTaskInput {
   id: string;
   title: string;
@@ -171,4 +170,105 @@ export function reminderFireAt(
 export function snoozeTomorrowAt(fireAt: number, timeZone: string): number {
   const { date, time } = instantWallTime(fireAt, timeZone);
   return calendarTimeInstant(addCalendarDays(date, 1), time, timeZone);
+}
+
+/** 文案上下文：由调用方按任务当前行查出。 */
+export interface ReminderTextContext {
+  /** 所属 Project 名（无 Project 时为 Area 名）。 */
+  parentName: string | null;
+  notes: string | null;
+}
+
+export interface ReminderTexts {
+  title: string;
+  body: string;
+}
+
+/** 备注首行的最大长度（超出截断加省略号）。 */
+const NOTE_LINE_MAX = 80;
+
+/**
+ * 通知文案（reminder-actions spec）：title 为任务标题；body 为
+ * `HH:mm · <Project 名或 Area 名>`，备注非空时另起一行附备注首行。与语言
+ * 无关（按钮文案按 App 语言由各端提供，原生随计划持久化）。
+ */
+export function buildReminderTexts(
+  notification: ReminderNotification,
+  context: ReminderTextContext,
+  timeZone: string,
+): ReminderTexts {
+  const time = new Intl.DateTimeFormat('en-GB', {
+    timeZone,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(notification.fireAt));
+  const parent = context.parentName?.trim();
+  let body = parent ? `${time} · ${parent}` : time;
+  const noteLine = firstNoteLine(context.notes);
+  if (noteLine) body += `\n${noteLine}`;
+  return { title: notification.taskTitle, body };
+}
+
+function firstNoteLine(notes: string | null): string | null {
+  if (!notes) return null;
+  const line = notes
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .find((l) => l.length > 0);
+  if (!line) return null;
+  const chars = Array.from(line);
+  return chars.length > NOTE_LINE_MAX ? `${chars.slice(0, NOTE_LINE_MAX).join('')}…` : line;
+}
+
+/** 交付给原生的一条提醒：规则与文案都已算完（ADR-0014 的 `sync(plan)` 条目）。 */
+export interface ReminderDelivery {
+  key: string;
+  taskId: string;
+  /** 触发时刻（epoch ms）。 */
+  fireAt: number;
+  /** 触发日 + 1 的同一时刻：原生在 App 未运行时临时重设「明天」闹钟用。 */
+  snoozeTomorrowAt: number;
+  title: string;
+  body: string;
+}
+
+/** 按任务 id 查文案上下文的名称表（Project / Area 标题）。 */
+export interface ReminderParentTitles {
+  projects: ReadonlyMap<string, string>;
+  areas: ReadonlyMap<string, string>;
+}
+
+/**
+ * 完整交付计划：期望集 + 文案。协调器（副本）与 hub（Postgres）各自读出
+ * 任务与名称表后调用，两端产出逐字一致的计划。
+ */
+export function planReminderDeliveries(
+  tasks: ReminderTaskInput[],
+  now: Date,
+  zones: { timeZone: string; legacyDateTimeZone: string },
+  titles: ReminderParentTitles,
+): ReminderDelivery[] {
+  const tasksById = new Map(tasks.map((t) => [t.id, t]));
+  return computeReminderPlan(tasks, now, zones.timeZone, zones.legacyDateTimeZone).map((n) => ({
+    key: n.key,
+    taskId: n.taskId,
+    fireAt: n.fireAt,
+    snoozeTomorrowAt: n.snoozeTomorrowAt,
+    ...buildReminderTexts(n, reminderTextContext(tasksById.get(n.taskId)!, titles), zones.timeZone),
+  }));
+}
+
+/** 文案上下文：Project 名优先，其次 Area 名。 */
+export function reminderTextContext(
+  task: ReminderTaskInput,
+  titles: ReminderParentTitles,
+): ReminderTextContext {
+  return {
+    parentName:
+      (task.projectId ? titles.projects.get(task.projectId) : undefined) ??
+      (task.areaId ? titles.areas.get(task.areaId) : undefined) ??
+      null,
+    notes: task.notes ?? null,
+  };
 }

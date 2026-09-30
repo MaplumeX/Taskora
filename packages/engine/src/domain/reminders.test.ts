@@ -3,11 +3,14 @@ import { describe, expect, it } from 'vitest';
 import { ScheduledType, TaskStatus } from '@taskora/shared';
 
 import {
+  buildReminderTexts,
   computeReminderPlan,
   diffReminderRegistration,
+  planReminderDeliveries,
   reminderNotificationKey,
+  type ReminderNotification,
   type ReminderTaskInput,
-} from './reminder-scheduler';
+} from './reminders';
 
 /** 2026-02-05 是周四。UTC 时区语义：fireAt = 计划日当天 + HH:mm。 */
 const SCHEDULED_DATE = '2026-02-05';
@@ -104,7 +107,11 @@ describe('diffReminderRegistration — 期望集 vs 已注册集 的注册/注�
       ['reminder:t1', future],
       [reminderNotificationKey('t2'), future],
     ]);
-    const diff = diffReminderRegistration(registered, computeReminderPlan([other], NOW), NOW.getTime());
+    const diff = diffReminderRegistration(
+      registered,
+      computeReminderPlan([other], NOW),
+      NOW.getTime(),
+    );
     expect(diff.register).toEqual([]);
     expect(diff.cancel).toEqual(['reminder:t1']);
     expect(diff.due).toEqual([]);
@@ -155,5 +162,96 @@ describe('diffReminderRegistration — 期望集 vs 已注册集 的注册/注�
     expect(diff.register).toEqual([]);
     expect(diff.cancel).toEqual([reminderNotificationKey('t1')]);
     expect(diff.due).toEqual([]);
+  });
+});
+
+describe('buildReminderTexts', () => {
+  const notification: ReminderNotification = {
+    key: 'reminder:t1',
+    taskId: 't1',
+    taskTitle: '写周报',
+    fireAt: Date.parse('2026-02-05T01:30:00.000Z'), // 上海 09:30
+    snoozeTomorrowAt: Date.parse('2026-02-06T01:30:00.000Z'),
+  };
+
+  it('无归属、无备注：正文只有时刻', () => {
+    expect(
+      buildReminderTexts(notification, { parentName: null, notes: null }, 'Asia/Shanghai'),
+    ).toEqual({ title: '写周报', body: '09:30' });
+  });
+
+  it('有归属：时刻 · 归属名；备注首个非空行另起一行', () => {
+    expect(
+      buildReminderTexts(
+        notification,
+        { parentName: '工作', notes: '\n  汇总本周进展  \n第二行' },
+        'Asia/Shanghai',
+      ),
+    ).toEqual({ title: '写周报', body: '09:30 · 工作\n汇总本周进展' });
+  });
+
+  it('空白归属名与空白备注视为无', () => {
+    expect(
+      buildReminderTexts(notification, { parentName: '  ', notes: ' \n ' }, 'Asia/Shanghai'),
+    ).toEqual({ title: '写周报', body: '09:30' });
+  });
+
+  it('备注首行过长时截断加省略号', () => {
+    const { body } = buildReminderTexts(
+      notification,
+      { parentName: null, notes: '字'.repeat(100) },
+      'Asia/Shanghai',
+    );
+    expect(body).toBe(`09:30\n${'字'.repeat(80)}…`);
+  });
+});
+
+describe('planReminderDeliveries — 设备与 hub 共用的完整交付计划', () => {
+  const zones = { timeZone: 'Asia/Shanghai', legacyDateTimeZone: 'Asia/Shanghai' };
+  const titles = {
+    projects: new Map([['p1', '发布']]),
+    areas: new Map([['a1', '工作']]),
+  };
+
+  it('期望集附文案：Project 名优先于 Area 名，备注取首行', () => {
+    const plan = planReminderDeliveries(
+      [
+        task({ id: 't1', title: '写周报', projectId: 'p1', areaId: 'a1', notes: '汇总' }),
+        task({ id: 't2', title: '复盘', areaId: 'a1', reminderTime: '10:15' }),
+        task({ id: 't3', status: TaskStatus.COMPLETED }),
+      ],
+      NOW,
+      zones,
+      titles,
+    );
+    expect(plan).toEqual([
+      {
+        key: 'reminder:t1',
+        taskId: 't1',
+        fireAt: Date.parse('2026-02-05T01:00:00.000Z'),
+        snoozeTomorrowAt: Date.parse('2026-02-06T01:00:00.000Z'),
+        title: '写周报',
+        body: '09:00 · 发布\n汇总',
+      },
+      {
+        key: 'reminder:t2',
+        taskId: 't2',
+        fireAt: Date.parse('2026-02-05T02:15:00.000Z'),
+        snoozeTomorrowAt: Date.parse('2026-02-06T02:15:00.000Z'),
+        title: '复盘',
+        body: '10:15 · 工作',
+      },
+    ]);
+  });
+
+  it('Postgres 形态的计划日（UTC 零点 DateTime）与日期键得到同一时刻', () => {
+    const fromKey = planReminderDeliveries([task({ id: 't1' })], NOW, zones, titles);
+    const fromStorage = planReminderDeliveries(
+      [task({ id: 't1', scheduledDate: '2026-02-05T00:00:00.000Z' })],
+      NOW,
+      zones,
+      titles,
+    );
+    expect(fromStorage).toEqual(fromKey);
   });
 });

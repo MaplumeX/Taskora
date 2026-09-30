@@ -374,6 +374,10 @@ model Device {
   label     String?
   createdAt DateTime @default(now())
   lastSeenAt DateTime @default(now())
+  /// Android 后台同步的只读凭据（local-first-v3 issue 09）：只能读提醒计划
+  /// （GET /reminders/plan）。存 SHA-256；每次设备注册时轮换并续期。
+  backgroundTokenHash      String?   @unique
+  backgroundTokenExpiresAt DateTime?
 
   @@unique([userId, deviceId])
   @@index([userId])

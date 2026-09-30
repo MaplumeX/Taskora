@@ -155,16 +155,20 @@ export {
   computeReminderPlan,
   diffReminderRegistration,
   reminderNotificationKey,
+  buildReminderTexts,
   type ReminderTaskInput,
   type ReminderNotification,
   type ReminderRegistrationDiff,
-} from './reminders/reminder-scheduler';
+  type ReminderTextContext,
+  type ReminderTexts,
+} from '@taskora/engine';
 export {
   setNotificationShell,
   getNotificationShell,
   reminderInputFromReplicaRow,
   type ReminderDelivery,
   type ReminderNotificationShell,
+  type ReminderPlanBasis,
   type ReminderReliabilityStatus,
   type ReminderSettingsTarget,
 } from './reminders/notification-shell';
@@ -180,13 +184,7 @@ export {
   type ReminderActionRequest,
   type ReminderActionResolution,
 } from './reminders/reminder-action';
-export {
-  buildReminderTexts,
-  reminderActionLabels,
-  type ReminderActionLabels,
-  type ReminderTextContext,
-  type ReminderTexts,
-} from './reminders/reminder-texts';
+export { reminderActionLabels, type ReminderActionLabels } from './reminders/reminder-texts';
 export {
   useReminderPermissionStore,
   type ReminderPermissionState,

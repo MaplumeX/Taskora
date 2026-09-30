@@ -12,7 +12,7 @@ import {
 import { usePreferencesStore } from '@/stores/preferences.store';
 import { todayDateKey, parseCalendarDate, toInputDateValue, formatDeadlineCountdown } from './date';
 import { i18n } from '@/i18n/config';
-import { computeReminderPlan } from '../reminders/reminder-scheduler';
+import { computeReminderPlan } from '@taskora/engine';
 import { taskMatchesQuery } from '../events/task-query-match';
 import { groupLogbookItems } from './logbookLayout';
 

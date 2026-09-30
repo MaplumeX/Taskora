@@ -32,6 +32,7 @@ import {
 } from '@taskora/engine';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { issueBackgroundToken } from '../reminders/background-token';
 import {
   codecFor,
   delegate,
@@ -230,13 +231,22 @@ export class SyncHubService implements OnModuleInit {
   }
 
   /** 设备注册：登录时分配/续期 device id（ADR-0007）。 */
-  async registerDevice(userId: string, deviceId: string, label?: string) {
+  async registerDevice(
+    userId: string,
+    deviceId: string,
+    label?: string,
+    withBackgroundToken = false,
+  ): Promise<{ deviceId: string; backgroundToken?: string }> {
+    const background = withBackgroundToken ? issueBackgroundToken() : null;
+    const credential = background
+      ? { backgroundTokenHash: background.hash, backgroundTokenExpiresAt: background.expiresAt }
+      : {};
     await this.prisma.device.upsert({
       where: { userId_deviceId: { userId, deviceId } },
-      create: { userId, deviceId, label },
-      update: { label, lastSeenAt: new Date() },
+      create: { userId, deviceId, label, ...credential },
+      update: { label, lastSeenAt: new Date(), ...credential },
     });
-    return { deviceId };
+    return background ? { deviceId, backgroundToken: background.token } : { deviceId };
   }
 
   // ---------- hub 侧写入（虚拟设备 0 / Delete Request） ----------

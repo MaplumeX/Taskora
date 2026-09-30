@@ -1,6 +1,6 @@
 ## Default Permission
 
-Allows syncing the reminder plan, querying delivery status, requesting notification permission, opening the related system settings, and receiving notification actions and taps.
+Allows syncing the reminder plan, configuring background plan sync, querying delivery status, requesting notification permission, opening the related system settings, and receiving notification actions and taps.
 
 #### This default permission set includes the following:
 
@@ -11,6 +11,7 @@ Allows syncing the reminder plan, querying delivery status, requesting notificat
 - `allow-open-settings`
 - `allow-take-pending-actions`
 - `allow-take-launch-task`
+- `allow-configure-background`
 - `allow-register-listener`
 - `allow-remove-listener`
 
@@ -45,6 +46,32 @@ Enables the clear command without any pre-configured scope.
 <td>
 
 Denies the clear command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`reminders:allow-configure-background`
+
+</td>
+<td>
+
+Enables the configure_background command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`reminders:deny-configure-background`
+
+</td>
+<td>
+
+Denies the configure_background command without any pre-configured scope.
 
 </td>
 </tr>

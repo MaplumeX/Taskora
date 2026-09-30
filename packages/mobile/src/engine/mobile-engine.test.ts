@@ -45,6 +45,25 @@ vi.mock('./tauri-storage', async () => ({
   createTauriSqlStorage: () => ({}),
 }));
 
+const backgroundMocks = vi.hoisted(() => ({
+  registerDevice: vi.fn(async (): Promise<string | null> => null),
+  configureBackgroundSync: vi.fn(async () => undefined),
+}));
+
+vi.mock('./http-transport', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./http-transport')>()),
+  registerDevice: backgroundMocks.registerDevice,
+}));
+
+vi.mock('../reminders/tauri-notification-shell', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../reminders/tauri-notification-shell')>()),
+  configureBackgroundSync: backgroundMocks.configureBackgroundSync,
+}));
+
+vi.mock('../server-settings', () => ({
+  getServerUrl: () => 'https://taskora.example.com/api/v1',
+}));
+
 type EngineOnChange = (change: { origin: string; entities?: [] }) => void;
 
 const fakeEngine = {
@@ -257,5 +276,32 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
       expect(fakeEngine.close).toHaveBeenCalled();
     });
     expect(getMobileEngine()).toBeNull();
+  });
+});
+
+describe('mobile-engine 提醒的后台同步（local-first-v3 issue 09）', () => {
+  it('设备注册取回后台凭据后，把计划地址与凭据交给原生', async () => {
+    backgroundMocks.registerDevice.mockResolvedValueOnce('bg-token');
+    const { initMobileEngine } = await loadEngine();
+
+    initMobileEngine(renderQueryClient());
+
+    await vi.waitFor(() =>
+      expect(backgroundMocks.configureBackgroundSync).toHaveBeenCalledWith(
+        'https://taskora.example.com/api/v1/reminders/plan',
+        'bg-token',
+      ),
+    );
+  });
+
+  it('没有取回凭据（旧 hub / 注册失败）时不启用', async () => {
+    backgroundMocks.registerDevice.mockRejectedValueOnce(new Error('offline'));
+    const { initMobileEngine } = await loadEngine();
+
+    initMobileEngine(renderQueryClient());
+
+    await vi.waitFor(() => expect(backgroundMocks.registerDevice).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(backgroundMocks.configureBackgroundSync).not.toHaveBeenCalled();
   });
 });

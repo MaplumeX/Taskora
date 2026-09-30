@@ -12,6 +12,9 @@
  * 另有 SSE（前台存活的 Event Stream）作为「远端有变更」的提示通道触发
  * pull——它是前台内的传输层提示，不是推送基建（ADR-0007 同口径）。
  *
+ * 副本只在前台同步。唯一的例外是提醒：App 未打开时，原生周期任务取回
+ * hub 算好的提醒计划直接交给闹钟（local-first-v3 issue 09），不写副本。
+ *
  * 登出：退回 REST 后端，本地数据保留（Outbox 未推的编辑属于用户数据）。
  */
 
@@ -51,10 +54,12 @@ import { createReminderCoordinator, type ReminderCoordinator } from '@taskora/ap
 import { createHttpSyncTransport, registerDevice } from './http-transport';
 import { createTauriSqlStorage, isTauriRuntime, useUserReplicaDb } from './tauri-storage';
 import {
+  configureBackgroundSync,
   createMobileNotificationShell,
   onOpenTask,
   takeLaunchTask,
 } from '../reminders/tauri-notification-shell';
+import { getServerUrl } from '../server-settings';
 import { isNativeNotificationPermissionGranted } from '../notification-bridge';
 import { scheduleStatusBarRefresh } from '../status-bar';
 
@@ -123,7 +128,10 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     setTagBackend(createEngineTagBackend({ engine }));
     setTagGroupBackend(createEngineTagGroupBackend({ engine }));
     setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine }));
-    registerDevice(deviceId).catch(() => undefined); // 注册失败不阻塞本地使用
+    // 注册失败不阻塞本地使用；成功时启用提醒的后台同步（issue 09）
+    void registerDevice(deviceId)
+      .then((token) => enableBackgroundSync(token))
+      .catch(() => undefined);
     // Engine 激活：SSE 只作「触发 engine pull」的提示通道（ADR-0007），
     // 停用 EventStreamApplier 的缓存手术——界面由响应式查询驱动。
     setEventStreamCacheSurgery(false);
@@ -214,6 +222,17 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
   }
 }
 
+/**
+ * 提醒的后台同步（local-first-v3 issue 09）：App 未打开时原生周期任务用
+ * 设备的只读后台凭据取回 hub 算好的提醒计划。登出时由协调器 stop 里的
+ * shell.clear 一并停用。
+ */
+async function enableBackgroundSync(token: string | null): Promise<void> {
+  const serverUrl = getServerUrl();
+  if (!token || !serverUrl || !engine) return;
+  await configureBackgroundSync(`${serverUrl}/reminders/plan`, token);
+}
+
 /** 全域退回 REST（登出 / 装配失败）。 */
 function resetBackends(): void {
   detachLiveQueries();
@@ -272,6 +291,9 @@ export function syncNow(): Promise<boolean> {
     .then(() => {
       // 已同步：Outbox 清空、增量拉平
       setSyncStatus('synced');
+      // 立即把新的副本基准交给原生：Outbox 清空后后台同步才会恢复（issue
+      // 09），不等周期 tick——App 随时可能被切到后台、计时器随之冻结。
+      void reminderCoordinator?.reschedule();
       return true;
     })
     .catch(async (error: unknown) => {

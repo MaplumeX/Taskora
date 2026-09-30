@@ -8,6 +8,7 @@ const COMMANDS: &[&str] = &[
     "open_settings",
     "take_pending_actions",
     "take_launch_task",
+    "configure_background",
     "register_listener",
     "remove_listener",
 ];

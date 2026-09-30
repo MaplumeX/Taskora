@@ -11,6 +11,7 @@ vi.mock('@tauri-apps/api/core', () => ({
 }));
 
 import {
+  configureBackgroundSync,
   createMobileNotificationShell,
   onOpenTask,
   takeLaunchTask,
@@ -37,7 +38,7 @@ describe('createMobileNotificationShell（reminders 插件）', () => {
         body: '09:00',
       },
     ];
-    await createMobileNotificationShell().sync!(plan);
+    await createMobileNotificationShell().sync!(plan, { cursor: 7, pendingLocal: false });
     expect(mocks.invoke).toHaveBeenCalledWith('plugin:reminders|sync', {
       args: {
         reminders: plan,
@@ -50,7 +51,15 @@ describe('createMobileNotificationShell（reminders 插件）', () => {
           snoozeTomorrow: expect.any(String),
           snoozeMore: expect.any(String),
         },
+        basis: { cursor: 7, pendingLocal: false },
       },
+    });
+  });
+
+  it('后台同步：计划地址与后台凭据交给原生（issue 09）', async () => {
+    await configureBackgroundSync('https://taskora.example.com/api/v1/reminders/plan', 'bg');
+    expect(mocks.invoke).toHaveBeenCalledWith('plugin:reminders|configure_background', {
+      args: { planUrl: 'https://taskora.example.com/api/v1/reminders/plan', token: 'bg' },
     });
   });
 
@@ -88,7 +97,9 @@ describe('createMobileNotificationShell（reminders 插件）', () => {
 
   it('sync 失败向上抛出，交给协调器下个 tick 重试', async () => {
     mocks.invoke.mockRejectedValue(new Error('ipc unavailable'));
-    await expect(createMobileNotificationShell().sync!([])).rejects.toThrow('ipc unavailable');
+    await expect(
+      createMobileNotificationShell().sync!([], { cursor: 0, pendingLocal: false }),
+    ).rejects.toThrow('ipc unavailable');
   });
 
   it('clear 清空原生计划', async () => {
