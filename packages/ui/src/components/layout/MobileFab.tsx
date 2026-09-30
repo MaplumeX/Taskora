@@ -9,14 +9,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useContentBottomActionsForRoute } from '@taskora/api';
+import { useContentBottomActionsForRoute, useMultiSelectStore } from '@taskora/api';
 
 /**
  * 手机端右下角悬浮添加按钮。
  * - 默认（可添加任务的页面）：直接点击创建任务。
  * - area 详情页：弹出朝上菜单选择「添加项目」。
  * - project 详情页：弹出朝上菜单选择「添加标题」。
- * - 页面无任何添加动作（upcoming/calendar/logbook/trash）时不渲染。
+ * - 页面无任何添加动作（upcoming/calendar/logbook/trash）或处于多选模式时不渲染。
  */
 export function MobileFab() {
   const { t } = useTranslation();
@@ -32,7 +32,10 @@ export function MobileFab() {
     addProjectPending,
     addHeadingPending,
   } = useContentBottomActionsForRoute();
+  const multiSelecting = useMultiSelectStore((s) => s.active);
 
+  // 多选模式中底部由多选工具栏占据。
+  if (multiSelecting) return null;
   if (!showAddTask && !showAddProject && !showAddHeading) return null;
 
   // 场景详情页（area/project）点击 FAB 弹出朝上菜单展示全部可用动作（添加任务+项目/标题）；

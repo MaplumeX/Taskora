@@ -68,5 +68,7 @@
   "repeatUntil": "直到",
   "repeatNextPreview": "下次：{{date}}",
   "repeatEnded": "已到最后一次重复",
-  "repeatUnit": "重复单位"
+  "repeatUnit": "重复单位",
+  "multiSelectCount": "已选择 {{count}} 项",
+  "multiSelectSchedule": "计划"
 }

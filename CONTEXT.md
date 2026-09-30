@@ -99,8 +99,12 @@ _Avoid_: 把 Cancelled 当作 COMPLETED 的子集、把终态与删除混淆
 ### 界面交互
 
 **Selection**:
-仅存在于键盘交互域：键盘导航下当前被高亮、并作为键盘动作（完成、删除、新建于下方等）作用对象的 Task / Project / Project Heading；区别于 focus（DOM 焦点）与完成态。触控交互没有 Selection：点击 = 打开详情，勾选用专用 checkbox，行内菜单用长按触发。
+仅存在于键盘交互域：键盘导航下当前被高亮、并作为键盘动作（完成、删除、新建于下方等）作用对象的 Task / Project / Project Heading；区别于 focus（DOM 焦点）与完成态。触控交互没有 Selection：点击 = 打开详情，勾选用专用 checkbox，长按只负责拖动排序，批量或行级操作走 Multi-Select Mode。
 _Avoid_: 高亮、hover、焦点
+
+**Multi-Select Mode（多选模式）**:
+触控交互中显式进入 / 退出的模式（对齐 Things 3 iPhone）：左滑 Task 行进入并勾选该行，模式中点击行 = 切换勾选，底部工具栏对勾选集合批量执行计划、移动、删除，其余动作（完成、取消、截止日期等）收在「更多」里。动作执行完、点「完成」、切换页面或系统返回即退出。与键盘 Selection 互不相通：进入时清空 Selection、收起展开行。Trash 行不可拖动，仍以长按打开菜单。
+_Avoid_: Selection（键盘专属）、编辑模式、批量选择
 
 ### 引擎与同步（local-first）
 

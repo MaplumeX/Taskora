@@ -68,5 +68,7 @@
   "repeatUntil": "Until",
   "repeatNextPreview": "Next: {{date}}",
   "repeatEnded": "No further occurrences",
-  "repeatUnit": "Repeat unit"
+  "repeatUnit": "Repeat unit",
+  "multiSelectCount": "{{count}} selected",
+  "multiSelectSchedule": "When"
 }

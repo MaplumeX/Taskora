@@ -12,6 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { TaskListView } from '@/components/task/TaskListView';
+import { MultiSelectEnabledContext } from '@/components/task/multiSelectContext';
 import { useDebouncedValue } from '@taskora/api';
 import { useTasksQuery } from '@taskora/api';
 
@@ -95,11 +96,14 @@ export function SearchModal({ open, onOpenChange }: Props) {
               {!isPending && !isError && (
                 <ScrollArea className="max-h-[60dvh]">
                   {tasks.length > 0 ? (
-                    <TaskListView
-                      tasks={tasks}
-                      sortable={false}
-                      emptyHint={t('noResults')}
-                    />
+                    // 多选工具栏在弹窗之下，搜索结果不支持左滑多选。
+                    <MultiSelectEnabledContext.Provider value={false}>
+                      <TaskListView
+                        tasks={tasks}
+                        sortable={false}
+                        emptyHint={t('noResults')}
+                      />
+                    </MultiSelectEnabledContext.Provider>
                   ) : (
                     <p className="py-4 text-sm text-muted-foreground">
                       {t('noResults')}

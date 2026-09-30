@@ -5,6 +5,7 @@ import type { TaskResponseDto } from '@taskora/shared';
 
 import { Dialog, DialogClose, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { TaskListView } from '@/components/task/TaskListView';
+import { MultiSelectEnabledContext } from '@/components/task/multiSelectContext';
 import { i18n, useUiInteractionStore } from '@taskora/api';
 import { cn } from '@/lib/utils';
 
@@ -67,7 +68,10 @@ export function CalendarDaySheet({ date, tasks, onClose }: Props) {
           </DialogClose>
         </div>
         <div className="min-h-0 overflow-y-auto px-2 pb-4">
-          <TaskListView tasks={tasks} emptyHint={t('calendar:dayEmpty')} />
+          {/* 多选工具栏在卡片之下，当天列表不支持左滑多选。 */}
+          <MultiSelectEnabledContext.Provider value={false}>
+            <TaskListView tasks={tasks} emptyHint={t('calendar:dayEmpty')} />
+          </MultiSelectEnabledContext.Provider>
         </div>
       </DialogContent>
     </Dialog>

@@ -92,3 +92,17 @@ export function useLongPress(
     },
   };
 }
+
+/**
+ * 该次 contextmenu 事件是否由触屏长按产生（Android WebView / Chrome 在
+ * 长按时也会派发 contextmenu）。可拖拽的行上长按只负责拖动，这类事件
+ * 应只 preventDefault、不开菜单；鼠标右键不受影响。
+ */
+export function isTouchContextMenu(e: React.MouseEvent): boolean {
+  const native = e.nativeEvent as MouseEvent & {
+    pointerType?: string;
+    sourceCapabilities?: { firesTouchEvents?: boolean } | null;
+  };
+  if (native.pointerType === 'touch' || native.pointerType === 'pen') return true;
+  return native.sourceCapabilities?.firesTouchEvents === true;
+}

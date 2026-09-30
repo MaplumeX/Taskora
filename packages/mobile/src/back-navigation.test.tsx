@@ -32,6 +32,7 @@ import {
   useBackNavigation,
 } from './back-navigation';
 import { Dialog, DialogContent, DialogTitle } from '@taskora/ui/components/ui/dialog';
+import { useMultiSelectStore } from '@taskora/api';
 
 function pressBack() {
   expect(hoisted.backHandler).toBeTruthy();
@@ -104,7 +105,22 @@ describe('back-navigation 级联（Tauri 环境，issue 05）', () => {
     expect(hoisted.invokeMock).not.toHaveBeenCalled();
   });
 
-  it('第二级：无浮层但历史可返回 → history.back', async () => {
+  it('第二级：无浮层但处于多选模式 → 退出多选，不路由返回', async () => {
+    const backSpy = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    window.history.replaceState({ idx: 2 }, '', '/today');
+    useMultiSelectStore.getState().enter('task-1');
+
+    installShell();
+    await waitFor(() => expect(hoisted.backHandler).toBeTruthy());
+
+    pressBack();
+
+    expect(useMultiSelectStore.getState().active).toBe(false);
+    expect(backSpy).not.toHaveBeenCalled();
+    backSpy.mockRestore();
+  });
+
+  it('第三级：无浮层但历史可返回 → history.back', async () => {
     const backSpy = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
     window.history.replaceState({ idx: 2 }, '', '/today');
     expect(canNavigateBack()).toBe(true);
@@ -119,7 +135,7 @@ describe('back-navigation 级联（Tauri 环境，issue 05）', () => {
     backSpy.mockRestore();
   });
 
-  it('第三级：根页无浮层 → 退到后台（background 插件 command）', async () => {
+  it('第四级：根页无浮层 → 退到后台（background 插件 command）', async () => {
     window.history.replaceState({ idx: 0 }, '', '/today');
     expect(canNavigateBack()).toBe(false);
 
