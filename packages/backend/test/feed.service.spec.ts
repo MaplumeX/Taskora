@@ -35,11 +35,16 @@ describe('FeedService', () => {
   describe('findAll — project 排除（origin/main #41）', () => {
     const userId = 'user-1';
 
-    it('anytime 视图不查询 projects（项目不出现在 Anytime）', async () => {
+    it('anytime 视图不返回项目行，项目查询仅用于判定稍后项目', async () => {
       mockPrisma.task.findMany.mockResolvedValue([]);
+      mockPrisma.project.findMany.mockResolvedValue([]);
       mockPrisma.task.groupBy.mockResolvedValue([]);
-      await service.findAll(userId, 'anytime');
-      expect(mockPrisma.project.findMany).not.toHaveBeenCalled();
+      const result = await service.findAll(userId, 'anytime');
+      expect(result).toEqual([]);
+      expect(mockPrisma.project.findMany).toHaveBeenCalledTimes(1);
+      expect(mockPrisma.project.findMany.mock.calls[0][0].select).toEqual(
+        expect.objectContaining({ id: true, scheduledType: true }),
+      );
     });
 
     it('inbox 视图不查询 projects（项目不出现在收件箱）', async () => {
@@ -55,6 +60,85 @@ describe('FeedService', () => {
       mockPrisma.task.groupBy.mockResolvedValue([]);
       mockPrisma.project.groupBy.mockResolvedValue([]);
       await service.findAll(userId, 'today');
+      expect(mockPrisma.project.findMany).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('findAll — 稍后项目内的任务（spec: later-projects）', () => {
+    const userId = 'user-1';
+    const project = (id: string, scheduledType: string, scheduledDate: Date | null = null) => ({
+      id,
+      status: 'ACTIVE',
+      trashedAt: null,
+      scheduledType,
+      scheduledDate,
+    });
+    const row = (id: string, projectId: string | null, scheduledType = 'NONE') => ({
+      id,
+      title: id,
+      notes: null,
+      scheduledDate: null,
+      scheduledType,
+      dueDate: null,
+      status: TaskStatus.ACTIVE,
+      bucket: 'ANYTIME',
+      settledAt: null,
+      trashedAt: null,
+      sortOrder: 0,
+      projectId,
+      headingId: null,
+      areaId: null,
+      createdAt: new Date('2026-01-01T00:00:00Z'),
+      updatedAt: new Date('2026-01-01T00:00:00Z'),
+      tags: [],
+    });
+    const candidates = [
+      project('p-someday', 'SOMEDAY'),
+      project('p-future', 'DATE', new Date('2099-01-01T00:00:00Z')),
+      project('p-past', 'DATE', new Date('2020-01-01T00:00:00Z')),
+    ];
+
+    it('anytime 排除 Someday / 未来日期项目内的任务，保留日期已到项目与无项目任务', async () => {
+      mockPrisma.task.findMany.mockResolvedValue([
+        row('loose', null),
+        row('in-someday', 'p-someday'),
+        row('in-future', 'p-future'),
+        row('in-past', 'p-past'),
+        row('in-active', 'p-active'),
+      ]);
+      mockPrisma.project.findMany.mockResolvedValue(candidates);
+      mockPrisma.task.groupBy.mockResolvedValue([]);
+
+      const result = await service.findAll(userId, 'anytime');
+
+      // 排序由 domain sortFeedItems 决定，这里只断言可见集合
+      expect(result.map((item) => item.id).sort()).toEqual(['in-active', 'in-past', 'loose']);
+    });
+
+    it('someday 排除 Someday 项目内的 Someday 任务', async () => {
+      mockPrisma.task.findMany.mockResolvedValue([
+        row('loose', null, 'SOMEDAY'),
+        row('in-someday', 'p-someday', 'SOMEDAY'),
+      ]);
+      // 第一次：someday 视图的项目行；第二次：稍后项目候选
+      mockPrisma.project.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce(candidates);
+      mockPrisma.task.groupBy.mockResolvedValue([]);
+      mockPrisma.project.groupBy.mockResolvedValue([]);
+
+      const result = await service.findAll(userId, 'someday');
+
+      expect(result.map((item) => item.id)).toEqual(['loose']);
+    });
+
+    it('today 不判定稍后项目：有日期的任务照常出现', async () => {
+      mockPrisma.task.findMany.mockResolvedValue([]);
+      mockPrisma.project.findMany.mockResolvedValue([]);
+      mockPrisma.task.groupBy.mockResolvedValue([]);
+      mockPrisma.project.groupBy.mockResolvedValue([]);
+
+      await service.findAll(userId, 'today');
+
+      // 只有 today 视图自身的项目行查询
       expect(mockPrisma.project.findMany).toHaveBeenCalledTimes(1);
     });
   });

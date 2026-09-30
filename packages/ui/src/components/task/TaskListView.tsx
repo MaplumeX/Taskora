@@ -14,10 +14,14 @@ import { toast } from 'sonner';
 interface Props {
   tasks: TaskResponseDto[];
   emptyHint?: string;
+  /** 为空时不渲染任何空状态（用于区域详情等自身不展示空态的页面）。 */
+  hideEmptyState?: boolean;
   sortable?: boolean;
+  /** 同页多个列表时，该列表在键盘遍历中的先后（见 useSelectionScope）。 */
+  selectionRank?: number;
 }
 
-export function TaskListView({ tasks, emptyHint, sortable }: Props) {
+export function TaskListView({ tasks, emptyHint, hideEmptyState, sortable, selectionRank }: Props) {
   const { t } = useTranslation();
   const { handleRowClick, handleBlankClick, selectedIds, expandedId } =
     useTaskRowSelection();
@@ -32,7 +36,7 @@ export function TaskListView({ tasks, emptyHint, sortable }: Props) {
       })),
     [tasks],
   );
-  useSelectionScope(rows);
+  useSelectionScope(rows, selectionRank);
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const reorderTasks = useReorderTasks();
@@ -70,6 +74,7 @@ export function TaskListView({ tasks, emptyHint, sortable }: Props) {
         onReorder={(ids) => reorderTasks.mutate(ids)}
         sortable={sortable}
         emptyHint={emptyHint}
+        hideEmptyState={hideEmptyState}
       />
     </div>
   );

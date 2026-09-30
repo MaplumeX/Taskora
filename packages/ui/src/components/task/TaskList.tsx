@@ -41,6 +41,8 @@ interface Props {
   onReorder?: (orderedIds: string[]) => void;
   sortable?: boolean;
   emptyHint?: string;
+  /** 为空时不渲染任何空状态（用于区域详情等自身不展示空态的页面）。 */
+  hideEmptyState?: boolean;
 }
 
 interface SortableTaskItemProps {
@@ -97,6 +99,7 @@ export function TaskList({
 onReorder,
   sortable = true,
   emptyHint,
+  hideEmptyState,
 }: Props) {
   const { t } = useTranslation();
   const topTasks = tasks;
@@ -109,7 +112,7 @@ onReorder,
   );
 
   if (topTasks.length === 0) {
-    return <EmptyState hint={emptyHint ?? t('task:empty')} />;
+    return hideEmptyState ? null : <EmptyState hint={emptyHint ?? t('task:empty')} />;
   }
 
   const renderItems = () =>

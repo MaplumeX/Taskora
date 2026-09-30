@@ -572,3 +572,57 @@ describe('SidebarProjectSection persistence and area isolation', () => {
     });
   });
 });
+
+describe('SidebarProjectSection later projects', () => {
+  const later = (
+    id: string,
+    areaId: string | null,
+    scheduledType: ScheduledType,
+    scheduledDate: string | null = null,
+  ): ProjectResponseDto => ({ ...project(id, areaId), scheduledType, scheduledDate });
+
+  it('隐藏稍后项目；无区域稍后项目汇总为列表末尾的入口', () => {
+    renderSection([
+      project('s', null),
+      later('ls', null, ScheduledType.SOMEDAY),
+      later('lf', null, ScheduledType.DATE, '2099-01-01'),
+      later('la', 'a', ScheduledType.SOMEDAY),
+      project('a1', 'a'),
+    ]);
+
+    for (const id of ['ls', 'lf', 'la']) {
+      expect(screen.queryByText(`Project ${id}`)).not.toBeInTheDocument();
+    }
+    const entry = screen.getByRole('link', { name: 'project:laterProjectCount' });
+    expect(entry).toHaveAttribute('href', '/later-projects');
+    // 紧跟在无区域项目容器之后、区域之前；不在可排序容器里
+    const standalone = document.querySelector('[data-project-container="standalone"]') as HTMLElement;
+    expect(standalone.nextElementSibling).toBe(entry);
+    expect(within(standalone).queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('日期已到的项目、已完成项目不计入；没有无区域稍后项目时不显示入口', () => {
+    renderSection([
+      later('past', null, ScheduledType.DATE, '2020-01-01'),
+      { ...later('done', null, ScheduledType.SOMEDAY), status: ProjectStatus.COMPLETED },
+      later('la', 'a', ScheduledType.SOMEDAY),
+    ]);
+    expect(screen.getByText('Project past')).toBeInTheDocument();
+    expect(screen.queryByText('Project done')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'project:laterProjectCount' })).not.toBeInTheDocument();
+  });
+
+  it('排序持久化保留隐藏项目的槽位', () => {
+    renderSection([
+      { ...project('s', null), sortOrder: 0 },
+      { ...later('ls', null, ScheduledType.SOMEDAY), sortOrder: 1 },
+      { ...project('t', null), sortOrder: 2 },
+    ]);
+    startProjectDrag('t');
+    detectProjectTarget('t', ['proj:s'], 11, [['proj:s', { top: 10, height: 40 }]]);
+    dragOver('t', 'proj:s');
+    endProjectDrag('t', 'proj:s');
+
+    expect(harness.reorderProjectsMutate).toHaveBeenCalledWith(['t', 'ls', 's'], expect.any(Object));
+  });
+});

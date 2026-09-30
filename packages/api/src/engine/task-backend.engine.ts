@@ -9,7 +9,7 @@
  * 调规则、写副本，以及位次分配。
  */
 
-import { currentLegacyDateTimeZone, currentTimeZone } from '@/utils/date';
+import { currentLegacyDateTimeZone, currentTimeZone, projectLaterKind } from '@/utils/date';
 import type {
   CalendarContext,
   CalendarZones,
@@ -41,7 +41,13 @@ import {
   taskRestorePatch,
   taskTrashPatch,
 } from '@taskora/engine';
-import { ProjectStatus, ScheduledType, TaskStatus, ProjectBucket } from '@taskora/shared';
+import {
+  hidesTasksInLaterProjects,
+  ProjectStatus,
+  ScheduledType,
+  TaskStatus,
+  ProjectBucket,
+} from '@taskora/shared';
 import type {
   CreateSubtaskDto,
   CreateTaskDto,
@@ -203,13 +209,22 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     if (target) await engine.delete('task', [target.id]); // 幂等：不存在则无操作
   }
 
+  /** 需要隐藏其内任务的稍后项目 id（仅 Anytime / Someday，语义对齐 backend views.ts）。 */
+  async function laterProjectIdsFor(view: string | undefined): Promise<ReadonlySet<string>> {
+    if (!hidesTasksInLaterProjects(view)) return NO_PROJECT_IDS;
+    const rows = await engine.list('project');
+    return new Set(rows.filter((row) => isLaterProjectRow(row)).map((row) => row.id));
+  }
+
   return {
     async getTasks(params?: TaskQuery): Promise<TaskResponseDto[]> {
       const rows = await engine.list('task', { where: tasksPrefilter(params) });
       const index = await tagIndex();
       const context = calendar();
-      const visible = rows.filter((row) =>
-        taskMatchesQuery(queryFieldsOf(row), params ?? {}, context),
+      const inActiveProject = notInLaterProject(await laterProjectIdsFor(params?.view));
+      const visible = rows.filter(
+        (row) =>
+          inActiveProject(row) && taskMatchesQuery(queryFieldsOf(row), params ?? {}, context),
       );
       return sortForView(
         visible.map((row) => taskRowToDto(row, index)),
@@ -228,8 +243,9 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       const index = await tagIndex();
       const context = calendar();
       const viewTasks = await engine.list('task', { where: viewPrefilter(view) });
+      const inActiveProject = notInLaterProject(await laterProjectIdsFor(view));
       const taskItems: TaskFeedItem[] = viewTasks
-        .filter((row) => taskMatchesView(queryFieldsOf(row), view, context))
+        .filter((row) => inActiveProject(row) && taskMatchesView(queryFieldsOf(row), view, context))
         .map((row) => {
           const dto = taskRowToDto(row, index);
           return { ...dto, type: 'task' as const, tags: dto.tags ?? [] };
@@ -563,4 +579,25 @@ function tasksPrefilter(params?: TaskQuery): ListWhere | undefined {
   if (params?.areaId) where.areaId = params.areaId;
   if (!params?.completed) where.status = TaskStatus.ACTIVE;
   return where;
+}
+
+const NO_PROJECT_IDS: ReadonlySet<string> = new Set();
+
+function isLaterProjectRow(row: ReplicaRow): boolean {
+  const f = row.fields;
+  return (
+    projectLaterKind({
+      status: f.status as string,
+      trashedAt: (f.trashedAt as string | null) ?? null,
+      scheduledType: f.scheduledType as string,
+      scheduledDate: (f.scheduledDate as string | null) ?? null,
+    }) !== null
+  );
+}
+
+function notInLaterProject(laterIds: ReadonlySet<string>): (row: ReplicaRow) => boolean {
+  return (row) => {
+    const projectId = row.fields.projectId;
+    return typeof projectId !== 'string' || !laterIds.has(projectId);
+  };
 }

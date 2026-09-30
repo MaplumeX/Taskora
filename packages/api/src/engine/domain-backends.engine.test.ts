@@ -482,4 +482,43 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     }
     await other.close();
   });
+  it('Later Project：稍后项目内的任务不进 Anytime / Someday，有日期的任务照常进 Today / Upcoming', async () => {
+    const someday = await projects.createProject({ title: '将来', scheduledType: ScheduledType.SOMEDAY });
+    const future = await projects.createProject({
+      title: '未来',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2099-01-01',
+    });
+    const active = await projects.createProject({ title: '活跃' });
+
+    const inSomeday = await tasks.createTask({ title: 'S1', projectId: someday.id });
+    const inFuture = await tasks.createTask({ title: 'F1', projectId: future.id });
+    const inActive = await tasks.createTask({ title: 'A1', projectId: active.id });
+    const somedayTask = await tasks.createTask({
+      title: 'S2',
+      projectId: someday.id,
+      scheduledType: ScheduledType.SOMEDAY,
+    });
+    const datedInSomeday = await tasks.createTask({
+      title: 'D1',
+      projectId: someday.id,
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2020-01-01',
+    });
+
+    const ids = (items: { id: string }[]) => items.map((item) => item.id);
+    const anytime = ids(await tasks.getFeed('anytime'));
+    expect(anytime).toContain(inActive.id);
+    expect(anytime).not.toContain(inSomeday.id);
+    expect(anytime).not.toContain(inFuture.id);
+    expect(ids(await tasks.getTasks({ view: 'anytime' }))).not.toContain(inSomeday.id);
+    expect(ids(await tasks.getFeed('someday'))).not.toContain(somedayTask.id);
+    expect(ids(await tasks.getFeed('today'))).toContain(datedInSomeday.id);
+
+    // 项目转为活跃后任务原样回来（任务字段未被改写）
+    await projects.updateProject(someday.id, { scheduledType: ScheduledType.NONE });
+    const after = ids(await tasks.getFeed('anytime'));
+    expect(after).toContain(inSomeday.id);
+    expect(ids(await tasks.getFeed('someday'))).toContain(somedayTask.id);
+  });
 });

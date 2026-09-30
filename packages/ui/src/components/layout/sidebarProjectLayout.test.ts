@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   STANDALONE_PROJECT_CONTAINER,
   findProjectContainer,
+  mergeVisibleProjectOrder,
   moveProjectToPlacement,
   normalizeSidebarProjectLayout,
   resolveProjectPlacement,
@@ -195,5 +196,20 @@ describe('sidebar project layout serialization', () => {
         containers: { ...layout.containers, 'area-b': ['standalone-a'] },
       }),
     ).toBe(false);
+  });
+});
+
+describe('mergeVisibleProjectOrder', () => {
+  const withOrder = (id: string, sortOrder: number) => ({ ...project(id, null), sortOrder });
+
+  it('可见项目按新顺序填回原槽位，隐藏项目原位不动', () => {
+    const all = [withOrder('v2', 2), withOrder('h1', 1), withOrder('v1', 0), withOrder('h3', 3), withOrder('v4', 4)];
+    // 全量原顺序：v1 h1 v2 h3 v4；可见项重排为 v4 v1 v2
+    expect(mergeVisibleProjectOrder(all, ['v4', 'v1', 'v2'])).toEqual(['v4', 'h1', 'v1', 'h3', 'v2']);
+  });
+
+  it('全部可见时等同于可见顺序', () => {
+    const all = [withOrder('a', 0), withOrder('b', 1)];
+    expect(mergeVisibleProjectOrder(all, ['b', 'a'])).toEqual(['b', 'a']);
   });
 });

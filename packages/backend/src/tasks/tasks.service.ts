@@ -29,7 +29,12 @@ import {
 } from '../common/domain-storage';
 import { userCalendarZones } from '../users/account-time-zone';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
-import { buildTaskViewWhere, WITH_SETTLED_STATUSES } from './views';
+import {
+  buildTaskViewWhere,
+  hidesTasksInLaterProjects,
+  laterProjectIds,
+  WITH_SETTLED_STATUSES,
+} from './views';
 import { parseRepeatRule, settledToCompletedAt, withRepeatRuleDto } from './task-dto.mapper';
 
 /** 派生路径需要的 Task 行形状（含标签关系与子任务）。 */
@@ -206,15 +211,26 @@ export class TasksService {
         ? [{ settledAt: 'desc' as const }]
         : [{ sortOrder: 'asc' as const }, { createdAt: 'desc' as const }];
 
+    const hideLaterProjectTasks = hidesTasksInLaterProjects(query.view);
     const tasks = await this.prisma.task.findMany({
       where,
       orderBy,
       include: { tags: { include: { tag: true } } },
     });
     // SQL 只是粗筛；最终过滤按 domain taskMatchesQuery（与设备同一规则）
-    const context = await calendarContextFor(this.prisma, userId, viewNeedsCalendar(query.view));
-    const visible = tasks.filter((task) =>
-      taskMatchesQuery({ ...task, tagIds: task.tags.map((tt) => tt.tagId) }, query, context),
+    const context = await calendarContextFor(
+      this.prisma,
+      userId,
+      viewNeedsCalendar(query.view) || hideLaterProjectTasks,
+    );
+    // 稍后项目内的任务在 Anytime / Someday 中随父项目休眠（Later Project）。
+    const hiddenProjectIds = hideLaterProjectTasks
+      ? await laterProjectIds(this.prisma, userId, context, context.now)
+      : new Set<string>();
+    const visible = tasks.filter(
+      (task) =>
+        (!task.projectId || !hiddenProjectIds.has(task.projectId)) &&
+        taskMatchesQuery({ ...task, tagIds: task.tags.map((tt) => tt.tagId) }, query, context),
     );
     return sortForView(visible, query.view, (task) => task.settledAt).map((t) =>
       settledToCompletedAt(withRepeatRuleDto({ ...t, tags: t.tags.map((tt) => tt.tag) })),

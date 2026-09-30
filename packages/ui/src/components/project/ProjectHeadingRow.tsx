@@ -128,13 +128,13 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
                 setEditing(false);
               }
             }}
-            className="min-w-0 flex-1 border-0 bg-transparent text-section text-primary outline-none placeholder:text-muted-foreground"
+            className="min-w-0 flex-1 border-0 bg-transparent text-section font-bold text-primary outline-none placeholder:text-muted-foreground"
           />
         ) : (
           <button
             type="button"
             onClick={() => setEditing(true)}
-            className="min-w-0 flex-1 truncate text-left text-section text-primary"
+            className="min-w-0 flex-1 truncate text-left text-section font-bold text-primary"
           >
             {heading.title || t('project:headingPlaceholder')}
           </button>

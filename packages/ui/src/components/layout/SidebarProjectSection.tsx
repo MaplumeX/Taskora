@@ -24,14 +24,18 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 
+import { NavLink } from 'react-router-dom';
+
+import { ProjectStatus } from '@taskora/shared';
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 
 import { SortableProjectItem } from '@/components/layout/SortableProjectItem';
 import { SortableAreaRow } from '@/components/layout/SortableAreaRow';
 import { ProjectItem } from '@/components/project/ProjectItem';
-import { useReorderProjects, useUpdateProject } from '@taskora/api';
+import { useLaterProjectKind, useReorderProjects, useUpdateProject } from '@taskora/api';
 import { useReorderAreas } from '@taskora/api';
 import { cn } from '@/lib/utils';
+import { sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import {
   AREA_DND_PREFIX,
   PROJECT_CONTAINER_DND_PREFIX,
@@ -40,6 +44,7 @@ import {
   areaDndId,
   cloneSidebarProjectLayout,
   findProjectContainer,
+  mergeVisibleProjectOrder,
   moveProjectToPlacement,
   normalizeSidebarProjectLayout,
   projectContainerDndId,
@@ -52,6 +57,7 @@ import {
 } from '@/components/layout/sidebarProjectLayout';
 
 interface Props {
+  /** 全部未进回收站的项目；已完成与稍后项目在此过滤，但参与排序持久化。 */
   projects: ProjectResponseDto[];
   areas: AreaResponseDto[];
 }
@@ -103,12 +109,44 @@ function StandaloneProjectContainer({
   );
 }
 
+/** 无区域稍后项目的汇总入口：固定在无区域项目列表末尾，不可拖动、不参与排序。 */
+function LaterProjectsEntry({ count }: { count: number }) {
+  const { t } = useTranslation();
+  return (
+    <NavLink
+      to="/later-projects"
+      className={({ isActive }) =>
+        sidebarRowClass(isActive, isActive ? undefined : 'text-muted-foreground')
+      }
+    >
+      <span aria-hidden className="w-4 shrink-0" />
+      <span className="truncate">{t('project:laterProjectCount', { count })}</span>
+    </NavLink>
+  );
+}
+
 /**
  * 侧边栏合并后的统一「项目」section。
  * 项目拖拽使用本地布局预览；区域拖拽继续使用独立的 area-only 排序路径。
  */
-export function SidebarProjectSection({ projects, areas }: Props) {
+export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
   const { t } = useTranslation();
+  const kindOf = useLaterProjectKind();
+  // 侧边栏只放活跃项目：已完成与稍后项目（Someday / 未来日期）都不显示。
+  const projects = React.useMemo(
+    () =>
+      allProjects.filter(
+        (project) => project.status !== ProjectStatus.COMPLETED && kindOf(project) === null,
+      ),
+    [allProjects, kindOf],
+  );
+  const laterCount = React.useMemo(() => {
+    const areaIds = new Set(areas.map((area) => area.id));
+    return allProjects.filter(
+      (project) =>
+        !(project.areaId && areaIds.has(project.areaId)) && kindOf(project) !== null,
+    ).length;
+  }, [allProjects, areas, kindOf]);
   const serverLayout = React.useMemo(
     () => normalizeSidebarProjectLayout(projects, areas),
     [projects, areas],
@@ -190,7 +228,10 @@ export function SidebarProjectSection({ projects, areas }: Props) {
     }
 
     const rollbackLayout = cloneSidebarProjectLayout(serverLayoutRef.current);
-    const orderedIds = serializeProjectOrder(next, areas);
+    const orderedIds = mergeVisibleProjectOrder(
+      allProjects,
+      serializeProjectOrder(next, areas),
+    );
     persistenceActiveRef.current = true;
     updateRenderedLayout(next);
 
@@ -422,6 +463,7 @@ export function SidebarProjectSection({ projects, areas }: Props) {
             activeProjectId={activeProjectId}
             projectDragActive={projectDragActive}
           />
+          {laterCount > 0 && <LaterProjectsEntry count={laterCount} />}
           <SortableContext
             items={areas.map((area) => areaDndId(area.id))}
             strategy={verticalListSortingStrategy}
@@ -452,7 +494,7 @@ export function SidebarProjectSection({ projects, areas }: Props) {
               aria-hidden="true"
               {...{ inert: '' }}
             >
-              <ProjectItem project={activeProject} showChevron={false} variant="sidebar" />
+              <ProjectItem project={activeProject} />
             </div>
           ) : null}
         </DragOverlay>

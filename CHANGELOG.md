@@ -9,6 +9,87 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.6.2] - 2026-09-30
+
+### Added
+
+- **api/ui**: Later Projects (#113) — Someday projects and projects with a
+  Scheduled Date later than today are now treated as one hibernating
+  "Later Project" concept, following Things 3. A single pure predicate
+  (`laterProjectKind` in `@taskora/shared`, fed the account time zone's
+  today key) is the only decision point, so the sidebar, the new page, the
+  area page and the task-view filters can never disagree; the state stays
+  fully derived with no cascade writes, so waking a project brings its
+  tasks back unchanged. The sidebar hides later projects entirely and
+  collapses the no-area ones into a muted "N later projects" row pinned at
+  the end of the standalone list, rendered outside the `SortableContext`
+  (so it cannot be dragged or used as a drop target) and appearing only
+  when N ≥ 1; area-owned later projects show only on their area page. A
+  new `/later-projects` route (registered in all three shells) lists the
+  no-area ones under "Scheduled" and "Someday" section headings, sorted by
+  date then order and by order respectively, with no drag handles; the
+  area page renders the same sections below its active projects and tasks,
+  and keyboard selection now walks active projects → tasks → Scheduled →
+  Someday via an explicit rank. Rows reuse `ProjectFeedRow`, and the plan
+  section carries a date chip. Tasks inside a later project are excluded
+  from Anytime and Someday (dated ones still reach Today / Upcoming,
+  matching Things 3); the backend view predicate, the local engine's
+  `taskMatchesView` and the event-stream matcher all learned the parent
+  rule, the last so that changing a project's status, `scheduledType` or
+  `scheduledDate` re-matches its tasks' queries. Sidebar reordering now
+  serializes the full project order (visible items fill their old slots,
+  hidden ones keep theirs) so hidden projects rejoin without number
+  collisions; dragging a later project onto an area row changes only its
+  area and never wakes it.
+- **api/mobile/desktop**: Reminder notifications gained actions and task
+  reveal (#112) — a reminder notification now offers Complete and Snooze
+  (15 minutes / 1 hour / tomorrow) and its body reads
+  `HH:mm · <project or area>`, appending the first line of the note and
+  localizing every string through the `task` namespace, so the shells
+  carry no translations. Tapping the body brings the app forward, expands
+  the reminded task and routes to the view that can hold it (Today when
+  visible there, otherwise its project, its area, or its bucket's list; a
+  completed or trashed task only opens the app). Actions run through a new
+  pure Reminder Action module: it discards a late action when the task is
+  settled, trashed, gone, or its current reminder `fireAt` no longer
+  matches the notification snapshot, applies Complete through the shared
+  `completeTask` path with `settledAt = tappedAt` (so Logbook grouping and
+  repeat-instance derivation stay correct), and applies Snooze as a plain
+  `scheduledDate` + `reminderTime` rewrite that syncs like any other field
+  edit; replays are idempotent. Android extends the repo-local reminders
+  plugin (ADR-0014): the plan gains `taskId` and a JS-computed
+  `snoozeTomorrowAt`, the notification exposes Complete / 15 minutes /
+  Later… (a native dialog with 1 hour / tomorrow), and a receiver cancels
+  or re-arms the alarm and appends the action to a persisted queue that JS
+  drains on start and via an `actions-available` event — all without
+  launching the app, so a killed process still completes or re-schedules
+  on time. Desktop bypasses `tauri-plugin-notification` for sending: a new
+  Rust `show_reminder` command posts buttons through
+  `tauri-winrt-notification` (all four actions flat on Windows),
+  `notify-rust` XDG actions on Linux and `mac-notification-sys` on macOS
+  (Complete plus a snooze dropdown), emitting a `reminder-action` event
+  after focusing the window; the plugin is kept only for permission
+  commands.
+
+### Changed
+
+- **ui**: Project rows in list views were unified on `ProjectFeedRow`
+  (#114) — the area page and Later Projects page now render the same row
+  as the Today / Upcoming feeds (accepting either a `ProjectFeedItem` or a
+  `ProjectResponseDto`), while `ProjectItem` is reduced to the sidebar's
+  compact 28px row with its 16px progress ring. The area page drops its
+  "Projects" and "Tasks" section labels, and section and heading titles
+  render bold.
+- **mobile**: The status-bar quick-add overlay now draws its own scrim and
+  card on a fully transparent Activity and animates them in and out
+  (#111) — a 150ms fade plus a decelerating slide-in, and a 120ms
+  accelerating fade plus slide-out on dismiss, with the system task
+  transition and the starting window disabled so closing the overlay no
+  longer plays the "window shrinking back to the launcher icon" task
+  animation. The scrim extends under the status and navigation bars, and
+  the keyboard is requested on the next frame instead of after a 100ms
+  delay.
+
 ## [0.6.1] - 2026-09-28
 
 ### Changed

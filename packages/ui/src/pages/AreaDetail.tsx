@@ -23,22 +23,29 @@ import { CSS } from '@dnd-kit/utilities';
 import type { ProjectResponseDto } from '@taskora/shared';
 
 import { useAreasQuery, useSelectionScope, useTaskRowSelection, useUpdateArea } from '@taskora/api';
-import { useProjectsQuery, useReorderProjects } from '@taskora/api';
+import {
+  selectionStateOf,
+  useLaterProjectKind,
+  useProjectsQuery,
+  useReorderProjects,
+  type SelectionState,
+} from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
 import { useTasksQuery } from '@taskora/api';
-import { Separator } from '@/components/ui/separator';
-import { ProjectItem } from '@/components/project/ProjectItem';
+import { ProjectFeedRow } from '@/components/feed/ProjectFeedRow';
+import { LaterProjectSections } from '@/components/project/LaterProjectSections';
+import { mergeVisibleProjectOrder } from '@/components/layout/sidebarProjectLayout';
 import { TaskListView } from '@/components/task/TaskListView';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { AreaMoreMenu } from '@/components/area/AreaMoreMenu';
 import { toast } from 'sonner';
 
-function SortableProjectItem({
+function SortableProjectRow({
   project,
-  selected,
+  selectionState,
 }: {
   project: ProjectResponseDto;
-  selected: boolean;
+  selectionState: SelectionState;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: project.id });
@@ -54,7 +61,7 @@ function SortableProjectItem({
       {...attributes}
       {...listeners}
     >
-      <ProjectItem project={project} selected={selected} selectionRow />
+      <ProjectFeedRow item={project} selectionState={selectionState} />
     </div>
   );
 }
@@ -71,11 +78,20 @@ export default function AreaDetail() {
   const { data: areas = [] } = useAreasQuery();
   const area = areas.find((a) => a.id === id);
   const { data: allProjects = [] } = useProjectsQuery();
-  const projects = allProjects.filter((p) => p.areaId === id);
+  const kindOf = useLaterProjectKind();
+  const areaProjects = useMemo(
+    () => allProjects.filter((p) => p.areaId === id),
+    [allProjects, id],
+  );
+  // 活跃项目可拖拽排序；稍后项目放在下方「计划」/「Someday」小节。
+  const projects = useMemo(
+    () => areaProjects.filter((p) => kindOf(p) === null),
+    [areaProjects, kindOf],
+  );
   const reorderProjects = useReorderProjects();
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ areaId: id });
   const updateArea = useUpdateArea();
-  const { selectedIds } = useTaskRowSelection();
+  const { selectedIds, expandedId } = useTaskRowSelection();
 
   // 鼠标：移动 5px 激活；触摸：按住 300ms 再移动才激活，避免与列表滚动冲突。
   const sensors = useSensors(
@@ -88,15 +104,17 @@ export default function AreaDetail() {
     if (!over || active.id === over.id) return;
     const ids = projects.map((p) => p.id);
     const reordered = arrayMove(ids, ids.indexOf(active.id as string), ids.indexOf(over.id as string));
-    reorderProjects.mutate(reordered);
+    // 以全量顺序为底写回，避免与其他区域 / 隐藏项目的 sortOrder 撞号。
+    reorderProjects.mutate(mergeVisibleProjectOrder(allProjects, reordered));
   };
 
   // 注册项目段可遍历行（Project 行仅作遍历停留点，⌘K/⌫ 对其无效）。
+  // 键盘遍历顺序与页面一致：活跃项目（0）→ 任务（1）→ 稍后项目（2）。
   const projectRows = useMemo(
     () => projects.map((p) => ({ id: p.id, kind: 'project' as const, completed: false })),
     [projects],
   );
-  useSelectionScope(projectRows);
+  useSelectionScope(projectRows, 0);
 
   return (
     <div className="flex flex-col gap-4">
@@ -125,29 +143,30 @@ export default function AreaDetail() {
         {area && <AreaMoreMenu area={area} />}
         </div>
 
-      <h2 className="text-sm font-medium text-muted-foreground">{t('area:projectsLabel')}</h2>
-      {projects.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('area:noProjects')}</p>
-      ) : (
+      {projects.length > 0 && (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
           <SortableContext items={projects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
             <div className="flex flex-col">
               {projects.map((p) => (
-                <SortableProjectItem key={p.id} project={p} selected={selectedIds.includes(p.id)} />
+                <SortableProjectRow
+                  key={p.id}
+                  project={p}
+                  selectionState={selectionStateOf(selectedIds, expandedId, p.id)}
+                />
               ))}
             </div>
           </SortableContext>
         </DndContext>
       )}
 
-      <Separator />
-
-      <h2 className="text-sm font-medium text-muted-foreground">{t('area:tasksLabel')}</h2>
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        <TaskListView tasks={tasks} emptyHint={t('area:noTasks')} />
+        <TaskListView tasks={tasks} hideEmptyState selectionRank={1} />
       )}
+
+      {/* 稍后项目放在页面最下方（活跃项目与任务之后）。 */}
+      <LaterProjectSections projects={areaProjects} selectionRank={2} />
 
       </div>
   );

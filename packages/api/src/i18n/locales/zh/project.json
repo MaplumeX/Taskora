@@ -30,5 +30,8 @@
   "archiveFailed": "归档失败",
   "unarchiveSuccess": "已取消归档",
   "unarchiveFailed": "取消归档失败",
-  "archivedHeadingCount": "{{count}} 个已归档标题"
+  "archivedHeadingCount": "{{count}} 个已归档标题",
+  "laterProjects": "稍后项目",
+  "laterProjectsEmpty": "没有稍后项目",
+  "laterProjectCount": "{{count}} 个稍后项目"
 }

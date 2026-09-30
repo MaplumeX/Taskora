@@ -4,14 +4,14 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Android 返回手势级联（issue 05 验收）：
- *   关闭浮层 → 路由返回 → 根页退出（app_exit）。
+ *   关闭浮层 → 路由返回 → 根页退到后台（plugin:background|move_to_back）。
  * mock @tauri-apps/api/app 的 onBackButtonPress 捕获回调。
  */
 
 const hoisted = vi.hoisted(() => {
   return {
     backHandler: null as null | ((payload: { canGoBack: boolean }) => void),
-    exitInvoke: vi.fn(() => Promise.resolve()),
+    invokeMock: vi.fn(() => Promise.resolve()),
   };
 });
 
@@ -23,7 +23,7 @@ vi.mock('@tauri-apps/api/app', () => ({
 }));
 
 vi.mock('@tauri-apps/api/core', () => ({
-  invoke: hoisted.exitInvoke,
+  invoke: hoisted.invokeMock,
 }));
 
 import {
@@ -61,7 +61,7 @@ describe('back-navigation 级联（Tauri 环境，issue 05）', () => {
       value: { invoke: vi.fn() },
     });
     window.history.replaceState(null, '', '/');
-    hoisted.exitInvoke.mockClear();
+    hoisted.invokeMock.mockClear();
   });
 
   afterEach(() => {
@@ -69,7 +69,7 @@ describe('back-navigation 级联（Tauri 环境，issue 05）', () => {
     hoisted.backHandler = null;
   });
 
-  it('第一级：打开的 Radix 浮层被关闭，且不路由返回/退出', async () => {
+  it('第一级：打开的 Radix 浮层被关闭，且不路由返回/退到后台', async () => {
     const onOpenChange = vi.fn();
     function Fixture() {
       const [open, setOpen] = useState(true);
@@ -100,8 +100,8 @@ describe('back-navigation 级联（Tauri 环境，issue 05）', () => {
       expect(onOpenChange).toHaveBeenCalledWith(false);
       expect(hasOpenOverlay()).toBe(false);
     });
-    // 没有退出
-    expect(hoisted.exitInvoke).not.toHaveBeenCalled();
+    // 没有退到后台
+    expect(hoisted.invokeMock).not.toHaveBeenCalled();
   });
 
   it('第二级：无浮层但历史可返回 → history.back', async () => {
@@ -115,11 +115,11 @@ describe('back-navigation 级联（Tauri 环境，issue 05）', () => {
     pressBack();
 
     expect(backSpy).toHaveBeenCalled();
-    expect(hoisted.exitInvoke).not.toHaveBeenCalled();
+    expect(hoisted.invokeMock).not.toHaveBeenCalled();
     backSpy.mockRestore();
   });
 
-  it('第三级：根页无浮层 → 退出 App（app_exit command）', async () => {
+  it('第三级：根页无浮层 → 退到后台（background 插件 command）', async () => {
     window.history.replaceState({ idx: 0 }, '', '/today');
     expect(canNavigateBack()).toBe(false);
 
@@ -128,6 +128,6 @@ describe('back-navigation 级联（Tauri 环境，issue 05）', () => {
 
     pressBack();
 
-    expect(hoisted.exitInvoke).toHaveBeenCalledWith('app_exit');
+    expect(hoisted.invokeMock).toHaveBeenCalledWith('plugin:background|move_to_back');
   });
 });

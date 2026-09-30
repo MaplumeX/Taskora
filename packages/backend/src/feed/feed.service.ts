@@ -27,7 +27,12 @@ import type {
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncHubService } from '../sync/sync-hub.service';
 import { calendarContextFor, countedTasksOf } from '../common/domain-storage';
-import { buildTaskViewWhere, type TaskView } from '../tasks/views';
+import {
+  buildTaskViewWhere,
+  hidesTasksInLaterProjects,
+  laterProjectIds,
+  type TaskView,
+} from '../tasks/views';
 import { buildProjectViewWhere, type ProjectView } from '../projects/views';
 import { parseRepeatRule } from '../tasks/task-dto.mapper';
 import { archivedTaskWhere } from '../sync/snapshot-pages';
@@ -136,6 +141,7 @@ export class FeedService {
 
   async findAll(userId: string, view: FeedView): Promise<FeedItem[]> {
     // SQL 只是粗筛；最终过滤、计数与排序按 domain 规则（与设备同一份）
+    const hideLaterProjectTasks = hidesTasksInLaterProjects(view);
     const [tasks, projects] = await Promise.all([
       this.prisma.task.findMany({
         where: { userId, ...buildTaskViewWhere(view as TaskView) },
@@ -148,9 +154,18 @@ export class FeedService {
           })
         : Promise.resolve([]),
     ]);
-    const context = await calendarContextFor(this.prisma, userId, viewNeedsCalendar(view));
+    const context = await calendarContextFor(
+      this.prisma,
+      userId,
+      viewNeedsCalendar(view) || hideLaterProjectTasks,
+    );
+    // 稍后项目内的任务在 Anytime / Someday 中随父项目休眠（Later Project）。
+    const hiddenProjectIds = hideLaterProjectTasks
+      ? await laterProjectIds(this.prisma, userId, context, context.now)
+      : new Set<string>();
 
     const taskItems: TaskFeedItem[] = tasks
+      .filter((task) => !task.projectId || !hiddenProjectIds.has(task.projectId))
       .filter((task) => taskMatchesView(task, view, context))
       .map(toTaskFeedItem);
 
