@@ -1,7 +1,7 @@
 # 版本管理与部署策略
 
 > 本文档记录 Taskora 在多客户端演进过程中的版本、仓库、部署决策。
-> 适用阶段：服务端开发期（当前）→ 移动端 / 桌面端引入（未来）。
+> 适用阶段：Web（前后端镜像）+ 桌面端 + 移动端在同一单轨发版（当前）。
 
 ## 一、仓库结构
 
@@ -15,7 +15,7 @@ packages/
 ├── ui/             # 跨 web/desktop 共享业务组件与页面视图
 ├── api/            # 跨端共享 API client + Query hooks + 认证流 + i18n
 ├── shared/         # 跨端共享 DTO / 枚举 / 类型
-└── mobile/         # 未来：React Native / Expo
+└── mobile/         # Tauri 2 Android 客户端（见 docs/adr/0010-tauri-v2-mobile-android.md）
 ```
 
 ### 关键决策
@@ -29,28 +29,33 @@ packages/
 
 **统一版本号（当前已生效）：**
 
-| 包                                                                 | 版本号                                             | Tag      |
-| ------------------------------------------------------------------ | -------------------------------------------------- | -------- |
-| 根 package.json + 全部子包（backend / frontend / api / ui / shared / desktop） | 统一版本号，写在根 `package.json` 并同步到全部子包与 Tauri 三件套 | `v0.3.0` |
+| 包                                                                                               | 版本号                                                                       | Tag      |
+| ------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------- | -------- |
+| 根 package.json + 全部子包（backend / frontend / api / ui / shared / engine / desktop / mobile） | 统一版本号，写在根 `package.json`，并同步到全部子包与两个 Tauri 壳的版本载体 | `v0.3.0` |
 
-- 所有子包共享同一版本号，不单独漂移（含桌面端）。
+- 所有子包共享同一版本号，不单独漂移（含桌面端与移动端）。
 - 历史：v0.3.0 之前桌面端独立版本号（`desktop-v*` tag）。因两端事实上总是同
-  步发版、功能一致，双轨版本号只剩成本没有信息量，于 v0.3.0 起合并为单轨。
-- 若未来桌面端出现独立的发版节奏（如纯 Web 热修不出桌面包、或平台专属功能），
-  再拆出独立的桌面轨道。
+  步发版、功能一致，双轨版本号只剩成本没有信息量，于 v0.3.0 起合并为单轨；
+  移动端（Android）自加入起即直接用 `v*` 单轨，不设 `mobile-v*`。
+- 若未来桌面端或移动端出现独立的发版节奏（如纯 Web 热修不出桌面包、或平台
+  专属功能），再拆出独立轨道。
 
 **发版命令（已落地）：**
 
 ```bash
-pnpm release 0.4.0    # bump 根 + 全部子包 + Tauri 三件套 → tag v0.4.0
+pnpm release 0.4.0    # bump 根 + 全部子包 + 两个 Tauri 壳 → tag v0.4.0
 ```
 
 脚本（`scripts/release.mjs`）负责：写版本号、拦截降级、检查工作区干净。
+版本载体：根 + 全部子包 `package.json`，以及 `desktop` / `mobile` 两个 Tauri
+壳的 `tauri.conf.json`、`Cargo.toml` 与 `Cargo.lock`（两个壳的 CI 构建都带
+`--locked`，lock 必须同步）。
 发版流程：`pnpm release <version>` → 编辑 `CHANGELOG.md` →
 `git commit -am "release: v<x.y.z>"` →
 `git tag v<x.y.z> && git push origin main --tags`。
-CI 按 tag 自动接管：`v*` 同时触发 `release.yml`（推双镜像）和
-`desktop-release.yml`（三平台桌面打包）。
+CI 按 tag 自动接管：`v*` 同时触发 `release.yml`（推双镜像）、
+`desktop-release.yml`（三平台桌面打包）和 `android-release.yml`
+（签名 APK，附到同一个 GitHub Release）。
 
 **不引入 changesets**，理由：
 
@@ -65,6 +70,14 @@ CI 按 tag 自动接管：`v*` 同时触发 `release.yml`（推双镜像）和
 - **V1 无自动更新**：用户手动从 GitHub Releases 下载新版；后续再上 `tauri-plugin-updater`（需 updater 签名密钥）。
 - **V1 不签名**：macOS 需右键打开绕过 Gatekeeper，Windows 会触发 SmartScreen 警告；README 需写清绕过方法。待有真实用户后购证书。
 - **Token 存储**：Windows 使用当前用户 DPAPI 加密的本地 `session.dpapi` 文件；macOS Keychain / Linux Secret Service 保存完整会话条目。不用 WebView localStorage 保存令牌。旧凭据自动迁移，详见 [ADR-0002](adr/0002-windows-dpapi-session-file.md)。
+
+## 二·六、移动端发布（已定）
+
+- **平台**：Android 独占（Tauri 2 Android，见 [ADR-0010](adr/0010-tauri-v2-mobile-android.md)），GitHub Releases 侧载分发，暂不上应用商店。
+- **产物**：签名的 arm64 release APK（`Taskora-vX.Y.Z.apk`），附在与桌面端同一个 `v*` Release 上。
+- **构建**：`android-release.yml` 在 `v*` tag 触发，release keystore 经 secrets 注入；签名密钥不轮换（轮换会迫使所有用户卸载重装、丢失本地 Local Replica）。
+- **版本号**：沿用 monorepo 单轨版本号；Android `versionCode` 由 Tauri 从 version 派生（`major*1000000+minor*1000+patch`），随版本单调递增，无需手动维护。
+- **无自动更新**：与桌面端一致，用户手动下载新 APK 覆盖安装（依赖同一签名密钥）。
 
 ## 三、分支策略
 
@@ -190,13 +203,20 @@ LABEL org.opencontainers.image.revision="${GIT_SHA}"
 
 - 三平台 Tauri 打包上传 GitHub Releases，与 `release.yml` 同 tag、独立运行。
 
+**4. `android-release.yml`（git tag `v*` 触发）**
+
+- 生成 Android 工程、注入 release 签名，构建 arm64 签名 APK，附到同一个
+  GitHub Release。与 `desktop-release.yml` 无顺序保证：两条流水线各自先确保
+  release 存在再上传资产。
+
 ### 未来阶段（多客户端）
 
-三条独立 pipeline，互不干扰：
+当前三端统一单轨、共用 `v*` tag 与单一 `ci.yml`。等某个端需要独立发版
+节奏时，再拆成互不干扰的独立 pipeline：
 
 1. `ci-backend.yml` — PR 触发测试 + migration 检查
 2. `ci-web.yml` — PR 触发构建 + 类型检查
-3. `ci-clients.yml` — 仅在对应 tag（`mobile-v*` / 桌面恢复 `desktop-v*`）推送时触发打包上传
+3. `ci-clients.yml` — 仅在对应 tag（如恢复 `desktop-v*` / 新增 `mobile-v*`）推送时触发打包上传
 
 这样各客户端可以各自发版，不会因为一个客户端的改动启动其他平台构建。
 
@@ -214,9 +234,9 @@ LABEL org.opencontainers.image.revision="${GIT_SHA}"
 
 **未来要做（多客户端阶段，加法，不推翻现在决策）：**
 
-1. 加 mobile 后新增 `mobile-v*` tag 前缀（现有 `v*` 保持不变，无需迁移）
-2. 拆分 CI pipeline 为每客户端一条
-3. 设计增量同步协议（`updated_at` + `deleted_at` + 客户端 ID）
-4. 移动端 EAS Update / Submit 管道对接 git tag
-5. 桌面端自更新通道
-6. 桌面端需要独立发版节奏时，恢复桌面轨版本号与 `desktop-v*` tag（发版脚本需扩展回双轨）
+1. ~~加 mobile 后新增 `mobile-v*` tag 前缀~~ ✅ 未采用：移动端直接用 `v*` 单轨
+2. 拆分 CI pipeline 为每客户端一条（当前仍共用 `ci.yml`）
+3. ~~设计增量同步协议（`updated_at` + `deleted_at` + 客户端 ID）~~ ✅ 已落地（local-first engine，见 [ADR-0007](adr/0007-local-first-engine.md)）
+4. ~~移动端 EAS Update / Submit 管道对接 git tag~~ ✅ 未采用：Tauri Android + GitHub Releases 侧载
+5. 桌面端 / 移动端自更新通道
+6. 桌面端 / 移动端需要独立发版节奏时，恢复独立轨道（发版脚本需扩展回多轨）

@@ -64,8 +64,10 @@ jobs:
         with:
           projectPath: packages/desktop
           tagName: ${{ github.ref_name }}
-          releaseName: 'Taskora Desktop ${{ github.ref_name }}'
-          releaseBody: 'Desktop client build ${{ github.ref_name }}. V1 builds are unsigned — see the README for Gatekeeper / SmartScreen instructions.'
+          # 三端共用同一个 v* Release：标题必须与 android-release.yml 的
+          # `gh release create --title` 一致，否则谁先跑谁定标题。
+          releaseName: 'Taskora ${{ github.ref_name }}'
+          releaseBody: 'Taskora ${{ github.ref_name }} — desktop installers (dmg / NSIS exe / AppImage) for this tag, plus the signed Android APK attached by android-release.yml. The desktop builds are unsigned — see the README for Gatekeeper / SmartScreen instructions.'
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.args }}
