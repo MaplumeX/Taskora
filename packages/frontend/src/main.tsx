@@ -17,6 +17,7 @@ import {
   setUnauthorizedHandler,
 } from '@taskora/api';
 import { router } from '@/router';
+import { installChunkLoadRecovery } from '@/lib/chunkRecovery';
 import { tryRecoverSession } from '@/lib/sessionRecovery';
 import { initWebEngine } from '@/engine/web-engine';
 // 登录/注册/登出后的导航回调在此注册（副作用 import，必须先于页面加载）。
@@ -25,6 +26,10 @@ import '@/index.css';
 
 // Apply theme synchronously before React renders to prevent FOUC
 applyThemeFromStorage();
+
+// 部署后旧 chunk 失效时自动刷新换到新构建（懒加载 import 失败 /
+// modulepreload 失败，带冷却时间戳防刷新循环）。
+installChunkLoadRecovery();
 
 // Web version comes from the frontend package.json.
 setAppVersion(pkg.version);
