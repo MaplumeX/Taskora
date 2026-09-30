@@ -6,6 +6,7 @@
   "permissions": [
     "core:default",
     "statusbar:default",
-    "reminders:default"
+    "reminders:default",
+    "background:default"
   ]
 }

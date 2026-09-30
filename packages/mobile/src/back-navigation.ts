@@ -8,7 +8,7 @@
  *   1. 有打开的抽屉 / 弹层（Radix dialog / menu / listbox）→ 派发一次
  *      Escape 关闭最顶层一层（Radix DismissableLayer 语义，一次一层）；
  *   2. 否则路由历史可返回（window.history.state.idx > 0）→ history.back()；
- *   3. 否则处于根页 → 退出 App（Rust 侧 app_exit command）。
+ *   3. 否则处于根页 → 退到后台（background 插件 moveTaskToBack，不结束进程）。
  *
  * 非监听场景（浏览器 dev:vite / vitest）为 no-op。
  */
@@ -65,8 +65,9 @@ export function handleBackNavigation(): void {
     window.history.back();
     return;
   }
-  // 根页（或未进入路由）：退出 App。Rust 侧 command，非 Tauri 环境忽略。
-  void invoke('app_exit').catch(() => undefined);
+  // 根页（或未进入路由）：退到后台（回桌面），不结束进程。
+  // background 插件（android-app issue 08），非 Tauri 环境忽略。
+  void invoke('plugin:background|move_to_back').catch(() => undefined);
 }
 
 /** 挂载级联监听；组件卸载时移除。非 Tauri 环境为 no-op。 */

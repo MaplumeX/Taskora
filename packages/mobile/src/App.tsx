@@ -24,7 +24,7 @@ export function App() {
   const user = useAuthStore((s) => s.user);
   const refreshing = useAuthStore((s) => s.refreshing);
 
-  // Android 返回手势级联（issue 05）：关闭抽屉/弹层 → 路由返回 → 根页退出。
+  // Android 返回手势级联（issue 05）：关闭抽屉/弹层 → 路由返回 → 根页退到后台。
   useBackNavigation();
 
   const [readyServer, setReadyServer] = useState<string | null | undefined>(undefined);
