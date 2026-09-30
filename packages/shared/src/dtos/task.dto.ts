@@ -65,3 +65,16 @@ export interface TaskResponseDto {
   createdAt: string;
   updatedAt: string;
 }
+
+/**
+ * 任务搜索的相关度档位（Quick Find）：标题前缀命中 > 标题包含 > 仅备注或
+ * Subtask 标题命中。
+ */
+export type TaskSearchRank = 'titlePrefix' | 'title' | 'other';
+
+/** 任务搜索的一条命中：命中的任务，及其标题命中的 Subtask（按排序位次）。 */
+export interface TaskSearchHit {
+  task: TaskResponseDto;
+  matchedSubtasks: Array<{ id: string; title: string }>;
+  rank: TaskSearchRank;
+}

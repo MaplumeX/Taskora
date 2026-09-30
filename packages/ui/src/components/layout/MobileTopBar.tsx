@@ -4,7 +4,7 @@ import { ChevronLeft, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
-import { SearchModal } from '@/components/search/SearchModal';
+import { QuickFind } from '@/components/search/QuickFind';
 import { cn } from '@/lib/utils';
 
 /**
@@ -50,13 +50,13 @@ export function MobileTopBar() {
       <Button
         variant="ghost"
         size="icon"
-        aria-label={t('task:searchTasks')}
+        aria-label={t('search:title')}
         className="h-11 w-11"
         onClick={() => setSearchOpen(true)}
       >
         <Search className="h-5 w-5" />
       </Button>
-      <SearchModal open={searchOpen} onOpenChange={setSearchOpen} />
+      <QuickFind open={searchOpen} onOpenChange={setSearchOpen} />
     </div>
   );
 }

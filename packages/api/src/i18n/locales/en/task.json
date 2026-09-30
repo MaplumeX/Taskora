@@ -4,7 +4,6 @@
   "createFailed": "Failed to create",
   "subtaskCreateFailed": "Failed to create subtask",
   "deleteFailed": "Failed to delete",
-  "searchTasks": "Search tasks",
   "addTask": "Add task",
   "notePlaceholder": "Note…",
   "notes": "Notes",

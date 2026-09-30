@@ -62,8 +62,8 @@ describe('ContentBottomBar — 按钮 hint 提示', () => {
   it('hover 图标按钮浮出 hint 文案与键位（jsdom → web 平台 Alt 系）', async () => {
     renderBar();
 
-    await user.hover(screen.getByRole('button', { name: 'Search tasks' }));
-    expect(await screen.findByText('Search tasks')).toBeInTheDocument();
+    await user.hover(screen.getByRole('button', { name: 'Quick Find' }));
+    expect(await screen.findByText('Quick Find')).toBeInTheDocument();
     expect(screen.getByText('Ctrl+F')).toBeInTheDocument();
 
     await user.hover(screen.getByRole('button', { name: 'Add task' }));

@@ -173,6 +173,22 @@ export class TaskQueryDto {
   hasScheduled?: boolean;
 }
 
+/** 任务搜索（Quick Find）：GET /tasks/search。 */
+export class TaskSearchQueryDto {
+  @IsString()
+  q!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  @Transform(({ value }) => {
+    if (value === undefined) return undefined;
+    if (value === 'true') return true;
+    if (value === 'false') return false;
+    return value;
+  })
+  extended?: boolean;
+}
+
 export class ReorderDto {
   @IsArray()
   @IsString({ each: true })

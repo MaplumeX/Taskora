@@ -7,7 +7,7 @@ import { ScheduledType, TaskBucket, TaskStatus, type TaskResponseDto } from '@ta
 import { setTaskBackend, type TaskBackend } from '@/api/task-backend';
 import { requestTaskReveal, useTaskRevealStore } from '@/stores/taskReveal.store';
 import { useUiInteractionStore } from '@/stores/uiInteraction.store';
-import { useTaskRevealListener } from './useRevealTask';
+import { useRevealTask, useTaskRevealListener } from './useRevealTask';
 
 function dto(partial: Partial<TaskResponseDto> & { id: string }): TaskResponseDto {
   return {
@@ -111,5 +111,40 @@ describe('useTaskRevealListener — 点通知定位任务', () => {
     await new Promise((r) => setTimeout(r, 0));
     expect(screen.getByTestId('path').textContent).toBe('/inbox');
     expect(useUiInteractionStore.getState().expandedId).toBeNull();
+  });
+});
+
+describe('useRevealTask — Quick Find 的继续搜索', () => {
+  let reveal: ReturnType<typeof useRevealTask>;
+
+  function Opener() {
+    reveal = useRevealTask();
+    const { pathname } = useLocation();
+    return <div data-testid="path">{pathname}</div>;
+  }
+
+  beforeEach(() => {
+    useUiInteractionStore.setState({ expandedId: null, revealId: null, searchOpen: true });
+  });
+  afterEach(() => setTaskBackend(undefined));
+
+  it('allowTrash：Trash 中的任务导航到 Trash 并请求定位，不展开', async () => {
+    useFakeTasks([dto({ id: 't1', trashedAt: '2026-02-05T00:00:00.000Z' })]);
+    render(
+      <MemoryRouter initialEntries={['/inbox']}>
+        <Opener />
+      </MemoryRouter>,
+    );
+    let revealed = false;
+    await act(async () => {
+      revealed = await reveal('t1', { allowTrash: true });
+    });
+    expect(revealed).toBe(true);
+    expect(screen.getByTestId('path').textContent).toBe('/trash');
+    expect(useUiInteractionStore.getState()).toMatchObject({
+      expandedId: null,
+      revealId: 't1',
+      searchOpen: false,
+    });
   });
 });

@@ -28,7 +28,7 @@ import { createEngineTagBackend } from '../engine/tag-backend.engine';
 import { createEngineTaskBackend } from '../engine/task-backend.engine';
 import { useAreasQuery } from './useAreas';
 import { useFeedQuery } from './useFeed';
-import { useTaskQuery, useTasksQuery, useUpdateTask } from './useTasks';
+import { useTaskQuery, useTaskSearchQuery, useTasksQuery, useUpdateTask } from './useTasks';
 
 let engine: Engine;
 let tasks: TaskBackend;
@@ -91,6 +91,23 @@ afterEach(async () => {
 const titles = (items: FeedItem[] | undefined) => items?.map((item) => item.title);
 
 describe('useEngineQuery（Engine 模式的列表视图）', () => {
+  it('task search reruns when a subtask starts matching', async () => {
+    const parent = await tasks.createTask({ title: 'Weekend' });
+    const search = renderHook(() => useTaskSearchQuery(' milk '), { wrapper });
+    await waitFor(() => expect(search.result.current.data).toEqual([]));
+    expect(search.result.current.searchedQuery).toBe('milk');
+
+    await act(async () => {
+      await tasks.createSubtask(parent.id, { title: 'Buy milk' });
+    });
+    await waitFor(() =>
+      expect(search.result.current.data?.map((hit) => hit.task.id)).toEqual([parent.id]),
+    );
+    expect(search.result.current.data?.[0].matchedSubtasks.map((s) => s.title)).toEqual([
+      'Buy milk',
+    ]);
+  });
+
   it('reads the replica without going through React Query', async () => {
     await tasks.createTask({ title: 'A' });
     const { result } = renderHook(() => useFeedQuery('inbox'), { wrapper });

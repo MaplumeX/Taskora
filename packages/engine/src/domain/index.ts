@@ -31,6 +31,16 @@ export {
   type ViewFields,
 } from './views';
 export {
+  planTaskSearch,
+  searchNeedle,
+  taskInSearchScope,
+  taskSearchRank,
+  type PlannedSearchHit,
+  type SearchSubtaskFields,
+  type SearchTaskFields,
+  type TaskSearchOptions,
+} from './search';
+export {
   planConvertTaskToProject,
   planTaskComplete,
   planTaskCreate,

@@ -1,14 +1,15 @@
 {
-  "title": "Search Tasks",
-  "placeholder": "Search tasks…",
-  "inputPlaceholder": "Enter keywords to search…",
+  "title": "Quick Find",
+  "inputPlaceholder": "Search tasks, projects, areas, tags…",
   "clearSearch": "Clear search",
-  "includeCompleted": "Include completed and cancelled",
-  "searching": "Searching…",
+  "emptyHint": "Type to find tasks, or jump to a list, project, area, or tag",
   "searchFailed": "Search failed, please try again.",
-  "noResults": "No matching tasks found",
+  "noResults": "No matches",
+  "groupLists": "Lists",
+  "groupPlaces": "Areas & Projects",
+  "groupTags": "Tags",
   "groupTasks": "Tasks",
-  "groupProjects": "Projects",
-  "groupAreas": "Areas",
-  "groupTags": "Tags"
+  "continueSearch": "Continue Search",
+  "continueSearchHint": "Include Logbook and Trash",
+  "inTrash": "In Trash"
 }

@@ -185,7 +185,7 @@ beforeEach(() => {
   harness.createMutate.mockReset();
   useSelectionStore.getState().setSelection([]);
   useSelectionStore.getState().clearSelection();
-  useUiInteractionStore.setState({ expandedId: null, searchOpen: false });
+  useUiInteractionStore.setState({ expandedId: null, searchOpen: false, searchSeed: null });
   window.localStorage.clear();
 });
 
@@ -551,3 +551,73 @@ describe('KeyboardShortcuts — 搜索与让路', () => {
   });
 });
 
+describe('KeyboardShortcuts — 打字唤起 Quick Find', () => {
+  const search = () => {
+    const { searchOpen, searchSeed } = useUiInteractionStore.getState();
+    return { searchOpen, searchSeed };
+  };
+
+  it('无 Selection 时敲可打印字符：打开 Quick Find 并带入该字符', () => {
+    renderAt('/today', tasks);
+    press('A', { shiftKey: true });
+    expect(search()).toEqual({ searchOpen: true, searchSeed: 'A' });
+  });
+
+  it('输入法组合的首键：打开但不带入字符', () => {
+    renderAt('/today', tasks);
+    press('Process');
+    expect(search()).toEqual({ searchOpen: true, searchSeed: null });
+  });
+
+  it('有 Selection 时单键属于列表操作，不唤起', () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press('a');
+    expect(search().searchOpen).toBe(false);
+  });
+
+  it('焦点在输入框内时不唤起', () => {
+    renderAt('/today', tasks);
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    act(() => {
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true }));
+    });
+    expect(search().searchOpen).toBe(false);
+    input.remove();
+  });
+
+  it('空格仍是下方新建，不唤起', () => {
+    renderAt('/today', tasks);
+    press(' ');
+    expect(search().searchOpen).toBe(false);
+    expect(harness.createMutate).toHaveBeenCalled();
+  });
+
+  it('助手页不唤起（该页不挂载 Quick Find）', () => {
+    renderAt('/agent', tasks);
+    press('a');
+    expect(search().searchOpen).toBe(false);
+  });
+
+  it('触控设备（粗指针）不唤起', () => {
+    const original = window.matchMedia;
+    window.matchMedia = (query: string) =>
+      ({ ...original(query), matches: query === '(pointer: coarse)' }) as MediaQueryList;
+    try {
+      renderAt('/today', tasks);
+      press('a');
+      expect(search().searchOpen).toBe(false);
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
+  it('⌘F 打开时不带入字符', () => {
+    useUiInteractionStore.setState({ searchSeed: 'stale' });
+    renderAt('/today', tasks);
+    press('f', { metaKey: true });
+    expect(search()).toEqual({ searchOpen: true, searchSeed: null });
+  });
+});

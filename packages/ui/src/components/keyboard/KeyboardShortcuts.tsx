@@ -59,6 +59,15 @@ function hasOpenOverlay(): boolean {
   );
 }
 
+/** 打字唤起 Quick Find 的前提（事件级前提 isEditableTarget / hasOpenOverlay 已在前面判过）。 */
+function canTypeToFind(pathname: string): boolean {
+  if (pathname.startsWith('/agent')) return false;
+  if (useSelectionStore.getState().selectedIds.length > 0) return false;
+  const coarse =
+    typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+  return !coarse;
+}
+
 /** 列表操作后，Selection 移到相邻行（story 28）。 */
 function neighborAfter(rows: SelectionRow[], ids: string[]): SelectionRow | null {
   const lastIdx = Math.max(-1, ...ids.map((id) => rows.findIndex((r) => r.id === id)));
@@ -125,6 +134,15 @@ export function KeyboardShortcuts({ platform }: Props) {
 
       const action = resolveAction(e, resolvedPlatform);
       if (!action) return;
+
+      // 打字唤起 Quick Find：只在「没有行被选中」时（有 Selection 时单键属于
+      // 列表操作）、非触控设备上生效；助手页不挂载 Quick Find。
+      if (action.type === 'typeToFind') {
+        if (!canTypeToFind(pathname)) return;
+        e.preventDefault();
+        useUiInteractionStore.getState().openSearch(action.seed);
+        return;
+      }
       e.preventDefault();
 
       // focus 跟随 selection（roving tabindex）：键盘移动选中后把 DOM 焦点
@@ -360,7 +378,7 @@ export function KeyboardShortcuts({ platform }: Props) {
           return;
         }
         case 'search': {
-          useUiInteractionStore.getState().setSearchOpen(true);
+          useUiInteractionStore.getState().openSearch();
           return;
         }
       }

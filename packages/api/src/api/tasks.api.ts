@@ -8,10 +8,14 @@
 
 import { currentTaskBackend } from './task-backend';
 
-export type { TaskQuery, TaskView } from './tasks.api.rest';
+export type { TaskQuery, TaskSearchOptions, TaskView } from './tasks.api.rest';
 
 export function getTasks(...args: Parameters<typeof import('./tasks.api.rest').getTasks>) {
   return currentTaskBackend().getTasks(...args);
+}
+
+export function searchTasks(...args: Parameters<typeof import('./tasks.api.rest').searchTasks>) {
+  return currentTaskBackend().searchTasks(...args);
 }
 
 export function getTask(...args: Parameters<typeof import('./tasks.api.rest').getTask>) {

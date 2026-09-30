@@ -1,7 +1,14 @@
-import { useCalendarQueryRefresh, useCurrentUser } from '@taskora/api';
-import { Suspense } from 'react';
+import {
+  useCalendarQueryRefresh,
+  useCurrentUser,
+  useMultiSelectStore,
+  useUiInteractionStore,
+} from '@taskora/api';
+import { Search } from 'lucide-react';
+import { Suspense, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 
+import { usePullToFind } from '../../lib/usePullToFind';
 import { cn } from '@/lib/utils';
 
 /**
@@ -26,21 +33,66 @@ function isFullBleedRoute(pathname: string): boolean {
   return FULL_BLEED_ROUTES.includes(pathname);
 }
 
+/** 可下拉打开 Quick Find 的列表类页面（手机首页、Bucket 视图、项目 / 区域 / 标签页）。 */
+const PULL_TO_FIND_ROUTES = [
+  '/home',
+  '/inbox',
+  '/today',
+  '/upcoming',
+  '/anytime',
+  '/someday',
+  '/logbook',
+  '/trash',
+  '/later-projects',
+  '/tags',
+];
+const PULL_TO_FIND_PREFIXES = ['/projects/', '/areas/', '/tags/'];
+
+export function isPullToFindRoute(pathname: string): boolean {
+  return (
+    PULL_TO_FIND_ROUTES.includes(pathname) ||
+    PULL_TO_FIND_PREFIXES.some((prefix) => pathname.startsWith(prefix))
+  );
+}
+
 export function MainContent() {
   useCurrentUser();
   useCalendarQueryRefresh();
   const { pathname } = useLocation();
   const canvas = isCanvasRoute(pathname);
   const fullBleed = isFullBleedRoute(pathname);
+  const mainRef = useRef<HTMLElement>(null);
+  // 多选模式中下拉不打开搜索（工具栏动作针对当前列表）
+  const multiSelectActive = useMultiSelectStore((s) => s.active);
+  const pull = usePullToFind(mainRef, () => useUiInteractionStore.getState().openSearch(), {
+    enabled: isPullToFindRoute(pathname) && !multiSelectActive,
+  });
 
   return (
     <main
+      ref={mainRef}
       className={cn(
         'flex-1 bg-background scroll-smooth',
         // Full-bleed pages own their scrolling; others scroll the main pane.
         fullBleed ? 'overflow-hidden' : 'overflow-y-auto',
       )}
     >
+      {pull.distance > 0 && (
+        <div
+          aria-hidden
+          data-testid="pull-to-find"
+          data-armed={pull.armed}
+          className="flex items-end justify-center overflow-hidden"
+          style={{ height: pull.distance }}
+        >
+          <Search
+            className={cn(
+              'mb-2 h-5 w-5 transition-colors duration-fast',
+              pull.armed ? 'text-primary' : 'text-muted-foreground',
+            )}
+          />
+        </div>
+      )}
       <div
         className={cn(
           'relative z-10 mx-auto w-full',

@@ -19,7 +19,11 @@ interface UiInteractionState {
    */
   settingsEntryTab: SettingsTab | null;
   searchOpen: boolean;
+  /** 打字唤起 Quick Find 时带入输入框的首字符；打开时取用一次。 */
+  searchSeed: string | null;
   setSearchOpen: (open: boolean) => void;
+  openSearch: (seed?: string) => void;
+  takeSearchSeed: () => string | null;
   setExpandedId: (id: string | null) => void;
   setRevealId: (id: string | null) => void;
   setPendingAutoEditId: (id: string | null) => void;
@@ -29,7 +33,7 @@ interface UiInteractionState {
   setSettingsTab: (tab: SettingsTab) => void;
 }
 
-export const useUiInteractionStore = create<UiInteractionState>()((set) => ({
+export const useUiInteractionStore = create<UiInteractionState>()((set, get) => ({
   expandedId: null,
   revealId: null,
   pendingAutoEditId: null,
@@ -37,7 +41,15 @@ export const useUiInteractionStore = create<UiInteractionState>()((set) => ({
   settingsTab: 'appearance',
   settingsEntryTab: null,
   searchOpen: false,
-  setSearchOpen: (open) => set({ searchOpen: open }),
+  searchSeed: null,
+  setSearchOpen: (open) =>
+    set(open ? { searchOpen: true } : { searchOpen: false, searchSeed: null }),
+  openSearch: (seed) => set({ searchOpen: true, searchSeed: seed || null }),
+  takeSearchSeed: () => {
+    const seed = get().searchSeed;
+    if (seed !== null) set({ searchSeed: null });
+    return seed;
+  },
   setExpandedId: (id) => set({ expandedId: id }),
   setRevealId: (id) => set({ revealId: id }),
   setPendingAutoEditId: (id) => set({ pendingAutoEditId: id }),

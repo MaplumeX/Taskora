@@ -7,6 +7,7 @@ import type {
   ReorderSubtasksDto,
   SubtaskResponseDto,
   TaskResponseDto,
+  TaskSearchHit,
   UpdateSubtaskDto,
   UpdateTaskDto,
 } from '@taskora/shared';
@@ -30,6 +31,19 @@ export interface TaskQuery {
 
 export function getTasks(params?: TaskQuery): Promise<TaskResponseDto[]> {
   return apiClient.get<TaskResponseDto[]>('/tasks', { params }).then((res) => res.data);
+}
+
+export interface TaskSearchOptions {
+  /** 继续搜索：纳入已了结（Logbook）与 Trash 中的任务。 */
+  extended?: boolean;
+}
+
+export function searchTasks(q: string, options?: TaskSearchOptions): Promise<TaskSearchHit[]> {
+  return apiClient
+    .get<TaskSearchHit[]>('/tasks/search', {
+      params: { q, extended: options?.extended || undefined },
+    })
+    .then((res) => res.data);
 }
 
 export function getTask(id: string): Promise<TaskResponseDto> {

@@ -175,3 +175,100 @@ export const VIEW_CONTRACT = {
     { query: { view: 'trash' }, ids: ['t-trashed'] },
   ] satisfies Array<{ query: TaskListQuery; ids: string[] }>,
 };
+
+export interface ContractSubtask {
+  id: string;
+  taskId: string;
+  title: string;
+  status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
+  settledAt: string | null;
+  sortOrder: number;
+  createdAt: string;
+}
+
+function subtask(
+  id: string,
+  taskId: string,
+  title: string,
+  sortOrder: number,
+  fields: Partial<ContractSubtask> = {},
+): ContractSubtask {
+  return {
+    id,
+    taskId,
+    title,
+    status: 'ACTIVE',
+    settledAt: null,
+    sortOrder,
+    createdAt: CREATED,
+    ...fields,
+  };
+}
+
+/**
+ * 任务搜索契约（Quick Find）：同一组数据由 planTaskSearch、设备 Engine
+ * 后端的 searchTasks、hub 的 TasksService.search 各跑一遍。期望带顺序；
+ * subtasks 为命中的 Subtask id（带顺序）。
+ */
+export const SEARCH_CONTRACT = {
+  tasks: [
+    task('s-prefix', 'a5', { title: 'Milk the cow' }),
+    task('s-prefix-2', 'a0', { title: 'milkshake' }),
+    task('s-title', 'a1', { title: 'Buy milk' }),
+    task('s-title-2', 'a3', { title: 'Oat MILK recipe' }),
+    task('s-notes', 'a0', { title: 'Groceries', notes: 'remember milk' }),
+    task('s-subtask', 'a2', { title: 'Weekend' }),
+    task('s-done', 'a1', {
+      title: 'Milk delivery',
+      status: 'COMPLETED',
+      settledAt: '2026-09-22T10:00:00.000Z',
+    }),
+    task('s-trashed', 'a0', { title: 'Milky way', trashedAt: '2026-09-21T00:00:00.000Z' }),
+    task('s-trashed-parent', 'a0', {
+      title: 'Chores',
+      trashedAt: '2026-09-21T00:00:00.000Z',
+    }),
+    task('s-miss', 'a0', { title: 'Bread', notes: 'whole wheat' }),
+  ],
+  subtasks: [
+    subtask('sub-bottles', 's-subtask', 'milk bottles', 1, {
+      status: 'COMPLETED',
+      settledAt: '2026-09-22T10:00:00.000Z',
+    }),
+    subtask('sub-buy', 's-subtask', 'buy Milk', 0),
+    subtask('sub-eggs', 's-subtask', 'eggs', 2),
+    subtask('sub-chore', 's-trashed-parent', 'milk run', 0),
+    subtask('sub-miss', 's-miss', 'flour', 0),
+  ],
+  cases: [
+    {
+      q: ' MiLk ',
+      extended: false,
+      hits: [
+        { id: 's-prefix-2', subtasks: [] },
+        { id: 's-prefix', subtasks: [] },
+        { id: 's-title', subtasks: [] },
+        { id: 's-title-2', subtasks: [] },
+        { id: 's-notes', subtasks: [] },
+        { id: 's-subtask', subtasks: ['sub-buy', 'sub-bottles'] },
+      ],
+    },
+    {
+      q: 'milk',
+      extended: true,
+      hits: [
+        { id: 's-prefix-2', subtasks: [] },
+        { id: 's-prefix', subtasks: [] },
+        { id: 's-done', subtasks: [] },
+        { id: 's-trashed', subtasks: [] },
+        { id: 's-title', subtasks: [] },
+        { id: 's-title-2', subtasks: [] },
+        { id: 's-notes', subtasks: [] },
+        { id: 's-subtask', subtasks: ['sub-buy', 'sub-bottles'] },
+        { id: 's-trashed-parent', subtasks: ['sub-chore'] },
+      ],
+    },
+    { q: 'eggs', extended: false, hits: [{ id: 's-subtask', subtasks: ['sub-eggs'] }] },
+    { q: '   ', extended: true, hits: [] },
+  ],
+};

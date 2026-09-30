@@ -7,8 +7,10 @@ import {
   planRepeatSkip,
   planTaskComplete,
   planTaskCreate,
+  planTaskSearch,
   planTaskUpdate,
   repeatDerivationTarget,
+  searchNeedle,
   sortForView,
   subtaskStatusPatch,
   taskCancelPatch,
@@ -17,6 +19,7 @@ import {
   taskRestorePatch,
   taskTrashPatch,
   viewNeedsCalendar,
+  type TaskSearchOptions,
 } from '@taskora/engine';
 import { TaskStatus } from '@taskora/shared';
 import { Prisma } from '@prisma/client';
@@ -226,6 +229,44 @@ export class TasksService {
     return sortForView(visible, query.view, (task) => task.settledAt).map((t) =>
       settledToCompletedAt(withRepeatRuleDto({ ...t, tags: t.tags.map((tt) => tt.tag) })),
     );
+  }
+
+  /**
+   * 任务搜索（Quick Find）：SQL 按标题 / 备注 / Subtask 标题粗筛，命中、
+   * 范围与排序按 domain planTaskSearch（与设备同一规则）。
+   */
+  async search(userId: string, q: string, options?: TaskSearchOptions) {
+    const needle = q.trim();
+    if (!searchNeedle(needle)) return [];
+    const contains = { contains: needle, mode: 'insensitive' as const };
+    const tasks = await this.prisma.task.findMany({
+      where: {
+        userId,
+        ...(options?.extended ? {} : { status: TaskStatus.ACTIVE, trashedAt: null }),
+        OR: [{ title: contains }, { notes: contains }, { subtasks: { some: { title: contains } } }],
+      },
+      include: {
+        ...WITH_TAGS,
+        subtasks: {
+          where: { title: contains },
+          select: { id: true, taskId: true, title: true, sortOrder: true, createdAt: true },
+        },
+      },
+    });
+    const hits = planTaskSearch(
+      tasks,
+      tasks.flatMap((task) => task.subtasks),
+      q,
+      options,
+    );
+    return hits.map(({ task, matchedSubtasks, rank }) => ({
+      // 这里的 subtasks 只是命中的那部分，不作为任务的子任务列表下发
+      task: settledToCompletedAt(
+        withRepeatRuleDto({ ...task, tags: task.tags.map((tt) => tt.tag), subtasks: undefined }),
+      ),
+      matchedSubtasks: matchedSubtasks.map(({ id, title }) => ({ id, title })),
+      rank,
+    }));
   }
 
   async findOne(userId: string, id: string) {

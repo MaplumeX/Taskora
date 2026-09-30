@@ -35,7 +35,12 @@ export type KeyAction =
   | { type: 'newProject' }
   | { type: 'newHeading' }
   /** ⌘F/Ctrl+F：打开搜索。 */
-  | { type: 'search' };
+  | { type: 'search' }
+  /**
+   * 打字唤起 Quick Find：无修饰（可带 Shift）的单个可打印字符，seed 为该字符；
+   * 输入法组合的首键 seed 为空（只打开并聚焦，不带入字符）。
+   */
+  | { type: 'typeToFind'; seed: string };
 
 /** 解析器所需的最小事件形状（便于测试构造）。 */
 export interface KeyEventLike {
@@ -44,6 +49,8 @@ export interface KeyEventLike {
   ctrlKey: boolean;
   altKey: boolean;
   shiftKey: boolean;
+  isComposing?: boolean;
+  keyCode?: number;
 }
 
 /** 运行时平台检测：Tauri 注入对象 + UA 判定；非 Tauri 一律视为 web。 */
@@ -83,7 +90,8 @@ export function resolveAction(e: KeyEventLike, platform: KeyPlatform): KeyAction
     const byPlatform =
       (platform === 'web' && altOnly) || (platform !== 'web' && cmd && !e.altKey && !e.shiftKey);
     if (byPlatform) return { type: 'navigate', index: Number(key) as 1 | 2 | 3 | 4 | 5 | 6 };
-    return null;
+    // 无修饰的数字落到下方的打字唤起
+    if (e.metaKey || e.ctrlKey || e.altKey) return null;
   }
 
   // 返回：mac ⌘←；Windows 桌面 Alt+←；Web 不派发（浏览器后退同效）。
@@ -127,8 +135,8 @@ export function resolveAction(e: KeyEventLike, platform: KeyPlatform): KeyAction
   if (bare && key === 'Enter') return { type: 'expand' };
   if (bare && key === ' ') return { type: 'newTaskBelow' };
 
-  // --- 创建 ---
-  if (key === 'n' || key === 'N') {
+  // --- 创建（无修饰的 n / N 落到下方的打字唤起） ---
+  if ((key === 'n' || key === 'N') && (e.metaKey || e.ctrlKey || e.altKey)) {
     // mac: ⌘N 新任务；⇧⌘N Heading；⌥⌘N 项目
     // windows: Ctrl+N / Ctrl+Shift+N / Ctrl+Alt+N
     // web: Alt+N 新任务 / Alt+Shift+N 项目（Heading 走 Alt+H）
@@ -151,6 +159,14 @@ export function resolveAction(e: KeyEventLike, platform: KeyPlatform): KeyAction
   // Web: Alt+H 新 Heading（Alt+Shift+N 已被新项目占用）
   if (platform === 'web' && altOnly && (key === 'h' || key === 'H')) {
     return { type: 'newHeading' };
+  }
+
+  // --- 打字唤起 Quick Find（空格已归「下方新建」） ---
+  if (!e.metaKey && !e.ctrlKey && !e.altKey) {
+    if (e.isComposing || e.keyCode === 229 || key === 'Process') {
+      return { type: 'typeToFind', seed: '' };
+    }
+    if ([...key].length === 1 && key !== ' ') return { type: 'typeToFind', seed: key };
   }
 
   return null;

@@ -23,6 +23,7 @@ import {
   planRepeatSkip,
   planTaskComplete,
   planTaskCreate,
+  planTaskSearch,
   planTaskUpdate,
   projectMatchesView,
   repeatDerivationTarget,
@@ -30,9 +31,10 @@ import {
   sortForView,
   taskMatchesQuery,
   taskMatchesView,
+  taskSearchRank,
   type ListView,
 } from '../src/index';
-import { VIEW_CONTRACT } from '../src/testing';
+import { SEARCH_CONTRACT, VIEW_CONTRACT } from '../src/testing';
 
 const UTC = { timeZone: 'UTC', legacyDateTimeZone: 'UTC' };
 
@@ -61,6 +63,34 @@ describe('视图契约（纯函数）', () => {
     expect(sortForView(visible, query.view, (task) => task.settledAt).map((t) => t.id)).toEqual(
       ids,
     );
+  });
+});
+
+describe('任务搜索（纯函数）', () => {
+  it.each(SEARCH_CONTRACT.cases)('契约 q=$q extended=$extended', ({ q, extended, hits }) => {
+    const result = planTaskSearch(SEARCH_CONTRACT.tasks, SEARCH_CONTRACT.subtasks, q, {
+      extended,
+    });
+    expect(
+      result.map((hit) => ({ id: hit.task.id, subtasks: hit.matchedSubtasks.map((s) => s.id) })),
+    ).toEqual(hits);
+  });
+
+  it('相关度档位', () => {
+    expect(taskSearchRank({ title: 'Milk tea', notes: null }, false, 'milk')).toBe('titlePrefix');
+    expect(taskSearchRank({ title: 'Buy milk', notes: null }, false, 'milk')).toBe('title');
+    expect(taskSearchRank({ title: 'Buy', notes: 'milk' }, false, 'milk')).toBe('other');
+    expect(taskSearchRank({ title: 'Buy', notes: null }, true, 'milk')).toBe('other');
+    expect(taskSearchRank({ title: 'Buy', notes: null }, false, 'milk')).toBeNull();
+    expect(taskSearchRank({ title: 'Buy', notes: null }, true, '')).toBeNull();
+  });
+
+  it('已取消的任务只在扩展范围内', () => {
+    const cancelled = { ...SEARCH_CONTRACT.tasks[0], id: 'c', status: 'CANCELLED' };
+    expect(planTaskSearch([cancelled], [], 'milk')).toEqual([]);
+    expect(
+      planTaskSearch([cancelled], [], 'milk', { extended: true }).map((h) => h.task.id),
+    ).toEqual(['c']);
   });
 });
 
