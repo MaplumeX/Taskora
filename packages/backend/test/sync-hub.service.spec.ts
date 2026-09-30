@@ -38,6 +38,11 @@ function stamp(wallMs: number, counter: number, deviceId: string) {
   return formatHlc({ wallMs, counter, deviceId });
 }
 
+/** 设备的创建写总带 createdAt（局部写不带；hub 据此区分创建与写给已删除行的局部写）。 */
+const CREATED_AT = {
+  createdAt: { value: '2026-12-31T00:00:00.000Z', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') },
+};
+
 describe('SyncHubService（合并器集成）', () => {
   let service: SyncHubService;
   let buffer: InMemorySyncChangeLog;
@@ -111,7 +116,10 @@ describe('SyncHubService（合并器集成）', () => {
       {
         entity: 'task',
         id: 'task-1',
-        fields: { title: { value: '新任务', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') } },
+        fields: {
+          title: { value: '新任务', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') },
+          ...CREATED_AT,
+        },
       },
     ]);
 
@@ -121,6 +129,7 @@ describe('SyncHubService（合并器集成）', () => {
     expect(createArgs.data.userId).toBe(USER);
     expect(createArgs.data.fieldClocks).toEqual({
       title: stamp(LATER_THAN_ROW, 0, 'dev-a'),
+      createdAt: stamp(LATER_THAN_ROW, 0, 'dev-a'),
     });
     // 补丁未携带 updatedAt → 兑底为最大时钟墙钟（不加 1，保持回声平局下两端值一致）
     expect((createArgs.data.updatedAt as Date).getTime()).toBe(LATER_THAN_ROW);
@@ -145,7 +154,10 @@ describe('SyncHubService（合并器集成）', () => {
         {
           entity: 'task',
           id: 'task-1',
-          fields: { title: { value: '新任务', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') } },
+          fields: {
+            title: { value: '新任务', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') },
+            ...CREATED_AT,
+          },
         },
       ],
       [{ entity: 'widget', ids: ['w-2'] }],
@@ -172,6 +184,7 @@ describe('SyncHubService（合并器集成）', () => {
         fields: {
           title: { value: '新任务', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') },
           energy: { value: 3, hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') },
+          ...CREATED_AT,
         },
       },
     ]);
@@ -314,7 +327,10 @@ describe('SyncHubService（合并器集成）', () => {
       {
         entity: 'task',
         id: 'task-1',
-        fields: { title: { value: '新任务', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') } },
+        fields: {
+          title: { value: '新任务', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') },
+          ...CREATED_AT,
+        },
       },
     ]);
 
@@ -552,6 +568,7 @@ describe('SyncHubService（合并器集成）', () => {
           fields: {
             title: { value: '步骤', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') },
             taskId: { value: 'task-1', hlc: stamp(LATER_THAN_ROW, 0, 'dev-a') },
+            ...CREATED_AT,
           },
         },
       ]);

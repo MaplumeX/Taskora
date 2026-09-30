@@ -1,4 +1,5 @@
 import {
+  ArrayMaxSize,
   IsArray,
   IsBoolean,
   IsObject,
@@ -73,4 +74,15 @@ export class PushRequestDto {
   @ValidateNested({ each: true })
   @Type(() => DeleteRequestDto)
   deletes?: DeleteRequestDto[];
+}
+
+/** 按 id 取实体（local-first-v3 issue 08）。entity 同上只校验为字符串。 */
+export class FetchEntitiesDto {
+  @IsString()
+  entity!: string;
+
+  @IsArray()
+  @ArrayMaxSize(500)
+  @IsString({ each: true })
+  ids!: string[];
 }

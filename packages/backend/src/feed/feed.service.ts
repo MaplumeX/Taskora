@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   countProjectTasks,
   feedIncludesProjects,
@@ -18,6 +18,7 @@ import {
 import type {
   FeedItem,
   FeedView,
+  LogbookArchivePage,
   TaskFeedItem,
   ProjectFeedItem,
   TagResponseDto,
@@ -29,6 +30,58 @@ import { calendarContextFor, countedTasksOf } from '../common/domain-storage';
 import { buildTaskViewWhere, type TaskView } from '../tasks/views';
 import { buildProjectViewWhere, type ProjectView } from '../projects/views';
 import { parseRepeatRule } from '../tasks/task-dto.mapper';
+import { archivedTaskWhere } from '../sync/snapshot-pages';
+
+/** Logbook 归档一页的缺省条数。 */
+const ARCHIVE_PAGE_SIZE = 50;
+
+type TaskWithTags = Awaited<ReturnType<PrismaService['task']['findMany']>>[number] & {
+  tags: Array<{ tag: Parameters<typeof mapTag>[0] }>;
+};
+
+function toTaskFeedItem(t: TaskWithTags): TaskFeedItem {
+  return {
+    id: t.id,
+    type: 'task' as const,
+    title: t.title,
+    notes: t.notes,
+    scheduledDate: t.scheduledDate ? t.scheduledDate.toISOString() : null,
+    scheduledType: t.scheduledType as ScheduledType,
+    reminderTime: t.reminderTime,
+    repeatRule: parseRepeatRule(t.repeatRule),
+    dueDate: t.dueDate ? t.dueDate.toISOString() : null,
+    status: t.status as TaskStatus,
+    bucket: t.bucket as TaskBucket,
+    // DTO 字段名保持 completedAt，承载 Settled At 语义（ADR 0006）。
+    completedAt: t.settledAt ? t.settledAt.toISOString() : null,
+    trashedAt: t.trashedAt ? t.trashedAt.toISOString() : null,
+    sortOrder: t.sortOrder,
+    position: t.position,
+    projectId: t.projectId,
+    headingId: t.headingId,
+    areaId: t.areaId,
+    createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
+    tags: t.tags.map((tt) => mapTag(tt.tag)),
+  };
+}
+
+/** 归档分页令牌：上一页最后一条的 (settledAt, id)，base64url JSON。 */
+function decodeArchiveToken(raw: string): { settledAt: Date; id: string } {
+  try {
+    const token = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as {
+      settledAt?: unknown;
+      id?: unknown;
+    };
+    const settledAt = typeof token.settledAt === 'string' ? new Date(token.settledAt) : null;
+    if (settledAt && !Number.isNaN(settledAt.getTime()) && typeof token.id === 'string') {
+      return { settledAt, id: token.id };
+    }
+  } catch {
+    // 落到下面的 400
+  }
+  throw new BadRequestException('无效的 Logbook 分页令牌');
+}
 
 function mapTag(tag: {
   id: string;
@@ -99,30 +152,7 @@ export class FeedService {
 
     const taskItems: TaskFeedItem[] = tasks
       .filter((task) => taskMatchesView(task, view, context))
-      .map((t) => ({
-        id: t.id,
-        type: 'task' as const,
-        title: t.title,
-        notes: t.notes,
-        scheduledDate: t.scheduledDate ? t.scheduledDate.toISOString() : null,
-        scheduledType: t.scheduledType as ScheduledType,
-        reminderTime: t.reminderTime,
-        repeatRule: parseRepeatRule(t.repeatRule),
-        dueDate: t.dueDate ? t.dueDate.toISOString() : null,
-        status: t.status as TaskStatus,
-        bucket: t.bucket as TaskBucket,
-        // DTO 字段名保持 completedAt，承载 Settled At 语义（ADR 0006）。
-        completedAt: t.settledAt ? t.settledAt.toISOString() : null,
-        trashedAt: t.trashedAt ? t.trashedAt.toISOString() : null,
-        sortOrder: t.sortOrder,
-        position: t.position,
-        projectId: t.projectId,
-        headingId: t.headingId,
-        areaId: t.areaId,
-        createdAt: t.createdAt.toISOString(),
-        updatedAt: t.updatedAt.toISOString(),
-        tags: t.tags.map((tt) => mapTag(tt.tag)),
-      }));
+      .map(toTaskFeedItem);
 
     const visibleProjects = projects.filter((project) =>
       projectMatchesView(project, view, context),
@@ -161,5 +191,53 @@ export class FeedService {
     });
 
     return sortFeedItems<FeedItem>([...taskItems, ...projectItems], view);
+  }
+
+  /**
+   * Logbook 的归档部分（local-first-v3 issue 08）：Local Replica 不保留的
+   * 归档任务（规则同 bootstrap 的省略规则，截止时刻由设备给出），按了结
+   * 时间倒序、(settledAt, id) keyset 分页。只读，不进副本。
+   */
+  async logbookArchive(
+    userId: string,
+    settledBefore: Date,
+    page?: string,
+    limit = ARCHIVE_PAGE_SIZE,
+  ): Promise<LogbookArchivePage> {
+    const after = page ? decodeArchiveToken(page) : null;
+    const rows = await this.prisma.task.findMany({
+      where: {
+        userId,
+        ...archivedTaskWhere(settledBefore),
+        ...(after
+          ? {
+              AND: [
+                {
+                  OR: [
+                    { settledAt: { lt: after.settledAt } },
+                    { settledAt: after.settledAt, id: { gt: after.id } },
+                  ],
+                },
+              ],
+            }
+          : {}),
+      },
+      include: { tags: { include: { tag: true } } },
+      // 与 Logbook 的本地排序一致（sortFeedItems：了结时间倒序，平局按 id 升序）
+      orderBy: [{ settledAt: 'desc' }, { id: 'asc' }],
+      take: limit + 1,
+    });
+    const items = rows.slice(0, limit).map(toTaskFeedItem);
+    const last = rows.length > limit ? rows[limit - 1] : null;
+    return {
+      items,
+      ...(last
+        ? {
+            next: Buffer.from(
+              JSON.stringify({ settledAt: last.settledAt!.toISOString(), id: last.id }),
+            ).toString('base64url'),
+          }
+        : {}),
+    };
   }
 }

@@ -28,6 +28,7 @@ import { createNodeSqliteStorage } from '../src/node';
 import type { WireRow } from '../src/entities';
 
 const USER = 'user-1';
+const HARNESS_NOW = Date.parse('2026-09-30T00:00:00.000Z');
 
 interface Harness {
   hub: InMemorySyncHub;
@@ -49,6 +50,8 @@ async function makeHarness(options: { wallClock?: () => number } = {}): Promise<
         deviceId: name,
         clock: new HybridClock(name, () => wallMs),
         transport: net,
+        // 归档截止按固定日期算：用例里写死的了结日期不会随时间变成归档
+        now: () => HARNESS_NOW,
       });
       nets.set(engine, net);
       return engine;
@@ -74,9 +77,13 @@ function wrapTransport(inner: SyncTransport): SyncTransport & { setOnline(v: boo
       if (!online) throw new Error('offline');
       return inner.pull(request);
     },
-    async bootstrap() {
+    async bootstrap(request) {
       if (!online) throw new Error('offline');
-      return inner.bootstrap();
+      return inner.bootstrap(request);
+    },
+    async fetchEntities(request) {
+      if (!online) throw new Error('offline');
+      return inner.fetchEntities!(request);
     },
   };
 }
@@ -121,7 +128,7 @@ describe('Engine 端到端收敛（主接缝）', () => {
         return inner.push(request);
       },
       pull: (request) => inner.pull(request),
-      bootstrap: () => inner.bootstrap(),
+      bootstrap: (request) => inner.bootstrap(request),
     };
     const engine = await openEngine({
       storage: await createNodeSqliteStorage(':memory:'),
@@ -949,7 +956,13 @@ describe('Position re-balance（sync 后台摊平超长键）', () => {
     const b = await h.device('dev-b');
 
     const task = await createTask(b, '父任务');
-    const sub = await b.create('subtask', { title: '步骤', taskId: task, sortOrder: 0, status: 'ACTIVE', settledAt: null });
+    const sub = await b.create('subtask', {
+      title: '步骤',
+      taskId: task,
+      sortOrder: 0,
+      status: 'ACTIVE',
+      settledAt: null,
+    });
     await b.sync();
     await a.sync();
 
@@ -1011,7 +1024,11 @@ describe('Compact 登记跨会话持久与 Outbox 因果序', () => {
     await engine.sync();
     // 模拟旧版本：compact 登记只在内存，重启后丢失，复用死 id 再建
     await storage.exec('DELETE FROM _compacted');
-    const reopened = await openEngine({ storage, deviceId: 'A', transport: hub.transportFor(USER) });
+    const reopened = await openEngine({
+      storage,
+      deviceId: 'A',
+      transport: hub.transportFor(USER),
+    });
     await createTask(reopened, '实例（幽灵）', { id: 'derived-1' });
     await reopened.sync();
     expect(hub.entityState(USER, 'task', 'derived-1')).toBeNull();
@@ -1051,7 +1068,7 @@ describe('Compact 登记跨会话持久与 Outbox 因果序', () => {
         return inner.push(request);
       },
       pull: (request) => inner.pull(request),
-      bootstrap: () => inner.bootstrap(),
+      bootstrap: (request) => inner.bootstrap(request),
     };
     const engine = await openEngine({
       storage: await createNodeSqliteStorage(':memory:'),

@@ -36,6 +36,7 @@ import { issueBackgroundToken } from '../reminders/background-token';
 import {
   codecFor,
   delegate,
+  includeFor,
   loadAllRows,
   loadRow,
   sameWireValue,
@@ -48,6 +49,16 @@ import {
 import { registerCompacted } from './compact-registry';
 import { materializeLegacyClocks } from './legacy-clock-backfill';
 import { SyncChangeLog, type HubChangeDraft } from './sync-change-log';
+import {
+  BOOTSTRAP_PAGE_SIZE,
+  COMPACTED_PAGE_SIZE,
+  SNAPSHOT_PHASES,
+  decodeSnapshotToken,
+  encodeSnapshotToken,
+  parseCutoff,
+  snapshotOwnerWhere,
+  type SnapshotToken,
+} from './snapshot-pages';
 
 /** 无 userId 列的实体（Subtask 经父 Task 认领归属）。 */
 const NO_USER_ID_ENTITIES = new Set<SyncEntity>(['subtask']);
@@ -87,9 +98,21 @@ export interface HubWriteBatch {
   delete(entity: SyncEntity, ids: string[]): Promise<void>;
 }
 
-/** 单行合并的输入：设备推送的带时钟字段写，或待 hub 盖章的虚拟设备 0 写。 */
+/**
+ * 单行合并的输入：设备推送的带时钟字段写，或待 hub 盖章的虚拟设备 0 写。
+ * batch：设备这次 push 里出现的全部实体（`entity:id`），引用清洗据此区分
+ * 「同批后序事件会创建」与「不会再来」。
+ */
 type MergeInput =
-  { kind: 'device'; fields: Record<string, FieldWrite> } | { kind: 'virtual'; fields: WireRow };
+  | { kind: 'device'; fields: Record<string, FieldWrite>; batch: ReadonlySet<string> }
+  | { kind: 'virtual'; fields: WireRow };
+
+type SnapshotEntry = {
+  entity: SyncEntity;
+  id: string;
+  fields: Record<string, unknown>;
+  clocks: Record<string, string>;
+};
 
 @Injectable()
 export class SyncHubService implements OnModuleInit {
@@ -126,7 +149,12 @@ export class SyncHubService implements OnModuleInit {
   ): Promise<{ acked: number; rejected?: RejectedChange[] }> {
     const rejected: RejectedChange[] = [];
     let firstFailure: unknown = null;
+    const batch = new Set(events.map((event) => `${event.entity}:${event.id}`));
+    // 同一实体前面的事件失败后，后面的事件跳过：它们依赖前者（创建失败时
+    // 后续局部写会被当成「写给已删除的行」），整批会随请求失败一起重试。
+    const failed = new Set<string>();
     for (const event of events) {
+      if (failed.has(`${event.entity}:${event.id}`)) continue;
       if (!isSyncEntity(event.entity)) {
         rejected.push({
           kind: 'write',
@@ -148,9 +176,10 @@ export class SyncHubService implements OnModuleInit {
         });
       }
       try {
-        await this.applyEvent(userId, { ...event, entity: event.entity });
+        await this.applyEvent(userId, { ...event, entity: event.entity }, batch);
       } catch (error) {
         firstFailure ??= error;
+        failed.add(`${event.entity}:${event.id}`);
         console.error('[sync-hub] 事件合并失败，将由设备重试', event.entity, event.id, error);
       }
     }
@@ -193,17 +222,15 @@ export class SyncHubService implements OnModuleInit {
     return this.log.pull(userId, cursor);
   }
 
-  /** 全量快照（新设备 / 重置副本的设备 bootstrap）。 */
+  /**
+   * 全量快照，一次返回（协议 2 之前的客户端；新设备 / 重置副本的设备
+   * bootstrap）。
+   */
   async bootstrap(userId: string) {
     // 先固定 fence：此后发生的任何发布都带更大 seq，设备应用快照后仍会
     // 在下一次 pull 中重放，不会出现“旧快照 + 新 cursor”的永久漏事件。
     const cursor = await this.log.currentSeq(userId);
-    const snapshot: Array<{
-      entity: SyncEntity;
-      id: string;
-      fields: Record<string, unknown>;
-      clocks: Record<string, string>;
-    }> = [];
+    const snapshot: SnapshotEntry[] = [];
     for (const entity of SYNC_ENTITIES) {
       const codec = codecFor(entity);
       const rows = await loadAllRows(this.prisma, codec, userId);
@@ -216,18 +243,120 @@ export class SyncHubService implements OnModuleInit {
       where: { userId },
       select: { entity: true, entityId: true },
     })) as Array<{ entity: string; entityId: string }>;
-    const compactedByEntity = new Map<SyncEntity, string[]>();
-    for (const row of compactedRows) {
-      if (!isSyncEntity(row.entity)) continue;
-      const ids = compactedByEntity.get(row.entity) ?? [];
-      ids.push(row.entityId);
-      compactedByEntity.set(row.entity, ids);
+    return { snapshot, cursor, compacted: groupCompacted(compactedRows) };
+  }
+
+  /**
+   * 快照的一页（协议 2 起，local-first-v3 issue 08）：按阶段、按 id 游标
+   * 分页，第一页之前固定 cursor fence；settledAfter 时省略归档任务及其
+   * Subtask（它们留在 hub，Logbook 按页读取）。实体行读完后是 Compact
+   * 登记。规则见 snapshot-pages.ts。
+   */
+  async bootstrapPage(
+    userId: string,
+    request: { page?: string; settledAfter?: string },
+  ): Promise<{
+    snapshot: SnapshotEntry[];
+    cursor: number;
+    compacted?: DeleteRequest[];
+    next?: string;
+  }> {
+    let token: SnapshotToken;
+    if (request.page) {
+      token = decodeSnapshotToken(request.page);
+    } else {
+      const cutoff = request.settledAfter ? parseCutoff(request.settledAfter) : null;
+      token = {
+        fence: await this.log.currentSeq(userId),
+        phase: 0,
+        after: '',
+        ...(cutoff ? { settledAfter: cutoff.toISOString() } : {}),
+      };
     }
+    const cutoff = token.settledAfter ? new Date(token.settledAfter) : null;
+    let { phase, after } = token;
+    const snapshot: SnapshotEntry[] = [];
+    while (phase < SNAPSHOT_PHASES.length && snapshot.length < BOOTSTRAP_PAGE_SIZE) {
+      const { entity, where } = SNAPSHOT_PHASES[phase];
+      const codec = codecFor(entity);
+      const take = BOOTSTRAP_PAGE_SIZE - snapshot.length;
+      const rows = await delegate(this.prisma, codec.model).findMany({
+        where: {
+          AND: [
+            snapshotOwnerWhere(entity, userId, cutoff),
+            where ?? {},
+            after ? { id: { gt: after } } : {},
+          ],
+        },
+        include: includeFor(codec),
+        orderBy: { id: 'asc' },
+        take,
+      });
+      for (const row of rows) {
+        const state = serializeRow(codec, row);
+        snapshot.push({ entity, id: row.id as string, fields: state.fields, clocks: state.clocks });
+      }
+      if (rows.length < take) {
+        phase += 1;
+        after = '';
+      } else {
+        after = rows[rows.length - 1].id as string;
+      }
+    }
+    let compacted: DeleteRequest[] | undefined;
+    if (phase === SNAPSHOT_PHASES.length) {
+      const rows = (await this.prisma.compactedEntity.findMany({
+        where: { userId, ...(after ? { id: { gt: after } } : {}) },
+        orderBy: { id: 'asc' },
+        take: COMPACTED_PAGE_SIZE,
+        select: { id: true, entity: true, entityId: true },
+      })) as Array<{ id: string; entity: string; entityId: string }>;
+      compacted = groupCompacted(rows);
+      if (rows.length < COMPACTED_PAGE_SIZE) {
+        phase += 1;
+      } else {
+        after = rows[rows.length - 1].id;
+      }
+    }
+    const done = phase > SNAPSHOT_PHASES.length;
     return {
       snapshot,
-      cursor,
-      compacted: [...compactedByEntity].map(([entity, ids]) => ({ entity, ids })),
+      cursor: token.fence,
+      ...(compacted ? { compacted } : {}),
+      ...(done ? {} : { next: encodeSnapshotToken({ ...token, phase, after }) }),
     };
+  }
+
+  /**
+   * 按 id 取实体的合并态及其 DELETE_CASCADES 子实体（协议 2 起）。归档
+   * 任务被修改后回到设备副本时，设备用它补齐 Subtask。只返回属于该用户
+   * 且仍存在的行。
+   */
+  async fetchEntities(
+    userId: string,
+    entity: SyncEntity,
+    ids: string[],
+  ): Promise<{ entries: SnapshotEntry[] }> {
+    const entries: SnapshotEntry[] = [];
+    const load = async (target: SyncEntity, where: Record<string, unknown>) => {
+      const codec = codecFor(target);
+      const rows = await delegate(this.prisma, codec.model).findMany({
+        where: { AND: [snapshotOwnerWhere(target, userId, null), where] },
+        include: includeFor(codec),
+      });
+      for (const row of rows) {
+        const state = serializeRow(codec, row);
+        entries.push({ entity: target, id: row.id as string, ...state });
+      }
+      return rows.map((row) => row.id as string);
+    };
+    const found = await load(entity, { id: { in: [...new Set(ids)] } });
+    if (found.length > 0) {
+      for (const rule of DELETE_CASCADES[entity] ?? []) {
+        await load(rule.entity, { [rule.foreignKey]: { in: found } });
+      }
+    }
+    return { entries };
   }
 
   /** 设备注册：登录时分配/续期 device id（ADR-0007）。 */
@@ -382,7 +511,11 @@ export class SyncHubService implements OnModuleInit {
   // ---------- 内部 ----------
 
   /** 设备推送的单事件合并：独立事务，合并结果与日志同事务提交。 */
-  private async applyEvent(userId: string, event: OutboxEvent): Promise<void> {
+  private async applyEvent(
+    userId: string,
+    event: OutboxEvent,
+    batch: ReadonlySet<string>,
+  ): Promise<void> {
     const codec = codecFor(event.entity);
     // 防御：只接受注册表内的字段（设备侧 bug 不应击穿 hub 列）
     const incoming: Record<string, FieldWrite> = {};
@@ -397,6 +530,7 @@ export class SyncHubService implements OnModuleInit {
       const change = await this.mergeRow(tx, userId, event.entity, event.id, {
         kind: 'device',
         fields: incoming,
+        batch,
       });
       if (change) await this.log.append(tx, userId, [change]);
     });
@@ -425,6 +559,14 @@ export class SyncHubService implements OnModuleInit {
     if (!row && (await this.isCompacted(tx, userId, entity, id))) {
       return compactChange(entity, [id]);
     }
+    // 设备对不存在的行的局部写（创建总带 createdAt，这条没有）：行已被
+    // 物理删除而登记已随保留期清理（issue 08），或 hub 从未有过它。写不出
+    // 完整的行（缺列会让 push 永远失败）；按 Compact 处理——登记并下发
+    // Compact Event，推送方移除本地残行、撤掉 Outbox 里的同类写。
+    if (!row && input.kind === 'device' && !('createdAt' in input.fields)) {
+      await registerCompacted(tx, userId, entity, [id]);
+      return compactChange(entity, [id]);
+    }
     const current = row ? serializeRow(codec, row) : null;
     const incoming =
       input.kind === 'device' ? input.fields : this.stampVirtualWrite(codec, current, input.fields);
@@ -439,7 +581,13 @@ export class SyncHubService implements OnModuleInit {
     // FK violation，整批 push 反复失败（同步毒丸）。尚未到达的引用
     // （同批后序事件可能创建）保留，由 FK 失败驱动重试收敛（既有
     // 语义）。先批量预加载引用状态，再清洗。
-    const referenceStatuses = await this.loadReferenceStatuses(tx, userId, entity, outcome);
+    const referenceStatuses = await this.loadReferenceStatuses(
+      tx,
+      userId,
+      entity,
+      outcome,
+      input.kind === 'device' ? input.batch : undefined,
+    );
     const bumpWall = 1 + Math.max(Date.now(), ...Object.values(outcome.clocks).map(hlcWallMs));
     const bumpClock = () =>
       formatHlc({ wallMs: bumpWall, counter: 0, deviceId: VIRTUAL_DEVICE_ID });
@@ -563,8 +711,11 @@ export class SyncHubService implements OnModuleInit {
    * 批量预加载 applied 字段引用的目标状态（ReferenceStatus）。
    * - 行存在且属于该用户：alive；
    * - 行不存在且已登记 compact：dead（迟到引用，清洗对象）；
-   * - 行不存在且未登记：pending（同批后序事件可能创建，保留引用
-   *   由 FK 失败驱动重试）；
+   * - 行不存在、未登记，且在设备这次 push 里（batch）：pending（同批
+   *   其他事件会创建它，保留引用由 FK 失败驱动重试）；
+   * - 行不存在、未登记、也不在这次 push 里：dead（Outbox 是因果序，被
+   *   引用的实体不会再来——多半已删除且登记已过期，issue 08）。没有
+   *   batch（虚拟设备 0，调用方已校验）时按 pending；
    * - 行存在但属于他人：dead（越权引用，不物化）。
    */
   private async loadReferenceStatuses(
@@ -572,7 +723,10 @@ export class SyncHubService implements OnModuleInit {
     userId: string,
     entity: SyncEntity,
     outcome: { appliedFields: string[]; fields: Record<string, unknown> },
+    batch?: ReadonlySet<string>,
   ): Promise<Map<string, ReferenceStatus>> {
+    const missing = (target: SyncEntity, id: string): ReferenceStatus =>
+      !batch || batch.has(`${target}:${id}`) ? 'pending' : 'dead';
     const refs = REFERENCE_FIELDS[entity];
     const statuses = new Map<string, ReferenceStatus>();
     if (!refs) return statuses;
@@ -610,7 +764,7 @@ export class SyncHubService implements OnModuleInit {
         } else {
           statuses.set(
             `${target}:${id}`,
-            (await this.isCompacted(tx, userId, target, id)) ? 'dead' : 'pending',
+            (await this.isCompacted(tx, userId, target, id)) ? 'dead' : missing(target, id),
           );
         }
       }
@@ -626,15 +780,15 @@ export class SyncHubService implements OnModuleInit {
       ids.forEach((id) => {
         if (owned.has(id)) statuses.set(`${target}:${id}`, 'alive');
       });
-      const missing = [...ids].filter((id) => !owned.has(id));
-      if (missing.length > 0) {
+      const absent = [...ids].filter((id) => !owned.has(id));
+      if (absent.length > 0) {
         const compactedRows = (await delegate(tx, 'compactedEntity').findMany({
-          where: { userId, entity: target, entityId: { in: missing } },
+          where: { userId, entity: target, entityId: { in: absent } },
           select: { entityId: true },
         })) as Array<{ entityId: string }>;
         const compacted = new Set(compactedRows.map((row) => row.entityId));
-        missing.forEach((id) => {
-          statuses.set(`${target}:${id}`, compacted.has(id) ? 'dead' : 'pending');
+        absent.forEach((id) => {
+          statuses.set(`${target}:${id}`, compacted.has(id) ? 'dead' : missing(target, id));
         });
       }
     }
@@ -680,6 +834,18 @@ export class SyncHubService implements OnModuleInit {
 
 function compactChange(entity: SyncEntity, ids: string[]): HubChangeDraft {
   return { kind: 'compact', entity, ids };
+}
+
+/** Compact 登记行按实体分组（本 hub 不认识的实体略过）。 */
+function groupCompacted(rows: Array<{ entity: string; entityId: string }>): DeleteRequest[] {
+  const byEntity = new Map<SyncEntity, string[]>();
+  for (const row of rows) {
+    if (!isSyncEntity(row.entity)) continue;
+    const ids = byEntity.get(row.entity) ?? [];
+    ids.push(row.entityId);
+    byEntity.set(row.entity, ids);
+  }
+  return [...byEntity].map(([entity, ids]) => ({ entity, ids }));
 }
 
 /**

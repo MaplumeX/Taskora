@@ -105,8 +105,12 @@ _Avoid_: 高亮、hover、焦点
 _Avoid_: 数据库、缓存、ORM、offline cache
 
 **Local Replica（本地副本）**:
-每台设备持有的该用户全量数据镜像，是 UI 读写的直接对象；不可视为可随时丢弃的缓存。
+每台设备持有的该用户数据镜像，是 UI 读写的直接对象；不可视为可随时丢弃的缓存。除 Archived Logbook 外是全量的。
 _Avoid_: cache、镜像只读副本
+
+**Archived Logbook（归档 Logbook）**:
+Local Replica 不保留的旧 Logbook Entry：了结时间早于保留期（缺省 365 天）、不在 Trash、不属于进行中项目的已了结任务及其 Subtask。它们留在 Sync Hub，Logbook 滚到底时按页读取，只读；在 hub 上被修改后会随变更回到副本。归档不是删除：不产生 Compact Event，也不登记。
+_Avoid_: 已删除、冷数据、Trash
 
 ### 同步
 
@@ -139,7 +143,7 @@ _Avoid_: 消息队列（MQ 意义上的）
 _Avoid_: offset、分页游标
 
 **Compact Event（压缩变更）**:
-Hub 的 GC 物理删除实体后下发给设备的变更类型：指令设备从 Local Replica 中移除一批实体，区别于携带实体内容的 Change Event。仅在清空 Trash / 级联清理后产生。
+Hub 的 GC 物理删除实体后下发给设备的变更类型：指令设备从 Local Replica 中移除一批实体，区别于携带实体内容的 Change Event。在清空 Trash / 级联清理 / Delete Request 后产生；设备写入 hub 上已不存在的实体时，hub 也回以 Compact Event 让它收敛。
 _Avoid_: 硬删除广播、tombstone（我们用软删除，无墓碑）
 
 **Delete Request（删除请求）**:

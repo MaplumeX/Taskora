@@ -231,6 +231,7 @@ export {
 export * from './utils/calendarGrid';
 export * from './utils/upcomingLayout';
 export * from './utils/logbookLayout';
+export * from './utils/logbookArchive';
 export { useDebouncedValue } from './hooks/useDebouncedValue';
 
 // i18n

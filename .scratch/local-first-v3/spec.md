@@ -30,7 +30,7 @@ V1/V2（`.scratch/local-first-v1`、`.scratch/local-first-v2`）交付了 Engine
 | 05 | [web 接入 Engine，退役 REST 写旁路](issues/05-web-on-engine.md) | 2 | P2（大） |
 | 06 | [响应式查询](issues/06-live-queries.md) | 4（长期） | P3 |
 | 07 | [备注字段的文本合并](issues/07-notes-text-merge.md) | 6 | P3（评估） |
-| 08 | [数据增长：Logbook 按需、bootstrap 分页、登记清理](issues/08-data-growth.md) | 7 | P3 |
+| 08 | [数据增长：Logbook 按需、bootstrap 分页、登记清理](issues/08-data-growth.md) | 7 | P3，已实现 |
 | 09 | [移动端后台同步](issues/09-mobile-background-sync.md) | 8 | P3 |
 | 10 | [同步可观测性](issues/10-sync-observability.md) | 8 | P2 |
 | 11 | [实时提示跨 hub 实例](issues/11-cross-instance-hints.md) | 8 | 视部署而定 |

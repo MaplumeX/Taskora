@@ -43,6 +43,7 @@ export const REMOTE_METHODS = [
   'pull',
   'sync',
   'bootstrap',
+  'maintain',
   'cursor',
 ] as const;
 export type RemoteMethod = (typeof REMOTE_METHODS)[number];
@@ -134,6 +135,9 @@ export class TabEngine implements Engine {
   }
   bootstrap() {
     return this.call('bootstrap', []) as Promise<void>;
+  }
+  maintain() {
+    return this.call('maintain', []) as Promise<void>;
   }
   cursor() {
     return this.call('cursor', []) as Promise<number>;

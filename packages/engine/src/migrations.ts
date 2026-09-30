@@ -56,6 +56,14 @@ export const REPLICA_MIGRATIONS: readonly ReplicaMigration[] = [
   (storage) => addColumnIfMissing(storage, 'task', 'reminderTime', 'TEXT'),
   // 3 → 4：task 增加 repeatRule（recurring-tasks spec，JSON 文本）。
   (storage) => addColumnIfMissing(storage, 'task', 'repeatRule', 'TEXT'),
+  // 4 → 5：Compact 登记增加本机登记时刻（local-first-v3 issue 08，过期
+  // 清理）。已有登记按迁移时刻计，从现在起再保留一个完整保留期。
+  async (storage) => {
+    await addColumnIfMissing(storage, '_compacted', 'registered_at', 'INTEGER NOT NULL DEFAULT 0');
+    await storage.run('UPDATE _compacted SET registered_at = ? WHERE registered_at = 0', [
+      Date.now(),
+    ]);
+  },
 ];
 
 /** 当前代码的副本 schema 版本。 */

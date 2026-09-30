@@ -31,6 +31,10 @@ const FIRST_PRUNE_DELAY_MS = 60 * 1000;
  *   读者不会先看到 seq 11 再看到 10（否则 cursor 越过 10 后永久漏掉）。
  * - 保留 SYNC_LOG_RETENTION_DAYS 天，按小时清理；被清理的最大 seq 记入
  *   prunedThrough，更早的 cursor 走 resync。
+ * - Compact 登记（CompactedEntity）与它的 Compact Event 同期清理
+ *   （local-first-v3 issue 08）：还没拉到这条 Compact Event 的设备，此后
+ *   的 cursor 都早于 prunedThrough，会先 bootstrap。登记与事件在同一个
+ *   事务里写入，createdAt 相同，按同一阈值删除即同期。
  */
 @Injectable()
 export class PrismaSyncChangeLog extends SyncChangeLog implements OnModuleInit, OnModuleDestroy {
@@ -111,11 +115,11 @@ export class PrismaSyncChangeLog extends SyncChangeLog implements OnModuleInit, 
     return (await this.readCounter(this.prisma, userId)).seq;
   }
 
-  /** 清理超出保留期的日志，并推进各用户的 prunedThrough。 */
+  /** 清理超出保留期的日志与 Compact 登记，并推进各用户的 prunedThrough。 */
   async prune(now: Date = new Date()): Promise<void> {
     const threshold = new Date(now.getTime() - SYNC_LOG_RETENTION_DAYS * 24 * 3600 * 1000);
-    await this.prisma.rawTransaction(
-      (tx) => tx.$executeRaw`
+    await this.prisma.rawTransaction(async (tx) => {
+      await tx.$executeRaw`
       WITH deleted AS (
         DELETE FROM "SyncChange" WHERE "createdAt" < ${threshold} RETURNING "userId", "seq"
       ), maxima AS (
@@ -123,8 +127,9 @@ export class PrismaSyncChangeLog extends SyncChangeLog implements OnModuleInit, 
       )
       UPDATE "SyncCounter" AS c
       SET "prunedThrough" = GREATEST(c."prunedThrough", maxima."maxSeq")
-      FROM maxima WHERE c."userId" = maxima."userId"`,
-    );
+      FROM maxima WHERE c."userId" = maxima."userId"`;
+      await tx.$executeRaw`DELETE FROM "CompactedEntity" WHERE "createdAt" < ${threshold}`;
+    });
   }
 
   /** 未写过日志的用户视为 seq = prunedThrough = 1。 */

@@ -19,14 +19,11 @@ import {
   type ReplicaRow,
 } from './replica';
 import { HybridClock } from './hlc';
-import {
-  MAX_POSITION_LENGTH,
-  positionBetween,
-  rebalanceSegments,
-  synthPosition,
-} from './position';
+import { MAX_POSITION_LENGTH, positionBetween, rebalanceSegments, synthPosition } from './position';
 import type { SyncEntity, WireRow } from './entities';
+import { archiveCutoff, DEFAULT_ARCHIVE_AFTER_DAYS } from './archive';
 import {
+  COMPACT_REGISTRY_RETENTION_DAYS,
   SYNC_PROTOCOL_VERSION,
   SyncUpgradeRequiredError,
   type DeleteRequest,
@@ -45,6 +42,13 @@ export interface EngineOptions {
   /** 可注入的 HLC（测试确定性）。 */
   clock?: HybridClock;
   generateId?: () => string;
+  /**
+   * 副本保留已了结任务的天数（issue 08，缺省 DEFAULT_ARCHIVE_AFTER_DAYS）；
+   * 更早的归档任务不进快照、定期从副本裁掉。null：副本保留全部历史。
+   */
+  archiveAfterDays?: number | null;
+  /** 墙钟（毫秒；归档截止与登记过期，测试确定性）。 */
+  now?: () => number;
 }
 
 export interface Engine {
@@ -79,10 +83,18 @@ export interface Engine {
   flush(): Promise<void>;
   /** 凭 Sync Cursor 拉取增量并应用；resync 时自动 bootstrap。 */
   pull(): Promise<void>;
-  /** flush + pull（正常在线同步路径）。 */
+  /** flush + pull（正常在线同步路径），到期时顺带 maintain。 */
   sync(): Promise<void>;
-  /** 从 hub 全量快照重建本地副本（保留未同步 Outbox）。 */
+  /**
+   * 从 hub 快照重建本地副本（保留未同步 Outbox）。快照按页拉取；新设备
+   * 各页到达即可见，已有数据的副本在最后一页到齐后整体替换。
+   */
   bootstrap(): Promise<void>;
+  /**
+   * 副本维护（issue 08）：裁掉归档任务、清理过期的 Compact 登记。sync
+   * 每小时至多自动跑一次；纯本地操作，不需要网络。
+   */
+  maintain(): Promise<void>;
   /** 当前 Sync Cursor。 */
   cursor(): Promise<number>;
   /** 订阅数据变更（本地写 / 应用远端写 / bootstrap 重建后触发，载荷
@@ -116,13 +128,28 @@ function limitBatchBytes(batch: OutboxEntry[]): OutboxEntry[] {
 /** 往返超过此值的响应不用于时钟校准（单程延迟不对称的误差太大）。 */
 const MAX_CALIBRATION_RTT_MS = 5_000;
 
+/** sync 自动维护副本的最短间隔。 */
+const MAINTENANCE_INTERVAL_MS = 60 * 60 * 1000;
+
+/** 一次向 hub 取回的归档任务数上限。 */
+const BACKFILL_BATCH = 200;
+
 export async function openEngine(options: EngineOptions): Promise<Engine> {
+  const now = options.now ?? (() => Date.now());
   const replica = new LocalReplica(options.storage, {
     deviceId: options.deviceId,
     clock: options.clock,
     generateId: options.generateId,
+    now,
   });
   await replica.init();
+  const archiveAfterDays =
+    options.archiveAfterDays === undefined ? DEFAULT_ARCHIVE_AFTER_DAYS : options.archiveAfterDays;
+  const currentArchiveCutoff = (): string | undefined =>
+    archiveAfterDays === null ? undefined : archiveCutoff(now(), archiveAfterDays);
+  /** hub 上次回报的协议版本（新端点只在 hub 声明支持后调用）。 */
+  let hubProtocol = 0;
+  let lastMaintenance = Number.NEGATIVE_INFINITY;
 
   const requireTransport = (): SyncTransport => {
     if (!options.transport) {
@@ -145,6 +172,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
     if ((response.minProtocolVersion ?? 0) > SYNC_PROTOCOL_VERSION) {
       throw new SyncUpgradeRequiredError(response.minProtocolVersion);
     }
+    hubProtocol = response.protocolVersion ?? 0;
     const receivedAt = replica.rawWallMs();
     if (typeof response.serverTime === 'number' && receivedAt - sentAt <= MAX_CALIBRATION_RTT_MS) {
       await replica.calibrateWall(response.serverTime - (sentAt + receivedAt) / 2);
@@ -195,7 +223,10 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
         else accepted.push(item);
       }
       if (rejected.size > 0) {
-        console.warn('[engine] hub 无法处理部分变更，保留在 Outbox 待 hub 升级后重推', response.rejected);
+        console.warn(
+          '[engine] hub 无法处理部分变更，保留在 Outbox 待 hub 升级后重推',
+          response.rejected,
+        );
       }
       await replica.deleteOutbox(accepted);
     }
@@ -211,16 +242,53 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
         await bootstrap();
         return;
       }
-      await replica.applyRemoteBatch(response.changes, response.cursor);
-      if (!response.hasMore || response.cursor <= cursor) return;
+      await replica.applyRemoteBatch(response.changes, response.cursor, {
+        archiveCutoff: currentArchiveCutoff(),
+      });
+      if (!response.hasMore || response.cursor <= cursor) break;
+    }
+    await backfillArchived();
+  };
+
+  /**
+   * 回到副本的归档任务补齐 Subtask（issue 08，见 applyRemoteBatch）：向
+   * hub 按 id 取任务及其子实体，按 LWW 合并。hub 不支持（协议 2 以下）时
+   * 名单留着，hub 升级后再补。
+   */
+  const backfillArchived = async (): Promise<void> => {
+    const transport = requireTransport();
+    if (!transport.fetchEntities || hubProtocol < 2) return;
+    const pending = await replica.pendingBackfill();
+    for (let index = 0; index < pending.length; index += BACKFILL_BATCH) {
+      const ids = pending.slice(index, index + BACKFILL_BATCH);
+      const response = await calibrated(() => transport.fetchEntities!({ entity: 'task', ids }));
+      await replica.applyRemoteEntries(response.entries, ids);
     }
   };
 
   const bootstrap = async (): Promise<void> => {
     const transport = requireTransport();
-    const response = await calibrated(() => transport.bootstrap());
-    await replica.replaceAll(response.snapshot, response.compacted);
-    await replica.setCursor(response.cursor);
+    await replica.beginBootstrap();
+    // 各页的 cursor 都是第一页之前固定的 fence；归档截止时刻由 hub 记在
+    // 分页令牌里，全程一致。
+    let response = await calibrated(() =>
+      transport.bootstrap({ settledAfter: currentArchiveCutoff() }),
+    );
+    const fence = response.cursor;
+    for (;;) {
+      await replica.stageSnapshot(response.snapshot, response.compacted);
+      const next = response.next;
+      if (!next) break;
+      response = await calibrated(() => transport.bootstrap({ page: next }));
+    }
+    await replica.finishBootstrap(fence);
+  };
+
+  const maintain = async (): Promise<void> => {
+    lastMaintenance = now();
+    const cutoff = currentArchiveCutoff();
+    if (cutoff) await replica.pruneArchive(cutoff);
+    await replica.expireCompacted(now() - COMPACT_REGISTRY_RETENTION_DAYS * 24 * 3600 * 1000);
   };
 
   /**
@@ -264,8 +332,10 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
       await flush();
       await applyPull();
       await rebalanceIfInflated();
+      if (now() - lastMaintenance >= MAINTENANCE_INTERVAL_MS) await maintain();
     },
     bootstrap,
+    maintain,
     cursor: () => replica.getCursor(),
     onChange: (listener) => replica.onChange(listener),
     watch: (query, observer) => watchQuery(replica, query, observer),

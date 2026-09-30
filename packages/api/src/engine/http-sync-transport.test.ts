@@ -41,6 +41,8 @@ describe('createHttpSyncTransport（协议版本，local-first-v3 issue 03）', 
     await transport.push({ deviceId: 'd', events: [] });
     await transport.pull({ cursor: 7 });
     await transport.bootstrap();
+    await transport.bootstrap({ page: 'next-token' });
+    await transport.fetchEntities!({ entity: 'task', ids: ['t1'] });
 
     const expected = {
       [SYNC_PROTOCOL_HEADER]: String(SYNC_PROTOCOL_VERSION),
@@ -51,7 +53,17 @@ describe('createHttpSyncTransport（协议版本，local-first-v3 issue 03）', 
       params: { cursor: 7 },
       headers: expected,
     });
-    expect(vi.mocked(apiClient.get).mock.calls[1][1]).toEqual({ headers: expected });
+    expect(vi.mocked(apiClient.get).mock.calls[1][1]).toEqual({ params: {}, headers: expected });
+    // 分页参数走查询串（旧 hub 忽略，照常回整包）
+    expect(vi.mocked(apiClient.get).mock.calls[2][1]).toEqual({
+      params: { page: 'next-token' },
+      headers: expected,
+    });
+    expect(vi.mocked(apiClient.post).mock.calls[1]).toEqual([
+      '/sync/entities',
+      { entity: 'task', ids: ['t1'] },
+      { headers: expected },
+    ]);
   });
 
   it('HTTP 426 → SyncUpgradeRequiredError（带 hub 的最低版本）', async () => {

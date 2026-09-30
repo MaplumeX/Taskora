@@ -8,16 +8,20 @@
  * - 本地写：字段打 HLC 时间戳、落库、进 Outbox（可合并同类 pending）；
  * - 远端写：按字段级 LWW 合并拉取的变更（同 hub 的合并器）；
  * - Compact Event：物理移除实体行；
- * - 快照重建（bootstrap）：整表替换、保留未同步 Outbox；
+ * - 快照重建（bootstrap）：分页暂存、整表替换、保留未同步 Outbox；
+ * - 归档裁剪与 Compact 登记过期（local-first-v3 issue 08）；
  * - 变更通知：任何本地/应用远端写都推进版本号、通知订阅者。
  *
  * 存储接口为异步（Tauri IPC 场景），方法均返回 Promise。
  */
 
+import { ProjectStatus, SETTLED_TASK_STATUSES } from '@taskora/shared';
+
 import {
   COMPACT_NULL_REFS,
   DELETE_CASCADES,
   entityDef,
+  entityTableDdl,
   isSyncEntity,
   SYNC_ENTITIES,
   type FieldDef,
@@ -27,8 +31,19 @@ import {
 import { HybridClock } from './hlc';
 import { migrateReplica } from './migrations';
 import { mergeEntityState, type EntityMergeState, type FieldWrite } from './merger';
-import type { HubChange, OutboxEvent, SnapshotEntry } from './protocol';
+import type { DeleteRequest, HubChange, OutboxEvent, SnapshotEntry } from './protocol';
 import { inTransaction, type SqlStorage } from './storage';
+
+/** bootstrap 暂存表（与实体表同列）。 */
+function stageTable(entity: SyncEntity): string {
+  return `_stage_${entityDef(entity).table}`;
+}
+
+/** 一次归档裁剪事务最多删除的任务数（事务短、SQL 参数个数有界）。 */
+const PRUNE_CHUNK = 500;
+
+/** 待补齐 Subtask 的回到副本的归档任务（_engine_meta 键）。 */
+const BACKFILL_META_KEY = 'archiveBackfill';
 
 export interface ReplicaRow {
   id: string;
@@ -115,6 +130,8 @@ export interface LocalReplicaOptions {
   clock?: HybridClock;
   /** id 生成器（测试确定性）。 */
   generateId?: () => string;
+  /** 墙钟（毫秒；Compact 登记时刻，测试确定性）。 */
+  now?: () => number;
 }
 
 export class LocalReplica {
@@ -144,6 +161,8 @@ export class LocalReplica {
    * 以前是事务外 fire-and-forget，可能插进别的事务或在崩溃时丢失。
    */
   private clockDirty = false;
+  /** 进行中的 bootstrap 是否把各页直接写进副本（新设备，见 beginBootstrap）。 */
+  private bootstrapLive = false;
 
   constructor(
     private readonly storage: SqlStorage,
@@ -162,12 +181,7 @@ export class LocalReplica {
     // 或拒绝打开更新版本写入的副本（ReplicaSchemaTooNewError）。
     await migrateReplica(this.storage);
     await this.metaSet('deviceId', this.options.deviceId);
-    const compactedRows = await this.storage.all<{ entity: string; entity_id: string }>(
-      'SELECT entity, entity_id FROM _compacted',
-    );
-    for (const row of compactedRows) {
-      this.compacted.add(`${row.entity}:${row.entity_id}`);
-    }
+    await this.reloadCompacted();
     const offset = Number(await this.metaGet('wallOffset'));
     if (Number.isFinite(offset)) this.clock.setWallOffset(offset);
     const saved = await this.metaGet('hlc');
@@ -482,7 +496,7 @@ export class LocalReplica {
   private async removeRows(
     entity: SyncEntity,
     ids: string[],
-    opts: { enqueue: boolean },
+    opts: { enqueue: boolean; purgeOutbox?: boolean },
     affected: Set<SyncEntity>,
   ): Promise<number> {
     const def = entityDef(entity);
@@ -546,6 +560,14 @@ export class LocalReplica {
       }
     }
     for (const id of ids) {
+      if (opts.purgeOutbox) {
+        // hub 已 compact 的实体：待推送的写与删除 hub 只会丢弃，撤掉它们，
+        // 不必等 hub 的登记（登记会过期，issue 08）来拦截。
+        await this.storage.run('DELETE FROM _outbox WHERE entity = ? AND entity_id = ?', [
+          entity,
+          id,
+        ]);
+      }
       const { changes } = await this.storage.run(`DELETE FROM ${def.table} WHERE id = ?`, [id]);
       removed += changes;
       if (changes === 0) continue; // 幂等：已不存在则无需排队
@@ -575,30 +597,33 @@ export class LocalReplica {
     id: string,
     remote: EntityMergeState,
   ): Promise<boolean> {
-    const applied = await this.tx(() => this.mergeRemote(entity, id, remote));
+    const applied = (await this.tx(() => this.mergeRemote(entity, id, remote))) !== null;
     if (applied) {
       this.notifyChanged({ origin: 'remote', entities: [entity], ids: { [entity]: [id] } });
     }
     return applied;
   }
 
-  /** 单个远端实体的 LWW 合并落库（调用方负责事务与通知）。 */
+  /**
+   * 单个远端实体的 LWW 合并落库（调用方负责事务与通知）。返回 inserted
+   * （本地原本没有这行）、updated，或 null（无变化）。
+   */
   private async mergeRemote(
     entity: SyncEntity,
     id: string,
     remote: EntityMergeState,
-  ): Promise<boolean> {
+  ): Promise<'inserted' | 'updated' | null> {
     this.absorbRemoteClocks(remote.clocks);
     // Compact 永久获胜（ADR-0008）：已 compact 的实体，迟到的远端字段
     // 变更一律静默丢弃（副本与 hub 同规则），不会「删了又复活」。
-    if (this.compacted.has(`${entity}:${id}`)) return false;
+    if (this.compacted.has(`${entity}:${id}`)) return null;
     const current = await this.getRaw(entity, id);
     const outcome = mergeEntityState(current, remote);
-    if (outcome.appliedFields.length === 0) return false;
+    if (outcome.appliedFields.length === 0) return null;
     await this.writeRow(entity, id, outcome.fields, outcome.clocks, {
       insert: current === null,
     });
-    return true;
+    return current === null ? 'inserted' : 'updated';
   }
 
   /** 应用 Compact Event：从副本物理移除一批实体。 */
@@ -624,7 +649,12 @@ export class LocalReplica {
     const touched = new Set<SyncEntity>([entity]);
     // 级联与引用清理与设备发起删除同规则（Task → Subtask；SetNull）；
     // 登记无论本地是否有行——compact 是 hub 的事实。
-    const removed = await this.removeRows(entity, ids, { enqueue: false }, touched);
+    const removed = await this.removeRows(
+      entity,
+      ids,
+      { enqueue: false, purgeOutbox: true },
+      touched,
+    );
     if (removed > 0 || touched.size > 1) {
       for (const item of touched) affected.add(item);
     }
@@ -634,11 +664,22 @@ export class LocalReplica {
    * 应用一次 pull 的全部远端变更并推进 Sync Cursor：一个事务、一次通知。
    * 逐条应用时每条都触发 UI 失效与整表重查，500 条变更就是 500 轮；
    * 游标与变更同事务提交，中途崩溃不会出现「游标已前进、变更没落库」。
+   *
+   * archiveCutoff（issue 08）：归档任务被远端修改后随日志回到副本，但它的
+   * Subtask 没有变更、不会跟着回来。回到副本的任务（本地原本没有、创建
+   * 早于截止时刻）与父任务不在副本里的 Subtask 登记为待补齐，与游标同
+   * 事务提交；Engine 之后向 hub 取回它们（pendingBackfill）。
    */
-  async applyRemoteBatch(changes: HubChange[], cursor: number): Promise<void> {
+  async applyRemoteBatch(
+    changes: HubChange[],
+    cursor: number,
+    options: { archiveCutoff?: string } = {},
+  ): Promise<void> {
     return this.serialized(async () => {
       const affected = new ChangedRows();
       await this.tx(async () => {
+        const revived = new Set<string>();
+        const subtaskParents = new Set<string>();
         for (const change of changes) {
           // 更新版本 hub 下发的、本端没有表的实体类型：跳过（协议规则见
           // ADR-0007「协议版本」——必须理解的新实体由 hub 提高最低版本）。
@@ -649,6 +690,19 @@ export class LocalReplica {
               clocks: change.clocks,
             });
             if (applied) affected.rows(change.entity, [change.id]);
+            if (applied === 'inserted' && options.archiveCutoff) {
+              const { createdAt, taskId } = change.fields;
+              if (
+                change.entity === 'task' &&
+                typeof createdAt === 'string' &&
+                createdAt < options.archiveCutoff
+              ) {
+                revived.add(change.id);
+              }
+              if (change.entity === 'subtask' && typeof taskId === 'string') {
+                subtaskParents.add(taskId);
+              }
+            }
           } else {
             const touched = new Set<SyncEntity>();
             await this.compactRows(change.entity, change.ids, touched);
@@ -658,6 +712,20 @@ export class LocalReplica {
             }
           }
         }
+        if (subtaskParents.size > 0) {
+          const parents = [...subtaskParents];
+          const present = await this.storage.all<{ id: string }>(
+            `SELECT id FROM task WHERE id IN (${parents.map(() => '?').join(', ')})`,
+            parents,
+          );
+          const presentIds = new Set(present.map((row) => row.id));
+          for (const id of parents) if (!presentIds.has(id)) revived.add(id);
+        }
+        if (revived.size > 0) {
+          const pending = new Set(await this.pendingBackfillRaw());
+          for (const id of revived) pending.add(id);
+          await this.metaSet(BACKFILL_META_KEY, JSON.stringify([...pending]));
+        }
         await this.metaSet('syncCursor', String(cursor));
       });
       if (affected.entities.size > 0) {
@@ -666,77 +734,274 @@ export class LocalReplica {
     });
   }
 
-  /**
-   * 快照重建：整表替换为 hub 的合并态。Outbox 保留——未同步的本地写
-   * 之后照常 flush 推给 hub，时间戳新者胜，最终收敛。重建后立即把
-   * Outbox 中的写重新落回本地，未同步编辑不会从 UI 上消失。
-   */
-  async replaceAll(
-    snapshot: SnapshotEntry[],
-    compacted: Array<{ entity: SyncEntity; ids: string[] }> = [],
-  ): Promise<void> {
-    return this.serialized(() => this.replaceAllInternal(snapshot, compacted));
+  /** 待补齐 Subtask 的任务 id（见 applyRemoteBatch）。 */
+  async pendingBackfill(): Promise<string[]> {
+    await this.readGate();
+    return this.pendingBackfillRaw();
   }
 
-  private async replaceAllInternal(
-    snapshot: SnapshotEntry[],
-    compacted: Array<{ entity: SyncEntity; ids: string[] }>,
-  ): Promise<void> {
-    // 本端不认识的实体类型（更新版本 hub）跳过，理由同 applyRemoteBatch。
-    snapshot = snapshot.filter((entry) => isSyncEntity(entry.entity));
-    compacted = compacted.filter((request) => isSyncEntity(request.entity));
-    const snapshotKeys = new Set(snapshot.map((entry) => `${entry.entity}:${entry.id}`));
-    this.compacted.clear();
-    await this.tx(async () => {
-      // 登记以 hub 的持久登记为准整体替换（未同步的本地删除在下方
-      // Outbox 回放时重新登记）。
-      await this.storage.exec('DELETE FROM _compacted');
-      for (const request of compacted) {
-        for (const id of request.ids) {
-          // Compact intent 可能先于一个最终回滚的删除登记；快照仍有行时以
-          // 快照为准。真正并发删除的 Compact Event 会在 cursor fence 后重放。
-          if (!snapshotKeys.has(`${request.entity}:${id}`)) {
-            await this.registerCompacted(request.entity, id);
+  private async pendingBackfillRaw(): Promise<string[]> {
+    const raw = await this.metaGet(BACKFILL_META_KEY);
+    if (!raw) return [];
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return Array.isArray(parsed)
+        ? parsed.filter((id): id is string => typeof id === 'string')
+        : [];
+    } catch {
+      return [];
+    }
+  }
+
+  /**
+   * 合并 hub 取回的实体（完整字段 + 完整时钟，LWW 与 pull 相同），并把
+   * done 里的任务移出待补齐名单。一个事务、一次通知。
+   */
+  async applyRemoteEntries(entries: SnapshotEntry[], done: string[] = []): Promise<void> {
+    return this.serialized(async () => {
+      const affected = new ChangedRows();
+      await this.tx(async () => {
+        for (const entry of entries) {
+          if (!isSyncEntity(entry.entity)) continue;
+          if (await this.mergeRemote(entry.entity, entry.id, entry)) {
+            affected.rows(entry.entity, [entry.id]);
           }
         }
-      }
-      for (const entity of SYNC_ENTITIES) {
-        await this.storage.exec(`DELETE FROM ${entityDef(entity).table}`);
-      }
-      for (const entry of snapshot) {
-        if (this.compacted.has(`${entry.entity}:${entry.id}`)) continue;
-        await this.writeRow(entry.entity, entry.id, entry.fields, entry.clocks, {
-          insert: true,
-        });
-        this.absorbRemoteClocks(entry.clocks);
-      }
-      // Outbox 回放（同一事务内：读者不会看到「快照已换、本地编辑未回放」
-      // 的中间态）：本地合并（不重新打时间戳，保留原 HLC）；Delete
-      // Request 照常回放为本地删除（未同步的删除不因重建而丢失）。
-      const pending = await this.takeOutbox(Number.MAX_SAFE_INTEGER);
-      for (const entry of pending) {
-        if (entry.kind === 'delete') {
-          await this.removeRows(entry.entity, [entry.id], { enqueue: false }, new Set());
-          continue;
+        if (done.length > 0) {
+          const finished = new Set(done);
+          const remaining = (await this.pendingBackfillRaw()).filter((id) => !finished.has(id));
+          await this.metaSet(BACKFILL_META_KEY, JSON.stringify(remaining));
         }
-        const { event } = entry;
-        if (this.compacted.has(`${event.entity}:${event.id}`)) continue;
-        const current = await this.getRaw(event.entity, event.id);
-        const remote: EntityMergeState = {
-          fields: Object.fromEntries(
-            Object.entries(event.fields).map(([field, write]) => [field, write.value]),
-          ),
-          clocks: Object.fromEntries(
-            Object.entries(event.fields).map(([field, write]) => [field, write.hlc]),
-          ),
-        };
-        const outcome = mergeEntityState(current, remote);
-        await this.writeRow(event.entity, event.id, outcome.fields, outcome.clocks, {
-          insert: current === null,
-        });
-      }
+      });
+      if (affected.entities.size > 0) this.notifyChanged(affected.toChange('remote'));
     });
-    this.notifyChanged({ origin: 'bootstrap' });
+  }
+
+  // ---------- 快照重建（bootstrap，issue 08 分页） ----------
+
+  /**
+   * 开始一次快照重建，建好暂存表。
+   *
+   * 新设备（从未同步、副本里没有任何行）：各页直接合并进副本，第一页
+   * 到达即可渲染——没有旧数据，谈不上「半份」。已有数据的副本：各页先写
+   * 暂存表，全部到齐后由 finishBootstrap 在一个事务里整体替换，重建期间
+   * 读者只看到旧副本或新副本。
+   */
+  async beginBootstrap(): Promise<void> {
+    return this.serialized(async () => {
+      const live = await this.isPristine();
+      await this.tx(async () => {
+        await this.dropStageTables();
+        for (const entity of SYNC_ENTITIES) {
+          await this.storage.exec(entityTableDdl(entity, stageTable(entity)));
+        }
+        await this.storage.exec(
+          `CREATE TABLE IF NOT EXISTS _stage_compacted (
+            entity TEXT NOT NULL,
+            entity_id TEXT NOT NULL,
+            PRIMARY KEY (entity, entity_id)
+          )`,
+        );
+      });
+      this.bootstrapLive = live;
+    });
+  }
+
+  /** 写入快照的一页（及 hub 的 Compact 登记）。 */
+  async stageSnapshot(snapshot: SnapshotEntry[], compacted: DeleteRequest[] = []): Promise<void> {
+    return this.serialized(async () => {
+      const affected = new ChangedRows();
+      await this.tx(async () => {
+        for (const request of compacted) {
+          // 本端不认识的实体类型（更新版本 hub）跳过，理由同 applyRemoteBatch。
+          if (!isSyncEntity(request.entity)) continue;
+          for (const id of request.ids) {
+            await this.storage.run(
+              'INSERT OR IGNORE INTO _stage_compacted (entity, entity_id) VALUES (?, ?)',
+              [request.entity, id],
+            );
+          }
+        }
+        for (const entry of snapshot) {
+          if (!isSyncEntity(entry.entity)) continue;
+          if (this.bootstrapLive) {
+            // 与本地写并发：按 LWW 合并，不覆盖用户刚做的编辑
+            if (await this.mergeRemote(entry.entity, entry.id, entry)) {
+              affected.rows(entry.entity, [entry.id]);
+            }
+          } else {
+            await this.writeRow(entry.entity, entry.id, entry.fields, entry.clocks, {
+              insert: true,
+              table: stageTable(entry.entity),
+            });
+            this.absorbRemoteClocks(entry.clocks);
+          }
+        }
+      });
+      if (affected.entities.size > 0) this.notifyChanged(affected.toChange('remote'));
+    });
+  }
+
+  /**
+   * 快照到齐：在一个事务里换上新副本、登记 hub 的 Compact 登记、回放
+   * Outbox、推进 Sync Cursor（中途崩溃时游标不动，下次重新 bootstrap）。
+   *
+   * Outbox 保留——未同步的本地写之后照常 flush 推给 hub，时间戳新者胜，
+   * 最终收敛。重建后立即把 Outbox 中的写重新落回本地，未同步编辑不会
+   * 从 UI 上消失。
+   */
+  async finishBootstrap(cursor: number): Promise<void> {
+    return this.serialized(async () => {
+      const now = this.now();
+      await this.tx(async () => {
+        if (!this.bootstrapLive) {
+          // 登记以 hub 的持久登记为准整体替换（未同步的本地删除在 Outbox
+          // 回放时重新登记）。
+          await this.storage.exec('DELETE FROM _compacted');
+        }
+        for (const entity of SYNC_ENTITIES) {
+          const def = entityDef(entity);
+          // 快照里仍有的行以快照为准：Compact 登记可能先于一个最终回滚的
+          // 删除；真正并发删除的 Compact Event 会在 cursor fence 后重放。
+          const source = this.bootstrapLive ? def.table : stageTable(entity);
+          await this.storage.run(
+            `INSERT OR IGNORE INTO _compacted (entity, entity_id, registered_at)
+             SELECT entity, entity_id, ? FROM _stage_compacted
+             WHERE entity = ? AND entity_id NOT IN (SELECT id FROM ${source})`,
+            [now, entity],
+          );
+          if (this.bootstrapLive) continue;
+          const columns = ['id', ...def.fields.map((field) => field.name), 'clocks'].join(', ');
+          await this.storage.exec(`DELETE FROM ${def.table}`);
+          await this.storage.exec(
+            `INSERT INTO ${def.table} (${columns}) SELECT ${columns} FROM ${stageTable(entity)}`,
+          );
+        }
+        await this.reloadCompacted();
+        // 新设备的各页已与本地写逐行合并，Outbox 不必回放
+        if (!this.bootstrapLive) await this.replayOutbox();
+        await this.metaSet('syncCursor', String(cursor));
+        await this.dropStageTables();
+      });
+      this.bootstrapLive = false;
+      this.notifyChanged({ origin: 'bootstrap' });
+    });
+  }
+
+  /**
+   * Outbox 回放（finishBootstrap 的事务内：读者不会看到「快照已换、本地
+   * 编辑未回放」的中间态）：本地合并（不重新打时间戳，保留原 HLC）；
+   * Delete Request 照常回放为本地删除（未同步的删除不因重建而丢失）。
+   */
+  private async replayOutbox(): Promise<void> {
+    const pending = await this.takeOutbox(Number.MAX_SAFE_INTEGER);
+    for (const entry of pending) {
+      if (entry.kind === 'delete') {
+        await this.removeRows(entry.entity, [entry.id], { enqueue: false }, new Set());
+        continue;
+      }
+      const { event } = entry;
+      if (this.compacted.has(`${event.entity}:${event.id}`)) continue;
+      const current = await this.getRaw(event.entity, event.id);
+      // 快照里没有这行、这条写也不是创建（创建总带 createdAt）：行在 hub
+      // 上已不存在，或是没进快照的归档任务。只写这几个字段会在副本里
+      // 留下残缺行；留在 Outbox 里推给 hub，由 hub 的合并结果（或 Compact
+      // Event）决定它的去向。
+      if (current === null && !('createdAt' in event.fields)) continue;
+      const remote: EntityMergeState = {
+        fields: Object.fromEntries(
+          Object.entries(event.fields).map(([field, write]) => [field, write.value]),
+        ),
+        clocks: Object.fromEntries(
+          Object.entries(event.fields).map(([field, write]) => [field, write.hlc]),
+        ),
+      };
+      const outcome = mergeEntityState(current, remote);
+      await this.writeRow(event.entity, event.id, outcome.fields, outcome.clocks, {
+        insert: current === null,
+      });
+    }
+  }
+
+  private async dropStageTables(): Promise<void> {
+    for (const entity of SYNC_ENTITIES) {
+      await this.storage.exec(`DROP TABLE IF EXISTS ${stageTable(entity)}`);
+    }
+    await this.storage.exec('DROP TABLE IF EXISTS _stage_compacted');
+  }
+
+  /** 从未同步、没有任何实体行的副本（新设备）。 */
+  private async isPristine(): Promise<boolean> {
+    if ((await this.getCursor()) !== 0) return false;
+    for (const entity of SYNC_ENTITIES) {
+      const rows = await this.storage.all(
+        `SELECT 1 AS present FROM ${entityDef(entity).table} LIMIT 1`,
+      );
+      if (rows.length > 0) return false;
+    }
+    return true;
+  }
+
+  // ---------- 数据增长（issue 08） ----------
+
+  /**
+   * 裁掉归档任务（规则见 archive.ts 的 isArchivedTask，这里是同一规则的
+   * SQL）及其 Subtask：只删本地行，不登记 compact、不进 Outbox——hub 上
+   * 它们照常存在，Logbook 按页从 hub 读取。任务或其 Subtask 仍有待推送
+   * 的写时留下（回放与推送需要本地行）。返回裁掉的任务数。
+   */
+  async pruneArchive(cutoff: string): Promise<number> {
+    const settled = SETTLED_TASK_STATUSES.map(() => '?').join(', ');
+    const affected = new ChangedRows();
+    let total = 0;
+    for (;;) {
+      const pruned = await this.serialized(() =>
+        this.tx(async () => {
+          const tasks = await this.storage.all<{ id: string }>(
+            `SELECT id FROM task
+             WHERE status IN (${settled}) AND settledAt < ? AND trashedAt IS NULL
+               AND (projectId IS NULL OR projectId IN (SELECT id FROM project WHERE status = ?))
+               AND id NOT IN (SELECT entity_id FROM _outbox WHERE entity = 'task')
+               AND id NOT IN (
+                 SELECT taskId FROM subtask WHERE taskId IS NOT NULL
+                   AND id IN (SELECT entity_id FROM _outbox WHERE entity = 'subtask')
+               )
+             LIMIT ?`,
+            [...SETTLED_TASK_STATUSES, cutoff, ProjectStatus.COMPLETED, PRUNE_CHUNK],
+          );
+          const taskIds = tasks.map((row) => row.id);
+          if (taskIds.length === 0) return { taskIds, subtaskIds: [] as string[] };
+          const placeholders = taskIds.map(() => '?').join(', ');
+          const subtasks = await this.storage.all<{ id: string }>(
+            `SELECT id FROM subtask WHERE taskId IN (${placeholders})`,
+            taskIds,
+          );
+          await this.storage.run(`DELETE FROM subtask WHERE taskId IN (${placeholders})`, taskIds);
+          await this.storage.run(`DELETE FROM task WHERE id IN (${placeholders})`, taskIds);
+          return { taskIds, subtaskIds: subtasks.map((row) => row.id) };
+        }),
+      );
+      if (pruned.taskIds.length > 0) affected.rows('task', pruned.taskIds);
+      if (pruned.subtaskIds.length > 0) affected.rows('subtask', pruned.subtaskIds);
+      total += pruned.taskIds.length;
+      if (pruned.taskIds.length < PRUNE_CHUNK) break;
+    }
+    if (affected.entities.size > 0) this.notifyChanged(affected.toChange('remote'));
+    return total;
+  }
+
+  /**
+   * 删除本机登记早于 beforeMs 的 Compact 登记（保留期见
+   * COMPACT_REGISTRY_RETENTION_DAYS）。登记不影响任何可见数据，不发通知。
+   */
+  async expireCompacted(beforeMs: number): Promise<number> {
+    return this.serialized(async () => {
+      const { changes } = await this.tx(() =>
+        this.storage.run('DELETE FROM _compacted WHERE registered_at < ?', [beforeMs]),
+      );
+      if (changes > 0) await this.reloadCompacted();
+      return changes;
+    });
   }
 
   // ---------- Outbox ----------
@@ -747,7 +1012,9 @@ export class LocalReplica {
    */
   async takeOutbox(limit = 500, excludeRowIds: readonly number[] = []): Promise<OutboxEntry[]> {
     const exclude =
-      excludeRowIds.length > 0 ? `WHERE id NOT IN (${excludeRowIds.map(() => '?').join(', ')}) ` : '';
+      excludeRowIds.length > 0
+        ? `WHERE id NOT IN (${excludeRowIds.map(() => '?').join(', ')}) `
+        : '';
     const rows = await this.storage.all<{
       id: number;
       revision: number;
@@ -810,11 +1077,24 @@ export class LocalReplica {
   private async registerCompacted(entity: SyncEntity, id: string): Promise<void> {
     const key = `${entity}:${id}`;
     if (this.compacted.has(key)) return;
-    await this.storage.run('INSERT OR IGNORE INTO _compacted (entity, entity_id) VALUES (?, ?)', [
-      entity,
-      id,
-    ]);
+    await this.storage.run(
+      'INSERT OR IGNORE INTO _compacted (entity, entity_id, registered_at) VALUES (?, ?, ?)',
+      [entity, id, this.now()],
+    );
     this.compacted.add(key);
+  }
+
+  /** 按 `_compacted` 表重建内存登记。 */
+  private async reloadCompacted(): Promise<void> {
+    const rows = await this.storage.all<{ entity: string; entity_id: string }>(
+      'SELECT entity, entity_id FROM _compacted',
+    );
+    this.compacted.clear();
+    for (const row of rows) this.compacted.add(`${row.entity}:${row.entity_id}`);
+  }
+
+  private now(): number {
+    return this.options.now?.() ?? Date.now();
   }
 
   /**
@@ -876,9 +1156,10 @@ export class LocalReplica {
     id: string,
     fields: WireRow,
     clocks: Record<string, string>,
-    opts: { insert: boolean },
+    opts: { insert: boolean; table?: string },
   ): Promise<void> {
     const def = entityDef(entity);
+    const table = opts.table ?? def.table;
     const columns: unknown[] = [];
     for (const field of def.fields) {
       const value = fields[field.name] ?? null;
@@ -888,14 +1169,14 @@ export class LocalReplica {
     const allValues: unknown[] = [id, ...columns, JSON.stringify(clocks)];
     if (opts.insert) {
       await this.storage.run(
-        `INSERT OR REPLACE INTO ${def.table} (${allColumns.join(', ')}) VALUES (${allColumns
+        `INSERT OR REPLACE INTO ${table} (${allColumns.join(', ')}) VALUES (${allColumns
           .map(() => '?')
           .join(', ')})`,
         allValues,
       );
     } else {
       const assignments = allColumns.slice(1).map((column) => `${column} = ?`);
-      await this.storage.run(`UPDATE ${def.table} SET ${assignments.join(', ')} WHERE id = ?`, [
+      await this.storage.run(`UPDATE ${table} SET ${assignments.join(', ')} WHERE id = ?`, [
         ...allValues.slice(1),
         id,
       ]);

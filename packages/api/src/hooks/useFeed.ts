@@ -1,8 +1,8 @@
-import { useMutation } from '@tanstack/react-query';
+import { useInfiniteQuery, useMutation } from '@tanstack/react-query';
 
 import type { FeedView } from '@taskora/shared';
 
-import { emptyTrash, getFeed } from '@/api/feed.api';
+import { emptyTrash, getFeed, getLogbookArchive } from '@/api/feed.api';
 import { refreshAfterWrite, useQueryCache } from './cache-patches';
 import { useReplicaQuery } from './useEngineQuery';
 
@@ -17,6 +17,23 @@ export function useFeedQuery(view: FeedView) {
     queryKey: feedKeys.list(view),
     queryFn: () => getFeed(view),
     dependsOn: ['task', 'project', 'tag'],
+  });
+}
+
+/**
+ * 归档 Logbook（local-first-v3 issue 08）：只在调用 fetchNextPage 时读取
+ * （Logbook 滚到底时），第一次调用取第一页。cutoff 为 null（REST 模式，
+ * feed 已含全部历史）时不读取。
+ */
+export function useLogbookArchive(cutoff: string | null) {
+  return useInfiniteQuery({
+    queryKey: [...feedKeys.list('logbook'), 'archive', cutoff] as const,
+    queryFn: ({ pageParam }) => getLogbookArchive(cutoff!, pageParam),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => last.next,
+    enabled: false,
+    // 归档是只读的历史：不因失焦 / 重连重取
+    staleTime: Infinity,
   });
 }
 

@@ -151,6 +151,28 @@ Key decisions, in the order they matter:
     reported `protocolVersion` says it understands them. Raise the hub's
     minimum only when old clients would do harm, never just to force updates.
   See `.scratch/local-first-v3/issues/03`.
+- **The replica is bounded; bootstrap is paged** (amended 2026-09-30).
+  The Local Replica no longer mirrors every settled task: tasks settled
+  before a cutoff (default 365 days, `archiveAfterDays`), not in Trash and
+  not in an active project are *archived* — left out of the snapshot,
+  pruned locally by `Engine.maintain` (local delete only: no Outbox entry, no
+  compact registration), and read page by page from the hub when the Logbook
+  is scrolled to the end (read-only). The rule lives once in
+  `engine/src/archive.ts`. An archived task changed on the hub comes back
+  through the log; the device then fetches its Subtasks (`POST
+  /sync/entities`). Protocol 2 pages `GET /sync/bootstrap` (stateless
+  base64url token carrying the cursor fence and cutoff; older clients still
+  get one response). A new device merges pages straight into the replica so
+  the first page renders; an existing replica stages pages and swaps them in
+  one transaction. Compact registrations now expire: the hub deletes each
+  one together with its Compact Event when the log is pruned (any device
+  that has not pulled it is past `prunedThrough` and bootstraps first); the
+  device keeps its own for two days longer. With registrations gone, the hub
+  treats a device's partial write to a missing row as a delete (answers with
+  a Compact Event instead of building a partial row or failing the push
+  forever) and scrubs references to missing entities that are not in the
+  same push. A device drops Outbox writes for entities it learns were
+  compacted. See `.scratch/local-first-v3/issues/08`.
 - **Migration is a vertical slice, desktop first**: Task CRUD in
   Inbox/Today buckets moves to the Engine first; the rest of `packages/api` and
   the old HTTP CRUD surface retire slice by slice. Web follows desktop once

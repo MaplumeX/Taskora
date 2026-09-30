@@ -17,7 +17,10 @@ import {
   SYNC_PROTOCOL_HEADER,
   SYNC_PROTOCOL_VERSION,
   SyncUpgradeRequiredError,
+  type BootstrapRequest,
   type BootstrapResponse,
+  type FetchEntitiesRequest,
+  type FetchEntitiesResponse,
   type PullRequest,
   type PullResponse,
   type PushRequest,
@@ -65,9 +68,19 @@ export function createHttpSyncTransport(platform: SyncClientPlatform): SyncTrans
         .catch(upgradeRequired);
       return response.data;
     },
-    async bootstrap(): Promise<BootstrapResponse> {
+    async bootstrap(request: BootstrapRequest = {}): Promise<BootstrapResponse> {
+      // 查询参数而不是请求体：旧 hub 忽略它们，照常回整包快照
       const response = await apiClient
-        .get<BootstrapResponse>('/sync/bootstrap', { headers: syncHeaders(platform) })
+        .get<BootstrapResponse>('/sync/bootstrap', {
+          params: request,
+          headers: syncHeaders(platform),
+        })
+        .catch(upgradeRequired);
+      return response.data;
+    },
+    async fetchEntities(request: FetchEntitiesRequest): Promise<FetchEntitiesResponse> {
+      const response = await apiClient
+        .post<FetchEntitiesResponse>('/sync/entities', request, { headers: syncHeaders(platform) })
         .catch(upgradeRequired);
       return response.data;
     },

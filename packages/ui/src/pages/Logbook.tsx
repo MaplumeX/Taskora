@@ -1,12 +1,15 @@
 import {
   useCalendarDay,
   useFeedQuery,
+  useLogbookArchive,
   useProjectsQuery,
   useAreasQuery,
   useTaskRowSelection,
   groupLogbookItems,
+  logbookArchiveCutoff,
+  mergeLogbookArchive,
 } from '@taskora/api';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { FeedItem } from '@taskora/shared';
@@ -26,7 +29,35 @@ import { EmptyState } from '@/components/common/EmptyState';
 export default function Logbook() {
   const calendarDay = useCalendarDay();
   const { t } = useTranslation();
-  const { data: items = [], isLoading, isError } = useFeedQuery('logbook');
+  const { data: localItems = [], isLoading, isError } = useFeedQuery('logbook');
+  // 归档部分（local-first-v3 issue 08）：副本不保留的旧条目，滚到底时从
+  // hub 按页读取，只读。截止时刻在页面打开时定下。
+  const [cutoff] = useState(() => logbookArchiveCutoff());
+  const archive = useLogbookArchive(cutoff);
+  const archivedPages = archive.data?.pages;
+  const exhausted = !cutoff || (!!archivedPages && !archive.hasNextPage);
+  const { items, archivedIds } = useMemo(
+    () =>
+      mergeLogbookArchive(
+        localItems,
+        archivedPages?.flatMap((page) => page.items) ?? [],
+        cutoff,
+        exhausted,
+      ),
+    [localItems, archivedPages, cutoff, exhausted],
+  );
+  const sentinel = useRef<HTMLDivElement>(null);
+  const canLoadMore = !exhausted && !archive.isFetching && !archive.isError && !isLoading;
+  const { fetchNextPage } = archive;
+  useEffect(() => {
+    const node = sentinel.current;
+    if (!node || !canLoadMore) return;
+    const observer = new IntersectionObserver((entries) => {
+      if (entries.some((entry) => entry.isIntersecting)) void fetchNextPage();
+    });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [canLoadMore, fetchNextPage]);
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const completeTask = useCompleteTask();
@@ -42,18 +73,18 @@ export default function Logbook() {
 
   const groups = useMemo(() => groupLogbookItems(items, new Date()), [items, calendarDay]);
 
-  // 注册可遍历行（Logbook 为已了结任务行：完成或取消）。
+  // 注册可遍历行（Logbook 为已了结任务行：完成或取消；归档行只读，不参与）。
   const rows = useMemo(
     () =>
       items
-        .filter((item) => item.type === 'task')
+        .filter((item) => item.type === 'task' && !archivedIds.has(item.id))
         .map((item) => ({
           id: item.id,
           kind: 'task' as const,
           completed: item.status === 'COMPLETED',
           cancelled: item.status === 'CANCELLED',
         })),
-    [items],
+    [items, archivedIds],
   );
   useSelectionScope(rows);
 
@@ -73,10 +104,11 @@ export default function Logbook() {
         <h2 className="px-2 pb-1 pt-4 text-sm font-medium text-muted-foreground">{label}</h2>
         {group.map((item) => {
           const isTask = item.type === 'task';
+          // 归档行：只读（不在副本里，改不了）
+          const readOnly = archivedIds.has(item.id);
           const taskItem = item as { projectId: string | null; areaId: string | null };
-          const selectionState = isTask
-            ? selectionStateOf(selectedIds, expandedId, item.id)
-            : 'idle';
+          const selectionState =
+            isTask && !readOnly ? selectionStateOf(selectedIds, expandedId, item.id) : 'idle';
           return (
             <FeedItemRow
               key={item.id}
@@ -86,8 +118,8 @@ export default function Logbook() {
               }
               areaTitle={isTask && taskItem.areaId ? areaMap[taskItem.areaId] : undefined}
               selectionState={selectionState}
-              onToggleComplete={() => toggleComplete(item)}
-              onRowClick={isTask ? () => handleRowClick(item.id) : undefined}
+              onToggleComplete={readOnly ? undefined : () => toggleComplete(item)}
+              onRowClick={isTask && !readOnly ? () => handleRowClick(item.id) : undefined}
               showScheduledBadge={false}
               showSettledDate
             />
@@ -104,10 +136,31 @@ export default function Logbook() {
       <PageHeading nav="/logbook">{t('nav:logbook')}</PageHeading>
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
-      ) : !hasAny ? (
+      ) : !hasAny && exhausted ? (
         <EmptyState hint={t('task:logbookEmpty')} />
       ) : (
         groups.map((group, i) => renderGroup(group.label, group.items, i === 0))
+      )}
+      {!exhausted && !isLoading && !isError && (
+        <div ref={sentinel} className="py-4 text-center text-sm text-muted-foreground">
+          {archive.isError ? (
+            <>
+              {t('task:logbookArchiveFailed')}{' '}
+              <button
+                type="button"
+                className="underline"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void fetchNextPage();
+                }}
+              >
+                {t('task:logbookArchiveRetry')}
+              </button>
+            </>
+          ) : archive.isFetching ? (
+            t('common:loading')
+          ) : null}
+        </div>
       )}
     </div>
   );

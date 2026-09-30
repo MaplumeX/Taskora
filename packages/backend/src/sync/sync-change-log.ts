@@ -1,5 +1,7 @@
 import type { CompactChange, EntityChange, HubChange } from '@taskora/engine';
 
+export { SYNC_LOG_RETENTION_DAYS } from '@taskora/engine';
+
 /** 待入日志的变更（seq 由日志分配）。 */
 export type HubChangeDraft = Omit<EntityChange, 'seq'> | Omit<CompactChange, 'seq'>;
 
@@ -12,9 +14,6 @@ export interface SyncPullResult {
   /** 还有下一页（设备应继续 pull）。 */
   hasMore: boolean;
 }
-
-/** 变更日志保留期：cursor 早于被清理的部分时设备走 bootstrap。 */
-export const SYNC_LOG_RETENTION_DAYS = 30;
 
 /** 单次 pull 最多返回的变更数。 */
 export const SYNC_PULL_PAGE_SIZE = 1000;

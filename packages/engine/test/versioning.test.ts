@@ -47,9 +47,7 @@ async function legacyReplica(): Promise<SqlStorage> {
   await storage.exec('ALTER TABLE _outbox DROP COLUMN kind');
   await storage.exec('ALTER TABLE _outbox DROP COLUMN revision');
   await storage.run("INSERT INTO task (id, title, clocks) VALUES ('t1', 'Legacy', '{}')");
-  await storage.run(
-    "INSERT INTO _outbox (entity, entity_id, fields) VALUES ('task', 't1', '{}')",
-  );
+  await storage.run("INSERT INTO _outbox (entity, entity_id, fields) VALUES ('task', 't1', '{}')");
   return storage;
 }
 
@@ -88,6 +86,23 @@ describe('副本 schema 版本', () => {
     expect(await engine.pendingCount()).toBe(1);
     await engine.update('task', 't1', { reminderTime: '09:00' });
     expect((await engine.get('task', 't1'))?.fields.reminderTime).toBe('09:00');
+    await engine.close();
+  });
+
+  it('4 → 5：旧的 Compact 登记按迁移时刻计入保留期', async () => {
+    const storage = await createNodeSqliteStorage(':memory:');
+    for (const statement of schemaDdl()) await storage.exec(statement);
+    await storage.exec('ALTER TABLE _compacted DROP COLUMN registered_at');
+    await storage.run("INSERT INTO _compacted (entity, entity_id) VALUES ('task', 'gone')");
+    await storage.exec('PRAGMA user_version = 4');
+    const before = Date.now();
+
+    const engine = await open(storage);
+    const [row] = await storage.all<{ registered_at: number }>(
+      'SELECT registered_at FROM _compacted',
+    );
+    expect(row.registered_at).toBeGreaterThanOrEqual(before);
+    expect(await engine.isCompacted('task', 'gone')).toBe(true);
     await engine.close();
   });
 

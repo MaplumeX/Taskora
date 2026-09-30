@@ -29,6 +29,7 @@ export {
   ENTITIES,
   SYNC_ENTITIES,
   entityDef,
+  entityTableDdl,
   isSyncEntity,
   schemaDdl,
   DELETE_CASCADES,
@@ -68,14 +69,19 @@ export {
   type EngineOptions,
 } from './engine';
 export {
+  COMPACT_REGISTRY_RETENTION_DAYS,
   SYNC_CLIENT_HEADER,
+  SYNC_LOG_RETENTION_DAYS,
   SYNC_PROTOCOL_HEADER,
   SYNC_PROTOCOL_VERSION,
   SyncUpgradeRequiredError,
+  type BootstrapRequest,
   type BootstrapResponse,
   type CompactChange,
   type DeleteRequest,
   type EntityChange,
+  type FetchEntitiesRequest,
+  type FetchEntitiesResponse,
   type HubChange,
   type HubVersionInfo,
   type OutboxEvent,
@@ -105,4 +111,10 @@ export {
   type ReferenceStatus,
 } from './hub';
 export { repairEntity, type HeadingProjectProbe } from './invariants';
+export {
+  archiveCutoff,
+  DEFAULT_ARCHIVE_AFTER_DAYS,
+  isArchivedTask,
+  type ArchiveTaskFields,
+} from './archive';
 export * from './domain';
