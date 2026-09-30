@@ -355,6 +355,26 @@ integrationDescribe('Change Events (service-level integration)', () => {
     expect(batch.filter((e) => e.entity === 'task')).toHaveLength(0);
   });
 
+  it('defers events recorded inside an open transaction until it commits', async () => {
+    await drain();
+
+    let taskId = '';
+    await prisma.$transaction(async (tx) => {
+      const task = await tx.task.create({ data: { title: 'Deferred', userId } });
+      taskId = task.id;
+      // Force the pass a scheduled flush would run. It must stop at the open
+      // transaction: the base-client refetch cannot see the uncommitted row
+      // yet, and publishing now would find no payload and silently drop the
+      // event for good.
+      await (collector as unknown as { runFlush(): Promise<void> }).runFlush();
+      expect(events.filter((e) => e.entity === 'task' && e.id === task.id)).toHaveLength(0);
+    });
+
+    const batch = await drainWhere((e) => e.entity === 'task' && e.id === taskId);
+    expect(batch).toHaveLength(1);
+    expect(batch[0]).toMatchObject({ action: 'created', id: taskId });
+  });
+
   it('keeps seqs strictly increasing across a mixed workload', async () => {
     const t = await tasks.create(userId, { title: 'Seq probe' });
     await tasks.update(userId, t.id, { title: 'Seq probe 2' });

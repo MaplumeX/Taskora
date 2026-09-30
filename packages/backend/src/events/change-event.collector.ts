@@ -15,6 +15,13 @@ import { settledToCompletedAt, withRepeatRuleDto } from '../tasks/task-dto.mappe
  * the transaction depth reaches zero (both $transaction forms increment it
  * synchronously, before any macrotask flush can run).
  *
+ * The flush pass itself re-checks the depth: a pass already in flight (or a
+ * flush() call) can observe descriptors recorded by a *new* transaction that
+ * started while it was awaiting. Publishing those would refetch an
+ * uncommitted row, find nothing, and silently drop the event — so the run
+ * stops at an open transaction and leaves the rest for the pass scheduled
+ * when that transaction's `finally` lowers the depth back to zero.
+ *
  * Rollback safety: after a rejected transaction the queued descriptors are
  * flushed anyway, but every descriptor is re-verified at flush time —
  * created/updated rows are refetched (a rolled-back create reads null and
@@ -294,6 +301,10 @@ export class ChangeEventCollector {
    */
   async flush(): Promise<void> {
     for (let guard = 0; guard < 10; guard += 1) {
+      // An open transaction holds descriptors that the payload refetch cannot
+      // see yet; its `finally` schedules the next pass, so give up instead of
+      // spinning on a queue we must not drain.
+      if (this.txDepth > 0) return;
       if (this.flushTimer !== null) {
         clearTimeout(this.flushTimer);
         this.flushTimer = null;
@@ -305,7 +316,10 @@ export class ChangeEventCollector {
   }
 
   private async runFlush(): Promise<void> {
-    while (this.pending.length > 0) {
+    // Never consume descriptors while a transaction is open: they may have
+    // been recorded by that transaction and are not visible to the base
+    // client yet. The transaction's `finally` schedules the next pass.
+    while (this.txDepth === 0 && this.pending.length > 0) {
       const batch = this.pending.splice(0, this.pending.length);
       const merged = mergeDescriptors(batch);
       for (const descriptor of merged) {
