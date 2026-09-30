@@ -9,6 +9,7 @@ const harness = vi.hoisted(() => ({
   projects: [] as ProjectResponseDto[],
   onDragEnd: null as ((event: unknown) => void) | null,
   reorderProjectsMutate: vi.fn(),
+  taskListViewProps: null as Record<string, unknown> | null,
 }));
 
 vi.mock('@dnd-kit/core', async () => {
@@ -30,7 +31,12 @@ vi.mock('@/components/feed/ProjectFeedRow', async () => {
       ReactModule.createElement('div', { 'data-project-item': item.id }, item.title),
   };
 });
-vi.mock('@/components/task/TaskListView', () => ({ TaskListView: () => null }));
+vi.mock('@/components/task/TaskListView', () => ({
+  TaskListView: (props: Record<string, unknown>) => {
+    harness.taskListViewProps = props;
+    return null;
+  },
+}));
 vi.mock('@/components/area/AreaMoreMenu', () => ({ AreaMoreMenu: () => null }));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
@@ -98,6 +104,7 @@ function renderedIds() {
 beforeEach(() => {
   harness.onDragEnd = null;
   harness.reorderProjectsMutate.mockReset();
+  harness.taskListViewProps = null;
   harness.projects = [
     project('x', null, 0),
     project('a1', 'a', 1),
@@ -119,5 +126,21 @@ describe('AreaDetail later projects', () => {
     renderArea();
     act(() => harness.onDragEnd?.({ active: { id: 'a2' }, over: { id: 'a1' } }));
     expect(harness.reorderProjectsMutate).toHaveBeenCalledWith(['x', 'a2', 'as', 'a1', 'af']);
+  });
+});
+
+describe('AreaDetail 空状态', () => {
+  it('区域为空时不显示空提示与占位', () => {
+    harness.projects = [];
+    renderArea();
+    expect(renderedIds()).toEqual([]);
+    expect(screen.queryByText('area:noProjects')).toBeNull();
+    expect(screen.queryByText('area:noTasks')).toBeNull();
+  });
+
+  it('任务区隐藏空状态，不再传入空提示', () => {
+    renderArea();
+    expect(harness.taskListViewProps).toMatchObject({ hideEmptyState: true });
+    expect(harness.taskListViewProps).not.toHaveProperty('emptyHint');
   });
 });

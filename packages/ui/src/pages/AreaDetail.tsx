@@ -143,9 +143,7 @@ export default function AreaDetail() {
         {area && <AreaMoreMenu area={area} />}
         </div>
 
-      {areaProjects.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{t('area:noProjects')}</p>
-      ) : (
+      {projects.length > 0 && (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
           <SortableContext items={projects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
             <div className="flex flex-col">
@@ -164,7 +162,7 @@ export default function AreaDetail() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        <TaskListView tasks={tasks} emptyHint={t('area:noTasks')} selectionRank={1} />
+        <TaskListView tasks={tasks} hideEmptyState selectionRank={1} />
       )}
 
       {/* 稍后项目放在页面最下方（活跃项目与任务之后）。 */}
