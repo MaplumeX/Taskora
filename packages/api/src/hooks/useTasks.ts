@@ -27,6 +27,7 @@ import {
   reorderSubtasks,
   reorderTasks,
   restoreTask,
+  searchTasks,
   skipTask,
   type TaskQuery,
   uncancelSubtask,
@@ -44,7 +45,8 @@ import {
   snapshotRoots,
   useQueryCache,
 } from './cache-patches';
-import { useReplicaQuery } from './useEngineQuery';
+import { useDebouncedValue } from './useDebouncedValue';
+import { useLiveQueryMode, useReplicaQuery } from './useEngineQuery';
 
 export const taskKeys = {
   all: ['tasks'] as const,
@@ -61,6 +63,29 @@ export function useTasksQuery(params?: TaskQuery, options?: { enabled?: boolean 
     dependsOn: ['task', 'tag'],
     enabled: options?.enabled,
   });
+}
+
+// 键不挂在 taskKeys.all 下：那里的缓存按 TaskResponseDto[] 就地改写。
+export const taskSearchKeys = {
+  search: (q: string, extended: boolean) => ['task-search', q, extended] as const,
+};
+
+/**
+ * 任务搜索（Quick Find）。输入先防抖：本地副本只合并连续击键（50ms），
+ * REST 回退 300ms。空白搜索词不查询。searchedQuery 为本次结果对应的
+ * 搜索词（高亮用，与结果同步）。
+ */
+export function useTaskSearchQuery(q: string, options?: { extended?: boolean }) {
+  const engineMode = useLiveQueryMode();
+  const searchedQuery = useDebouncedValue(q.trim(), engineMode ? 50 : 300);
+  const extended = options?.extended === true;
+  const result = useReplicaQuery({
+    queryKey: taskSearchKeys.search(searchedQuery, extended),
+    queryFn: () => searchTasks(searchedQuery, { extended }),
+    dependsOn: ['task', 'subtask', 'tag'],
+    enabled: searchedQuery.length > 0,
+  });
+  return { ...result, searchedQuery };
 }
 
 export function useTaskQuery(id: string) {

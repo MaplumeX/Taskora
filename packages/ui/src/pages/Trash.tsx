@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Folder, Trash2 } from 'lucide-react';
@@ -15,7 +15,14 @@ import {
 import { TaskCheckbox } from '@/components/task/TaskCheckbox';
 import { TaskContextMenu } from '@/components/task/TaskContextMenu';
 import { TaskDateBadge } from '@/components/task/TaskDateBadge';
-import { useEmptyTrash, useFeedQuery, useSelectionScope, useTaskRowSelection } from '@taskora/api';
+import {
+  useEmptyTrash,
+  useFeedQuery,
+  useSelectionScope,
+  useSelectionStore,
+  useTaskRowSelection,
+  useUiInteractionStore,
+} from '@taskora/api';
 import { useRestoreProject } from '@taskora/api';
 import { toast } from 'sonner';
 
@@ -135,8 +142,22 @@ function TrashTaskRow({
   onRowClick?: () => void;
 }) {
   const task = { ...item, subtasks: [] } as TaskResponseDto;
+  const rowRef = useRef<HTMLDivElement>(null);
+  // Reveal Task（Quick Find 的继续搜索）：Trash 行不展开，改为选中并滚到
+  // 视野中央，一次性。晚一帧执行，排在换页清空 Selection 之后。
+  const revealing = useUiInteractionStore((s) => s.revealId === item.id);
+  useEffect(() => {
+    if (!revealing) return;
+    const id = requestAnimationFrame(() => {
+      rowRef.current?.scrollIntoView?.({ block: 'center' });
+      useSelectionStore.getState().setSelection([item.id]);
+      useUiInteractionStore.getState().setRevealId(null);
+    });
+    return () => cancelAnimationFrame(id);
+  }, [revealing, item.id]);
   return (
     <div
+      ref={rowRef}
       data-task-item
       aria-selected={selected || undefined}
       className={cn('group flex flex-col transition-colors', selected && 'bg-accent rounded-lg')}

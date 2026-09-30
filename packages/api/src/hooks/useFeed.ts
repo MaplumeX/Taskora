@@ -12,11 +12,12 @@ export const feedKeys = {
 };
 
 /** feed 混排任务与项目行（项目行带任务计数），都嵌入标签芯片。 */
-export function useFeedQuery(view: FeedView) {
+export function useFeedQuery(view: FeedView, options?: { enabled?: boolean }) {
   return useReplicaQuery({
     queryKey: feedKeys.list(view),
     queryFn: () => getFeed(view),
     dependsOn: ['task', 'project', 'tag'],
+    enabled: options?.enabled,
   });
 }
 

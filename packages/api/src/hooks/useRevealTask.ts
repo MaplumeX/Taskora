@@ -9,14 +9,21 @@ import { revealRouteFor } from '@/utils/revealRoute';
 /**
  * Reveal Task（reminder-actions spec）：导航到最能容纳该任务的视图并
  * 展开它、滚入视野。任务不存在或已进 Trash 时不导航，返回 false。
+ * allowTrash（Quick Find 的继续搜索）：Trash 中的任务导航到 Trash 并选中
+ * 该行（Trash 行不展开）。
  */
-export function useRevealTask(): (taskId: string) => Promise<boolean> {
+export function useRevealTask(): (
+  taskId: string,
+  options?: { allowTrash?: boolean },
+) => Promise<boolean> {
   const navigate = useNavigate();
   return useCallback(
-    async (taskId: string) => {
+    async (taskId: string, options?: { allowTrash?: boolean }) => {
       let route: string | null;
       try {
-        route = revealRouteFor(await currentTaskBackend().getTask(taskId));
+        route = revealRouteFor(await currentTaskBackend().getTask(taskId), {
+          allowTrash: options?.allowTrash,
+        });
       } catch {
         return false; // 任务不存在（已删除 / 尚未同步到本机）
       }
@@ -25,7 +32,7 @@ export function useRevealTask(): (taskId: string) => Promise<boolean> {
       // 覆盖在列表之上的浮层会挡住目标行
       ui.closeSettings();
       ui.setSearchOpen(false);
-      ui.setExpandedId(taskId);
+      ui.setExpandedId(route === '/trash' ? null : taskId);
       ui.setRevealId(taskId);
       navigate(route);
       return true;

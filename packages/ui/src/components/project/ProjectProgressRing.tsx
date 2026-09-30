@@ -29,10 +29,7 @@ export function ProjectProgressRing({
   const { t } = useTranslation('task');
 
   const isChecked = projectStatus === ProjectStatus.COMPLETED;
-  // 取消不属于项目模型（ADR 0006 out of scope）；作防御性呈现，与未来扩展兼容。
   const isCancelled = projectStatus === ('CANCELLED' as ProjectStatus);
-  const ratio = total > 0 ? completed / total : 0;
-  const offset = PIE_CIRCUMFERENCE * (1 - ratio);
 
   return (
     <button
@@ -51,64 +48,87 @@ export function ProjectProgressRing({
       )}
       style={{ width: size, height: size }}
     >
-      <svg viewBox="0 0 20 20" width={size} height={size}>
-        {/* 轨道圆 */}
+      <ProjectProgressPie
+        total={total}
+        completed={completed}
+        projectStatus={projectStatus}
+        size={size}
+      />
+    </button>
+  );
+}
+
+/** 进度饼图形本身（不可交互）：列表 / 搜索结果中只展示项目状态时使用。 */
+export function ProjectProgressPie({
+  total,
+  completed,
+  projectStatus,
+  size = 20,
+}: Pick<Props, 'total' | 'completed' | 'projectStatus' | 'size'>) {
+  const isChecked = projectStatus === ProjectStatus.COMPLETED;
+  // 取消不属于项目模型（ADR 0006 out of scope）；作防御性呈现，与未来扩展兼容。
+  const isCancelled = projectStatus === ('CANCELLED' as ProjectStatus);
+  const ratio = total > 0 ? completed / total : 0;
+  const offset = PIE_CIRCUMFERENCE * (1 - ratio);
+
+  return (
+    <svg viewBox="0 0 20 20" width={size} height={size}>
+      {/* 轨道圆 */}
+      <circle
+        cx="10"
+        cy="10"
+        r={RADIUS}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        className="text-primary"
+      />
+      {/* 进度饼（进行中且有进度时；满饼时仍无勾，勾只属于已完成） */}
+      {!isChecked && !isCancelled && ratio > 0 && (
         <circle
           cx="10"
           cy="10"
-          r={RADIUS}
+          r={PIE_RADIUS}
           fill="none"
           stroke="currentColor"
-          strokeWidth="1.5"
+          strokeWidth={PIE_RADIUS * 2}
           className="text-primary"
+          strokeDasharray={PIE_CIRCUMFERENCE}
+          strokeDashoffset={offset}
+          transform="rotate(-90 10 10)"
         />
-        {/* 进度饼（进行中且有进度时；满饼时仍无勾，勾只属于已完成） */}
-        {!isChecked && !isCancelled && ratio > 0 && (
-          <circle
-            cx="10"
-            cy="10"
-            r={PIE_RADIUS}
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={PIE_RADIUS * 2}
-            className="text-primary"
-            strokeDasharray={PIE_CIRCUMFERENCE}
-            strokeDashoffset={offset}
-            transform="rotate(-90 10 10)"
-          />
-        )}
-        {/* 已完成时实心填充 */}
-        {isChecked && (
-          <circle cx="10" cy="10" r={RADIUS} fill="currentColor" className="text-primary" />
-        )}
-        {/* 已取消时同样实心填充（主题色） */}
-        {isCancelled && (
-          <circle cx="10" cy="10" r={RADIUS} fill="currentColor" className="text-primary" />
-        )}
-        {/* 中心勾（仅项目已完成时） */}
-        {isChecked && (
-          <path
-            d="M6.5 10 L9 12.5 L14 7"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="text-primary-foreground"
-          />
-        )}
-        {/* 中心叉（仅项目已取消时） */}
-        {isCancelled && (
-          <path
-            d="M7 7 L13 13 M13 7 L7 13"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            className="text-primary-foreground"
-          />
-        )}
-      </svg>
-    </button>
+      )}
+      {/* 已完成时实心填充 */}
+      {isChecked && (
+        <circle cx="10" cy="10" r={RADIUS} fill="currentColor" className="text-primary" />
+      )}
+      {/* 已取消时同样实心填充（主题色） */}
+      {isCancelled && (
+        <circle cx="10" cy="10" r={RADIUS} fill="currentColor" className="text-primary" />
+      )}
+      {/* 中心勾（仅项目已完成时） */}
+      {isChecked && (
+        <path
+          d="M6.5 10 L9 12.5 L14 7"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="text-primary-foreground"
+        />
+      )}
+      {/* 中心叉（仅项目已取消时） */}
+      {isCancelled && (
+        <path
+          d="M7 7 L13 13 M13 7 L7 13"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          className="text-primary-foreground"
+        />
+      )}
+    </svg>
   );
 }

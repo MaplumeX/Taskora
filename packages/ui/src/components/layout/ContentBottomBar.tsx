@@ -4,14 +4,14 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
-import { SearchModal } from '@/components/search/SearchModal';
+import { QuickFind } from '@/components/search/QuickFind';
 import { useContentBottomActionsForRoute, useUiInteractionStore } from '@taskora/api';
 
 export function ContentBottomBar() {
   const { t } = useTranslation();
   const { pathname } = useLocation();
   // 搜索入口由全局 keymap registry（⌘F/Ctrl+F）驱动，状态提升到
-  // uiInteraction store；本组件只负责挂载 SearchModal。
+  // uiInteraction store；本组件只负责挂载 QuickFind。
   const searchOpen = useUiInteractionStore((s) => s.searchOpen);
   const setSearchOpen = useUiInteractionStore((s) => s.setSearchOpen);
   const {
@@ -32,11 +32,11 @@ export function ContentBottomBar() {
   return (
     <>
       <footer className="hidden h-11 shrink-0 items-center justify-center gap-2 bg-background px-4 md:flex">
-        <Hint label={t('task:searchTasks')} action="search">
+        <Hint label={t('search:title')} action="search">
           <Button
             variant="ghost"
             size="icon"
-            aria-label={t('task:searchTasks')}
+            aria-label={t('search:title')}
             onClick={() => setSearchOpen(true)}
           >
             <Search className="h-5 w-5" />
@@ -82,7 +82,7 @@ export function ContentBottomBar() {
           </Hint>
         )}
       </footer>
-      <SearchModal open={searchOpen} onOpenChange={setSearchOpen} />
+      <QuickFind open={searchOpen} onOpenChange={setSearchOpen} />
     </>
   );
 }

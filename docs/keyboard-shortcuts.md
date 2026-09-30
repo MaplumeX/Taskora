@@ -62,8 +62,11 @@ Grouped View（今天/随时/将来按项目/领域分组）补充规则：
 
 | 动作 | macOS | Windows | Web |
 |---|---|---|---|
-| 搜索 | ⌘F | Ctrl+F | Ctrl+F |
+| 快速查找（Quick Find） | ⌘F | Ctrl+F | Ctrl+F |
+| 快速查找（打字唤起） | 直接输入 | 同左 | 同左 |
 | Quick Add（系统级） | ⌘⇧Space | Ctrl+Shift+Space | — |
+
+打字唤起：没有行被选中、焦点不在输入框、没有弹窗时，敲任意可打印字符（可带 Shift，空格除外）即打开快速查找，并把该字符填入输入框；输入法组合的首键只打开面板、不带入字符。有 Selection 时单键属于列表操作，不唤起；触控设备与助手页不生效。
 
 Quick Add 从 `Cmd/Ctrl+Space` 改为 `Cmd/Ctrl+Shift+Space`：Windows 上 Ctrl+Space 是中文输入法切换键，macOS 上 ⌘Space 是 Spotlight。
 

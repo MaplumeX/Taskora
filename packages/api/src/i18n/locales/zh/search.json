@@ -1,14 +1,15 @@
 {
-  "title": "搜索任务",
-  "placeholder": "搜索任务…",
-  "inputPlaceholder": "输入关键词搜索…",
+  "title": "快速查找",
+  "inputPlaceholder": "搜索任务、项目、区域、标签…",
   "clearSearch": "清空搜索",
-  "includeCompleted": "包含已了结项",
-  "searching": "搜索中…",
+  "emptyHint": "输入关键词查找任务，或跳转到列表、项目、区域和标签",
   "searchFailed": "搜索失败，请重试。",
-  "noResults": "未找到匹配的任务",
+  "noResults": "未找到匹配项",
+  "groupLists": "列表",
+  "groupPlaces": "区域与项目",
+  "groupTags": "标签",
   "groupTasks": "任务",
-  "groupProjects": "项目",
-  "groupAreas": "区域",
-  "groupTags": "标签"
+  "continueSearch": "继续搜索",
+  "continueSearchHint": "在日志和废纸篓中查找",
+  "inTrash": "在废纸篓中"
 }

@@ -94,6 +94,7 @@ function makeEngineLikeBackend(client: QueryClient): TaskBackend {
         .filter((t) => (params?.projectId ? t.projectId === params.projectId : true))
         .map(dto);
     },
+    searchTasks: async () => [],
     getTask: async (id) => {
       await new Promise((r) => setTimeout(r, 5));
       const found = dbTasks.find((t) => t.id === id);

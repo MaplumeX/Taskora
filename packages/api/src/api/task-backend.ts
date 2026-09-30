@@ -14,16 +14,22 @@ import type {
   FeedView,
   SubtaskResponseDto,
   TaskResponseDto,
+  TaskSearchHit,
   UpdateSubtaskDto,
   UpdateTaskDto,
 } from '@taskora/shared';
-import type { TaskQuery } from './tasks.api.rest';
+import type { TaskQuery, TaskSearchOptions } from './tasks.api.rest';
 
-export type { TaskQuery };
+export type { TaskQuery, TaskSearchOptions };
 
 export interface TaskBackend {
   getTasks(params?: TaskQuery): Promise<TaskResponseDto[]>;
   getTask(id: string): Promise<TaskResponseDto>;
+  /**
+   * 任务搜索（Quick Find）：标题 / 备注 / Subtask 标题命中，按相关度排序。
+   * 默认只含未了结且不在 Trash 的任务；extended 再纳入已了结与 Trash。
+   */
+  searchTasks(q: string, options?: TaskSearchOptions): Promise<TaskSearchHit[]>;
   getFeed(view: FeedView): Promise<import('@taskora/shared').FeedItem[]>;
   createTask(data: CreateTaskDto): Promise<TaskResponseDto>;
   updateTask(id: string, data: UpdateTaskDto): Promise<TaskResponseDto>;

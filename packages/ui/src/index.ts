@@ -16,5 +16,5 @@ export { GroupedFeedListView } from './components/feed/GroupedFeedListView';
 export { TimeViewFeedList } from './components/feed/TimeViewFeedList';
 export { TaskListView } from './components/task/TaskListView';
 export { TaskItem } from './components/task/TaskItem';
-export { SearchModal } from './components/search/SearchModal';
+export { QuickFind } from './components/search/QuickFind';
 export { SettingsModal } from './components/settings/SettingsModal';

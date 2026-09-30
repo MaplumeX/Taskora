@@ -27,12 +27,14 @@ import {
   planRepeatSkip,
   planTaskComplete,
   planTaskCreate,
+  planTaskSearch,
   planTaskUpdate,
   positionAfter,
   projectMatchesView,
   repeatDerivationTarget,
   RepeatSkipBlockedError,
   repositionMinimal,
+  searchNeedle,
   sortFeedItems,
   sortForView,
   subtaskStatusPatch,
@@ -60,11 +62,12 @@ import type {
   TagResponseDto,
   TaskFeedItem,
   TaskResponseDto,
+  TaskSearchHit,
   UpdateSubtaskDto,
   UpdateTaskDto,
 } from '@taskora/shared';
 
-import type { TaskBackend, TaskQuery } from '../api/task-backend';
+import type { TaskBackend, TaskQuery, TaskSearchOptions } from '../api/task-backend';
 import {
   SETTLED_TASK_STATUSES as SETTLED_STATUSES,
   projectRowToDto,
@@ -100,6 +103,21 @@ function queryFieldsOf(row: ReplicaRow) {
     projectId: f.projectId,
     areaId: f.areaId,
     tagIds: tagIdsOf(row),
+  };
+}
+
+/** 副本行 → 搜索判定与排序的字段。 */
+function searchFieldsOf(row: ReplicaRow) {
+  const f = row.fields;
+  return {
+    id: row.id,
+    title: f.title,
+    notes: f.notes,
+    status: f.status,
+    trashedAt: f.trashedAt,
+    position: typeof f.position === 'string' ? f.position : null,
+    sortOrder: typeof f.sortOrder === 'number' ? f.sortOrder : null,
+    createdAt: typeof f.createdAt === 'string' ? f.createdAt : null,
   };
 }
 
@@ -226,6 +244,37 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         params?.view,
         (task) => task.completedAt,
       );
+    },
+
+    async searchTasks(q: string, options?: TaskSearchOptions): Promise<TaskSearchHit[]> {
+      if (!searchNeedle(q)) return [];
+      // 副本在本机，全量读出后由 domain 判定命中；默认范围先用 SQL 粗筛
+      const taskRows = await engine.list(
+        'task',
+        options?.extended ? undefined : { where: { status: TaskStatus.ACTIVE, trashedAt: null } },
+      );
+      const subtaskRows = await engine.list('subtask');
+      const hits = planTaskSearch(
+        taskRows.map((row) => ({ ...searchFieldsOf(row), row })),
+        subtaskRows.map((row) => ({
+          id: row.id,
+          taskId: row.fields.taskId,
+          title: row.fields.title,
+          sortOrder: row.fields.sortOrder,
+          createdAt: row.fields.createdAt,
+        })),
+        q,
+        options,
+      );
+      const index = await tagIndex();
+      return hits.map(({ task, matchedSubtasks, rank }) => ({
+        task: taskRowToDto(task.row, index),
+        matchedSubtasks: matchedSubtasks.map((subtask) => ({
+          id: subtask.id,
+          title: typeof subtask.title === 'string' ? subtask.title : '',
+        })),
+        rank,
+      }));
     },
 
     async getTask(id: string): Promise<TaskResponseDto> {

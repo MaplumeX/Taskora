@@ -17,7 +17,7 @@ import {
 } from '@taskora/api';
 
 import { Button } from '@/components/ui/button';
-import { SearchModal } from '@/components/search/SearchModal';
+import { QuickFind } from '@/components/search/QuickFind';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
 import { mainNav, type NavItem } from '@/components/layout/navItems';
 import { useBucketCounts } from '@/components/layout/useBucketCounts';
@@ -101,7 +101,7 @@ export default function Home() {
           className="flex h-10 flex-1 items-center gap-2 rounded-xl bg-muted/70 px-3 text-left text-[15px] text-muted-foreground"
         >
           <Search className="h-4 w-4" />
-          {t('task:searchTasks')}
+          {t('search:title')}
         </button>
         <Button
           variant="ghost"
@@ -113,7 +113,7 @@ export default function Home() {
           <Bot className="h-5 w-5" />
         </Button>
       </div>
-      <SearchModal open={searchOpen} onOpenChange={setSearchOpen} />
+      <QuickFind open={searchOpen} onOpenChange={setSearchOpen} />
 
       {NAV_GROUPS.map((group) => (
         <HomeGroup key={group[0]}>

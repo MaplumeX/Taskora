@@ -11,7 +11,13 @@ import {
   Request,
 } from '@nestjs/common';
 import { TasksService } from './tasks.service';
-import { CreateTaskDto, UpdateTaskDto, TaskQueryDto, ReorderDto } from './dto/tasks.dto';
+import {
+  CreateTaskDto,
+  UpdateTaskDto,
+  TaskQueryDto,
+  TaskSearchQueryDto,
+  ReorderDto,
+} from './dto/tasks.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
@@ -38,6 +44,11 @@ export class TasksController {
     @Query() query: TaskQueryDto,
   ) {
     return this.tasksService.findAll(req.user.id, query);
+  }
+
+  @Get('search')
+  search(@Request() req: { user: { id: string } }, @Query() query: TaskSearchQueryDto) {
+    return this.tasksService.search(req.user.id, query.q, { extended: query.extended });
   }
 
   @Get(':id')

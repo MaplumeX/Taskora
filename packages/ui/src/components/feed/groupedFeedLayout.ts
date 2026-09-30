@@ -77,7 +77,7 @@ function canHostGroup(project: ProjectResponseDto | undefined): project is Proje
  * 内项目）按项目间相对 Position 定位；区域放在第一个排在它之后的项目
  * 之前（区域内项目序列已按 Position，自然跟随其后）。
  */
-function flatParentOrder(
+export function flatParentOrder(
   projects: ProjectResponseDto[],
   areas: AreaResponseDto[],
 ): Array<

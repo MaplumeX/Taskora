@@ -1,6 +1,6 @@
 /**
  * 领域规则契约（local-first-v3 issue 04）：hub 的 REST 服务对契约夹具
- * 给出与 domain 纯函数、设备 Engine 后端相同的 feed / 任务列表结果。
+ * 给出与 domain 纯函数、设备 Engine 后端相同的 feed / 任务列表 / 搜索结果。
  * 夹具与期望见 @taskora/engine/testing。
  *
  * Prisma mock 忽略 where（SQL 只是粗筛），返回夹具的存储形态：结果完全
@@ -9,7 +9,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { VIEW_CONTRACT } from '@taskora/engine/testing';
+import { SEARCH_CONTRACT, VIEW_CONTRACT } from '@taskora/engine/testing';
 import type { FeedView } from '@taskora/shared';
 
 import { FeedService } from '../src/feed/feed.service';
@@ -91,5 +91,40 @@ describe('领域规则契约 — hub REST 服务', () => {
   it.each(VIEW_CONTRACT.queries)('tasks $query', async ({ query, ids }) => {
     const result = await tasks.findAll('user-1', query as TaskQueryDto);
     expect(result.map((task) => task.id)).toEqual(ids);
+  });
+});
+
+describe('任务搜索契约 — hub REST 服务', () => {
+  const subtaskRows = SEARCH_CONTRACT.subtasks.map((subtask) => ({
+    ...subtask,
+    settledAt: instant(subtask.settledAt),
+    createdAt: new Date(subtask.createdAt),
+  }));
+  // Prisma mock 忽略 where / include 的过滤：每个任务带上它全部的 Subtask
+  const searchRows = SEARCH_CONTRACT.tasks.map(({ tagIds, ...task }) => ({
+    ...task,
+    scheduledDate: date(task.scheduledDate),
+    dueDate: null,
+    settledAt: instant(task.settledAt),
+    trashedAt: instant(task.trashedAt),
+    createdAt: new Date(task.createdAt),
+    updatedAt: new Date(task.createdAt),
+    reminderTime: null,
+    repeatRule: null,
+    headingId: null,
+    sortOrder: 0,
+    tags: tagIds.map((tagId) => ({ tagId, tag: tagRows.find((tag) => tag.id === tagId)! })),
+    subtasks: subtaskRows.filter((subtask) => subtask.taskId === task.id),
+  }));
+  const prisma = {
+    task: { findMany: vi.fn().mockResolvedValue(searchRows) },
+  } as unknown as PrismaService;
+  const tasks = new TasksService(prisma, {} as SyncHubService);
+
+  it.each(SEARCH_CONTRACT.cases)('q=$q extended=$extended', async ({ q, extended, hits }) => {
+    const result = await tasks.search('user-1', q, { extended });
+    expect(
+      result.map((hit) => ({ id: hit.task.id, subtasks: hit.matchedSubtasks.map((s) => s.id) })),
+    ).toEqual(hits);
   });
 });

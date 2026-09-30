@@ -106,4 +106,37 @@ describe('TasksService — search (q param)', () => {
     // view's status takes precedence (ACTIVE for today)
     expect(call.where.status).toBe(TaskStatus.ACTIVE);
   });
+
+  describe('search (Quick Find)', () => {
+    it('粗筛标题 / 备注 / Subtask 标题，默认只含未了结且不在 Trash', async () => {
+      mockPrisma.task.findMany.mockResolvedValue([]);
+
+      await service.search('user-1', '  Milk ');
+
+      const call = mockPrisma.task.findMany.mock.calls[0][0];
+      const contains = { contains: 'Milk', mode: 'insensitive' };
+      expect(call.where).toEqual({
+        userId: 'user-1',
+        status: TaskStatus.ACTIVE,
+        trashedAt: null,
+        OR: [{ title: contains }, { notes: contains }, { subtasks: { some: { title: contains } } }],
+      });
+      expect(call.include.subtasks.where).toEqual({ title: contains });
+    });
+
+    it('extended 不限制状态与 Trash', async () => {
+      mockPrisma.task.findMany.mockResolvedValue([]);
+
+      await service.search('user-1', 'milk', { extended: true });
+
+      const call = mockPrisma.task.findMany.mock.calls[0][0];
+      expect(call.where.status).toBeUndefined();
+      expect(call.where.trashedAt).toBeUndefined();
+    });
+
+    it('空白搜索词不查库', async () => {
+      await expect(service.search('user-1', '   ')).resolves.toEqual([]);
+      expect(mockPrisma.task.findMany).not.toHaveBeenCalled();
+    });
+  });
 });

@@ -163,13 +163,14 @@ describe('resolveAction — Web（Alt 系降级）', () => {
 });
 
 describe('resolveAction — 通用', () => {
-  it.each(['mac', 'windows', 'web'] as const)('%s: 无修饰字母键不触发动作', (platform) => {
-    expect(resolveAction(key('n'), platform)).toBeNull();
-    expect(resolveAction(key('k'), platform)).toBeNull();
-    expect(resolveAction(key('a'), platform)).toBeNull();
-    expect(resolveAction(key('h'), platform)).toBeNull();
-    expect(resolveAction(key('f'), platform)).toBeNull();
-  });
+  it.each(['mac', 'windows', 'web'] as const)(
+    '%s: 无修饰字母键只唤起 Quick Find，不触发其他动作',
+    (platform) => {
+      for (const letter of ['n', 'k', 'a', 'h', 'f']) {
+        expect(resolveAction(key(letter), platform)).toEqual({ type: 'typeToFind', seed: letter });
+      }
+    },
+  );
 
   it.each(['mac', 'windows', 'web'] as const)('%s: 带修饰的 ↑/↓ 不误触移动', (platform) => {
     expect(resolveAction(key('ArrowUp', { shiftKey: true }), platform)).toBeNull();
@@ -177,10 +178,48 @@ describe('resolveAction — 通用', () => {
     expect(resolveAction(key('ArrowDown', { metaKey: true }), platform)).toBeNull();
   });
 
-  it.each(['mac', 'windows', 'web'] as const)('%s: 普通字符输入不触发动作', (platform) => {
-    expect(resolveAction(key('x'), platform)).toBeNull();
-    expect(resolveAction(key('7'), platform)).toBeNull();
-  });
+  it.each(['mac', 'windows', 'web'] as const)(
+    '%s: 普通字符（含 Shift、数字、符号）唤起 Quick Find 并带入该字符',
+    (platform) => {
+      expect(resolveAction(key('x'), platform)).toEqual({ type: 'typeToFind', seed: 'x' });
+      expect(resolveAction(key('X', { shiftKey: true }), platform)).toEqual({
+        type: 'typeToFind',
+        seed: 'X',
+      });
+      // 无修饰的 1..6 不是导航键
+      expect(resolveAction(key('1'), platform)).toEqual({ type: 'typeToFind', seed: '1' });
+      expect(resolveAction(key('7'), platform)).toEqual({ type: 'typeToFind', seed: '7' });
+      expect(resolveAction(key('#', { shiftKey: true }), platform)).toEqual({
+        type: 'typeToFind',
+        seed: '#',
+      });
+      expect(resolveAction(key('中'), platform)).toEqual({ type: 'typeToFind', seed: '中' });
+    },
+  );
+
+  it.each(['mac', 'windows', 'web'] as const)(
+    '%s: 输入法组合的首键只唤起，不带入字符',
+    (platform) => {
+      const ime = { type: 'typeToFind', seed: '' };
+      expect(resolveAction(key('Process'), platform)).toEqual(ime);
+      expect(resolveAction(key('a', { keyCode: 229 }), platform)).toEqual(ime);
+      expect(resolveAction(key('a', { isComposing: true }), platform)).toEqual(ime);
+    },
+  );
+
+  it.each(['mac', 'windows', 'web'] as const)(
+    '%s: 空格、带 ⌘/Ctrl/Alt 的字符、非字符键不唤起 Quick Find',
+    (platform) => {
+      expect(resolveAction(key(' '), platform)).toEqual({ type: 'newTaskBelow' });
+      expect(resolveAction(key('x', { ctrlKey: true }), platform)).toBeNull();
+      expect(resolveAction(key('x', { metaKey: true }), platform)).toBeNull();
+      expect(resolveAction(key('x', { altKey: true }), platform)).toBeNull();
+      expect(resolveAction(key('7', { ctrlKey: true }), platform)).toBeNull();
+      for (const name of ['Tab', 'Escape', 'F1', 'Shift', 'Dead', 'ArrowLeft']) {
+        expect(resolveAction(key(name), platform)).toBeNull();
+      }
+    },
+  );
 
   it.each(['mac', 'windows', 'web'] as const)('%s: Shift+Enter 不展开（保留扩展语义）', (platform) => {
     expect(resolveAction(key('Enter', { shiftKey: true }), platform)).toBeNull();
