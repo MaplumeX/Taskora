@@ -9,6 +9,191 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > CHANGELOG 不再单设 Desktop 小节（桌面专属改动标注 `(desktop)`）。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.7.0] - 2026-09-30
+
+### Added
+
+- **engine/api/backend**: Local-first v3 — field-level merges can no longer
+  produce entities that violate cross-field invariants (#117) — concurrent
+  edits on two devices could each be valid on their own yet combine into an
+  invalid entity: a heading owned by another project, a Someday task
+  carrying a reminder or repeat rule, a DATE task in the Anytime bucket, an
+  active task with a settled time. Both hubs now run the same pure
+  `repairEntity` (the rules the REST services always enforced) after
+  merging and scrubbing, writing corrections with a winning
+  virtual-device-0 clock so every device converges; the tightening side
+  wins and consistent states are left alone, keeping normal echoes no-ops.
+  The rules themselves (bucket derivation, view filters and sorting,
+  delete/restore cascades, convert-to-project, repeat derivation) moved into
+  `@taskora/engine/src/domain`, and the Engine backends and the REST
+  services are now read → rule → write, with one shared fixture run as a
+  contract test on both sides; the "same semantics as REST" comments are
+  gone. Unifying them also settled a batch of drifts: device search with
+  `completed` now returns settled and unsettled tasks like REST, device
+  Logbook sorts by settled time, feeds mix tasks and projects by Position,
+  completing an already completed task is a no-op, cascading a project or
+  heading into Trash no longer rewrites tasks already in Trash (restoring
+  the project no longer resurrects individually deleted tasks), cascaded
+  tasks lose their reminders, and converting a task to a project derives
+  the bucket instead of copying INBOX.
+- **engine/api/backend**: The replica schema and the sync protocol are
+  versioned (#117) — the replica tracks migrations with `PRAGMA
+user_version` and an append-only list (one transaction per step) instead
+  of ad-hoc column probes, and an installation pointing at a newer replica
+  is refused with a "upgrade Taskora to sync" state instead of silently
+  downgrading. Requests carry `x-taskora-sync-protocol` /
+  `x-taskora-client`, responses carry `protocolVersion` /
+  `minProtocolVersion`, and a hub requiring a newer protocol answers 426:
+  syncing stops, the Outbox is kept and the UI asks the user to upgrade.
+  Unknown entity types in a push are rejected one by one and reported
+  (`PushResponse.rejected`) instead of failing the whole batch, unknown
+  remote entities are skipped on pull, and rejected entries stay in the
+  Outbox for a later hub upgrade.
+- **engine/api/backend**: Device clocks are calibrated to hub time and the
+  change log lives in Postgres (#117) — sync responses carry `serverTime`
+  and the Engine derives an NTP-style wall-clock offset (RTT ≤ 5 s),
+  persists it and applies it to HLC stamps, while `HybridClock.receive`
+  absorbs remote stamps at most `MAX_CLOCK_DRIFT_MS` (1 h) beyond
+  calibrated now, so hub-synthesized virtual-device-0 clocks (REST/web
+  writes) compare fairly against device HLCs. The in-memory pull ring
+  buffer became `SyncChange` / `SyncCounter` tables with per-user
+  `UPSERT … RETURNING` seq allocation and 30-day hourly pruning, so hub
+  restarts and multiple hub instances share one log and no longer force
+  every device into a full bootstrap.
+- **engine/api/backend/frontend**: web runs the Engine and REST writes go
+  through the merger (#117) — every REST service is now read → domain rule
+  → `writeAsHub`, sharing one transactional row-level merge (lock → LWW →
+  reference scrub → invariant repair → persist) with device pushes and
+  appending to the change log in the same transaction, which retired the
+  serialized field-digest detection, the collector tap's sync branch and
+  `publishCompact` / `submitVirtualWrite`. On the client, web runs the real
+  Engine on `@sqlite.org/sqlite-wasm` + OPFS (one pool directory per
+  account) with Web Locks electing a leader tab that owns the replica,
+  HLC, Outbox and sync loop while the other tabs proxy reads and writes
+  over a `BroadcastChannel` and take over when the leader closes; browsers
+  without OPFS/Web Locks, an unreadable replica or a newer replica fall
+  back to the REST path and show the upgrade state.
+- **engine/api/ui**: Engine-mode reads are reactive live queries (#117) —
+  `Engine.watch(query, callback)` lets a query declare the entities (and
+  optionally ids) it depends on, reruns only the affected queries after a
+  transaction commits, merges same-tick notifications, discards results
+  invalidated while in flight and structurally shares unchanged results;
+  `useEngineQuery` / `useReplicaQuery` replace React Query in Engine mode
+  for task lists and details, feeds, projects, areas, tags, tag groups and
+  headings, while optimistic patches stay (Tauri IPC still costs a few
+  frames) but go through a mode-dispatching `useQueryCache` facade that
+  patches every cached shape of an entity, including project rows and tag
+  chips embedded in feeds.
+- **engine/api/backend**: Sync no longer ships the whole database (#117) —
+  bootstrap is paged (≤ 500 rows per page, ordered structure → unsettled
+  tasks → settled tasks → subtasks → compact registry, with a cursor fence
+  fixed on the first page and a stateless token), devices stage the pages
+  into `_stage_*` tables and swap them in one transaction so a rebuild
+  never exposes half a database, while a brand-new device merges pages by
+  LWW and can render as soon as the first page lands. Settled tasks older
+  than the archive window (365 days by default, `archiveAfterDays`, `null`
+  keeps everything) are dropped from the replica and from bootstrap and
+  are instead read from a new read-only, keyset-paged
+  `GET /feed/logbook/archive` that the Logbook page pulls as it scrolls,
+  with archived rows returning to the replica (and their subtasks
+  backfilled) when the hub changes them; compact registries now expire
+  after the log retention window on both sides, and push treats writes to
+  missing rows and dangling references as compactions/deletions instead of
+  building partial rows or retrying forever.
+- **engine/api/backend/mobile**: Android syncs reminders in the background
+  (#117) — instead of a headless WebView or reimplementing reminder rules
+  in Kotlin, the hub computes the full plan with the same shared domain
+  code (`planReminderDeliveries` in `@taskora/engine/src/domain`, used by
+  both the replica coordinator and the hub) and exposes it at
+  `GET /reminders/plan`; device registration can request a read-only
+  30-day `backgroundToken` (rotated on every registration), a WorkManager
+  job runs every 15 minutes when online and not battery-saving and applies
+  the plan, and the two writers are ordered by a `PlanSource` (a non-empty
+  Outbox or a locally delivered change keeps JS in charge, and the queue's
+  notification actions always stay with JS).
+- **engine/api/backend/ui**: Repeating tasks v2 (#118) — three additions on
+  top of v1. **Skip occurrence**: a new "skip" action in the task context
+  menu (disabled with a reason at the end of the chain) rewrites the
+  current occurrence in place — `scheduledDate` advances by the rule to the
+  first occurrence after the original date that is not before today
+  (account time zone), an existing `dueDate` shifts by the same number of
+  days, all subtasks go back to ACTIVE and `reminderTime` is kept — with no
+  new task and no Logbook entry; the shared `planRepeatSkip` /
+  `skipOccurrenceDate` live in the engine domain and are used by the device
+  backend and by a new `POST /tasks/:id/skip`, which returns the reason as
+  a 409 the client turns back into `RepeatSkipBlockedError`. **`repeatSourceId`**:
+  derived instances now record their source task, so un-completing no
+  longer deletes the instance (user edits survive complete → undo →
+  re-complete, and completion-anchored tasks no longer derive a second
+  instance a day later); derivation is idempotent through "source already
+  has a live instance" with the deterministic id as the fallback, and an
+  instance left in Trash still counts as gone. **Repeat previews**:
+  Upcoming and Calendar project the next occurrence of each
+  scheduled-anchored chain as a grey read-only ↻ row (one preview per
+  chain, never in the past, nothing for completion anchors), derived purely
+  by `buildRepeatPreviews` and excluded from selection and drag.
+- **backend**: The assistant can set up repeats (#118) — `create_task` and
+  `update_task` accept a structured `repeatRule` (unit / interval /
+  weekdays / anchor / until, validated by `normalizeRepeatRule` with
+  readable errors the model can correct), `update_task` also accepts
+  `skipOccurrence`, and `list_tasks` / `get_task` / `list_feed` return the
+  rule so the assistant can see and explain recurring tasks.
+- **api/ui/mobile**: Touch multi-select mode (#119) — long-press on a task
+  row now only starts a drag; row and bulk actions moved to a swipe-left
+  gesture that enters Multi-Select Mode, matching Things 3 on the iPhone.
+  A swipe locks to its main axis after 8 px, only counts as a selection
+  swipe when it moves left within 250 ms of touch-down (the drag sensor
+  needs 300 ms, so the two cannot overlap), follows the finger up to 88 px
+  and commits at 64 px, revealing a multi-select icon; the native
+  `contextmenu` Android dispatches on long-press is simply suppressed. The
+  mode itself lives in `useMultiSelectStore` (separate from the keyboard
+  Selection), clears Selection and collapses expanded rows on entry,
+  highlights checked rows and replaces the FAB with a
+  `MultiSelectToolbar` offering Plan / Move / Delete / More (Complete,
+  Cancel, Due date, plus Tag / Repeat / Convert to project when exactly one
+  row is checked); field edits reuse the `FieldPickerDialog` card. Exits
+  are the completed action, Done, a route change and the Android back
+  button, which now runs after overlays close and before route navigation;
+  Trash and subtask rows keep their long-press menu, and search and the
+  calendar day sheet disable the swipe because the toolbar would be
+  covered.
+- **mobile**: Root-page back now backgrounds the app instead of killing it
+  (#116) — a new repo-local `tauri-plugin-background` exposes
+  `moveTaskToBack` from the Activity (the shell's `app_exit` command is
+  gone), matching native Android behaviour: WebView state and the task
+  survive, so returning from Recents resumes in place instead of cold
+  starting.
+
+### Changed
+
+- **ui**: Area detail pages no longer render empty states (#115) — the
+  "no projects"/"no tasks" copy and its translations were removed, so an
+  area with nothing to show only lists the rows that exist.
+
+### Fixed
+
+- **engine/api/backend**: A batch of sync defects found in the review
+  (#117) — the Outbox now only coalesces into its tail row, keeping causal
+  order so any batch prefix commits (the old merge-into-an-earlier-row
+  behaviour deadlocked on foreign keys across 500-row batches; a new
+  real-Engine Postgres e2e drives a 601-row offline backlog through the
+  hub); push batches are capped at 256 KB and the backend JSON limit and
+  nginx body size are raised to 4 MB (the former 100 KB default rejected
+  roughly fifty offline creates forever); compacted ids are persisted in
+  `_compacted` so repeat re-derivation cannot reuse a dead deterministic id
+  after a restart, and a late write to a compacted id makes the hub
+  re-broadcast its Compact Event; field values the hub cannot store
+  (unknown enum values from newer clients, invalid dates, malformed JSON or
+  tagIds) now get a winning virtual-device-0 clock so the pusher adopts the
+  stored value instead of keeping its own forever; HLC state is written
+  inside the transaction that used it; reorders assign new positions only
+  to the rows that must move; replica writes and remote batches run in one
+  transaction with one change notification; inflation checks and
+  rebalancing stay inside SQLite and rewrite only the inflated run; and
+  engine reads accept SQL prefilters (whitelisted fields) backed by new
+  indexes, so active views and project counts no longer scan the whole
+  Logbook.
+
 ## [0.6.2] - 2026-09-30
 
 ### Added
