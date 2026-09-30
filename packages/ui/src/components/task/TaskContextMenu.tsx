@@ -21,7 +21,7 @@ import { ScheduledType, TaskStatus } from '@taskora/shared';
 
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { MenuRow } from '@/components/common/MenuRow';
-import { useLongPress } from '../../lib/useLongPress';
+import { isTouchContextMenu, useLongPress } from '../../lib/useLongPress';
 import {
   currentLegacyDateTimeZone,
   getClientKind,
@@ -177,7 +177,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
     setActivePicker(kind);
   };
 
-  /** 以坐标为锚点打开主菜单（右键与触屏长按共用）。 */
+  /** 以坐标为锚点打开主菜单（右键与 Trash 行的触屏长按共用）。 */
   const openMenuAt = (x: number, y: number) => {
     virtualAnchorRef.current = {
       getBoundingClientRect: () =>
@@ -199,11 +199,14 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
 
   const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+    // 触屏长按派发的 contextmenu 不开菜单：普通行长按只负责拖动（操作走
+    // 左滑多选工具栏），Trash 行由下方 useLongPress 接管。
+    if (isTouchContextMenu(e)) return;
     openMenuAt(e.clientX, e.clientY);
   };
 
-  // 触屏长按（约 500ms 按住不动）与右键走同一菜单；触发后的抬手
-  // click 由 hook 在 capture 阶段抑制，不会误触发行展开。
+  // 触屏长按开菜单仅限 Trash：该页行不可拖动，长按是恢复的唯一入口。
+  // 其余行长按只负责拖动（对齐 Things 3），操作走左滑多选工具栏。
   const longPress = useLongPress((p) => openMenuAt(p.x, p.y));
 
   // Auto-focus first menu item when opened.
@@ -215,7 +218,12 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   }, [menuOpen]);
 
   return (
-    <div ref={containerRef} className="flex flex-col" onContextMenu={onContextMenu} {...longPress}>
+    <div
+      ref={containerRef}
+      className="flex flex-col"
+      onContextMenu={onContextMenu}
+      {...(variant === 'trash' ? longPress : undefined)}
+    >
       {children}
 
       {/* Main context menu (anchored to the right-click coordinates). */}

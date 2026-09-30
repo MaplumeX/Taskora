@@ -4,6 +4,7 @@ import { ContentBottomBar } from '@/components/layout/ContentBottomBar';
 import { KeyboardShortcuts } from '@/components/keyboard/KeyboardShortcuts';
 import { MobileTopBar } from '@/components/layout/MobileTopBar';
 import { MobileFab } from '@/components/layout/MobileFab';
+import { MultiSelectToolbar } from '@/components/task/MultiSelectToolbar';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { SyncIndicator } from './SyncIndicator';
 import { useTaskRevealListener } from '@taskora/api';
@@ -25,6 +26,8 @@ export function AppShell() {
         <ContentBottomBar />
       </div>
       <MobileFab />
+      {/* 触控多选模式（左滑任务行进入）的底部工具栏，模式中替代 FAB。 */}
+      <MultiSelectToolbar />
       <SettingsModal />
       <KeyboardShortcuts />
       {/* 同步指示器（V2）：仅桌面端有 Engine 时渲染，常驻角落不拦操作 */}

@@ -7,8 +7,9 @@
  *
  *   1. 有打开的抽屉 / 弹层（Radix dialog / menu / listbox）→ 派发一次
  *      Escape 关闭最顶层一层（Radix DismissableLayer 语义，一次一层）；
- *   2. 否则路由历史可返回（window.history.state.idx > 0）→ history.back()；
- *   3. 否则处于根页 → 退到后台（background 插件 moveTaskToBack，不结束进程）。
+ *   2. 否则处于触控多选模式（左滑任务行进入）→ 退出多选；
+ *   3. 否则路由历史可返回（window.history.state.idx > 0）→ history.back()；
+ *   4. 否则处于根页 → 退到后台（background 插件 moveTaskToBack，不结束进程）。
  *
  * 非监听场景（浏览器 dev:vite / vitest）为 no-op。
  */
@@ -16,6 +17,7 @@
 import { useEffect } from 'react';
 import { onBackButtonPress } from '@tauri-apps/api/app';
 import { invoke } from '@tauri-apps/api/core';
+import { useMultiSelectStore } from '@taskora/api';
 
 /** 打开中的 Radix 浮层选择器：Dialog（含详情 sheet / 设置）、菜单、下拉列表。 */
 const OPEN_OVERLAY_SELECTOR = [
@@ -52,6 +54,14 @@ export function closeTopOverlay(): boolean {
   return true;
 }
 
+/** 处于多选模式时退出；返回是否消费了本次返回事件。 */
+export function exitMultiSelect(): boolean {
+  const multiSelect = useMultiSelectStore.getState();
+  if (!multiSelect.active) return false;
+  multiSelect.exit();
+  return true;
+}
+
 /** 路由历史是否可以返回（react-router v6 在 history.state.idx 记录深度）。 */
 export function canNavigateBack(): boolean {
   const idx = (window.history.state as { idx?: number } | null)?.idx;
@@ -61,6 +71,7 @@ export function canNavigateBack(): boolean {
 /** 单次返回事件的处理级联（导出供测试）。 */
 export function handleBackNavigation(): void {
   if (closeTopOverlay()) return;
+  if (exitMultiSelect()) return;
   if (canNavigateBack()) {
     window.history.back();
     return;

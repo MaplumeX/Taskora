@@ -33,10 +33,8 @@ interface Props {
  * 字段组件不感知容器，通过 `close` 回调在选定后关闭。
  */
 export function FieldPicker({ label, tooltip = false, trigger, children }: Props) {
-  const { t } = useTranslation();
   const isDesktop = useIsDesktop();
   const [open, setOpen] = React.useState(false);
-  const contentRef = React.useRef<HTMLDivElement>(null);
   const close = () => setOpen(false);
   const body = typeof children === 'function' ? children(close) : children;
 
@@ -53,6 +51,30 @@ export function FieldPicker({ label, tooltip = false, trigger, children }: Props
   }
 
   return (
+    <FieldPickerDialog label={label} open={open} onOpenChange={setOpen} trigger={trigger}>
+      {body}
+    </FieldPickerDialog>
+  );
+}
+
+interface DialogProps {
+  label: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  /** 可选触发按钮；无 trigger 时由调用方受控打开（如多选工具栏）。 */
+  trigger?: React.ReactElement;
+  children: React.ReactNode;
+}
+
+/**
+ * 窄屏字段卡片（受控）：FieldPicker 的窄屏形态，也供没有锚点按钮的入口
+ * （多选工具栏）直接使用。
+ */
+export function FieldPickerDialog({ label, open, onOpenChange, trigger, children }: DialogProps) {
+  const { t } = useTranslation();
+  const contentRef = React.useRef<HTMLDivElement>(null);
+
+  return (
     // Portal 内事件仍沿 React 树冒泡：截断遮罩点击与卡片内 Escape，
     // 避免宿主行（TaskItem 的 Escape 收起 / 行点击）被误触发。
     <span
@@ -62,8 +84,8 @@ export function FieldPicker({ label, tooltip = false, trigger, children }: Props
         if (e.key === 'Escape') e.stopPropagation();
       }}
     >
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogTrigger asChild>{trigger}</DialogTrigger>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
         <DialogContent
           ref={contentRef}
           hideClose
@@ -84,7 +106,7 @@ export function FieldPicker({ label, tooltip = false, trigger, children }: Props
               <X className="h-5 w-5" />
             </DialogClose>
           </div>
-          <div className="min-h-0 overflow-y-auto px-2 pb-2">{body}</div>
+          <div className="min-h-0 overflow-y-auto px-2 pb-2">{children}</div>
         </DialogContent>
       </Dialog>
     </span>

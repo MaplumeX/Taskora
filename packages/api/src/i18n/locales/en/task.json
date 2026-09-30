@@ -69,6 +69,8 @@
   "repeatNextPreview": "Next: {{date}}",
   "repeatEnded": "No further occurrences",
   "repeatUnit": "Repeat unit",
+  "multiSelectCount": "{{count}} selected",
+  "multiSelectSchedule": "When",
   "skipOccurrence": "Skip Occurrence",
   "skipOccurrenceLast": "This is the last occurrence",
   "skipOccurrenceNextExists": "The next occurrence already exists",

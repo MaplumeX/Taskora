@@ -1,5 +1,7 @@
 import {
   useCalendarDay,
+  useMultiSelectStore,
+  useSelectionStore,
   parseCalendarDate,
   startOfTomorrow,
   useTaskQuery,
@@ -9,11 +11,13 @@ import {
 import * as React from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
+import { ListChecks } from 'lucide-react';
 
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
+import { useSwipeToSelect } from '../../lib/useSwipeToSelect';
 import { TaskCheckbox } from './TaskCheckbox';
 import { TaskContextMenu } from './TaskContextMenu';
 import { TaskDateBadge } from './TaskDateBadge';
@@ -26,6 +30,7 @@ import { TaskSubtasksBadge } from './TaskSubtasksBadge';
 import { TaskTagCapsules } from './TaskTagCapsules';
 import { TaskRowExpanded } from './TaskRowExpanded';
 import { useCompletionRhythm } from './useCompletionRhythm';
+import { MultiSelectEnabledContext } from './multiSelectContext';
 
 /** 展开 / 收起详情的时长，与 tokens.css 的 --dur-expand 一致。 */
 const EXPAND_MS = 200;
@@ -97,6 +102,26 @@ export function TaskItem({
   const [title, setTitle] = React.useState(current.title);
   const titleInputRef = React.useRef<HTMLInputElement>(null);
   const rowRef = React.useRef<HTMLDivElement>(null);
+
+  // 触控多选（对齐 Things 3 iPhone）：左滑进入多选模式并勾选本行；模式中
+  // 点击行 = 切换勾选，不展开、不勾完成。
+  const multiSelectEnabled = React.useContext(MultiSelectEnabledContext);
+  const selectMode = useMultiSelectStore((s) => multiSelectEnabled && s.active);
+  const multiSelected = useMultiSelectStore(
+    (s) => multiSelectEnabled && s.active && s.ids.includes(task.id),
+  );
+  const swipe = useSwipeToSelect(
+    () => {
+      const multiSelect = useMultiSelectStore.getState();
+      if (!multiSelect.active) {
+        // 进入模式前收起展开行、清掉键盘 Selection，两套状态不并存。
+        useUiInteractionStore.getState().setExpandedId(null);
+        useSelectionStore.getState().clearSelection();
+      }
+      multiSelect.enter(task.id);
+    },
+    { enabled: multiSelectEnabled && !expanded },
+  );
 
   // Keep local title in sync with the server value when it changes externally.
   React.useEffect(() => {
@@ -184,134 +209,167 @@ export function TaskItem({
       <div className={cn('flex min-h-0 flex-col', exiting && 'overflow-hidden')}>
         <TaskContextMenu task={task} current={current}>
           <div
-            ref={rowRef}
-            data-selection-row={task.id}
-            tabIndex={onRowClick ? (selectionState !== 'idle' ? 0 : -1) : undefined}
-            className={cn(
-              'flex min-w-0 items-center gap-2.5 rounded-md px-2 py-1 transition-colors',
-              // 无归属任务保持单行紧凑高度；有归属时由标题行 + 归属小字行
-              // 自然撑高（参考 Things 3 的两段式任务行）。
-              !tag && 'h-8 max-md:h-11',
-              // 选中态已有 bg-accent 指示，抑制原生 outline；
-              // 仅聚焦但未选中（如 Tab 聚焦）时显示细 ring 保持键盘可访问性。
-              'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
-              selectionState !== 'idle' && 'focus-visible:ring-0',
-              !expanded && selectionState === 'idle' && 'hover:bg-accent/60',
-            )}
-            onClick={(e) => {
-              if (!onRowClick) return;
+            className="relative"
+            {...swipe.handlers}
+            onClickCapture={(e) => {
+              swipe.handlers.onClickCapture(e);
+              if (e.isPropagationStopped() || !selectMode) return;
+              // 多选模式：整行（含复选框）点击只切换勾选。
+              e.preventDefault();
               e.stopPropagation();
-              onRowClick();
+              useMultiSelectStore.getState().toggle(task.id);
             }}
-            role={onRowClick ? 'button' : undefined}
           >
-            {/* 复选框放入 20px 固定槽位，与项目行/组头的进度环（20px）同宽，
+            {/* 左滑露出的多选指示：宽度跟随位移，越过阈值后高亮。 */}
+            {swipe.offset < 0 && (
+              <div
+                aria-hidden
+                className={cn(
+                  'absolute inset-y-0 right-0 flex items-center justify-center overflow-hidden transition-colors',
+                  swipe.armed ? 'text-primary' : 'text-muted-foreground',
+                )}
+                style={{ width: -swipe.offset }}
+              >
+                <ListChecks className="h-5 w-5 shrink-0" />
+              </div>
+            )}
+            <div
+              ref={rowRef}
+              data-selection-row={task.id}
+              tabIndex={onRowClick ? (selectionState !== 'idle' ? 0 : -1) : undefined}
+              className={cn(
+                'flex min-w-0 items-center gap-2.5 rounded-md px-2 py-1 transition-colors',
+                // 无归属任务保持单行紧凑高度；有归属时由标题行 + 归属小字行
+                // 自然撑高（参考 Things 3 的两段式任务行）。
+                !tag && 'h-8 max-md:h-11',
+                // 选中态已有 bg-accent 指示，抑制原生 outline；
+                // 仅聚焦但未选中（如 Tab 聚焦）时显示细 ring 保持键盘可访问性。
+                'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
+                selectionState !== 'idle' && 'focus-visible:ring-0',
+                !expanded && selectionState === 'idle' && !selectMode && 'hover:bg-accent/60',
+                // 横向手势交给左滑，纵向仍由浏览器滚动列表。
+                'touch-pan-y',
+                multiSelected && 'bg-selection',
+                swipe.offset === 0 && 'transition-[background-color,transform] duration-fast',
+              )}
+              style={
+                swipe.offset !== 0 ? { transform: `translateX(${swipe.offset}px)` } : undefined
+              }
+              onClick={(e) => {
+                if (!onRowClick) return;
+                e.stopPropagation();
+                onRowClick();
+              }}
+              role={onRowClick ? 'button' : undefined}
+            >
+              {/* 复选框放入 20px 固定槽位，与项目行/组头的进度环（20px）同宽，
             保证混合列表中任务与项目的标题起始位置对齐。 */}
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center">
-              <TaskCheckbox
-                checked={completed || pendingComplete}
-                cancelled={cancelled}
-                onToggle={handleToggle}
-              />
-            </span>
+              <span className="flex h-5 w-5 shrink-0 items-center justify-center">
+                <TaskCheckbox
+                  checked={completed || pendingComplete}
+                  cancelled={cancelled}
+                  onToggle={handleToggle}
+                />
+              </span>
 
-            {/* 行首日期标记 + 重复图标:参考 Things 3 的 [chip][↻] 标题 结构。
+              {/* 行首日期标记 + 重复图标:参考 Things 3 的 [chip][↻] 标题 结构。
             ≤ 今天 → 黄星；未来日期 → 灰色短日期 chip（两者互斥）。
             已了结任务（Logbook）不适用：行首改显示了结时间。
             展开时这些信息改由卡片底栏的字段 chip 呈现，行内不重复。 */}
-            {expanded ? null : settled ? (
-              settledDateBadge
-            ) : (
-              <>
-                {showScheduledBadge && scheduledOnOrBeforeToday && (
-                  <TaskTodayBadge className="shrink-0" />
-                )}
-                {showScheduledBadge && (
-                  <TaskDateBadge scheduledDate={current.scheduledDate} className="shrink-0" />
-                )}
-                <TaskRepeatBadge repeatRule={current.repeatRule} className="shrink-0" />
-              </>
-            )}
+              {expanded ? null : settled ? (
+                settledDateBadge
+              ) : (
+                <>
+                  {showScheduledBadge && scheduledOnOrBeforeToday && (
+                    <TaskTodayBadge className="shrink-0" />
+                  )}
+                  {showScheduledBadge && (
+                    <TaskDateBadge scheduledDate={current.scheduledDate} className="shrink-0" />
+                  )}
+                  <TaskRepeatBadge repeatRule={current.repeatRule} className="shrink-0" />
+                </>
+              )}
 
-            {/* 标题区：备注/子任务徽标紧贴标题文本（参考 Things 3），
+              {/* 标题区：备注/子任务徽标紧贴标题文本（参考 Things 3），
             而非被 flex-1 的标题推到行尾。有归属时归属小字在标题下方
             自成一行（参考 Things 3），行高随之增加。 */}
-            <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
-              <div className="flex min-w-0 items-center gap-1.5">
-                {expanded ? (
-                  <Input
-                    ref={titleInputRef}
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    onBlur={commitTitle}
-                    placeholder={t('task:newTaskPlaceholder')}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.stopPropagation();
-                        e.preventDefault();
-                        // Enter（含 ⌘Enter/Ctrl+Enter）：先 blur 触发提交，再收起，
-                        // 避免出现「退出编辑」与「收起」拆成两次按键的中间态。
-                        e.currentTarget.blur();
-                        rowRef.current?.focus();
-                        onRowClick?.();
-                      } else if (e.key === ' ') {
-                        e.stopPropagation();
-                      } else if (e.key === 'Escape') {
-                        setTitle(current.title);
-                        e.currentTarget.blur();
-                      }
-                    }}
-                    onClick={(e) => e.stopPropagation()}
-                    className={cn(
-                      'min-w-0 flex-1 border-0 bg-transparent px-0 text-body font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
-                      settled &&
-                        (plainSettledTitle
-                          ? cancelled
-                            ? 'text-foreground line-through'
-                            : 'text-foreground'
-                          : cancelled
-                            ? 'text-muted-foreground line-through'
-                            : 'text-muted-foreground'),
-                    )}
-                  />
-                ) : (
-                  <span
-                    className={cn(
-                      'truncate text-left text-body transition-colors',
-                      settled
-                        ? plainSettledTitle
-                          ? cancelled
-                            ? 'text-foreground line-through'
-                            : 'text-foreground'
-                          : cancelled
-                            ? 'text-muted-foreground line-through'
-                            : 'text-muted-foreground'
-                        : current.title
-                          ? 'text-foreground'
-                          : 'text-muted-foreground',
-                    )}
-                  >
-                    {current.title || t('task:newTaskPlaceholder')}
-                  </span>
-                )}
-                {/* 备注徽标：有备注的任务一眼可见。 */}
-                <TaskNotesBadge notes={current.notes} className="shrink-0" />
-                {/* 子任务徽标：有子任务的任务一眼可见，并显示未了结数量。 */}
-                <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
-              </div>
-              {/* 归属上下文：标题下方一行灰色小字，只显示直接父级一层
+              <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
+                <div className="flex min-w-0 items-center gap-1.5">
+                  {expanded ? (
+                    <Input
+                      ref={titleInputRef}
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      onBlur={commitTitle}
+                      placeholder={t('task:newTaskPlaceholder')}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.stopPropagation();
+                          e.preventDefault();
+                          // Enter（含 ⌘Enter/Ctrl+Enter）：先 blur 触发提交，再收起，
+                          // 避免出现「退出编辑」与「收起」拆成两次按键的中间态。
+                          e.currentTarget.blur();
+                          rowRef.current?.focus();
+                          onRowClick?.();
+                        } else if (e.key === ' ') {
+                          e.stopPropagation();
+                        } else if (e.key === 'Escape') {
+                          setTitle(current.title);
+                          e.currentTarget.blur();
+                        }
+                      }}
+                      onClick={(e) => e.stopPropagation()}
+                      className={cn(
+                        'min-w-0 flex-1 border-0 bg-transparent px-0 text-body font-normal shadow-none focus-visible:ring-0 focus-visible:ring-offset-0',
+                        settled &&
+                          (plainSettledTitle
+                            ? cancelled
+                              ? 'text-foreground line-through'
+                              : 'text-foreground'
+                            : cancelled
+                              ? 'text-muted-foreground line-through'
+                              : 'text-muted-foreground'),
+                      )}
+                    />
+                  ) : (
+                    <span
+                      className={cn(
+                        'truncate text-left text-body transition-colors',
+                        settled
+                          ? plainSettledTitle
+                            ? cancelled
+                              ? 'text-foreground line-through'
+                              : 'text-foreground'
+                            : cancelled
+                              ? 'text-muted-foreground line-through'
+                              : 'text-muted-foreground'
+                          : current.title
+                            ? 'text-foreground'
+                            : 'text-muted-foreground',
+                      )}
+                    >
+                      {current.title || t('task:newTaskPlaceholder')}
+                    </span>
+                  )}
+                  {/* 备注徽标：有备注的任务一眼可见。 */}
+                  <TaskNotesBadge notes={current.notes} className="shrink-0" />
+                  {/* 子任务徽标：有子任务的任务一眼可见，并显示未了结数量。 */}
+                  <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
+                </div>
+                {/* 归属上下文：标题下方一行灰色小字，只显示直接父级一层
               （projectTitle 优先，否则 areaTitle），参考 Things 3。
               移动端同样显示；分组视图内由组头承担归属、不传入。 */}
-              {tag && <span className="truncate text-meta text-muted-foreground">{tag}</span>}
-            </div>
+                {tag && <span className="truncate text-meta text-muted-foreground">{tag}</span>}
+              </div>
 
-            <div className={cn('flex min-w-0 shrink items-center gap-2', expanded && 'hidden')}>
-              <TaskTagCapsules tags={current.tags} />
-              {/* 提醒徽标不受 showScheduledBadge 限制：Today/Scheduled 等视图
+              <div className={cn('flex min-w-0 shrink items-center gap-2', expanded && 'hidden')}>
+                <TaskTagCapsules tags={current.tags} />
+                {/* 提醒徽标不受 showScheduledBadge 限制：Today/Scheduled 等视图
               不展示日期徽标时仍能看到提醒时刻（reminders spec）。 */}
-              <TaskReminderBadge reminderTime={current.reminderTime} className="shrink-0" />
-              {/* 截止徽标在行尾右对齐（参考 Things 3 的旗帜 + 日期）。 */}
-              <TaskDueDateBadge dueDate={current.dueDate} className="shrink-0" />
+                <TaskReminderBadge reminderTime={current.reminderTime} className="shrink-0" />
+                {/* 截止徽标在行尾右对齐（参考 Things 3 的旗帜 + 日期）。 */}
+                <TaskDueDateBadge dueDate={current.dueDate} className="shrink-0" />
+              </div>
             </div>
           </div>
         </TaskContextMenu>

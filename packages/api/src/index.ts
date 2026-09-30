@@ -144,6 +144,7 @@ export {
   type SelectionRowKind,
   type SelectionRowGroupHeader,
 } from './stores/selection.store';
+export { useMultiSelectStore } from './stores/multiSelect.store';
 export { useProjectUiPrefsStore } from './stores/projectUiPrefs.store';
 
 // Preferences (theme / language / week start)
