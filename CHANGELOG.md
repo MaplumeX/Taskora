@@ -10,6 +10,46 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > Android 小节，端专属改动标注 `(desktop)` / `(android)`。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.7.1] - 2026-09-30
+
+### Added
+
+- **ui/api/backend/engine/shared**: Quick Find — 搜索弹窗升级为「搜索 + 导航」的统一入口
+  (#121) — 一个输入框既能搜任务，也能跳到任意列表、Project、Area、Tag。结果分四组
+  固定顺序展示（列表 → 区域与项目 → 标签 → 任务），组内按相关度排序（标题前缀命中
+  优先于标题包含，再优于仅 Subtask / 备注命中）；选中导航目标即跳转，选中任务即
+  Reveal（关闭面板、跳到所在视图、展开并滚入视野）。Subtask 标题命中时展示其父
+  Task，并在下方逐行列出命中的 Subtask。`↑`/`↓` 跨组连续移动高亮、`Enter` 打开、
+  `Esc` 关闭，全程可不用鼠标。默认只搜未了结、未进 Trash 的条目，结果末尾常驻
+  「继续搜索」把范围扩大到 Logbook 与 Trash，取代原来的「包含已完成」复选框；在
+  扩展范围中打开已完成 / Trash 中的任务会分别定位到 Logbook / Trash 页。桌面端在
+  列表视图直接打字唤起（首字符带入输入框；IME 组合输入时只打开面板、交由输入法
+  继续组合），移动端在列表顶部下拉唤起。导航目标由客户端从已有的本地查询计算，
+  不新增接口；只有任务搜索新增后端方法 `searchTasks(q, { extended })`，其纯函数
+  `taskSearchRank` 与排序放在 `@taskora/engine` 的 `domain/search.ts`，设备端与
+  REST 共用（REST 侧新增 `GET /tasks/search?q=&extended=`），本地副本上的
+  debounce 从 300ms 降到约 50ms。
+
+### Fixed
+
+- **frontend/nginx**: 重新部署后旧 bundle 的懒加载路由 chunk 失效不再自愈 (#120) —
+  重新部署会替换带 hash 的 assets，仍跑旧 bundle 的浏览器导航到懒加载路由时抛
+  "Failed to fetch dynamically imported module"，且永远不会自行恢复。nginx 改为给
+  index.html 下发 `Cache-Control: no-cache`（它不带 content hash，被缓存的副本会
+  一直指向已删除的 chunk），`/assets/` 保持 immutable；前端新增 `lazyWithRetry` /
+  `loadWithRecovery`，在动态 import 失败时硬刷新一次以拿到新入口，并监听
+  `vite:preloadError` 处理失败的 modulepreload。刷新用 10s sessionStorage 冷却
+  限流，而不是 once-per-session 标志 —— 那个标志只能靠另一个 chunk 加载成功来
+  清除，某个 chunk 永久缺失时会无限循环。
+
+- **backend**: 事务进行中不再冲刷 change events (#122) —
+  `ChangeEventCollector.runFlush()` 排空待发布队列时没有重新检查 `txDepth`：一次
+  已经在飞行中的 flush 撞上新的 `$transaction` 启动，会把该事务的 descriptor 摘走
+  并在 commit 前发布，base-client 回查 payload 时看不到行而静默丢事件；随后的
+  commit 已无内容可发布，created / updated 事件就此永久丢失，客户端一直漂移直到
+  下次 resync。改为 `txDepth === 0` 才允许 runFlush，并让仅测试用的 `flush()` 在
+  不该排空的队列上直接返回而不是空转。
+
 ## [0.7.0] - 2026-09-30
 
 ### Added
