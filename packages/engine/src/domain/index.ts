@@ -69,10 +69,21 @@ export {
 } from './headings';
 export {
   planRepeatInstance,
+  planRepeatSkip,
+  repeatDerivationTarget,
   repeatInstanceId,
+  RepeatSkipBlockedError,
+  type PlannedIdState,
   type RepeatParent,
+  type RepeatSkipBlock,
+  type RepeatSkipSource,
   type RepeatSubtaskFields,
 } from './repeat-instance';
+export {
+  buildRepeatPreviews,
+  type RepeatPreview,
+  type RepeatPreviewSource,
+} from './repeat-preview';
 export {
   buildReminderTexts,
   computeReminderPlan,

@@ -3,11 +3,20 @@ import { useTranslation } from 'react-i18next';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { cn } from '@/lib/utils';
-import { i18n, isOverdue, isToday, parseCalendarDate, toInputDateValue } from '@taskora/api';
+import {
+  i18n,
+  isOverdue,
+  isToday,
+  parseCalendarDate,
+  toInputDateValue,
+  type RepeatPreview,
+} from '@taskora/api';
 
 interface Props {
   date: Date;
   tasks: TaskResponseDto[];
+  /** 下次预告：虚线弱化色块排在任务之后，占格位但不计入任务数。 */
+  previews?: RepeatPreview[];
   /** 格内最多可放的色块行数（含「+N」行）。 */
   capacity: number;
   outOfMonth?: boolean;
@@ -15,6 +24,10 @@ interface Props {
   selectedIds?: string[];
   onOpen: (date: Date) => void;
 }
+
+/** 色块外形（任务与下次预告共用）；尺寸需与 CalendarMonthGrid 的容量常量一致。 */
+const CHIP_CLASS =
+  'block h-[14px] shrink-0 overflow-hidden whitespace-nowrap rounded-[3px] px-0.5 text-[10px] leading-[14px] md:h-5 md:text-ellipsis md:rounded md:px-1.5 md:text-xs md:leading-5';
 
 /** 截止日期 ≤ 今天（到期 / 逾期）的未了结任务：红色语义只属于 Deadline。 */
 function isDeadlineUrgent(task: TaskResponseDto): boolean {
@@ -32,6 +45,7 @@ function isDeadlineUrgent(task: TaskResponseDto): boolean {
 export function CalendarDayCell({
   date,
   tasks,
+  previews = [],
   capacity,
   outOfMonth = false,
   selectedIds = [],
@@ -40,9 +54,13 @@ export function CalendarDayCell({
   const { t } = useTranslation();
   const todayCell = isToday(date);
 
-  const overflow = tasks.length > capacity;
-  const visible = overflow ? tasks.slice(0, Math.max(0, capacity - 1)) : tasks;
-  const hiddenCount = tasks.length - visible.length;
+  const entries = [
+    ...tasks.map((task) => ({ kind: 'task' as const, task })),
+    ...previews.map((preview) => ({ kind: 'preview' as const, preview })),
+  ];
+  const overflow = entries.length > capacity;
+  const visible = overflow ? entries.slice(0, Math.max(0, capacity - 1)) : entries;
+  const hiddenCount = entries.length - visible.length;
 
   const dateLabel = new Intl.DateTimeFormat(i18n.language, {
     month: 'long',
@@ -74,7 +92,23 @@ export function CalendarDayCell({
           </span>
         </span>
 
-        {visible.map((task) => {
+        {visible.map((entry) => {
+          if (entry.kind === 'preview') {
+            return (
+              <span
+                key={`preview:${entry.preview.sourceTaskId}`}
+                data-calendar-preview-chip
+                title={t('task:repeatPreviewHint')}
+                className={cn(
+                  CHIP_CLASS,
+                  'border border-dashed border-border text-muted-foreground',
+                )}
+              >
+                {entry.preview.title || t('common:empty')}
+              </span>
+            );
+          }
+          const task = entry.task;
           const completed = task.status === 'COMPLETED';
           const cancelled = task.status === 'CANCELLED';
           return (
@@ -83,8 +117,8 @@ export function CalendarDayCell({
               data-calendar-chip
               aria-selected={selectedIds.includes(task.id) || undefined}
               className={cn(
-                'block h-[14px] shrink-0 overflow-hidden whitespace-nowrap rounded-[3px] px-0.5 text-[10px] leading-[14px] text-foreground',
-                'md:h-5 md:text-ellipsis md:rounded md:px-1.5 md:text-xs md:leading-5',
+                CHIP_CLASS,
+                'text-foreground',
                 isDeadlineUrgent(task) ? 'bg-deadline/15' : 'bg-primary/10',
                 (completed || cancelled) && 'bg-muted text-muted-foreground',
                 cancelled && 'line-through',

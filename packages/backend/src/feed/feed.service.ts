@@ -54,6 +54,7 @@ function toTaskFeedItem(t: TaskWithTags): TaskFeedItem {
     scheduledType: t.scheduledType as ScheduledType,
     reminderTime: t.reminderTime,
     repeatRule: parseRepeatRule(t.repeatRule),
+    repeatSourceId: t.repeatSourceId,
     dueDate: t.dueDate ? t.dueDate.toISOString() : null,
     status: t.status as TaskStatus,
     bucket: t.bucket as TaskBucket,
@@ -189,6 +190,7 @@ export class FeedService {
         scheduledType: p.scheduledType as ScheduledType,
         reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
         repeatRule: null, // Project 不设 Repeat Rule（CONTEXT.md）
+        repeatSourceId: null,
         dueDate: p.dueDate ? p.dueDate.toISOString() : null,
         status: p.status as ProjectStatus,
         bucket: p.bucket as ProjectBucket,

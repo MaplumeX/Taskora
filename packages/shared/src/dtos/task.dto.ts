@@ -46,6 +46,8 @@ export interface TaskResponseDto {
   reminderTime: string | null;
   /** 重复规则（Repeat Rule）：完成后按规则派生下一实例；已了结任务保留该字段作 Logbook 溯源；null 表示未设置。 */
   repeatRule: RepeatRule | null;
+  /** 派生来源（Repeat Instance）：派生出本任务的那个重复任务的 id；非派生任务为 null。 */
+  repeatSourceId: string | null;
   dueDate: string | null; // 截止日期：必须完成日，可逾期（与 scheduledDate「计划开始做、永不逾期」对立）
   bucket: TaskBucket;
   status: TaskStatus;

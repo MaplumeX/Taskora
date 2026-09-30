@@ -70,6 +70,7 @@ export function taskRowToDto(row: ReplicaRow, tags: Map<string, TagResponseDto>)
     scheduledType: (f.scheduledType as ScheduledType) ?? ScheduledType.NONE,
     reminderTime: (f.reminderTime as string | null) ?? null,
     repeatRule: (f.repeatRule as RepeatRule | null) ?? null,
+    repeatSourceId: (f.repeatSourceId as string | null) ?? null,
     dueDate: (f.dueDate as string | null) ?? null,
     bucket: (f.bucket as TaskBucket) ?? TaskBucket.INBOX,
     status: (f.status as TaskStatus) ?? TaskStatus.ACTIVE,

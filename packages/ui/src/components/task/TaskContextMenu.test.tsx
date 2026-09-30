@@ -21,6 +21,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useDeleteTask: () => ({ mutate: vi.fn(), isPending: false }),
   useRestoreTask: () => ({ mutate: vi.fn(), isPending: false }),
   useConvertTaskToProject: () => ({ mutate: vi.fn(), isPending: false }),
+  useSkipTask: () => ({ mutate: skipMock, isPending: false }),
   useProjectsQuery: () => ({
     data: [{ id: 'project-1', title: 'Project Alpha', areaId: null }],
   }),
@@ -29,6 +30,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
 }));
 
 const updateMock = vi.hoisted(() => vi.fn());
+const skipMock = vi.hoisted(() => vi.fn());
 
 const baseTask: TaskResponseDto = {
   id: 'task-1',
@@ -38,6 +40,7 @@ const baseTask: TaskResponseDto = {
   scheduledType: ScheduledType.NONE,
   reminderTime: null,
   repeatRule: null,
+  repeatSourceId: null,
   dueDate: null,
   bucket: TaskBucket.INBOX,
   status: TaskStatus.ACTIVE,
@@ -114,3 +117,51 @@ describe('TaskContextMenu — move picker', () => {
     );
   });
 });
+
+describe('TaskContextMenu — 跳过本次', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  const repeating: TaskResponseDto = {
+    ...baseTask,
+    scheduledType: ScheduledType.DATE,
+    scheduledDate: '2026-02-05',
+    bucket: TaskBucket.SCHEDULED,
+    repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+  };
+  const openMenu = (task: TaskResponseDto) => {
+    withQueryClient(<TaskItem task={task} onToggleComplete={() => {}} onRowClick={() => {}} />);
+    fireEvent.contextMenu(screen.getByText('My task'));
+  };
+  const skipName = /^(Skip Occurrence|跳过本次)$/;
+
+  it('重复任务显示入口，点击调用 skip', async () => {
+    const user = userEvent.setup();
+    openMenu(repeating);
+    await user.click(await screen.findByRole('button', { name: skipName }));
+    expect(skipMock).toHaveBeenCalledWith('task-1', expect.anything());
+  });
+
+  it('无规则的任务不显示入口', async () => {
+    openMenu({ ...repeating, repeatRule: null });
+    await screen.findByRole('button', { name: /^(Move|移动)/ });
+    expect(screen.queryByRole('button', { name: skipName })).toBeNull();
+  });
+
+  it('已完成的重复任务不显示入口', async () => {
+    openMenu({ ...repeating, status: TaskStatus.COMPLETED });
+    await screen.findByRole('button', { name: /^(Move|移动)/ });
+    expect(screen.queryByRole('button', { name: skipName })).toBeNull();
+  });
+
+  it('链已到头（until 已过）：入口禁用，点击无效', async () => {
+    const user = userEvent.setup();
+    openMenu({ ...repeating, repeatRule: { ...repeating.repeatRule!, until: '2026-02-06' } });
+    const item = await screen.findByRole('button', { name: skipName });
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    await user.click(item);
+    expect(skipMock).not.toHaveBeenCalled();
+  });
+});
+
