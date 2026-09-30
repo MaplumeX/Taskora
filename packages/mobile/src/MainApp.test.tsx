@@ -23,6 +23,10 @@ vi.mock('./engine/mobile-engine', () => ({
 
 import { MainApp } from './MainApp';
 
+// 页面是 lazy() 路由：CI 冷启动时首次 import + transform 可能超过默认 1s。
+const LAZY_PAGE = { timeout: 10_000 };
+const LAZY_TEST_TIMEOUT = 15_000;
+
 function renderApp() {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false } },
@@ -63,29 +67,37 @@ describe('MainApp (android navigation shell)', () => {
     expect(screen.queryByRole('navigation', { name: 'Main navigation' })).not.toBeInTheDocument();
   });
 
-  it('pushes into a list and returns to home with the back button', async () => {
-    const user = userEvent.setup();
-    renderApp();
+  it(
+    'pushes into a list and returns to home with the back button',
+    async () => {
+      const user = userEvent.setup();
+      renderApp();
 
-    const main = await screen.findByRole('main');
-    await user.click(await within(main).findByRole('link', { name: 'Today' }));
-    expect(await screen.findByRole('heading', { name: 'Today' })).toBeInTheDocument();
+      const main = await screen.findByRole('main');
+      await user.click(await within(main).findByRole('link', { name: 'Today' }));
+      expect(await screen.findByRole('heading', { name: 'Today' }, LAZY_PAGE)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Back' }));
-    expect(await within(main).findByRole('link', { name: 'Inbox' })).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/home');
-  });
-
-  it('falls back to home when a list was opened without history', async () => {
-    window.history.replaceState(null, '', '/today');
-    const user = userEvent.setup();
-    renderApp();
-
-    expect(await screen.findByRole('heading', { name: 'Today' })).toBeInTheDocument();
-    await user.click(screen.getByRole('button', { name: 'Back' }));
-
-    await waitFor(() => {
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+      expect(await within(main).findByRole('link', { name: 'Inbox' })).toBeInTheDocument();
       expect(window.location.pathname).toBe('/home');
-    });
-  });
+    },
+    LAZY_TEST_TIMEOUT,
+  );
+
+  it(
+    'falls back to home when a list was opened without history',
+    async () => {
+      window.history.replaceState(null, '', '/today');
+      const user = userEvent.setup();
+      renderApp();
+
+      expect(await screen.findByRole('heading', { name: 'Today' }, LAZY_PAGE)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Back' }));
+
+      await waitFor(() => {
+        expect(window.location.pathname).toBe('/home');
+      });
+    },
+    LAZY_TEST_TIMEOUT,
+  );
 });
