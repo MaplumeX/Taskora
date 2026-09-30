@@ -40,10 +40,23 @@ class SyncLabels {
 }
 
 @InvokeArg
+class SyncBasis {
+    var cursor: Long = 0
+    var pendingLocal: Boolean = false
+}
+
+@InvokeArg
 class SyncArgs {
     var reminders: List<SyncEntry> = listOf()
     lateinit var channelName: String
     var labels: SyncLabels? = null
+    var basis: SyncBasis? = null
+}
+
+@InvokeArg
+class ConfigureBackgroundArgs {
+    lateinit var planUrl: String
+    lateinit var token: String
 }
 
 @InvokeArg
@@ -80,7 +93,7 @@ private val AUTOSTART_COMPONENTS = listOf(
 /**
  * Reminder 投递插件入口（ADR-0014）。JS 经 Rust 命令调用：
  * sync / clear / status / requestPermission / openSettings /
- * takePendingActions / takeLaunchTask。
+ * takePendingActions / takeLaunchTask / configureBackground。
  *
  * 事件（reminder-actions spec，JS 经 addPluginListener 订阅）：
  * - actions-available：通知按钮排进了新操作（进程存活时立即应用）；
@@ -154,7 +167,8 @@ class RemindersPlugin(private val activity: Activity) : Plugin(activity) {
                     snoozeMore = it.snoozeMore,
                 )
             }
-            ReminderAlarms.sync(activity.applicationContext, incoming, args.channelName, labels)
+            val basis = args.basis?.let { PlanBasis(cursor = it.cursor, pendingLocal = it.pendingLocal) }
+            ReminderAlarms.sync(activity.applicationContext, incoming, args.channelName, labels, basis)
             invoke.resolve()
         } catch (e: Exception) {
             invoke.reject("reminder sync failed: ${e.message}")
@@ -188,10 +202,24 @@ class RemindersPlugin(private val activity: Activity) : Plugin(activity) {
         invoke.resolve(result)
     }
 
+    /** 登出：注销全部提醒并停用后台同步。 */
     @Command
     fun clear(invoke: Invoke) {
         ReminderAlarms.clear(activity.applicationContext)
+        ReminderBackground.disable(activity.applicationContext)
         invoke.resolve()
+    }
+
+    /** 后台同步（local-first-v3 issue 09）：设备注册取回后台凭据后调用。 */
+    @Command
+    fun configureBackground(invoke: Invoke) {
+        try {
+            val args = invoke.parseArgs(ConfigureBackgroundArgs::class.java)
+            ReminderBackground.configure(activity.applicationContext, args.planUrl, args.token)
+            invoke.resolve()
+        } catch (e: Exception) {
+            invoke.reject("configure background sync failed: ${e.message}")
+        }
     }
 
     @Command

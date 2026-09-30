@@ -1,6 +1,5 @@
 import { useCalendarDay, parseCalendarDate } from '@taskora/api';
 import * as React from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Calendar, Flag } from 'lucide-react';
@@ -12,7 +11,6 @@ import {
   formatDeadlineCountdown,
   isOverdue,
   isToday,
-  projectKeys,
   useUpdateProject,
 } from '@taskora/api';
 
@@ -35,18 +33,12 @@ export function ProjectMetaRow({ project }: Props) {
   useCalendarDay();
   const { t } = useTranslation('task');
   const { t: tc } = useTranslation('common');
-  const queryClient = useQueryClient();
   const updateProject = useUpdateProject();
 
   const patch = (data: UpdateProjectDto) =>
     updateProject.mutate(
       { id: project.id, data },
       {
-        onSuccess: () => {
-          void queryClient.invalidateQueries({ queryKey: projectKeys.detail(project.id) });
-          void queryClient.invalidateQueries({ queryKey: projectKeys.all });
-          void queryClient.invalidateQueries({ queryKey: ['feed'] });
-        },
         onError: () => toast.error(tc('saveFailed')),
       },
     );

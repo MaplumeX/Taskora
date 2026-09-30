@@ -10,7 +10,10 @@ export {
   BASE_62_DIGITS,
   positionBetween,
   positionsBetween,
+  MAX_POSITION_LENGTH,
   rebalancePositions,
+  rebalanceSegments,
+  repositionMinimal,
   synthPosition,
   validatePosition,
 } from './position';
@@ -26,6 +29,7 @@ export {
   ENTITIES,
   SYNC_ENTITIES,
   entityDef,
+  entityTableDdl,
   isSyncEntity,
   schemaDdl,
   DELETE_CASCADES,
@@ -41,30 +45,76 @@ export { inTransaction } from './storage';
 export {
   LocalReplica,
   type ReplicaRow,
+  type ListOptions,
+  type ListWhere,
+  type ListWhereValue,
   type LocalReplicaOptions,
   type OutboxEntry,
   type EngineChange,
 } from './replica';
-export { openEngine, positionAfter, type Engine, type EngineOptions } from './engine';
-export type {
-  BootstrapResponse,
-  CompactChange,
-  DeleteRequest,
-  EntityChange,
-  HubChange,
-  OutboxEvent,
-  PullRequest,
-  PullResponse,
-  PushRequest,
-  PushResponse,
-  SnapshotEntry,
-  SyncTransport,
+export {
+  changeAffects,
+  replaceEqualDeep,
+  watchQuery,
+  type LiveQuery,
+  type QueryDependency,
+  type QueryObserver,
+  type QueryWatch,
+} from './live-query';
+export {
+  MAX_PUSH_BATCH_BYTES,
+  openEngine,
+  positionAfter,
+  type Engine,
+  type EngineOptions,
+} from './engine';
+export {
+  COMPACT_REGISTRY_RETENTION_DAYS,
+  SYNC_CLIENT_HEADER,
+  SYNC_LOG_RETENTION_DAYS,
+  SYNC_PROTOCOL_HEADER,
+  SYNC_PROTOCOL_VERSION,
+  SyncUpgradeRequiredError,
+  type BootstrapRequest,
+  type BootstrapResponse,
+  type CompactChange,
+  type DeleteRequest,
+  type EntityChange,
+  type FetchEntitiesRequest,
+  type FetchEntitiesResponse,
+  type HubChange,
+  type HubVersionInfo,
+  type OutboxEvent,
+  type PullRequest,
+  type PullResponse,
+  type PushRequest,
+  type PushResponse,
+  type RejectedChange,
+  type SnapshotEntry,
+  type SyncTransport,
 } from './protocol';
 export {
+  REPLICA_MIGRATIONS,
+  REPLICA_SCHEMA_VERSION,
+  ReplicaSchemaTooNewError,
+  migrateReplica,
+  readSchemaVersion,
+  type ReplicaMigration,
+} from './migrations';
+export {
   InMemorySyncHub,
+  applyRepairs,
   scrubReferences,
   VIRTUAL_DEVICE_ID,
   type InMemorySyncHubOptions,
   type ReferenceProbe,
   type ReferenceStatus,
 } from './hub';
+export { repairEntity, type HeadingProjectProbe } from './invariants';
+export {
+  archiveCutoff,
+  DEFAULT_ARCHIVE_AFTER_DAYS,
+  isArchivedTask,
+  type ArchiveTaskFields,
+} from './archive';
+export * from './domain';

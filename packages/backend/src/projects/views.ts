@@ -5,8 +5,9 @@ export type ProjectView =
   'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
 
 /**
- * Build the Prisma `where` clause for a given view (Project version).
- * Same semantics as buildTaskViewWhere but for Project model (no parentId/projectId).
+ * 视图的 SQL 粗筛（Prisma `where`）。视图规则本身在 @taskora/engine 的
+ * domain projectMatchesView（与设备共用），服务在查询后按它做最终过滤；这里
+ * 只负责少读行，条件只能比规则宽、不能比它窄。
  *
  * Returns only the view-specific conditions (not userId — caller must add that).
  */

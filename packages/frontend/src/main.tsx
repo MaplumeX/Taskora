@@ -18,6 +18,7 @@ import {
 } from '@taskora/api';
 import { router } from '@/router';
 import { tryRecoverSession } from '@/lib/sessionRecovery';
+import { initWebEngine } from '@/engine/web-engine';
 // 登录/注册/登出后的导航回调在此注册（副作用 import，必须先于页面加载）。
 import '@/lib/hooks/useAuth';
 import '@/index.css';
@@ -46,6 +47,10 @@ const queryClient = new QueryClient({
 // Event Stream singleton: connects after login, disconnects on logout,
 // applies Change Events straight onto the query cache.
 initEventStream(queryClient);
+
+// Local-first Engine（local-first-v3 issue 05）：登录后实体读写切到 OPFS
+// 里的本地副本，多标签页由 leader 独占副本；浏览器不支持时保持 REST。
+initWebEngine(queryClient);
 
 // Web wiring: localStorage-backed token store + API base URL from env.
 configureTokenStore(createLocalTokenStore());

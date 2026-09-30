@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { usePreferencesStore } from '@/stores/preferences.store';
 import type { LaterProjectFields, LaterProjectKind } from '@taskora/shared';
 import { projectLaterKind, todayDateKey } from '@/utils/date';
 import { currentStatusBarController } from '../status-bar/controller';
+import { useQueryCache } from './cache-patches';
 
 const listeners = new Set<() => void>();
 let timer: ReturnType<typeof setInterval> | undefined;
@@ -35,13 +35,14 @@ export function useCalendarDay(): string {
 /** Mounted once by the shared app shell; does not remount editors. */
 export function useCalendarQueryRefresh(): void {
   const key = useCalendarDay();
-  const queryClient = useQueryClient();
+  const cache = useQueryCache();
   useEffect(() => {
-    void queryClient.invalidateQueries({
-      predicate: (query) => ['tasks', 'feed', 'projects'].includes(String(query.queryKey[0])),
-    });
+    // 「今天」不是副本数据：Engine 模式下没有变更通知，同样要主动重跑
+    for (const root of ['tasks', 'feed', 'projects']) {
+      void cache.invalidateQueries({ queryKey: [root] });
+    }
     currentStatusBarController()?.scheduleRefresh();
-  }, [key, queryClient]);
+  }, [key, cache]);
 }
 
 /** 客户端 Later Project 判定（`projectLaterKind`），跨天 / 换时区后返回新的函数引用。 */

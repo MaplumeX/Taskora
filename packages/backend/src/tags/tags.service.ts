@@ -1,20 +1,33 @@
+import { randomUUID } from 'node:crypto';
+
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { registerCompacted } from '../sync/compact-registry';
+import { SyncHubService } from '../sync/sync-hub.service';
+import { newRowOrder } from '../common/domain-storage';
 import { CreateTagDto, UpdateTagDto } from './dto/tags.dto';
 
+/** Tag 的 REST 写路径：写入经 Sync Hub 的合并器（虚拟设备 0）。 */
 @Injectable()
 export class TagsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly hub: SyncHubService,
+  ) {}
+
+  private write(userId: string, id: string, fields: Record<string, unknown>) {
+    return this.hub.writeAsHub(userId, async (batch) => {
+      await batch.write('tag', id, fields);
+      return batch.tx.tag.findUniqueOrThrow({ where: { id } });
+    });
+  }
 
   async create(userId: string, dto: CreateTagDto) {
-    return this.prisma.tag.create({
-      data: {
-        title: dto.title,
-        color: dto.color ?? '#3B82F6',
-        tagGroupId: dto.tagGroupId ?? null,
-        userId,
-      },
+    return this.write(userId, randomUUID(), {
+      title: dto.title,
+      color: dto.color ?? '#3B82F6',
+      tagGroupId: dto.tagGroupId ?? null,
+      // 新标签的位次口径不变：sortOrder 0 + 同口径合成的 Position
+      ...newRowOrder(0),
     });
   }
 
@@ -37,22 +50,17 @@ export class TagsService {
 
   async update(userId: string, id: string, dto: UpdateTagDto) {
     await this.findOne(userId, id);
-    const data: { title?: string; color?: string; tagGroupId?: string | null } = {};
-    if (dto.title !== undefined) data.title = dto.title;
-    if (dto.color !== undefined) data.color = dto.color;
-    if (dto.tagGroupId !== undefined) data.tagGroupId = dto.tagGroupId;
-    return this.prisma.tag.update({
-      where: { id },
-      data,
-    });
+    const fields: { title?: string; color?: string; tagGroupId?: string | null } = {};
+    if (dto.title !== undefined) fields.title = dto.title;
+    if (dto.color !== undefined) fields.color = dto.color;
+    if (dto.tagGroupId !== undefined) fields.tagGroupId = dto.tagGroupId;
+    return this.write(userId, id, fields);
   }
 
   async remove(userId: string, id: string) {
-    await this.findOne(userId, id);
+    const tag = await this.findOne(userId, id);
     // TaskTag 关联通过 onDelete: Cascade 自动清理
-    return this.prisma.$transaction(async (tx) => {
-      await registerCompacted(tx, userId, 'tag', [id]);
-      return tx.tag.delete({ where: { id } });
-    });
+    await this.hub.writeAsHub(userId, (batch) => batch.delete('tag', [id]));
+    return tag;
   }
 }

@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal, Tag, Trash2 } from 'lucide-react';
@@ -15,7 +14,7 @@ import {
 } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { MenuRow } from '@/components/common/MenuRow';
-import { areaKeys, useDeleteArea, useUpdateArea } from '@taskora/api';
+import { useDeleteArea, useUpdateArea } from '@taskora/api';
 import { TagsField } from '@/components/task/fields/TagsField';
 
 export interface AreaMoreMenuProps {
@@ -27,7 +26,6 @@ type PickerKind = 'tags' | null;
 export function AreaMoreMenu({ area }: AreaMoreMenuProps) {
   const { t } = useTranslation('task');
   const { t: tc } = useTranslation('common');
-  const queryClient = useQueryClient();
   const navigate = useNavigate();
   const updateArea = useUpdateArea();
   const deleteArea = useDeleteArea();
@@ -48,10 +46,6 @@ export function AreaMoreMenu({ area }: AreaMoreMenuProps) {
     updateArea.mutate(
       { id: area.id, data },
       {
-        onSuccess: () => {
-          void queryClient.invalidateQueries({ queryKey: areaKeys.detail(area.id) });
-          void queryClient.invalidateQueries({ queryKey: areaKeys.all });
-        },
         onError: () => toast.error(tc('saveFailed')),
       },
     );
@@ -60,10 +54,7 @@ export function AreaMoreMenu({ area }: AreaMoreMenuProps) {
   const handleDelete = () => {
     closeMenu();
     deleteArea.mutate(area.id, {
-      onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: areaKeys.all });
-        navigate('/today');
-      },
+      onSuccess: () => navigate('/today'),
       onError: () => toast.error(tc('deleteFailed')),
     });
   };

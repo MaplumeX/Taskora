@@ -28,119 +28,8 @@ describe('FeedService', () => {
       $transaction: vi.fn(async (cb: (tx: typeof mockPrisma) => unknown) => cb(mockPrisma)),
     } as unknown as InstanceType<typeof PrismaService>;
 
-    // emptyTrash 现在还会下发 Subtask / ProjectHeading 级联的 Compact Event
-    // （ADR-0007；heading 随 trashed project 的 DB 级联消失）
-    mockPrisma.subtask = { findMany: vi.fn().mockResolvedValue([]) };
-    mockPrisma.projectHeading = { findMany: vi.fn().mockResolvedValue([]) };
-    mockPrisma.compactedEntity = { createMany: vi.fn().mockResolvedValue({ count: 0 }) };
-    service = new FeedService(mockPrisma, {
-      publishCompact: vi.fn().mockResolvedValue(undefined),
-    } as never);
-  });
-
-  describe('emptyTrash', () => {
-    const userId = 'user-1';
-
-    it('1. 空 trash: 无 trashed task / project → deleteMany 不调用, count=0', async () => {
-      mockPrisma.project.findMany.mockResolvedValue([]);
-      mockPrisma.task.findMany.mockResolvedValue([]);
-      mockPrisma.task.deleteMany.mockResolvedValue({ count: 0 });
-      mockPrisma.project.deleteMany.mockResolvedValue({ count: 0 });
-
-      const result = await service.emptyTrash(userId);
-
-      expect(result).toEqual({ deletedTasks: 0, deletedProjects: 0 });
-      // deleteMany 应以空 in 列表调用(集合为空 → in: [])
-      expect(mockPrisma.task.deleteMany).toHaveBeenCalledWith({
-        where: { id: { in: [] }, userId },
-      });
-      expect(mockPrisma.project.deleteMany).toHaveBeenCalledWith({
-        where: { id: { in: [] }, userId },
-      });
-    });
-
-    it('2. 仅 trashed task → 删该 task, count=1', async () => {
-      const trashedTask = {
-        id: 't1',
-        projectId: null,
-        trashedAt: new Date(),
-        status: TaskStatus.ACTIVE,
-      };
-      mockPrisma.project.findMany.mockResolvedValue([]);
-      mockPrisma.task.findMany.mockResolvedValue([trashedTask]);
-      mockPrisma.task.deleteMany.mockResolvedValue({ count: 1 });
-      mockPrisma.project.deleteMany.mockResolvedValue({ count: 0 });
-
-      const result = await service.emptyTrash(userId);
-
-      expect(result).toEqual({ deletedTasks: 1, deletedProjects: 0 });
-      expect(mockPrisma.task.deleteMany).toHaveBeenCalledWith({
-        where: { id: { in: ['t1'] }, userId },
-      });
-    });
-
-    it('5. trashed project + 下属 active task → project + task 都删', async () => {
-      const tasks = [{ id: 't1', projectId: 'p1', trashedAt: null, status: TaskStatus.ACTIVE }];
-      mockPrisma.project.findMany.mockResolvedValue([{ id: 'p1' }]);
-      mockPrisma.task.findMany.mockResolvedValue(tasks);
-      mockPrisma.task.deleteMany.mockResolvedValue({ count: 1 });
-      mockPrisma.project.deleteMany.mockResolvedValue({ count: 1 });
-
-      const result = await service.emptyTrash(userId);
-
-      expect(result).toEqual({ deletedTasks: 1, deletedProjects: 1 });
-      // task 删除集合应含 t1(project 下属)
-      const taskCall = mockPrisma.task.deleteMany.mock.calls[0][0];
-      expect(taskCall.where.id.in).toEqual(['t1']);
-      // project 删除集合应含 p1
-      expect(mockPrisma.project.deleteMany).toHaveBeenCalledWith({
-        where: { id: { in: ['p1'] }, userId },
-      });
-    });
-
-    it('6. 非 trashed task 不被删(trashedAt 隔离)', async () => {
-      // active task 不属 trashed project → 不应出现在删除集
-      const tasks = [
-        { id: 't1', projectId: null, trashedAt: new Date(), status: TaskStatus.ACTIVE },
-        { id: 't2', projectId: null, trashedAt: null, status: TaskStatus.ACTIVE },
-        { id: 't3', projectId: null, trashedAt: null, status: TaskStatus.COMPLETED },
-      ];
-      mockPrisma.project.findMany.mockResolvedValue([]);
-      mockPrisma.task.findMany.mockResolvedValue(tasks);
-      mockPrisma.task.deleteMany.mockResolvedValue({ count: 1 });
-      mockPrisma.project.deleteMany.mockResolvedValue({ count: 0 });
-
-      const result = await service.emptyTrash(userId);
-
-      expect(result).toEqual({ deletedTasks: 1, deletedProjects: 0 });
-      const call = mockPrisma.task.deleteMany.mock.calls[0][0];
-      expect(call.where.id.in).toEqual(['t1']);
-    });
-
-    it('7. userId 隔离: findMany where 含 userId, deleteMany where 含 userId', async () => {
-      mockPrisma.project.findMany.mockResolvedValue([]);
-      mockPrisma.task.findMany.mockResolvedValue([]);
-      mockPrisma.task.deleteMany.mockResolvedValue({ count: 0 });
-      mockPrisma.project.deleteMany.mockResolvedValue({ count: 0 });
-
-      await service.emptyTrash(userId);
-
-      // project.findMany where 含 userId
-      expect(mockPrisma.project.findMany).toHaveBeenCalledWith({
-        where: { userId, trashedAt: { not: null } },
-        select: { id: true },
-      });
-      // task.findMany where 含 userId (no parentId select)
-      expect(mockPrisma.task.findMany).toHaveBeenCalledWith({
-        where: { userId },
-        select: { id: true, projectId: true, trashedAt: true },
-      });
-      // deleteMany where 含 userId(双保险)
-      const taskCall = mockPrisma.task.deleteMany.mock.calls[0][0];
-      expect(taskCall.where).toHaveProperty('userId', userId);
-      const projectCall = mockPrisma.project.deleteMany.mock.calls[0][0];
-      expect(projectCall.where).toHaveProperty('userId', userId);
-    });
+    // 只测读路径；清空 Trash 的写路径见 rest-writes.structure.e2e-spec
+    service = new FeedService(mockPrisma, undefined as never);
   });
 
   describe('findAll — project 排除（origin/main #41）', () => {
@@ -222,7 +111,8 @@ describe('FeedService', () => {
 
       const result = await service.findAll(userId, 'anytime');
 
-      expect(result.map((item) => item.id)).toEqual(['loose', 'in-past', 'in-active']);
+      // 排序由 domain sortFeedItems 决定，这里只断言可见集合
+      expect(result.map((item) => item.id).sort()).toEqual(['in-active', 'in-past', 'loose']);
     });
 
     it('someday 排除 Someday 项目内的 Someday 任务', async () => {
@@ -302,7 +192,6 @@ describe('FeedService', () => {
           trashedAt: null,
         }),
       );
-      expect(taskCall.orderBy).toEqual([{ settledAt: 'desc' }]);
       expect(result).toHaveLength(2);
       // 按了结时间降序（取消的更晚 → 在前）
       expect(result[0]).toMatchObject({ id: 'task-2' });
@@ -326,7 +215,12 @@ describe('FeedService', () => {
     });
 
     it('项目统计的 completed 计数口径 = 已了结（完成 + 取消）', async () => {
-      mockPrisma.task.findMany.mockResolvedValue([]);
+      // 第一次：视图任务；第二次：进度计数用的项目任务
+      mockPrisma.task.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([
+        { projectId: 'p1', status: TaskStatus.ACTIVE, trashedAt: null },
+        { projectId: 'p1', status: TaskStatus.COMPLETED, trashedAt: null },
+        { projectId: 'p1', status: TaskStatus.CANCELLED, trashedAt: null },
+      ]);
       mockPrisma.project.findMany.mockResolvedValue([
         {
           id: 'p1',
@@ -346,16 +240,9 @@ describe('FeedService', () => {
           tags: [],
         },
       ]);
-      mockPrisma.task.groupBy
-        .mockResolvedValueOnce([{ projectId: 'p1', _count: { _all: 3 } }])
-        .mockResolvedValueOnce([{ projectId: 'p1', _count: { _all: 2 } }]);
 
       const result = await service.findAll(userId, 'today');
 
-      const completedCall = mockPrisma.task.groupBy.mock.calls[1][0];
-      expect(completedCall.where.status).toEqual({
-        in: [TaskStatus.COMPLETED, TaskStatus.CANCELLED],
-      });
       expect(result[0]).toMatchObject({
         id: 'p1',
         type: 'project',

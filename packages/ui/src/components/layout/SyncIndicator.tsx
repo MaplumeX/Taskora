@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { CloudOff, Cloud, Loader2 } from 'lucide-react';
+import { CircleArrowUp, CloudOff, Cloud, Loader2 } from 'lucide-react';
 
 import { useSyncStatusStore } from '@taskora/api';
 
@@ -7,15 +7,16 @@ import { useSyncStatusStore } from '@taskora/api';
  * 同步状态指示器（V2 spec：离线可见性）。
  *
  * 常驻角落、只呈现状态、不拦截任何操作（无阻塞式 UI、无逐任务标注）。
- * 状态由桌面端 syncNow 的成败驱动；web 端无 Engine，状态恒为 idle →
- * 不渲染。离线时显示 Outbox 中未同步的写操作条数。
+ * 状态由各端 Engine 同步调度（syncNow）的成败驱动；没有 Engine 时（web
+ * 浏览器不支持 OPFS、退回 REST）状态恒为 idle → 不渲染。离线时显示 Outbox 中未同步的写操作条数。需要升级（hub 要求
+ * 更高的同步协议版本，或副本来自更新版本）时常驻提示，直到安装新版本。
  */
 export function SyncIndicator() {
   const { t } = useTranslation();
   const status = useSyncStatusStore((s) => s.status);
   const pendingCount = useSyncStatusStore((s) => s.pendingCount);
 
-  if (status === 'idle') return null; // web：无 Engine，无可指示的状态
+  if (status === 'idle') return null; // 无 Engine（REST 路径），无可指示的状态
 
   if (status === 'offline') {
     return (
@@ -26,6 +27,19 @@ export function SyncIndicator() {
       >
         <CloudOff className="h-3.5 w-3.5" />
         <span>{t('common:syncStatusOffline', { count: pendingCount })}</span>
+      </div>
+    );
+  }
+
+  if (status === 'upgrade-required') {
+    return (
+      <div
+        role="status"
+        data-sync-status="upgrade-required"
+        className="pointer-events-none fixed bottom-[calc(0.75rem+var(--kb-inset,0px))] right-3 z-40 max-md:bottom-[calc(1.75rem+env(safe-area-inset-bottom)+var(--kb-inset,0px))] max-md:right-auto max-md:left-3 flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-xs text-destructive backdrop-blur-sm"
+      >
+        <CircleArrowUp className="h-3.5 w-3.5" />
+        <span>{t('common:syncStatusUpgradeRequired')}</span>
       </div>
     );
   }

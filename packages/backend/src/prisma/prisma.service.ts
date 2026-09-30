@@ -1,5 +1,5 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 
 import { ChangeEventCollector } from '../events/change-event.collector';
 
@@ -94,7 +94,27 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get compactedEntity() {
     return this.extended.compactedEntity;
   }
+  get syncChange() {
+    return this.extended.syncChange;
+  }
+  get syncCounter() {
+    return this.extended.syncCounter;
+  }
 
   // Overridden in the constructor (wrapped with the collector's tx scope).
   declare $transaction: PrismaClient['$transaction'];
+
+  /**
+   * Interactive transaction on the base client, outside the Change Event
+   * collector. Only for tables the collector does not observe (sync change
+   * log, compact registry): the collector's transaction depth is global, so
+   * opening its scope from a tap (which runs inside its own flush) would hold
+   * back every other write's events until this transaction ends.
+   */
+  rawTransaction<T>(
+    run: (tx: Prisma.TransactionClient) => Promise<T>,
+    options?: { isolationLevel?: Prisma.TransactionIsolationLevel },
+  ): Promise<T> {
+    return this.base.$transaction(run, options);
+  }
 }

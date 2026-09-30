@@ -67,3 +67,12 @@ export function setTaskBackend(implementation: TaskBackend | undefined): void {
 export function currentTaskBackend(): TaskBackend {
   return backend;
 }
+
+/**
+ * 当前是否为 Engine（local-first）模式：各域后端总是一起注入（桌面端 /
+ * 移动端装配 Engine 时），以 Task 后端为准。Engine 模式下缓存由 Engine 的
+ * 变更通知驱动刷新，mutation 不再自行失效（local-first-v3 issue 02）。
+ */
+export function isEngineMode(): boolean {
+  return backend !== restBackend;
+}

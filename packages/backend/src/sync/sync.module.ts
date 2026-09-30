@@ -2,14 +2,15 @@ import { Module } from '@nestjs/common';
 
 import { SyncController } from './sync.controller';
 import { SyncHubService } from './sync-hub.service';
-import { SyncEventBuffer } from './sync-event-buffer.service';
+import { SyncChangeLog } from './sync-change-log';
+import { PrismaSyncChangeLog } from './prisma-sync-change-log.service';
 import { PrismaModule } from '../prisma/prisma.module';
 import { EventsModule } from '../events/events.module';
 
 @Module({
   imports: [PrismaModule, EventsModule],
   controllers: [SyncController],
-  providers: [SyncHubService, SyncEventBuffer],
-  exports: [SyncHubService],
+  providers: [SyncHubService, { provide: SyncChangeLog, useClass: PrismaSyncChangeLog }],
+  exports: [SyncHubService, SyncChangeLog],
 })
 export class SyncModule {}

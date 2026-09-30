@@ -259,6 +259,121 @@ export function rebalancePositions(
   return positionsBetween(null, null, keys.length);
 }
 
+/** Position 超过此长度视为膨胀（反复插队的痕迹），需要局部 re-balance。 */
+export const MAX_POSITION_LENGTH = 24;
+
+/**
+ * 局部 re-balance：只重排膨胀键所在的那一段（CONTEXT.md：Position 需要
+ * 后台偶尔 re-balance 防字符串膨胀）。
+ *
+ * ordered 为按 Position 升序的全部行。每段连续的超长键取其前后的正常
+ * 键为界，在两者之间生成等距短键；若界限太近、生成的键仍然超长，就
+ * 向两侧扩大窗口（把邻居也一起重排），直到键足够短或覆盖整表。
+ * 顺序保持不变，窗口外的行一律不动——不再因为一个膨胀键改写整张表。
+ *
+ * 返回需要写入的 { id, position }。
+ */
+export function rebalanceSegments(
+  ordered: Array<{ id: string; position: string }>,
+  maxLength: number = MAX_POSITION_LENGTH,
+): Array<{ id: string; position: string }> {
+  const n = ordered.length;
+  const changes: Array<{ id: string; position: string }> = [];
+  let index = 0;
+  while (index < n) {
+    if (ordered[index].position.length <= maxLength) {
+      index += 1;
+      continue;
+    }
+    let end = index;
+    while (end < n && ordered[end].position.length > maxLength) end += 1;
+    // 窗口 (lo, hi)：lo / hi 是保持不动的界（-1 / n 表示两端开放）
+    let lo = index - 1;
+    let hi = end;
+    let keys: string[] | null = null;
+    for (;;) {
+      const lower = lo >= 0 ? ordered[lo].position : null;
+      const upper = hi < n ? ordered[hi].position : null;
+      try {
+        const candidate = positionsBetween(lower, upper, hi - lo - 1);
+        if (candidate.every((key) => key.length <= maxLength)) keys = candidate;
+      } catch {
+        // 界限非严格递增（如重复键）：扩大窗口
+      }
+      if (keys || (lo < 0 && hi >= n)) break;
+      if (lo >= 0) lo -= 1;
+      if (hi < n) hi += 1;
+    }
+    // 覆盖整表仍不够短（极端情况）：接受整表等距键
+    keys ??= positionsBetween(null, null, n);
+    const start = keys.length === n ? 0 : lo + 1;
+    for (let k = 0; k < keys.length; k += 1) {
+      const row = ordered[start + k];
+      if (row.position !== keys[k]) changes.push({ id: row.id, position: keys[k] });
+    }
+    index = start + keys.length;
+  }
+  return changes;
+}
+
+/**
+ * 按目标顺序重排时，只为「必须移动」的行分配新 Position（CONTEXT.md：
+ * 插队只需在两个邻居间生成新串，无需重排他人）。
+ *
+ * 取现有 Position 沿目标顺序的最长严格递增子序列作为不动的骨架，其余
+ * 行（被拖动的、缺 Position 的）按连续段插进前后骨架邻居之间。单次拖动
+ * 只产生一条写；并发拖动不同行的两台设备各写各的行，LWW 下双方的移动
+ * 都保留，而不是一方的整表顺序覆盖另一方。
+ *
+ * 返回需要写入的 { id, position }（已在位的行不出现）。
+ */
+export function repositionMinimal(
+  ordered: Array<{ id: string; position: string | null | undefined }>,
+): Array<{ id: string; position: string }> {
+  const n = ordered.length;
+  // 最长严格递增子序列（耐心排序，O(n log n)），缺 Position 的行不参与
+  const tailIndex: number[] = [];
+  const prev = new Array<number>(n).fill(-1);
+  for (let i = 0; i < n; i += 1) {
+    const key = ordered[i].position;
+    if (typeof key !== 'string') continue;
+    let lo = 0;
+    let hi = tailIndex.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if ((ordered[tailIndex[mid]].position as string) < key) lo = mid + 1;
+      else hi = mid;
+    }
+    if (lo > 0) prev[i] = tailIndex[lo - 1];
+    tailIndex[lo] = i;
+  }
+  const fixed = new Set<number>();
+  for (let i = tailIndex.length > 0 ? tailIndex[tailIndex.length - 1] : -1; i !== -1; i = prev[i]) {
+    fixed.add(i);
+  }
+
+  const changes: Array<{ id: string; position: string }> = [];
+  let lower: string | null = null;
+  let i = 0;
+  while (i < n) {
+    if (fixed.has(i)) {
+      lower = ordered[i].position as string;
+      i += 1;
+      continue;
+    }
+    let end = i;
+    while (end < n && !fixed.has(end)) end += 1;
+    const upper = end < n ? (ordered[end].position as string) : null;
+    const keys = positionsBetween(lower, upper, end - i);
+    for (let k = 0; k < keys.length; k += 1) {
+      changes.push({ id: ordered[i + k].id, position: keys[k] });
+    }
+    lower = keys[keys.length - 1];
+    i = end;
+  }
+  return changes;
+}
+
 // ---------- Legacy 行的 Position 合成（REST 写 / 兜底共用） ----------
 
 const MAX_TS = 4_102_444_800_000; // 2100-01-01，分数编码的值域上界

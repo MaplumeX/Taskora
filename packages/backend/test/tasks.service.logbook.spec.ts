@@ -66,9 +66,10 @@ describe('TasksService — logbook view', () => {
     // mapper 只做键重命名（settledAt → completedAt），Date 序列化发生在 HTTP 层
     const { settledAt: settled0, ...rest0 } = settled[0];
     const { settledAt: settled1, ...rest1 } = settled[1];
+    // 顺序按了结时间倒序（domain sortForView，与设备同一规则），不依赖 SQL 返回顺序
     expect(result).toEqual([
-      { ...rest0, tags: [], completedAt: settled0 },
       { ...rest1, tags: [], completedAt: settled1 },
+      { ...rest0, tags: [], completedAt: settled0 },
     ]);
     expect(
       result.every(

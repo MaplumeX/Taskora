@@ -1,5 +1,4 @@
 import * as React from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
@@ -24,7 +23,6 @@ import { MenuRow } from '@/components/common/MenuRow';
 import { useLongPress } from '../../lib/useLongPress';
 import {
   getClientKind,
-  taskKeys,
   useCancelTask,
   useCompleteTask,
   useConvertTaskToProject,
@@ -52,7 +50,6 @@ type PickerKind = 'scheduled' | 'repeat' | 'due' | 'tags' | 'move' | null;
 export function TaskContextMenu({ task, current, children, variant = 'default' }: Props) {
   const { t } = useTranslation('task');
   const { t: tc } = useTranslation('common');
-  const queryClient = useQueryClient();
 
   const updateTask = useUpdateTask();
   const completeTask = useCompleteTask();
@@ -77,10 +74,6 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
     updateTask.mutate(
       { id: task.id, data },
       {
-        onSuccess: () => {
-          void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
-          void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-        },
         onError: () => toast.error(tc('saveFailed')),
       },
     );
@@ -90,10 +83,6 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const handleToggleComplete = () => {
     closeMenu();
     (completed ? uncompleteTask : completeTask).mutate(task.id, {
-      onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
-        void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      },
       onError: () => toast.error(tc('saveFailed')),
     });
   };
@@ -102,10 +91,6 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const handleToggleCancel = () => {
     closeMenu();
     (cancelled ? uncancelTask : cancelTask).mutate(task.id, {
-      onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
-        void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      },
       onError: () => toast.error(tc('saveFailed')),
     });
   };
@@ -113,9 +98,6 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const handleDelete = () => {
     closeMenu();
     deleteTask.mutate(task.id, {
-      onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      },
       onError: () => toast.error(t('deleteFailed')),
     });
   };
@@ -123,9 +105,6 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const handleRestore = () => {
     closeMenu();
     restoreTask.mutate(task.id, {
-      onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      },
       onError: () => toast.error(tc('restoreFailed')),
     });
   };

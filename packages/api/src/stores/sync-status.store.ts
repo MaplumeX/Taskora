@@ -6,9 +6,13 @@ import { create } from 'zustand';
  * 三态指示（已同步 / 同步中 / 离线·N 条待同步）由桌面端 syncNow 的
  * 成败驱动（不用 navigator.onLine——服务器不可达不应被假在线掩盖）。
  * web 端无 Engine，状态恒为 idle，指示器不渲染。
+ *
+ * upgrade-required（local-first-v3 issue 03）：hub 要求更高的同步协议
+ * 版本（HTTP 426），或本地副本由更新版本的 Taskora 写入。同步停止、
+ * Outbox 保留，直到安装新版本。
  */
 
-export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'offline';
+export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'offline' | 'upgrade-required';
 
 interface SyncStatusStore {
   status: SyncStatus;

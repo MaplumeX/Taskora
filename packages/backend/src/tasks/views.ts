@@ -22,8 +22,9 @@ export const SETTLED_STATUSES = SETTLED_TASK_STATUSES;
 export const WITH_SETTLED_STATUSES = WITH_SETTLED_TASK_STATUSES;
 
 /**
- * Build the Prisma `where` clause for a given view.
- * Extracted from TasksService.findAll so FeedService can reuse the same logic.
+ * 视图的 SQL 粗筛（Prisma `where`）。视图规则本身在 @taskora/engine 的
+ * domain taskMatchesView（与设备共用），服务在查询后按它做最终过滤；这里
+ * 只负责少读行，条件只能比规则宽、不能比它窄。
  *
  * Returns only the view-specific conditions (not userId — caller must add that).
  */

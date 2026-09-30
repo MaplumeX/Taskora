@@ -8,7 +8,6 @@ import {
   Tag,
   Trash2,
 } from 'lucide-react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 
 import type { SubtaskResponseDto, TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
@@ -31,7 +30,6 @@ import {
   isToday,
   parseCalendarDate,
   startOfTomorrow,
-  taskKeys,
   useCancelSubtask,
   useCompleteSubtask,
   useCreateSubtask,
@@ -54,8 +52,6 @@ interface Props {
 
 export function TaskRowExpanded({ task, current }: Props) {
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
-
   const updateTask = useUpdateTask();
   const createSubtask = useCreateSubtask();
 
@@ -68,19 +64,10 @@ export function TaskRowExpanded({ task, current }: Props) {
 
   const scheduledType = current.scheduledType ?? ScheduledType.NONE;
 
-  const invalidateParent = () =>
-    queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
-
   const patch = (data: UpdateTaskDto) =>
     updateTask.mutate(
       { id: task.id, data },
-      {
-        onSuccess: () => {
-          invalidateParent();
-          void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-        },
-        onError: () => toast.error(t('common:saveFailed')),
-      },
+      { onError: () => toast.error(t('common:saveFailed')) },
     );
 
   const commitNotes = () => {
@@ -96,10 +83,7 @@ export function TaskRowExpanded({ task, current }: Props) {
         data: { title: trimmed },
       },
       {
-        onSuccess: () => {
-          setSubtaskTitle('');
-          invalidateParent();
-        },
+        onSuccess: () => setSubtaskTitle(''),
         onError: () => toast.error(t('task:subtaskCreateFailed')),
       },
     );
@@ -148,7 +132,7 @@ export function TaskRowExpanded({ task, current }: Props) {
           {subtasks.length > 0 && (
             <ul className="flex flex-col">
               {subtasks.map((c) => (
-                <SubtaskRow key={c.id} subtask={c} taskId={task.id} onMutated={invalidateParent} />
+                <SubtaskRow key={c.id} subtask={c} taskId={task.id} />
               ))}
             </ul>
           )}
@@ -322,15 +306,7 @@ function IconPopover({
   );
 }
 
-function SubtaskRow({
-  subtask,
-  taskId,
-  onMutated,
-}: {
-  subtask: SubtaskResponseDto;
-  taskId: string;
-  onMutated: () => void;
-}) {
+function SubtaskRow({ subtask, taskId }: { subtask: SubtaskResponseDto; taskId: string }) {
   const { t } = useTranslation();
   const { t: tc } = useTranslation('common');
   const completeSubtask = useCompleteSubtask();
@@ -377,7 +353,6 @@ function SubtaskRow({
   const toggleCancel = () => {
     setMenuOpen(false);
     (cancelled ? uncancelSubtask : cancelSubtask).mutate(subtask.id, {
-      onSuccess: onMutated,
       onError: () => toast.error(tc('saveFailed')),
     });
   };
@@ -387,7 +362,7 @@ function SubtaskRow({
     if (trimmed && trimmed !== subtask.title) {
       updateSubtask.mutate(
         { id: subtask.id, data: { title: trimmed } },
-        { onSuccess: onMutated, onError: () => toast.error(t('common:saveFailed')) },
+        { onError: () => toast.error(t('common:saveFailed')) },
       );
     } else {
       setDraft(subtask.title);
@@ -405,11 +380,7 @@ function SubtaskRow({
         className="h-3 w-3 rounded-full"
         checked={completed}
         cancelled={cancelled}
-        onToggle={() =>
-          (completed ? uncompleteSubtask : completeSubtask).mutate(subtask.id, {
-            onSuccess: onMutated,
-          })
-        }
+        onToggle={() => (completed ? uncompleteSubtask : completeSubtask).mutate(subtask.id)}
       />
       {editing ? (
         <Input
@@ -466,7 +437,7 @@ function SubtaskRow({
           aria-label={t('common:delete')}
           onClick={(e) => {
             e.stopPropagation();
-            deleteSubtask.mutate({ id: subtask.id, taskId }, { onSuccess: onMutated });
+            deleteSubtask.mutate({ id: subtask.id, taskId });
           }}
         >
           <Trash2 className="h-3.5 w-3.5" />

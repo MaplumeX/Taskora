@@ -7,7 +7,11 @@ import { ScheduledType, TaskStatus } from '@taskora/shared';
 import { usePreferencesStore } from '@/stores/preferences.store';
 import { createReminderCoordinator, type ReminderCoordinator } from './reminder-coordinator';
 import type { ReminderActionRequest } from './reminder-action';
-import type { ReminderDelivery, ReminderNotificationShell } from './notification-shell';
+import type {
+  ReminderDelivery,
+  ReminderNotificationShell,
+  ReminderPlanBasis,
+} from './notification-shell';
 
 const USER = 'user-1';
 
@@ -17,7 +21,9 @@ function makeShell() {
     isPermissionGranted: vi.fn(async () => true),
     requestPermission: vi.fn(async () => true),
     fireNow: vi.fn<(reminder: ReminderDelivery) => Promise<void>>(async () => {}),
-    sync: vi.fn<(plan: ReminderDelivery[]) => Promise<void>>(async () => {}),
+    sync: vi.fn<(plan: ReminderDelivery[], basis: ReminderPlanBasis) => Promise<void>>(
+      async () => {},
+    ),
     clear: vi.fn<() => Promise<void>>(async () => {}),
     openSettings: vi.fn(async () => {}),
   } satisfies ReminderNotificationShell & Record<string, ReturnType<typeof vi.fn>>;
@@ -345,6 +351,26 @@ describe('ReminderCoordinator — system（Android）模式', () => {
     expect(shell.sync).toHaveBeenCalledTimes(2);
 
     warn.mockRestore();
+    coordinator.stop();
+    await engine.close();
+  });
+
+  it('随计划交付副本基准；推送清空 Outbox 后计划未变也重新交付（issue 09）', async () => {
+    await seedTask(engine);
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(shell.sync).toHaveBeenCalledTimes(1);
+    // 本地新建的任务还在 Outbox：hub 计划不含它，原生不得用后台计划覆盖
+    expect(shell.sync.mock.calls[0][1]).toEqual({ cursor: 0, pendingLocal: true });
+
+    await engine.sync();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(shell.sync).toHaveBeenCalledTimes(2);
+    expect(shell.sync.mock.calls[1][0]).toEqual(shell.sync.mock.calls[0][0]);
+    const basis = shell.sync.mock.calls[1][1];
+    expect(basis.pendingLocal).toBe(false);
+    expect(basis.cursor).toBe(await engine.cursor());
+
     coordinator.stop();
     await engine.close();
   });

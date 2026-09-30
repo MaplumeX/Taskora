@@ -34,4 +34,12 @@ describe('SyncIndicator（V2：离线可见性）', () => {
     expect(offline).toHaveAttribute('data-sync-status', 'offline');
     expect(offline.textContent).toContain('3');
   });
+
+  it('需要升级：常驻提示（hub 要求更高协议版本或副本来自更新版本）', () => {
+    useSyncStatusStore.setState({ status: 'upgrade-required', pendingCount: 2 });
+    render(<SyncIndicator />);
+    const status = screen.getByRole('status');
+    expect(status).toHaveAttribute('data-sync-status', 'upgrade-required');
+    expect(status.className).toContain('pointer-events-none');
+  });
 });

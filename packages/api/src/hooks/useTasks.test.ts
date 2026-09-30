@@ -4,7 +4,7 @@ import { type ReactNode, createElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
-import type { TaskResponseDto } from '@taskora/shared';
+import type { FeedItem, TaskResponseDto } from '@taskora/shared';
 
 // Mock the tasks API module
 vi.mock('@/api/tasks.api', () => ({
@@ -35,6 +35,7 @@ import {
   completeTask,
   createTask,
   deleteTask,
+  reorderTasks,
   uncancelTask,
   uncompleteTask,
   updateTask,
@@ -45,6 +46,7 @@ import {
   useCompleteTask,
   useCreateTask,
   useDeleteTask,
+  useReorderTasks,
   useUncancelTask,
   useUncompleteTask,
   useUpdateTask,
@@ -446,6 +448,72 @@ describe('useDeleteTask (optimistic)', () => {
       );
       expect(listData).toHaveLength(1);
       expect(listData?.[0].id).toBe('task-1');
+    });
+  });
+});
+
+describe('feed 缓存同步乐观更新（Inbox/Today 等视图读 feed）', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const feedTask = (id: string): FeedItem => ({ ...baseTask, id, type: 'task', tags: [] });
+  const feedProject = (id: string): FeedItem =>
+    ({ ...feedTask(id), type: 'project', taskTotalCount: 0, taskCompletedCount: 0 }) as FeedItem;
+
+  it('reorder：松手即在 feed 中呈现新顺序，项目行保持原槽位', async () => {
+    vi.mocked(reorderTasks).mockReturnValue(new Promise(() => undefined));
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(
+      ['feed', 'today'],
+      [feedTask('a'), feedProject('p'), feedTask('b'), feedTask('c')],
+    );
+    const { result } = renderHook(() => useReorderTasks(), { wrapper });
+
+    result.current.mutate(['c', 'a', 'b']);
+
+    await waitFor(() => {
+      const ids = queryClient.getQueryData<FeedItem[]>(['feed', 'today'])?.map((item) => item.id);
+      expect(ids).toEqual(['c', 'p', 'a', 'b']);
+    });
+  });
+
+  it('reorder 失败回滚 feed', async () => {
+    vi.mocked(reorderTasks).mockRejectedValue(new Error('boom'));
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(['feed', 'inbox'], [feedTask('a'), feedTask('b')]);
+    const { result } = renderHook(() => useReorderTasks(), { wrapper });
+
+    await expect(result.current.mutateAsync(['b', 'a'])).rejects.toThrow('boom');
+    const ids = queryClient.getQueryData<FeedItem[]>(['feed', 'inbox'])?.map((item) => item.id);
+    expect(ids).toEqual(['a', 'b']);
+  });
+
+  it('complete：feed 中的任务行即时变为已完成', async () => {
+    vi.mocked(completeTask).mockReturnValue(new Promise(() => undefined));
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(['feed', 'today'], [feedTask('task-1'), feedProject('task-1-p')]);
+    const { result } = renderHook(() => useCompleteTask(), { wrapper });
+
+    result.current.mutate('task-1');
+
+    await waitFor(() => {
+      const items = queryClient.getQueryData<FeedItem[]>(['feed', 'today']);
+      expect(items?.[0].status).toBe(TaskStatus.COMPLETED);
+      expect(items?.[0].type).toBe('task');
+      expect(items?.[1].status).toBe(TaskStatus.ACTIVE);
+    });
+  });
+
+  it('delete：任务行即时从 feed 移除', async () => {
+    vi.mocked(deleteTask).mockReturnValue(new Promise(() => undefined));
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(['feed', 'inbox'], [feedTask('task-1'), feedTask('task-2')]);
+    const { result } = renderHook(() => useDeleteTask(), { wrapper });
+
+    result.current.mutate('task-1');
+
+    await waitFor(() => {
+      const ids = queryClient.getQueryData<FeedItem[]>(['feed', 'inbox'])?.map((item) => item.id);
+      expect(ids).toEqual(['task-2']);
     });
   });
 });

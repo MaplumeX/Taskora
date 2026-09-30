@@ -2,16 +2,18 @@
  * Sync Hub — 服务端在 local-first 架构中的角色（ADR-0007）。
  *
  * 接收各设备推送的 Change Event、按字段级 LWW 合并入 Postgres 副本、
- * 供设备拉取；同时作为第 0 号虚拟设备的写入路径。REST CRUD（含
- * Assistant 直调 Prisma 的写）通过 collector tap 进入同一推流：序列化
- * 时由时钟基线机制（entity-codec）赋予虚拟设备 0 的合并语义，无特权
- * 写入路径。
+ * 供设备拉取；同时是第 0 号虚拟设备的写入路径：REST 服务（web 与
+ * Assistant）经 writeAsHub 提交字段写与物理删除，与设备推送走同一个
+ * 合并器，变更日志与数据同事务提交（local-first-v3 issue 05）。没有
+ * 绕过合并器的写入路径。
  */
 
 import { Injectable, OnModuleInit } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 
 import {
   mergeFieldWrites,
+  applyRepairs,
   hlcWallMs,
   formatHlc,
   scrubReferences,
@@ -24,34 +26,39 @@ import {
   type DeleteRequest,
   type OutboxEvent,
   type ReferenceStatus,
+  type RejectedChange,
   type SyncEntity,
+  type WireRow,
 } from '@taskora/engine';
-import type { ChangeAction, ChangeEntity } from '@taskora/shared';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { ChangeEventHub } from '../events/change-event-hub.service';
+import { issueBackgroundToken } from '../reminders/background-token';
 import {
   codecFor,
   delegate,
+  includeFor,
   loadAllRows,
   loadRow,
+  sameWireValue,
   serializeRow,
   toPrismaData,
   wireViewOfRow,
   type PrismaRow,
+  type SerializedState,
 } from './entity-codec';
 import { registerCompacted } from './compact-registry';
-import { SyncEventBuffer } from './sync-event-buffer.service';
-
-const CHANGE_ENTITY_TO_SYNC: Record<ChangeEntity, SyncEntity> = {
-  task: 'task',
-  subtask: 'subtask',
-  project: 'project',
-  'project-heading': 'project-heading',
-  area: 'area',
-  tag: 'tag',
-  'tag-group': 'tag-group',
-};
+import { materializeLegacyClocks } from './legacy-clock-backfill';
+import { SyncChangeLog, type HubChangeDraft } from './sync-change-log';
+import {
+  BOOTSTRAP_PAGE_SIZE,
+  COMPACTED_PAGE_SIZE,
+  SNAPSHOT_PHASES,
+  decodeSnapshotToken,
+  encodeSnapshotToken,
+  parseCutoff,
+  snapshotOwnerWhere,
+  type SnapshotToken,
+} from './snapshot-pages';
 
 /** 无 userId 列的实体（Subtask 经父 Task 认领归属）。 */
 const NO_USER_ID_ENTITIES = new Set<SyncEntity>(['subtask']);
@@ -67,21 +74,61 @@ const PRISMA_TABLE_NAMES: Record<SyncEntity, string> = {
   'tag-group': 'TagGroup',
 };
 
+/**
+ * REST 写入批（虚拟设备 0）的事务上限。批内每行一次加锁读合并写，
+ * 级联（清空 Trash、整页重排）可能涉及数百行，Prisma 默认的 5 秒不够。
+ */
+const HUB_WRITE_TX_OPTIONS = { maxWait: 10_000, timeout: 60_000 };
+
+/**
+ * 一次 REST 写入（web / Assistant）在 hub 上的事务批：批内的字段写与
+ * 物理删除和它们的变更日志一起提交或一起回滚。
+ */
+export interface HubWriteBatch {
+  /** 批内读取用的事务客户端（能读到本批已写的行）。 */
+  readonly tx: Prisma.TransactionClient;
+  /**
+   * 字段写（行不存在即新建）：hub 在行锁内以虚拟设备 0 盖章——时间戳
+   * 高于该行现有的全部字段时钟（用户是看着这些值做的修改，因果在后）——
+   * 再走与设备推送相同的合并、引用清洗与不变量修复。值未变的字段不写。
+   * 行属于其他用户或已被 compact 时静默忽略（调用方先做归属校验）。
+   */
+  write(entity: SyncEntity, id: string, fields: WireRow): Promise<void>;
+  /** 物理删除：与 Delete Request 同一路径（归属校验、级联、Compact 登记）。 */
+  delete(entity: SyncEntity, ids: string[]): Promise<void>;
+}
+
+/**
+ * 单行合并的输入：设备推送的带时钟字段写，或待 hub 盖章的虚拟设备 0 写。
+ * batch：设备这次 push 里出现的全部实体（`entity:id`），引用清洗据此区分
+ * 「同批后序事件会创建」与「不会再来」。
+ */
+type MergeInput =
+  | { kind: 'device'; fields: Record<string, FieldWrite>; batch: ReadonlySet<string> }
+  | { kind: 'virtual'; fields: WireRow };
+
+type SnapshotEntry = {
+  entity: SyncEntity;
+  id: string;
+  fields: Record<string, unknown>;
+  clocks: Record<string, string>;
+};
+
 @Injectable()
 export class SyncHubService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly buffer: SyncEventBuffer,
-    private readonly changeEventHub: ChangeEventHub,
+    private readonly log: SyncChangeLog,
   ) {}
 
-  /** 订阅 REST/Assistant 的 Prisma 写（collector → 旧 Event Stream 的同一份事件）。 */
-  onModuleInit(): void {
-    this.changeEventHub.tap((userId, event) => {
-      void this.handleTap(userId, event.entity, event.action, event.id).catch((error) => {
-        console.error('[sync-hub] tap 处理失败', event, error);
-      });
-    });
+  /**
+   * 启动时把旧版本留下的「值摘要」物化为字段时钟（一次性，处理完的行
+   * fieldDigests 置空）。此后所有写都经合并器、时钟即权威，序列化不再
+   * 做摘要检测。Nest 在开始监听前等待它完成。
+   */
+  async onModuleInit(): Promise<void> {
+    const migrated = await materializeLegacyClocks(this.prisma);
+    if (migrated > 0) console.log(`[sync-hub] 已物化 ${migrated} 行旧摘要时钟`);
   }
 
   // ---------- 设备协议面 ----------
@@ -90,24 +137,66 @@ export class SyncHubService implements OnModuleInit {
    * 设备推送一批变更：先逐事件按字段级 LWW 合并入 Postgres，再应用
    * Delete Request（ADR-0008 同序：字段写 → 删除）。单个事件失败时继续
    * 尝试同批后续事件，但最终让请求失败，使设备保留整批并幂等重试。
+   *
+   * 本 hub 不认识的实体 / 字段（更新版本的客户端，协议 1）逐条拒绝并在
+   * rejected 里列出：设备把它们留在 Outbox，hub 升级后重推即被接受。
+   * 认识的字段照常合并。
    */
   async push(
     userId: string,
-    events: OutboxEvent[],
-    deletes?: DeleteRequest[],
-  ): Promise<{ acked: number }> {
+    events: Array<{ entity: string; id: string; fields: OutboxEvent['fields'] }>,
+    deletes?: Array<{ entity: string; ids: string[] }>,
+  ): Promise<{ acked: number; rejected?: RejectedChange[] }> {
+    const rejected: RejectedChange[] = [];
     let firstFailure: unknown = null;
+    const batch = new Set(events.map((event) => `${event.entity}:${event.id}`));
+    // 同一实体前面的事件失败后，后面的事件跳过：它们依赖前者（创建失败时
+    // 后续局部写会被当成「写给已删除的行」），整批会随请求失败一起重试。
+    const failed = new Set<string>();
     for (const event of events) {
+      if (failed.has(`${event.entity}:${event.id}`)) continue;
+      if (!isSyncEntity(event.entity)) {
+        rejected.push({
+          kind: 'write',
+          entity: event.entity,
+          id: event.id,
+          reason: 'unknown-entity',
+        });
+        continue;
+      }
+      const known = new Set(codecFor(event.entity).def.fields.map((def) => def.name));
+      const unknownFields = Object.keys(event.fields).filter((field) => !known.has(field));
+      if (unknownFields.length > 0) {
+        rejected.push({
+          kind: 'write',
+          entity: event.entity,
+          id: event.id,
+          reason: 'unknown-fields',
+          fields: unknownFields,
+        });
+      }
       try {
-        await this.applyEvent(userId, event);
+        await this.applyEvent(userId, { ...event, entity: event.entity }, batch);
       } catch (error) {
         firstFailure ??= error;
+        failed.add(`${event.entity}:${event.id}`);
         console.error('[sync-hub] 事件合并失败，将由设备重试', event.entity, event.id, error);
       }
     }
     for (const deleteRequest of deletes ?? []) {
+      if (!isSyncEntity(deleteRequest.entity)) {
+        for (const id of deleteRequest.ids) {
+          rejected.push({
+            kind: 'delete',
+            entity: deleteRequest.entity,
+            id,
+            reason: 'unknown-entity',
+          });
+        }
+        continue;
+      }
       try {
-        await this.applyDeleteRequest(userId, deleteRequest);
+        await this.applyDeleteRequest(userId, { ...deleteRequest, entity: deleteRequest.entity });
       } catch (error) {
         firstFailure ??= error;
         console.error('[sync-hub] Delete Request 处理失败', deleteRequest.entity, error);
@@ -116,25 +205,32 @@ export class SyncHubService implements OnModuleInit {
     // 同批后续事件仍会尝试执行：它们可能正是前面悬挂引用所依赖的父实体。
     // 只要有一条失败，整个 HTTP 请求失败，设备保留原批次并幂等重放。
     if (firstFailure !== null) throw firstFailure;
-    return { acked: events.length };
+    if (rejected.length > 0) {
+      console.warn('[sync-hub] 拒绝本 hub 不认识的变更（客户端协议更新）', userId, rejected);
+    }
+    const rejectedWrites = rejected.filter(
+      (item) => item.kind === 'write' && item.reason === 'unknown-entity',
+    ).length;
+    return {
+      acked: events.length - rejectedWrites,
+      ...(rejected.length > 0 ? { rejected } : {}),
+    };
   }
 
   /** 设备凭 Sync Cursor 拉取增量。 */
   pull(userId: string, cursor: number) {
-    return this.buffer.pull(userId, cursor);
+    return this.log.pull(userId, cursor);
   }
 
-  /** 全量快照（新设备 / 重置副本的设备 bootstrap）。 */
+  /**
+   * 全量快照，一次返回（协议 2 之前的客户端；新设备 / 重置副本的设备
+   * bootstrap）。
+   */
   async bootstrap(userId: string) {
     // 先固定 fence：此后发生的任何发布都带更大 seq，设备应用快照后仍会
     // 在下一次 pull 中重放，不会出现“旧快照 + 新 cursor”的永久漏事件。
-    const cursor = this.buffer.currentSeq(userId);
-    const snapshot: Array<{
-      entity: SyncEntity;
-      id: string;
-      fields: Record<string, unknown>;
-      clocks: Record<string, string>;
-    }> = [];
+    const cursor = await this.log.currentSeq(userId);
+    const snapshot: SnapshotEntry[] = [];
     for (const entity of SYNC_ENTITIES) {
       const codec = codecFor(entity);
       const rows = await loadAllRows(this.prisma, codec, userId);
@@ -147,42 +243,163 @@ export class SyncHubService implements OnModuleInit {
       where: { userId },
       select: { entity: true, entityId: true },
     })) as Array<{ entity: string; entityId: string }>;
-    const compactedByEntity = new Map<SyncEntity, string[]>();
-    for (const row of compactedRows) {
-      if (!isSyncEntity(row.entity)) continue;
-      const ids = compactedByEntity.get(row.entity) ?? [];
-      ids.push(row.entityId);
-      compactedByEntity.set(row.entity, ids);
+    return { snapshot, cursor, compacted: groupCompacted(compactedRows) };
+  }
+
+  /**
+   * 快照的一页（协议 2 起，local-first-v3 issue 08）：按阶段、按 id 游标
+   * 分页，第一页之前固定 cursor fence；settledAfter 时省略归档任务及其
+   * Subtask（它们留在 hub，Logbook 按页读取）。实体行读完后是 Compact
+   * 登记。规则见 snapshot-pages.ts。
+   */
+  async bootstrapPage(
+    userId: string,
+    request: { page?: string; settledAfter?: string },
+  ): Promise<{
+    snapshot: SnapshotEntry[];
+    cursor: number;
+    compacted?: DeleteRequest[];
+    next?: string;
+  }> {
+    let token: SnapshotToken;
+    if (request.page) {
+      token = decodeSnapshotToken(request.page);
+    } else {
+      const cutoff = request.settledAfter ? parseCutoff(request.settledAfter) : null;
+      token = {
+        fence: await this.log.currentSeq(userId),
+        phase: 0,
+        after: '',
+        ...(cutoff ? { settledAfter: cutoff.toISOString() } : {}),
+      };
     }
+    const cutoff = token.settledAfter ? new Date(token.settledAfter) : null;
+    let { phase, after } = token;
+    const snapshot: SnapshotEntry[] = [];
+    while (phase < SNAPSHOT_PHASES.length && snapshot.length < BOOTSTRAP_PAGE_SIZE) {
+      const { entity, where } = SNAPSHOT_PHASES[phase];
+      const codec = codecFor(entity);
+      const take = BOOTSTRAP_PAGE_SIZE - snapshot.length;
+      const rows = await delegate(this.prisma, codec.model).findMany({
+        where: {
+          AND: [
+            snapshotOwnerWhere(entity, userId, cutoff),
+            where ?? {},
+            after ? { id: { gt: after } } : {},
+          ],
+        },
+        include: includeFor(codec),
+        orderBy: { id: 'asc' },
+        take,
+      });
+      for (const row of rows) {
+        const state = serializeRow(codec, row);
+        snapshot.push({ entity, id: row.id as string, fields: state.fields, clocks: state.clocks });
+      }
+      if (rows.length < take) {
+        phase += 1;
+        after = '';
+      } else {
+        after = rows[rows.length - 1].id as string;
+      }
+    }
+    let compacted: DeleteRequest[] | undefined;
+    if (phase === SNAPSHOT_PHASES.length) {
+      const rows = (await this.prisma.compactedEntity.findMany({
+        where: { userId, ...(after ? { id: { gt: after } } : {}) },
+        orderBy: { id: 'asc' },
+        take: COMPACTED_PAGE_SIZE,
+        select: { id: true, entity: true, entityId: true },
+      })) as Array<{ id: string; entity: string; entityId: string }>;
+      compacted = groupCompacted(rows);
+      if (rows.length < COMPACTED_PAGE_SIZE) {
+        phase += 1;
+      } else {
+        after = rows[rows.length - 1].id;
+      }
+    }
+    const done = phase > SNAPSHOT_PHASES.length;
     return {
       snapshot,
-      cursor,
-      compacted: [...compactedByEntity].map(([entity, ids]) => ({ entity, ids })),
+      cursor: token.fence,
+      ...(compacted ? { compacted } : {}),
+      ...(done ? {} : { next: encodeSnapshotToken({ ...token, phase, after }) }),
     };
   }
 
+  /**
+   * 按 id 取实体的合并态及其 DELETE_CASCADES 子实体（协议 2 起）。归档
+   * 任务被修改后回到设备副本时，设备用它补齐 Subtask。只返回属于该用户
+   * 且仍存在的行。
+   */
+  async fetchEntities(
+    userId: string,
+    entity: SyncEntity,
+    ids: string[],
+  ): Promise<{ entries: SnapshotEntry[] }> {
+    const entries: SnapshotEntry[] = [];
+    const load = async (target: SyncEntity, where: Record<string, unknown>) => {
+      const codec = codecFor(target);
+      const rows = await delegate(this.prisma, codec.model).findMany({
+        where: { AND: [snapshotOwnerWhere(target, userId, null), where] },
+        include: includeFor(codec),
+      });
+      for (const row of rows) {
+        const state = serializeRow(codec, row);
+        entries.push({ entity: target, id: row.id as string, ...state });
+      }
+      return rows.map((row) => row.id as string);
+    };
+    const found = await load(entity, { id: { in: [...new Set(ids)] } });
+    if (found.length > 0) {
+      for (const rule of DELETE_CASCADES[entity] ?? []) {
+        await load(rule.entity, { [rule.foreignKey]: { in: found } });
+      }
+    }
+    return { entries };
+  }
+
   /** 设备注册：登录时分配/续期 device id（ADR-0007）。 */
-  async registerDevice(userId: string, deviceId: string, label?: string) {
+  async registerDevice(
+    userId: string,
+    deviceId: string,
+    label?: string,
+    withBackgroundToken = false,
+  ): Promise<{ deviceId: string; backgroundToken?: string }> {
+    const background = withBackgroundToken ? issueBackgroundToken() : null;
+    const credential = background
+      ? { backgroundTokenHash: background.hash, backgroundTokenExpiresAt: background.expiresAt }
+      : {};
     await this.prisma.device.upsert({
       where: { userId_deviceId: { userId, deviceId } },
-      create: { userId, deviceId, label },
-      update: { label, lastSeenAt: new Date() },
+      create: { userId, deviceId, label, ...credential },
+      update: { label, lastSeenAt: new Date(), ...credential },
     });
-    return { deviceId };
+    return background ? { deviceId, backgroundToken: background.token } : { deviceId };
   }
 
-  // ---------- hub 侧写入（GC Compact / 虚拟设备 0 / Delete Request） ----------
+  // ---------- hub 侧写入（虚拟设备 0 / Delete Request） ----------
 
-  /** hub GC 物理删除后，先持久登记，再下发 Compact Event。 */
-  async publishCompact(userId: string, entity: SyncEntity, ids: string[]): Promise<void> {
-    if (ids.length === 0) return;
-    await registerCompacted(this.prisma, userId, entity, ids);
-    this.broadcastCompact(userId, entity, ids);
-  }
-
-  /** 虚拟设备 0（Assistant）提交字段级写：与设备推送同一合并路径。 */
-  async submitVirtualWrite(userId: string, event: OutboxEvent): Promise<void> {
-    await this.applyEvent(userId, event);
+  /**
+   * REST 写入（web 与 Assistant，虚拟设备 0）：run 里的字段写与物理删除
+   * 在同一个事务里经合并器落库，变更日志随数据一起提交——提交即可被
+   * pull 到，崩溃不会只丢日志不丢数据。run 抛错则整批回滚。
+   */
+  async writeAsHub<T>(userId: string, run: (batch: HubWriteBatch) => Promise<T>): Promise<T> {
+    return this.prisma.$transaction(async (tx) => {
+      const changes = new ChangeBuffer();
+      const result = await run({
+        tx,
+        write: async (entity, id, fields) => {
+          changes.add(await this.mergeRow(tx, userId, entity, id, { kind: 'virtual', fields }));
+        },
+        delete: async (entity, ids) => {
+          changes.addAll(await this.deleteRows(tx, userId, entity, ids));
+        },
+      });
+      await this.log.append(tx, userId, changes.drain());
+      return result;
+    }, HUB_WRITE_TX_OPTIONS);
   }
 
   // ---------- 设备发起删除（Delete Request，ADR-0008） ----------
@@ -194,60 +411,70 @@ export class SyncHubService implements OnModuleInit {
    * 不广播。幂等：重复请求（实体已不存在）为 no-op。
    */
   private async applyDeleteRequest(userId: string, request: DeleteRequest): Promise<void> {
-    const ids = [...new Set(request.ids)];
-    if (ids.length === 0) return;
-    const codec = codecFor(request.entity);
-    const result = await this.prisma.$transaction(async (tx) => {
-      for (const id of [...ids].sort()) await this.lockEntity(tx, userId, request.entity, id);
-
-      // 归属校验（story 6）：只删属于该用户的行（Subtask 经父 Task 认领）
-      const rows = (await delegate(tx, codec.model).findMany({
-        where: { id: { in: ids } },
-        select: {
-          id: true,
-          ...(codec.entity === 'subtask'
-            ? { task: { select: { userId: true } } }
-            : { userId: true }),
-        },
-      })) as Array<{ id: string } & Record<string, unknown>>;
-      const owned = rows
-        .filter((row) =>
-          codec.entity === 'subtask'
-            ? (row.task as { userId: string } | null)?.userId === userId
-            : row.userId === userId,
-        )
-        .map((row) => row.id);
-
-      // 级联子实体（DELETE_CASCADES：Task → Subtask、Project →
-      // ProjectHeading）：登记 + 物理删除同事务，按实体分组广播
-      const cascaded: Array<{ entity: SyncEntity; ids: string[] }> = [];
-      for (const rule of DELETE_CASCADES[request.entity] ?? []) {
-        const childCodec = codecFor(rule.entity);
-        const childRows = (await delegate(tx, childCodec.model).findMany({
-          where: { [rule.foreignKey]: { in: owned } },
-          select: { id: true },
-        })) as Array<{ id: string }>;
-        const childIds = childRows.map((row) => row.id);
-        await registerCompacted(tx, userId, rule.entity, childIds);
-        if (childIds.length > 0) {
-          cascaded.push({ entity: rule.entity, ids: childIds });
-          await delegate(tx, childCodec.model).deleteMany({ where: { id: { in: childIds } } });
-        }
-      }
-
-      // 登记与物理删除同事务提交；登记在前，删除失败会一起回滚。
-      await registerCompacted(tx, userId, request.entity, owned);
-      if (owned.length > 0) {
-        await delegate(tx, codec.model).deleteMany({ where: { id: { in: owned } } });
-      }
-      return { owned, cascaded };
+    await this.prisma.$transaction(async (tx) => {
+      await this.log.append(
+        tx,
+        userId,
+        await this.deleteRows(tx, userId, request.entity, request.ids),
+      );
     });
+  }
 
-    // 只在事务提交后发布；collector 的重复 Compact 对设备幂等。
-    this.broadcastCompact(userId, request.entity, result.owned);
-    for (const group of result.cascaded) {
-      this.broadcastCompact(userId, group.entity, group.ids);
+  /** 事务内的物理删除；返回待入日志的 Compact Event。 */
+  private async deleteRows(
+    tx: unknown,
+    userId: string,
+    entity: SyncEntity,
+    requestedIds: string[],
+  ): Promise<HubChangeDraft[]> {
+    const ids = [...new Set(requestedIds)];
+    if (ids.length === 0) return [];
+    const codec = codecFor(entity);
+    for (const id of [...ids].sort()) await this.lockEntity(tx, userId, entity, id);
+
+    // 归属校验（story 6）：只删属于该用户的行（Subtask 经父 Task 认领）
+    const rows = (await delegate(tx, codec.model).findMany({
+      where: { id: { in: ids } },
+      select: {
+        id: true,
+        ...(codec.entity === 'subtask' ? { task: { select: { userId: true } } } : { userId: true }),
+      },
+    })) as Array<{ id: string } & Record<string, unknown>>;
+    const owned = rows
+      .filter((row) =>
+        codec.entity === 'subtask'
+          ? (row.task as { userId: string } | null)?.userId === userId
+          : row.userId === userId,
+      )
+      .map((row) => row.id);
+
+    // 级联子实体（DELETE_CASCADES：Task → Subtask、Project →
+    // ProjectHeading）：登记 + 物理删除同事务，按实体分组广播
+    const cascaded: Array<{ entity: SyncEntity; ids: string[] }> = [];
+    for (const rule of DELETE_CASCADES[entity] ?? []) {
+      const childCodec = codecFor(rule.entity);
+      const childRows = (await delegate(tx, childCodec.model).findMany({
+        where: { [rule.foreignKey]: { in: owned } },
+        select: { id: true },
+      })) as Array<{ id: string }>;
+      const childIds = childRows.map((row) => row.id);
+      await registerCompacted(tx, userId, rule.entity, childIds);
+      if (childIds.length > 0) {
+        cascaded.push({ entity: rule.entity, ids: childIds });
+        await delegate(tx, childCodec.model).deleteMany({ where: { id: { in: childIds } } });
+      }
     }
+
+    // 登记、物理删除与 Compact Event 同事务提交；登记在前，删除失败会
+    // 一起回滚。
+    await registerCompacted(tx, userId, entity, owned);
+    if (owned.length > 0) {
+      await delegate(tx, codec.model).deleteMany({ where: { id: { in: owned } } });
+    }
+    const changes: HubChangeDraft[] = [];
+    if (owned.length > 0) changes.push(compactChange(entity, owned));
+    for (const group of cascaded) changes.push(compactChange(group.entity, group.ids));
+    return changes;
   }
 
   /** 查询某实体 id 是否已被 compact（迟到写丢弃，ADR-0008）。 */
@@ -283,32 +510,12 @@ export class SyncHubService implements OnModuleInit {
 
   // ---------- 内部 ----------
 
-  /** collector tap：REST/Assistant 写 → 序列化并入同步推流。 */
-  private async handleTap(
+  /** 设备推送的单事件合并：独立事务，合并结果与日志同事务提交。 */
+  private async applyEvent(
     userId: string,
-    changeEntity: ChangeEntity,
-    action: ChangeAction,
-    id: string,
+    event: OutboxEvent,
+    batch: ReadonlySet<string>,
   ): Promise<void> {
-    const entity = CHANGE_ENTITY_TO_SYNC[changeEntity];
-    if (action === 'deleted') {
-      // 物理删除 → Compact Event + 登记（设备端从副本移除；迟到写丢弃）
-      await this.publishCompact(userId, entity, [id]);
-      return;
-    }
-    const codec = codecFor(entity);
-    const row = await loadRow(this.prisma, codec, id);
-    if (!row) return; // 已被后续删除覆盖
-    const state = serializeRow(codec, row);
-    this.buffer.publish(
-      userId,
-      { kind: 'entity', seq: 0, entity, id, fields: state.fields, clocks: state.clocks },
-      fingerprint(state),
-    );
-  }
-
-  /** 单事件合并：load → mergeFieldWrites → 写回 → 发布 EntityChange。 */
-  private async applyEvent(userId: string, event: OutboxEvent): Promise<void> {
     const codec = codecFor(event.entity);
     // 防御：只接受注册表内的字段（设备侧 bug 不应击穿 hub 列）
     const incoming: Record<string, FieldWrite> = {};
@@ -319,115 +526,196 @@ export class SyncHubService implements OnModuleInit {
     }
     if (Object.keys(incoming).length === 0) return;
 
-    const state = await this.prisma.$transaction(async (tx) => {
-      await this.lockEntity(tx, userId, event.entity, event.id);
-      const row = await loadRow(tx, codec, event.id);
-      // 归属校验（story 6 对偶，字段写与 Delete Request 同口径）：行存在
-      // 但属于其他用户（Subtask 经父 Task 认领）时静默丢弃。
-      if (row && !(await this.ownsRow(tx, userId, event.entity, row))) return null;
-      // Compact 永久获胜：已 compact 的实体不重建、不发事件。
-      if (!row && (await this.isCompacted(tx, userId, event.entity, event.id))) return null;
-      const current = row ? serializeRow(codec, row) : null;
-
-      const outcome = mergeFieldWrites(
-        current ? { fields: current.fields, clocks: current.clocks } : null,
-        incoming,
-      );
-      // 失效引用清洗（REFERENCE_FIELDS）：设备离线期间的写可能引用此后
-      // 被 compact（或从未存在且永不会到达）的实体——直接物化会触发
-      // FK violation，整批 push 反复失败（同步毒丸）。尚未到达的引用
-      // （同批后序事件可能创建）保留，由 FK 失败驱动重试收敛（既有
-      // 语义）。先批量预加载引用状态，再清洗。
-      const referenceStatuses = await this.loadReferenceStatuses(
-        tx,
-        userId,
-        event.entity,
-        outcome,
-      );
-      const bumpWall = 1 + Math.max(Date.now(), ...Object.values(outcome.clocks).map(hlcWallMs));
-      const handled = scrubReferences(
-        event.entity,
-        current ? { fields: current.fields, clocks: current.clocks } : null,
-        outcome,
-        (target, id) => referenceStatuses.get(`${target}:${id}`) ?? 'pending',
-        () => formatHlc({ wallMs: bumpWall, counter: 0, deviceId: VIRTUAL_DEVICE_ID }),
-      );
-      if (!handled) return null; // 孤儿 Subtask：整事件丢弃
-      if (outcome.appliedFields.length === 0) return null;
-
-      // 新建行走 create 模式：tagIds 只物化为纯 create。
-      const data = toPrismaData(
-        codec,
-        outcome.fields,
-        outcome.appliedFields,
-        row ? 'update' : 'create',
-      );
-      data.fieldClocks = outcome.clocks;
-      // 补丁未携带 updatedAt 时（如虚拟设备 0 的部分写）才兑底：避免
-      // Prisma @updatedAt 自动取 hub 墙钟，使时钟与列值失去确定性。
-      // 携带时保持设备值原样落库——回声平局下两端值也一致。
-      if (data.updatedAt === undefined) {
-        data.updatedAt = new Date(Math.max(0, ...Object.values(outcome.clocks).map(hlcWallMs)));
-      }
-
-      if (row) {
-        await delegate(tx, codec.model).update({ where: { id: event.id }, data });
-      } else if (NO_USER_ID_ENTITIES.has(event.entity)) {
-        // Subtask 无 userId 列：归属经父 Task 认领。
-        const taskId = outcome.fields.taskId;
-        if (typeof taskId !== 'string') return null;
-        const parent = await loadRow(tx, codecFor('task'), taskId);
-        if (!parent || parent.userId !== userId) return null;
-        await delegate(tx, codec.model).create({ data: { ...data, id: event.id } });
-      } else {
-        await delegate(tx, codec.model).create({ data: { ...data, id: event.id, userId } });
-      }
-
-      // 落库值摘要回填（回声幂等的关键）：fieldDigests 必须按「实际落库
-      // 的列值」的 wire 视图计算，而非设备推送值——不可空列的 Prisma
-      // 默认值（如 sortOrder null → 0）、tagIds 关系表排序都会使列值 ≠
-      // 推送值。若按推送值存摘要，serializeRow 的摘要检测会把这次合并
-      // 写误判为「REST 绕过合并器」，将字段时钟重置为虚拟设备 0 @
-      // updatedAt——设备 pull 回自己的回声时时钟反而更新，被当作远端
-      // 写应用，触发 onChange → 全域失效 → 界面「同步后刷新一下」。
-      // 回填后摘要匹配，时钟保持合并结果，回声在设备端逐字段持平 →
-      // 零应用、零通知。
-      const fresh = await loadRow(tx, codec, event.id);
-      if (!fresh) return null;
-      const digests = digestMap(codec, wireViewOfRow(codec, fresh));
-      // 显式回写 updatedAt：列是 @updatedAt，否则这次 UPDATE 会把列值
-      // 推到真实 now()，重新制造摘要不一致。
-      await delegate(tx, codec.model).update({
-        where: { id: event.id },
-        data: { fieldDigests: digests, updatedAt: fresh.updatedAt as Date },
+    await this.prisma.$transaction(async (tx) => {
+      const change = await this.mergeRow(tx, userId, event.entity, event.id, {
+        kind: 'device',
+        fields: incoming,
+        batch,
       });
-      // 写库后的真实序列化态（摘要已回填 → 时钟保持合并结果）；
-      // 事务提交后再发布。
-      return serializeRow(codec, { ...fresh, fieldDigests: digests });
+      if (change) await this.log.append(tx, userId, [change]);
     });
+  }
 
-    if (state) {
-      this.buffer.publish(
-        userId,
-        {
-          kind: 'entity',
-          seq: 0,
-          entity: event.entity,
-          id: event.id,
-          fields: state.fields,
-          clocks: state.clocks,
-        },
-        fingerprint(state),
-      );
+  /**
+   * 单行合并（事务内）：加锁 load → 字段级 LWW → 引用清洗 → 不变量修复
+   * → 写回。返回待入日志的变更（合并态未变时为 null）。
+   */
+  private async mergeRow(
+    tx: unknown,
+    userId: string,
+    entity: SyncEntity,
+    id: string,
+    input: MergeInput,
+  ): Promise<HubChangeDraft | null> {
+    const codec = codecFor(entity);
+    await this.lockEntity(tx, userId, entity, id);
+    const row = await loadRow(tx, codec, id);
+    // 归属校验（story 6 对偶，字段写与 Delete Request 同口径）：行存在
+    // 但属于其他用户（Subtask 经父 Task 认领）时静默丢弃。
+    if (row && !(await this.ownsRow(tx, userId, entity, row))) return null;
+    // Compact 永久获胜：已 compact 的实体不重建。推送方显然还持有这行
+    // （如重启前的旧版本复用了已死的确定性 id），重发 Compact Event
+    // 让它收敛，而不是留下永远不同步的本地幽灵行。
+    if (!row && (await this.isCompacted(tx, userId, entity, id))) {
+      return compactChange(entity, [id]);
     }
+    // 设备对不存在的行的局部写（创建总带 createdAt，这条没有）：行已被
+    // 物理删除而登记已随保留期清理（issue 08），或 hub 从未有过它。写不出
+    // 完整的行（缺列会让 push 永远失败）；按 Compact 处理——登记并下发
+    // Compact Event，推送方移除本地残行、撤掉 Outbox 里的同类写。
+    if (!row && input.kind === 'device' && !('createdAt' in input.fields)) {
+      await registerCompacted(tx, userId, entity, [id]);
+      return compactChange(entity, [id]);
+    }
+    const current = row ? serializeRow(codec, row) : null;
+    const incoming =
+      input.kind === 'device' ? input.fields : this.stampVirtualWrite(codec, current, input.fields);
+    if (Object.keys(incoming).length === 0) return null;
+
+    const outcome = mergeFieldWrites(
+      current ? { fields: current.fields, clocks: current.clocks } : null,
+      incoming,
+    );
+    // 失效引用清洗（REFERENCE_FIELDS）：设备离线期间的写可能引用此后
+    // 被 compact（或从未存在且永不会到达）的实体——直接物化会触发
+    // FK violation，整批 push 反复失败（同步毒丸）。尚未到达的引用
+    // （同批后序事件可能创建）保留，由 FK 失败驱动重试收敛（既有
+    // 语义）。先批量预加载引用状态，再清洗。
+    const referenceStatuses = await this.loadReferenceStatuses(
+      tx,
+      userId,
+      entity,
+      outcome,
+      input.kind === 'device' ? input.batch : undefined,
+    );
+    const bumpWall = 1 + Math.max(Date.now(), ...Object.values(outcome.clocks).map(hlcWallMs));
+    const bumpClock = () =>
+      formatHlc({ wallMs: bumpWall, counter: 0, deviceId: VIRTUAL_DEVICE_ID });
+    const handled = scrubReferences(
+      entity,
+      current ? { fields: current.fields, clocks: current.clocks } : null,
+      outcome,
+      (target, refId) => referenceStatuses.get(`${target}:${refId}`) ?? 'pending',
+      bumpClock,
+    );
+    if (!handled) return null; // 孤儿 Subtask：整事件丢弃
+    // 跨字段不变量（local-first-v3 issue 01）：合并出的组合违反业务规则
+    // （别的项目的分组、Someday 带提醒……）时纠正，以必胜时钟下发。
+    const headingOwner = await this.loadHeadingOwner(tx, entity, outcome.fields);
+    applyRepairs(
+      entity,
+      outcome,
+      (headingId) => (headingId === headingOwner?.id ? headingOwner.projectId : undefined),
+      bumpClock,
+    );
+    if (outcome.appliedFields.length === 0) return null;
+
+    // 新建行走 create 模式：tagIds 只物化为纯 create。
+    const rejected: string[] = [];
+    const data = toPrismaData(
+      codec,
+      outcome.fields,
+      outcome.appliedFields,
+      row ? 'update' : 'create',
+      rejected,
+    );
+    data.fieldClocks = outcome.clocks;
+    // 旧版的值摘要作废（见 legacy-clock-backfill）：清空即「时钟已权威」。
+    data.fieldDigests = Prisma.DbNull;
+    // 补丁未携带 updatedAt 时才兜底：避免 Prisma @updatedAt 自动取 hub
+    // 墙钟，使时钟与列值失去确定性。携带时保持设备值原样落库——回声
+    // 平局下两端值也一致。
+    if (data.updatedAt === undefined) {
+      data.updatedAt = new Date(Math.max(0, ...Object.values(outcome.clocks).map(hlcWallMs)));
+    }
+
+    if (row) {
+      await delegate(tx, codec.model).update({ where: { id }, data });
+    } else if (NO_USER_ID_ENTITIES.has(entity)) {
+      // Subtask 无 userId 列：归属经父 Task 认领。
+      const taskId = outcome.fields.taskId;
+      if (typeof taskId !== 'string') return null;
+      const parent = await loadRow(tx, codecFor('task'), taskId);
+      if (!parent || parent.userId !== userId) return null;
+      await delegate(tx, codec.model).create({ data: { ...data, id } });
+    } else {
+      await delegate(tx, codec.model).create({ data: { ...data, id, userId } });
+    }
+
+    // 落库后的真实状态入日志：不可空列的 Prisma 默认值（sortOrder null
+    // → 0）、tagIds 关系表排序、日期格式都以列值为准。
+    const fresh = await loadRow(tx, codec, id);
+    if (!fresh) return null;
+    // 被剔除的字段（新版客户端的未知枚举值、非法日期等）：库里留的是旧值
+    // 或列默认值，时钟却是推送方的。推送方拉回声时时钟持平、保留本地
+    // 非法值，两端永久分叉。与引用清洗同一机制：以虚拟设备 0 的必胜时钟
+    // 下发实际落库值，推送方随之收敛。只看被剔除的字段——已接受字段的
+    // 格式差异（如日期）不能提升时钟，否则每次回声都会被当作远端写。
+    const wire = wireViewOfRow(codec, fresh);
+    const corrected: Record<string, string> = {};
+    for (const field of rejected) {
+      if (JSON.stringify(wire[field] ?? null) === JSON.stringify(outcome.fields[field] ?? null)) {
+        continue;
+      }
+      corrected[field] = bumpClock();
+    }
+    let state: SerializedState;
+    if (Object.keys(corrected).length > 0) {
+      const clocks = { ...outcome.clocks, ...corrected };
+      // 显式回写 updatedAt：列是 @updatedAt，否则这次 UPDATE 会把它推到 now()。
+      await delegate(tx, codec.model).update({
+        where: { id },
+        data: { fieldClocks: clocks, updatedAt: fresh.updatedAt as Date },
+      });
+      state = serializeRow(codec, { ...fresh, fieldClocks: clocks });
+    } else {
+      state = serializeRow(codec, fresh);
+    }
+    return { kind: 'entity', entity, id, fields: state.fields, clocks: state.clocks };
+  }
+
+  /**
+   * 虚拟设备 0 的字段写盖章。时间戳高于行上现有的全部字段时钟（REST
+   * 调用方读到了这些值，写在因果上晚于它们），因此必胜——包括时钟
+   * 超前的设备留下的时间戳。值与当前相同的字段不写（不制造无意义的
+   * 变更，也不压掉并发中的设备写）；有实际变化时补上 updatedAt。
+   */
+  private stampVirtualWrite(
+    codec: ReturnType<typeof codecFor>,
+    current: SerializedState | null,
+    fields: WireRow,
+  ): Record<string, FieldWrite> {
+    const known = new Set(codec.def.fields.map((def) => def.name));
+    const changed: WireRow = {};
+    for (const [field, value] of Object.entries(fields)) {
+      if (!known.has(field) || value === undefined) continue;
+      if (current && sameWireValue(codec, field, current.fields[field], value)) continue;
+      changed[field] = value;
+    }
+    if (Object.keys(changed).length === 0) return {};
+    const now = Date.now();
+    if (changed.updatedAt === undefined) changed.updatedAt = new Date(now).toISOString();
+    if (!current && changed.createdAt === undefined) changed.createdAt = changed.updatedAt;
+    const floor = current ? Object.values(current.clocks).map(hlcWallMs) : [];
+    const hlc = formatHlc({
+      wallMs: Math.max(now, ...floor.map((wall) => wall + 1)),
+      counter: 0,
+      deviceId: VIRTUAL_DEVICE_ID,
+    });
+    return Object.fromEntries(
+      Object.entries(changed).map(([field, value]) => [field, { value, hlc }]),
+    );
   }
 
   /**
    * 批量预加载 applied 字段引用的目标状态（ReferenceStatus）。
    * - 行存在且属于该用户：alive；
    * - 行不存在且已登记 compact：dead（迟到引用，清洗对象）；
-   * - 行不存在且未登记：pending（同批后序事件可能创建，保留引用
-   *   由 FK 失败驱动重试）；
+   * - 行不存在、未登记，且在设备这次 push 里（batch）：pending（同批
+   *   其他事件会创建它，保留引用由 FK 失败驱动重试）；
+   * - 行不存在、未登记、也不在这次 push 里：dead（Outbox 是因果序，被
+   *   引用的实体不会再来——多半已删除且登记已过期，issue 08）。没有
+   *   batch（虚拟设备 0，调用方已校验）时按 pending；
    * - 行存在但属于他人：dead（越权引用，不物化）。
    */
   private async loadReferenceStatuses(
@@ -435,17 +723,16 @@ export class SyncHubService implements OnModuleInit {
     userId: string,
     entity: SyncEntity,
     outcome: { appliedFields: string[]; fields: Record<string, unknown> },
+    batch?: ReadonlySet<string>,
   ): Promise<Map<string, ReferenceStatus>> {
+    const missing = (target: SyncEntity, id: string): ReferenceStatus =>
+      !batch || batch.has(`${target}:${id}`) ? 'pending' : 'dead';
     const refs = REFERENCE_FIELDS[entity];
     const statuses = new Map<string, ReferenceStatus>();
     if (!refs) return statuses;
     const scalarTargets = new Map<SyncEntity, Set<string>>();
     const arrayTargets = new Map<SyncEntity, Set<string>>();
-    const add = (
-      map: Map<SyncEntity, Set<string>>,
-      target: SyncEntity,
-      ids: string[],
-    ) => {
+    const add = (map: Map<SyncEntity, Set<string>>, target: SyncEntity, ids: string[]) => {
       if (ids.length === 0) return;
       const set = map.get(target) ?? new Set<string>();
       ids.forEach((id) => set.add(id));
@@ -459,9 +746,7 @@ export class SyncHubService implements OnModuleInit {
         add(
           arrayTargets,
           ref.entity,
-          Array.isArray(value)
-            ? value.filter((id): id is string => typeof id === 'string')
-            : [],
+          Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : [],
         );
       } else if (typeof value === 'string') {
         add(scalarTargets, ref.entity, [value]);
@@ -479,7 +764,7 @@ export class SyncHubService implements OnModuleInit {
         } else {
           statuses.set(
             `${target}:${id}`,
-            (await this.isCompacted(tx, userId, target, id)) ? 'dead' : 'pending',
+            (await this.isCompacted(tx, userId, target, id)) ? 'dead' : missing(target, id),
           );
         }
       }
@@ -495,19 +780,32 @@ export class SyncHubService implements OnModuleInit {
       ids.forEach((id) => {
         if (owned.has(id)) statuses.set(`${target}:${id}`, 'alive');
       });
-      const missing = [...ids].filter((id) => !owned.has(id));
-      if (missing.length > 0) {
+      const absent = [...ids].filter((id) => !owned.has(id));
+      if (absent.length > 0) {
         const compactedRows = (await delegate(tx, 'compactedEntity').findMany({
-          where: { userId, entity: target, entityId: { in: missing } },
+          where: { userId, entity: target, entityId: { in: absent } },
           select: { entityId: true },
         })) as Array<{ entityId: string }>;
         const compacted = new Set(compactedRows.map((row) => row.entityId));
-        missing.forEach((id) => {
-          statuses.set(`${target}:${id}`, compacted.has(id) ? 'dead' : 'pending');
+        absent.forEach((id) => {
+          statuses.set(`${target}:${id}`, compacted.has(id) ? 'dead' : missing(target, id));
         });
       }
     }
     return statuses;
+  }
+
+  /** 任务所挂分组的归属项目（R4 探针；非任务 / 无分组 / 分组不存在时为 null）。 */
+  private async loadHeadingOwner(
+    tx: unknown,
+    entity: SyncEntity,
+    fields: Record<string, unknown>,
+  ): Promise<{ id: string; projectId: string } | null> {
+    if (entity !== 'task' || typeof fields.headingId !== 'string') return null;
+    const heading = await loadRow(tx, codecFor('project-heading'), fields.headingId);
+    return heading && typeof heading.projectId === 'string'
+      ? { id: fields.headingId, projectId: heading.projectId }
+      : null;
   }
 
   /** 同一实体的跨实例事务锁；行存在时再取 FOR UPDATE，与普通 REST 写互斥。 */
@@ -532,27 +830,48 @@ export class SyncHubService implements OnModuleInit {
       id,
     );
   }
-
-  private broadcastCompact(userId: string, entity: SyncEntity, ids: string[]): void {
-    if (ids.length === 0) return;
-    this.buffer.publish(userId, { kind: 'compact', seq: 0, entity, ids });
-  }
 }
 
-function fingerprint(state: {
-  fields: Record<string, unknown>;
-  clocks: Record<string, string>;
-}): string {
-  return JSON.stringify([state.fields, state.clocks]);
+function compactChange(entity: SyncEntity, ids: string[]): HubChangeDraft {
+  return { kind: 'compact', entity, ids };
 }
 
-function digestMap(
-  codec: ReturnType<typeof codecFor>,
-  fields: Record<string, unknown>,
-): Record<string, string> {
-  const digests: Record<string, string> = {};
-  for (const def of codec.def.fields) {
-    digests[def.name] = JSON.stringify(fields[def.name] ?? null);
+/** Compact 登记行按实体分组（本 hub 不认识的实体略过）。 */
+function groupCompacted(rows: Array<{ entity: string; entityId: string }>): DeleteRequest[] {
+  const byEntity = new Map<SyncEntity, string[]>();
+  for (const row of rows) {
+    if (!isSyncEntity(row.entity)) continue;
+    const ids = byEntity.get(row.entity) ?? [];
+    ids.push(row.entityId);
+    byEntity.set(row.entity, ids);
   }
-  return digests;
+  return [...byEntity].map(([entity, ids]) => ({ entity, ids }));
+}
+
+/**
+ * 一个写入批的待入日志变更。同一实体在批内多次写入时只保留最后一次的
+ * 状态（它已包含之前的写）；Compact 按发生顺序保留。
+ */
+class ChangeBuffer {
+  private readonly changes: Array<HubChangeDraft | null> = [];
+  private readonly entityIndex = new Map<string, number>();
+
+  add(change: HubChangeDraft | null): void {
+    if (!change) return;
+    if (change.kind === 'entity') {
+      const key = `${change.entity}:${change.id}`;
+      const previous = this.entityIndex.get(key);
+      if (previous !== undefined) this.changes[previous] = null;
+      this.entityIndex.set(key, this.changes.length);
+    }
+    this.changes.push(change);
+  }
+
+  addAll(changes: HubChangeDraft[]): void {
+    changes.forEach((change) => this.add(change));
+  }
+
+  drain(): HubChangeDraft[] {
+    return this.changes.filter((change): change is HubChangeDraft => change !== null);
+  }
 }

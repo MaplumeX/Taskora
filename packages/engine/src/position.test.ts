@@ -1,4 +1,12 @@
-import { BASE_62_DIGITS, positionBetween, positionsBetween, rebalancePositions } from './position';
+import {
+  BASE_62_DIGITS,
+  MAX_POSITION_LENGTH,
+  positionBetween,
+  positionsBetween,
+  rebalancePositions,
+  rebalanceSegments,
+  repositionMinimal,
+} from './position';
 
 describe('positionBetween', () => {
   it('首条 Position 是 "a0"，追加在末尾则整数部分递增', () => {
@@ -66,5 +74,106 @@ describe('positionBetween', () => {
     expect(rebalanced![0].length).toBeLessThanOrEqual(4);
     expect(rebalanced![0] < rebalanced![1]).toBe(true);
     expect(BASE_62_DIGITS.length).toBe(62);
+  });
+});
+
+describe('repositionMinimal', () => {
+  const apply = (
+    ordered: Array<{ id: string; position: string | null }>,
+  ): { changes: number; sorted: string[] } => {
+    const changes = repositionMinimal(ordered);
+    const next = new Map(ordered.map((row) => [row.id, row.position]));
+    for (const change of changes) next.set(change.id, change.position);
+    const sorted = [...next].sort((a, b) => ((a[1] as string) < (b[1] as string) ? -1 : 1));
+    return { changes: changes.length, sorted: sorted.map(([id]) => id) };
+  };
+  const keys = positionsBetween(null, null, 6);
+  const rows = ['a', 'b', 'c', 'd', 'e', 'f'].map((id, index) => ({ id, position: keys[index] }));
+
+  it('单次拖动只写被拖的一行', () => {
+    // 把 e 拖到 b 前面
+    const ordered = [rows[0], rows[4], rows[1], rows[2], rows[3], rows[5]];
+    expect(apply(ordered)).toEqual({ changes: 1, sorted: ['a', 'e', 'b', 'c', 'd', 'f'] });
+  });
+
+  it('拖到最前 / 最后', () => {
+    expect(apply([rows[5], ...rows.slice(0, 5)])).toEqual({
+      changes: 1,
+      sorted: ['f', 'a', 'b', 'c', 'd', 'e'],
+    });
+    expect(apply([...rows.slice(1), rows[0]])).toEqual({
+      changes: 1,
+      sorted: ['b', 'c', 'd', 'e', 'f', 'a'],
+    });
+  });
+
+  it('顺序未变不写', () => {
+    expect(apply(rows).changes).toBe(0);
+  });
+
+  it('缺 Position 的行与完全逆序也能排成目标顺序', () => {
+    const withNull = [rows[0], { id: 'x', position: null }, rows[1]];
+    expect(apply(withNull).sorted).toEqual(['a', 'x', 'b']);
+    const reversed = [...rows].reverse();
+    expect(apply(reversed).sorted).toEqual(['f', 'e', 'd', 'c', 'b', 'a']);
+  });
+});
+
+describe('rebalanceSegments', () => {
+  const apply = (ordered: Array<{ id: string; position: string }>) => {
+    const changes = rebalanceSegments(ordered);
+    const next = new Map(ordered.map((row) => [row.id, row.position]));
+    for (const change of changes) next.set(change.id, change.position);
+    const sorted = [...next].sort((a, b) => (a[1] < b[1] ? -1 : 1)).map(([id]) => id);
+    return { changes, next, sorted };
+  };
+  const long = (prefix: string) => prefix + 'V'.repeat(MAX_POSITION_LENGTH);
+
+  it('没有膨胀键时不写任何行', () => {
+    const rows = ['a0', 'a1', 'a2'].map((position, index) => ({ id: `r${index}`, position }));
+    expect(rebalanceSegments(rows)).toEqual([]);
+  });
+
+  it('只重排膨胀键本身，两侧邻居不动', () => {
+    const rows = [
+      { id: 'a', position: 'a0' },
+      { id: 'b', position: long('a0') },
+      { id: 'c', position: 'a1' },
+      { id: 'd', position: 'a2' },
+    ];
+    const { changes, next, sorted } = apply(rows);
+    expect(changes.map((change) => change.id)).toEqual(['b']);
+    expect(next.get('b')!.length).toBeLessThanOrEqual(MAX_POSITION_LENGTH);
+    expect(sorted).toEqual(['a', 'b', 'c', 'd']);
+  });
+
+  it('连续一段膨胀键（含表头表尾）保持顺序', () => {
+    const rows = [
+      { id: 'a', position: long('Zz') },
+      { id: 'b', position: long('Zz' + 'W') },
+      { id: 'c', position: 'a0' },
+      { id: 'd', position: long('a0') },
+      { id: 'e', position: long('a0W') },
+    ];
+    const { changes, next, sorted } = apply(rows);
+    expect(changes.map((change) => change.id).sort()).toEqual(['a', 'b', 'd', 'e']);
+    expect([...next.values()].every((key) => key.length <= MAX_POSITION_LENGTH)).toBe(true);
+    expect(sorted).toEqual(['a', 'b', 'c', 'd', 'e']);
+  });
+
+  it('邻居太近时向两侧扩大窗口，窗口外不动', () => {
+    const near = 'a0' + 'V'.repeat(MAX_POSITION_LENGTH - 3);
+    const rows = [
+      { id: 'far', position: 'Zz' },
+      { id: 'lo', position: near },
+      { id: 'x', position: near + 'V' + 'V'.repeat(MAX_POSITION_LENGTH) },
+      { id: 'hi', position: near + 'W' },
+      { id: 'end', position: 'b0' },
+    ];
+    const { next, sorted } = apply(rows);
+    expect(next.get('far')).toBe('Zz');
+    expect(next.get('end')).toBe('b0');
+    expect([...next.values()].every((key) => key.length <= MAX_POSITION_LENGTH)).toBe(true);
+    expect(sorted).toEqual(['far', 'lo', 'x', 'hi', 'end']);
   });
 });

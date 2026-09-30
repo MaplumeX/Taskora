@@ -7,6 +7,9 @@
  * 并在到点时投递——App 关闭或进程被回收后仍按时触发。JS 侧不保存任何
  * 注册状态，也不再做权限预检：未授权时原生照样落盘计划，授权恢复后
  * 后续提醒自动投递。
+ *
+ * App 未打开时由原生后台任务取回 hub 算好的计划（local-first-v3 issue 09，
+ * configureBackgroundSync）；sync 附带的副本基准让原生在两者间取较新者。
  */
 
 import { addPluginListener, invoke } from '@tauri-apps/api/core';
@@ -28,13 +31,14 @@ export function createMobileNotificationShell(): ReminderNotificationShell {
     isSupported: () => true,
     isPermissionGranted: isNativeNotificationPermissionGranted,
     requestPermission: requestNativeNotificationPermission,
-    async sync(plan) {
+    async sync(plan, basis) {
       await invoke('plugin:reminders|sync', {
         args: {
           reminders: plan,
           channelName: i18n.t('task:reminderChannelName'),
           // 通知按钮文案（reminder-actions spec）：原生不维护翻译，随计划持久化。
           labels: reminderActionLabels(),
+          basis,
         },
       });
     },
@@ -58,6 +62,15 @@ export function createMobileNotificationShell(): ReminderNotificationShell {
       await invoke('plugin:reminders|open_settings', { target });
     },
   };
+}
+
+/**
+ * 启用 App 未打开时的后台同步（local-first-v3 issue 09）：原生周期任务用
+ * 设备的只读后台凭据取回 `planUrl` 的提醒计划。每次设备注册（凭据轮换）
+ * 后调用；登出时由 clear 停用。
+ */
+export async function configureBackgroundSync(planUrl: string, token: string): Promise<void> {
+  await invoke('plugin:reminders|configure_background', { args: { planUrl, token } });
 }
 
 /**

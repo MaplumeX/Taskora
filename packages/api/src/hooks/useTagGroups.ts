@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 
 import type { CreateTagGroupDto, UpdateTagGroupDto } from '@taskora/shared';
 
@@ -9,6 +9,8 @@ import {
   updateTagGroup,
 } from '@/api/tag-groups.api';
 import { tagKeys } from './useTags';
+import { refreshAfterWrite, useQueryCache } from './cache-patches';
+import { useReplicaQuery } from './useEngineQuery';
 
 export const tagGroupKeys = {
   all: ['tag-groups'] as const,
@@ -16,42 +18,43 @@ export const tagGroupKeys = {
 };
 
 export function useTagGroupsQuery() {
-  return useQuery({
+  return useReplicaQuery({
     queryKey: tagGroupKeys.all,
     queryFn: getTagGroups,
+    dependsOn: ['tag-group', 'tag'],
   });
 }
 
 export function useCreateTagGroup() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (data: CreateTagGroupDto) => createTagGroup(data),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: tagGroupKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: tagGroupKeys.all });
     },
   });
 }
 
 export function useUpdateTagGroup() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTagGroupDto }) =>
       updateTagGroup(id, data),
     onSuccess: (group) => {
-      void queryClient.invalidateQueries({ queryKey: tagGroupKeys.detail(group.id) });
-      void queryClient.invalidateQueries({ queryKey: tagGroupKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: tagGroupKeys.detail(group.id) });
+      refreshAfterWrite(queryClient, { queryKey: tagGroupKeys.all });
     },
   });
 }
 
 export function useDeleteTagGroup() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => deleteTagGroup(id),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: tagGroupKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: tagGroupKeys.all });
       // 组删除后标签的 tagGroupId 变 null，需刷新标签列表
-      void queryClient.invalidateQueries({ queryKey: tagKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: tagKeys.all });
     },
   });
 }

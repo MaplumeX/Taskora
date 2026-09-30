@@ -30,6 +30,8 @@ export interface ProjectResponseDto {
   notes: string | null;
   areaId: string | null;
   sortOrder: number;
+  /** 列表位次（fractional indexing 字符串，ADR-0007）；web 与桌面端共用的排序键。 */
+  position?: string | null;
   status: ProjectStatus;
   bucket: ProjectBucket;
   scheduledType: ScheduledType;

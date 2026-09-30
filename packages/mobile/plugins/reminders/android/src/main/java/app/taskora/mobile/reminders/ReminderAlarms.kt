@@ -14,7 +14,10 @@ import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 
-/** JS 交付的一条期望提醒。 */
+/** JS 交付计划时副本的状态（local-first-v3 issue 09，见 PlanSource）。 */
+data class PlanBasis(val cursor: Long, val pendingLocal: Boolean)
+
+/** 交付的一条期望提醒（JS 或后台取回的 hub 计划）。 */
 data class IncomingReminder(
     val key: String,
     val taskId: String,
@@ -39,6 +42,10 @@ data class IncomingReminder(
  *   不拉起 App 进程——撤下通知、按操作取消或临时重设本机闹钟，并把操作
  *   排进持久化队列，等 JS 下次运行时按 Reminder Action 规则应用。规则仍
  *   只在 JS：原生只做「点击时刻 + 固定时长」和使用 JS 预先算好的时刻。
+ * - 后台同步（local-first-v3 issue 09）：ReminderPlanWorker 取回 hub 按同一
+ *   套规则算好的计划，经 applyBackgroundPlan 替换计划。两个写入方按
+ *   PlanSource 取较新者：副本有未推送的本地写时后台不覆盖；副本落后于
+ *   后台计划（离线打开 App）时 JS 的计划不覆盖。
  */
 internal object ReminderAlarms {
     /** 沿用 tauri-plugin-notification 时期的渠道 id：用户对该渠道的设置保留。 */
@@ -71,47 +78,106 @@ internal object ReminderAlarms {
 
     private val lock = Any()
 
+    /**
+     * JS 交付完整期望集。basis 为 null 时视为权威（不做来源比较）。
+     *
+     * @return 是否采纳：副本落后于当前的后台计划、且没有未推送的本地写
+     *   时不采纳（渠道名与按钮文案照常更新）。
+     */
     fun sync(
         context: Context,
         incoming: List<IncomingReminder>,
         channelName: String,
         labels: ActionLabels?,
-    ) {
+        basis: PlanBasis?,
+    ): Boolean {
         synchronized(lock) {
             ReminderStore.setChannelName(context, channelName)
             if (labels != null) ReminderStore.setLabels(context, labels)
             ensureChannel(context, channelName)
 
-            val now = System.currentTimeMillis()
-            val plan = ReminderStore.load(context)
-            val incomingKeys = incoming.mapTo(HashSet()) { it.key }
-            // 仍在队列中的操作：JS 还没应用，其 Snooze 临时闹钟不属于「已消失」。
-            val queuedKeys = ReminderStore.pendingActions(context).mapTo(HashSet()) { it.key }
-
-            val iterator = plan.values.iterator()
-            while (iterator.hasNext()) {
-                val stored = iterator.next()
-                if (stored.key !in incomingKeys && stored.key !in queuedKeys && stored.fireAt > now) {
-                    cancelAlarm(context, stored.id)
-                    iterator.remove()
-                }
+            val source = ReminderStore.planSource(context)
+            val pendingLocal = basis?.pendingLocal ?: false
+            if (basis != null && !pendingLocal && basis.cursor < source.backgroundCursor) {
+                ReminderStore.savePlanSource(context, source.copy(pendingLocal = false))
+                return false
             }
-            for (reminder in incoming) {
-                val id = plan[reminder.key]?.id ?: ReminderStore.allocateId(context)
-                plan[reminder.key] = StoredReminder(
-                    key = reminder.key,
-                    id = id,
-                    fireAt = reminder.fireAt,
-                    title = reminder.title,
-                    body = reminder.body,
-                    taskId = reminder.taskId,
-                    snoozeTomorrowAt = reminder.snoozeTomorrowAt,
-                )
-            }
-            collectGarbage(context, plan, now)
-            ReminderStore.save(context, plan)
-            armWindow(context, plan.values, now)
+            replacePlan(context, incoming)
+            ReminderStore.savePlanSource(
+                context,
+                PlanSource(
+                    generation = source.generation + 1,
+                    pendingLocal = pendingLocal,
+                    backgroundCursor = 0,
+                ),
+            )
+            return true
         }
+    }
+
+    /**
+     * 后台同步取回的 hub 计划（ReminderPlanWorker）。
+     *
+     * @param expectedGeneration 取回前读到的 generation：取回期间 JS 交付过
+     *   计划（App 在前台）则作废，JS 的计划基于同样新或更新的数据。
+     * @return 是否采纳。JS 从未交付过（没有渠道名与按钮文案）、副本有未推送
+     *   的本地写时不采纳。
+     */
+    fun applyBackgroundPlan(
+        context: Context,
+        incoming: List<IncomingReminder>,
+        cursor: Long,
+        expectedGeneration: Long,
+    ): Boolean {
+        synchronized(lock) {
+            val channelName = ReminderStore.channelName(context) ?: return false
+            val source = ReminderStore.planSource(context)
+            if (source.pendingLocal || source.generation != expectedGeneration) return false
+            ensureChannel(context, channelName)
+            replacePlan(context, incoming)
+            ReminderStore.savePlanSource(context, source.copy(backgroundCursor = cursor))
+            return true
+        }
+    }
+
+    /** 当前计划来源（后台同步取回前读 generation 与 pendingLocal）。 */
+    fun planSource(context: Context): PlanSource =
+        synchronized(lock) { ReminderStore.planSource(context) }
+
+    /** 以完整期望集替换计划；调用方持锁。 */
+    private fun replacePlan(context: Context, incoming: List<IncomingReminder>) {
+        val now = System.currentTimeMillis()
+        val plan = ReminderStore.load(context)
+        val incomingKeys = incoming.mapTo(HashSet()) { it.key }
+        // 仍在队列中的操作：JS 还没应用，其 Snooze 临时闹钟不属于「已消失」。
+        val queuedKeys = ReminderStore.pendingActions(context).mapTo(HashSet()) { it.key }
+
+        val iterator = plan.values.iterator()
+        while (iterator.hasNext()) {
+            val stored = iterator.next()
+            if (stored.key !in incomingKeys && stored.key !in queuedKeys && stored.fireAt > now) {
+                cancelAlarm(context, stored.id)
+                iterator.remove()
+            }
+        }
+        for (reminder in incoming) {
+            // 队列里有该 key 的操作（完成 / Snooze）：原生已按操作撤下或临时重设，
+            // 该 key 由 JS 应用队列后决定——后台取回的 hub 计划还不知道这次操作。
+            if (reminder.key in queuedKeys) continue
+            val id = plan[reminder.key]?.id ?: ReminderStore.allocateId(context)
+            plan[reminder.key] = StoredReminder(
+                key = reminder.key,
+                id = id,
+                fireAt = reminder.fireAt,
+                title = reminder.title,
+                body = reminder.body,
+                taskId = reminder.taskId,
+                snoozeTomorrowAt = reminder.snoozeTomorrowAt,
+            )
+        }
+        collectGarbage(context, plan, now)
+        ReminderStore.save(context, plan)
+        armWindow(context, plan.values, now)
     }
 
     /** 登出：注销全部闹钟并清空计划。 */
@@ -121,6 +187,7 @@ internal object ReminderAlarms {
             for (stored in plan.values) cancelAlarm(context, stored.id)
             plan.clear()
             ReminderStore.save(context, plan)
+            ReminderStore.savePlanSource(context, PlanSource(0, pendingLocal = false, backgroundCursor = 0))
         }
     }
 

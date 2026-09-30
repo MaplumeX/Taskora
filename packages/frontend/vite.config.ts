@@ -23,6 +23,14 @@ export default defineConfig({
   server: {
     port: 5173,
   },
+  // SQLite WASM（web Local Replica）：自带 .wasm 按 import.meta.url 定位，
+  // 不能被预构建改写路径；worker 以 ES module 打包（sqlite.worker.ts）。
+  optimizeDeps: {
+    exclude: ['@sqlite.org/sqlite-wasm'],
+  },
+  worker: {
+    format: 'es',
+  },
   build: {
     rollupOptions: {
       output: {

@@ -109,8 +109,12 @@ _Avoid_: 高亮、hover、焦点
 _Avoid_: 数据库、缓存、ORM、offline cache
 
 **Local Replica（本地副本）**:
-每台设备持有的该用户全量数据镜像，是 UI 读写的直接对象；不可视为可随时丢弃的缓存。
+每台设备持有的该用户数据镜像，是 UI 读写的直接对象；不可视为可随时丢弃的缓存。除 Archived Logbook 外是全量的。
 _Avoid_: cache、镜像只读副本
+
+**Archived Logbook（归档 Logbook）**:
+Local Replica 不保留的旧 Logbook Entry：了结时间早于保留期（缺省 365 天）、不在 Trash、不属于进行中项目的已了结任务及其 Subtask。它们留在 Sync Hub，Logbook 滚到底时按页读取，只读；在 hub 上被修改后会随变更回到副本。归档不是删除：不产生 Compact Event，也不登记。
+_Avoid_: 已删除、冷数据、Trash
 
 ### 同步
 
@@ -123,7 +127,7 @@ _Avoid_: 消息、推送、payload
 _Avoid_: API 服务器、权威数据库（ authoritative 只指合并后的服务端副本）
 
 **Field-level LWW（字段级 Last-Writer-Wins）**:
-冲突解决模型：每个实体的每个字段独立携带修改时间戳，并发冲突时新者胜；同一字段真并发时按设备 ID 决胜，败方编辑被丢弃（接受的语义，不弹冲突 UI）。
+冲突解决模型：每个实体的每个字段独立携带修改时间戳，并发冲突时新者胜；同一字段真并发时按设备 ID 决胜，败方编辑被丢弃（接受的语义，不弹冲突 UI）。合并出违反跨字段规则的组合（别的项目的分组、Someday 带提醒等）时，由 Sync Hub 按规则纠正，收紧的一方获胜。
 _Avoid_: 整实体覆盖、弹窗合并
 
 **HLC（Hybrid Logical Clock，混合逻辑时钟）**:
@@ -139,11 +143,11 @@ _Avoid_: 整数序号、sortOrder、order index
 _Avoid_: 消息队列（MQ 意义上的）
 
 **Sync Cursor**:
-设备记录的「已拉取到的全局单调序号」位置，增量拉取以此为起点；复用原 Event Stream 的单调 seq 机制。
+设备记录的「已拉取到的每用户单调序号」位置，增量拉取以此为起点。序号由 Sync Hub 的持久化变更日志分配（保留 30 天），hub 重启不失效；早于保留窗口或来自旧世代的 cursor 触发全量 bootstrap。
 _Avoid_: offset、分页游标
 
 **Compact Event（压缩变更）**:
-Hub 的 GC 物理删除实体后下发给设备的变更类型：指令设备从 Local Replica 中移除一批实体，区别于携带实体内容的 Change Event。仅在清空 Trash / 级联清理后产生。
+Hub 的 GC 物理删除实体后下发给设备的变更类型：指令设备从 Local Replica 中移除一批实体，区别于携带实体内容的 Change Event。在清空 Trash / 级联清理 / Delete Request 后产生；设备写入 hub 上已不存在的实体时，hub 也回以 Compact Event 让它收敛。
 _Avoid_: 硬删除广播、tombstone（我们用软删除，无墓碑）
 
 **Delete Request（删除请求）**:

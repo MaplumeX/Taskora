@@ -24,6 +24,8 @@
   "anytimeEmpty": "No anytime tasks",
   "somedayEmpty": "No Someday tasks",
   "logbookEmpty": "No completed or cancelled tasks yet",
+  "logbookArchiveFailed": "Couldn't load older entries",
+  "logbookArchiveRetry": "Retry",
   "trashEmpty": "Trash is empty",
   "yesterday": "Yesterday",
   "earlier": "Earlier",

@@ -28,9 +28,17 @@ import {
   setProjectHeadingBackend,
   createEngineProjectHeadingBackend,
   setSyncStatus,
+  attachLiveQueries,
+  detachLiveQueries,
+  createEngineInvalidator,
   requestTaskReveal,
 } from '@taskora/api';
-import { openEngine, type Engine, type SyncEntity } from '@taskora/engine';
+import {
+  openEngine,
+  ReplicaSchemaTooNewError,
+  SyncUpgradeRequiredError,
+  type Engine,
+} from '@taskora/engine';
 import { createReminderCoordinator, type ReminderCoordinator } from '@taskora/api';
 
 import { createHttpSyncTransport, registerDevice } from './http-transport';
@@ -44,38 +52,19 @@ import {
 const DEVICE_ID_KEY = 'taskora.deviceId';
 const SYNC_INTERVAL_MS = 30_000;
 
-/**
- * 实体 → 需失效的 query root（失效面对齐 event-applier 的口径）：
- * task/project/feed 互相嵌入计数，tag 嵌入一切带标签芯片的缓存。
- */
-const INVALIDATION_BY_ENTITY: Record<SyncEntity, string[][]> = {
-  task: [['tasks'], ['task'], ['feed'], ['projects'], ['project']],
-  subtask: [['tasks'], ['task']],
-  project: [['projects'], ['project'], ['feed']],
-  'project-heading': [['project-headings']],
-  area: [['areas'], ['area'], ['feed']],
-  tag: [['tags'], ['tag'], ['tag-groups'], ['tasks'], ['projects'], ['areas'], ['feed']],
-  'tag-group': [['tag-groups'], ['tag-group']],
-};
-
-const ALL_QUERY_ROOTS = [...new Set(Object.values(INVALIDATION_BY_ENTITY).flat())];
-
-/** 按变更涉及的实体失效对应域；entities 缺省（bootstrap）时全量。 */
-function invalidateEntities(queryClient: QueryClient, entities?: SyncEntity[]): void {
-  const roots = entities
-    ? [...new Set(entities.flatMap((entity) => INVALIDATION_BY_ENTITY[entity] ?? []))]
-    : ALL_QUERY_ROOTS;
-  for (const root of roots) {
-    queryClient.invalidateQueries({ queryKey: root });
-  }
-}
-
 let engine: Engine | null = null;
 let unsubscribeRemoteChange: (() => void) | null = null;
 let syncTimer: ReturnType<typeof setInterval> | null = null;
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 let unsubscribeAuth: (() => void) | null = null;
 let syncInFlight: Promise<boolean> | null = null;
+/** 在飞期间又有触发（SSE 提示、本地写）：结束后立即补跑一轮，而不是等下个周期。 */
+let syncRequested = false;
+/**
+ * hub 要求更高的同步协议版本（HTTP 426，local-first-v3 issue 03）：停止
+ * 同步直到安装新版本（重新登录会重新尝试）。本地读写照常，Outbox 保留。
+ */
+let upgradeRequired = false;
 /** Reminders（reminders spec）：runtime 模式调度器，随 Engine 生命周期启停。 */
 let reminderCoordinator: ReminderCoordinator | null = null;
 let unsubscribeReminderActions: (() => void) | null = null;
@@ -128,14 +117,15 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine }));
     registerDevice(deviceId).catch(() => undefined); // 注册失败不阻塞本地使用
     // Engine 激活：SSE 只作「触发 engine pull」的提示通道（ADR-0007），
-    // 停用 EventStreamApplier 的缓存手术——失效由 engine.onChange 驱动，
-    // 避免回声/远端事件的双重失效与 sortOrder/position 双权威打架。
+    // 停用 EventStreamApplier 的缓存手术——界面由响应式查询驱动，
+    // 避免回声/远端事件的双重刷新与 sortOrder/position 双权威打架。
     setEventStreamCacheSurgery(false);
+    // 界面读改由 Engine 的响应式查询提供（local-first-v3 issue 06）：装配
+    // 期间按 REST 渲染的视图随之切到本地副本，之后只在依赖的数据变更时重跑。
+    attachLiveQueries(engine);
 
-    // 副本变更 → UI 缓存失效（本地读，立即生效；按实体粒度），
     // 仅本地写需要防抖调度同步——远端写应用后无新 Outbox，再拉是空转。
     engine.onChange((change) => {
-      invalidateEntities(queryClient, change.entities);
       if (change.origin === 'local') {
         scheduleSync(1_000);
       }
@@ -146,7 +136,8 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     unsubscribeRemoteChange?.();
     unsubscribeRemoteChange = onRemoteChangeEvent(() => void syncNow());
 
-    // 首次装配先 bootstrap（新设备全量快照），此后走增量。首次失败且
+    // 首次同步：新设备 cursor 为 0，pull 必然被 hub 判为 resync，由
+    // engine.pull 转走 bootstrap 拉全量快照；此后走增量。首次失败且
     // 副本尚未同步过（cursor === 0，本地无数据）时激进退避重试直到
     // 首次成功——否则新设备对着空副本渲染「数据全没了」长达一个周期。
     if (!(await syncNow()) && (await engine.cursor()) === 0) {
@@ -177,14 +168,19 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     console.error('[desktop-engine] 装配失败，退回 REST 后端', error);
     stopReminderCoordinator();
     resetBackends();
+    // React Query 里留着的是装配前的结果
+    createEngineInvalidator(queryClient)();
     setEventStreamCacheSurgery(true);
     engine = null;
-    setSyncStatus('idle');
+    // 副本由更新版本的 Taskora 写入（降级安装）：不打开它，在线走 REST，
+    // 并提示升级——本地未同步的编辑留在副本里，等升级后送出。
+    setSyncStatus(error instanceof ReplicaSchemaTooNewError ? 'upgrade-required' : 'idle');
   }
 }
 
 /** 全域退回 REST（登出 / 装配失败）。 */
 function resetBackends(): void {
+  detachLiveQueries();
   setTaskBackend(undefined);
   setProjectBackend(undefined);
   setAreaBackend(undefined);
@@ -199,14 +195,8 @@ function stopEngine(): void {
   // 退回 REST 后端：恢复 SSE 缓存手术（web 同款失效路径）
   setEventStreamCacheSurgery(true);
   setSyncStatus('idle');
-  if (syncTimer !== null) {
-    clearInterval(syncTimer);
-    syncTimer = null;
-  }
-  if (debounceTimer !== null) {
-    clearTimeout(debounceTimer);
-    debounceTimer = null;
-  }
+  upgradeRequired = false;
+  stopSyncTriggers();
   unsubscribeRemoteChange?.();
   unsubscribeRemoteChange = null;
   void engine?.close().catch(() => undefined);
@@ -233,10 +223,25 @@ function stopReminderCoordinator(): void {
   reminderCoordinator = null;
 }
 
+/** 停掉周期与写后防抖同步（登出 / 需要升级）。 */
+function stopSyncTriggers(): void {
+  if (syncTimer !== null) {
+    clearInterval(syncTimer);
+    syncTimer = null;
+  }
+  if (debounceTimer !== null) {
+    clearTimeout(debounceTimer);
+    debounceTimer = null;
+  }
+}
+
 /** flush + pull；并发调用合并为一个在飞任务。成败驱动同步指示器（V2）。 */
 function syncNow(): Promise<boolean> {
-  if (!engine) return Promise.resolve(false);
-  if (syncInFlight) return syncInFlight;
+  if (!engine || upgradeRequired) return Promise.resolve(false);
+  if (syncInFlight) {
+    syncRequested = true;
+    return syncInFlight;
+  }
   setSyncStatus('syncing');
   syncInFlight = engine
     .sync()
@@ -245,7 +250,13 @@ function syncNow(): Promise<boolean> {
       setSyncStatus('synced');
       return true;
     })
-    .catch(async () => {
+    .catch(async (error: unknown) => {
+      if (error instanceof SyncUpgradeRequiredError) {
+        upgradeRequired = true;
+        stopSyncTriggers();
+        setSyncStatus('upgrade-required', await engine!.pendingCount());
+        return false;
+      }
       // 断网/服务器维护：静默退避，等下个时机；离线·N 条待同步。
       // 不用 navigator.onLine：服务器不可达不应被假在线掩盖。
       setSyncStatus('offline', await engine!.pendingCount());
@@ -253,6 +264,10 @@ function syncNow(): Promise<boolean> {
     })
     .finally(() => {
       syncInFlight = null;
+      if (syncRequested) {
+        syncRequested = false;
+        void syncNow();
+      }
     });
   return syncInFlight;
 }
@@ -263,7 +278,7 @@ function syncNow(): Promise<boolean> {
  */
 async function retryUntilFirstSync(): Promise<void> {
   let delayMs = 2_000;
-  while (engine && (await engine.cursor()) === 0) {
+  while (engine && !upgradeRequired && (await engine.cursor()) === 0) {
     await new Promise((resolve) => setTimeout(resolve, delayMs));
     if (!engine) return;
     if (await syncNow()) return;

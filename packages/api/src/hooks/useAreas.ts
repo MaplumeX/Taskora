@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 
 import type { AreaResponseDto, CreateAreaDto, UpdateAreaDto } from '@taskora/shared';
 
@@ -9,6 +9,8 @@ import {
   reorderAreas,
   updateArea,
 } from '@/api/areas.api';
+import { refreshAfterWrite, restoreSnapshot, useQueryCache } from './cache-patches';
+import { useReplicaQuery } from './useEngineQuery';
 
 export const areaKeys = {
   all: ['areas'] as const,
@@ -16,9 +18,10 @@ export const areaKeys = {
 };
 
 export function useAreasQuery() {
-  return useQuery({
+  return useReplicaQuery({
     queryKey: areaKeys.all,
     queryFn: getAreas,
+    dependsOn: ['area', 'tag'],
   });
 }
 
@@ -41,19 +44,8 @@ function removeAreaFromList(
   return list.filter((a) => a.id !== areaId);
 }
 
-// Restore snapshot to queries data (list caches)
-function restoreListSnapshot(
-  queryClient: ReturnType<typeof useQueryClient>,
-  queryKey: readonly string[],
-  snapshot: [readonly unknown[], unknown][],
-) {
-  for (const [key, data] of snapshot) {
-    queryClient.setQueryData(key as readonly string[], data);
-  }
-}
-
 export function useCreateArea() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (data: CreateAreaDto) => createArea(data),
     onMutate: async (data) => {
@@ -80,7 +72,7 @@ export function useCreateArea() {
     },
     onError: (_err, _data, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, areaKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
     },
     onSuccess: (area, _data, ctx) => {
@@ -99,13 +91,13 @@ export function useCreateArea() {
       queryClient.setQueryData(areaKeys.detail(area.id), area);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: areaKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: areaKeys.all });
     },
   });
 }
 
 export function useUpdateArea() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateAreaDto }) => updateArea(id, data),
     onMutate: async ({ id, data }) => {
@@ -133,21 +125,21 @@ export function useUpdateArea() {
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, areaKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(areaKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, { id }) => {
-      void queryClient.invalidateQueries({ queryKey: areaKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: areaKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: areaKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: areaKeys.all });
     },
   });
 }
 
 export function useReorderAreas() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (orderedIds: string[]) => reorderAreas(orderedIds),
     onMutate: async (orderedIds) => {
@@ -170,13 +162,13 @@ export function useReorderAreas() {
       void queryClient.invalidateQueries({ queryKey: areaKeys.all });
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: areaKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: areaKeys.all });
     },
   });
 }
 
 export function useDeleteArea() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => deleteArea(id),
     onMutate: async (id) => {
@@ -192,11 +184,11 @@ export function useDeleteArea() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, areaKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: areaKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: areaKeys.all });
     },
   });
 }

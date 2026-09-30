@@ -1,5 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import { hidesTasksInLaterProjects, HeadingStatus } from '@taskora/shared';
+import { synthPosition } from '@taskora/engine';
 import type {
   ChangeEvent,
   ProjectHeadingResponseDto,
@@ -28,6 +29,7 @@ interface Entity {
   id: string;
   sortOrder: number;
   createdAt: string;
+  position?: string | null;
 }
 
 /** Server list ordering: sortOrder asc, createdAt desc (headings: asc). */
@@ -38,7 +40,19 @@ function bySortOrder(a: Entity, b: Entity, createdAtOrder: 'asc' | 'desc' = 'des
   return (createdAtOrder === 'desc' ? later : !later) ? -1 : 1;
 }
 
-const taskComparator = (a: TaskResponseDto, b: TaskResponseDto) => bySortOrder(a, b, 'desc');
+/**
+ * Server list ordering for positioned lists (tasks/projects/feed): effective
+ * Position, byte order. Rows without a position fall back to the hub's
+ * synthesized key, which encodes exactly "sortOrder asc, createdAt desc" —
+ * so this also reproduces the legacy order for areas/tags.
+ */
+function byPosition(a: Entity, b: Entity): number {
+  const pa = a.position ?? synthPosition(a.sortOrder, new Date(a.createdAt));
+  const pb = b.position ?? synthPosition(b.sortOrder, new Date(b.createdAt));
+  return pa < pb ? -1 : pa > pb ? 1 : 0;
+}
+
+const taskComparator = (a: TaskResponseDto, b: TaskResponseDto) => byPosition(a, b);
 const headingComparator = (a: ProjectHeadingResponseDto, b: ProjectHeadingResponseDto) =>
   bySortOrder(a, b, 'asc');
 
@@ -84,9 +98,7 @@ export function applyChangeEvents(queryClient: QueryClient, batch: ChangeEvent[]
         void queryClient.invalidateQueries({
           predicate: (query) =>
             query.queryKey[0] === 'tasks' &&
-            hidesTasksInLaterProjects(
-              (query.queryKey[1] as { view?: string } | undefined)?.view,
-            ),
+            hidesTasksInLaterProjects((query.queryKey[1] as { view?: string } | undefined)?.view),
         });
         break;
       }
@@ -249,7 +261,7 @@ function upsertInLists<T extends Entity>(
   rootKey: string,
   entity: T,
   matches: (item: T, key: readonly unknown[]) => boolean,
-  comparator: (a: T, b: T) => number = (a, b) => bySortOrder(a, b, 'desc'),
+  comparator: (a: T, b: T) => number = byPosition,
 ): void {
   for (const cache of listCaches(queryClient, rootKey)) {
     const list = cache.data as T[];

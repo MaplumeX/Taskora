@@ -2,7 +2,8 @@
 //!
 //! JS 只负责计算规则（期望集），经 `sync` 整体交付；原生侧持久化计划、
 //! 自行差量、设置精确闹钟、开机/升级/启动后重新设置、到点发通知，并管理
-//! 渠道与权限。结构同 `tauri-plugin-statusbar`：桌面端（测试编译）为 no-op。
+//! 渠道与权限。App 未打开时，原生的后台周期任务取回 hub 按同一套规则算好
+//! 的计划（`configure_background`，local-first-v3 issue 09）。结构同 `tauri-plugin-statusbar`：桌面端（测试编译）为 no-op。
 
 use serde::{Deserialize, Serialize};
 use tauri::{
@@ -70,6 +71,17 @@ struct LaunchTaskResponse {
     task_id: Option<String>,
 }
 
+/// 计划依据的副本状态（local-first-v3 issue 09）：原生据此在 JS 的计划与
+/// 后台取回的 hub 计划之间取较新者。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanBasis {
+    /// 副本已拉到的 hub 变更日志位置。
+    pub cursor: i64,
+    /// Outbox 里还有未推送的本地写。
+    pub pending_local: bool,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncArgs {
@@ -78,6 +90,16 @@ pub struct SyncArgs {
     /// reminders 渠道名（渠道创建后名字可随语言更新，importance 不变）。
     pub channel_name: String,
     pub labels: ActionLabels,
+    pub basis: PlanBasis,
+}
+
+/// 后台同步的配置（local-first-v3 issue 09）：hub 的提醒计划地址与设备的
+/// 只读后台凭据。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ConfigureBackgroundArgs {
+    pub plan_url: String,
+    pub token: String,
 }
 
 /// 投递可靠性状态（设置页「提醒可靠性」区展示）。
@@ -117,6 +139,20 @@ impl<R: Runtime> Reminders<R> {
         {
             self.handle
                 .run_mobile_plugin::<()>("sync", args)
+                .map_err(|e| e.to_string())
+        }
+        #[cfg(desktop)]
+        {
+            let _ = args;
+            Ok(())
+        }
+    }
+
+    pub fn configure_background(&self, args: ConfigureBackgroundArgs) -> Result<(), String> {
+        #[cfg(mobile)]
+        {
+            self.handle
+                .run_mobile_plugin::<()>("configureBackground", args)
                 .map_err(|e| e.to_string())
         }
         #[cfg(desktop)]
@@ -224,6 +260,15 @@ async fn sync<R: Runtime>(app: tauri::AppHandle<R>, args: SyncArgs) -> Result<()
     app.reminders().sync(args)
 }
 
+/// 设备注册取回后台凭据后调用：保存并确保后台周期任务存在。
+#[tauri::command]
+async fn configure_background<R: Runtime>(
+    app: tauri::AppHandle<R>,
+    args: ConfigureBackgroundArgs,
+) -> Result<(), String> {
+    app.reminders().configure_background(args)
+}
+
 #[tauri::command]
 async fn clear<R: Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
     app.reminders().clear()
@@ -269,7 +314,8 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             request_permission,
             open_settings,
             take_pending_actions,
-            take_launch_task
+            take_launch_task,
+            configure_background
         ])
         .setup(|app, _api| {
             #[cfg(target_os = "android")]

@@ -11,34 +11,38 @@
  *
  * 触发时机：Engine 副本变更（本地写或应用远端写）+ 周期 tick（兜底
  * 跨天滚动与启动后的首次对齐）。
+ *
+ * 规则与文案来自共享 domain（@taskora/engine）：hub 为 Android 后台同步
+ * 计算的计划（`GET /reminders/plan`，local-first-v3 issue 09）与这里逐字
+ * 一致。system 模式随计划附上副本基准（cursor、有无未推送的本地写），
+ * 原生据此在自己的计划与后台取回的 hub 计划之间取较新者。
  */
 
 import { currentTimeZone, currentLegacyDateTimeZone } from '@/utils/date';
 import { usePreferencesStore } from '@/stores/preferences.store';
-import type { Engine } from '@taskora/engine';
+import {
+  buildReminderTexts,
+  computeReminderPlan,
+  diffReminderRegistration,
+  isReminderEligible,
+  planReminderDeliveries,
+  reminderFireAt,
+  reminderTextContext,
+  type Engine,
+  type ReminderNotification,
+  type ReminderParentTitles,
+  type ReminderTaskInput,
+} from '@taskora/engine';
 
 import type { TaskBackend } from '../api/task-backend';
 import { createEngineTaskBackend } from '../engine/task-backend.engine';
 
 import {
-  computeReminderPlan,
-  reminderFireAt,
-  diffReminderRegistration,
-  isReminderEligible,
-  type ReminderNotification,
-  type ReminderTaskInput,
-} from './reminder-scheduler';
-import {
   resolveReminderAction,
   type ReminderActionRequest,
   type ReminderActionResolution,
 } from './reminder-action';
-import { buildReminderTexts, type ReminderTextContext, type ReminderTexts } from './reminder-texts';
-import {
-  reminderInputFromReplicaRow,
-  type ReminderDelivery,
-  type ReminderNotificationShell,
-} from './notification-shell';
+import { reminderInputFromReplicaRow, type ReminderNotificationShell } from './notification-shell';
 
 export interface ReminderCoordinatorOptions {
   engine: Engine;
@@ -48,8 +52,6 @@ export interface ReminderCoordinatorOptions {
   tickMs?: number;
   /** 可注入的时钟（测试确定性）。 */
   now?: () => Date;
-  /** 通知文案组装（默认 buildReminderTexts：标题=任务名，正文=HH:mm · 归属 + 备注首行）。 */
-  texts?: (notification: ReminderNotification, context: ReminderTextContext) => ReminderTexts;
   /** 通知操作的写入口（默认基于同一 engine 的 Task 传输层）。 */
   tasks?: Pick<TaskBackend, 'completeTask' | 'updateTask'>;
 }
@@ -68,6 +70,7 @@ export interface ReminderCoordinator {
 
 const DEFAULT_TICK_MS = 30_000;
 const noop = () => undefined;
+const EMPTY_TITLES: ReminderParentTitles = { projects: new Map(), areas: new Map() };
 
 export function createReminderCoordinator(
   options: ReminderCoordinatorOptions,
@@ -75,10 +78,6 @@ export function createReminderCoordinator(
   const { engine, shell, mode } = options;
   const tickMs = options.tickMs ?? DEFAULT_TICK_MS;
   const now = options.now ?? (() => new Date());
-  const texts =
-    options.texts ??
-    ((n: ReminderNotification, context: ReminderTextContext) =>
-      buildReminderTexts(n, context, currentTimeZone()));
   const tasksBackend = options.tasks ?? createEngineTaskBackend({ engine });
 
   /** runtime：key → 当前登记的 fireAt（内存表，到点 fireNow）。 */
@@ -102,8 +101,14 @@ export function createReminderCoordinator(
     if (mode === 'system' && shell.takePendingActions) {
       await drainPendingActions(shell.takePendingActions);
     }
-    const rows = await engine.list('task');
+    // 只有带提醒时刻的任务可能进入计划（isReminderEligible 的必要条件）
+    const rows = await engine.list('task', { where: { reminderTime: { notNull: true } } });
     const tasks = rows.map(reminderInputFromReplicaRow);
+    if (mode === 'system') {
+      await deliver(tasks);
+      return;
+    }
+
     const nowMs = now().getTime();
     const desired = computeReminderPlan(
       tasks,
@@ -111,14 +116,9 @@ export function createReminderCoordinator(
       currentTimeZone(),
       currentLegacyDateTimeZone(),
     );
-    if (mode === 'system') {
-      await deliver(desired, new Map(tasks.map((t) => [t.id, t])));
-      return;
-    }
-
     const diff = diffReminderRegistration(registered, desired, nowMs);
     const tasksById = new Map(tasks.map((t) => [t.id, t]));
-    const contextOf = diff.due.length > 0 ? await textContexts() : null;
+    const titles = diff.due.length > 0 ? await parentTitles() : null;
 
     // 自然到点：补发跨越 tick 边界的提醒——前提是任务仍符合条件且时刻
     // 未被改动（到点后才了结/改期的不补发）。
@@ -142,7 +142,7 @@ export function createReminderCoordinator(
             taskId: m.taskId,
             fireAt: m.fireAt,
             snoozeTomorrowAt: m.snoozeTomorrowAt,
-            ...texts(m, contextOf!(task)),
+            ...buildReminderTexts(m, reminderTextContext(task, titles!), currentTimeZone()),
           })
           .catch(noop);
       }
@@ -161,43 +161,35 @@ export function createReminderCoordinator(
     }
   }
 
-  async function deliver(
-    desired: ReminderNotification[],
-    tasksById: Map<string, ReminderTaskInput>,
-  ): Promise<void> {
+  async function deliver(tasks: ReminderTaskInput[]): Promise<void> {
     if (!shell.sync) return;
-    const contextOf = desired.length > 0 ? await textContexts() : null;
-    const plan: ReminderDelivery[] = desired.map((n) => ({
-      key: n.key,
-      taskId: n.taskId,
-      fireAt: n.fireAt,
-      snoozeTomorrowAt: n.snoozeTomorrowAt,
-      ...texts(n, contextOf!(tasksById.get(n.taskId)!)),
-    }));
-    const signature = JSON.stringify(plan);
+    const titles = tasks.length > 0 ? await parentTitles() : EMPTY_TITLES;
+    const plan = planReminderDeliveries(
+      tasks,
+      now(),
+      { timeZone: currentTimeZone(), legacyDateTimeZone: currentLegacyDateTimeZone() },
+      titles,
+    );
+    // 副本基准：原生据此判断这份计划与后台取回的 hub 计划谁更新（issue 09）。
+    const [cursor, pending] = await Promise.all([engine.cursor(), engine.pendingCount()]);
+    const basis = { cursor, pendingLocal: pending > 0 };
+    // 基准进签名：推送清空 Outbox 后计划未变也要重新交付，原生才会恢复后台同步。
+    const signature = JSON.stringify([plan, basis]);
     if (signature === lastSynced) return;
     try {
-      await shell.sync(plan);
+      await shell.sync(plan, basis);
       lastSynced = signature;
     } catch (error) {
       console.warn('[reminders] sync failed:', error);
     }
   }
 
-  /** 文案上下文查找：Project 名优先，其次 Area 名（仅在需要文案时读取）。 */
-  async function textContexts(): Promise<(task: ReminderTaskInput) => ReminderTextContext> {
+  /** 文案上下文用的名称表：Project 名优先，其次 Area 名（仅在需要文案时读取）。 */
+  async function parentTitles(): Promise<ReminderParentTitles> {
     const [projects, areas] = await Promise.all([engine.list('project'), engine.list('area')]);
     const titleOf = (rows: typeof projects) =>
       new Map(rows.map((row) => [row.id, (row.fields.title as string | undefined) ?? '']));
-    const projectTitles = titleOf(projects);
-    const areaTitles = titleOf(areas);
-    return (task) => ({
-      parentName:
-        (task.projectId ? projectTitles.get(task.projectId) : undefined) ??
-        (task.areaId ? areaTitles.get(task.areaId) : undefined) ??
-        null,
-      notes: task.notes ?? null,
-    });
+    return { projects: titleOf(projects), areas: titleOf(areas) };
   }
 
   async function applyAction(request: ReminderActionRequest): Promise<ReminderActionResolution> {

@@ -8,20 +8,27 @@
  */
 
 import { mergeFieldWrites, type EntityMergeState, type MergeOutcome } from './merger';
+import { repairEntity, type HeadingProjectProbe } from './invariants';
 import { formatHlc, hlcWallMs } from './hlc';
-import { DELETE_CASCADES, REFERENCE_FIELDS, type SyncEntity } from './entities';
+import { DELETE_CASCADES, REFERENCE_FIELDS, SYNC_ENTITIES, type SyncEntity } from './entities';
+import { isArchivedTask } from './archive';
 import type {
+  BootstrapRequest,
   BootstrapResponse,
   DeleteRequest,
+  FetchEntitiesRequest,
+  FetchEntitiesResponse,
   HubChange,
   OutboxEvent,
   PullRequest,
   PullResponse,
   PushRequest,
   PushResponse,
+  RejectedChange,
   SnapshotEntry,
   SyncTransport,
 } from './protocol';
+import { SYNC_PROTOCOL_VERSION } from './protocol';
 
 type UserState = {
   entities: Map<string, EntityMergeState>; // key: `${entity}:${id}`
@@ -42,30 +49,92 @@ export interface InMemorySyncHubOptions {
   bufferSize?: number;
   /** 墙钟（测试确定性）。 */
   wallClock?: () => number;
+  /**
+   * 模拟 Postgres 外键：合并结果引用尚未到达（pending）的实体时，该事件
+   * 失败。与 NestJS hub 相同，同批后续事件照常尝试，最后整个 push 失败。
+   */
+  enforceReferences?: boolean;
+  /** 在 transport 响应里回报 serverTime（取自 wallClock），驱动设备时钟校准。 */
+  reportServerTime?: boolean;
+  /**
+   * hub 认识的实体（缺省为全部）：模拟较旧的 hub。不认识的实体的字段写与
+   * Delete Request 逐条拒绝、在 PushResponse.rejected 里列出（协议 1）。
+   * 按引用保存：测试可在运行中往数组里追加，模拟 hub 升级。
+   */
+  knownEntities?: readonly SyncEntity[];
+  /** 分页 bootstrap 的每页行数（缺省 500）。 */
+  bootstrapPageSize?: number;
+}
+
+/** 分页令牌（进程内 hub 直接用 JSON）。 */
+interface BootstrapToken {
+  fence: number;
+  /** 当前阶段：实体下标，SYNC_ENTITIES.length 为 Compact 登记。 */
+  phase: number;
+  after: string;
+  settledAfter?: string;
 }
 
 export class InMemorySyncHub {
   private readonly bufferSize: number;
   private readonly wallClock: () => number;
+  private readonly enforceReferences: boolean;
+  private readonly knownEntities: readonly string[];
+  private readonly reportServerTime: boolean;
+  private readonly bootstrapPageSize: number;
   private readonly users = new Map<string, UserState>();
 
   constructor(options: InMemorySyncHubOptions = {}) {
     this.bufferSize = options.bufferSize ?? 500;
     this.wallClock = options.wallClock ?? (() => Date.now());
+    this.enforceReferences = options.enforceReferences ?? false;
+    this.reportServerTime = options.reportServerTime ?? false;
+    this.knownEntities = options.knownEntities ?? SYNC_ENTITIES;
+    this.bootstrapPageSize = options.bootstrapPageSize ?? 500;
   }
 
   // ---------- 设备侧协议面 ----------
 
   push(userId: string, pushRequest: PushRequest): PushResponse {
     const state = this.stateFor(userId);
+    const rejected: RejectedChange[] = [];
+    let firstFailure: unknown = null;
     for (const event of pushRequest.events) {
-      this.mergeEvent(state, event);
+      if (!this.knownEntities.includes(event.entity)) {
+        rejected.push({
+          kind: 'write',
+          entity: event.entity,
+          id: event.id,
+          reason: 'unknown-entity',
+        });
+        continue;
+      }
+      try {
+        this.mergeEvent(state, event);
+      } catch (error) {
+        firstFailure ??= error;
+      }
     }
     // 先合并字段写、再应用删除（ADR-0008 同序：字段写 → 删除）
     for (const deleteRequest of pushRequest.deletes ?? []) {
+      if (!this.knownEntities.includes(deleteRequest.entity)) {
+        for (const id of deleteRequest.ids) {
+          rejected.push({
+            kind: 'delete',
+            entity: deleteRequest.entity,
+            id,
+            reason: 'unknown-entity',
+          });
+        }
+        continue;
+      }
       this.applyDeleteRequest(state, deleteRequest);
     }
-    return { acked: pushRequest.events.length };
+    if (firstFailure !== null) throw firstFailure;
+    return {
+      acked: pushRequest.events.length - rejected.filter((item) => item.kind === 'write').length,
+      ...(rejected.length > 0 ? { rejected } : {}),
+    };
   }
 
   pull(userId: string, request: PullRequest): PullResponse {
@@ -81,13 +150,99 @@ export class InMemorySyncHub {
     };
   }
 
-  bootstrap(userId: string): BootstrapResponse {
+  /**
+   * 快照。不带请求（协议 2 之前的客户端）时回整包；带请求时按实体、按
+   * id 分页，第一页之前固定 cursor fence，归档任务（settledAfter）及其
+   * Subtask 不进快照。与 NestJS hub 同语义。
+   */
+  bootstrap(userId: string, request?: BootstrapRequest): BootstrapResponse {
     const state = this.stateFor(userId);
-    const snapshot: SnapshotEntry[] = [];
-    for (const [key, entity] of state.entities) {
-      const [entityName, id] = splitKey(key);
-      snapshot.push({ entity: entityName, id, fields: entity.fields, clocks: entity.clocks });
+    if (!request) {
+      const snapshot: SnapshotEntry[] = [];
+      for (const [key, entity] of state.entities) {
+        const [entityName, id] = splitKey(key);
+        snapshot.push({ entity: entityName, id, fields: entity.fields, clocks: entity.clocks });
+      }
+      return { snapshot, cursor: state.nextSeq - 1, compacted: this.compactedList(state) };
     }
+    const token: BootstrapToken = request.page
+      ? (JSON.parse(request.page) as BootstrapToken)
+      : { fence: state.nextSeq - 1, phase: 0, after: '', settledAfter: request.settledAfter };
+    let { phase, after } = token;
+    const snapshot: SnapshotEntry[] = [];
+    let compacted: DeleteRequest[] | undefined;
+    const archived = (taskId: unknown): boolean => {
+      if (!token.settledAfter || typeof taskId !== 'string') return false;
+      const task = state.entities.get(`task:${taskId}`);
+      if (!task) return false;
+      const projectId = task.fields.projectId;
+      const project =
+        typeof projectId === 'string' ? state.entities.get(`project:${projectId}`) : undefined;
+      return isArchivedTask(
+        task.fields,
+        project?.fields.status as string | undefined,
+        token.settledAfter,
+      );
+    };
+    while (phase < SYNC_ENTITIES.length && snapshot.length < this.bootstrapPageSize) {
+      const entity = SYNC_ENTITIES[phase];
+      const ids = [...state.entities.keys()]
+        .filter((key) => key.startsWith(`${entity}:`))
+        .map((key) => key.slice(entity.length + 1))
+        .filter((id) => id > after)
+        .sort();
+      for (const id of ids) {
+        if (snapshot.length >= this.bootstrapPageSize) break;
+        after = id;
+        const row = state.entities.get(`${entity}:${id}`)!;
+        if (entity === 'task' && archived(id)) continue;
+        if (entity === 'subtask' && archived(row.fields.taskId)) continue;
+        snapshot.push({ entity, id, fields: row.fields, clocks: row.clocks });
+      }
+      if (snapshot.length < this.bootstrapPageSize) {
+        phase += 1;
+        after = '';
+      }
+    }
+    if (phase === SYNC_ENTITIES.length) {
+      compacted = this.compactedList(state);
+      phase += 1;
+    }
+    const done = phase > SYNC_ENTITIES.length;
+    return {
+      snapshot,
+      cursor: token.fence,
+      ...(compacted ? { compacted } : {}),
+      ...(done ? {} : { next: JSON.stringify({ ...token, phase, after }) }),
+    };
+  }
+
+  /** 按 id 取实体合并态及其 DELETE_CASCADES 子实体（不存在的 id 略过）。 */
+  fetchEntities(userId: string, request: FetchEntitiesRequest): FetchEntitiesResponse {
+    const state = this.stateFor(userId);
+    const entries: SnapshotEntry[] = [];
+    for (const id of request.ids) {
+      const row = state.entities.get(`${request.entity}:${id}`);
+      if (!row) continue;
+      entries.push({ entity: request.entity, id, fields: row.fields, clocks: row.clocks });
+    }
+    const found = new Set(entries.map((entry) => entry.id));
+    for (const rule of DELETE_CASCADES[request.entity] ?? []) {
+      for (const [key, row] of state.entities) {
+        if (!key.startsWith(`${rule.entity}:`)) continue;
+        if (!found.has(row.fields[rule.foreignKey] as string)) continue;
+        entries.push({
+          entity: rule.entity,
+          id: key.slice(rule.entity.length + 1),
+          fields: row.fields,
+          clocks: row.clocks,
+        });
+      }
+    }
+    return { entries };
+  }
+
+  private compactedList(state: UserState): DeleteRequest[] {
     const compacted = new Map<SyncEntity, string[]>();
     for (const key of state.compacted) {
       const [entity, id] = splitKey(key);
@@ -95,19 +250,22 @@ export class InMemorySyncHub {
       ids.push(id);
       compacted.set(entity, ids);
     }
-    return {
-      snapshot,
-      cursor: state.nextSeq - 1,
-      compacted: [...compacted].map(([entity, ids]) => ({ entity, ids })),
-    };
+    return [...compacted].map(([entity, ids]) => ({ entity, ids }));
   }
 
   /** 给测试用的 transport 视图（单用户 harness）。 */
   transportFor(userId: string): SyncTransport {
+    const stamped = <T extends object>(response: T): T => ({
+      ...response,
+      protocolVersion: SYNC_PROTOCOL_VERSION,
+      minProtocolVersion: 0,
+      ...(this.reportServerTime ? { serverTime: this.wallClock() } : {}),
+    });
     return {
-      push: (request) => Promise.resolve(this.push(userId, request)),
-      pull: (request) => Promise.resolve(this.pull(userId, request)),
-      bootstrap: () => Promise.resolve(this.bootstrap(userId)),
+      push: async (request) => stamped(this.push(userId, request)),
+      pull: async (request) => stamped(this.pull(userId, request)),
+      bootstrap: async (request) => stamped(this.bootstrap(userId, request)),
+      fetchEntities: async (request) => stamped(this.fetchEntities(userId, request)),
     };
   }
 
@@ -164,14 +322,18 @@ export class InMemorySyncHub {
   private mergeEvent(state: UserState, event: OutboxEvent): void {
     const key = `${event.entity}:${event.id}`;
     // Compact 永久获胜（ADR-0008）：已 compact 的实体，迟到的字段写
-    // 静默丢弃（不重建、不发事件）。
-    if (state.compacted.has(key)) return;
-    // 孤儿 Subtask 防御：父 Task 不存在（含已被 compact）时丢弃，与
-    // NestJS hub 的越权拒绝路径同规则。
-    if (event.entity === 'subtask' && !state.entities.has(`task:${event.fields.taskId?.value}`)) {
+    // 丢弃不重建；重发 Compact Event 让仍持有该行的推送方收敛。
+    if (state.compacted.has(key)) {
+      this.publish(state, { kind: 'compact', seq: 0, entity: event.entity, ids: [event.id] });
       return;
     }
     const current = state.entities.get(key) ?? null;
+    // 孤儿 Subtask 防御：父 Task 不存在（含已被 compact）时丢弃，与
+    // NestJS hub 的越权拒绝路径同规则。局部更新不带 taskId，看现有行的。
+    const parentId = event.fields.taskId?.value ?? current?.fields.taskId;
+    if (event.entity === 'subtask' && !state.entities.has(`task:${parentId}`)) {
+      return;
+    }
     const outcome = mergeFieldWrites(current, event.fields);
     // 失效引用清洗（REFERENCE_FIELDS）：离线写可能引用此后被 compact
     // 的实体。数组剔除失效 id、标量置 null；Subtask.taskId 失效则整
@@ -184,26 +346,45 @@ export class InMemorySyncHub {
       if (state.entities.has(targetKey)) return 'alive' as const;
       return 'pending' as const;
     };
-    const handled = scrubReferences(
-      event.entity,
-      current,
-      outcome,
-      referenceStatus,
-      () =>
-        formatHlc({
-          // 必胜时钟：晚于已见时钟、hub 墙钟与本事件自身的 HLC 墙钟
-          // （设备时钟可能超前于 hub 墙钟）。
-          wallMs:
-            Math.max(
-              state.seenWallMs,
-              this.wallClock(),
-              ...Object.values(event.fields).map((write) => hlcWallMs(write.hlc)),
-            ) + 1,
-          counter: 0,
-          deviceId: VIRTUAL_DEVICE_ID,
-        }),
-    );
+    // 必胜时钟：晚于已见时钟、hub 墙钟与本事件自身的 HLC 墙钟
+    // （设备时钟可能超前于 hub 墙钟）。
+    const bumpClock = () =>
+      formatHlc({
+        wallMs:
+          Math.max(
+            state.seenWallMs,
+            this.wallClock(),
+            ...Object.values(event.fields).map((write) => hlcWallMs(write.hlc)),
+          ) + 1,
+        counter: 0,
+        deviceId: VIRTUAL_DEVICE_ID,
+      });
+    const handled = scrubReferences(event.entity, current, outcome, referenceStatus, bumpClock);
     if (!handled) return;
+    // 跨字段不变量（local-first-v3 issue 01）：合并出的组合违反业务规则
+    // 时纠正，并以必胜时钟下发，所有设备收敛到同一结果。
+    applyRepairs(
+      event.entity,
+      outcome,
+      (headingId) => {
+        const owner = state.entities.get(`project-heading:${headingId}`)?.fields.projectId;
+        return typeof owner === 'string' ? owner : undefined;
+      },
+      bumpClock,
+    );
+    if (this.enforceReferences) {
+      const refs = REFERENCE_FIELDS[event.entity] ?? {};
+      for (const field of outcome.appliedFields) {
+        const ref = refs[field];
+        const value = outcome.fields[field];
+        const ids = ref?.array ? (Array.isArray(value) ? value : []) : [value];
+        for (const id of ids) {
+          if (ref && typeof id === 'string' && referenceStatus(ref.entity, id) === 'pending') {
+            throw new Error(`FK violation: ${event.entity}.${field} → ${ref.entity}:${id}`);
+          }
+        }
+      }
+    }
     if (outcome.appliedFields.length === 0) {
       // 纯重放：合并态未变，不分配 seq、不下发事件
       state.entities.set(key, { fields: outcome.fields, clocks: outcome.clocks });
@@ -314,6 +495,30 @@ export type ReferenceProbe = (entity: SyncEntity, id: string) => ReferenceStatus
 
 /** 为被清洗字段生成必胜时钟（晚于推送设备的 HLC）。 */
 export type ClockBump = () => string;
+
+/**
+ * 合并后的确定性修复（local-first-v3 issue 01）：就地修改 outcome，
+ * 把违反跨字段不变量的字段纠正为 repairEntity 给出的值，时钟提升为
+ * bumpClock()（虚拟设备 0 的必胜时钟），推送方与其他设备拉到后都采用
+ * 纠正值。只在这次合并真的改了什么时运行：纯重放保持零事件。
+ * 两个 hub（进程内与 NestJS）共用。
+ */
+export function applyRepairs(
+  entity: SyncEntity,
+  outcome: MergeOutcome,
+  probe: HeadingProjectProbe,
+  bumpClock: ClockBump,
+): string[] {
+  if (outcome.appliedFields.length === 0) return [];
+  const fixes = repairEntity(entity, outcome.fields, probe);
+  const repaired = Object.keys(fixes);
+  for (const field of repaired) {
+    outcome.fields[field] = fixes[field];
+    outcome.clocks[field] = bumpClock();
+    if (!outcome.appliedFields.includes(field)) outcome.appliedFields.push(field);
+  }
+  return repaired;
+}
 
 /**
  * 合并结果中的失效引用清洗（REFERENCE_FIELDS 注册表驱动）。

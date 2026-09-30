@@ -34,7 +34,8 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useAuthStore: fakeAuthStore,
 }));
 
-vi.mock('@taskora/engine', () => ({
+vi.mock('@taskora/engine', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@taskora/engine')>()),
   openEngine: vi.fn(async () => fakeEngine),
 }));
 
@@ -42,6 +43,25 @@ vi.mock('./tauri-storage', async () => ({
   isTauriRuntime: () => true,
   useUserReplicaDb: vi.fn(async () => undefined),
   createTauriSqlStorage: () => ({}),
+}));
+
+const backgroundMocks = vi.hoisted(() => ({
+  registerDevice: vi.fn(async (): Promise<string | null> => null),
+  configureBackgroundSync: vi.fn(async () => undefined),
+}));
+
+vi.mock('./http-transport', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./http-transport')>()),
+  registerDevice: backgroundMocks.registerDevice,
+}));
+
+vi.mock('../reminders/tauri-notification-shell', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../reminders/tauri-notification-shell')>()),
+  configureBackgroundSync: backgroundMocks.configureBackgroundSync,
+}));
+
+vi.mock('../server-settings', () => ({
+  getServerUrl: () => 'https://taskora.example.com/api/v1',
 }));
 
 type EngineOnChange = (change: { origin: string; entities?: [] }) => void;
@@ -88,6 +108,23 @@ afterEach(async () => {
 function renderQueryClient() {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } });
 }
+
+describe('mobile-engine 冷启动首屏', () => {
+  it('Engine 装配后立即改从本地副本重读，不等同步完成（网络挂起/离线）', async () => {
+    // 同步请求一直挂着：模拟冷启动时网络慢或断网
+    fakeEngine.sync.mockImplementationOnce(() => new Promise<undefined>(() => undefined));
+    const queryClient = renderQueryClient();
+    const { isLiveQueryMode } = await import('@taskora/api');
+    const { initMobileEngine } = await loadEngine();
+
+    initMobileEngine(queryClient);
+
+    // 装配前 UI 已经用 REST 发起了首屏查询；注入 Engine 后界面读立即改由
+    // 响应式查询提供（local-first-v3 issue 06）——而此时同步仍未返回
+    await vi.waitFor(() => expect(isLiveQueryMode()).toBe(true));
+    expect(fakeEngine.sync).toHaveBeenCalledTimes(1);
+  });
+});
 
 describe('mobile-engine 前台同步触发（issue 04）', () => {
   it('场景 1 — 启动：Engine 装配后立即 pull（bootstrap/增量）', async () => {
@@ -157,7 +194,7 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
     __resetForTest();
   });
 
-  it('场景 4 — 下拉刷新：requestPullSync 手动触发 pull，且在飞任务合并', async () => {
+  it('场景 4 — 下拉刷新：requestPullSync 手动触发 pull，在飞期间的触发合并为一次补跑', async () => {
     const { initMobileEngine, requestPullSync } = await loadEngine();
     initMobileEngine(renderQueryClient());
 
@@ -166,10 +203,14 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
     });
     fakeEngine.sync.mockClear();
 
-    // 两次手动触发并发合并为一个在飞 sync
-    await Promise.all([requestPullSync(), requestPullSync()]);
-
-    expect(fakeEngine.sync).toHaveBeenCalledTimes(1);
+    // 在飞期间的多次触发合并为一个在飞 sync + 结束后补跑一轮（期间可能
+    // 有新的远端变更或本地写，不能等下个周期）
+    await Promise.all([requestPullSync(), requestPullSync(), requestPullSync()]);
+    await vi.waitFor(() => {
+      expect(fakeEngine.sync).toHaveBeenCalledTimes(2);
+    });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(fakeEngine.sync).toHaveBeenCalledTimes(2);
   });
 
   it('断网：sync 失败 → SyncIndicator 显示 offline + Outbox 排队数', async () => {
@@ -186,6 +227,41 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
     expect(useSyncStatusStore.getState().pendingCount).toBe(4);
   });
 
+  it('hub 要求升级（426）：显示升级提示，此后不再发起同步，Outbox 保留', async () => {
+    const { useSyncStatusStore } = await import('@taskora/api');
+    const { SyncUpgradeRequiredError } = await import('@taskora/engine');
+    const { initMobileEngine, requestPullSync } = await loadEngine();
+    fakeEngine.sync.mockRejectedValueOnce(new SyncUpgradeRequiredError(2));
+    fakeEngine.pendingCount.mockResolvedValueOnce(3);
+
+    initMobileEngine(renderQueryClient());
+
+    await vi.waitFor(() => {
+      expect(useSyncStatusStore.getState().status).toBe('upgrade-required');
+    });
+    expect(useSyncStatusStore.getState().pendingCount).toBe(3);
+    const calls = fakeEngine.sync.mock.calls.length;
+    await requestPullSync();
+    expect(fakeEngine.sync).toHaveBeenCalledTimes(calls);
+    expect(fakeEngine.close).not.toHaveBeenCalled(); // 本地读写照常
+  });
+
+  it('副本来自更新版本（降级安装）：不打开副本，退回 REST 并提示升级', async () => {
+    const { useSyncStatusStore } = await import('@taskora/api');
+    const engineModule = await import('@taskora/engine');
+    vi.mocked(engineModule.openEngine).mockRejectedValueOnce(
+      new engineModule.ReplicaSchemaTooNewError(9, 4),
+    );
+    const { initMobileEngine, getMobileEngine } = await loadEngine();
+
+    initMobileEngine(renderQueryClient());
+
+    await vi.waitFor(() => {
+      expect(useSyncStatusStore.getState().status).toBe('upgrade-required');
+    });
+    expect(getMobileEngine()).toBeNull();
+  });
+
   it('登出：退回 REST 后端并关闭副本', async () => {
     const { initMobileEngine, getMobileEngine } = await loadEngine();
     initMobileEngine(renderQueryClient());
@@ -200,5 +276,32 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
       expect(fakeEngine.close).toHaveBeenCalled();
     });
     expect(getMobileEngine()).toBeNull();
+  });
+});
+
+describe('mobile-engine 提醒的后台同步（local-first-v3 issue 09）', () => {
+  it('设备注册取回后台凭据后，把计划地址与凭据交给原生', async () => {
+    backgroundMocks.registerDevice.mockResolvedValueOnce('bg-token');
+    const { initMobileEngine } = await loadEngine();
+
+    initMobileEngine(renderQueryClient());
+
+    await vi.waitFor(() =>
+      expect(backgroundMocks.configureBackgroundSync).toHaveBeenCalledWith(
+        'https://taskora.example.com/api/v1/reminders/plan',
+        'bg-token',
+      ),
+    );
+  });
+
+  it('没有取回凭据（旧 hub / 注册失败）时不启用', async () => {
+    backgroundMocks.registerDevice.mockRejectedValueOnce(new Error('offline'));
+    const { initMobileEngine } = await loadEngine();
+
+    initMobileEngine(renderQueryClient());
+
+    await vi.waitFor(() => expect(backgroundMocks.registerDevice).toHaveBeenCalled());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(backgroundMocks.configureBackgroundSync).not.toHaveBeenCalled();
   });
 });

@@ -1,8 +1,11 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+
+import type { QueryCacheFacade } from '../engine/live-queries';
 import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
 import type {
   CreateSubtaskDto,
   CreateTaskDto,
+  FeedItem,
   SubtaskResponseDto,
   TaskResponseDto,
   UpdateSubtaskDto,
@@ -32,6 +35,15 @@ import {
   updateSubtask,
   updateTask,
 } from '@/api/tasks.api';
+import {
+  type CacheSnapshot,
+  cancelRoots,
+  refreshAfterWrite,
+  restoreSnapshot,
+  snapshotRoots,
+  useQueryCache,
+} from './cache-patches';
+import { useReplicaQuery } from './useEngineQuery';
 
 export const taskKeys = {
   all: ['tasks'] as const,
@@ -39,18 +51,22 @@ export const taskKeys = {
   detail: (id: string) => ['task', id] as const,
 };
 
+// Engine 模式的查询依赖（local-first-v3 issue 06）：任务行嵌入标签芯片，
+// 详情另含子任务。
 export function useTasksQuery(params?: TaskQuery, options?: { enabled?: boolean }) {
-  return useQuery({
+  return useReplicaQuery({
     queryKey: taskKeys.list(params),
     queryFn: () => getTasks(params),
+    dependsOn: ['task', 'tag'],
     enabled: options?.enabled,
   });
 }
 
 export function useTaskQuery(id: string) {
-  return useQuery({
+  return useReplicaQuery({
     queryKey: taskKeys.detail(id),
     queryFn: () => getTask(id),
+    dependsOn: [{ entity: 'task', ids: [id] }, 'subtask', 'tag'],
     enabled: !!id,
   });
 }
@@ -74,26 +90,83 @@ function removeTaskFromList(
   return list.filter((t) => t.id !== taskId);
 }
 
-// Restore snapshot to queries data (list caches)
-function restoreListSnapshot(
-  queryClient: ReturnType<typeof useQueryClient>,
-  queryKey: readonly string[],
-  snapshot: [readonly unknown[], unknown][],
+// Optimistic updates must cover both list families: ['tasks'] (TaskList
+// views) and ['feed'] (Inbox/Today/Anytime/... — most of the app). Patching
+// only ['tasks'] leaves feed views showing the old state until the refetch
+// lands, e.g. a dropped row snapping back before jumping to its new slot.
+const TASK_LIST_ROOTS = ['tasks', 'feed'];
+
+async function cancelTaskLists(queryClient: QueryCacheFacade) {
+  await cancelRoots(queryClient, TASK_LIST_ROOTS);
+}
+
+function snapshotTaskLists(queryClient: QueryCacheFacade): CacheSnapshot {
+  return snapshotRoots(queryClient, TASK_LIST_ROOTS);
+}
+
+type ListItem = { id: string; type?: string };
+
+/** Only task rows: feed lists mix tasks and projects that may share nothing but shape. */
+function isTaskRow(item: ListItem): boolean {
+  return item.type === undefined || item.type === 'task';
+}
+
+function patchTaskInLists(
+  queryClient: QueryCacheFacade,
+  taskId: string,
+  updater: (task: TaskResponseDto) => TaskResponseDto,
 ) {
-  for (const [key, data] of snapshot) {
-    queryClient.setQueryData(key as readonly string[], data);
-  }
+  queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
+    applyToTaskInList(old, taskId, updater),
+  );
+  queryClient.setQueriesData<FeedItem[]>({ queryKey: ['feed'] }, (old) =>
+    old?.map((item) =>
+      item.type === 'task' && item.id === taskId
+        ? ({ ...updater(item as unknown as TaskResponseDto), type: 'task' } as FeedItem)
+        : item,
+    ),
+  );
+}
+
+function removeTaskFromLists(queryClient: QueryCacheFacade, taskId: string) {
+  queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
+    removeTaskFromList(old, taskId),
+  );
+  queryClient.setQueriesData<FeedItem[]>({ queryKey: ['feed'] }, (old) =>
+    old?.filter((item) => !(item.type === 'task' && item.id === taskId)),
+  );
+}
+
+/**
+ * Reorder the task rows of a list in place: the slots currently held by
+ * reordered tasks are refilled in the new order; every other row (projects
+ * in feeds, tasks outside the dragged set) keeps its slot. Works for any
+ * list shape, so partial views and mixed feeds get the new order at once.
+ */
+export function reorderInSlots<T extends ListItem>(list: T[], orderedIds: string[]): T[] {
+  const rank = new Map(orderedIds.map((id, index) => [id, index]));
+  const slots: number[] = [];
+  list.forEach((item, index) => {
+    if (isTaskRow(item) && rank.has(item.id)) slots.push(index);
+  });
+  if (slots.length < 2) return list;
+  const members = slots
+    .map((index) => list[index])
+    .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+  const next = [...list];
+  slots.forEach((slot, index) => {
+    next[slot] = members[index];
+  });
+  return next;
 }
 
 export function useCreateTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (data: CreateTaskDto) => createTask(data),
     onMutate: async (data) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
       const now = new Date().toISOString();
       const tempId = crypto.randomUUID();
       const tempTask: TaskResponseDto = {
@@ -128,7 +201,7 @@ export function useCreateTask() {
     },
     onError: (_err, _data, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
     },
     onSuccess: (task, _data, ctx) => {
@@ -145,31 +218,27 @@ export function useCreateTask() {
       });
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
 
 export function useUpdateTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTaskDto }) => updateTask(id, data),
     onMutate: async ({ id, data }) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
       const now = new Date().toISOString();
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        applyToTaskInList(old, id, (task) => ({
+      patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           ...data,
           updatedAt: now,
-        })),
-      );
+        }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, ...data, updatedAt: now } : old,
       );
@@ -177,66 +246,58 @@ export function useUpdateTask() {
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, { id }) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
 
 export function useDeleteTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => deleteTask(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        removeTaskFromList(old, id),
-      );
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
+      removeTaskFromLists(queryClient, id);
       return { snapshot };
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
 
 export function useCompleteTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => completeTask(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
       const now = new Date().toISOString();
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        applyToTaskInList(old, id, (task) => ({
+      patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           status: TaskStatus.COMPLETED,
           completedAt: now,
-        })),
-      );
+        }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, status: TaskStatus.COMPLETED, completedAt: now } : old,
       );
@@ -244,38 +305,34 @@ export function useCompleteTask() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, id) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
 
 export function useUncompleteTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => uncompleteTask(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        applyToTaskInList(old, id, (task) => ({
+      patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           status: TaskStatus.ACTIVE,
           completedAt: null,
-        })),
-      );
+        }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, status: TaskStatus.ACTIVE, completedAt: null } : old,
       );
@@ -283,39 +340,35 @@ export function useUncompleteTask() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, id) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
 
 export function useCancelTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => cancelTask(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
       const now = new Date().toISOString();
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        applyToTaskInList(old, id, (task) => ({
+      patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           status: TaskStatus.CANCELLED,
           completedAt: now,
-        })),
-      );
+        }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, status: TaskStatus.CANCELLED, completedAt: now } : old,
       );
@@ -323,38 +376,34 @@ export function useCancelTask() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, id) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
 
 export function useUncancelTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => uncancelTask(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        applyToTaskInList(old, id, (task) => ({
+      patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           status: TaskStatus.ACTIVE,
           completedAt: null,
-        })),
-      );
+        }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, status: TaskStatus.ACTIVE, completedAt: null } : old,
       );
@@ -362,66 +411,62 @@ export function useUncancelTask() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, id) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }
 
 export function useReorderTasks() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (orderedIds: string[]) => reorderTasks(orderedIds),
     onMutate: async (orderedIds) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) => {
-        if (!old) return old;
-        // 仅对成员完全覆盖的列表（目标视图）做乐观重排；异构过滤参数的
-        // 列表（其它项目/视图）保持原序，避免 comparator 对非成员返回 0
-        // 造成的未定义交错，等 onSettled 拉平。
-        if (!old.every((task) => orderMap.has(task.id))) return old;
-        return [...old].sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
+      // 乐观重排 tasks 与 feed 两类列表（槽位保持：非成员行不动），松手
+      // 即是新顺序，不再先弹回旧顺序等重查。
+      for (const root of TASK_LIST_ROOTS) {
+        queryClient.setQueriesData<ListItem[]>({ queryKey: [root] }, (old) =>
+          old ? reorderInSlots(old, orderedIds) : old,
+        );
+      }
+      return { snapshot };
     },
-    onError: () => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
+    onError: (_err, _ids, ctx) => {
+      if (ctx?.snapshot) restoreSnapshot(queryClient, ctx.snapshot);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useRestoreTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => restoreTask(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: taskKeys.all });
-      const snapshot = queryClient.getQueriesData<TaskResponseDto[]>({
-        queryKey: taskKeys.all,
-      });
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
-      queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        applyToTaskInList(old, id, (task) => ({
+      patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           trashedAt: null,
           // "从垃圾桶捡回"始终是未了结（spec: task-cancelled story 19）。
           status: TaskStatus.ACTIVE,
           completedAt: null,
-        })),
-      );
+        }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, trashedAt: null, status: TaskStatus.ACTIVE, completedAt: null } : old,
       );
@@ -429,29 +474,29 @@ export function useRestoreTask() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, taskKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, id) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useConvertTaskToProject() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => convertTaskToProject(id),
     onSuccess: (_data, id) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-      void queryClient.invalidateQueries({ queryKey: ['projects'] });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: ['tasks'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
@@ -476,7 +521,7 @@ function applyToSubtaskInArray(
 }
 
 export function useCreateSubtask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ taskId, data }: { taskId: string; data: CreateSubtaskDto }) =>
       createSubtask(taskId, data),
@@ -518,15 +563,15 @@ export function useCreateSubtask() {
       );
     },
     onSettled: (_data, _error, { taskId }) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(taskId) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useUpdateSubtask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateSubtaskDto }) => updateSubtask(id, data),
     onMutate: async ({ id, data }) => {
@@ -576,18 +621,18 @@ export function useUpdateSubtask() {
     onSettled: (data, _error, _vars, ctx) => {
       const taskId = ctx?.taskId ?? data?.taskId;
       if (taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(taskId),
         });
       }
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useDeleteSubtask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ id }: { id: string; taskId: string }) => deleteSubtask(id),
     onMutate: async ({ id, taskId }) => {
@@ -604,15 +649,15 @@ export function useDeleteSubtask() {
       }
     },
     onSettled: (_data, _error, { taskId }) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) });
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(taskId) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useCompleteSubtask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => completeSubtask(id),
     onMutate: async (id) => {
@@ -650,22 +695,22 @@ export function useCompleteSubtask() {
     },
     onSettled: (subtask, _error, _id, ctx) => {
       if (ctx?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(ctx.taskId),
         });
       } else if (subtask?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(subtask.taskId),
         });
       }
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useUncompleteSubtask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => uncompleteSubtask(id),
     onMutate: async (id) => {
@@ -703,22 +748,22 @@ export function useUncompleteSubtask() {
     },
     onSettled: (subtask, _error, _id, ctx) => {
       if (ctx?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(ctx.taskId),
         });
       } else if (subtask?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(subtask.taskId),
         });
       }
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useCancelSubtask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => cancelSubtask(id),
     onMutate: async (id) => {
@@ -756,22 +801,22 @@ export function useCancelSubtask() {
     },
     onSettled: (subtask, _error, _id, ctx) => {
       if (ctx?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(ctx.taskId),
         });
       } else if (subtask?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(subtask.taskId),
         });
       }
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useUncancelSubtask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => uncancelSubtask(id),
     onMutate: async (id) => {
@@ -809,27 +854,27 @@ export function useUncancelSubtask() {
     },
     onSettled: (subtask, _error, _id, ctx) => {
       if (ctx?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(ctx.taskId),
         });
       } else if (subtask?.taskId) {
-        void queryClient.invalidateQueries({
+        refreshAfterWrite(queryClient, {
           queryKey: taskKeys.detail(subtask.taskId),
         });
       }
-      void queryClient.invalidateQueries({ queryKey: taskKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useReorderSubtasks() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ taskId, orderedIds }: { taskId: string; orderedIds: string[] }) =>
       reorderSubtasks(taskId, orderedIds),
     onSuccess: (_data, { taskId }) => {
-      void queryClient.invalidateQueries({ queryKey: taskKeys.detail(taskId) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(taskId) });
     },
   });
 }

@@ -21,8 +21,8 @@ export function createEngineTagGroupBackend(
   const { engine } = options;
 
   async function membersOf(groupId: string) {
-    const tags = await engine.list('tag');
-    return tags.filter((row) => row.fields.tagGroupId === groupId).map((row) => tagRowToDto(row));
+    const tags = await engine.list('tag', { where: { tagGroupId: groupId } });
+    return tags.map((row) => tagRowToDto(row));
   }
 
   async function groupDto(id: string): Promise<TagGroupResponseDto> {
@@ -42,7 +42,7 @@ export function createEngineTagGroupBackend(
     },
 
     async createTagGroup(data: CreateTagGroupDto): Promise<TagGroupResponseDto> {
-      // 与 REST 默认一致：sortOrder 缺省 0（新建排最前，createdAt desc）
+      // 新建排最前：sortOrder 0，平局按 createdAt desc
       const id = await engine.create('tag-group', {
         title: data.title,
         sortOrder: 0,

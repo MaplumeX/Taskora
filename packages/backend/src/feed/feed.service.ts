@@ -1,17 +1,13 @@
-import { userCalendarZones, matchesCalendarView } from '../users/account-time-zone';
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { SyncHubService } from '../sync/sync-hub.service';
-import { registerCompacted } from '../sync/compact-registry';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
-  buildTaskViewWhere,
-  hidesTasksInLaterProjects,
-  laterProjectIds,
-  SETTLED_STATUSES,
-  type TaskView,
-} from '../tasks/views';
-import { buildProjectViewWhere, type ProjectView } from '../projects/views';
-import { parseRepeatRule } from '../tasks/task-dto.mapper';
+  countProjectTasks,
+  feedIncludesProjects,
+  planEmptyTrash,
+  projectMatchesView,
+  sortFeedItems,
+  taskMatchesView,
+  viewNeedsCalendar,
+} from '@taskora/engine';
 import {
   ScheduledType,
   TaskStatus,
@@ -22,10 +18,75 @@ import {
 import type {
   FeedItem,
   FeedView,
+  LogbookArchivePage,
   TaskFeedItem,
   ProjectFeedItem,
   TagResponseDto,
 } from '@taskora/shared';
+
+import { PrismaService } from '../prisma/prisma.service';
+import { SyncHubService } from '../sync/sync-hub.service';
+import { calendarContextFor, countedTasksOf } from '../common/domain-storage';
+import {
+  buildTaskViewWhere,
+  hidesTasksInLaterProjects,
+  laterProjectIds,
+  type TaskView,
+} from '../tasks/views';
+import { buildProjectViewWhere, type ProjectView } from '../projects/views';
+import { parseRepeatRule } from '../tasks/task-dto.mapper';
+import { archivedTaskWhere } from '../sync/snapshot-pages';
+
+/** Logbook 归档一页的缺省条数。 */
+const ARCHIVE_PAGE_SIZE = 50;
+
+type TaskWithTags = Awaited<ReturnType<PrismaService['task']['findMany']>>[number] & {
+  tags: Array<{ tag: Parameters<typeof mapTag>[0] }>;
+};
+
+function toTaskFeedItem(t: TaskWithTags): TaskFeedItem {
+  return {
+    id: t.id,
+    type: 'task' as const,
+    title: t.title,
+    notes: t.notes,
+    scheduledDate: t.scheduledDate ? t.scheduledDate.toISOString() : null,
+    scheduledType: t.scheduledType as ScheduledType,
+    reminderTime: t.reminderTime,
+    repeatRule: parseRepeatRule(t.repeatRule),
+    dueDate: t.dueDate ? t.dueDate.toISOString() : null,
+    status: t.status as TaskStatus,
+    bucket: t.bucket as TaskBucket,
+    // DTO 字段名保持 completedAt，承载 Settled At 语义（ADR 0006）。
+    completedAt: t.settledAt ? t.settledAt.toISOString() : null,
+    trashedAt: t.trashedAt ? t.trashedAt.toISOString() : null,
+    sortOrder: t.sortOrder,
+    position: t.position,
+    projectId: t.projectId,
+    headingId: t.headingId,
+    areaId: t.areaId,
+    createdAt: t.createdAt.toISOString(),
+    updatedAt: t.updatedAt.toISOString(),
+    tags: t.tags.map((tt) => mapTag(tt.tag)),
+  };
+}
+
+/** 归档分页令牌：上一页最后一条的 (settledAt, id)，base64url JSON。 */
+function decodeArchiveToken(raw: string): { settledAt: Date; id: string } {
+  try {
+    const token = JSON.parse(Buffer.from(raw, 'base64url').toString('utf8')) as {
+      settledAt?: unknown;
+      id?: unknown;
+    };
+    const settledAt = typeof token.settledAt === 'string' ? new Date(token.settledAt) : null;
+    if (settledAt && !Number.isNaN(settledAt.getTime()) && typeof token.id === 'string') {
+      return { settledAt, id: token.id };
+    }
+  } catch {
+    // 落到下面的 400
+  }
+  throw new BadRequestException('无效的 Logbook 分页令牌');
+}
 
 function mapTag(tag: {
   id: string;
@@ -55,250 +116,143 @@ export class FeedService {
   ) {}
 
   async emptyTrash(userId: string): Promise<{ deletedTasks: number; deletedProjects: number }> {
-    const result = await this.prisma.$transaction(async (tx) => {
-      // 1. 取本用户所有 trashed project 的 id
-      const trashedProjects = await tx.project.findMany({
-        where: { userId, trashedAt: { not: null } },
-        select: { id: true },
-      });
-      const trashedProjectIds = new Set(trashedProjects.map((p) => p.id));
-
-      // 2. 取本用户所有 task 的 id / projectId / trashedAt
-      const allTasks = await tx.task.findMany({
-        where: { userId },
-        select: { id: true, projectId: true, trashedAt: true },
-      });
-
-      // 3. 删除集 = trashed tasks ∪ trashed project 的下属 tasks
-      //    Subtask 自动 CASCADE（onDelete: Cascade），无需手工收集后代
-      const trashedTaskIds = new Set(allTasks.filter((t) => t.trashedAt !== null).map((t) => t.id));
-
-      // 3a. trashed project 下属任务: projectId ∈ trashedProjectIds 的 task
-      const projectOrphanIds = new Set(
-        allTasks.filter((t) => t.projectId && trashedProjectIds.has(t.projectId)).map((t) => t.id),
-      );
-
-      const taskDeleteIds = new Set<string>([...trashedTaskIds, ...projectOrphanIds]);
-
-      // 3b. DB 级联删除的 Subtask / ProjectHeading 不会产生 collector 事件，
-      //     先收集其 id，之后与主体一起下发 Compact Event（ADR-0007：
-      //     GC 后压缩变更）。Heading 随 trashed project 的 DB 级联消失，
-      //     不登记会永久残留其他设备的副本。
-      const cascadedSubtaskIds = taskDeleteIds.size
-        ? (
-            await tx.subtask.findMany({
-              where: { taskId: { in: [...taskDeleteIds] } },
-              select: { id: true },
-            })
-          ).map((s) => s.id)
-        : [];
-      const cascadedHeadingIds = trashedProjectIds.size
-        ? (
-            await tx.projectHeading.findMany({
-              where: { projectId: { in: [...trashedProjectIds] } },
-              select: { id: true },
-            })
-          ).map((h) => h.id)
-        : [];
-
-      // Compact 登记与物理删除同事务提交。即使进程在提交后、广播前退出，
-      // bootstrap 仍能知道这些 id 永久删除，迟到字段写也不会复活它们。
-      await registerCompacted(tx, userId, 'task', [...taskDeleteIds]);
-      await registerCompacted(tx, userId, 'project', [...trashedProjectIds]);
-      await registerCompacted(tx, userId, 'subtask', cascadedSubtaskIds);
-      await registerCompacted(tx, userId, 'project-heading', cascadedHeadingIds);
-
-      // 4. 物理删除: TaskTag/ProjectTag/Subtask 关联走 onDelete: Cascade 自动清理
-      //    where 再带一次 userId 作防御性约束(集合已来自本用户数据,纯双保险)
-      const taskDelete = await tx.task.deleteMany({
-        where: { id: { in: [...taskDeleteIds] }, userId },
-      });
-      const projectDelete = await tx.project.deleteMany({
-        where: { id: { in: [...trashedProjectIds] }, userId },
-      });
-
-      return {
-        deletedTasks: taskDelete.count,
-        deletedProjects: projectDelete.count,
-        taskIds: [...taskDeleteIds],
-        projectIds: [...trashedProjectIds],
-        cascadedSubtaskIds,
-        cascadedHeadingIds,
-      };
+    return this.syncHub.writeAsHub(userId, async (batch) => {
+      // 删除集（规则见 domain planEmptyTrash）：Trash 里的任务与项目，及
+      // Trash 里项目下的全部任务。
+      const [projects, tasks] = await Promise.all([
+        batch.tx.project.findMany({
+          where: { userId, trashedAt: { not: null } },
+          select: { id: true, trashedAt: true },
+        }),
+        batch.tx.task.findMany({
+          where: { userId },
+          select: { id: true, projectId: true, trashedAt: true },
+        }),
+      ]);
+      const plan = planEmptyTrash(projects, tasks);
+      // 与 Delete Request 同一路径：Subtask / 分组按 DELETE_CASCADES 级联，
+      // Compact 登记、物理删除与 Compact Event 同事务提交——bootstrap 永远
+      // 知道这些 id 已删除，迟到的字段写也不会复活它们。
+      await batch.delete('task', plan.taskIds);
+      await batch.delete('project', plan.projectIds);
+      return { deletedTasks: plan.taskIds.length, deletedProjects: plan.projectIds.length };
     });
-    // 事务提交后再广播；collector 产生的重复 Compact 对设备幂等。
-    await this.syncHub.publishCompact(userId, 'task', result.taskIds);
-    await this.syncHub.publishCompact(userId, 'project', result.projectIds);
-    await this.syncHub.publishCompact(userId, 'subtask', result.cascadedSubtaskIds);
-    await this.syncHub.publishCompact(userId, 'project-heading', result.cascadedHeadingIds);
-    return { deletedTasks: result.deletedTasks, deletedProjects: result.deletedProjects };
   }
 
   async findAll(userId: string, view: FeedView): Promise<FeedItem[]> {
-    // Projects never appear in the inbox or anytime feeds —
-    // they only surface in schedule/terminal views (today, upcoming,
-    // someday, logbook, trash).
-    const includeProjects = ['today', 'upcoming', 'someday', 'logbook', 'trash'].includes(view);
+    // SQL 只是粗筛；最终过滤、计数与排序按 domain 规则（与设备同一份）
     const hideLaterProjectTasks = hidesTasksInLaterProjects(view);
-
     const [tasks, projects] = await Promise.all([
       this.prisma.task.findMany({
         where: { userId, ...buildTaskViewWhere(view as TaskView) },
-        orderBy:
-          view === 'logbook'
-            ? [{ settledAt: 'desc' as const }]
-            : [{ sortOrder: 'asc' as const }, { createdAt: 'desc' as const }],
         include: { tags: { include: { tag: true } } },
       }),
-      includeProjects
+      feedIncludesProjects(view)
         ? this.prisma.project.findMany({
             where: { userId, ...buildProjectViewWhere(view as ProjectView) },
-            orderBy:
-              view === 'logbook'
-                ? [{ completedAt: 'desc' as const }]
-                : [{ sortOrder: 'asc' as const }, { createdAt: 'desc' as const }],
             include: { tags: { include: { tag: true } } },
           })
         : Promise.resolve([]),
     ]);
-
-    const zones =
-      view === 'today' || view === 'upcoming' || hideLaterProjectTasks
-        ? await userCalendarZones(this.prisma, userId)
-        : { timeZone: 'UTC', legacyDateTimeZone: 'UTC' };
-    const now = new Date();
+    const context = await calendarContextFor(
+      this.prisma,
+      userId,
+      viewNeedsCalendar(view) || hideLaterProjectTasks,
+    );
+    // 稍后项目内的任务在 Anytime / Someday 中随父项目休眠（Later Project）。
     const hiddenProjectIds = hideLaterProjectTasks
-      ? await laterProjectIds(this.prisma, userId, zones, now)
+      ? await laterProjectIds(this.prisma, userId, context, context.now)
       : new Set<string>();
-    const activeParent = (task: { projectId: string | null }) =>
-      !task.projectId || !hiddenProjectIds.has(task.projectId);
+
     const taskItems: TaskFeedItem[] = tasks
-      .filter(activeParent)
-      .filter((task) =>
-        matchesCalendarView(
-          task.scheduledDate,
-          view,
-          zones.timeZone,
-          now,
-          zones.legacyDateTimeZone,
-        ),
-      )
-      .map((t) => ({
-        id: t.id,
-        type: 'task' as const,
-        title: t.title,
-        notes: t.notes,
-        scheduledDate: t.scheduledDate ? t.scheduledDate.toISOString() : null,
-        scheduledType: t.scheduledType as ScheduledType,
-        reminderTime: t.reminderTime,
-        repeatRule: parseRepeatRule(t.repeatRule),
-        dueDate: t.dueDate ? t.dueDate.toISOString() : null,
-        status: t.status as TaskStatus,
-        bucket: t.bucket as TaskBucket,
-        // DTO 字段名保持 completedAt，承载 Settled At 语义（ADR 0006）。
-        completedAt: t.settledAt ? t.settledAt.toISOString() : null,
-        trashedAt: t.trashedAt ? t.trashedAt.toISOString() : null,
-        sortOrder: t.sortOrder,
-        projectId: t.projectId,
-        headingId: t.headingId,
-        areaId: t.areaId,
-        createdAt: t.createdAt.toISOString(),
-        updatedAt: t.updatedAt.toISOString(),
-        tags: t.tags.map((tt) => mapTag(tt.tag)),
-      }));
+      .filter((task) => !task.projectId || !hiddenProjectIds.has(task.projectId))
+      .filter((task) => taskMatchesView(task, view, context))
+      .map(toTaskFeedItem);
 
-    const projectIds = projects.map((p) => p.id);
+    const visibleProjects = projects.filter((project) =>
+      projectMatchesView(project, view, context),
+    );
+    const projectIds = visibleProjects.map((p) => p.id);
+    const counts = countProjectTasks(
+      projectIds,
+      await countedTasksOf(this.prisma, userId, projectIds),
+    );
 
-    // 统计口径：项目下所有非 trashed task（不受 feed view 过滤影响）
-    const [totalCounts, completedCounts] = await Promise.all([
-      this.prisma.task.groupBy({
-        by: ['projectId'],
-        where: { userId, projectId: { in: projectIds }, trashedAt: null },
-        _count: { _all: true },
-      }),
-      this.prisma.task.groupBy({
-        by: ['projectId'],
-        where: {
-          userId,
-          projectId: { in: projectIds },
-          trashedAt: null,
-          // 项目统计口径：completed 计数 = 已了结（完成 + 取消），
-          // 与 Logbook Entry 口径一致（ADR 0006）。
-          status: { in: [...SETTLED_STATUSES] },
-        },
-        _count: { _all: true },
-      }),
-    ]);
+    const projectItems: ProjectFeedItem[] = visibleProjects.map((p) => {
+      const { total, completed } = counts.get(p.id)!;
+      return {
+        id: p.id,
+        type: 'project' as const,
+        title: p.title,
+        notes: p.notes,
+        scheduledDate: p.scheduledDate ? p.scheduledDate.toISOString() : null,
+        scheduledType: p.scheduledType as ScheduledType,
+        reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
+        repeatRule: null, // Project 不设 Repeat Rule（CONTEXT.md）
+        dueDate: p.dueDate ? p.dueDate.toISOString() : null,
+        status: p.status as ProjectStatus,
+        bucket: p.bucket as ProjectBucket,
+        completedAt: p.completedAt ? p.completedAt.toISOString() : null,
+        trashedAt: p.trashedAt ? p.trashedAt.toISOString() : null,
+        sortOrder: p.sortOrder,
+        position: p.position,
+        areaId: p.areaId,
+        createdAt: p.createdAt.toISOString(),
+        updatedAt: p.updatedAt.toISOString(),
+        tags: p.tags.map((pt) => mapTag(pt.tag)),
+        taskTotalCount: total,
+        taskCompletedCount: completed,
+      };
+    });
 
-    const countMap = new Map<string, { total: number; completed: number }>();
-    for (const row of totalCounts) {
-      if (!row.projectId) continue;
-      countMap.set(row.projectId, { total: row._count._all, completed: 0 });
-    }
-    for (const row of completedCounts) {
-      if (!row.projectId) continue;
-      const entry = countMap.get(row.projectId);
-      if (entry) {
-        entry.completed = row._count._all;
-      } else {
-        countMap.set(row.projectId, { total: 0, completed: row._count._all });
-      }
-    }
+    return sortFeedItems<FeedItem>([...taskItems, ...projectItems], view);
+  }
 
-    const projectItems: ProjectFeedItem[] = projects
-      .filter((project) =>
-        matchesCalendarView(
-          project.scheduledDate,
-          view,
-          zones.timeZone,
-          now,
-          zones.legacyDateTimeZone,
-        ),
-      )
-      .map((p) => {
-        const counts = countMap.get(p.id);
-        return {
-          id: p.id,
-          type: 'project' as const,
-          title: p.title,
-          notes: p.notes,
-          scheduledDate: p.scheduledDate ? p.scheduledDate.toISOString() : null,
-          scheduledType: p.scheduledType as ScheduledType,
-          reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
-          repeatRule: null, // Project 不设 Repeat Rule（CONTEXT.md）
-          dueDate: p.dueDate ? p.dueDate.toISOString() : null,
-          status: p.status as ProjectStatus,
-          bucket: p.bucket as ProjectBucket,
-          completedAt: p.completedAt ? p.completedAt.toISOString() : null,
-          trashedAt: p.trashedAt ? p.trashedAt.toISOString() : null,
-          sortOrder: p.sortOrder,
-          areaId: p.areaId,
-          createdAt: p.createdAt.toISOString(),
-          updatedAt: p.updatedAt.toISOString(),
-          tags: p.tags.map((pt) => mapTag(pt.tag)),
-          taskTotalCount: counts?.total ?? 0,
-          taskCompletedCount: counts?.completed ?? 0,
-        };
-      });
-
-    // Merge and sort: default sortOrder asc, createdAt desc; logbook already
-    // sorted by completedAt desc from each query, but since we mix two sources
-    // we re-sort the merged list for logbook.
-    const items: FeedItem[] = [...taskItems, ...projectItems];
-
-    if (view === 'logbook') {
-      items.sort((a, b) => {
-        const ac = a.completedAt ? new Date(a.completedAt).getTime() : 0;
-        const bc = b.completedAt ? new Date(b.completedAt).getTime() : 0;
-        return bc - ac;
-      });
-    } else {
-      items.sort((a, b) => {
-        if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-      });
-    }
-
-    return items;
+  /**
+   * Logbook 的归档部分（local-first-v3 issue 08）：Local Replica 不保留的
+   * 归档任务（规则同 bootstrap 的省略规则，截止时刻由设备给出），按了结
+   * 时间倒序、(settledAt, id) keyset 分页。只读，不进副本。
+   */
+  async logbookArchive(
+    userId: string,
+    settledBefore: Date,
+    page?: string,
+    limit = ARCHIVE_PAGE_SIZE,
+  ): Promise<LogbookArchivePage> {
+    const after = page ? decodeArchiveToken(page) : null;
+    const rows = await this.prisma.task.findMany({
+      where: {
+        userId,
+        ...archivedTaskWhere(settledBefore),
+        ...(after
+          ? {
+              AND: [
+                {
+                  OR: [
+                    { settledAt: { lt: after.settledAt } },
+                    { settledAt: after.settledAt, id: { gt: after.id } },
+                  ],
+                },
+              ],
+            }
+          : {}),
+      },
+      include: { tags: { include: { tag: true } } },
+      // 与 Logbook 的本地排序一致（sortFeedItems：了结时间倒序，平局按 id 升序）
+      orderBy: [{ settledAt: 'desc' }, { id: 'asc' }],
+      take: limit + 1,
+    });
+    const items = rows.slice(0, limit).map(toTaskFeedItem);
+    const last = rows.length > limit ? rows[limit - 1] : null;
+    return {
+      items,
+      ...(last
+        ? {
+            next: Buffer.from(
+              JSON.stringify({ settledAt: last.settledAt!.toISOString(), id: last.id }),
+            ).toString('base64url'),
+          }
+        : {}),
+    };
   }
 }

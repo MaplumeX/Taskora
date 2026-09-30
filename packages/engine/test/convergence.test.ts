@@ -7,9 +7,19 @@
  * 语义（断网期间的写在 flush 后不丢）。
  */
 
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
-import { openEngine, positionBetween, type Engine } from '../src/index';
+import {
+  LocalReplica,
+  MAX_PUSH_BATCH_BYTES,
+  openEngine,
+  positionBetween,
+  type Engine,
+} from '../src/index';
 import { HybridClock } from '../src/hlc';
 import { InMemorySyncHub } from '../src/hub';
 import { formatHlc } from '../src/hlc';
@@ -18,6 +28,7 @@ import { createNodeSqliteStorage } from '../src/node';
 import type { WireRow } from '../src/entities';
 
 const USER = 'user-1';
+const HARNESS_NOW = Date.parse('2026-09-30T00:00:00.000Z');
 
 interface Harness {
   hub: InMemorySyncHub;
@@ -39,6 +50,8 @@ async function makeHarness(options: { wallClock?: () => number } = {}): Promise<
         deviceId: name,
         clock: new HybridClock(name, () => wallMs),
         transport: net,
+        // 归档截止按固定日期算：用例里写死的了结日期不会随时间变成归档
+        now: () => HARNESS_NOW,
       });
       nets.set(engine, net);
       return engine;
@@ -64,9 +77,13 @@ function wrapTransport(inner: SyncTransport): SyncTransport & { setOnline(v: boo
       if (!online) throw new Error('offline');
       return inner.pull(request);
     },
-    async bootstrap() {
+    async bootstrap(request) {
       if (!online) throw new Error('offline');
-      return inner.bootstrap();
+      return inner.bootstrap(request);
+    },
+    async fetchEntities(request) {
+      if (!online) throw new Error('offline');
+      return inner.fetchEntities!(request);
     },
   };
 }
@@ -111,7 +128,7 @@ describe('Engine 端到端收敛（主接缝）', () => {
         return inner.push(request);
       },
       pull: (request) => inner.pull(request),
-      bootstrap: () => inner.bootstrap(),
+      bootstrap: (request) => inner.bootstrap(request),
     };
     const engine = await openEngine({
       storage: await createNodeSqliteStorage(':memory:'),
@@ -939,7 +956,13 @@ describe('Position re-balance（sync 后台摊平超长键）', () => {
     const b = await h.device('dev-b');
 
     const task = await createTask(b, '父任务');
-    const sub = await b.create('subtask', { title: '步骤', taskId: task, sortOrder: 0, status: 'ACTIVE', settledAt: null });
+    const sub = await b.create('subtask', {
+      title: '步骤',
+      taskId: task,
+      sortOrder: 0,
+      status: 'ACTIVE',
+      settledAt: null,
+    });
     await b.sync();
     await a.sync();
 
@@ -956,5 +979,414 @@ describe('Position re-balance（sync 后台摊平超长键）', () => {
     expect(await a.get('task', task)).toBeNull();
     await a.close();
     await b.close();
+  });
+});
+
+describe('Compact 登记跨会话持久与 Outbox 因果序', () => {
+  it('重启后仍认得已 compact 的 id（Repeat 重派生不复用死 id）', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'taskora-engine-'));
+    const path = join(dir, 'replica.db');
+    const hub = new InMemorySyncHub();
+    const transport = hub.transportFor(USER);
+    try {
+      const first = await openEngine({
+        storage: await createNodeSqliteStorage(path),
+        deviceId: 'A',
+        transport,
+      });
+      await first.sync();
+      await createTask(first, '派生实例', { id: 'derived-1' });
+      await first.sync();
+      await first.delete('task', ['derived-1']);
+      await first.sync();
+      await first.close();
+
+      const restarted = await openEngine({
+        storage: await createNodeSqliteStorage(path),
+        deviceId: 'A',
+        transport,
+      });
+      expect(await restarted.isCompacted('task', 'derived-1')).toBe(true);
+      await restarted.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('推给已 compact id 的迟到写会收到重发的 Compact Event，本地幽灵行被移除', async () => {
+    const hub = new InMemorySyncHub();
+    const storage = await createNodeSqliteStorage(':memory:');
+    const engine = await openEngine({ storage, deviceId: 'A', transport: hub.transportFor(USER) });
+    await engine.sync();
+    await createTask(engine, '实例', { id: 'derived-1' });
+    await engine.sync();
+    await engine.delete('task', ['derived-1']);
+    await engine.sync();
+    // 模拟旧版本：compact 登记只在内存，重启后丢失，复用死 id 再建
+    await storage.exec('DELETE FROM _compacted');
+    const reopened = await openEngine({
+      storage,
+      deviceId: 'A',
+      transport: hub.transportFor(USER),
+    });
+    await createTask(reopened, '实例（幽灵）', { id: 'derived-1' });
+    await reopened.sync();
+    expect(hub.entityState(USER, 'task', 'derived-1')).toBeNull();
+    expect(await reopened.get('task', 'derived-1')).toBeNull();
+    expect(await reopened.pendingCount()).toBe(0);
+    await reopened.close();
+  });
+
+  it('跨批次的前向引用不会让同步永久卡死（Outbox 保持因果序）', async () => {
+    const hub = new InMemorySyncHub({ enforceReferences: true });
+    const engine = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'A',
+      transport: hub.transportFor(USER),
+    });
+    await engine.sync();
+    const early = await createTask(engine, '早建的任务');
+    for (let index = 0; index < 600; index += 1) {
+      await createTask(engine, `填充 ${index}`);
+    }
+    const area = await engine.create('area', { title: '晚建的区域' });
+    // 旧实现把这条写合并进第 1 行 → 排到 area 创建之前、不同批 → 永久 FK 失败
+    await engine.update('task', early, { areaId: area });
+    await engine.sync();
+    expect(hub.entityState(USER, 'task', early)?.fields.areaId).toBe(area);
+    expect(await engine.pendingCount()).toBe(0);
+    await engine.close();
+  });
+
+  it('push 按体积分批，单批不超过 MAX_PUSH_BATCH_BYTES', async () => {
+    const hub = new InMemorySyncHub();
+    const inner = hub.transportFor(USER);
+    const sizes: number[] = [];
+    const transport: SyncTransport = {
+      push: (request) => {
+        sizes.push(JSON.stringify(request).length);
+        return inner.push(request);
+      },
+      pull: (request) => inner.pull(request),
+      bootstrap: (request) => inner.bootstrap(request),
+    };
+    const engine = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'A',
+      transport,
+    });
+    await engine.sync();
+    for (let index = 0; index < 400; index += 1) {
+      await createTask(engine, `离线新建 ${index}`);
+    }
+    await engine.sync();
+    expect(sizes.length).toBeGreaterThan(1);
+    // 请求外壳（deviceId 等）只多几十字节
+    for (const size of sizes) expect(size).toBeLessThan(MAX_PUSH_BATCH_BYTES + 1024);
+    expect(await engine.pendingCount()).toBe(0);
+    await engine.close();
+  });
+});
+
+describe('批量写 / 批量应用 / 事务读闸', () => {
+  it('updateMany 与一次 pull 的多条远端变更各只触发一次变更通知', async () => {
+    const h = await makeHarness();
+    const a = await h.device('A');
+    const b = await h.device('B');
+    await a.sync();
+    await b.sync();
+    const ids: string[] = [];
+    for (let index = 0; index < 20; index += 1) ids.push(await createTask(a, `任务 ${index}`));
+    await a.sync();
+
+    const localEvents: string[] = [];
+    const offA = a.onChange((change) => localEvents.push(change.origin));
+    await a.updateMany(
+      'task',
+      ids.map((id, index) => ({ id, patch: { title: `改 ${index}` } })),
+    );
+    expect(localEvents).toEqual(['local']);
+    offA();
+    await a.sync();
+
+    const remoteEvents: string[] = [];
+    b.onChange((change) => remoteEvents.push(change.origin));
+    await b.sync();
+    expect(remoteEvents.filter((origin) => origin !== 'bootstrap')).toEqual(['remote']);
+    expect((await b.list('task')).map((row) => row.fields.title)).toContain('改 19');
+    await a.close();
+    await b.close();
+  });
+
+  it('bootstrap 重建期间的并发读看不到空表或半份数据', async () => {
+    const h = await makeHarness();
+    const a = await h.device('A');
+    await a.sync();
+    for (let index = 0; index < 50; index += 1) await createTask(a, `任务 ${index}`);
+    await a.sync();
+
+    const counts: number[] = [];
+    let done = false;
+    const rebuilding = a.bootstrap().finally(() => {
+      done = true;
+    });
+    while (!done) {
+      counts.push((await a.list('task')).length);
+    }
+    await rebuilding;
+    expect(counts.length).toBeGreaterThan(0);
+    expect(counts.every((count) => count === 50)).toBe(true);
+    await a.close();
+  });
+});
+
+describe('list 的 SQL 预过滤', () => {
+  it('支持相等 / IS NULL / IS NOT NULL / IN / limit，并拒绝未知或 JSON 字段', async () => {
+    const engine = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'A',
+    });
+    const project = await engine.create('project', { title: 'P' });
+    const a = await createTask(engine, 'a', { projectId: project, position: 'a0' });
+    const b = await createTask(engine, 'b', { status: 'COMPLETED', position: 'a1' });
+    const c = await createTask(engine, 'c', { trashedAt: '2026-01-01T00:00:00Z', position: 'a2' });
+    const ids = async (options: Parameters<Engine['list']>[1]) =>
+      (await engine.list('task', options)).map((row) => row.id);
+
+    expect(await ids({ where: { projectId: project } })).toEqual([a]);
+    expect(await ids({ where: { status: 'ACTIVE', trashedAt: null } })).toEqual([a]);
+    expect(await ids({ where: { trashedAt: { notNull: true } } })).toEqual([c]);
+    expect(await ids({ where: { id: { in: [c, b] } } })).toEqual([b, c]);
+    expect(await ids({ where: { id: { in: [] } } })).toEqual([]);
+    expect(await ids({ limit: 1 })).toEqual([a]);
+    await expect(engine.list('task', { where: { tagIds: 'x' } })).rejects.toThrow();
+    await expect(engine.list('task', { where: { 'id; DROP TABLE task': 'x' } })).rejects.toThrow();
+    await engine.close();
+  });
+});
+
+describe('HLC 跨会话持久', () => {
+  it('墙钟不动时重启后发号仍严格递增；一次写只用一个时间戳', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'taskora-hlc-'));
+    const path = join(dir, 'replica.db');
+    try {
+      const open = async () =>
+        openEngine({
+          storage: await createNodeSqliteStorage(path),
+          deviceId: 'A',
+          clock: new HybridClock('A', () => 1_000),
+        });
+      const first = await open();
+      const id = await createTask(first, 'x');
+      const replica = new LocalReplica(await createNodeSqliteStorage(path), { deviceId: 'A' });
+      const created = await replica.get('task', id);
+      expect(new Set(Object.values(created!.clocks)).size).toBe(1);
+      const createdStamp = Object.values(created!.clocks)[0];
+      await first.close();
+
+      const second = await open();
+      await second.update('task', id, { title: 'y' });
+      const updated = await replica.get('task', id);
+      expect(updated!.clocks.title > createdStamp).toBe(true);
+      await second.close();
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('设备时钟按 hub 时间校准（ADR-0007）', () => {
+  it('系统时钟快一天的设备校准后，不再压过其他设备之后的编辑', async () => {
+    let hubNow = 5_000_000_000;
+    const hub = new InMemorySyncHub({ wallClock: () => hubNow, reportServerTime: true });
+    const fast = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'fast',
+      clock: new HybridClock('fast', () => hubNow + 24 * 3600 * 1000),
+      transport: hub.transportFor(USER),
+    });
+    const honest = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'honest',
+      clock: new HybridClock('honest', () => hubNow),
+      transport: hub.transportFor(USER),
+    });
+    await fast.sync();
+    await honest.sync();
+    const id = await createTask(honest, '原标题');
+    await honest.sync();
+    await fast.sync();
+
+    hubNow += 1_000;
+    await fast.update('task', id, { title: '快钟设备的编辑' });
+    await fast.sync();
+    hubNow += 1_000;
+    await honest.sync();
+    await honest.update('task', id, { title: '之后的编辑' });
+    await honest.sync();
+    await fast.sync();
+
+    expect((await fast.get('task', id))?.fields.title).toBe('之后的编辑');
+    expect((await honest.get('task', id))?.fields.title).toBe('之后的编辑');
+    await fast.close();
+    await honest.close();
+  });
+});
+
+describe('同步时的局部 re-balance', () => {
+  it('只改写膨胀的那一行，其余行不进 Outbox', async () => {
+    const hub = new InMemorySyncHub();
+    const engine = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'A',
+      transport: hub.transportFor(USER),
+    });
+    await engine.sync();
+    for (const position of ['a0', 'a1', 'a2', 'a3']) {
+      await createTask(engine, position, { position });
+    }
+    const inflated = await createTask(engine, 'inflated', { position: 'a1' + 'V'.repeat(30) });
+    await engine.sync(); // flush → pull → re-balance（写入留待下一轮推送）
+    expect(await engine.pendingCount()).toBe(1);
+    const fixed = (await engine.get('task', inflated))!.fields.position as string;
+    expect(fixed.length).toBeLessThanOrEqual(24);
+    expect((await engine.list('task')).map((row) => row.fields.title)).toEqual([
+      'a0',
+      'a1',
+      'inflated',
+      'a2',
+      'a3',
+    ]);
+    await engine.sync();
+    expect(await engine.pendingCount()).toBe(0);
+    await engine.close();
+  });
+});
+
+describe('跨字段不变量：并发编辑合并后确定性修复（local-first-v3 01）', () => {
+  /** 两台设备先同步到同一状态，然后各自离线编辑，再先后联网。 */
+  async function concurrently(
+    setup: (a: Engine) => Promise<string>,
+    editA: (a: Engine, id: string) => Promise<void>,
+    editB: (b: Engine, id: string) => Promise<void>,
+  ) {
+    const h = await makeHarness();
+    const a = await h.device('A');
+    // B 的墙钟更晚：它的编辑在字段级 LWW 中一定胜出，冲突组合必然形成
+    const b = await h.device('B', 2_000_000);
+    await a.sync();
+    const id = await setup(a);
+    await a.sync();
+    await b.sync();
+    h.online(a, false);
+    h.online(b, false);
+    await editA(a, id);
+    await editB(b, id);
+    h.online(a, true);
+    h.online(b, true);
+    await a.sync();
+    await b.sync();
+    await a.sync();
+    const fieldsA = (await a.get('task', id))!.fields;
+    const fieldsB = (await b.get('task', id))!.fields;
+    const hub = h.hub.entityState(USER, 'task', id)!.fields;
+    return { a, b, fieldsA, fieldsB, hub };
+  }
+
+  it('A 换项目、B 设了原项目的分组 → 分组被清空，三方一致', async () => {
+    let p2 = '';
+    let h1 = '';
+    const { fieldsA, fieldsB, hub } = await concurrently(
+      async (a) => {
+        const p1 = await a.create('project', { title: 'P1', status: 'ACTIVE', bucket: 'ANYTIME' });
+        p2 = await a.create('project', { title: 'P2', status: 'ACTIVE', bucket: 'ANYTIME' });
+        h1 = await a.create('project-heading', { title: 'H1', projectId: p1, status: 'ACTIVE' });
+        return createTask(a, 't', { projectId: p1, bucket: 'ANYTIME', scheduledType: 'NONE' });
+      },
+      (a, id) => a.update('task', id, { projectId: p2, headingId: null }),
+      (b, id) => b.update('task', id, { headingId: h1 }),
+    );
+    for (const fields of [fieldsA, fieldsB, hub]) {
+      expect(fields.projectId).toBe(p2);
+      expect(fields.headingId).toBeNull();
+    }
+  });
+
+  it('A 移到 Someday、B 设了提醒 → Someday 任务不带提醒', async () => {
+    const { fieldsA, fieldsB, hub } = await concurrently(
+      (a) =>
+        createTask(a, 't', {
+          scheduledType: 'DATE',
+          scheduledDate: '2026-10-01',
+          bucket: 'SCHEDULED',
+        }),
+      (a, id) =>
+        a.update('task', id, {
+          scheduledType: 'SOMEDAY',
+          scheduledDate: null,
+          reminderTime: null,
+          repeatRule: null,
+          bucket: 'SCHEDULED',
+        }),
+      (b, id) => b.update('task', id, { reminderTime: '09:00' }),
+    );
+    for (const fields of [fieldsA, fieldsB, hub]) {
+      expect(fields.scheduledType).toBe('SOMEDAY');
+      expect(fields.reminderTime).toBeNull();
+    }
+  });
+
+  it('A 设日期、B 把任务移到 Anytime → 落在 Scheduled', async () => {
+    const { fieldsA, fieldsB, hub } = await concurrently(
+      (a) => createTask(a, 't', { scheduledType: 'NONE', bucket: 'INBOX' }),
+      (a, id) =>
+        a.update('task', id, {
+          scheduledType: 'DATE',
+          scheduledDate: '2026-10-01',
+          bucket: 'SCHEDULED',
+        }),
+      (b, id) => b.update('task', id, { bucket: 'ANYTIME' }),
+    );
+    for (const fields of [fieldsA, fieldsB, hub]) {
+      expect(fields.scheduledType).toBe('DATE');
+      expect(fields.bucket).toBe('SCHEDULED');
+    }
+  });
+
+  it('A 重开任务、B（旧客户端）只写了结时间 → 未了结且没有了结时间', async () => {
+    const { fieldsA, fieldsB, hub } = await concurrently(
+      (a) =>
+        createTask(a, 't', {
+          scheduledType: 'NONE',
+          status: 'COMPLETED',
+          settledAt: '2026-09-01T00:00:00.000Z',
+        }),
+      (a, id) => a.update('task', id, { status: 'ACTIVE', settledAt: null }),
+      (b, id) => b.update('task', id, { settledAt: '2026-09-02T00:00:00.000Z' }),
+    );
+    for (const fields of [fieldsA, fieldsB, hub]) {
+      expect(fields.status).toBe('ACTIVE');
+      expect(fields.settledAt).toBeNull();
+    }
+  });
+
+  it('没有冲突的并发编辑不触发修复：写入方的回声零应用', async () => {
+    const h = await makeHarness();
+    const a = await h.device('A');
+    await a.sync();
+    const id = await createTask(a, 't', { scheduledType: 'NONE', bucket: 'INBOX' });
+    await a.sync();
+    const remote: string[] = [];
+    a.onChange((change) => {
+      if (change.origin === 'remote') remote.push('remote');
+    });
+    await a.update('task', id, {
+      scheduledType: 'DATE',
+      scheduledDate: '2026-10-01',
+      bucket: 'SCHEDULED',
+      reminderTime: '09:00',
+    });
+    await a.sync();
+    expect(remote).toEqual([]);
   });
 });

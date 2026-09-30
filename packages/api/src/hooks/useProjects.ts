@@ -1,11 +1,10 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import {
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
-} from '@taskora/shared';
+import { useMutation } from '@tanstack/react-query';
+
+import type { QueryCacheFacade } from '../engine/live-queries';
+import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
 import type {
   CreateProjectDto,
+  FeedItem,
   ProjectResponseDto,
   UpdateProjectDto,
 } from '@taskora/shared';
@@ -21,26 +20,35 @@ import {
   uncompleteProject,
   updateProject,
 } from '@/api/projects.api';
+import {
+  type CacheSnapshot,
+  cancelRoots,
+  refreshAfterWrite,
+  restoreSnapshot,
+  snapshotRoots,
+  useQueryCache,
+} from './cache-patches';
+import { useReplicaQuery } from './useEngineQuery';
 
 export const projectKeys = {
   all: ['projects'] as const,
   detail: (id: string) => ['project', id] as const,
 };
 
+// 项目带任务计数与标签芯片：依赖 task 与 tag（local-first-v3 issue 06）。
 export function useProjectsQuery() {
-  return useQuery({
+  return useReplicaQuery({
     queryKey: projectKeys.all,
     queryFn: getProjects,
+    dependsOn: ['project', 'task', 'tag'],
   });
 }
 
-export function useProjectQuery(
-  id: string,
-  options?: { enabled?: boolean },
-) {
-  return useQuery({
+export function useProjectQuery(id: string, options?: { enabled?: boolean }) {
+  return useReplicaQuery({
     queryKey: projectKeys.detail(id),
     queryFn: () => getProject(id),
+    dependsOn: [{ entity: 'project', ids: [id] }, 'task', 'tag'],
     enabled: !!id && (options?.enabled ?? true),
   });
 }
@@ -64,19 +72,47 @@ function removeProjectFromList(
   return list.filter((p) => p.id !== projectId);
 }
 
-// Restore snapshot to queries data (list caches)
-function restoreListSnapshot(
-  queryClient: ReturnType<typeof useQueryClient>,
-  queryKey: readonly string[],
-  snapshot: [readonly unknown[], unknown][],
+// 项目同时出现在 ['projects'] 列表与 ['feed'] 视图（Today / Upcoming /
+// Someday / Logbook / Trash 的项目行）里：乐观补丁两处都改，否则 feed 视图
+// 里的项目行要等重查才更新（local-first-v3 issue 02）。
+const PROJECT_LIST_ROOTS = ['projects', 'feed'];
+
+async function cancelProjectLists(queryClient: QueryCacheFacade) {
+  await cancelRoots(queryClient, PROJECT_LIST_ROOTS);
+}
+
+function snapshotProjectLists(queryClient: QueryCacheFacade): CacheSnapshot {
+  return snapshotRoots(queryClient, PROJECT_LIST_ROOTS);
+}
+
+function patchProjectInLists(
+  queryClient: QueryCacheFacade,
+  projectId: string,
+  updater: (project: ProjectResponseDto) => ProjectResponseDto,
 ) {
-  for (const [key, data] of snapshot) {
-    queryClient.setQueryData(key as readonly string[], data);
-  }
+  queryClient.setQueriesData<ProjectResponseDto[]>({ queryKey: projectKeys.all }, (old) =>
+    applyToProjectInList(old, projectId, updater),
+  );
+  queryClient.setQueriesData<FeedItem[]>({ queryKey: ['feed'] }, (old) =>
+    old?.map((item) =>
+      item.type === 'project' && item.id === projectId
+        ? ({ ...updater(item as unknown as ProjectResponseDto), type: 'project' } as FeedItem)
+        : item,
+    ),
+  );
+}
+
+function removeProjectFromLists(queryClient: QueryCacheFacade, projectId: string) {
+  queryClient.setQueriesData<ProjectResponseDto[]>({ queryKey: projectKeys.all }, (old) =>
+    removeProjectFromList(old, projectId),
+  );
+  queryClient.setQueriesData<FeedItem[]>({ queryKey: ['feed'] }, (old) =>
+    old?.filter((item) => !(item.type === 'project' && item.id === projectId)),
+  );
 }
 
 export function useCreateProject() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (data: CreateProjectDto) => createProject(data),
     onMutate: async (data) => {
@@ -105,15 +141,14 @@ export function useCreateProject() {
         createdAt: now,
         updatedAt: now,
       };
-      queryClient.setQueriesData<ProjectResponseDto[]>(
-        { queryKey: projectKeys.all },
-        (old) => (old ? [...old, tempProject] : old),
+      queryClient.setQueriesData<ProjectResponseDto[]>({ queryKey: projectKeys.all }, (old) =>
+        old ? [...old, tempProject] : old,
       );
       return { snapshot, tempId };
     },
     onError: (_err, _data, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, projectKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
     },
     onSuccess: (project, _data, ctx) => {
@@ -121,47 +156,35 @@ export function useCreateProject() {
       // 并发缓存更新（SSE 手术 / engine 写后失效 refetch）可能已写入
       // 真实行——再追加会重复（duplicate key → 卸载重建 → 丢焦）。
       const tempId = ctx?.tempId;
-      queryClient.setQueriesData<ProjectResponseDto[]>(
-        { queryKey: projectKeys.all },
-        (old) => {
-          if (!old) return old;
-          const deduped = old.filter((p) => p.id !== tempId && p.id !== project.id);
-          return [...deduped, project];
-        },
-      );
+      queryClient.setQueriesData<ProjectResponseDto[]>({ queryKey: projectKeys.all }, (old) => {
+        if (!old) return old;
+        const deduped = old.filter((p) => p.id !== tempId && p.id !== project.id);
+        return [...deduped, project];
+      });
       // Set detail cache so detail page can read immediately
       queryClient.setQueryData(projectKeys.detail(project.id), project);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useUpdateProject() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
-    mutationFn: ({ id, data }: { id: string; data: UpdateProjectDto }) =>
-      updateProject(id, data),
+    mutationFn: ({ id, data }: { id: string; data: UpdateProjectDto }) => updateProject(id, data),
     onMutate: async ({ id, data }) => {
-      await queryClient.cancelQueries({ queryKey: projectKeys.all });
-      const snapshot = queryClient.getQueriesData<ProjectResponseDto[]>({
-        queryKey: projectKeys.all,
-      });
-      const detailSnapshot = queryClient.getQueryData<ProjectResponseDto>(
-        projectKeys.detail(id),
-      );
+      await cancelProjectLists(queryClient);
+      const snapshot = snapshotProjectLists(queryClient);
+      const detailSnapshot = queryClient.getQueryData<ProjectResponseDto>(projectKeys.detail(id));
       const now = new Date().toISOString();
-      queryClient.setQueriesData<ProjectResponseDto[]>(
-        { queryKey: projectKeys.all },
-        (old) =>
-          applyToProjectInList(old, id, (project) => ({
-            ...project,
-            ...data,
-            updatedAt: now,
-          })),
-      );
+      patchProjectInLists(queryClient, id, (project) => ({
+        ...project,
+        ...data,
+        updatedAt: now,
+      }));
       queryClient.setQueryData<ProjectResponseDto>(projectKeys.detail(id), (old) =>
         old ? { ...old, ...data, updatedAt: now } : old,
       );
@@ -169,40 +192,32 @@ export function useUpdateProject() {
     },
     onError: (_err, _vars, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, projectKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(projectKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, { id }) => {
-      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useRestoreProject() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => restoreProject(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: projectKeys.all });
-      const snapshot = queryClient.getQueriesData<ProjectResponseDto[]>({
-        queryKey: projectKeys.all,
-      });
-      const detailSnapshot = queryClient.getQueryData<ProjectResponseDto>(
-        projectKeys.detail(id),
-      );
-      queryClient.setQueriesData<ProjectResponseDto[]>(
-        { queryKey: projectKeys.all },
-        (old) =>
-          applyToProjectInList(old, id, (project) => ({
-            ...project,
-            trashedAt: null,
-          })),
-      );
+      await cancelProjectLists(queryClient);
+      const snapshot = snapshotProjectLists(queryClient);
+      const detailSnapshot = queryClient.getQueryData<ProjectResponseDto>(projectKeys.detail(id));
+      patchProjectInLists(queryClient, id, (project) => ({
+        ...project,
+        trashedAt: null,
+      }));
       queryClient.setQueryData<ProjectResponseDto>(projectKeys.detail(id), (old) =>
         old ? { ...old, trashedAt: null } : old,
       );
@@ -210,42 +225,34 @@ export function useRestoreProject() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, projectKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(projectKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, id) => {
-      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useCompleteProject() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => completeProject(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: projectKeys.all });
-      const snapshot = queryClient.getQueriesData<ProjectResponseDto[]>({
-        queryKey: projectKeys.all,
-      });
-      const detailSnapshot = queryClient.getQueryData<ProjectResponseDto>(
-        projectKeys.detail(id),
-      );
+      await cancelProjectLists(queryClient);
+      const snapshot = snapshotProjectLists(queryClient);
+      const detailSnapshot = queryClient.getQueryData<ProjectResponseDto>(projectKeys.detail(id));
       const now = new Date().toISOString();
-      queryClient.setQueriesData<ProjectResponseDto[]>(
-        { queryKey: projectKeys.all },
-        (old) =>
-          applyToProjectInList(old, id, (project) => ({
-            ...project,
-            status: ProjectStatus.COMPLETED,
-            completedAt: now,
-          })),
-      );
+      patchProjectInLists(queryClient, id, (project) => ({
+        ...project,
+        status: ProjectStatus.COMPLETED,
+        completedAt: now,
+      }));
       queryClient.setQueryData<ProjectResponseDto>(projectKeys.detail(id), (old) =>
         old ? { ...old, status: ProjectStatus.COMPLETED, completedAt: now } : old,
       );
@@ -253,41 +260,33 @@ export function useCompleteProject() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, projectKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(projectKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, id) => {
-      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useUncompleteProject() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => uncompleteProject(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: projectKeys.all });
-      const snapshot = queryClient.getQueriesData<ProjectResponseDto[]>({
-        queryKey: projectKeys.all,
-      });
-      const detailSnapshot = queryClient.getQueryData<ProjectResponseDto>(
-        projectKeys.detail(id),
-      );
-      queryClient.setQueriesData<ProjectResponseDto[]>(
-        { queryKey: projectKeys.all },
-        (old) =>
-          applyToProjectInList(old, id, (project) => ({
-            ...project,
-            status: ProjectStatus.ACTIVE,
-            completedAt: null,
-          })),
-      );
+      await cancelProjectLists(queryClient);
+      const snapshot = snapshotProjectLists(queryClient);
+      const detailSnapshot = queryClient.getQueryData<ProjectResponseDto>(projectKeys.detail(id));
+      patchProjectInLists(queryClient, id, (project) => ({
+        ...project,
+        status: ProjectStatus.ACTIVE,
+        completedAt: null,
+      }));
       queryClient.setQueryData<ProjectResponseDto>(projectKeys.detail(id), (old) =>
         old ? { ...old, status: ProjectStatus.ACTIVE, completedAt: null } : old,
       );
@@ -295,73 +294,65 @@ export function useUncompleteProject() {
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, projectKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(projectKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
     onSettled: (_data, _error, id) => {
-      void queryClient.invalidateQueries({ queryKey: projectKeys.detail(id) });
-      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useReorderProjects() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (orderedIds: string[]) => reorderProjects(orderedIds),
     onMutate: async (orderedIds) => {
       await queryClient.cancelQueries({ queryKey: projectKeys.all });
-      queryClient.setQueriesData<ProjectResponseDto[]>(
-        { queryKey: projectKeys.all },
-        (old) => {
-          if (!old) return old;
-          const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
-          return [...old].sort((a, b) => {
-            const ai = orderMap.get(a.id);
-            const bi = orderMap.get(b.id);
-            if (ai !== undefined && bi !== undefined) return ai - bi;
-            return 0;
-          });
-        },
-      );
+      queryClient.setQueriesData<ProjectResponseDto[]>({ queryKey: projectKeys.all }, (old) => {
+        if (!old) return old;
+        const orderMap = new Map(orderedIds.map((id, i) => [id, i]));
+        return [...old].sort((a, b) => {
+          const ai = orderMap.get(a.id);
+          const bi = orderMap.get(b.id);
+          if (ai !== undefined && bi !== undefined) return ai - bi;
+          return 0;
+        });
+      });
     },
     onError: () => {
       void queryClient.invalidateQueries({ queryKey: projectKeys.all });
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }
 
 export function useDeleteProject() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => deleteProject(id),
     onMutate: async (id) => {
-      await queryClient.cancelQueries({ queryKey: projectKeys.all });
-      const snapshot = queryClient.getQueriesData<ProjectResponseDto[]>({
-        queryKey: projectKeys.all,
-      });
-      queryClient.setQueriesData<ProjectResponseDto[]>(
-        { queryKey: projectKeys.all },
-        (old) => removeProjectFromList(old, id),
-      );
+      await cancelProjectLists(queryClient);
+      const snapshot = snapshotProjectLists(queryClient);
+      removeProjectFromLists(queryClient, id);
       return { snapshot };
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
-        restoreListSnapshot(queryClient, projectKeys.all, ctx.snapshot);
+        restoreSnapshot(queryClient, ctx.snapshot);
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: projectKeys.all });
-      void queryClient.invalidateQueries({ queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }

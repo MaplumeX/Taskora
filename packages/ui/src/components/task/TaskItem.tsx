@@ -2,13 +2,11 @@ import {
   useCalendarDay,
   parseCalendarDate,
   startOfTomorrow,
-  taskKeys,
   useTaskQuery,
   useUpdateTask,
   useUiInteractionStore,
 } from '@taskora/api';
 import * as React from 'react';
-import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -60,7 +58,6 @@ export function TaskItem({
 }: Props) {
   useCalendarDay();
   const { t } = useTranslation();
-  const queryClient = useQueryClient();
   const { data: liveTask } = useTaskQuery(task.id);
   const current = liveTask ?? task;
   const completed = current.status === 'COMPLETED';
@@ -136,10 +133,6 @@ export function TaskItem({
       updateTask.mutate(
         { id: task.id, data: { title: trimmed } },
         {
-          onSuccess: () => {
-            queryClient.invalidateQueries({ queryKey: taskKeys.detail(task.id) });
-            void queryClient.invalidateQueries({ queryKey: ['tasks'] });
-          },
           onError: () => toast.error(t('common:saveFailed')),
         },
       );

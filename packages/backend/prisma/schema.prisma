@@ -26,6 +26,9 @@ model User {
   agentConfig     AgentConfig?
   conversations   Conversation[]
   devices         Device[]
+  compactedEntities CompactedEntity[]
+  syncChanges     SyncChange[]
+  syncCounter     SyncCounter?
 }
 
 model RefreshToken {
@@ -249,6 +252,7 @@ model Task {
   tags TaskTag[]
 
   @@index([userId])
+  @@index([userId, settledAt])
   @@index([projectId])
   @@index([headingId])
   @@index([areaId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
@@ -371,6 +375,10 @@ model Device {
   label     String?
   createdAt DateTime @default(now())
   lastSeenAt DateTime @default(now())
+  /// Android 后台同步的只读凭据（local-first-v3 issue 09）：只能读提醒计划
+  /// （GET /reminders/plan）。存 SHA-256；每次设备注册时轮换并续期。
+  backgroundTokenHash      String?   @unique
+  backgroundTokenExpiresAt DateTime?
 
   @@unique([userId, deviceId])
   @@index([userId])
@@ -379,14 +387,40 @@ model Device {
 /// Compact 登记（ADR-0008）：已被物理删除（Delete Request / hub GC）的
 /// 实体 id。迟到的设备字段写到达这些实体时被静默丢弃（Compact 永久
 /// 获胜，副本与 hub 同规则）。这不是墓碑：不承载值与时钟，仅登记
-/// 「该 id 已不存在，拒绝重建」。
+/// 「该 id 已不存在，拒绝重建」。与对应的 Compact Event 同期清理
+/// （PrismaSyncChangeLog.prune，local-first-v3 issue 08）。
 model CompactedEntity {
   id        String   @id @default(uuid())
   userId    String
   entity    String
   entityId  String
   createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([userId, entity, entityId])
   @@index([userId])
+  @@index([createdAt])
+}
+
+/// 同步变更日志（ADR-0007）：每用户单调 seq 的 Change Event 序列，设备凭
+/// Sync Cursor 增量拉取。保留 30 天（PrismaSyncChangeLog.prune）。
+model SyncChange {
+  userId    String
+  seq       BigInt
+  /// HubChange（不含 seq）
+  payload   Json
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([userId, seq])
+  @@index([createdAt])
+}
+
+/// 每用户的 seq 分配器。UPSERT ... RETURNING 的行锁持有到写事务提交，
+/// 保证 seq 顺序即提交顺序。prunedThrough：已被保留期清理的最大 seq。
+model SyncCounter {
+  userId        String @id
+  seq           BigInt @default(1)
+  prunedThrough BigInt @default(1)
+  user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }

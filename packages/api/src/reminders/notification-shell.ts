@@ -9,22 +9,22 @@
  *   持久化、设置闹钟并投递（ADR-0014）。
  */
 
-import type { ReplicaRow } from '@taskora/engine';
+import type { ReminderDelivery, ReminderTaskInput, ReplicaRow } from '@taskora/engine';
 import { ScheduledType, TaskStatus } from '@taskora/shared';
 
 import type { ReminderActionRequest } from './reminder-action';
-import type { ReminderTaskInput } from './reminder-scheduler';
 
-/** 交付给原生的一条提醒：规则已在 JS 侧算完，文案已按当前语言组装。 */
-export interface ReminderDelivery {
-  key: string;
-  taskId: string;
-  /** 触发时刻（epoch ms）。 */
-  fireAt: number;
-  /** 触发日 + 1 的同一时刻：原生在 App 未运行时临时重设「明天」闹钟用。 */
-  snoozeTomorrowAt: number;
-  title: string;
-  body: string;
+export type { ReminderDelivery };
+
+/**
+ * 计划所依据的副本状态（local-first-v3 issue 09）。Android 的后台同步会
+ * 用 hub 计算的计划替换原生计划；原生据此判断两者谁更新：
+ * - `cursor`：副本已拉到的 hub 变更日志位置；
+ * - `pendingLocal`：Outbox 里还有未推送的本地写（hub 计划不含它们）。
+ */
+export interface ReminderPlanBasis {
+  cursor: number;
+  pendingLocal: boolean;
 }
 
 /** 投递可靠性状态（Android 设置页「提醒可靠性」区）。 */
@@ -56,9 +56,11 @@ export interface ReminderNotificationShell {
   fireNow?(reminder: ReminderDelivery): Promise<void>;
   /**
    * system 模式（Android）：交付完整期望集（不是增量）。原生侧自行与
-   * 持久化计划比对，调用方不维护任何注册状态。
+   * 持久化计划比对，调用方不维护任何注册状态。basis 是计划依据的副本
+   * 状态：副本落后于后台取回的 hub 计划、又没有未推送的本地写时，原生
+   * 保留 hub 计划。
    */
-  sync?(plan: ReminderDelivery[]): Promise<void>;
+  sync?(plan: ReminderDelivery[], basis: ReminderPlanBasis): Promise<void>;
   /** system 模式：注销全部提醒并清空原生计划（登出）。 */
   clear?(): Promise<void>;
   /**

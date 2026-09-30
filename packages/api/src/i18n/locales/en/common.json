@@ -50,5 +50,6 @@
   "clear": "Clear",
   "syncStatusSynced": "Synced",
   "syncStatusSyncing": "Syncing…",
-  "syncStatusOffline": "Offline · {{count}} pending"
+  "syncStatusOffline": "Offline · {{count}} pending",
+  "syncStatusUpgradeRequired": "Update Taskora to sync"
 }

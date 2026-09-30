@@ -180,11 +180,9 @@ integrationDescribe('Change Events (service-level integration)', () => {
     const task = await tasks.create(userId, { title: 'Tagged', tagIds: [tagA.id] });
     await drain();
 
-    // update(tagIds) runs deleteMany + createMany on TaskTag inside an
-    // array transaction (merged into one task event), followed by the
-    // task.update itself — a separate write flushed separately. The burst
-    // is coalesced again by the client's ~50ms apply window; what matters
-    // here is that every event carries `updated` and the final tag set.
+    // update(tagIds) replaces the TaskTag rows inside the hub's merge
+    // transaction; whatever events the collector derives from it, every
+    // one carries `updated` and the final tag set.
     await tasks.update(userId, task.id, { tagIds: [tagB.id] });
 
     const batch = await drainWhere((e) => e.entity === 'task' && e.id === task.id);
@@ -195,16 +193,17 @@ integrationDescribe('Change Events (service-level integration)', () => {
     }
   });
 
-  it('emits one updated event per task for reorders, with monotonic seqs', async () => {
+  it('emits one updated event per reordered task, with monotonic seqs', async () => {
     const t1 = await tasks.create(userId, { title: 'r1' });
     const t2 = await tasks.create(userId, { title: 'r2' });
     const t3 = await tasks.create(userId, { title: 'r3' });
     await drain();
 
+    // t3 落在索引 0：排序键与新建时相同，hub 不写它（值未变的字段不写）
     await tasks.reorder(userId, [t3.id, t1.id, t2.id]);
 
     const batch = await drainWhere((e) => e.entity === 'task' && e.action === 'updated');
-    expect(batch.map((e) => e.id).sort()).toEqual([t1.id, t2.id, t3.id].sort());
+    expect(batch.map((e) => e.id).sort()).toEqual([t1.id, t2.id].sort());
     expectSeqsMonotonic(batch);
   });
 

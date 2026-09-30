@@ -25,6 +25,8 @@ export interface FeedItemBase {
   completedAt: string | null;
   trashedAt: string | null;
   sortOrder: number;
+  /** 列表位次（fractional indexing 字符串，ADR-0007）；web 与桌面端共用的排序键。 */
+  position?: string | null;
   createdAt: string;
   updatedAt: string;
   tags: TagResponseDto[];
@@ -45,3 +47,13 @@ export interface ProjectFeedItem extends FeedItemBase {
 }
 
 export type FeedItem = TaskFeedItem | ProjectFeedItem;
+
+/**
+ * Logbook 的归档部分（local-first-v3 issue 08）：Local Replica 不保留的
+ * 旧 Logbook Entry，按了结时间倒序从 hub 分页读取，只读。
+ */
+export interface LogbookArchivePage {
+  items: TaskFeedItem[];
+  /** 下一页令牌；缺省即已到底。 */
+  next?: string;
+}

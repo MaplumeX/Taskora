@@ -2,21 +2,25 @@ import { describe, expect, it, vi } from 'vitest';
 import { validate } from 'class-validator';
 import { AuthService } from '../src/auth/auth.service';
 import { UpdatePreferencesDto } from '../src/users/dto/users.dto';
-import { matchesCalendarView } from '../src/users/account-time-zone';
+import { taskMatchesView, type ListView } from '@taskora/engine';
 import { renderSystemPrompt } from '../src/agent/runtime/agent-model';
 
 describe('Account time zone', () => {
-  it('REST Today/Upcoming 与助手当前日期一致，覆盖 UTC 午夜前的北京时间', () => {
+  it('Today/Upcoming 按账户时区判定（domain 规则，REST 与设备共用），与助手当前日期一致', () => {
     const now = new Date('2026-09-23T17:00Z');
-    expect(matchesCalendarView(new Date('2026-09-24T00:00Z'), 'today', 'Asia/Shanghai', now)).toBe(
-      true,
-    );
-    expect(matchesCalendarView(new Date('2026-09-23T16:00Z'), 'today', 'Asia/Shanghai', now)).toBe(
-      true,
-    );
-    expect(
-      matchesCalendarView(new Date('2026-09-24T00:00Z'), 'upcoming', 'America/Los_Angeles', now),
-    ).toBe(true);
+    const dated = (scheduledDate: Date) => ({
+      status: 'ACTIVE',
+      scheduledType: 'DATE',
+      scheduledDate,
+      bucket: 'SCHEDULED',
+      trashedAt: null,
+    });
+    const matches = (date: Date, view: ListView, zone: string) =>
+      taskMatchesView(dated(date), view, { timeZone: zone, legacyDateTimeZone: zone, now });
+    expect(matches(new Date('2026-09-24T00:00Z'), 'today', 'Asia/Shanghai')).toBe(true);
+    // 旧的非零点时刻按 legacy 时区解读（北京时间 9-24 零点）
+    expect(matches(new Date('2026-09-23T16:00Z'), 'today', 'Asia/Shanghai')).toBe(true);
+    expect(matches(new Date('2026-09-24T00:00Z'), 'upcoming', 'America/Los_Angeles')).toBe(true);
     expect(renderSystemPrompt(now, 'Asia/Shanghai')).toContain('2026-09-24 (Asia/Shanghai)');
   });
 

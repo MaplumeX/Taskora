@@ -14,7 +14,7 @@
 
 import { addCalendarDays, instantDateKey, instantWallTime } from '@taskora/shared';
 
-import { isReminderEligible, reminderFireAt, type ReminderTaskInput } from './reminder-scheduler';
+import { isReminderEligible, reminderFireAt, type ReminderTaskInput } from '@taskora/engine';
 
 export type ReminderActionKind = 'complete' | 'snooze15' | 'snooze60' | 'snoozeTomorrow';
 

@@ -13,6 +13,7 @@ import { ProjectHeadingsModule } from './project-headings/project-headings.modul
 import { SubtasksModule } from './subtasks/subtasks.module';
 import { AgentModule } from './agent/agent.module';
 import { SyncModule } from './sync/sync.module';
+import { RemindersModule } from './reminders/reminders.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -31,6 +32,7 @@ import { HealthController } from './health/health.controller';
     SubtasksModule,
     AgentModule,
     SyncModule,
+    RemindersModule,
   ],
   controllers: [HealthController],
 })
