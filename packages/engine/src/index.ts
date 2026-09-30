@@ -52,6 +52,15 @@ export {
   type EngineChange,
 } from './replica';
 export {
+  changeAffects,
+  replaceEqualDeep,
+  watchQuery,
+  type LiveQuery,
+  type QueryDependency,
+  type QueryObserver,
+  type QueryWatch,
+} from './live-query';
+export {
   MAX_PUSH_BATCH_BYTES,
   openEngine,
   positionAfter,

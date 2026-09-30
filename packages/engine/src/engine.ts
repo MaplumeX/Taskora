@@ -1,14 +1,14 @@
 /**
  * Engine 门面 — UI 的唯一读写入口（CONTEXT.md「引擎与同步」）。
  *
- * 读：get/list/query 直接作用于 Local Replica，零网络往返；写后由订阅
- * 者（桌面端为 React Query invalidate，按变更携带的实体粒度）刷新视图。写：create/update 落库
+ * 读：get/list/query 直接作用于 Local Replica，零网络往返；视图经 watch
+ * 订阅，写入提交后只重跑受影响的查询。写：create/update 落库
  * 同时进 Outbox（字段级 HLC + device id）；flush 把 Outbox 推给 Sync
  * Hub，pull 凭 Sync Cursor 拉全局增量。断网时全功能可用，恢复联网后
  * 自动收敛。
  *
- * 注意：所有方法为异步（存储接口面向 Tauri IPC 异步桥）。响应式刷新
- * 由 onChange 通知驱动，UI 层自行选择失效策略。
+ * 注意：所有方法为异步（存储接口面向 Tauri IPC 异步桥）。UI 经 watch
+ * 订阅响应式查询（local-first-v3 issue 06），onChange 是其底层通知。
  */
 
 import {
@@ -35,6 +35,7 @@ import {
   type SyncTransport,
 } from './protocol';
 import type { SqlStorage } from './storage';
+import { watchQuery, type LiveQuery, type QueryObserver, type QueryWatch } from './live-query';
 
 export interface EngineOptions {
   storage: SqlStorage;
@@ -87,6 +88,11 @@ export interface Engine {
   /** 订阅数据变更（本地写 / 应用远端写 / bootstrap 重建后触发，载荷
    * 携带来源与涉及实体；UI 层自行选择失效策略）。返回退订函数。 */
   onChange(listener: (change: EngineChange) => void): () => void;
+  /**
+   * 响应式查询（local-first-v3 issue 06）：立即运行，之后只在影响其依赖
+   * 的变更提交后重跑，结果与上次结构相同则不推送。
+   */
+  watch<T>(query: LiveQuery<T>, observer: QueryObserver<T>): QueryWatch;
   close(): Promise<void>;
 }
 
@@ -262,6 +268,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
     bootstrap,
     cursor: () => replica.getCursor(),
     onChange: (listener) => replica.onChange(listener),
+    watch: (query, observer) => watchQuery(replica, query, observer),
     close: () => options.storage.close(),
   };
 }

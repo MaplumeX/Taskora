@@ -55,10 +55,42 @@ export interface ListOptions {
  * 变更通知载荷：来源 + 涉及实体。bootstrap 整表重建时 entities 缺省
  * （表示全部）。UI 据此选择失效粒度，并区分「本地写需要防抖同步」
  * 与「远端写应用后无需再拉」。
+ *
+ * ids：已知的变更行 id（按实体）。entities 里有、ids 里没有的实体表示
+ * 「行未知」（级联删除、引用清理波及的行），按整个实体变更处理。响应式
+ * 查询据此只重跑真正受影响的单行查询（local-first-v3 issue 06）。
  */
 export interface EngineChange {
   origin: 'local' | 'remote' | 'bootstrap';
   entities?: SyncEntity[];
+  ids?: Partial<Record<SyncEntity, string[]>>;
+}
+
+/** 变更行登记：已知 id 的实体与行未知的实体（后者覆盖前者）。 */
+class ChangedRows {
+  readonly entities = new Set<SyncEntity>();
+  private readonly known = new Map<SyncEntity, Set<string>>();
+  private readonly unknown = new Set<SyncEntity>();
+
+  rows(entity: SyncEntity, ids: Iterable<string>): void {
+    this.entities.add(entity);
+    const set = this.known.get(entity) ?? new Set<string>();
+    for (const id of ids) set.add(id);
+    this.known.set(entity, set);
+  }
+
+  whole(entity: SyncEntity): void {
+    this.entities.add(entity);
+    this.unknown.add(entity);
+  }
+
+  toChange(origin: 'local' | 'remote'): EngineChange {
+    const ids: Partial<Record<SyncEntity, string[]>> = {};
+    for (const [entity, set] of this.known) {
+      if (!this.unknown.has(entity)) ids[entity] = [...set];
+    }
+    return { origin, entities: [...this.entities], ids };
+  }
 }
 
 /**
@@ -348,7 +380,7 @@ export class LocalReplica {
       await this.writeRow(entity, id, fields, clocks, { insert: true });
       await this.appendOutbox(entity, id, writes);
     });
-    this.notifyChanged({ origin: 'local', entities: [entity] });
+    this.notifyChanged({ origin: 'local', entities: [entity], ids: { [entity]: [id] } });
     return id;
   }
 
@@ -375,7 +407,11 @@ export class LocalReplica {
           await this.applyLocalUpdate(entity, id, patch);
         }
       });
-      this.notifyChanged({ origin: 'local', entities: [entity] });
+      this.notifyChanged({
+        origin: 'local',
+        entities: [entity],
+        ids: { [entity]: patches.map(({ id }) => id) },
+      });
     });
   }
 
@@ -431,7 +467,7 @@ export class LocalReplica {
     await this.tx(async () => {
       await this.removeRows(entity, ids, { enqueue: true }, affected);
     });
-    this.notifyChanged({ origin: 'local', entities: [...affected] });
+    this.notifyChanged(removalChange('local', entity, ids, affected));
   }
 
   /**
@@ -540,7 +576,9 @@ export class LocalReplica {
     remote: EntityMergeState,
   ): Promise<boolean> {
     const applied = await this.tx(() => this.mergeRemote(entity, id, remote));
-    if (applied) this.notifyChanged({ origin: 'remote', entities: [entity] });
+    if (applied) {
+      this.notifyChanged({ origin: 'remote', entities: [entity], ids: { [entity]: [id] } });
+    }
     return applied;
   }
 
@@ -569,7 +607,7 @@ export class LocalReplica {
       const affected = new Set<SyncEntity>();
       await this.tx(() => this.compactRows(entity, ids, affected));
       if (affected.size === 0) return false;
-      this.notifyChanged({ origin: 'remote', entities: [...affected] });
+      this.notifyChanged(removalChange('remote', entity, ids, affected));
       return true;
     });
   }
@@ -599,7 +637,7 @@ export class LocalReplica {
    */
   async applyRemoteBatch(changes: HubChange[], cursor: number): Promise<void> {
     return this.serialized(async () => {
-      const affected = new Set<SyncEntity>();
+      const affected = new ChangedRows();
       await this.tx(async () => {
         for (const change of changes) {
           // 更新版本 hub 下发的、本端没有表的实体类型：跳过（协议规则见
@@ -610,15 +648,20 @@ export class LocalReplica {
               fields: change.fields,
               clocks: change.clocks,
             });
-            if (applied) affected.add(change.entity);
+            if (applied) affected.rows(change.entity, [change.id]);
           } else {
-            await this.compactRows(change.entity, change.ids, affected);
+            const touched = new Set<SyncEntity>();
+            await this.compactRows(change.entity, change.ids, touched);
+            for (const entity of touched) {
+              if (entity === change.entity) affected.rows(entity, change.ids);
+              else affected.whole(entity);
+            }
           }
         }
         await this.metaSet('syncCursor', String(cursor));
       });
-      if (affected.size > 0) {
-        this.notifyChanged({ origin: 'remote', entities: [...affected] });
+      if (affected.entities.size > 0) {
+        this.notifyChanged(affected.toChange('remote'));
       }
     });
   }
@@ -919,4 +962,19 @@ export class LocalReplica {
       [entity, id],
     );
   }
+}
+
+/** 删除类变更：被删实体的行已知，级联 / 引用清理波及的其他实体行未知。 */
+function removalChange(
+  origin: 'local' | 'remote',
+  entity: SyncEntity,
+  ids: string[],
+  affected: Set<SyncEntity>,
+): EngineChange {
+  const rows = new ChangedRows();
+  for (const item of affected) {
+    if (item === entity) rows.rows(item, ids);
+    else rows.whole(item);
+  }
+  return rows.toChange(origin);
 }

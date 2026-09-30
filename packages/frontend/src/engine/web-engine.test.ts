@@ -12,7 +12,7 @@ import {
   type EngineOptions,
 } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
-import { useAuthStore, useSyncStatusStore } from '@taskora/api';
+import { isLiveQueryMode, useAuthStore, useSyncStatusStore } from '@taskora/api';
 
 import type { WorkerSqlStorage } from './worker-storage';
 import {
@@ -83,7 +83,6 @@ describe('web-engine 装配', () => {
 
   it('登录 → leader 打开副本并首次同步；读写走本地副本；登出释放锁、退回 REST', async () => {
     const queryClient = new QueryClient();
-    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
     const { runtime: rt, held } = runtime();
     initWebEngine(queryClient, rt);
     expect(getWebEngine()).toBeNull();
@@ -91,8 +90,8 @@ describe('web-engine 装配', () => {
     useAuthStore.setState({ token: 't', user: { id: 'u1' } } as never);
     const engine = getWebEngine();
     expect(engine).not.toBeNull();
-    // 注入后立即全量失效，改从本地副本重读（不等首次同步）
-    await vi.waitFor(() => expect(invalidate).toHaveBeenCalled());
+    // 注入后界面读立即改由响应式查询提供（不等首次同步，local-first-v3 issue 06）
+    expect(isLiveQueryMode()).toBe(true);
 
     await vi.waitFor(() => expect(useSyncStatusStore.getState().status).toBe('synced'));
     expect(held.has('taskora-replica:u1')).toBe(true);
@@ -107,6 +106,7 @@ describe('web-engine 装配', () => {
     useAuthStore.setState({ token: null, user: null } as never);
     await vi.waitFor(() => expect(held.has('taskora-replica:u1')).toBe(false));
     expect(getWebEngine()).toBeNull();
+    expect(isLiveQueryMode()).toBe(false);
     expect(useSyncStatusStore.getState().status).toBe('idle');
     expect(queryClient.getDefaultOptions().queries?.networkMode).toBeUndefined();
   });

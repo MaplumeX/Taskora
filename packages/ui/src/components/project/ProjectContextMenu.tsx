@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQueryClient } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { MoreHorizontal, Check, Circle, CalendarClock, CalendarDays, Tag, Trash2, RotateCcw } from 'lucide-react';
@@ -17,7 +16,6 @@ import { Button } from '@/components/ui/button';
 import { MenuRow } from '@/components/common/MenuRow';
 import { useLongPress } from '../../lib/useLongPress';
 import {
-  projectKeys,
   useCompleteProject,
   useDeleteProject,
   useRestoreProject,
@@ -52,7 +50,6 @@ export function ProjectMenuPanel({
 }) {
   const { t } = useTranslation('task');
   const { t: tc } = useTranslation('common');
-  const queryClient = useQueryClient();
 
   const completeProject = useCompleteProject();
   const uncompleteProject = useUncompleteProject();
@@ -61,16 +58,9 @@ export function ProjectMenuPanel({
 
   const completed = current.status === 'COMPLETED';
 
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: projectKeys.detail(project.id) });
-    void queryClient.invalidateQueries({ queryKey: projectKeys.all });
-    void queryClient.invalidateQueries({ queryKey: ['feed'] });
-  };
-
   const handleToggleComplete = () => {
     onClose();
     (completed ? uncompleteProject : completeProject).mutate(project.id, {
-      onSuccess: invalidate,
       onError: () => toast.error(tc('saveFailed')),
     });
   };
@@ -78,11 +68,7 @@ export function ProjectMenuPanel({
   const handleDelete = () => {
     onClose();
     deleteProject.mutate(project.id, {
-      onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: projectKeys.all });
-        void queryClient.invalidateQueries({ queryKey: ['feed'] });
-        onDeleted?.();
-      },
+      onSuccess: () => onDeleted?.(),
       onError: () => toast.error(tc('deleteFailed')),
     });
   };
@@ -90,10 +76,6 @@ export function ProjectMenuPanel({
   const handleRestore = () => {
     onClose();
     restoreProject.mutate(project.id, {
-      onSuccess: () => {
-        void queryClient.invalidateQueries({ queryKey: projectKeys.all });
-        void queryClient.invalidateQueries({ queryKey: ['feed'] });
-      },
       onError: () => toast.error(tc('restoreFailed')),
     });
   };
@@ -131,18 +113,12 @@ export function ProjectMenuPanel({
 
 function useProjectPatch(project: ProjectResponseDto) {
   const { t: tc } = useTranslation('common');
-  const queryClient = useQueryClient();
   const updateProject = useUpdateProject();
 
   return (data: UpdateProjectDto) =>
     updateProject.mutate(
       { id: project.id, data },
       {
-        onSuccess: () => {
-          void queryClient.invalidateQueries({ queryKey: projectKeys.detail(project.id) });
-          void queryClient.invalidateQueries({ queryKey: projectKeys.all });
-          void queryClient.invalidateQueries({ queryKey: ['feed'] });
-        },
         onError: () => toast.error(tc('saveFailed')),
       },
     );

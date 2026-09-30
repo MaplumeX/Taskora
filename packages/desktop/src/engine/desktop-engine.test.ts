@@ -4,7 +4,8 @@ import { QueryClient } from '@tanstack/react-query';
 /**
  * 冷启动首屏：UI 在 Engine 装配完成前已经渲染，首屏查询走的是 REST
  * （离线失败、在线缺本地未推送的编辑）。装配后必须立即改从本地副本
- * 重读，不能等首次同步——没有远端变更时同步根本不会触发 onChange。
+ * 读（进入响应式查询模式），不能等首次同步——没有远端变更时同步根本
+ * 不会触发 onChange。
  */
 
 const authState = { token: 'token-1', user: { id: 'u1' } };
@@ -51,15 +52,14 @@ vi.mock('../reminders/tauri-notification-shell', () => ({
 describe('desktop-engine 冷启动首屏', () => {
   it('Engine 装配后立即改从本地副本重读，不等同步完成（网络挂起/离线）', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+    const { isLiveQueryMode } = await import('@taskora/api');
     const { initDesktopEngine } = await import('./desktop-engine');
 
     initDesktopEngine(queryClient);
 
-    await vi.waitFor(() => {
-      const roots = invalidate.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
-      expect(roots).toEqual(expect.arrayContaining(['["feed"]', '["tasks"]', '["projects"]']));
-    });
+    // 界面读改由 Engine 的响应式查询提供（local-first-v3 issue 06）：装配完
+    // 即切换，此时同步仍未返回
+    await vi.waitFor(() => expect(isLiveQueryMode()).toBe(true));
     expect(fakeEngine.sync).toHaveBeenCalledTimes(1);
   });
 });

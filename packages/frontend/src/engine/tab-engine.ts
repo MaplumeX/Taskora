@@ -14,10 +14,14 @@
  * 重放结果相同），所以重发安全。
  */
 
+import { watchQuery } from '@taskora/engine';
 import type {
   Engine,
   EngineChange,
   ListOptions,
+  LiveQuery,
+  QueryObserver,
+  QueryWatch,
   ReplicaRow,
   SyncEntity,
   WireRow,
@@ -25,7 +29,7 @@ import type {
 
 import type { SyncStatus } from '@taskora/api';
 
-/** 可经标签页代理的 Engine 方法（close / onChange 是各标签页自己的）。 */
+/** 可经标签页代理的 Engine 方法（close / onChange / watch 是各标签页自己的）。 */
 export const REMOTE_METHODS = [
   'get',
   'list',
@@ -137,6 +141,10 @@ export class TabEngine implements Engine {
   onChange(listener: (change: EngineChange) => void): () => void {
     this.changeListeners.add(listener);
     return () => this.changeListeners.delete(listener);
+  }
+  /** 响应式查询在本标签页运行：读经 leader 代理，失效由广播的变更驱动。 */
+  watch<T>(query: LiveQuery<T>, observer: QueryObserver<T>): QueryWatch {
+    return watchQuery(this, query, observer);
   }
   /** 只断开本标签页；副本的生命周期归 leader（见 web-engine.ts）。 */
   async close(): Promise<void> {

@@ -32,12 +32,11 @@ export const INVALIDATION_BY_ENTITY: Record<SyncEntity, string[][]> = {
 const ALL_QUERY_ROOTS = [...new Set(Object.values(INVALIDATION_BY_ENTITY).flat())];
 
 /**
- * Engine 变更 → UI 缓存失效，按短窗口合并。
+ * Engine 变更 → React Query 缓存失效，按短窗口合并；entities 缺省表示全部。
  *
- * 多步操作（完成重复任务 = 更新 + 派生新实例、转项目、删 Area）会连发
- * 多次变更通知；逐次失效会让每个活跃查询各自重跑整表查询，并把中间
- * 态渲染出来。窗口内涉及的实体取并集，只失效一次。entities 缺省
- * （bootstrap 整表重建）表示全部。
+ * Engine 模式的界面读已改由响应式查询提供（live-queries.ts，local-first-v3
+ * issue 06），不再按变更失效 React Query。现在只用于退回 REST 时整体失效：
+ * React Query 里留着的是进入 Engine 模式之前的结果。
  */
 export function createEngineInvalidator(
   queryClient: QueryClient,

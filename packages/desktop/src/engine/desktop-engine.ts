@@ -28,6 +28,8 @@ import {
   setProjectHeadingBackend,
   createEngineProjectHeadingBackend,
   setSyncStatus,
+  attachLiveQueries,
+  detachLiveQueries,
   createEngineInvalidator,
   requestTaskReveal,
 } from '@taskora/api';
@@ -115,19 +117,15 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine }));
     registerDevice(deviceId).catch(() => undefined); // 注册失败不阻塞本地使用
     // Engine 激活：SSE 只作「触发 engine pull」的提示通道（ADR-0007），
-    // 停用 EventStreamApplier 的缓存手术——失效由 engine.onChange 驱动，
-    // 避免回声/远端事件的双重失效与 sortOrder/position 双权威打架。
+    // 停用 EventStreamApplier 的缓存手术——界面由响应式查询驱动，
+    // 避免回声/远端事件的双重刷新与 sortOrder/position 双权威打架。
     setEventStreamCacheSurgery(false);
-    // 装配期间 UI 已经渲染、首屏查询走的是 REST（离线时失败，在线时缺
-    // 本地未推送的编辑）。注入完成后全量失效，改从本地副本重读——不能
-    // 指望首次同步触发 onChange：没有远端变更时它根本不会触发。
-    const invalidateEntities = createEngineInvalidator(queryClient);
-    invalidateEntities();
+    // 界面读改由 Engine 的响应式查询提供（local-first-v3 issue 06）：装配
+    // 期间按 REST 渲染的视图随之切到本地副本，之后只在依赖的数据变更时重跑。
+    attachLiveQueries(engine);
 
-    // 副本变更 → UI 缓存失效（本地读，立即生效；按实体粒度），
     // 仅本地写需要防抖调度同步——远端写应用后无新 Outbox，再拉是空转。
     engine.onChange((change) => {
-      invalidateEntities(change.entities);
       if (change.origin === 'local') {
         scheduleSync(1_000);
       }
@@ -170,6 +168,8 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     console.error('[desktop-engine] 装配失败，退回 REST 后端', error);
     stopReminderCoordinator();
     resetBackends();
+    // React Query 里留着的是装配前的结果
+    createEngineInvalidator(queryClient)();
     setEventStreamCacheSurgery(true);
     engine = null;
     // 副本由更新版本的 Taskora 写入（降级安装）：不打开它，在线走 REST，
@@ -180,6 +180,7 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
 
 /** 全域退回 REST（登出 / 装配失败）。 */
 function resetBackends(): void {
+  detachLiveQueries();
   setTaskBackend(undefined);
   setProjectBackend(undefined);
   setAreaBackend(undefined);

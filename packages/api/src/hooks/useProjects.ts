@@ -1,4 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+
+import type { QueryCacheFacade } from '../engine/live-queries';
 import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
 import type {
   CreateProjectDto,
@@ -24,24 +26,29 @@ import {
   refreshAfterWrite,
   restoreSnapshot,
   snapshotRoots,
+  useQueryCache,
 } from './cache-patches';
+import { useReplicaQuery } from './useEngineQuery';
 
 export const projectKeys = {
   all: ['projects'] as const,
   detail: (id: string) => ['project', id] as const,
 };
 
+// 项目带任务计数与标签芯片：依赖 task 与 tag（local-first-v3 issue 06）。
 export function useProjectsQuery() {
-  return useQuery({
+  return useReplicaQuery({
     queryKey: projectKeys.all,
     queryFn: getProjects,
+    dependsOn: ['project', 'task', 'tag'],
   });
 }
 
 export function useProjectQuery(id: string, options?: { enabled?: boolean }) {
-  return useQuery({
+  return useReplicaQuery({
     queryKey: projectKeys.detail(id),
     queryFn: () => getProject(id),
+    dependsOn: [{ entity: 'project', ids: [id] }, 'task', 'tag'],
     enabled: !!id && (options?.enabled ?? true),
   });
 }
@@ -70,16 +77,16 @@ function removeProjectFromList(
 // 里的项目行要等重查才更新（local-first-v3 issue 02）。
 const PROJECT_LIST_ROOTS = ['projects', 'feed'];
 
-async function cancelProjectLists(queryClient: ReturnType<typeof useQueryClient>) {
+async function cancelProjectLists(queryClient: QueryCacheFacade) {
   await cancelRoots(queryClient, PROJECT_LIST_ROOTS);
 }
 
-function snapshotProjectLists(queryClient: ReturnType<typeof useQueryClient>): CacheSnapshot {
+function snapshotProjectLists(queryClient: QueryCacheFacade): CacheSnapshot {
   return snapshotRoots(queryClient, PROJECT_LIST_ROOTS);
 }
 
 function patchProjectInLists(
-  queryClient: ReturnType<typeof useQueryClient>,
+  queryClient: QueryCacheFacade,
   projectId: string,
   updater: (project: ProjectResponseDto) => ProjectResponseDto,
 ) {
@@ -95,7 +102,7 @@ function patchProjectInLists(
   );
 }
 
-function removeProjectFromLists(queryClient: ReturnType<typeof useQueryClient>, projectId: string) {
+function removeProjectFromLists(queryClient: QueryCacheFacade, projectId: string) {
   queryClient.setQueriesData<ProjectResponseDto[]>({ queryKey: projectKeys.all }, (old) =>
     removeProjectFromList(old, projectId),
   );
@@ -105,7 +112,7 @@ function removeProjectFromLists(queryClient: ReturnType<typeof useQueryClient>, 
 }
 
 export function useCreateProject() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (data: CreateProjectDto) => createProject(data),
     onMutate: async (data) => {
@@ -165,7 +172,7 @@ export function useCreateProject() {
 }
 
 export function useUpdateProject() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateProjectDto }) => updateProject(id, data),
     onMutate: async ({ id, data }) => {
@@ -200,7 +207,7 @@ export function useUpdateProject() {
 }
 
 export function useRestoreProject() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => restoreProject(id),
     onMutate: async (id) => {
@@ -233,7 +240,7 @@ export function useRestoreProject() {
 }
 
 export function useCompleteProject() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => completeProject(id),
     onMutate: async (id) => {
@@ -268,7 +275,7 @@ export function useCompleteProject() {
 }
 
 export function useUncompleteProject() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => uncompleteProject(id),
     onMutate: async (id) => {
@@ -302,7 +309,7 @@ export function useUncompleteProject() {
 }
 
 export function useReorderProjects() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (orderedIds: string[]) => reorderProjects(orderedIds),
     onMutate: async (orderedIds) => {
@@ -329,7 +336,7 @@ export function useReorderProjects() {
 }
 
 export function useDeleteProject() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => deleteProject(id),
     onMutate: async (id) => {

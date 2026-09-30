@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 
 import type { AreaResponseDto, CreateAreaDto, UpdateAreaDto } from '@taskora/shared';
 
@@ -9,7 +9,8 @@ import {
   reorderAreas,
   updateArea,
 } from '@/api/areas.api';
-import { refreshAfterWrite, restoreSnapshot } from './cache-patches';
+import { refreshAfterWrite, restoreSnapshot, useQueryCache } from './cache-patches';
+import { useReplicaQuery } from './useEngineQuery';
 
 export const areaKeys = {
   all: ['areas'] as const,
@@ -17,9 +18,10 @@ export const areaKeys = {
 };
 
 export function useAreasQuery() {
-  return useQuery({
+  return useReplicaQuery({
     queryKey: areaKeys.all,
     queryFn: getAreas,
+    dependsOn: ['area', 'tag'],
   });
 }
 
@@ -43,7 +45,7 @@ function removeAreaFromList(
 }
 
 export function useCreateArea() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (data: CreateAreaDto) => createArea(data),
     onMutate: async (data) => {
@@ -95,7 +97,7 @@ export function useCreateArea() {
 }
 
 export function useUpdateArea() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateAreaDto }) => updateArea(id, data),
     onMutate: async ({ id, data }) => {
@@ -137,7 +139,7 @@ export function useUpdateArea() {
 }
 
 export function useReorderAreas() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (orderedIds: string[]) => reorderAreas(orderedIds),
     onMutate: async (orderedIds) => {
@@ -166,7 +168,7 @@ export function useReorderAreas() {
 }
 
 export function useDeleteArea() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => deleteArea(id),
     onMutate: async (id) => {

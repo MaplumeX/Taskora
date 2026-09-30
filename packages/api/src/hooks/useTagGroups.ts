@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 
 import type { CreateTagGroupDto, UpdateTagGroupDto } from '@taskora/shared';
 
@@ -9,7 +9,8 @@ import {
   updateTagGroup,
 } from '@/api/tag-groups.api';
 import { tagKeys } from './useTags';
-import { refreshAfterWrite } from './cache-patches';
+import { refreshAfterWrite, useQueryCache } from './cache-patches';
+import { useReplicaQuery } from './useEngineQuery';
 
 export const tagGroupKeys = {
   all: ['tag-groups'] as const,
@@ -17,14 +18,15 @@ export const tagGroupKeys = {
 };
 
 export function useTagGroupsQuery() {
-  return useQuery({
+  return useReplicaQuery({
     queryKey: tagGroupKeys.all,
     queryFn: getTagGroups,
+    dependsOn: ['tag-group', 'tag'],
   });
 }
 
 export function useCreateTagGroup() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (data: CreateTagGroupDto) => createTagGroup(data),
     onSuccess: () => {
@@ -34,7 +36,7 @@ export function useCreateTagGroup() {
 }
 
 export function useUpdateTagGroup() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTagGroupDto }) =>
       updateTagGroup(id, data),
@@ -46,7 +48,7 @@ export function useUpdateTagGroup() {
 }
 
 export function useDeleteTagGroup() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => deleteTagGroup(id),
     onSuccess: () => {

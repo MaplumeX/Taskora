@@ -20,6 +20,8 @@ import type { QueryClient } from '@tanstack/react-query';
 
 import {
   createEngineAreaBackend,
+  attachLiveQueries,
+  detachLiveQueries,
   createEngineInvalidator,
   createEngineProjectBackend,
   createEngineProjectHeadingBackend,
@@ -164,15 +166,15 @@ function startSession(queryClient: QueryClient, runtime: WebEngineRuntime, userI
   setTagBackend(createEngineTagBackend({ engine: tab }));
   setTagGroupBackend(createEngineTagGroupBackend({ engine: tab }));
   setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine: tab }));
-  // SSE 只作「远端有变更」的提示（leader 据此 pull），缓存失效由 onChange 驱动
+  // SSE 只作「远端有变更」的提示（leader 据此 pull），界面由响应式查询驱动
   setEventStreamCacheSurgery(false);
   // 读写都是本地的：浏览器报告离线时 React Query 默认暂停查询与 mutation
   // （networkMode 'online'），离线写入就不会出现在界面上。
   current.restoreQueryDefaults = runQueriesWhileOffline(queryClient);
-  const invalidateEntities = createEngineInvalidator(queryClient);
-  invalidateEntities();
+  // 界面读改由本标签页的响应式查询提供（local-first-v3 issue 06）：读经
+  // leader 代理，只在 leader 广播的变更影响其依赖时重跑。
+  attachLiveQueries(tab);
   current.unsubscribers.push(
-    tab.onChange((change) => invalidateEntities(change.entities)),
     tab.onStatus((status, pendingCount) => setSyncStatus(status, pendingCount)),
     tab.onUnavailable((reason) => fallBackToRest(current, queryClient, reason)),
   );
@@ -360,6 +362,7 @@ function runQueriesWhileOffline(queryClient: QueryClient): () => void {
 }
 
 function resetBackends(): void {
+  detachLiveQueries();
   setTaskBackend(undefined);
   setProjectBackend(undefined);
   setAreaBackend(undefined);

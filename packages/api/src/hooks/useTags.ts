@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 
 import type { CreateTagDto, TagResponseDto, UpdateTagDto } from '@taskora/shared';
 
@@ -10,7 +10,9 @@ import {
   refreshAfterWrite,
   restoreSnapshot,
   snapshotRoots,
+  useQueryCache,
 } from './cache-patches';
+import { useReplicaQuery } from './useEngineQuery';
 
 export const tagKeys = {
   all: ['tags'] as const,
@@ -18,9 +20,10 @@ export const tagKeys = {
 };
 
 export function useTagsQuery() {
-  return useQuery({
+  return useReplicaQuery({
     queryKey: tagKeys.all,
     queryFn: getTags,
+    dependsOn: ['tag'],
   });
 }
 
@@ -48,7 +51,7 @@ function removeTagFromList(
 }
 
 export function useCreateTag() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (data: CreateTagDto) => createTag(data),
     onMutate: async (data) => {
@@ -100,7 +103,7 @@ export function useCreateTag() {
 }
 
 export function useUpdateTag() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTagDto }) => updateTag(id, data),
     onMutate: async ({ id, data }) => {
@@ -139,7 +142,7 @@ export function useUpdateTag() {
 }
 
 export function useDeleteTag() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => deleteTag(id),
     onMutate: async (id) => {

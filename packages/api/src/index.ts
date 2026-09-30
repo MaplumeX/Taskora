@@ -58,6 +58,20 @@ export { createEngineTaskBackend } from './engine/task-backend.engine';
 export { isEngineMode } from './api/task-backend';
 export { createEngineInvalidator, INVALIDATION_BY_ENTITY } from './engine/engine-invalidation';
 export {
+  attachLiveQueries,
+  detachLiveQueries,
+  isLiveQueryMode,
+  queryCache,
+  type QueryCacheFacade,
+} from './engine/live-queries';
+export {
+  useEngineQuery,
+  useLiveQueryMode,
+  useReplicaQuery,
+  type ReplicaQueryOptions,
+  type ReplicaQueryResult,
+} from './hooks/useEngineQuery';
+export {
   createHttpSyncTransport,
   registerSyncDevice,
   type SyncClientPlatform,

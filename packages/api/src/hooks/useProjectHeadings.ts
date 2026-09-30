@@ -1,4 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+
+import type { QueryCacheFacade } from '../engine/live-queries';
 import type {
   CreateProjectHeadingDto,
   ProjectHeadingResponseDto,
@@ -18,7 +20,8 @@ import {
   updateProjectHeading,
 } from '@/api/project-headings.api';
 import { taskKeys } from './useTasks';
-import { refreshAfterWrite } from './cache-patches';
+import { refreshAfterWrite, useQueryCache } from './cache-patches';
+import { useReplicaQuery } from './useEngineQuery';
 
 export const projectHeadingKeys = {
   all: ['project-headings'] as const,
@@ -31,22 +34,24 @@ export function useProjectHeadingsQuery(
   options?: { includeArchived?: boolean },
 ) {
   const includeArchived = options?.includeArchived;
-  return useQuery({
+  return useReplicaQuery({
     queryKey: projectHeadingKeys.list(projectId ?? '', includeArchived),
     queryFn: () => getProjectHeadings(projectId!, { includeArchived }),
+    // 项目不存在时查询报错：项目行也是依赖
+    dependsOn: ['project-heading', { entity: 'project', ids: [projectId ?? ''] }],
     enabled: !!projectId,
   });
 }
 
 /** 写入成功后的刷新：Engine 模式下由 Engine 变更通知负责（见 refreshAfterWrite）。 */
-function refreshProjectData(queryClient: ReturnType<typeof useQueryClient>, projectId: string) {
+function refreshProjectData(queryClient: QueryCacheFacade, projectId: string) {
   refreshAfterWrite(queryClient, { queryKey: ['project-headings', { projectId }] });
   refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
   refreshAfterWrite(queryClient, { queryKey: ['feed'] });
 }
 
 /** 失败恢复：无论哪种模式都重新读取（重排的乐观补丁没有快照可恢复）。 */
-function invalidateProjectData(queryClient: ReturnType<typeof useQueryClient>, projectId: string) {
+function invalidateProjectData(queryClient: QueryCacheFacade, projectId: string) {
   // Invalidate all heading query variants (active-only + includeArchived) for this project.
   void queryClient.invalidateQueries({
     queryKey: ['project-headings', { projectId }],
@@ -56,7 +61,7 @@ function invalidateProjectData(queryClient: ReturnType<typeof useQueryClient>, p
 }
 
 export function useCreateProjectHeading() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (data: CreateProjectHeadingDto) => createProjectHeading(data),
     onSuccess: (heading) => {
@@ -66,7 +71,7 @@ export function useCreateProjectHeading() {
 }
 
 export function useUpdateProjectHeading(projectId: string) {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateProjectHeadingDto }) =>
       updateProjectHeading(id, data),
@@ -77,7 +82,7 @@ export function useUpdateProjectHeading(projectId: string) {
 }
 
 export function useDeleteProjectHeading(projectId: string) {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => deleteProjectHeading(id),
     onSuccess: () => {
@@ -87,7 +92,7 @@ export function useDeleteProjectHeading(projectId: string) {
 }
 
 export function useConvertProjectHeadingToProject(projectId: string) {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => convertProjectHeadingToProject(id),
     onSuccess: () => {
@@ -100,7 +105,7 @@ export function useConvertProjectHeadingToProject(projectId: string) {
 }
 
 export function useArchiveProjectHeading(projectId: string) {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => archiveProjectHeading(id),
     onSuccess: () => {
@@ -110,7 +115,7 @@ export function useArchiveProjectHeading(projectId: string) {
 }
 
 export function useUnarchiveProjectHeading(projectId: string) {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => unarchiveProjectHeading(id),
     onSuccess: () => {
@@ -120,7 +125,7 @@ export function useUnarchiveProjectHeading(projectId: string) {
 }
 
 export function useReorderProjectHeadingLayout() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (data: ReorderProjectHeadingLayoutDto) => reorderProjectHeadingLayout(data),
     onMutate: async (layout) => {

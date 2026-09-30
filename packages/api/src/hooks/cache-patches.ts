@@ -1,18 +1,32 @@
-import type { InvalidateQueryFilters, QueryClient } from '@tanstack/react-query';
+import { useMemo } from 'react';
+import { useQueryClient, type QueryKey } from '@tanstack/react-query';
 
 import type { TagResponseDto } from '@taskora/shared';
 
 import { isEngineMode } from '@/api/task-backend';
+import { isLiveQueryMode, queryCache, type QueryCacheFacade } from '../engine/live-queries';
+
+/**
+ * mutation 操作的缓存：Engine 模式为响应式查询存储，REST 模式为 React
+ * Query（local-first-v3 issue 06）。乐观补丁代码两种模式共用。
+ */
+export function useQueryCache(): QueryCacheFacade {
+  const queryClient = useQueryClient();
+  return useMemo(() => queryCache(queryClient), [queryClient]);
+}
 
 /**
  * 写入成功后的缓存刷新（local-first-v3 issue 02）。
  *
  * REST 模式：mutation 自己让相关查询失效（服务器是数据源）。
- * Engine 模式：空操作——Engine 的变更通知（createEngineInvalidator）是唯一
- * 刷新来源，按涉及的实体合并失效；mutation 再失效一遍只会让每次写入多一轮
- * 整条查询重跑。即时显示仍由各 hook 的乐观补丁负责。
+ * Engine 模式：空操作——写入提交后 Engine 只重跑依赖受影响的响应式查询
+ * （issue 06），mutation 再刷新一遍只会多一轮查询。即时显示仍由各 hook 的
+ * 乐观补丁负责。
  */
-export function refreshAfterWrite(queryClient: QueryClient, filters: InvalidateQueryFilters) {
+export function refreshAfterWrite(
+  queryClient: QueryCacheFacade,
+  filters: { queryKey?: QueryKey; exact?: boolean },
+) {
   if (isEngineMode()) return;
   void queryClient.invalidateQueries(filters);
 }
@@ -30,18 +44,24 @@ const TAG_EMBEDDING_ROOTS = [
   'tag-group',
 ];
 
-export type CacheSnapshot = [readonly unknown[], unknown][];
+export type CacheSnapshot = [QueryKey, unknown][];
 
-export function snapshotRoots(queryClient: QueryClient, roots: readonly string[]): CacheSnapshot {
+export function snapshotRoots(queryClient: QueryCacheFacade, roots: readonly string[]): CacheSnapshot {
   return roots.flatMap((root) => queryClient.getQueriesData({ queryKey: [root] }));
 }
 
-export async function cancelRoots(queryClient: QueryClient, roots: readonly string[]) {
+export async function cancelRoots(queryClient: QueryCacheFacade, roots: readonly string[]) {
   await Promise.all(roots.map((root) => queryClient.cancelQueries({ queryKey: [root] })));
 }
 
-export function restoreSnapshot(queryClient: QueryClient, snapshot: CacheSnapshot) {
+/**
+ * 写入失败后恢复补丁前的快照。Engine 模式下再按副本重跑这些查询：补丁
+ * 作废过它们在飞的结果，其间若有别的变更（如远端同步）会就此丢失。
+ */
+export function restoreSnapshot(queryClient: QueryCacheFacade, snapshot: CacheSnapshot) {
   for (const [key, data] of snapshot) queryClient.setQueryData(key, data);
+  if (!isLiveQueryMode()) return;
+  for (const [key] of snapshot) void queryClient.invalidateQueries({ queryKey: key, exact: true });
 }
 
 type WithTags = { tags?: TagResponseDto[] };
@@ -59,7 +79,7 @@ function patchTagsOf<T>(value: T, update: (tags: TagResponseDto[]) => TagRespons
  * update 返回 null 表示移除该标签。标签列表本身由调用方另行修补。
  */
 export function patchEmbeddedTag(
-  queryClient: QueryClient,
+  queryClient: QueryCacheFacade,
   tagId: string,
   update: (tag: TagResponseDto) => TagResponseDto | null,
 ) {

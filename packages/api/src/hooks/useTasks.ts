@@ -1,4 +1,6 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
+
+import type { QueryCacheFacade } from '../engine/live-queries';
 import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
 import type {
   CreateSubtaskDto,
@@ -39,7 +41,9 @@ import {
   refreshAfterWrite,
   restoreSnapshot,
   snapshotRoots,
+  useQueryCache,
 } from './cache-patches';
+import { useReplicaQuery } from './useEngineQuery';
 
 export const taskKeys = {
   all: ['tasks'] as const,
@@ -47,18 +51,22 @@ export const taskKeys = {
   detail: (id: string) => ['task', id] as const,
 };
 
+// Engine 模式的查询依赖（local-first-v3 issue 06）：任务行嵌入标签芯片，
+// 详情另含子任务。
 export function useTasksQuery(params?: TaskQuery, options?: { enabled?: boolean }) {
-  return useQuery({
+  return useReplicaQuery({
     queryKey: taskKeys.list(params),
     queryFn: () => getTasks(params),
+    dependsOn: ['task', 'tag'],
     enabled: options?.enabled,
   });
 }
 
 export function useTaskQuery(id: string) {
-  return useQuery({
+  return useReplicaQuery({
     queryKey: taskKeys.detail(id),
     queryFn: () => getTask(id),
+    dependsOn: [{ entity: 'task', ids: [id] }, 'subtask', 'tag'],
     enabled: !!id,
   });
 }
@@ -88,11 +96,11 @@ function removeTaskFromList(
 // lands, e.g. a dropped row snapping back before jumping to its new slot.
 const TASK_LIST_ROOTS = ['tasks', 'feed'];
 
-async function cancelTaskLists(queryClient: ReturnType<typeof useQueryClient>) {
+async function cancelTaskLists(queryClient: QueryCacheFacade) {
   await cancelRoots(queryClient, TASK_LIST_ROOTS);
 }
 
-function snapshotTaskLists(queryClient: ReturnType<typeof useQueryClient>): CacheSnapshot {
+function snapshotTaskLists(queryClient: QueryCacheFacade): CacheSnapshot {
   return snapshotRoots(queryClient, TASK_LIST_ROOTS);
 }
 
@@ -104,7 +112,7 @@ function isTaskRow(item: ListItem): boolean {
 }
 
 function patchTaskInLists(
-  queryClient: ReturnType<typeof useQueryClient>,
+  queryClient: QueryCacheFacade,
   taskId: string,
   updater: (task: TaskResponseDto) => TaskResponseDto,
 ) {
@@ -120,7 +128,7 @@ function patchTaskInLists(
   );
 }
 
-function removeTaskFromLists(queryClient: ReturnType<typeof useQueryClient>, taskId: string) {
+function removeTaskFromLists(queryClient: QueryCacheFacade, taskId: string) {
   queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
     removeTaskFromList(old, taskId),
   );
@@ -153,7 +161,7 @@ export function reorderInSlots<T extends ListItem>(list: T[], orderedIds: string
 }
 
 export function useCreateTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (data: CreateTaskDto) => createTask(data),
     onMutate: async (data) => {
@@ -218,7 +226,7 @@ export function useCreateTask() {
 }
 
 export function useUpdateTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTaskDto }) => updateTask(id, data),
     onMutate: async ({ id, data }) => {
@@ -254,7 +262,7 @@ export function useUpdateTask() {
 }
 
 export function useDeleteTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => deleteTask(id),
     onMutate: async (id) => {
@@ -277,7 +285,7 @@ export function useDeleteTask() {
 }
 
 export function useCompleteTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => completeTask(id),
     onMutate: async (id) => {
@@ -313,7 +321,7 @@ export function useCompleteTask() {
 }
 
 export function useUncompleteTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => uncompleteTask(id),
     onMutate: async (id) => {
@@ -348,7 +356,7 @@ export function useUncompleteTask() {
 }
 
 export function useCancelTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => cancelTask(id),
     onMutate: async (id) => {
@@ -384,7 +392,7 @@ export function useCancelTask() {
 }
 
 export function useUncancelTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => uncancelTask(id),
     onMutate: async (id) => {
@@ -419,7 +427,7 @@ export function useUncancelTask() {
 }
 
 export function useReorderTasks() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (orderedIds: string[]) => reorderTasks(orderedIds),
     onMutate: async (orderedIds) => {
@@ -445,7 +453,7 @@ export function useReorderTasks() {
 }
 
 export function useRestoreTask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => restoreTask(id),
     onMutate: async (id) => {
@@ -481,7 +489,7 @@ export function useRestoreTask() {
 }
 
 export function useConvertTaskToProject() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => convertTaskToProject(id),
     onSuccess: (_data, id) => {
@@ -513,7 +521,7 @@ function applyToSubtaskInArray(
 }
 
 export function useCreateSubtask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ taskId, data }: { taskId: string; data: CreateSubtaskDto }) =>
       createSubtask(taskId, data),
@@ -563,7 +571,7 @@ export function useCreateSubtask() {
 }
 
 export function useUpdateSubtask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateSubtaskDto }) => updateSubtask(id, data),
     onMutate: async ({ id, data }) => {
@@ -624,7 +632,7 @@ export function useUpdateSubtask() {
 }
 
 export function useDeleteSubtask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ id }: { id: string; taskId: string }) => deleteSubtask(id),
     onMutate: async ({ id, taskId }) => {
@@ -649,7 +657,7 @@ export function useDeleteSubtask() {
 }
 
 export function useCompleteSubtask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => completeSubtask(id),
     onMutate: async (id) => {
@@ -702,7 +710,7 @@ export function useCompleteSubtask() {
 }
 
 export function useUncompleteSubtask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => uncompleteSubtask(id),
     onMutate: async (id) => {
@@ -755,7 +763,7 @@ export function useUncompleteSubtask() {
 }
 
 export function useCancelSubtask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => cancelSubtask(id),
     onMutate: async (id) => {
@@ -808,7 +816,7 @@ export function useCancelSubtask() {
 }
 
 export function useUncancelSubtask() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: (id: string) => uncancelSubtask(id),
     onMutate: async (id) => {
@@ -861,7 +869,7 @@ export function useUncancelSubtask() {
 }
 
 export function useReorderSubtasks() {
-  const queryClient = useQueryClient();
+  const queryClient = useQueryCache();
   return useMutation({
     mutationFn: ({ taskId, orderedIds }: { taskId: string; orderedIds: string[] }) =>
       reorderSubtasks(taskId, orderedIds),
