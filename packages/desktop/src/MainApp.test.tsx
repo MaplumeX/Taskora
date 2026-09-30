@@ -28,13 +28,19 @@ function renderApp() {
   );
 }
 
+// 页面是 lazy() 路由：CI 冷启动时首次 import + transform 可能超过默认 1s。
+const LAZY_PAGE = { timeout: 10_000 };
+
 describe('MainApp (desktop navigation shell)', () => {
   it('renders the sidebar with all main nav entries', async () => {
     renderApp();
 
-    await waitFor(() => {
-      expect(screen.getAllByRole('link', { name: /Inbox/ }).length).toBeGreaterThan(0);
-    });
+    await waitFor(
+      () => {
+        expect(screen.getAllByRole('link', { name: /Inbox/ }).length).toBeGreaterThan(0);
+      },
+      { timeout: 5_000 },
+    );
     for (const label of ['Today', 'Upcoming', 'Calendar', 'Anytime', 'Someday', 'Logbook', 'Trash']) {
       expect(screen.getAllByRole('link', { name: new RegExp(label) }).length).toBeGreaterThan(0);
     }
@@ -43,9 +49,7 @@ describe('MainApp (desktop navigation shell)', () => {
   it('lands on the Today view after boot', async () => {
     renderApp();
 
-    await waitFor(() => {
-      // Today page renders its heading + date line (feed hook returns empty).
-      expect(screen.getByRole('heading', { name: 'Today' })).toBeInTheDocument();
-    });
+    // Today page renders its heading + date line (feed hook returns empty).
+    expect(await screen.findByRole('heading', { name: 'Today' }, LAZY_PAGE)).toBeInTheDocument();
   });
 });
