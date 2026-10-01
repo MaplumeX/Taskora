@@ -204,6 +204,19 @@ describe('ProjectCompletedTasks', () => {
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
   });
 
+  it('shows the settled date badge at the row start (like Logbook)', async () => {
+    const user = userEvent.setup();
+    mockQuery([makeTask({ id: 't1', title: 'Task A' })]);
+    mockUncomplete();
+    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+
+    await user.click(screen.getByRole('button', { expanded: false }));
+
+    // 只断言日期标签存在；具体值随 locale / 时区变化（Aug 8 / août 8 / 8月8日）。
+    const row = screen.getByText('Task A').closest('[data-selection-row]')!;
+    expect(row.querySelector('span.text-meta.text-primary')).toBeInTheDocument();
+  });
+
   it('calls uncomplete mutation when checkbox is clicked', async () => {
     const user = userEvent.setup();
     mockQuery([makeTask({ id: 't1', title: 'Task A' })]);
