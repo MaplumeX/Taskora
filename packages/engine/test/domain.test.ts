@@ -156,6 +156,56 @@ describe('任务写入规则', () => {
     });
   });
 
+  it('Inbox（CONTEXT：Inbox）：获得归属即离开；带归属新建不落 Inbox', () => {
+    const inbox = {
+      ...base,
+      scheduledType: 'NONE',
+      scheduledDate: null,
+      bucket: 'INBOX',
+      projectId: null,
+      headingId: null,
+    };
+    expect(planTaskUpdate(inbox, { projectId: 'p1' }, UTC)).toEqual({
+      projectId: 'p1',
+      bucket: 'ANYTIME',
+      reminderTime: null,
+      repeatRule: null,
+    });
+    expect(planTaskUpdate(inbox, { areaId: 'a1' }, UTC)).toMatchObject({ bucket: 'ANYTIME' });
+    expect(
+      planTaskCreate({ title: 'x', bucket: 'INBOX' as never, projectId: 'p1' }, UTC),
+    ).toMatchObject({
+      bucket: 'ANYTIME',
+    });
+    // 清空归属不会自动回 Inbox：Anytime 是用户选择，移入 Inbox 需显式指定
+    expect(
+      planTaskUpdate({ ...inbox, bucket: 'ANYTIME', areaId: 'a1' }, { areaId: null }, UTC),
+    ).toEqual({
+      areaId: null,
+      reminderTime: null,
+      repeatRule: null,
+    });
+  });
+
+  it('移入 Inbox：清除归属与计划（日期、提醒、重复规则），解除分组', () => {
+    expect(
+      planTaskUpdate(
+        base,
+        { projectId: null, areaId: null, bucket: 'INBOX' as never, scheduledType: 'NONE' as never },
+        UTC,
+      ),
+    ).toEqual({
+      scheduledType: 'NONE',
+      scheduledDate: null,
+      reminderTime: null,
+      repeatRule: null,
+      bucket: 'INBOX',
+      projectId: null,
+      areaId: null,
+      headingId: null,
+    });
+  });
+
   it('转项目：bucket 按计划类型推导（Inbox 任务得到 Anytime 项目）', () => {
     const plan = planConvertTaskToProject(
       {
@@ -181,7 +231,12 @@ describe('任务写入规则', () => {
       areaId: 'area-parent',
       tagIds: ['tag-1'],
     });
-    expect(plan.promotedTasks[0]).toMatchObject({ title: 's', bucket: 'INBOX', status: 'ACTIVE' });
+    // 提升的任务属于新项目，不在 Inbox
+    expect(plan.promotedTasks[0]).toMatchObject({
+      title: 's',
+      bucket: 'ANYTIME',
+      status: 'ACTIVE',
+    });
   });
 
   it('重复实例：确定性 id 与字段；子任务按 sortOrder、平局后建在前', () => {

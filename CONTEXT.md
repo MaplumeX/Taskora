@@ -77,6 +77,10 @@ _Avoid_: 幽灵任务、虚拟实例（预告不是实例）
 按状态/时间过滤出的任务视图：Inbox、Anytime、Scheduled、Someday、Today、Upcoming、Logbook、Trash。不是存储位置。
 _Avoid_: 列表、filter、缓存
 
+**Inbox**:
+「尚未整理」的 Bucket：无归属（Project / Area）、无计划（计划类型为 NONE）的未了结任务。任何整理动作都会让任务离开 Inbox：获得归属转入 Anytime，获得计划转入 Scheduled。移入 Inbox 时同时清除归属与计划（计划日期、提醒、重复规则随之清除），截止日期保留（参考 Things 3）。不是 Project，也不是存储位置。
+_Avoid_: 收件箱项目、默认项目
+
 **Grouped View（分组视图）**:
 Bucket 视图的一种展示形态：视图内任务按其直接父级（Project，无项目时按 Area）聚类显示，区别于任务平铺的 Flat View。组是纯渲染层推导，不改数据模型。
 _Avoid_: 分节、分类显示

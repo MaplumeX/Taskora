@@ -361,7 +361,7 @@ describe('EngineTaskBackend（V2：Subtask / convert / emptyTrash 全离线）',
     expect((await backend.getFeed('trash')).map((i) => i.title)).not.toContain('重新装修');
     await expect(backend.getTask(task.id)).rejects.toThrow();
 
-    // Subtask 提升为完整 Task：继承标题/状态/了结时间，落位 INBOX
+    // Subtask 提升为完整 Task：继承标题/状态/了结时间，有归属落位 ANYTIME
     const promotedRows = (await engine.list('task')).filter(
       (row) => row.fields.projectId === project.id,
     );
@@ -369,7 +369,7 @@ describe('EngineTaskBackend（V2：Subtask / convert / emptyTrash 全离线）',
     const settledRow = promotedRows.find((r) => r.fields.title === '定方案');
     expect(settledRow?.fields.status).toBe(TaskStatus.COMPLETED);
     expect(settledRow?.fields.settledAt).not.toBeNull();
-    expect(promotedRows.every((r) => r.fields.bucket === TaskBucket.INBOX)).toBe(true);
+    expect(promotedRows.every((r) => r.fields.bucket === TaskBucket.ANYTIME)).toBe(true);
     // 原 Subtask 行不残留
     expect(await engine.get('subtask', done.id)).toBeNull();
 

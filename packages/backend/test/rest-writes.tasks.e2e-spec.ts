@@ -496,8 +496,8 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     const promoted = await testPrisma.task.findMany({ where: { projectId: project.id } });
     const ordered = [...promoted].sort((a, b) => (a.position! < b.position! ? -1 : 1));
     expect(ordered.map((task) => [task.title, task.status, task.bucket])).toEqual([
-      ['第一步', TaskStatus.ACTIVE, TaskBucket.INBOX],
-      ['第二步', TaskStatus.COMPLETED, TaskBucket.INBOX],
+      ['第一步', TaskStatus.ACTIVE, TaskBucket.ANYTIME],
+      ['第二步', TaskStatus.COMPLETED, TaskBucket.ANYTIME],
     ]);
     expect(await testPrisma.task.findUnique({ where: { id: 'task-1' } })).toBeNull();
     expect(await registeredCompacted('task')).toEqual(['task-1']);

@@ -236,7 +236,8 @@ export interface ConvertedProjectFields {
  * 任务转项目：新项目继承标题 / 备注 / 计划 / 截止 / 标签 / Trash 状态；
  * 区域取任务的，没有则取原所属项目的；完成的任务得到完成的项目（项目
  * 没有取消态，取消的任务得到未完成的项目）。Subtask 提升为新项目下的
- * Inbox 任务，保留标题、状态与了结时间。原任务随后物理删除（调用方）。
+ * Anytime 任务（有归属即不在 Inbox，CONTEXT：Inbox），保留标题、状态与
+ * 了结时间。原任务随后物理删除（调用方）。
  */
 export function planConvertTaskToProject(
   task: ConvertibleTask,
@@ -269,7 +270,7 @@ export function planConvertTaskToProject(
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
-    bucket: TaskBucket.INBOX,
+    bucket: TaskBucket.ANYTIME,
     status: (subtask.status as TaskStatus) ?? TaskStatus.ACTIVE,
     settledAt: subtask.settledAt,
     trashedAt: null,

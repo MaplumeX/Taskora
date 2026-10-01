@@ -7,8 +7,9 @@
 import { ProjectBucket, ScheduledType, TaskBucket } from '@taskora/shared';
 
 /**
- * Task：DATE / SOMEDAY 在 Scheduled；NONE 下 INBOX / ANYTIME 是用户选择，
- * 保留；否则有归属（项目 / 区域）落 Anytime，无归属落 Inbox。
+ * Task：DATE / SOMEDAY 在 Scheduled。NONE 下 Inbox 是「尚未整理」
+ * （CONTEXT：Inbox）：有归属（项目 / 区域）即离开 Inbox 落 Anytime；
+ * 无归属时 INBOX / ANYTIME 是用户选择，保留，未指定落 Inbox。
  */
 export function resolveTaskBucket(
   bucket: unknown,
@@ -19,8 +20,8 @@ export function resolveTaskBucket(
   if (scheduledType === ScheduledType.DATE || scheduledType === ScheduledType.SOMEDAY) {
     return TaskBucket.SCHEDULED;
   }
-  if (bucket === TaskBucket.INBOX || bucket === TaskBucket.ANYTIME) return bucket;
-  return projectId || areaId ? TaskBucket.ANYTIME : TaskBucket.INBOX;
+  if (projectId || areaId) return TaskBucket.ANYTIME;
+  return bucket === TaskBucket.ANYTIME ? TaskBucket.ANYTIME : TaskBucket.INBOX;
 }
 
 /**

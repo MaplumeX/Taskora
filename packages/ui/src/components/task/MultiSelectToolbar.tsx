@@ -47,7 +47,7 @@ import { ScheduledDateField } from './fields/ScheduledDateField';
 import { DueDateField } from './fields/DueDateField';
 import { RepeatRuleField } from './fields/RepeatRuleField';
 import { TagsField } from './fields/TagsField';
-import { MoveField } from './fields/MoveField';
+import { MovePicker } from './fields/MovePicker';
 
 type PickerKind = 'scheduled' | 'move' | 'due' | 'tags' | 'repeat';
 
@@ -255,9 +255,9 @@ export function MultiSelectToolbar() {
           />
         )}
         {picker === 'move' && (
-          <MoveField
+          <MovePicker
             current={current}
-            onPatch={(data) => {
+            onSelect={(data) => {
               patchAll(data);
               closePicker();
             }}
