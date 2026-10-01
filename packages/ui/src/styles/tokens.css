@@ -1,7 +1,14 @@
 /*
  * 三端（frontend / desktop / mobile）共享的主题：Tailwind 入口、设计 token、
  * base 层与 utilities。各壳的 index.css 只 @import 本文件并追加壳专属样式。
+ *
+ * 字体：自托管 Noto Sans SC 可变字体（sole source 见 tailwind.preset.js 的
+ * fontFamily.sans）。该包按 unicode-range 切成 101 个 woff2 分片，浏览器只
+ * 下载实际用到的片；桌面 / 手机壳随包分发（约 4.3MB），macOS 因本地命中
+ * PingFang SC 而完全不下载。@import 必须在所有规则之前。
  */
+@import '@fontsource-variable/noto-sans-sc';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
