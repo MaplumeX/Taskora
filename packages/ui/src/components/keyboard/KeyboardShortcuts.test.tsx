@@ -621,3 +621,136 @@ describe('KeyboardShortcuts — 打字唤起 Quick Find', () => {
     expect(search()).toEqual({ searchOpen: true, searchSeed: null });
   });
 });
+
+describe('KeyboardShortcuts — 输入法打字唤起（隐藏输入框）', () => {
+  const sink = () => document.querySelector<HTMLInputElement>('[data-type-to-find-sink]')!;
+  const settle = () =>
+    act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  const keydownOnSink = (init: KeyboardEventInit & { keyCode?: number }) => {
+    const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
+    if (init.keyCode !== undefined) Object.defineProperty(event, 'keyCode', { value: init.keyCode });
+    act(() => {
+      sink().dispatchEvent(event);
+    });
+    return event;
+  };
+
+  it('焦点无处可落时由隐藏输入框持有', async () => {
+    renderAt('/today', tasks);
+    await settle();
+    expect(sink()).toHaveFocus();
+  });
+
+  it('输入法首键交给隐藏输入框组字，不提前唤起', async () => {
+    renderAt('/today', tasks);
+    await settle();
+    const event = keydownOnSink({ key: 'Process', keyCode: 229 });
+    expect(event.defaultPrevented).toBe(false);
+    keydownOnSink({ key: 'Enter', isComposing: true });
+    expect(useUiInteractionStore.getState().searchOpen).toBe(false);
+  });
+
+  it('组字上屏后以结果唤起 Quick Find', async () => {
+    renderAt('/today', tasks);
+    await settle();
+    act(() => {
+      sink().value = '你好';
+      sink().dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '你好' }));
+    });
+    const { searchOpen, searchSeed } = useUiInteractionStore.getState();
+    expect({ searchOpen, searchSeed }).toEqual({ searchOpen: true, searchSeed: '你好' });
+    expect(sink().value).toBe('');
+  });
+
+  it('组字期间显形为搜索栏，上屏后隐去', async () => {
+    renderAt('/today', tasks);
+    await settle();
+    const bar = sink().parentElement!;
+    expect(bar).toHaveAttribute('aria-hidden', 'true');
+    act(() => {
+      sink().dispatchEvent(new CompositionEvent('compositionstart', { bubbles: true }));
+    });
+    expect(bar).toHaveAttribute('aria-hidden', 'false');
+    act(() => {
+      sink().value = '你';
+      sink().dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '你' }));
+    });
+    expect(bar).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('取消组字（上屏为空）不唤起', async () => {
+    renderAt('/today', tasks);
+    await settle();
+    act(() => {
+      sink().dispatchEvent(new CompositionEvent('compositionend', { bubbles: true, data: '' }));
+    });
+    expect(useUiInteractionStore.getState().searchOpen).toBe(false);
+  });
+
+  it('非输入法按键照常唤起并带入字符，不落进隐藏输入框', async () => {
+    renderAt('/today', tasks);
+    await settle();
+    const event = keydownOnSink({ key: 'a' });
+    expect(event.defaultPrevented).toBe(true);
+    const { searchOpen, searchSeed } = useUiInteractionStore.getState();
+    expect({ searchOpen, searchSeed }).toEqual({ searchOpen: true, searchSeed: 'a' });
+  });
+
+  it('隐藏输入框持焦时其余快捷键照常生效', async () => {
+    renderAt('/today', tasks);
+    await settle();
+    keydownOnSink({ key: 'ArrowDown' });
+    expect(screen.getByTestId('row-t1')).toHaveAttribute('aria-selected', 'true');
+  });
+
+  it('有 Selection 时归还焦点，清空后重新持有', async () => {
+    renderAt('/today', tasks);
+    await settle();
+    act(() => useSelectionStore.getState().setSelection(['t1']));
+    expect(sink()).not.toHaveFocus();
+    act(() => useSelectionStore.getState().clearSelection());
+    await settle();
+    expect(sink()).toHaveFocus();
+  });
+
+  it('鼠标点完链接/按钮后接管其焦点，Tab 来的焦点不抢', async () => {
+    renderAt('/today', tasks);
+    await settle();
+    const link = document.createElement('a');
+    link.href = '#';
+    document.body.appendChild(link);
+    link.focus();
+    await settle();
+    expect(link).toHaveFocus();
+    act(() => {
+      link.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      link.dispatchEvent(new Event('pointerup', { bubbles: true }));
+    });
+    await settle();
+    expect(sink()).toHaveFocus();
+    link.remove();
+  });
+
+  it('鼠标点进输入框不抢焦点', async () => {
+    renderAt('/today', tasks);
+    await settle();
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    act(() => {
+      input.dispatchEvent(new Event('pointerdown', { bubbles: true }));
+      input.dispatchEvent(new Event('pointerup', { bubbles: true }));
+    });
+    await settle();
+    expect(input).toHaveFocus();
+    input.remove();
+  });
+
+  it('助手页不持有焦点', async () => {
+    renderAt('/agent', tasks);
+    await settle();
+    expect(sink()).not.toHaveFocus();
+  });
+});

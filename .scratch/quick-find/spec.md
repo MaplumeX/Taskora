@@ -89,7 +89,7 @@ Status: implemented — awaiting desktop / Android acceptance
 
 - 条件：非触控平台；焦点不在任何输入框 / 可编辑元素内；没有打开的弹窗或浮层；当前没有 Selection（有 Selection 时单键属于列表操作）。
 - 触发键：单个可打印字符，无 `⌘`/`Ctrl`/`Alt` 修饰（允许 Shift）；排除空格（`newTaskBelow`）以及 keymap 已占用的其他单键。
-- 行为：打开 Quick Find，输入框初始值为该字符，光标在末尾。IME 组合输入：若首键是 `Process` / `isComposing`，只打开面板并聚焦输入框，不带入字符，由 IME 在输入框内继续组合。
+- 行为：打开 Quick Find，输入框初始值为该字符，光标在末尾。IME 组合输入：焦点不在可编辑元素上时浏览器不把按键交给输入法，首键会以英文字母到达。所以可以打字唤起时，空闲焦点由一个视觉隐藏的输入框持有，IME 从首键起在其中组字，上屏（`compositionend`）后以上屏文字为 seed 打开面板；有 Selection、助手页、触控设备时不持焦。
 - 在 `keymap.ts` 中作为一个新动作注册，遵循 ADR-0004。
 
 ### 6. 移动端下拉唤起
