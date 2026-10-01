@@ -28,7 +28,7 @@ import {
   type SyncEntity,
   type WireRow,
 } from './entities';
-import { HybridClock } from './hlc';
+import { compareHlc, HybridClock, isLegacyFractionalHlc } from './hlc';
 import { migrateReplica } from './migrations';
 import { mergeEntityState, type EntityMergeState, type FieldWrite } from './merger';
 import type { DeleteRequest, HubChange, OutboxEvent, SnapshotEntry } from './protocol';
@@ -44,6 +44,20 @@ const PRUNE_CHUNK = 500;
 
 /** 待补齐 Subtask 的回到副本的归档任务（_engine_meta 键）。 */
 const BACKFILL_META_KEY = 'archiveBackfill';
+
+/** 小数墙钟时间戳的一次性修复已完成（_engine_meta 键，见 repairFractionalClocks）。 */
+const CLOCK_REPAIR_META_KEY = 'fractionalClockRepair';
+
+/** 修复重推的实体顺序：被引用者在前。 */
+const REPAIR_ORDER: SyncEntity[] = [
+  'tag-group',
+  'tag',
+  'area',
+  'project',
+  'project-heading',
+  'task',
+  'subtask',
+];
 
 export interface ReplicaRow {
   id: string;
@@ -198,6 +212,46 @@ export class LocalReplica {
       const state = JSON.parse(saved) as { wallMs: number; counter: number };
       this.clock.restoreState(state);
     }
+  }
+
+  /**
+   * 一次性修复旧版小数墙钟时间戳（`1790857242098.5:…`，字典序压过一切正常
+   * 时间戳）造成的分叉：hub 与各副本曾按字典序裁决，比它真正更新的写被
+   * 丢弃——典型是新建任务（create 恰好带小数时间戳）之后输入的标题，本机
+   * 可见，hub 与其他设备仍为空。
+   *
+   * 带这类时间戳的行按原时钟整行进 Outbox（不重新打时间戳），由按数值
+   * 裁决的 hub（协议 3）接受当初被丢弃的写；游标归零，随后的 pull 走
+   * bootstrap，本机当初丢弃的远端写也一并收回。只做一次；返回是否有行
+   * 需要重推。
+   */
+  async repairFractionalClocks(): Promise<boolean> {
+    return this.serialized(() => this.repairFractionalClocksInternal());
+  }
+
+  private async repairFractionalClocksInternal(): Promise<boolean> {
+    if (await this.metaGet(CLOCK_REPAIR_META_KEY)) return false;
+    return this.tx(async () => {
+      let repaired = 0;
+      for (const entity of REPAIR_ORDER) {
+        const rows = await this.storage.all<Record<string, unknown>>(
+          `SELECT * FROM ${entityDef(entity).table} WHERE clocks LIKE '%.%'`,
+        );
+        for (const row of rows) {
+          const state = this.rowToState(entity, row);
+          if (!Object.values(state.clocks).some(isLegacyFractionalHlc)) continue;
+          const writes: Record<string, FieldWrite> = {};
+          for (const [field, hlc] of Object.entries(state.clocks)) {
+            writes[field] = { value: state.fields[field] ?? null, hlc };
+          }
+          await this.appendOutbox(entity, row.id as string, writes);
+          repaired += 1;
+        }
+      }
+      if (repaired > 0) await this.metaSet('syncCursor', '0');
+      await this.metaSet(CLOCK_REPAIR_META_KEY, '1');
+      return repaired > 0;
+    });
   }
 
   get deviceId(): string {
@@ -1124,7 +1178,7 @@ export class LocalReplica {
   private absorbRemoteClocks(clocks: Record<string, string>): void {
     let max: string | null = null;
     for (const stamp of Object.values(clocks)) {
-      if (max === null || stamp > max) max = stamp;
+      if (max === null || compareHlc(stamp, max) > 0) max = stamp;
     }
     if (max !== null) {
       this.clock.receive(max);

@@ -1231,6 +1231,103 @@ describe('设备时钟按 hub 时间校准（ADR-0007）', () => {
     await fast.close();
     await honest.close();
   });
+
+  it('往返中点带 .5 的校准不产生小数墙钟：新建后输入的标题同步到其他设备', async () => {
+    const hub = new InMemorySyncHub({ wallClock: () => 5_000_000_000, reportServerTime: true });
+    // 每读一次系统时钟前进 tick 毫秒：奇数时请求往返中点落在半毫秒上
+    let deviceNow = 4_000_000_000;
+    let tick = 1;
+    const creator = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'creator',
+      clock: new HybridClock('creator', () => (deviceNow += tick)),
+      transport: hub.transportFor(USER),
+    });
+    const other = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'other',
+      transport: hub.transportFor(USER),
+    });
+    await creator.sync(); // 校准偏移 x.5
+    await other.sync();
+    const id = await createTask(creator, ''); // 旧版：小数墙钟 create
+    tick = 2;
+    await creator.sync(); // 校准偏移回到整数
+    await creator.update('task', id, { title: '新任务' }); // 整数墙钟
+    await creator.sync();
+    await other.sync();
+
+    expect((await creator.get('task', id))?.fields.title).toBe('新任务');
+    expect((await other.get('task', id))?.fields.title).toBe('新任务');
+    await creator.close();
+    await other.close();
+  });
+});
+
+describe('旧版小数墙钟时间戳的一次性修复', () => {
+  /** 第一次发号返回旧版小数时间戳（模拟升级前留在副本里的 create）。 */
+  class LegacyOnceClock extends HybridClock {
+    private legacy = true;
+    override now(): string {
+      if (!this.legacy) return super.now();
+      this.legacy = false;
+      return '5000000000000.5:000000:A';
+    }
+  }
+
+  it('hub 声明协议 3 后重推被字典序丢弃的写，并 bootstrap 收回', async () => {
+    const hub = new InMemorySyncHub();
+    const inner = hub.transportFor(USER);
+    // 旧 hub：协议 2，按字典序把「之后的整数时间戳」写丢弃（这里直接吞掉
+    // 不带 createdAt 的局部写，照常 ack）
+    let legacyHub = true;
+    const version = <T extends object>(response: T): T =>
+      legacyHub ? { ...response, protocolVersion: 2 } : response;
+    const transport: SyncTransport = {
+      async push(request) {
+        const events = legacyHub
+          ? request.events.filter((event) => 'createdAt' in event.fields)
+          : request.events;
+        return version(await inner.push({ ...request, events }));
+      },
+      pull: async (request) => version(await inner.pull(request)),
+      bootstrap: async (request) => version(await inner.bootstrap(request)),
+      fetchEntities: async (request) => version(await inner.fetchEntities!(request)),
+    };
+    const a = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'A',
+      clock: new LegacyOnceClock('A', () => 5_000_000_001_000),
+      transport,
+    });
+    const b = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'B',
+      transport: hub.transportFor(USER),
+    });
+    await a.sync();
+    const id = await createTask(a, '');
+    await a.sync();
+    await a.update('task', id, { title: '新任务' });
+    await a.sync();
+    await b.sync();
+    // 症状：本机有标题，其他设备为空
+    expect((await a.get('task', id))?.fields.title).toBe('新任务');
+    expect((await b.get('task', id))?.fields.title).toBe('');
+
+    legacyHub = false;
+    await a.sync();
+    await b.sync();
+    expect((await b.get('task', id))?.fields.title).toBe('新任务');
+    expect((await a.get('task', id))?.fields.title).toBe('新任务');
+    expect(await a.pendingCount()).toBe(0);
+    // 只修一次：之后的同步不再重推
+    await a.update('task', id, { notes: 'x' });
+    await a.sync();
+    expect(await a.pendingCount()).toBe(0);
+    await a.close();
+    await b.close();
+  });
 });
 
 describe('同步时的局部 re-balance', () => {

@@ -69,11 +69,48 @@ describe('HybridClock 校准与漂移上限', () => {
 
   it('超前过多的远端时间戳按上限吸收，不把本地时钟拖进未来', () => {
     const clock = new HybridClock('dev', () => 10_000);
-    const future = formatHlc({ wallMs: 10_000 + 10 * MAX_CLOCK_DRIFT_MS, counter: 5, deviceId: 'x' });
+    const future = formatHlc({
+      wallMs: 10_000 + 10 * MAX_CLOCK_DRIFT_MS,
+      counter: 5,
+      deviceId: 'x',
+    });
     const absorbed = parseHlc(clock.receive(future));
     expect(absorbed.wallMs).toBe(10_000 + MAX_CLOCK_DRIFT_MS);
     // 上限之内的远端时间戳照常吸收
     const near = formatHlc({ wallMs: 10_000 + MAX_CLOCK_DRIFT_MS + 0, counter: 9, deviceId: 'x' });
     expect(parseHlc(clock.receive(near)).counter).toBe(10);
+  });
+});
+
+describe('小数墙钟（旧版校准偏移带 .5）', () => {
+  const legacy = '1790857242098.5:000000:dev';
+  const later = formatHlc({ wallMs: 1_790_857_243_000, counter: 0, deviceId: 'dev' });
+
+  it('校准偏移取整：发出的时间戳都是定宽整数墙钟', () => {
+    const clock = new HybridClock('dev', () => 1_790_857_242_000);
+    clock.setWallOffset(98.5);
+    const stamp = clock.now();
+    expect(stamp).toMatch(/^\d{15}:/);
+    expect(parseHlc(stamp).wallMs).toBe(1_790_857_242_099);
+  });
+
+  it('compareHlc 按数值裁决：旧版小数时间戳不再压过之后的整数时间戳', () => {
+    expect(legacy > later).toBe(true); // 字典序：错误
+    expect(compareHlc(legacy, later)).toBe(-1);
+    expect(compareHlc(later, legacy)).toBe(1);
+    expect(compareHlc(legacy, legacy)).toBe(0);
+  });
+
+  it('formatHlc 向上取整；吸收与恢复小数墙钟后继续发出规范时间戳', () => {
+    expect(formatHlc({ wallMs: 10.5, counter: 0, deviceId: 'd' })).toBe('000000000000011:000000:d');
+    const clock = new HybridClock('dev', () => 1_000);
+    clock.restoreState({ wallMs: 1_790_857_242_098.5, counter: 0 });
+    const restored = clock.now();
+    expect(restored).toMatch(/^\d{15}:/);
+    expect(compareHlc(restored, legacy)).toBe(1);
+    const near = new HybridClock('dev', () => 1_790_857_249_000);
+    const received = near.receive('1790857250000.5:000003:x');
+    expect(received).toMatch(/^\d{15}:/);
+    expect(compareHlc(received, '1790857250000.5:000003:x')).toBe(1);
   });
 });

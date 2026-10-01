@@ -15,9 +15,12 @@ export interface HlcParts {
   deviceId: string;
 }
 
-/** 序列化为 `"<wall>:<counter>:<deviceId>"`，字典序即可比较。 */
+/**
+ * 序列化为 `"<wall>:<counter>:<deviceId>"`，字典序即可比较。墙钟向上取整：
+ * 小数毫秒（如 `1790857242098.5`）不补零，字典序会压过所有正常时间戳。
+ */
 export function formatHlc(parts: HlcParts): string {
-  return `${String(parts.wallMs).padStart(WALL_WIDTH, '0')}:${String(parts.counter).padStart(COUNTER_WIDTH, '0')}:${parts.deviceId}`;
+  return `${String(Math.ceil(parts.wallMs)).padStart(WALL_WIDTH, '0')}:${String(parts.counter).padStart(COUNTER_WIDTH, '0')}:${parts.deviceId}`;
 }
 
 export function parseHlc(stamp: string): HlcParts {
@@ -33,9 +36,30 @@ export function hlcWallMs(stamp: string): number {
   return Number(stamp.split(':', 1)[0]);
 }
 
-/** 比较两个时间戳：新者返回正数。可直接用字符串比较，等价。 */
+/** 定宽整数墙钟的时间戳：字典序即数值序。 */
+function isCanonical(stamp: string): boolean {
+  return stamp.charCodeAt(WALL_WIDTH) === 58 /* ':' */ && stamp.lastIndexOf('.', WALL_WIDTH) === -1;
+}
+
+/**
+ * 比较两个时间戳：新者返回正数。规范时间戳直接比较字符串；旧版校准偏移
+ * 带小数时发出过 `1790857242098.5:…` 这样的墙钟（不补零，字典序压过一切
+ * 正常时间戳），按 (wallMs, counter, deviceId) 数值比较才得到真实先后。
+ */
 export function compareHlc(a: string, b: string): number {
+  if (!isCanonical(a) || !isCanonical(b)) {
+    const pa = parseHlc(a);
+    const pb = parseHlc(b);
+    if (pa.wallMs !== pb.wallMs) return pa.wallMs < pb.wallMs ? -1 : 1;
+    if (pa.counter !== pb.counter) return pa.counter < pb.counter ? -1 : 1;
+    return pa.deviceId < pb.deviceId ? -1 : pa.deviceId > pb.deviceId ? 1 : 0;
+  }
   return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** 旧版发出的非规范时间戳（墙钟带小数，见 compareHlc）。 */
+export function isLegacyFractionalHlc(stamp: string): boolean {
+  return !isCanonical(stamp);
 }
 
 /**
@@ -70,9 +94,12 @@ export class HybridClock {
     return this.wallClock();
   }
 
-  /** 设置校准偏移：此后墙钟读数 = 系统时钟 + offsetMs。 */
+  /**
+   * 设置校准偏移：此后墙钟读数 = 系统时钟 + offsetMs。取整：偏移按往返
+   * 中点估算，常带 .5，小数墙钟会发出字典序错乱的时间戳（见 compareHlc）。
+   */
   setWallOffset(offsetMs: number): void {
-    this.offsetMs = offsetMs;
+    this.offsetMs = Math.round(offsetMs);
   }
 
   getWallOffset(): number {
@@ -101,6 +128,7 @@ export class HybridClock {
    */
   receive(remote: string): string {
     const parsed = parseHlc(remote);
+    parsed.wallMs = Math.ceil(parsed.wallMs); // 旧版小数墙钟
     const physical = this.physicalNow();
     // 超前过多的远端时间戳按上限吸收（不把本地时钟拖进未来）
     const ceiling = physical + this.maxDriftMs;
@@ -131,7 +159,9 @@ export class HybridClock {
 
   /** 从持久化状态恢复（仅 init 时调用）。 */
   restoreState(state: { wallMs: number; counter: number }): void {
-    this.lastWallMs = Math.max(this.lastWallMs, state.wallMs);
-    this.counter = state.wallMs === this.lastWallMs ? state.counter : 0;
+    // 旧版可能持久化了小数墙钟：向上取整，不回退
+    const wallMs = Math.ceil(state.wallMs);
+    this.lastWallMs = Math.max(this.lastWallMs, wallMs);
+    this.counter = wallMs === this.lastWallMs ? state.counter : 0;
   }
 }

@@ -121,3 +121,17 @@ describe('mergeEntityState', () => {
     expect(outcome.fields).toEqual({ title: '新任务' });
   });
 });
+
+describe('旧版小数墙钟时间戳', () => {
+  it('之后的整数时间戳写入胜过旧版小数时间戳（数值裁决，非字典序）', () => {
+    const current = {
+      fields: { title: '' },
+      clocks: { title: '1790850193869.5:000000:dev-a' },
+    };
+    const outcome = mergeFieldWrites(current, {
+      title: { value: '新任务', hlc: stamp(1_790_850_200_000, 0, 'dev-a') },
+    });
+    expect(outcome.fields.title).toBe('新任务');
+    expect(outcome.appliedFields).toEqual(['title']);
+  });
+});

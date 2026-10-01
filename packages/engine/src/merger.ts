@@ -7,6 +7,8 @@
  * 变更）与 Sync Hub（合并推送的变更），保证任意设备重放合并结果一致。
  */
 
+import { compareHlc } from './hlc';
+
 /** field → HLC 时间戳（内含设备 ID）。 */
 export type FieldClocks = Record<string, string>;
 
@@ -58,7 +60,7 @@ export function mergeFieldWrites(
 
   for (const [field, write] of Object.entries(incoming)) {
     const existing = current.clocks[field];
-    if (existing === undefined || write.hlc > existing) {
+    if (existing === undefined || compareHlc(write.hlc, existing) > 0) {
       fields[field] = write.value;
       clocks[field] = write.hlc;
       appliedFields.push(field);

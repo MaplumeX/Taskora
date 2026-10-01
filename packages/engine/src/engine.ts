@@ -24,6 +24,7 @@ import type { SyncEntity, WireRow } from './entities';
 import { archiveCutoff, DEFAULT_ARCHIVE_AFTER_DAYS } from './archive';
 import {
   COMPACT_REGISTRY_RETENTION_DAYS,
+  NUMERIC_HLC_PROTOCOL,
   SYNC_PROTOCOL_VERSION,
   SyncUpgradeRequiredError,
   type DeleteRequest,
@@ -369,6 +370,12 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
     async sync() {
       await flush();
       await applyPull();
+      // 旧版小数墙钟时间戳的一次性修复（见 repairFractionalClocks）：hub
+      // 按数值裁决后才重推，再走一轮 flush + bootstrap 收敛
+      if (hubProtocol >= NUMERIC_HLC_PROTOCOL && (await replica.repairFractionalClocks())) {
+        await flush();
+        await applyPull();
+      }
       await rebalanceIfInflated();
       if (now() - lastMaintenance >= MAINTENANCE_INTERVAL_MS) await maintain();
     },
