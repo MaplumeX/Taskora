@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { subtaskStatusPatch } from '@taskora/engine';
 import { TaskStatus } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
@@ -50,17 +50,45 @@ export class SubtasksService {
   async create(userId: string, taskId: string, dto: CreateSubtaskDto) {
     await this.requireTask(userId, taskId);
 
-    // Compute next sortOrder (max + 1)
-    const max = await this.prisma.subtask.aggregate({
-      where: { taskId },
-      _max: { sortOrder: true },
-    });
-    return this.write(userId, randomUUID(), {
-      title: dto.title,
-      status: TaskStatus.ACTIVE,
-      settledAt: null,
-      sortOrder: (max._max.sortOrder ?? -1) + 1,
-      taskId,
+    if (dto.id) {
+      const existing = await this.prisma.subtask.findUnique({ where: { id: dto.id } });
+      if (existing) {
+        // 客户端重试同一创建：同一 Task 下的同 id 视为已创建（幂等）
+        if (existing.taskId === taskId) return settledToCompletedAt(existing);
+        throw new ConflictException('Subtask id already exists');
+      }
+    }
+    const id = dto.id ?? randomUUID();
+    const fields = { title: dto.title, status: TaskStatus.ACTIVE, settledAt: null, taskId };
+
+    const siblings = dto.afterId
+      ? await this.prisma.subtask.findMany({
+          where: { taskId },
+          orderBy: { sortOrder: 'asc' },
+          select: { id: true, sortOrder: true },
+        })
+      : [];
+    const afterIndex = siblings.findIndex((s) => s.id === dto.afterId);
+    if (afterIndex < 0) {
+      // Compute next sortOrder (max + 1)
+      const max = await this.prisma.subtask.aggregate({
+        where: { taskId },
+        _max: { sortOrder: true },
+      });
+      return this.write(userId, id, { ...fields, sortOrder: (max._max.sortOrder ?? -1) + 1 });
+    }
+
+    // 插入到 afterId 之后：整体重排为 0..n，插入点之后的各项顺延一位
+    const insertAt = afterIndex + 1;
+    return this.hub.writeAsHub(userId, async (batch) => {
+      for (const [index, sibling] of siblings.entries()) {
+        const sortOrder = index < insertAt ? index : index + 1;
+        if (sibling.sortOrder !== sortOrder) {
+          await batch.write('subtask', sibling.id, { sortOrder });
+        }
+      }
+      await batch.write('subtask', id, { ...fields, sortOrder: insertAt });
+      return settledToCompletedAt(await batch.tx.subtask.findUniqueOrThrow({ where: { id } }));
     });
   }
 

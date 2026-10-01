@@ -10,6 +10,7 @@
   "subtasks": "Subtasks",
   "noSubtasks": "No subtasks",
   "addSubtask": "Add subtask…",
+  "reorderSubtask": "Drag to reorder",
   "scheduledDate": "Date",
   "dueDate": "Due",
   "tags": "Tags",

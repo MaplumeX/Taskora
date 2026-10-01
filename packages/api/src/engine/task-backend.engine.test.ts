@@ -239,6 +239,30 @@ describe('EngineTaskBackend（V2：Subtask / convert / emptyTrash 全离线）',
     expect((await backend.getTask(task.id)).subtasks?.map((s) => s.id)).toEqual([s2.id]);
   });
 
+  it('createSubtask：afterId 插入到其后、后续顺延；客户端 id 被采用且重复创建幂等', async () => {
+    const task = await backend.createTask({ title: '父任务' });
+    const s1 = await backend.createSubtask(task.id, { title: '一' });
+    const s3 = await backend.createSubtask(task.id, { title: '三' });
+    const id = crypto.randomUUID();
+    const s2 = await backend.createSubtask(task.id, { title: '二', id, afterId: s1.id });
+    expect(s2.id).toBe(id);
+    // 以刚建的 id 为锚点连续插入
+    await backend.createSubtask(task.id, { title: '二点五', afterId: id });
+
+    const titles = async () => (await backend.getTask(task.id)).subtasks?.map((s) => s.title);
+    expect(await titles()).toEqual(['一', '二', '二点五', '三']);
+    expect((await backend.getTask(task.id)).subtasks?.find((s) => s.id === s3.id)?.sortOrder).toBe(
+      3,
+    );
+
+    await backend.createSubtask(task.id, { title: '二', id, afterId: s1.id });
+    expect(await titles()).toEqual(['一', '二', '二点五', '三']);
+
+    // 找不到的 afterId 退化为追加
+    await backend.createSubtask(task.id, { title: '尾', afterId: 'missing' });
+    expect((await titles())?.at(-1)).toBe('尾');
+  });
+
   it('convert：断网也能转 Project，新 Project 继承字段、Subtask 提升为 Task、原 Task 干净消失', async () => {
     const tagId = await engine.create('tag', { title: '装修', color: '#3B82F6', tagGroupId: null });
     const areaId = await engine.create('area', { title: '家', notes: null, tagIds: [] });

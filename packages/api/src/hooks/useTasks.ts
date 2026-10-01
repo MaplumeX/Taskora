@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import type { QueryCacheFacade } from '../engine/live-queries';
 import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
@@ -547,6 +547,29 @@ export function useConvertTaskToProject() {
 
 // ---------- Subtask hooks ----------
 
+/**
+ * Subtask 写入串行执行（乐观补丁仍即时生效）：连续插入时下一条以上一条的
+ * 客户端 id 为 afterId，REST 模式下须等上一条落库后再发。
+ */
+const SUBTASK_WRITE_SCOPE = { id: 'subtask-write' };
+const SUBTASK_WRITE_KEY = ['subtask-write'] as const;
+
+/**
+ * REST 模式的写后刷新：队列里还有后续 Subtask 写入时跳过——此时 refetch 会
+ * 冲掉后续写入的乐观行（连续插入时正在输入的行会闪没、丢焦），由最后一个统一刷新。
+ */
+function useRefreshAfterSubtaskWrite() {
+  const queryClient = useQueryCache();
+  const mutations = useQueryClient();
+  return () => {
+    // 结算回调执行时自身仍计入 isMutating
+    if (mutations.isMutating({ mutationKey: SUBTASK_WRITE_KEY }) > 1) return;
+    refreshAfterWrite(queryClient, { queryKey: ['task'] });
+    refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+    refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+  };
+}
+
 // Helper: apply a change to subtasks array within a task detail
 function applyToSubtasks(
   task: TaskResponseDto | undefined,
@@ -566,14 +589,18 @@ function applyToSubtaskInArray(
 
 export function useCreateSubtask() {
   const queryClient = useQueryCache();
+  const refreshSubtaskWrites = useRefreshAfterSubtaskWrite();
   return useMutation({
+    mutationKey: SUBTASK_WRITE_KEY,
+    scope: SUBTASK_WRITE_SCOPE,
     mutationFn: ({ taskId, data }: { taskId: string; data: CreateSubtaskDto }) =>
       createSubtask(taskId, data),
     onMutate: async ({ taskId, data }) => {
       await queryClient.cancelQueries({ queryKey: taskKeys.detail(taskId) });
       const snapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(taskId));
       const now = new Date().toISOString();
-      const tempId = crypto.randomUUID();
+      // 带客户端 id 时乐观行即最终行，不必换 id（输入框不重建、不丢焦）
+      const tempId = data.id ?? crypto.randomUUID();
       const tempSubtask: SubtaskResponseDto = {
         id: tempId,
         title: data.title,
@@ -585,7 +612,13 @@ export function useCreateSubtask() {
         updatedAt: now,
       };
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(taskId), (old) =>
-        applyToSubtasks(old, (subtasks) => [...subtasks, tempSubtask]),
+        applyToSubtasks(old, (subtasks) => {
+          const afterIndex = data.afterId ? subtasks.findIndex((s) => s.id === data.afterId) : -1;
+          if (afterIndex < 0) return [...subtasks, tempSubtask];
+          const next = [...subtasks];
+          next.splice(afterIndex + 1, 0, tempSubtask);
+          return next.map((s, index) => ({ ...s, sortOrder: index }));
+        }),
       );
       return { snapshot, tempId, taskId };
     },
@@ -601,22 +634,25 @@ export function useCreateSubtask() {
         applyToSubtasks(old, (subtasks) => {
           // 同 useCreateTask：幂等去重，防止并发缓存更新已写入真实行时
           // 重复追加（duplicate key → 卸载重建 → 丢焦）。
+          // 原位替换，保留插入位置。
+          const at = subtasks.findIndex((s) => s.id === tempId || s.id === subtask.id);
           const deduped = subtasks.filter((s) => s.id !== tempId && s.id !== subtask.id);
-          return [...deduped, subtask];
+          if (at < 0) return [...deduped, subtask];
+          deduped.splice(at, 0, subtask);
+          return deduped;
         }),
       );
     },
-    onSettled: (_data, _error, { taskId }) => {
-      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(taskId) });
-      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
-      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
-    },
+    onSettled: () => refreshSubtaskWrites(),
   });
 }
 
 export function useUpdateSubtask() {
   const queryClient = useQueryCache();
+  const refreshSubtaskWrites = useRefreshAfterSubtaskWrite();
   return useMutation({
+    mutationKey: SUBTASK_WRITE_KEY,
+    scope: SUBTASK_WRITE_SCOPE,
     mutationFn: ({ id, data }: { id: string; data: UpdateSubtaskDto }) => updateSubtask(id, data),
     onMutate: async ({ id, data }) => {
       // Find taskId from current detail cache
@@ -662,22 +698,16 @@ export function useUpdateSubtask() {
         queryClient.setQueryData(taskKeys.detail(ctx.taskId), ctx.snapshot);
       }
     },
-    onSettled: (data, _error, _vars, ctx) => {
-      const taskId = ctx?.taskId ?? data?.taskId;
-      if (taskId) {
-        refreshAfterWrite(queryClient, {
-          queryKey: taskKeys.detail(taskId),
-        });
-      }
-      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
-      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
-    },
+    onSettled: () => refreshSubtaskWrites(),
   });
 }
 
 export function useDeleteSubtask() {
   const queryClient = useQueryCache();
+  const refreshSubtaskWrites = useRefreshAfterSubtaskWrite();
   return useMutation({
+    mutationKey: SUBTASK_WRITE_KEY,
+    scope: SUBTASK_WRITE_SCOPE,
     mutationFn: ({ id }: { id: string; taskId: string }) => deleteSubtask(id),
     onMutate: async ({ id, taskId }) => {
       await queryClient.cancelQueries({ queryKey: taskKeys.detail(taskId) });
@@ -692,17 +722,16 @@ export function useDeleteSubtask() {
         queryClient.setQueryData(taskKeys.detail(ctx.taskId), ctx.snapshot);
       }
     },
-    onSettled: (_data, _error, { taskId }) => {
-      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(taskId) });
-      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
-      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
-    },
+    onSettled: () => refreshSubtaskWrites(),
   });
 }
 
 export function useCompleteSubtask() {
   const queryClient = useQueryCache();
+  const refreshSubtaskWrites = useRefreshAfterSubtaskWrite();
   return useMutation({
+    mutationKey: SUBTASK_WRITE_KEY,
+    scope: SUBTASK_WRITE_SCOPE,
     mutationFn: (id: string) => completeSubtask(id),
     onMutate: async (id) => {
       // Find taskId from detail caches
@@ -737,25 +766,16 @@ export function useCompleteSubtask() {
         queryClient.setQueryData(taskKeys.detail(ctx.taskId), ctx.snapshot);
       }
     },
-    onSettled: (subtask, _error, _id, ctx) => {
-      if (ctx?.taskId) {
-        refreshAfterWrite(queryClient, {
-          queryKey: taskKeys.detail(ctx.taskId),
-        });
-      } else if (subtask?.taskId) {
-        refreshAfterWrite(queryClient, {
-          queryKey: taskKeys.detail(subtask.taskId),
-        });
-      }
-      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
-      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
-    },
+    onSettled: () => refreshSubtaskWrites(),
   });
 }
 
 export function useUncompleteSubtask() {
   const queryClient = useQueryCache();
+  const refreshSubtaskWrites = useRefreshAfterSubtaskWrite();
   return useMutation({
+    mutationKey: SUBTASK_WRITE_KEY,
+    scope: SUBTASK_WRITE_SCOPE,
     mutationFn: (id: string) => uncompleteSubtask(id),
     onMutate: async (id) => {
       // Find taskId from detail caches
@@ -790,25 +810,16 @@ export function useUncompleteSubtask() {
         queryClient.setQueryData(taskKeys.detail(ctx.taskId), ctx.snapshot);
       }
     },
-    onSettled: (subtask, _error, _id, ctx) => {
-      if (ctx?.taskId) {
-        refreshAfterWrite(queryClient, {
-          queryKey: taskKeys.detail(ctx.taskId),
-        });
-      } else if (subtask?.taskId) {
-        refreshAfterWrite(queryClient, {
-          queryKey: taskKeys.detail(subtask.taskId),
-        });
-      }
-      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
-      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
-    },
+    onSettled: () => refreshSubtaskWrites(),
   });
 }
 
 export function useCancelSubtask() {
   const queryClient = useQueryCache();
+  const refreshSubtaskWrites = useRefreshAfterSubtaskWrite();
   return useMutation({
+    mutationKey: SUBTASK_WRITE_KEY,
+    scope: SUBTASK_WRITE_SCOPE,
     mutationFn: (id: string) => cancelSubtask(id),
     onMutate: async (id) => {
       // Find taskId from detail caches
@@ -843,25 +854,16 @@ export function useCancelSubtask() {
         queryClient.setQueryData(taskKeys.detail(ctx.taskId), ctx.snapshot);
       }
     },
-    onSettled: (subtask, _error, _id, ctx) => {
-      if (ctx?.taskId) {
-        refreshAfterWrite(queryClient, {
-          queryKey: taskKeys.detail(ctx.taskId),
-        });
-      } else if (subtask?.taskId) {
-        refreshAfterWrite(queryClient, {
-          queryKey: taskKeys.detail(subtask.taskId),
-        });
-      }
-      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
-      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
-    },
+    onSettled: () => refreshSubtaskWrites(),
   });
 }
 
 export function useUncancelSubtask() {
   const queryClient = useQueryCache();
+  const refreshSubtaskWrites = useRefreshAfterSubtaskWrite();
   return useMutation({
+    mutationKey: SUBTASK_WRITE_KEY,
+    scope: SUBTASK_WRITE_SCOPE,
     mutationFn: (id: string) => uncancelSubtask(id),
     onMutate: async (id) => {
       // Find taskId from detail caches
@@ -896,29 +898,36 @@ export function useUncancelSubtask() {
         queryClient.setQueryData(taskKeys.detail(ctx.taskId), ctx.snapshot);
       }
     },
-    onSettled: (subtask, _error, _id, ctx) => {
-      if (ctx?.taskId) {
-        refreshAfterWrite(queryClient, {
-          queryKey: taskKeys.detail(ctx.taskId),
-        });
-      } else if (subtask?.taskId) {
-        refreshAfterWrite(queryClient, {
-          queryKey: taskKeys.detail(subtask.taskId),
-        });
-      }
-      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
-      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
-    },
+    onSettled: () => refreshSubtaskWrites(),
   });
 }
 
 export function useReorderSubtasks() {
   const queryClient = useQueryCache();
+  const refreshSubtaskWrites = useRefreshAfterSubtaskWrite();
   return useMutation({
+    mutationKey: SUBTASK_WRITE_KEY,
+    scope: SUBTASK_WRITE_SCOPE,
     mutationFn: ({ taskId, orderedIds }: { taskId: string; orderedIds: string[] }) =>
       reorderSubtasks(taskId, orderedIds),
-    onSuccess: (_data, { taskId }) => {
-      refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(taskId) });
+    onMutate: async ({ taskId, orderedIds }) => {
+      await queryClient.cancelQueries({ queryKey: taskKeys.detail(taskId) });
+      const snapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(taskId));
+      const rank = new Map(orderedIds.map((id, index) => [id, index]));
+      queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(taskId), (old) =>
+        applyToSubtasks(old, (subtasks) =>
+          [...subtasks]
+            .sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity))
+            .map((s, index) => ({ ...s, sortOrder: index })),
+        ),
+      );
+      return { snapshot };
     },
+    onError: (_err, { taskId }, ctx) => {
+      if (ctx?.snapshot !== undefined) {
+        queryClient.setQueryData(taskKeys.detail(taskId), ctx.snapshot);
+      }
+    },
+    onSettled: () => refreshSubtaskWrites(),
   });
 }

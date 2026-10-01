@@ -3,7 +3,7 @@
  * issue 05）：Subtask、Project、Project Heading、Area、Tag、TagGroup、
  * 清空 Trash。每个写都经合并器，数据与日志同事务。
  */
-import { BadRequestException, NotFoundException } from '@nestjs/common';
+import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { afterAll, beforeEach, expect, it } from 'vitest';
 
 import { effectivePosition, synthPosition } from '@taskora/engine';
@@ -78,6 +78,37 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     expect(await testPrisma.subtask.findUnique({ where: { id: first.id } })).toBeNull();
     expect(await registeredCompacted('subtask')).toEqual([first.id]);
     expect(await compactedIdsInLog('subtask')).toEqual([first.id]);
+  });
+
+  it('Subtask：afterId 插入其后、后续顺延；客户端 id 被采用，重试幂等，跨任务冲突 → 409', async () => {
+    await seedTask('task-1');
+    await seedTask('task-2');
+    const first = await h.subtasks.create(USER, 'task-1', { title: '一' });
+    const third = await h.subtasks.create(USER, 'task-1', { title: '三' });
+    const id = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
+    const second = await h.subtasks.create(USER, 'task-1', { title: '二', id, afterId: first.id });
+    expect([second.id, second.sortOrder]).toEqual([id, 1]);
+    await expectLoggedAsStored('subtask', third.id);
+
+    const titles = async () =>
+      (
+        await testPrisma.subtask.findMany({
+          where: { taskId: 'task-1' },
+          orderBy: { sortOrder: 'asc' },
+        })
+      ).map((s) => s.title);
+    expect(await titles()).toEqual(['一', '二', '三']);
+
+    expect(
+      (await h.subtasks.create(USER, 'task-1', { title: '二', id, afterId: first.id })).id,
+    ).toBe(id);
+    expect(await titles()).toEqual(['一', '二', '三']);
+    await expect(h.subtasks.create(USER, 'task-2', { title: 'x', id })).rejects.toBeInstanceOf(
+      ConflictException,
+    );
+
+    await h.subtasks.create(USER, 'task-1', { title: '尾', afterId: 'missing' });
+    expect(await titles()).toEqual(['一', '二', '三', '尾']);
   });
 
   it('Subtask：他人的任务 / Subtask → 404；重排含外来或重复 id → 404', async () => {
