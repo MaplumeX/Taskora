@@ -8,6 +8,9 @@
  * 刷新触发点：启动、Engine 数据变更（mobile-engine 调
  * scheduleStatusBarRefresh，防抖合并在控制器内）、回前台（跨天口径
  * 滚动 + 恢复被划掉的通知）。
+ *
+ * 点通知本体（issue 03）：冷启动 take 启动意图、热启动订阅 navigate
+ * 事件，统一经 requestNavigation('/today') 交给 AppShell 导航。
  */
 
 import {
@@ -15,6 +18,7 @@ import {
   currentTaskBackend,
   i18n,
   registerStatusBarController,
+  requestNavigation,
   setStatusBarShell,
   useAuthStore,
   type StatusBarController,
@@ -22,7 +26,11 @@ import {
 } from '@taskora/api';
 
 import { isTauriRuntime } from '../engine/tauri-storage';
-import { createTauriStatusBarShell } from './tauri-shell';
+import {
+  createTauriStatusBarShell,
+  onStatusBarNavigate,
+  takeStatusBarNavigation,
+} from './tauri-shell';
 
 let controller: StatusBarController | null = null;
 let unsubscribeAuth: (() => void) | null = null;
@@ -32,6 +40,14 @@ export function initStatusBar(): void {
 
   const shell = createTauriStatusBarShell();
   setStatusBarShell(shell);
+
+  // 点通知本体（android-status-bar issue 03）：冷启动时意图早于 JS 就绪，
+  // 主动取一次；App 存活时由原生 onNewIntent 事件投递。两条路径统一
+  // 导航到 Today（窄屏默认落 /home，必须显式请求）。
+  void takeStatusBarNavigation().then((destination) => {
+    if (destination === 'today') requestNavigation('/today');
+  });
+  onStatusBarNavigate(() => requestNavigation('/today'));
 
   controller = createStatusBarController({
     shell,

@@ -7,11 +7,13 @@ import { MobileFab } from '@/components/layout/MobileFab';
 import { MultiSelectToolbar } from '@/components/task/MultiSelectToolbar';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { SyncIndicator } from './SyncIndicator';
-import { useTaskRevealListener } from '@taskora/api';
+import { useNavigationRequestListener, useTaskRevealListener } from '@taskora/api';
 
 export function AppShell() {
   // Reveal Task：平台壳（点通知）投递的定位请求在这里执行（需在 Router 内）。
   useTaskRevealListener();
+  // 路由请求：平台壳（点状态栏通知）投递的导航请求同样在 Router 内执行。
+  useNavigationRequestListener();
   // h-[calc(100dvh-var(--kb-inset,0px))]：Android 键盘避让（mobile 壳的
   // visualViewport 驱动，其余端未设置 → 0px，等价 h-dvh）。
   return (

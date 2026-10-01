@@ -1,11 +1,12 @@
 ## Default Permission
 
-Allows showing and cancelling the single-line status bar notification, and subscribing to its actions.
+Allows showing and cancelling the single-line status bar notification, subscribing to its actions, and taking the navigation request carried by a notification tap.
 
 #### This default permission set includes the following:
 
 - `allow-show`
 - `allow-cancel`
+- `allow-take-navigation`
 - `allow-register-listener`
 - `allow-remove-listener`
 
@@ -118,6 +119,32 @@ Enables the show command without any pre-configured scope.
 <td>
 
 Denies the show command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`statusbar:allow-take-navigation`
+
+</td>
+<td>
+
+Enables the take_navigation command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`statusbar:deny-take-navigation`
+
+</td>
+<td>
+
+Denies the take_navigation command without any pre-configured scope.
 
 </td>
 </tr>

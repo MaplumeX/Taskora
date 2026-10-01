@@ -24,6 +24,10 @@ const val EXTRA_CHANNEL_NAME = "channelName"
 const val EXTRA_QUICK_ADD_HINT = "quickAddHint"
 const val EXTRA_SUBMIT_LABEL = "submitLabel"
 
+/** 点通知本体时携带的导航目标（issue 03：跳转到 Today）。 */
+const val EXTRA_NAVIGATE = "navigate"
+const val NAVIGATE_TODAY = "today"
+
 /** 内容快照与 pending 快速添加共用的 SharedPreferences 文件。 */
 const val STATUS_BAR_PREFS = "taskora-statusbar"
 
@@ -163,6 +167,9 @@ class StatusBarService : Service() {
 
             val openApp = context.packageManager
                 .getLaunchIntentForPackage(context.packageName)
+                // 点通知本体应落到 Today（issue 03）：标准 launch intent 只会
+                // 回到上次界面，加 extra 交给原生插件转成导航请求。
+                ?.apply { putExtra(EXTRA_NAVIGATE, NAVIGATE_TODAY) }
                 ?.let {
                     PendingIntent.getActivity(
                         context, 0, it,
