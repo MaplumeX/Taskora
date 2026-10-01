@@ -139,6 +139,7 @@ interface DeriveOpts {
   projects?: ProjectResponseDto[];
   areas?: AreaResponseDto[];
   groupingEnabled?: boolean;
+  retainGroupIds?: ReadonlySet<string>;
 }
 
 function derive(items: FeedItem[], opts: DeriveOpts = {}): GroupedFeedLayout {
@@ -147,6 +148,7 @@ function derive(items: FeedItem[], opts: DeriveOpts = {}): GroupedFeedLayout {
     projects: opts.projects ?? [],
     areas: opts.areas ?? [],
     groupingEnabled: opts.groupingEnabled ?? true,
+    retainGroupIds: opts.retainGroupIds,
   });
 }
 
@@ -324,6 +326,17 @@ describe('grouped feed layout — group visibility（组头可见性）', () => 
     });
 
     expect(blockSummary(layout)).toEqual(['task:loose']);
+  });
+
+  it('keeps a retained parent header without visible tasks (drag source group)', () => {
+    const layout = derive([taskItem('loose'), projectItem('p1')], {
+      projects: [project('p1'), project('p2')],
+      areas: [area('a1')],
+      retainGroupIds: new Set(['p1', 'a1']),
+    });
+
+    // 保留的项目组头吸收其独立项目行；未保留的空父级仍不出组头。
+    expect(blockSummary(layout)).toEqual(['task:loose', 'projectHeader:p1', 'areaHeader:a1']);
   });
 
   it('headers carry their view task ids (no counts, no collapse state)', () => {

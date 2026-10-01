@@ -17,7 +17,7 @@ import {
 } from '@taskora/shared';
 
 import { dateKeyOf, instantMs, todayKey, type CalendarContext } from './calendar';
-import { sortByEffectivePosition, type Positioned } from './order';
+import { feedSortKey, sortByEffectivePosition, type FeedPositioned, type Positioned } from './order';
 
 export type ListView = 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
 
@@ -172,11 +172,21 @@ export function sortForView<T extends Positioned & { id: string }>(
   );
 }
 
-/** feed 顺序：同 sortForView，任务与项目混排。 */
+/**
+ * feed 顺序：Logbook 同 sortForView；其余视图任务与项目混排，按 feed
+ * 排序键（feedSortKey：项目优先用 Feed Position）。平局按 id，两端稳定。
+ */
 export function sortFeedItems<
-  T extends Positioned & { id: string; completedAt?: Date | string | null },
+  T extends FeedPositioned & { id: string; completedAt?: Date | string | null },
 >(items: readonly T[], view: ListView): T[] {
-  return sortForView(items, view, (item) => item.completedAt);
+  if (view === 'logbook') return sortForView(items, view, (item) => item.completedAt);
+  const keyed = items.map((item) => ({ item, key: feedSortKey(item) }));
+  keyed.sort(
+    (a, b) =>
+      (a.key < b.key ? -1 : a.key > b.key ? 1 : 0) ||
+      (a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0),
+  );
+  return keyed.map(({ item }) => item);
 }
 
 /** 项目进度计数的任务字段。 */

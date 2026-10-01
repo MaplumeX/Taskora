@@ -251,4 +251,54 @@ describe('FeedService', () => {
       });
     });
   });
+
+  describe('reorder — feed 混排（feed-project-ordering spec）', () => {
+    it('项目行写 feedPosition、任务写 position，只写必须移动的行', async () => {
+      const writes: Array<[string, string, Record<string, unknown>]> = [];
+      const hub = {
+        writeAsHub: vi.fn(async (_userId: string, fn: (batch: unknown) => Promise<void>) =>
+          fn({
+            write: async (entity: string, id: string, fields: Record<string, unknown>) => {
+              writes.push([entity, id, fields]);
+            },
+          }),
+        ),
+      };
+      const writing = new FeedService(mockPrisma, hub as never);
+      mockPrisma.task.findMany.mockResolvedValue([
+        { id: 't1', position: 'a1' },
+        { id: 't2', position: 'a2' },
+      ]);
+      mockPrisma.project.findMany.mockResolvedValue([
+        { id: 'p', position: 'a5', feedPosition: null, sortOrder: 0, createdAt: new Date(0) },
+      ]);
+
+      await writing.reorder('user-1', [
+        { type: 'task', id: 't1' },
+        { type: 'project', id: 'p' },
+        { type: 'task', id: 't2' },
+      ]);
+
+      expect(writes).toHaveLength(1);
+      const [entity, id, fields] = writes[0];
+      expect([entity, id, Object.keys(fields)]).toEqual(['project', 'p', ['feedPosition']]);
+      expect('a1' < (fields.feedPosition as string) && (fields.feedPosition as string) < 'a2').toBe(
+        true,
+      );
+    });
+
+    it('顺序未变不写；不属于该用户的行报 404', async () => {
+      const hub = { writeAsHub: vi.fn() };
+      const writing = new FeedService(mockPrisma, hub as never);
+      mockPrisma.task.findMany.mockResolvedValue([{ id: 't1', position: 'a1' }]);
+      mockPrisma.project.findMany.mockResolvedValue([]);
+      await writing.reorder('user-1', [{ type: 'task', id: 't1' }]);
+      expect(hub.writeAsHub).not.toHaveBeenCalled();
+
+      mockPrisma.task.findMany.mockResolvedValue([]);
+      await expect(writing.reorder('user-1', [{ type: 'task', id: 'other' }])).rejects.toThrow(
+        'Feed item not found',
+      );
+    });
+  });
 });

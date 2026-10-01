@@ -12,6 +12,7 @@ interface DndHandlers {
     droppableRects: Map<string, { top: number; height: number }>;
   }) => Array<{ id: unknown }>;
   onDragStart?: (event: unknown) => void;
+  onDragMove?: (event: unknown) => void;
   onDragOver?: (event: unknown) => void;
   onDragEnd?: (event: unknown) => void;
   onDragCancel?: () => void;
@@ -535,6 +536,39 @@ describe('ProjectTaskLayout drag sessions', () => {
       'task-b',
       'task-u1',
     ]);
+  });
+
+  it('moves the gap across a row midpoint on pointer move without a new over target', () => {
+    renderLayout();
+    startTaskDrag('task-u1');
+    harness.pointerCollisionIds = ['container:ungrouped', 'task:task-u2'];
+    const detect = (y: number) =>
+      act(() => {
+        handlers().collisionDetection?.({
+          active: { id: 'task:task-u1' },
+          pointerCoordinates: { x: 20, y },
+          droppableContainers: harness.pointerCollisionIds.map((id) => ({ id })),
+          droppableRects: new Map([['task:task-u2', { top: 40, height: 40 }]]),
+        });
+      });
+    const ungroupedOrder = () =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>(
+          '[data-task-container="ungrouped"] [data-sortable-task-id]',
+        ),
+      ).map((node) => node.dataset.sortableTaskId);
+
+    detect(50);
+    dragOver('task:task-u1', 'task:task-u2');
+    expect(ungroupedOrder()).toEqual(['task-u1', 'task-u2']);
+
+    // 同一目标行内越过中线：只有 onDragMove，没有新的 onDragOver。
+    detect(70);
+    act(() => {
+      handlers().onDragMove?.({ active: { id: 'task:task-u1' } });
+    });
+    expect(ungroupedOrder()).toEqual(['task-u2', 'task-u1']);
+    expect(screen.getByTestId('task-placeholder-task-u1')).toBeInTheDocument();
   });
 
   it('keeps the active task as the nested collision target instead of appending to its container', () => {

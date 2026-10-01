@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import type { SubtaskResponseDto } from '@taskora/shared';
+import { dndListProps, useHeldOrder } from '../../lib/dnd';
 import {
   useCancelSubtask,
   useCompleteSubtask,
@@ -88,8 +89,10 @@ function pastedLines(e: React.ClipboardEvent<HTMLInputElement>): string[] | null
  * 多行粘贴拆成多项；拖拽把手排序。
  */
 export const TaskSubtaskList = React.forwardRef<TaskSubtaskListHandle, Props>(
-  function TaskSubtaskList({ taskId, subtasks }, ref) {
+  function TaskSubtaskList({ taskId, subtasks: sourceSubtasks }, ref) {
     const { t } = useTranslation();
+    // 松手后先按本地顺序渲染，等乐观更新追上，避免条目闪回原位。
+    const [subtasks, holdOrder] = useHeldOrder(sourceSubtasks, subtaskKey);
     const createSubtask = useCreateSubtask();
     const deleteSubtask = useDeleteSubtask();
     const reorderSubtasks = useReorderSubtasks();
@@ -203,6 +206,7 @@ export const TaskSubtaskList = React.forwardRef<TaskSubtaskListHandle, Props>(
         ids.indexOf(String(active.id)),
         ids.indexOf(String(over.id)),
       );
+      holdOrder(orderedIds);
       reorderSubtasks.mutate(
         { taskId, orderedIds },
         { onError: () => toast.error(t('common:saveFailed')) },
@@ -280,7 +284,9 @@ export const TaskSubtaskList = React.forwardRef<TaskSubtaskListHandle, Props>(
     return (
       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
         <SortableContext items={subtasks.map((s) => s.id)} strategy={verticalListSortingStrategy}>
-          <ul className="flex flex-col divide-y divide-border/60">{rows}</ul>
+          <ul {...dndListProps} className="flex flex-col divide-y divide-border/60">
+            {rows}
+          </ul>
         </SortableContext>
       </DndContext>
     );
@@ -479,4 +485,8 @@ function SubtaskRow({
       </Popover>
     </li>
   );
+}
+
+function subtaskKey(subtask: SubtaskResponseDto) {
+  return subtask.id;
 }

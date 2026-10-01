@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type {
   AreaResponseDto,
@@ -25,6 +25,7 @@ interface DndHandlers {
     droppableRects: Map<string, { top: number; height: number }>;
   }) => Array<{ id: unknown }>;
   onDragStart?: (event: unknown) => void;
+  onDragOver?: (event: unknown) => void;
   onDragEnd?: (event: unknown) => void;
   onDragCancel?: () => void;
 }
@@ -33,7 +34,7 @@ const harness = vi.hoisted(() => ({
   dndProps: null as DndHandlers | null,
   completeTaskMutate: vi.fn(),
   uncompleteTaskMutate: vi.fn(),
-  reorderTasksMutate: vi.fn(),
+  reorderFeedMutate: vi.fn(),
   updateTaskMutate: vi.fn(),
   completeProjectMutate: vi.fn(),
   uncompleteProjectMutate: vi.fn(),
@@ -173,7 +174,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
     ...actual,
     useCompleteTask: () => ({ mutate: harness.completeTaskMutate }),
     useUncompleteTask: () => ({ mutate: harness.uncompleteTaskMutate }),
-    useReorderTasks: () => ({ mutate: harness.reorderTasksMutate }),
+    useReorderFeed: () => ({ mutate: harness.reorderFeedMutate }),
     useUpdateTask: () => ({ mutate: harness.updateTaskMutate }),
     useCompleteProject: () => ({ mutate: harness.completeProjectMutate }),
     useUncompleteProject: () => ({ mutate: harness.uncompleteProjectMutate }),
@@ -315,6 +316,13 @@ function renderView(items: FeedItem[], view: 'today' | 'anytime' | 'someday' = '
   );
 }
 
+/** 期望的 feed 重排参数：t:id 为任务，p:id 为独立项目行。 */
+function feedOrder(...keys: string[]) {
+  return keys.map((key) =>
+    key.startsWith('p:') ? { type: 'project', id: key.slice(2) } : { type: 'task', id: key },
+  );
+}
+
 function handlers() {
   if (!harness.dndProps) throw new Error('DndContext was not rendered');
   return harness.dndProps;
@@ -356,7 +364,7 @@ beforeEach(() => {
   harness.closestCollisionIds = [];
   harness.completeTaskMutate.mockReset();
   harness.uncompleteTaskMutate.mockReset();
-  harness.reorderTasksMutate.mockReset();
+  harness.reorderFeedMutate.mockReset();
   harness.updateTaskMutate.mockReset();
   harness.completeProjectMutate.mockReset();
   harness.uncompleteProjectMutate.mockReset();
@@ -526,8 +534,8 @@ describe('GroupedFeedListView — 拖拽语义', () => {
     dragEnd('task:a1', 'task:a2', 'task:a2');
 
     expect(harness.updateTaskMutate).not.toHaveBeenCalled();
-    expect(harness.reorderTasksMutate).toHaveBeenCalledTimes(1);
-    expect(harness.reorderTasksMutate).toHaveBeenCalledWith(['loose', 'a2', 'a1', 'b1']);
+    expect(harness.reorderFeedMutate).toHaveBeenCalledTimes(1);
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('loose', 'a2', 'a1', 'b1'));
   });
 
   it('cross-group drop fires the reassignment mutation (project re-file)', () => {
@@ -541,7 +549,7 @@ describe('GroupedFeedListView — 拖拽语义', () => {
       data: { projectId: 'p2', areaId: null },
     });
     // 落点写回全局位次：a1 插到 b1 之前。
-    expect(harness.reorderTasksMutate).toHaveBeenCalledWith(['loose', 'a2', 'a1', 'b1']);
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('loose', 'a2', 'a1', 'b1'));
   });
 
   it('drop onto the ungrouped zone clears both parents', () => {
@@ -554,7 +562,7 @@ describe('GroupedFeedListView — 拖拽语义', () => {
       id: 'a2',
       data: { projectId: null, areaId: null },
     });
-    expect(harness.reorderTasksMutate).toHaveBeenCalledWith(['a2', 'loose', 'a1', 'b1']);
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('a2', 'loose', 'a1', 'b1'));
   });
 
   it('drop onto a group header lands at the end of that group', () => {
@@ -567,7 +575,7 @@ describe('GroupedFeedListView — 拖拽语义', () => {
       data: { projectId: 'p2', areaId: null },
     });
     // 落在组末尾：b1 之后。
-    expect(harness.reorderTasksMutate).toHaveBeenCalledWith(['a1', 'a2', 'b1', 'loose']);
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('a1', 'a2', 'b1', 'loose'));
   });
 
   it('drop onto an area group reassigns the area and clears the project', () => {
@@ -590,7 +598,168 @@ describe('GroupedFeedListView — 拖拽语义', () => {
     dragEnd('task:a1', 'task:a1');
 
     expect(harness.updateTaskMutate).not.toHaveBeenCalled();
-    expect(harness.reorderTasksMutate).not.toHaveBeenCalled();
+    expect(harness.reorderFeedMutate).not.toHaveBeenCalled();
+  });
+
+  function containerOrder(containerId: string) {
+    return Array.from(
+      document.querySelectorAll<HTMLElement>(
+        `[data-task-container="${containerId}"] [data-sortable-task-id]`,
+      ),
+    ).map((node) => node.dataset.sortableTaskId);
+  }
+
+  it('does not push the list down with an empty ungrouped drop zone when a drag starts', () => {
+    harness.projects = [project('p1')];
+    renderView([taskItem('a1', { projectId: 'p1' }), taskItem('a2', { projectId: 'p1' })]);
+    expect(document.querySelector('[data-task-container="ungrouped"]')).toBeNull();
+
+    act(() => {
+      handlers().onDragStart?.({ active: { id: 'task:a2' } });
+    });
+    // 投放面浮在列表上方，不占文档流。
+    const zone = document.querySelector('[data-task-container="ungrouped"]') as HTMLElement;
+    expect(zone).toHaveClass('absolute', 'bottom-full');
+    expect(zone.children).toHaveLength(0);
+    // 也不能排在首个组头之前：否则组头失去 :first-child，mt-6 生效整列下移。
+    expect(screen.getByTestId('dnd-context').firstElementChild).toHaveAttribute(
+      'data-group-header-dropzone',
+      'p1',
+    );
+
+    // 拖入后任务进入顶部未分组区（文档流内），投放面不再浮动。
+    act(() => {
+      handlers().onDragOver?.({ active: { id: 'task:a2' }, over: { id: 'container:ungrouped' } });
+    });
+    const zones = document.querySelectorAll<HTMLElement>('[data-task-container="ungrouped"]');
+    expect(zones).toHaveLength(1);
+    expect(zones[0]).not.toHaveClass('absolute');
+    expect(containerOrder('ungrouped')).toEqual(['a2']);
+  });
+
+  it('previews a cross-group move live, keeps the emptied source header, and persists the preview', () => {
+    setupTwoProjects();
+    act(() => {
+      handlers().onDragStart?.({ active: { id: 'task:b1' } });
+    });
+    act(() => {
+      handlers().onDragOver?.({ active: { id: 'task:b1' }, over: { id: 'task:a1' } });
+    });
+
+    expect(containerOrder('p1')).toEqual(['b1', 'a1', 'a2']);
+    expect(screen.getByTestId('task-placeholder-b1')).toBeInTheDocument();
+    // 原组最后一个任务被拖走，组头仍保留在原位。
+    expect(headerOf('p2')).toBeInTheDocument();
+    expect(harness.updateTaskMutate).not.toHaveBeenCalled();
+    expect(harness.reorderFeedMutate).not.toHaveBeenCalled();
+
+    // 拖出列表外：落在最后一次有效预览处。
+    act(() => {
+      handlers().onDragEnd?.({ active: { id: 'task:b1' }, over: null });
+    });
+    expect(harness.updateTaskMutate).toHaveBeenCalledWith({
+      id: 'b1',
+      data: { projectId: 'p1', areaId: null },
+    });
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('loose', 'b1', 'a1', 'a2'));
+  });
+
+  it('keeps rendering the dropped order until the props catch up', () => {
+    setupTwoProjects();
+    dragEnd('task:a1', 'task:a2', 'task:a2');
+
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('loose', 'a2', 'a1', 'b1'));
+    expect(containerOrder('p1')).toEqual(['a2', 'a1']);
+    expect(screen.queryByTestId('task-placeholder-a1')).not.toBeInTheDocument();
+  });
+
+  it('flat mode (grouping off) keeps the same drag reorder without reassignment', () => {
+    harness.projects = [project('p1')];
+    render(
+      <MemoryRouter>
+        <GroupedFeedListView
+          items={[taskItem('loose'), taskItem('a1', { projectId: 'p1' }), taskItem('a2', { projectId: 'p1' })]}
+          grouping={false}
+        />
+      </MemoryRouter>,
+    );
+    // 平铺：无组头，任务都在未分组区并保留项目标签。
+    expect(document.querySelector('[data-group-header-dropzone]')).toBeNull();
+    expect(containerOrder('ungrouped')).toEqual(['loose', 'a1', 'a2']);
+    expect(screen.getByTestId('tag-project-a1')).toBeInTheDocument();
+
+    // 浮层与列表行同参渲染：同样带项目标签。
+    act(() => {
+      handlers().onDragStart?.({ active: { id: 'task:a1' } });
+    });
+    expect(
+      within(screen.getByTestId('drag-overlay')).getByTestId('tag-project-a1'),
+    ).toBeInTheDocument();
+    act(() => {
+      handlers().onDragCancel?.();
+    });
+
+    dragEnd('task:a2', 'task:loose');
+
+    expect(harness.updateTaskMutate).not.toHaveBeenCalled();
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('a2', 'loose', 'a1'));
+    expect(containerOrder('ungrouped')).toEqual(['a2', 'loose', 'a1']);
+  });
+
+  function topOrder() {
+    return Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[data-task-container="ungrouped"] [data-sortable-task-id], [data-task-container="ungrouped"] [data-sortable-project-id]',
+      ),
+    ).map((node) => node.dataset.sortableTaskId ?? `p:${node.dataset.sortableProjectId}`);
+  }
+
+  it('drags a standalone project row among top-zone tasks and writes the feed order', () => {
+    harness.projects = [project('p1'), project('pr')];
+    renderView([
+      taskItem('loose'),
+      projectItem('pr'),
+      taskItem('tail'),
+      taskItem('a1', { projectId: 'p1' }),
+    ]);
+    expect(topOrder()).toEqual(['loose', 'p:pr', 'tail']);
+
+    act(() => {
+      handlers().onDragStart?.({ active: { id: 'project:pr' } });
+    });
+    act(() => {
+      handlers().onDragOver?.({ active: { id: 'project:pr' }, over: { id: 'task:loose' } });
+    });
+    expect(topOrder()).toEqual(['p:pr', 'loose', 'tail']);
+    expect(screen.getByTestId('project-placeholder-pr')).toBeInTheDocument();
+
+    // 独立项目行不能进组：越界目标不改变预览。
+    act(() => {
+      handlers().onDragOver?.({ active: { id: 'project:pr' }, over: { id: 'task:a1' } });
+    });
+    expect(topOrder()).toEqual(['p:pr', 'loose', 'tail']);
+
+    act(() => {
+      handlers().onDragEnd?.({ active: { id: 'project:pr' }, over: { id: 'task:a1' } });
+    });
+    expect(harness.updateTaskMutate).not.toHaveBeenCalled();
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(
+      feedOrder('p:pr', 'loose', 'tail', 'a1'),
+    );
+  });
+
+  it('places a task next to a standalone project row', () => {
+    harness.projects = [project('p1'), project('pr')];
+    renderView([taskItem('loose'), projectItem('pr'), taskItem('a1', { projectId: 'p1' })]);
+
+    dragEnd('task:a1', 'project:pr', 'project:pr');
+
+    expect(harness.updateTaskMutate).toHaveBeenCalledWith({
+      id: 'a1',
+      data: { projectId: null, areaId: null },
+    });
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('loose', 'p:pr', 'a1'));
+    expect(topOrder()).toEqual(['loose', 'p:pr', 'a1']);
   });
 
   it('dropping outside fires no mutations', () => {
@@ -599,6 +768,6 @@ describe('GroupedFeedListView — 拖拽语义', () => {
     dragEnd('task:a1', null);
 
     expect(harness.updateTaskMutate).not.toHaveBeenCalled();
-    expect(harness.reorderTasksMutate).not.toHaveBeenCalled();
+    expect(harness.reorderFeedMutate).not.toHaveBeenCalled();
   });
 });

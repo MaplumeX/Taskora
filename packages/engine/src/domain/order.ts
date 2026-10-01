@@ -26,6 +26,21 @@ function compareStrings(a: string, b: string): number {
   return a < b ? -1 : a > b ? 1 : 0;
 }
 
+/** feed 混排中的行：项目可带 Feed Position。 */
+export interface FeedPositioned extends Positioned {
+  feedPosition?: string | null;
+}
+
+/**
+ * feed 视图中的排序键：任务与项目行混排在同一个键空间里。任务用自身
+ * Position；项目用 Feed Position（在 feed 中拖动过才有），没有时退回其
+ * Position——项目的 Position 只表达侧边栏顺序，从未在 feed 中排过的项目
+ * 维持既有的混排结果。
+ */
+export function feedSortKey(row: FeedPositioned): string {
+  return typeof row.feedPosition === 'string' ? row.feedPosition : effectivePosition(row);
+}
+
 /**
  * 按有效 Position 排序（字节序，与设备 SQLite 的 BINARY 排序一致；
  * Postgres ORDER BY 用数据库排序规则，不能代替）。平局按 id，两端稳定。

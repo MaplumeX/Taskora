@@ -134,6 +134,15 @@ export interface LocalReplicaOptions {
   now?: () => number;
 }
 
+/** 位次列名（拼进 SQL，只接受实体注册表里的非 JSON 字段）。 */
+function positionColumn(entity: SyncEntity, field: string): string {
+  const def = entityDef(entity);
+  if (!def.fields.some((candidate) => candidate.name === field && !candidate.json)) {
+    throw new Error(`positionKeys: ${entity} 没有位次字段 ${field}`);
+  }
+  return field;
+}
+
 export class LocalReplica {
   private readonly clock: HybridClock;
   private readonly generateId: () => string;
@@ -336,21 +345,32 @@ export class LocalReplica {
     });
   }
 
-  /** 位次长度超过 maxLength 的行数（SQL 内计数，不传输行）。 */
-  async countInflatedPositions(entity: SyncEntity, maxLength: number): Promise<number> {
+  /**
+   * 位次长度超过 maxLength 的行数（SQL 内计数，不传输行）。field 为位次
+   * 字段（默认 position；project 另有 feedPosition）。
+   */
+  async countInflatedPositions(
+    entity: SyncEntity,
+    maxLength: number,
+    field = 'position',
+  ): Promise<number> {
     await this.readGate();
     const rows = await this.storage.all<{ count: number }>(
-      `SELECT COUNT(*) AS count FROM ${entityDef(entity).table} WHERE length(position) > ?`,
+      `SELECT COUNT(*) AS count FROM ${entityDef(entity).table} WHERE length(${positionColumn(entity, field)}) > ?`,
       [maxLength],
     );
     return rows[0]?.count ?? 0;
   }
 
   /** 按位次升序的 { id, position }（只取两列，re-balance 用）。 */
-  async positionKeys(entity: SyncEntity): Promise<Array<{ id: string; position: string }>> {
+  async positionKeys(
+    entity: SyncEntity,
+    field = 'position',
+  ): Promise<Array<{ id: string; position: string }>> {
     await this.readGate();
+    const column = positionColumn(entity, field);
     return this.storage.all<{ id: string; position: string }>(
-      `SELECT id, position FROM ${entityDef(entity).table} WHERE position IS NOT NULL ORDER BY position ASC`,
+      `SELECT id, ${column} AS position FROM ${entityDef(entity).table} WHERE ${column} IS NOT NULL ORDER BY ${column} ASC`,
     );
   }
 

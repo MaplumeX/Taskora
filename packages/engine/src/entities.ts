@@ -7,6 +7,8 @@
  *
  * `position` 是 Task/Project/Tag 的排序位次（fractional indexing 字符串，
  * CONTEXT.md「引擎与同步」）；`sortOrder` 是过渡期保留的旧 REST 排序列。
+ * Project 另有 `feedPosition`（Feed Position）：项目行在 feed 视图中与任务
+ * 混排的位次，与任务的 `position` 同处一个键空间，不影响侧边栏顺序。
  */
 
 export type SyncEntity =
@@ -97,6 +99,7 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('completedAt'),
       f('trashedAt'),
       f('position'),
+      f('feedPosition'),
       f('sortOrder', { sql: 'INTEGER' }),
       f('areaId'),
       f('tagIds', { json: true }),

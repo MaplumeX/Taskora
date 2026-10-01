@@ -6,6 +6,7 @@ import type {
   CreateSubtaskDto,
   CreateTaskDto,
   FeedItem,
+  FeedOrderItem,
   SubtaskResponseDto,
   TaskResponseDto,
   UpdateSubtaskDto,
@@ -24,6 +25,7 @@ import {
   deleteTask,
   getTask,
   getTasks,
+  reorderFeed,
   reorderSubtasks,
   reorderTasks,
   restoreTask,
@@ -179,6 +181,28 @@ export function reorderInSlots<T extends ListItem>(list: T[], orderedIds: string
   const members = slots
     .map((index) => list[index])
     .sort((a, b) => (rank.get(a.id) ?? 0) - (rank.get(b.id) ?? 0));
+  const next = [...list];
+  slots.forEach((slot, index) => {
+    next[slot] = members[index];
+  });
+  return next;
+}
+
+/**
+ * feed 混排的槽位重排：按 items（任务与项目行）的目标顺序重排列表中的
+ * 成员行，非成员行原位不动。任务行（tasks 列表无 type）按 task 计。
+ */
+export function reorderFeedInSlots<T extends ListItem>(list: T[], items: FeedOrderItem[]): T[] {
+  const keyOf = (item: ListItem) => `${item.type ?? 'task'}:${item.id}`;
+  const rank = new Map(items.map((item, index) => [`${item.type}:${item.id}`, index]));
+  const slots: number[] = [];
+  list.forEach((item, index) => {
+    if (rank.has(keyOf(item))) slots.push(index);
+  });
+  if (slots.length < 2) return list;
+  const members = slots
+    .map((index) => list[index])
+    .sort((a, b) => (rank.get(keyOf(a)) ?? 0) - (rank.get(keyOf(b)) ?? 0));
   const next = [...list];
   slots.forEach((slot, index) => {
     next[slot] = members[index];
@@ -492,6 +516,35 @@ export function useReorderTasks() {
     onSettled: () => {
       refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+    },
+  });
+}
+
+/**
+ * feed 拖拽重排（feed-project-ordering spec）：任务与项目行一起按显示顺序
+ * 写回——任务写 position，项目写 feedPosition（不动侧边栏顺序）。
+ */
+export function useReorderFeed() {
+  const queryClient = useQueryCache();
+  return useMutation({
+    mutationFn: (items: FeedOrderItem[]) => reorderFeed(items),
+    onMutate: async (items) => {
+      await cancelTaskLists(queryClient);
+      const snapshot = snapshotTaskLists(queryClient);
+      for (const root of TASK_LIST_ROOTS) {
+        queryClient.setQueriesData<ListItem[]>({ queryKey: [root] }, (old) =>
+          old ? reorderFeedInSlots(old, items) : old,
+        );
+      }
+      return { snapshot };
+    },
+    onError: (_err, _items, ctx) => {
+      if (ctx?.snapshot) restoreSnapshot(queryClient, ctx.snapshot);
+    },
+    onSettled: () => {
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });
 }

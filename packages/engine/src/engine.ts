@@ -292,13 +292,51 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
   };
 
   /**
+   * feed 排序键空间的 re-balance：任务 Position 与项目 Feed Position 在
+   * feed 中混排（feedSortKey），必须合成一张有序表一起修，否则只重排
+   * 任务会把夹在它们之间的项目行挪到错误的一侧。任务 Position 只在这里
+   * re-balance；顺序保持不变，任务之间的相对顺序（项目页等）同样不变。
+   */
+  const rebalanceFeedKeys = async (): Promise<void> => {
+    const inflated =
+      (await replica.countInflatedPositions('task', MAX_POSITION_LENGTH)) +
+      (await replica.countInflatedPositions('project', MAX_POSITION_LENGTH, 'feedPosition'));
+    if (inflated === 0) return;
+    const merged = [
+      ...(await replica.positionKeys('task')).map((row) => ({ ...row, id: `task:${row.id}` })),
+      ...(await replica.positionKeys('project', 'feedPosition')).map((row) => ({
+        ...row,
+        id: `project:${row.id}`,
+      })),
+    ].sort(
+      (a, b) =>
+        (a.position < b.position ? -1 : a.position > b.position ? 1 : 0) ||
+        (a.id < b.id ? -1 : a.id > b.id ? 1 : 0),
+    );
+    const changes = rebalanceSegments(merged);
+    const pick = (prefix: string) =>
+      changes
+        .filter(({ id }) => id.startsWith(prefix))
+        .map(({ id, position }) => ({ id: id.slice(prefix.length), position }));
+    await replica.updateMany(
+      'task',
+      pick('task:').map(({ id, position }) => ({ id, patch: { position } })),
+    );
+    await replica.updateMany(
+      'project',
+      pick('project:').map(({ id, position }) => ({ id, patch: { feedPosition: position } })),
+    );
+  };
+
+  /**
    * Position re-balance（ADR-0007）：出现超长键（反复插队的痕迹）时，
    * 只重排膨胀键所在的那一段，作为普通字段写入（走 LWW，推送 hub）。
    * 每次同步都会跑：先在 SQLite 里计数，平时不传输任何行；真有膨胀时
    * 也只取 id / position 两列。
    */
   const rebalanceIfInflated = async (): Promise<void> => {
-    for (const entity of ['task', 'project', 'tag'] as SyncEntity[]) {
+    await rebalanceFeedKeys();
+    for (const entity of ['project', 'tag'] as SyncEntity[]) {
       if ((await replica.countInflatedPositions(entity, MAX_POSITION_LENGTH)) === 0) continue;
       const changes = rebalanceSegments(await replica.positionKeys(entity));
       await replica.updateMany(

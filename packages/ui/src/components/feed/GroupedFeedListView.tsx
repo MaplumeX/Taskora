@@ -4,6 +4,7 @@ import {
   closestCenter,
   DndContext,
   DragOverlay,
+  MeasuringStrategy,
   MouseSensor,
   pointerWithin,
   TouchSensor,
@@ -12,21 +13,33 @@ import {
   useSensors,
   type CollisionDetection,
   type DragEndEvent,
+  type DragMoveEvent,
+  type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import {
-  SortableContext,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { SortableContext, useSortable } from '@dnd-kit/sortable';
 import { toast } from 'sonner';
 
-import type { FeedItem, TaskFeedItem, UpdateTaskDto } from '@taskora/shared';
+import type {
+  FeedItem,
+  FeedOrderItem,
+  TaskFeedItem,
+  UpdateTaskDto,
+} from '@taskora/shared';
 
 import { cn } from '@/lib/utils';
+import {
+  dndListProps,
+  dragOverlayClass,
+  dropAnimation,
+  flipId,
+  noLayoutAnimation,
+  noopSortingStrategy,
+  useFlipList,
+  useHeldValue,
+} from '../../lib/dnd';
 import { FeedItemRow } from './FeedItemRow';
-import { FeedEmptyHint } from './FeedListView';
+import { EmptyState } from '@/components/common/EmptyState';
 import { ProjectGroupHeaderRow } from './ProjectGroupHeaderRow';
 import { AreaGroupHeaderRow } from './AreaGroupHeaderRow';
 import {
@@ -39,7 +52,7 @@ import {
   useAreasQuery,
   useCompleteTask,
   useProjectsQuery,
-  useReorderTasks,
+  useReorderFeed,
   useSelectionScope,
   useTaskRowSelection,
   useUncompleteTask,
@@ -53,6 +66,11 @@ interface Props {
   emptyHint?: string;
   /** 视图本身已表达日期语境时传 false（如 Today），省略行首日期 chip。 */
   showScheduledBadge?: boolean;
+  /**
+   * 是否按项目/领域分组（默认 true）。关闭时为平铺列表：全部任务在
+   * 未分组区、与独立项目行按 feed 顺序交错，拖拽只重排、不改归属。
+   */
+  grouping?: boolean;
 }
 
 const UNGROUPED = 'ungrouped';
@@ -61,13 +79,10 @@ type ContainerId = typeof UNGROUPED | string;
 const TASK_DND_PREFIX = 'task:';
 const CONTAINER_DND_PREFIX = 'container:';
 const HEADER_DND_PREFIX = 'header:';
+/** 独立项目行（顶部未分组区，非组头）。 */
+const PROJECT_ROW_DND_PREFIX = 'project:';
 
 type PlacementEdge = 'before' | 'after';
-
-export interface GroupedFeedPlacement {
-  containerId: ContainerId;
-  index: number;
-}
 
 export function taskDndId(id: string) {
   return `${TASK_DND_PREFIX}${id}`;
@@ -81,26 +96,11 @@ export function headerDndId(id: string) {
   return `${HEADER_DND_PREFIX}${id}`;
 }
 
-/** 由推导结果播种拖拽容器：ungrouped 装顶部浮动任务；每个组头容器装其成员任务。 */
-export function containersFromLayout(layout: GroupedFeedLayout): {
-  zoneOrder: ContainerId[];
-  containers: Record<ContainerId, string[]>;
-} {
-  const containers: Record<ContainerId, string[]> = { [UNGROUPED]: [] };
-  const zoneOrder: ContainerId[] = [UNGROUPED];
-  for (const block of layout.blocks) {
-    if (block.kind === 'task') {
-      if (block.groupHeaderId === null) containers[UNGROUPED].push(block.item.id);
-      continue;
-    }
-    if (block.kind === 'projectGroupHeader' || block.kind === 'areaGroupHeader') {
-      const id = block.kind === 'projectGroupHeader' ? block.project.id : block.area.id;
-      containers[id] = [...block.taskIds];
-      zoneOrder.push(id);
-    }
-  }
-  return { zoneOrder, containers };
+export function projectRowDndId(id: string) {
+  return `${PROJECT_ROW_DND_PREFIX}${id}`;
 }
+
+type FeedDragTarget = { overKey: string; edge: PlacementEdge };
 
 interface ParentMaps {
   kinds: Map<string, 'project' | 'area'>;
@@ -118,118 +118,215 @@ function parentMapsFromLayout(layout: GroupedFeedLayout): ParentMaps {
   return { kinds };
 }
 
-/** 落点解析：任务行 → 其容器内 before/after；容器/组头 → 该组末尾。 */
-export function resolveGroupedFeedPlacement(
-  containers: Record<ContainerId, string[]>,
-  overKey: string,
-  edge: PlacementEdge,
-): GroupedFeedPlacement | null {
-  if (overKey.startsWith(TASK_DND_PREFIX)) {
-    const overTaskId = overKey.slice(TASK_DND_PREFIX.length);
-    const containerId = Object.keys(containers).find((id) =>
-      containers[id].includes(overTaskId),
-    );
-    if (!containerId) return null;
-    const overIndex = containers[containerId].indexOf(overTaskId);
-    if (overIndex < 0) return null;
-    return { containerId, index: overIndex + (edge === 'after' ? 1 : 0) };
+/** 推导结果中每个任务所在的容器（组头 id；顶部未分组区为 UNGROUPED）。 */
+export function taskContainersOf(layout: GroupedFeedLayout): Map<string, ContainerId> {
+  const containers = new Map<string, ContainerId>();
+  for (const block of layout.blocks) {
+    if (block.kind === 'task') containers.set(block.item.id, block.groupHeaderId ?? UNGROUPED);
   }
-  // 组头行与容器空白同义：落到该组末尾。
-  for (const prefix of [CONTAINER_DND_PREFIX, HEADER_DND_PREFIX]) {
-    if (!overKey.startsWith(prefix)) continue;
-    const containerId = overKey.slice(prefix.length);
-    const target = containers[containerId];
-    if (!target) return null;
-    return { containerId, index: target.length };
-  }
-  return null;
+  return containers;
 }
 
-/** 在容器集合内移动任务（跨容器 = 改归属，同容器 = 重排）；无变化返回 null。 */
-export function moveGroupedFeedTask(
-  containers: Record<ContainerId, string[]>,
-  activeTaskId: string,
-  placement: GroupedFeedPlacement,
-): Record<ContainerId, string[]> | null {
-  const sourceId = Object.keys(containers).find((id) =>
-    containers[id].includes(activeTaskId),
-  );
-  const targetIds = containers[placement.containerId];
-  if (!sourceId || !targetIds) return null;
+/** feed 项的 dnd id：任务行与独立项目行（顶部未分组区）。 */
+export function feedItemDndId(item: Pick<FeedItem, 'type' | 'id'>) {
+  return item.type === 'task' ? taskDndId(item.id) : projectRowDndId(item.id);
+}
 
-  const sourceIds = containers[sourceId];
-  const sourceIndex = sourceIds.indexOf(activeTaskId);
-  let insertionIndex = Math.max(0, Math.min(placement.index, targetIds.length));
-  if (sourceId === placement.containerId && sourceIndex < insertionIndex) {
-    insertionIndex -= 1;
+/**
+ * 可排序行的显示顺序：任务行与独立项目行（被组头吸收的项目不在其中），
+ * 即 feed 重排写回的顺序。
+ */
+export function feedOrderOf(layout: GroupedFeedLayout): FeedOrderItem[] {
+  return layout.blocks.flatMap((block): FeedOrderItem[] => {
+    if (block.kind === 'task') return [{ type: 'task', id: block.item.id }];
+    if (block.kind === 'projectRow') return [{ type: 'project', id: block.item.id }];
+    return [];
+  });
+}
+
+function sameFeedItem(item: FeedItem, ref: Pick<FeedItem, 'type' | 'id'>) {
+  return item.type === ref.type && item.id === ref.id;
+}
+
+/**
+ * 实时预览 / 落点：把被拖的行移到目标处，返回新的 feed 项数组（无变化返回 null）。
+ *
+ * - 任务行 / 独立项目行 → 插到该行之前/之后（edge）；任务的归属随目标所在组；
+ * - 组头 / 组容器 → 该组末尾；顶部未分组区空白 → 未分组区末尾。
+ * - 独立项目行只能在顶部未分组区内移动（它不属于任何组），越界目标不生效。
+ *
+ * 组内顺序与未分组区顺序都跟随 feed 项数组顺序（deriveGroupedFeedLayout），
+ * 因此只需在数组内挪位并改写归属字段。任务回到原组时恢复拖拽开始时的原
+ * 字段（孤儿任务留在未分组区不会被清掉项目归属）。
+ */
+export function moveFeedItemToTarget(
+  items: FeedItem[],
+  layout: GroupedFeedLayout,
+  origin: { item: FeedItem; container: ContainerId },
+  target: FeedDragTarget,
+): FeedItem[] | null {
+  const active = origin.item;
+  const containers = taskContainersOf(layout);
+  const topRows = layout.blocks.flatMap((block): Array<Pick<FeedItem, 'type' | 'id'>> => {
+    if (block.kind === 'projectRow') return [block.item];
+    if (block.kind === 'task' && block.groupHeaderId === null) return [block.item];
+    return [];
+  });
+  const lastIn = (containerId: ContainerId): Pick<FeedItem, 'type' | 'id'> | null => {
+    const rows =
+      containerId === UNGROUPED
+        ? topRows
+        : [...containers]
+            .filter(([, id]) => id === containerId)
+            .map(([id]) => ({ type: 'task' as const, id }));
+    const others = rows.filter((row) => !sameFeedItem(active, row));
+    return others[others.length - 1] ?? null;
+  };
+
+  let targetContainer: ContainerId;
+  let anchor: Pick<FeedItem, 'type' | 'id'> | null;
+  let after: boolean;
+  const { overKey, edge } = target;
+  if (overKey.startsWith(TASK_DND_PREFIX) || overKey.startsWith(PROJECT_ROW_DND_PREFIX)) {
+    const isTask = overKey.startsWith(TASK_DND_PREFIX);
+    const over = {
+      type: isTask ? ('task' as const) : ('project' as const),
+      id: overKey.slice((isTask ? TASK_DND_PREFIX : PROJECT_ROW_DND_PREFIX).length),
+    };
+    const overContainer = isTask ? containers.get(over.id) : UNGROUPED;
+    if (sameFeedItem(active, over) || overContainer === undefined) return null;
+    targetContainer = overContainer;
+    anchor = over;
+    after = edge === 'after';
+  } else if (overKey.startsWith(HEADER_DND_PREFIX) || overKey.startsWith(CONTAINER_DND_PREFIX)) {
+    const prefix = overKey.startsWith(HEADER_DND_PREFIX) ? HEADER_DND_PREFIX : CONTAINER_DND_PREFIX;
+    targetContainer = overKey.slice(prefix.length);
+    if (targetContainer !== UNGROUPED && !parentMapsFromLayout(layout).kinds.has(targetContainer)) {
+      return null;
+    }
+    anchor = lastIn(targetContainer);
+    after = true;
+  } else {
+    return null;
   }
-  const maxIndexAfterRemoval =
-    sourceId === placement.containerId ? targetIds.length - 1 : targetIds.length;
-  insertionIndex = Math.min(insertionIndex, maxIndexAfterRemoval);
-  if (sourceId === placement.containerId && sourceIndex === insertionIndex) return null;
+  if (active.type === 'project' && targetContainer !== UNGROUPED) return null;
 
-  const next = Object.fromEntries(
-    Object.entries(containers).map(([id, ids]) => [id, [...ids]]),
-  );
-  next[sourceId].splice(sourceIndex, 1);
-  next[placement.containerId].splice(insertionIndex, 0, activeTaskId);
-  return next;
+  let moved: FeedItem = active;
+  if (active.type === 'task' && targetContainer !== origin.container) {
+    const data = reassignmentDto(targetContainer, parentMapsFromLayout(layout));
+    if (!data) return null;
+    moved = { ...active, projectId: data.projectId ?? null, areaId: data.areaId ?? null };
+  }
+
+  const rest = items.filter((item) => !sameFeedItem(item, active));
+  let index: number;
+  if (anchor !== null) {
+    const anchorRef = anchor;
+    const anchorIndex = rest.findIndex((item) => sameFeedItem(item, anchorRef));
+    if (anchorIndex < 0) return null;
+    index = anchorIndex + (after ? 1 : 0);
+  } else {
+    // 目标区内没有其它行：组的位置由侧边栏顺序决定，数组内位置无关紧要；
+    // 未分组区则放到最前，紧贴顶部投放面。
+    index = targetContainer === UNGROUPED ? 0 : rest.length;
+  }
+  const next = [...rest.slice(0, index), moved, ...rest.slice(index)];
+
+  const current = items.find((item) => sameFeedItem(item, active));
+  const unchanged =
+    current !== undefined &&
+    (current.type !== 'task' ||
+      moved.type !== 'task' ||
+      (current.projectId === moved.projectId && current.areaId === moved.areaId)) &&
+    next.every((item, i) => items[i] !== undefined && sameFeedItem(item, items[i]));
+  return unchanged ? null : next;
 }
 
-function ordersEqual(left: string[], right: string[]) {
-  return left.length === right.length && left.every((id, index) => id === right[index]);
+function feedOrderKey(order: FeedOrderItem[]) {
+  return order.map((item) => `${item.type}:${item.id}`).join('|');
 }
 
-interface SortableFeedTaskProps {
-  item: TaskFeedItem;
+/** 显示顺序 + 任务归属的签名（松手后的本地结果是否已被 props 追上）。 */
+function feedSignature(layout: GroupedFeedLayout) {
+  const containers = taskContainersOf(layout);
+  return feedOrderOf(layout)
+    .map((item) =>
+      item.type === 'task' ? `task:${item.id}@${containers.get(item.id)}` : `project:${item.id}`,
+    )
+    .join('|');
+}
+
+function isRowKey(key: string) {
+  return key.startsWith(TASK_DND_PREFIX) || key.startsWith(PROJECT_ROW_DND_PREFIX);
+}
+
+interface SortableFeedRowProps {
+  item: FeedItem;
+  placeholder: boolean;
   projectTitle?: string;
   areaTitle?: string;
   selectionState: SelectionState;
-  onToggleComplete: () => void;
-  onRowClick: () => void;
+  onToggleComplete?: () => void;
+  onRowClick?: () => void;
   showScheduledBadge?: boolean;
 }
 
-function SortableFeedTask({
+/** 可拖拽的 feed 行：任务行，或顶部未分组区的独立项目行。 */
+function SortableFeedRow({
   item,
+  placeholder,
   projectTitle,
   areaTitle,
   selectionState,
   onToggleComplete,
   onRowClick,
   showScheduledBadge,
-}: SortableFeedTaskProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: taskDndId(item.id) });
+}: SortableFeedRowProps) {
+  // 实时预览：布局随指针重排、位移由 FLIP 动画承担（见 lib/dnd.ts）。
+  const dndId = feedItemDndId(item);
+  const { attributes, listeners, setNodeRef } = useSortable({
+    id: dndId,
+    animateLayoutChanges: noLayoutAnimation,
+  });
 
   return (
     <div
       ref={setNodeRef}
-      data-sortable-task-id={item.id}
-      style={{
-        transform: CSS.Translate.toString(transform),
-        transition,
-        opacity: isDragging ? 0.45 : undefined,
-        zIndex: isDragging ? 10 : undefined,
-      }}
+      {...(item.type === 'task'
+        ? { 'data-sortable-task-id': item.id }
+        : { 'data-sortable-project-id': item.id })}
+      {...flipId(dndId)}
       {...attributes}
       {...listeners}
       tabIndex={-1}
     >
-      <FeedItemRow
-        item={item}
-        projectTitle={projectTitle}
-        areaTitle={areaTitle}
-        selectionState={selectionState}
-        onToggleComplete={onToggleComplete}
-        onRowClick={onRowClick}
-        showScheduledBadge={showScheduledBadge}
-      />
+      {placeholder ? (
+        // 空位：保留真实行（不可见），高度与被拖行完全一致。
+        <div data-testid={`${item.type}-placeholder-${item.id}`} className="invisible" aria-hidden="true">
+          <FeedItemRow
+            item={item}
+            projectTitle={projectTitle}
+            areaTitle={areaTitle}
+            selectionState="idle"
+            showScheduledBadge={showScheduledBadge}
+          />
+        </div>
+      ) : (
+        <FeedItemRow
+          item={item}
+          projectTitle={projectTitle}
+          areaTitle={areaTitle}
+          selectionState={selectionState}
+          onToggleComplete={onToggleComplete}
+          onRowClick={onRowClick}
+          showScheduledBadge={showScheduledBadge}
+        />
+      )}
     </div>
   );
 }
 
-/** 组头行的放置目标（投向组头 = 落在该组末尾；isOver 时给出落点反馈）。
+/** 组头行的放置目标（投向组头 = 落在该组末尾）。
  *  同时承载组间间隔：mt-6 开新的一块，首个组头（first）无额外间距。 */
 function GroupHeaderDropZone({
   parentId,
@@ -238,12 +335,13 @@ function GroupHeaderDropZone({
   parentId: string;
   children: React.ReactNode;
 }) {
-  const { setNodeRef, isOver } = useDroppable({ id: headerDndId(parentId) });
+  const { setNodeRef } = useDroppable({ id: headerDndId(parentId) });
   return (
     <div
       ref={setNodeRef}
       data-group-header-dropzone={parentId}
-      className={cn('mt-6 rounded-lg first:mt-0', isOver && 'bg-accent/40')}
+      {...flipId(headerDndId(parentId))}
+      className="mt-6 rounded-lg first:mt-0"
     >
       {children}
     </div>
@@ -262,7 +360,7 @@ function TaskContainerDropZone({
 }) {
   const { setNodeRef } = useDroppable({ id: containerDndId(containerId) });
   return (
-    <SortableContext items={taskIds.map(taskDndId)} strategy={verticalListSortingStrategy}>
+    <SortableContext items={taskIds.map(taskDndId)} strategy={noopSortingStrategy}>
       <div ref={setNodeRef} data-task-container={containerId} className="min-h-2 rounded-md">
         {children}
       </div>
@@ -270,28 +368,34 @@ function TaskContainerDropZone({
   );
 }
 
-/** 顶部未分组区的放置目标（未分组任务与独立项目行共享一个容器）。 */
+/**
+ * 顶部未分组区的放置目标（未分组任务与独立项目行共享一个容器）。
+ * floating：未分组区为空时的拖拽投放面——浮在列表上方、不占文档流，
+ * 拖拽开始时不会把整列往下推出一块空白。
+ */
 function UngroupedDropZone({
-  dragging,
+  floating = false,
   children,
 }: {
-  dragging: boolean;
-  children: React.ReactNode;
+  floating?: boolean;
+  children?: React.ReactNode;
 }) {
   const { setNodeRef } = useDroppable({ id: containerDndId(UNGROUPED) });
   return (
     <div
       ref={setNodeRef}
       data-task-container={UNGROUPED}
-      className={cn('flex flex-col rounded-md', dragging && 'min-h-10')}
+      className={cn(
+        'flex flex-col rounded-md',
+        floating && 'absolute inset-x-0 bottom-full h-10',
+      )}
     >
       {children}
     </div>
   );
 }
 
-type RenderChunk =
-  | { type: 'projectRow'; block: Extract<GroupedFeedBlock, { kind: 'projectRow' }> }
+type GroupChunk =
   | {
       type: 'header';
       block: Extract<
@@ -305,9 +409,19 @@ type RenderChunk =
  * Grouped View（分组视图）列表：今天/随时/将来三个时间视图按项目/领域
  * 聚类展示任务。分组为纯渲染层推导（deriveGroupedFeedLayout），扁平单层、
  * 不可折叠；组内拖拽重排写回全局 Position，跨组拖拽改任务归属，组头不
- * 可拖拽（组间顺序由侧边栏持有）。
+ * 可拖拽（组间顺序由侧边栏持有）。顶部未分组区的独立项目行可与任务一起
+ * 拖拽排序，写回项目的 Feed Position（不影响侧边栏顺序）。
+ *
+ * 拖拽为实时预览：拖拽中在本地 feed 项副本上挪位（含跨组改归属）并重新
+ * 推导分组，空位即落点；松手后本地结果保留到乐观更新追上（lib/dnd.ts）。
+ * grouping=false 时同一套渲染与拖拽用于平铺时间视图。
  */
-export function GroupedFeedListView({ items, emptyHint, showScheduledBadge }: Props) {
+export function GroupedFeedListView({
+  items,
+  emptyHint,
+  showScheduledBadge,
+  grouping = true,
+}: Props) {
   const { t } = useTranslation();
   const { handleRowClick, handleBlankClick, selectedIds, expandedId } =
     useTaskRowSelection();
@@ -315,13 +429,41 @@ export function GroupedFeedListView({ items, emptyHint, showScheduledBadge }: Pr
   const { data: areas = [] } = useAreasQuery();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
-  const reorderTasks = useReorderTasks();
+  const reorderFeed = useReorderFeed();
   const updateTask = useUpdateTask();
 
-  const layout = React.useMemo(
-    () => deriveGroupedFeedLayout({ items, projects, areas, groupingEnabled: true }),
-    [items, projects, areas],
+  const derive = (list: FeedItem[], retainGroupIds?: ReadonlySet<string>) =>
+    deriveGroupedFeedLayout({
+      items: list,
+      projects,
+      areas,
+      groupingEnabled: grouping,
+      retainGroupIds,
+    });
+
+  // 松手后的本地结果：显示顺序与任务归属追上之前一直以它渲染。
+  const [shownItems, holdItems] = useHeldValue(items, (list) => feedSignature(derive(list)));
+  const [drag, setDrag] = React.useState<{
+    origin: { item: FeedItem; container: ContainerId };
+    items: FeedItem[];
+  } | null>(null);
+  const dragRef = React.useRef(drag);
+  const lastTargetRef = React.useRef<FeedDragTarget | null>(null);
+
+  const viewItems = drag?.items ?? shownItems;
+  const retainGroupIds = React.useMemo(
+    () =>
+      drag && drag.origin.container !== UNGROUPED
+        ? new Set([drag.origin.container])
+        : undefined,
+    [drag],
   );
+  const layout = React.useMemo(
+    () => derive(viewItems, retainGroupIds),
+    // derive 只依赖 projects / areas / grouping
+    [viewItems, retainGroupIds, projects, areas, grouping],
+  );
+  const flip = useFlipList<HTMLDivElement>(layout);
 
   // 注册当前可见行（ADR-0004）：组头行携带 groupHeader 元数据供「下方新建」
   // 预填父级与 Alt+↑/↓ 组边界钳制；所有行始终可见。
@@ -367,24 +509,11 @@ export function GroupedFeedListView({ items, emptyHint, showScheduledBadge }: Pr
     () => Object.fromEntries(areas.map((a) => [a.id, a.title])),
     [areas],
   );
-  const itemMap = React.useMemo(
-    () =>
-      new Map(
-        items.filter((i): i is TaskFeedItem => i.type === 'task').map((i) => [i.id, i]),
-      ),
-    [items],
+  // dnd id → 行（任务与独立项目行）。
+  const rowMap = React.useMemo(
+    () => new Map(viewItems.map((item) => [feedItemDndId(item), item])),
+    [viewItems],
   );
-
-  const [activeTask, setActiveTask] = React.useState<TaskFeedItem | null>(null);
-  const lastTargetRef = React.useRef<{ overKey: string; edge: PlacementEdge } | null>(
-    null,
-  );
-
-  const { zoneOrder, containers } = React.useMemo(
-    () => containersFromLayout(layout),
-    [layout],
-  );
-  const parentMaps = React.useMemo(() => parentMapsFromLayout(layout), [layout]);
 
   // 鼠标：移动 5px 激活；触摸：按住 300ms 再移动才激活，避免与列表滚动冲突。
   // 不挂 KeyboardSensor：组头不可拖拽，行内 Enter/Space 属于全局键位。
@@ -395,13 +524,11 @@ export function GroupedFeedListView({ items, emptyHint, showScheduledBadge }: Pr
 
   const collisionDetection = React.useCallback<CollisionDetection>((args) => {
     const activeKey = String(args.active.id);
-    if (!activeKey.startsWith(TASK_DND_PREFIX)) return [];
+    if (!isRowKey(activeKey)) return [];
     const compatible = args.droppableContainers.filter((container) => {
       const id = String(container.id);
       return (
-        id.startsWith(TASK_DND_PREFIX) ||
-        id.startsWith(CONTAINER_DND_PREFIX) ||
-        id.startsWith(HEADER_DND_PREFIX)
+        isRowKey(id) || id.startsWith(CONTAINER_DND_PREFIX) || id.startsWith(HEADER_DND_PREFIX)
       );
     });
     const collisions = args.pointerCoordinates
@@ -409,9 +536,9 @@ export function GroupedFeedListView({ items, emptyHint, showScheduledBadge }: Pr
       : closestCenter({ ...args, droppableContainers: compatible });
     if (collisions.length === 0) return [];
 
-    // 优先最具体的落点：任务行 > 组头 > 容器空白。
+    // 优先最具体的落点：任务 / 项目行（含被拖行自己的空位）> 组头 > 容器空白。
     const collision = args.pointerCoordinates
-      ? (collisions.find(({ id }) => String(id).startsWith(TASK_DND_PREFIX)) ??
+      ? (collisions.find(({ id }) => isRowKey(String(id))) ??
         collisions.find(({ id }) => String(id).startsWith(HEADER_DND_PREFIX)) ??
         collisions.find(({ id }) => String(id).startsWith(CONTAINER_DND_PREFIX)))
       : collisions[0];
@@ -419,7 +546,7 @@ export function GroupedFeedListView({ items, emptyHint, showScheduledBadge }: Pr
 
     const overKey = String(collision.id);
     let edge: PlacementEdge = 'before';
-    if (overKey.startsWith(TASK_DND_PREFIX)) {
+    if (isRowKey(overKey)) {
       const rect = args.droppableRects.get(collision.id);
       if (args.pointerCoordinates && rect) {
         edge = args.pointerCoordinates.y >= rect.top + rect.height / 2 ? 'after' : 'before';
@@ -429,8 +556,8 @@ export function GroupedFeedListView({ items, emptyHint, showScheduledBadge }: Pr
     return [collision];
   }, []);
 
-  if (items.length === 0) {
-    return <FeedEmptyHint hint={emptyHint ?? t('task:empty')} />;
+  if (items.length === 0 && !drag) {
+    return <EmptyState hint={emptyHint ?? t('task:empty')} />;
   }
 
   const handleToggle = (item: TaskFeedItem) => {
@@ -442,107 +569,176 @@ export function GroupedFeedListView({ items, emptyHint, showScheduledBadge }: Pr
     }
   };
 
+  const updateDrag = (next: typeof drag) => {
+    dragRef.current = next;
+    setDrag(next);
+  };
+
   const handleDragStart = ({ active }: DragStartEvent) => {
-    const activeKey = String(active.id);
-    if (!activeKey.startsWith(TASK_DND_PREFIX)) return;
-    const taskId = activeKey.slice(TASK_DND_PREFIX.length);
-    const item = itemMap.get(taskId);
+    const item = rowMap.get(String(active.id));
     if (!item) return;
+    const container =
+      item.type === 'task' ? taskContainersOf(layout).get(item.id) : UNGROUPED;
+    if (container === undefined) return;
 
     const focused = document.activeElement as HTMLElement | null;
     const sortableTask = focused?.closest<HTMLElement>('[data-sortable-task-id]');
-    if (sortableTask?.dataset.sortableTaskId === taskId) focused?.blur();
+    if (sortableTask?.dataset.sortableTaskId === item.id) focused?.blur();
     handleBlankClick();
 
     lastTargetRef.current = null;
-    setActiveTask(item);
+    updateDrag({ origin: { item, container }, items: viewItems });
+  };
+
+  /** 把当前碰撞目标应用到拖拽副本上；返回应用后的 feed 项。 */
+  const applyTarget = (target: FeedDragTarget | null) => {
+    const current = dragRef.current;
+    if (!current || !target) return current?.items ?? null;
+    const retain =
+      current.origin.container !== UNGROUPED ? new Set([current.origin.container]) : undefined;
+    const next = moveFeedItemToTarget(
+      current.items,
+      derive(current.items, retain),
+      current.origin,
+      target,
+    );
+    return next ?? current.items;
+  };
+
+  const previewTarget = (activeKey: string) => {
+    const current = dragRef.current;
+    if (!current || activeKey !== feedItemDndId(current.origin.item)) return;
+    const next = applyTarget(lastTargetRef.current);
+    if (!next || next === current.items) return;
+    flip.capture();
+    updateDrag({ ...current, items: next });
+  };
+
+  const handleDragOver = ({ active, over }: DragOverEvent) => {
+    if (!over) return;
+    const overKey = String(over.id);
+    if (lastTargetRef.current?.overKey !== overKey) {
+      lastTargetRef.current = { overKey, edge: 'before' };
+    }
+    previewTarget(String(active.id));
+  };
+
+  // dnd-kit 只在 over.id 变化时触发 onDragOver；同一行内越过中线要靠每次
+  // 指针移动重读碰撞检测记下的 edge。
+  const handleDragMove = ({ active }: DragMoveEvent) => {
+    previewTarget(String(active.id));
   };
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
-    const activeKey = String(active.id);
-    setActiveTask(null);
-    if (!activeKey.startsWith(TASK_DND_PREFIX)) return;
-    const taskId = activeKey.slice(TASK_DND_PREFIX.length);
-    if (!over) {
-      lastTargetRef.current = null;
-      return;
-    }
-    const overKey = String(over.id);
-    const edge =
-      lastTargetRef.current?.overKey === overKey ? lastTargetRef.current.edge : 'before';
+    const current = dragRef.current;
+    const target: FeedDragTarget | null = over
+      ? {
+          overKey: String(over.id),
+          edge:
+            lastTargetRef.current?.overKey === String(over.id)
+              ? lastTargetRef.current.edge
+              : 'before',
+        }
+      : null;
+    // 松手 = 落在最后一次预览处（拖出列表外也保留最后的有效预览）。
+    const finalItems = applyTarget(target);
     lastTargetRef.current = null;
-
-    const placement = resolveGroupedFeedPlacement(containers, overKey, edge);
-    if (!placement) return;
-    const fromContainer = Object.keys(containers).find((id) =>
-      containers[id].includes(taskId),
-    );
-    if (!fromContainer) return;
-
-    const next = moveGroupedFeedTask(containers, taskId, placement);
-    const finalContainers = next ?? containers;
-    const finalOrder = zoneOrder.flatMap((zone) => finalContainers[zone] ?? []);
-    const orderChanged = !ordersEqual(finalOrder, layout.taskOrder);
-
-    if (placement.containerId !== fromContainer) {
-      // 跨组 = 改归属（headingId 由数据层随 projectId 变化自动清除），
-      // 并把任务写回到落点对应的全局位次。
-      const data = reassignmentDto(placement.containerId, parentMaps);
-      if (!data) return;
-      updateTask.mutate({ id: taskId, data });
-      if (orderChanged) reorderTasks.mutate(finalOrder);
+    updateDrag(null);
+    if (!current || !finalItems || String(active.id) !== feedItemDndId(current.origin.item)) {
       return;
     }
 
-    // 同组 = 组内重排，写回全局 Position（与平铺 sortable 路径一致）。
-    if (orderChanged) reorderTasks.mutate(finalOrder);
+    const moved = current.origin.item;
+    const before = derive(items);
+    const after = derive(finalItems);
+    const beforeOrder = feedOrderOf(before);
+    const afterOrder = feedOrderOf(after);
+    const orderChanged = feedOrderKey(afterOrder) !== feedOrderKey(beforeOrder);
+    let data: UpdateTaskDto | null = null;
+    if (moved.type === 'task') {
+      const fromContainer = taskContainersOf(before).get(moved.id);
+      const toContainer = taskContainersOf(after).get(moved.id);
+      if (fromContainer === undefined || toContainer === undefined) return;
+      if (toContainer !== fromContainer) {
+        data = reassignmentDto(toContainer, parentMapsFromLayout(after));
+        if (!data) return;
+      }
+    }
+    if (!orderChanged && !data) return;
+
+    holdItems(finalItems);
+    // 跨组 = 改归属（headingId 由数据层随 projectId 变化自动清除）；顺序按
+    // 显示顺序写回：任务写 Position，独立项目行写 Feed Position。跨组时
+    // 即使显示顺序没变也要写：分组时组内任务总排在顶部区之后、与其位次
+    // 无关，进入顶部区后才按真实位次排（repositionFeed 已在序则不写）。
+    if (data) updateTask.mutate({ id: moved.id, data });
+    if (orderChanged || data) reorderFeed.mutate(afterOrder);
   };
 
   const handleDragCancel = () => {
     lastTargetRef.current = null;
-    setActiveTask(null);
+    updateDrag(null);
   };
 
-  // 渲染序列切块：连续同容器任务合并为一个容器块；顶部未分组区与分组块
-  // 依次排列（扁平单层，组间无嵌套）。
-  const chunks: RenderChunk[] = [];
+  const activeItem = drag?.origin.item ?? null;
+  // 跨组预览会改写归属字段，浮层跟随当前预览中的那一行。
+  const overlayItem = activeItem ? rowMap.get(feedItemDndId(activeItem)) ?? activeItem : null;
+
+  // 顶部未分组区：未分组任务与独立项目行按 feed 顺序交错，同属一个可
+  // 排序容器。其后是扁平单层的分组：组头 + 组内任务。
+  const topRows = layout.blocks.flatMap((block): FeedItem[] => {
+    if (block.kind === 'projectRow') return [block.item];
+    if (block.kind === 'task' && block.groupHeaderId === null) return [block.item];
+    return [];
+  });
+  const groupChunks: GroupChunk[] = [];
   for (const block of layout.blocks) {
-    if (block.kind === 'task') {
-      const containerId = block.groupHeaderId ?? UNGROUPED;
-      const last = chunks[chunks.length - 1];
-      if (last?.type === 'tasks' && last.containerId === containerId) {
+    if (block.kind === 'projectGroupHeader' || block.kind === 'areaGroupHeader') {
+      groupChunks.push({ type: 'header', block });
+    } else if (block.kind === 'task' && block.groupHeaderId !== null) {
+      const last = groupChunks[groupChunks.length - 1];
+      if (last?.type === 'tasks' && last.containerId === block.groupHeaderId) {
         last.taskIds.push(block.item.id);
       } else {
-        chunks.push({ type: 'tasks', containerId, taskIds: [block.item.id] });
+        groupChunks.push({ type: 'tasks', containerId: block.groupHeaderId, taskIds: [block.item.id] });
       }
-    } else if (block.kind === 'projectRow') {
-      chunks.push({ type: 'projectRow', block });
-    } else {
-      chunks.push({ type: 'header', block });
     }
   }
-  const firstHeaderIndex = chunks.findIndex((chunk) => chunk.type === 'header');
-  const topChunks = firstHeaderIndex === -1 ? chunks : chunks.slice(0, firstHeaderIndex);
-  const groupChunks = firstHeaderIndex === -1 ? [] : chunks.slice(firstHeaderIndex);
 
-  const renderTask = (containerId: ContainerId) => (taskId: string) => {
-    const item = itemMap.get(taskId);
-    if (!item) return null;
-    // 孤儿任务在未分组区保留项目/领域标题标签；组内任务的归属已由组头
-    // 表达，不再重复标签。
+  // 孤儿任务在未分组区保留项目/领域标题标签；组内任务的归属已由组头
+  // 表达，不再重复标签。列表行与拖拽浮层共用，保证拖起来的就是那一行。
+  const rowLabels = (item: FeedItem, containerId: ContainerId | undefined) => {
     const ungrouped = containerId === UNGROUPED;
+    if (item.type !== 'task') return {};
+    return {
+      projectTitle: ungrouped && item.projectId ? projectMap[item.projectId] : undefined,
+      areaTitle: ungrouped && item.areaId ? areaMap[item.areaId] : undefined,
+    };
+  };
+
+  const renderRow = (item: FeedItem, containerId: ContainerId) => {
+    const dndId = feedItemDndId(item);
     return (
-      <SortableFeedTask
-        key={taskId}
+      <SortableFeedRow
+        key={dndId}
         item={item}
-        projectTitle={ungrouped && item.projectId ? projectMap[item.projectId] : undefined}
-        areaTitle={ungrouped && item.areaId ? areaMap[item.areaId] : undefined}
-        selectionState={selectionStateOf(selectedIds, expandedId, taskId)}
-        onToggleComplete={() => handleToggle(item)}
-        onRowClick={() => handleRowClick(taskId)}
+        placeholder={activeItem !== null && feedItemDndId(activeItem) === dndId}
+        {...rowLabels(item, containerId)}
+        selectionState={selectionStateOf(selectedIds, expandedId, item.id)}
         showScheduledBadge={showScheduledBadge}
+        {...(item.type === 'task'
+          ? {
+              onToggleComplete: () => handleToggle(item),
+              onRowClick: () => handleRowClick(item.id),
+            }
+          : {})}
       />
     );
+  };
+
+  const renderTask = (containerId: ContainerId) => (taskId: string) => {
+    const item = rowMap.get(taskDndId(taskId));
+    return item ? renderRow(item, containerId) : null;
   };
 
   const renderHeader = (
@@ -565,44 +761,35 @@ export function GroupedFeedListView({ items, emptyHint, showScheduledBadge }: Pr
   };
 
   return (
-    <div className="flex flex-col" onClick={handleBlankClick}>
+    <div
+      ref={flip.rootRef}
+      {...dndListProps}
+      className="relative flex flex-col"
+      onClick={handleBlankClick}
+    >
       <DndContext
         sensors={sensors}
         collisionDetection={collisionDetection}
+        // 实时预览每次重排都会改变行位置，碰撞检测须用最新的测量结果。
+        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
         onDragStart={handleDragStart}
+        onDragMove={handleDragMove}
+        onDragOver={handleDragOver}
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
         {/* 顶部未分组区：未分组任务与独立项目行按合并 feed 顺序交错。
-            拖拽期间即使为空也保留投放面（移出项目 = 拖到此处）。 */}
-        {(topChunks.length > 0 || activeTask) && (
-          <UngroupedDropZone dragging={activeTask !== null}>
-            {topChunks.map((chunk, index) => {
-              if (chunk.type === 'projectRow') {
-                const item = chunk.block.item;
-                return (
-                  <FeedItemRow
-                    key={item.id}
-                    item={item}
-                    selectionState={selectionStateOf(selectedIds, expandedId, item.id)}
-                  />
-                );
-              }
-              if (chunk.type !== 'tasks') return null;
-              return (
-                <SortableContext
-                  key={`${UNGROUPED}:${index}`}
-                  items={chunk.taskIds.map(taskDndId)}
-                  strategy={verticalListSortingStrategy}
-                >
-                  {chunk.taskIds.map(renderTask(UNGROUPED))}
-                </SortableContext>
-              );
-            })}
+            拖拽期间即使为空也保留投放面（移出项目 = 拖到此处），但浮在
+            列表上方，不额外占位（浮动投放面渲染在列表末尾，见下）。 */}
+        {topRows.length > 0 && (
+          <UngroupedDropZone>
+            <SortableContext items={topRows.map(feedItemDndId)} strategy={noopSortingStrategy}>
+              {topRows.map((item) => renderRow(item, UNGROUPED))}
+            </SortableContext>
           </UngroupedDropZone>
         )}
 
-        {groupChunks.map((chunk, index) => {
+        {groupChunks.map((chunk) => {
           if (chunk.type === 'header') {
             const parentId =
               chunk.block.kind === 'projectGroupHeader'
@@ -617,7 +804,7 @@ export function GroupedFeedListView({ items, emptyHint, showScheduledBadge }: Pr
           if (chunk.type !== 'tasks') return null;
           return (
             <TaskContainerDropZone
-              key={`${chunk.containerId}:${index}`}
+              key={`tasks:${chunk.containerId}`}
               containerId={chunk.containerId}
               taskIds={chunk.taskIds}
             >
@@ -626,14 +813,22 @@ export function GroupedFeedListView({ items, emptyHint, showScheduledBadge }: Pr
           );
         })}
 
-        <DragOverlay>
-          {activeTask ? (
-            <div
-              className="pointer-events-none w-[min(36rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border/70 bg-card shadow-popover"
-              aria-hidden="true"
-              {...{ inert: '' }}
-            >
-              <FeedItemRow item={activeTask} selectionState="idle" />
+        {/* 绝对定位，DOM 位置不影响显示；放在末尾是为了不挤掉首个组头的
+            :first-child（否则 mt-6 生效，拖拽一开始整列下移 24px）。 */}
+        {topRows.length === 0 && activeItem && <UngroupedDropZone floating />}
+
+        <DragOverlay dropAnimation={dropAnimation}>
+          {overlayItem ? (
+            <div className={cn(dragOverlayClass, 'bg-card')} aria-hidden="true" {...{ inert: '' }}>
+              <FeedItemRow
+                item={overlayItem}
+                {...rowLabels(
+                  overlayItem,
+                  overlayItem.type === 'task' ? taskContainersOf(layout).get(overlayItem.id) : UNGROUPED,
+                )}
+                selectionState="idle"
+                showScheduledBadge={showScheduledBadge}
+              />
             </div>
           ) : null}
         </DragOverlay>

@@ -150,6 +150,10 @@ _Avoid_: 服务器时间、纯墙上时钟
 Task 在列表中的排序位次，用 fractional indexing 字符串表达，是 Task 的普通字段，纳入字段级 LWW；插队只需在两个邻居间生成新串，无需重排他人。需要后台偶尔 re-balance 防字符串膨胀。
 _Avoid_: 整数序号、sortOrder、order index
 
+**Feed Position**:
+Project 在 feed 视图（Today / Upcoming / Someday 等）中作为独立项目行、与 Task 混排时的排序位次；与 Task 的 Position 同处一个 fractional indexing 键空间，是 Project 的普通字段，纳入字段级 LWW。只在 feed 中拖动项目行时写入；为空时 feed 按项目的 Position 排。项目的 Position 只表达侧边栏顺序，两者互不影响。Task Position 与 Feed Position 一起 re-balance，保证修复膨胀键不打乱混排顺序。
+_Avoid_: 今日排序、todayIndex、视图内序号
+
 **Outbox**:
 断网或同步未完成时，本地写操作在设备上的排队区；联网后一次性 flush 到 Sync Hub。
 _Avoid_: 消息队列（MQ 意义上的）

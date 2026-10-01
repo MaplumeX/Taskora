@@ -1,15 +1,14 @@
 import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
 
 import type { ProjectResponseDto } from '@taskora/shared';
 
 import { ProjectItem } from '@/components/project/ProjectItem';
 import { projectDndId } from '@/components/layout/sidebarProjectLayout';
+import { flipId, noLayoutAnimation } from '../../lib/dnd';
 
 interface Props {
   project: ProjectResponseDto;
   placeholder?: boolean;
-  projectDragActive?: boolean;
 }
 
 /**
@@ -18,35 +17,31 @@ interface Props {
  * - sortable id 采用 `proj:<projectId>` 前缀，与区域条目 (`area:<id>`) 区分。
  * - listeners 挂在外层 div 而非 ProjectItem 的点击区域上，配合鼠标
  *   distance:5 / 触摸 delay:300 的激活约束，保留点击导航行为。
+ * - 项目拖拽走实时预览：布局随指针重排，位移由 FLIP 动画承担，不叠加
+ *   dnd-kit 的排序位移（见 lib/dnd.ts）。被拖项目在列表里保留为不可见
+ *   的真实行，空位高度与行高一致。
  */
-export function SortableProjectItem({
-  project,
-  placeholder = false,
-  projectDragActive = false,
-}: Props) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: projectDndId(project.id) });
+export function SortableProjectItem({ project, placeholder = false }: Props) {
+  const { attributes, listeners, setNodeRef } = useSortable({
+    id: projectDndId(project.id),
+    animateLayoutChanges: noLayoutAnimation,
+  });
 
   return (
     <div
       ref={setNodeRef}
       data-sortable-project-id={project.id}
-      style={{
-        transform: projectDragActive ? undefined : CSS.Translate.toString(transform),
-        transition: projectDragActive ? undefined : transition,
-        opacity: isDragging && !projectDragActive ? 0.5 : undefined,
-        zIndex: isDragging && !projectDragActive ? 10 : undefined,
-      }}
+      {...flipId(projectDndId(project.id))}
       {...attributes}
       {...listeners}
     >
       {placeholder ? (
         <div
           data-testid={`project-placeholder-${project.id}`}
-          className="relative h-8"
+          className="invisible"
           aria-hidden="true"
         >
-          <div className="absolute inset-x-2 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-primary" />
+          <ProjectItem project={project} />
         </div>
       ) : (
         <ProjectItem project={project} />

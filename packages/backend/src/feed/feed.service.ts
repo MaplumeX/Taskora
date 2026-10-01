@@ -1,7 +1,9 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   countProjectTasks,
   feedIncludesProjects,
+  feedSortKey,
+  repositionFeed,
   planEmptyTrash,
   projectMatchesView,
   sortFeedItems,
@@ -17,6 +19,7 @@ import {
 } from '@taskora/shared';
 import type {
   FeedItem,
+  FeedOrderItem,
   FeedView,
   LogbookArchivePage,
   TaskFeedItem,
@@ -116,6 +119,47 @@ export class FeedService {
     private readonly syncHub: SyncHubService,
   ) {}
 
+  /**
+   * feed 拖拽重排（feed-project-ordering spec）：items 为任务与项目行的
+   * 目标显示顺序。只给必须移动的行分配新位次（repositionFeed）：任务写
+   * position，项目写 feedPosition，项目的侧边栏 position 不动。
+   */
+  async reorder(userId: string, items: FeedOrderItem[]): Promise<void> {
+    const taskIds = items.filter((item) => item.type === 'task').map((item) => item.id);
+    const projectIds = items.filter((item) => item.type === 'project').map((item) => item.id);
+    const [tasks, projects] = await Promise.all([
+      this.prisma.task.findMany({
+        where: { id: { in: taskIds }, userId },
+        select: { id: true, position: true },
+      }),
+      this.prisma.project.findMany({
+        where: { id: { in: projectIds }, userId },
+        select: { id: true, position: true, feedPosition: true, sortOrder: true, createdAt: true },
+      }),
+    ]);
+    if (tasks.length !== new Set(taskIds).size || projects.length !== new Set(projectIds).size) {
+      throw new NotFoundException('Feed item not found');
+    }
+    const taskKey = new Map(tasks.map((task) => [task.id, task.position]));
+    const projectKey = new Map(projects.map((project) => [project.id, feedSortKey(project)]));
+    const changes = repositionFeed(
+      items.map((item) => ({
+        ...item,
+        key: (item.type === 'task' ? taskKey.get(item.id) : projectKey.get(item.id)) ?? null,
+      })),
+    );
+    if (changes.length === 0) return;
+    await this.syncHub.writeAsHub(userId, async (batch) => {
+      for (const change of changes) {
+        if (change.type === 'task') {
+          await batch.write('task', change.id, { position: change.position });
+        } else {
+          await batch.write('project', change.id, { feedPosition: change.position });
+        }
+      }
+    });
+  }
+
   async emptyTrash(userId: string): Promise<{ deletedTasks: number; deletedProjects: number }> {
     return this.syncHub.writeAsHub(userId, async (batch) => {
       // 删除集（规则见 domain planEmptyTrash）：Trash 里的任务与项目，及
@@ -198,6 +242,7 @@ export class FeedService {
         trashedAt: p.trashedAt ? p.trashedAt.toISOString() : null,
         sortOrder: p.sortOrder,
         position: p.position,
+        feedPosition: p.feedPosition,
         areaId: p.areaId,
         createdAt: p.createdAt.toISOString(),
         updatedAt: p.updatedAt.toISOString(),

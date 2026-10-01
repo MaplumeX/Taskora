@@ -4,6 +4,7 @@ import {
   DndContext,
   DragOverlay,
   KeyboardSensor,
+  MeasuringStrategy,
   MouseSensor,
   TouchSensor,
   pointerWithin,
@@ -12,6 +13,7 @@ import {
   useSensors,
   type CollisionDetection,
   type DragEndEvent,
+  type DragMoveEvent,
   type DragOverEvent,
   type DragStartEvent,
   type KeyboardCoordinateGetter,
@@ -34,10 +36,20 @@ import { toast } from 'sonner';
 
 import { TaskItem } from '@/components/task/TaskItem';
 import { EmptyState } from '@/components/common/EmptyState';
+import { cn } from '@/lib/utils';
 import { useCompleteTask, useUncompleteTask } from '@taskora/api';
 import { useSelectionScope } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
 import { useReorderProjectHeadingLayout } from '@taskora/api';
+import {
+  dndListProps,
+  dragOverlayClass,
+  dropAnimation,
+  flipId,
+  noLayoutAnimation,
+  noopSortingStrategy,
+  useFlipList,
+} from '../../lib/dnd';
 import { ProjectHeadingRow } from './ProjectHeadingRow';
 
 const UNGROUPED = 'ungrouped';
@@ -246,8 +258,11 @@ function SortableTask({
   onRowClick,
   onToggleComplete,
 }: SortableTaskProps) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
+  // 任务拖拽走实时预览：布局随指针重排、位移由 FLIP 动画承担，
+  // 不叠加 dnd-kit 的排序位移与布局动画（见 lib/dnd.ts）。
+  const { attributes, listeners, setNodeRef } = useSortable({
     id: taskId(task.id),
+    animateLayoutChanges: noLayoutAnimation,
   });
   // dnd-kit KeyboardSensor 默认把 Enter/Space 当作「开始拖拽」的启动键，
   // 而行焦点按 Enter=展开 / Space=下方新建是全局键位（ADR-0004）。
@@ -264,23 +279,19 @@ function SortableTask({
     <div
       ref={setNodeRef}
       data-sortable-task-id={task.id}
-      style={{
-        transform: CSS.Translate.toString(transform),
-        transition,
-        opacity: isDragging && !placeholder ? 0.45 : undefined,
-        zIndex: isDragging && !placeholder ? 10 : undefined,
-      }}
+      {...flipId(taskId(task.id))}
       {...attributes}
       {...pointerListeners}
       tabIndex={-1}
     >
       {placeholder ? (
+        // 空位：保留真实行（不可见），高度与被拖任务完全一致。
         <div
           data-testid={`task-placeholder-${task.id}`}
-          className="relative h-10"
+          className="invisible"
           aria-hidden="true"
         >
-          <div className="absolute inset-x-2 top-1/2 h-0.5 -translate-y-1/2 rounded-full bg-primary" />
+          <TaskItem task={task} selectionState="idle" onToggleComplete={() => undefined} />
         </div>
       ) : (
         <TaskItem
@@ -317,7 +328,7 @@ function TaskContainer({
 }: TaskContainerProps) {
   const { setNodeRef } = useDroppable({ id: containerId(id) });
   return (
-    <SortableContext items={taskIds.map(taskId)} strategy={verticalListSortingStrategy}>
+    <SortableContext items={taskIds.map(taskId)} strategy={noopSortingStrategy}>
       <div ref={setNodeRef} data-task-container={id} className="min-h-10 rounded-md pb-2">
         {taskIds.map((id) => {
           const task = taskMap.get(id);
@@ -362,11 +373,13 @@ function SortableHeadingBlock({
       }}
       className="mt-3"
     >
-      <ProjectHeadingRow
-        heading={heading}
-        selected={taskContainerProps.selectedIds.includes(heading.id)}
-        dragHandleProps={{ ...attributes, ...listeners }}
-      />
+      <div {...flipId(headingId(heading.id))}>
+        <ProjectHeadingRow
+          heading={heading}
+          selected={taskContainerProps.selectedIds.includes(heading.id)}
+          dragHandleProps={{ ...attributes, ...listeners }}
+        />
+      </div>
       <TaskContainer {...taskContainerProps} id={heading.id} taskIds={taskIds} />
     </section>
   );
@@ -439,6 +452,8 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
     useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: keyboardCoordinates }),
   );
+
+  const flip = useFlipList<HTMLDivElement>(layout);
 
   const updateRenderedLayout = React.useCallback((next: LayoutState) => {
     layoutRef.current = next;
@@ -553,22 +568,33 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
     setActiveTask(task);
   };
 
-  const handleDragOver = ({ active, over }: DragOverEvent) => {
-    const activeKey = String(active.id);
-    if (!activeKey.startsWith('task:') || !over) return;
+  const previewTaskTarget = (activeKey: string) => {
+    if (!activeKey.startsWith('task:')) return;
     const activeId = activeKey.slice('task:'.length);
     if (activeTaskIdRef.current !== activeId) return;
-
-    const overKey = String(over.id);
-    const edge =
-      lastTaskTargetRef.current?.overKey === overKey
-        ? lastTaskTargetRef.current.edge
-        : keyboardTaskEdgeRef.current;
-    lastTaskTargetRef.current = { overKey, edge };
-    const placement = resolveTaskPlacement(layoutRef.current, overKey, edge);
+    const target = lastTaskTargetRef.current;
+    if (!target) return;
+    const placement = resolveTaskPlacement(layoutRef.current, target.overKey, target.edge);
     if (!placement) return;
     const next = moveTaskToPlacement(layoutRef.current, activeId, placement);
-    if (next) updateRenderedLayout(next);
+    if (!next) return;
+    flip.capture();
+    updateRenderedLayout(next);
+  };
+
+  const handleDragOver = ({ active, over }: DragOverEvent) => {
+    if (!over) return;
+    const overKey = String(over.id);
+    if (lastTaskTargetRef.current?.overKey !== overKey) {
+      lastTaskTargetRef.current = { overKey, edge: keyboardTaskEdgeRef.current };
+    }
+    previewTaskTarget(String(active.id));
+  };
+
+  // dnd-kit 只在 over.id 变化时触发 onDragOver；同一行内越过中线（before ↔
+  // after）要靠每次指针移动重读碰撞检测记下的 edge，空位才会跟上。
+  const handleDragMove = ({ active }: DragMoveEvent) => {
+    previewTaskTarget(String(active.id));
   };
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
@@ -635,14 +661,22 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
   const hasContent = taskMap.size > 0 || headings.length > 0;
 
   return (
-    <div className="flex flex-col" onClick={handleBlankClick}>
+    <div
+      ref={flip.rootRef}
+      {...dndListProps}
+      className="flex flex-col"
+      onClick={handleBlankClick}
+    >
       {!hasContent ? (
         <EmptyState hint={emptyHint} />
       ) : (
         <DndContext
           sensors={sensors}
           collisionDetection={collisionDetection}
+          // 实时预览每次重排都会改变行位置，碰撞检测须用最新的测量结果。
+          measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
           onDragStart={handleDragStart}
+          onDragMove={handleDragMove}
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
           onDragCancel={handleDragCancel}
@@ -669,10 +703,10 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
               );
             })}
           </SortableContext>
-          <DragOverlay>
+          <DragOverlay dropAnimation={dropAnimation}>
             {activeTask ? (
               <div
-                className="pointer-events-none w-[min(36rem,calc(100vw-2rem))] overflow-hidden rounded-xl border border-border/70 bg-card shadow-popover"
+                className={cn(dragOverlayClass, 'bg-card')}
                 aria-hidden="true"
                 {...{ inert: '' }}
               >

@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { ChevronDown, Layers } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useDroppable } from '@dnd-kit/core';
-import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable';
+import { SortableContext } from '@dnd-kit/sortable';
 
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 
@@ -14,12 +14,12 @@ import {
   projectContainerDndId,
   projectDndId,
 } from '@/components/layout/sidebarProjectLayout';
+import { flipId, noopSortingStrategy } from '../../lib/dnd';
 
 interface Props {
   area: AreaResponseDto;
   projects: ProjectResponseDto[];
   activeProjectId: string | null;
-  projectDragActive: boolean;
 }
 
 /**
@@ -30,7 +30,6 @@ export function SidebarAreaRow({
   area,
   projects,
   activeProjectId,
-  projectDragActive,
 }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = React.useState(true);
@@ -46,13 +45,12 @@ export function SidebarAreaRow({
       key={project.id}
       project={project}
       placeholder={project.id === activeProjectId}
-      projectDragActive={projectDragActive}
     />
   );
 
   return (
     <div className="mt-2 flex flex-col gap-px">
-      <div className="group/area relative flex items-center">
+      <div {...flipId(`area-row:${area.id}`)} className="group/area relative flex items-center">
         <NavLink
           to={`/areas/${area.id}`}
           className={({ isActive }) =>
@@ -92,7 +90,7 @@ export function SidebarAreaRow({
       {open && (
         <SortableContext
           items={projects.map((project) => projectDndId(project.id))}
-          strategy={verticalListSortingStrategy}
+          strategy={noopSortingStrategy}
         >
           <div
             ref={setProjectContainerRef}
@@ -106,7 +104,7 @@ export function SidebarAreaRow({
       {collapsedPlaceholder && (
         <SortableContext
           items={[projectDndId(projects[0].id)]}
-          strategy={verticalListSortingStrategy}
+          strategy={noopSortingStrategy}
         >
           <div>{renderProject(projects[0])}</div>
         </SortableContext>

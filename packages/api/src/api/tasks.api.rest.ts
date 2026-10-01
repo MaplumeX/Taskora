@@ -2,6 +2,7 @@ import type {
   CreateSubtaskDto,
   CreateTaskDto,
   FeedItem,
+  FeedOrderItem,
   FeedView,
   ProjectResponseDto,
   ReorderSubtasksDto,
@@ -101,6 +102,10 @@ export function skipTask(id: string): Promise<TaskResponseDto> {
 
 export function reorderTasks(orderedIds: string[]): Promise<void> {
   return apiClient.post('/tasks/reorder', { orderedIds }).then(() => undefined);
+}
+
+export function reorderFeed(items: FeedOrderItem[]): Promise<void> {
+  return apiClient.post('/feed/reorder', { items }).then(() => undefined);
 }
 
 export function convertTaskToProject(id: string): Promise<ProjectResponseDto> {

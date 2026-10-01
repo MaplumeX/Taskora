@@ -33,6 +33,8 @@ import {
   projectMatchesView,
   repeatDerivationTarget,
   RepeatSkipBlockedError,
+  feedSortKey,
+  repositionFeed,
   repositionMinimal,
   searchNeedle,
   sortFeedItems,
@@ -56,6 +58,7 @@ import type {
   CreateSubtaskDto,
   CreateTaskDto,
   FeedItem,
+  FeedOrderItem,
   FeedView,
   ProjectResponseDto,
   SubtaskResponseDto,
@@ -443,6 +446,55 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       );
     },
 
+    async reorderFeed(items: FeedOrderItem[]): Promise<void> {
+      // feed 混排（feed-project-ordering spec）：任务写 position，项目写
+      // feedPosition（侧边栏 position 不动）；同 reorderTasks 只动必须移动的行。
+      const ids = (type: FeedOrderItem['type']) =>
+        items.filter((item) => item.type === type).map((item) => item.id);
+      const [tasks, projects] = await Promise.all([
+        engine.list('task', { where: { id: { in: ids('task') } } }),
+        engine.list('project', { where: { id: { in: ids('project') } } }),
+      ]);
+      const taskKey = new Map(
+        tasks.map((row) => [
+          row.id,
+          typeof row.fields.position === 'string' ? row.fields.position : null,
+        ]),
+      );
+      const projectKey = new Map(
+        projects.map((row) => [
+          row.id,
+          feedSortKey({
+            id: row.id,
+            position: typeof row.fields.position === 'string' ? row.fields.position : null,
+            feedPosition:
+              typeof row.fields.feedPosition === 'string' ? row.fields.feedPosition : null,
+            sortOrder: typeof row.fields.sortOrder === 'number' ? row.fields.sortOrder : null,
+            createdAt: (row.fields.createdAt as string | null) ?? null,
+          }),
+        ]),
+      );
+      const changes = repositionFeed(
+        items.flatMap((item) => {
+          const keys = item.type === 'task' ? taskKey : projectKey;
+          if (!keys.has(item.id)) return [];
+          return [{ ...item, key: keys.get(item.id) ?? null }];
+        }),
+      );
+      await engine.updateMany(
+        'task',
+        changes
+          .filter((change) => change.type === 'task')
+          .map(({ id, position }) => ({ id, patch: { position } })),
+      );
+      await engine.updateMany(
+        'project',
+        changes
+          .filter((change) => change.type === 'project')
+          .map(({ id, position }) => ({ id, patch: { feedPosition: position } })),
+      );
+    },
+
     // ---------- Subtask CRUD（全部本地，进 Outbox） ----------
 
     async createSubtask(taskId: string, data: CreateSubtaskDto): Promise<SubtaskResponseDto> {
@@ -643,6 +695,7 @@ function projectRowToFeedItem(
     trashedAt: (f.trashedAt as string | null) ?? null,
     sortOrder: (f.sortOrder as number) ?? 0,
     position: typeof f.position === 'string' ? f.position : null,
+    feedPosition: typeof f.feedPosition === 'string' ? f.feedPosition : null,
     areaId: (f.areaId as string | null) ?? null,
     createdAt: (f.createdAt as string) ?? new Date().toISOString(),
     updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),

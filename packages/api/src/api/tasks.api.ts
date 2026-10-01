@@ -66,6 +66,12 @@ export function reorderTasks(
   return currentTaskBackend().reorderTasks(...args);
 }
 
+export function reorderFeed(
+  ...args: Parameters<typeof import('./tasks.api.rest').reorderFeed>
+) {
+  return currentTaskBackend().reorderFeed(...args);
+}
+
 export function convertTaskToProject(
   ...args: Parameters<typeof import('./tasks.api.rest').convertTaskToProject>
 ) {

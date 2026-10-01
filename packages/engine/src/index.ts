@@ -14,7 +14,9 @@ export {
   MAX_POSITION_LENGTH,
   rebalancePositions,
   rebalanceSegments,
+  repositionFeed,
   repositionMinimal,
+  type FeedOrderEntry,
   synthPosition,
   validatePosition,
 } from './position';
