@@ -21,7 +21,7 @@ describe('repairEntity — task', () => {
   it('一致的状态返回空（包括 NONE 下的 INBOX / ANYTIME、DATE 无日期）', () => {
     expect(repairEntity('task', task())).toEqual({});
     expect(repairEntity('task', task({ bucket: 'ANYTIME' }))).toEqual({});
-    expect(repairEntity('task', task({ bucket: 'INBOX', projectId: 'p1' }))).toEqual({});
+    expect(repairEntity('task', task({ bucket: 'ANYTIME', projectId: 'p1' }))).toEqual({});
     expect(
       repairEntity(
         'task',
@@ -63,6 +63,9 @@ describe('repairEntity — task', () => {
       ),
     ).toEqual({ bucket: 'SCHEDULED' });
     expect(repairEntity('task', task({ bucket: 'SCHEDULED' }))).toEqual({ bucket: 'INBOX' });
+    expect(repairEntity('task', task({ bucket: 'INBOX', projectId: 'p1' }))).toEqual({
+      bucket: 'ANYTIME',
+    });
     expect(repairEntity('task', task({ bucket: 'SCHEDULED', areaId: 'a1' }))).toEqual({
       bucket: 'ANYTIME',
     });
@@ -71,13 +74,11 @@ describe('repairEntity — task', () => {
   it('R4：分组必须属于任务所在项目；未知分组不动', () => {
     const owners: Record<string, string> = { h1: 'p1' };
     const probe = (id: string) => owners[id];
-    expect(repairEntity('task', task({ projectId: 'p2', headingId: 'h1' }), probe)).toEqual({
-      headingId: null,
-    });
-    expect(repairEntity('task', task({ projectId: 'p1', headingId: 'h1' }), probe)).toEqual({});
-    expect(repairEntity('task', task({ projectId: 'p2', headingId: 'unknown' }), probe)).toEqual(
-      {},
-    );
+    const inProject = (projectId: string, headingId: string) =>
+      task({ bucket: 'ANYTIME', projectId, headingId });
+    expect(repairEntity('task', inProject('p2', 'h1'), probe)).toEqual({ headingId: null });
+    expect(repairEntity('task', inProject('p1', 'h1'), probe)).toEqual({});
+    expect(repairEntity('task', inProject('p2', 'unknown'), probe)).toEqual({});
   });
 
   it('R5：未了结没有了结时间', () => {
@@ -128,5 +129,12 @@ describe('resolveTaskBucket', () => {
     expect(resolveTaskBucket('ANYTIME', 'NONE', null, null)).toBe('ANYTIME');
     expect(resolveTaskBucket(undefined, 'NONE', 'p1', null)).toBe('ANYTIME');
     expect(resolveTaskBucket(undefined, 'NONE', null, null)).toBe('INBOX');
+  });
+
+  it('Inbox 不能有归属：有项目 / 区域即离开 Inbox', () => {
+    expect(resolveTaskBucket('INBOX', 'NONE', 'p1', null)).toBe('ANYTIME');
+    expect(resolveTaskBucket('INBOX', 'NONE', null, 'a1')).toBe('ANYTIME');
+    expect(resolveTaskBucket('INBOX', 'NONE', null, null)).toBe('INBOX');
+    expect(resolveTaskBucket('INBOX', 'SOMEDAY', 'p1', null)).toBe('SCHEDULED');
   });
 });

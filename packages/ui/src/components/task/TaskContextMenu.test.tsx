@@ -23,7 +23,9 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useConvertTaskToProject: () => ({ mutate: vi.fn(), isPending: false }),
   useSkipTask: () => ({ mutate: skipMock, isPending: false }),
   useProjectsQuery: () => ({
-    data: [{ id: 'project-1', title: 'Project Alpha', areaId: null }],
+    data: [
+      { id: 'project-1', title: 'Project Alpha', areaId: null, status: 'ACTIVE', trashedAt: null },
+    ],
   }),
   useAreasQuery: () => ({ data: [{ id: 'area-1', title: 'Work Area' }] }),
   useTagsQuery: () => ({ data: [] }),
@@ -68,7 +70,7 @@ describe('TaskContextMenu — move picker', () => {
     vi.clearAllMocks();
   });
 
-  it('moves task to a project via the Move menu entry', async () => {
+  it('moves task to a project via the Move menu entry, then closes', async () => {
     const user = userEvent.setup();
     withQueryClient(<TaskItem task={baseTask} onToggleComplete={() => {}} onRowClick={() => {}} />);
 
@@ -77,41 +79,73 @@ describe('TaskContextMenu — move picker', () => {
     const moveItem = await screen.findByRole('button', { name: /^(Move|移动)/ });
     await user.click(moveItem);
 
-    // 移动面板同时列出区域与项目条目
-    expect(screen.getByRole('heading', { name: /^(Area|区域)/ })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: /^(Project|项目)/ })).toBeInTheDocument();
+    // 移动选择器：Inbox 在首位（当前位置打勾），其后与侧边栏同序
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+      expect.stringMatching(/Inbox|收件箱/),
+      'Project Alpha',
+      'Work Area',
+    ]);
+    expect(screen.getByRole('option', { name: /Inbox|收件箱/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
 
-    await user.click(screen.getByRole('button', { name: /Project Alpha/ }));
+    await user.click(screen.getByRole('option', { name: /Project Alpha/ }));
     await waitFor(() =>
       expect(updateMock).toHaveBeenCalledWith(
-        { id: 'task-1', data: { projectId: 'project-1' } },
+        { id: 'task-1', data: { projectId: 'project-1', areaId: null } },
         expect.anything(),
       ),
     );
+    await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument());
   });
 
-  it('moves task to an area and can clear it with none', async () => {
+  it('moves task to an area by typing', async () => {
     const user = userEvent.setup();
     withQueryClient(<TaskItem task={baseTask} onToggleComplete={() => {}} onRowClick={() => {}} />);
 
     fireEvent.contextMenu(screen.getByText('My task'));
     await user.click(await screen.findByRole('button', { name: /^(Move|移动)/ }));
-
-    await user.click(screen.getByRole('button', { name: /Work Area/ }));
+    await user.type(screen.getByRole('combobox'), 'work{Enter}');
     await waitFor(() =>
       expect(updateMock).toHaveBeenCalledWith(
-        { id: 'task-1', data: { areaId: 'area-1' } },
+        { id: 'task-1', data: { projectId: null, areaId: 'area-1' } },
         expect.anything(),
       ),
     );
+  });
 
-    // 「无」条目用于清除归属（区域分区在项目分区之前，取第一个）
+  it('moving a scheduled project task to Inbox clears ownership and schedule', async () => {
+    const user = userEvent.setup();
+    const scheduled: TaskResponseDto = {
+      ...baseTask,
+      projectId: 'project-1',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2026-02-05',
+      bucket: TaskBucket.SCHEDULED,
+    };
+    withQueryClient(
+      <TaskItem task={scheduled} onToggleComplete={() => {}} onRowClick={() => {}} />,
+    );
+
     fireEvent.contextMenu(screen.getByText('My task'));
     await user.click(await screen.findByRole('button', { name: /^(Move|移动)/ }));
-    await user.click(screen.getAllByRole('button', { name: /^(None|无)$/ })[0]);
+    expect(screen.getByRole('option', { name: /Project Alpha/ })).toHaveAttribute(
+      'aria-current',
+      'true',
+    );
+    await user.type(screen.getByRole('combobox'), 'inbox{Enter}');
     await waitFor(() =>
       expect(updateMock).toHaveBeenCalledWith(
-        { id: 'task-1', data: { areaId: null } },
+        {
+          id: 'task-1',
+          data: {
+            projectId: null,
+            areaId: null,
+            bucket: TaskBucket.INBOX,
+            scheduledType: ScheduledType.NONE,
+          },
+        },
         expect.anything(),
       ),
     );
@@ -164,4 +198,3 @@ describe('TaskContextMenu — 跳过本次', () => {
     expect(skipMock).not.toHaveBeenCalled();
   });
 });
-

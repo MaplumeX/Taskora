@@ -31,7 +31,9 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useRestoreTask: () => ({ mutate: vi.fn(), isPending: false }),
   useConvertTaskToProject: () => ({ mutate: vi.fn(), isPending: false }),
   useProjectsQuery: () => ({
-    data: [{ id: 'project-1', title: 'Project Alpha', areaId: null }],
+    data: [
+      { id: 'project-1', title: 'Project Alpha', areaId: null, status: 'ACTIVE', trashedAt: null },
+    ],
   }),
   useAreasQuery: () => ({ data: [] }),
   useTagsQuery: () => ({ data: [] }),
@@ -171,14 +173,14 @@ describe('MultiSelectToolbar', () => {
     renderWithProviders(<MultiSelectToolbar />);
 
     await user.click(screen.getByRole('button', { name: /^(Move|移动)$/ }));
-    await user.click(await screen.findByRole('button', { name: /Project Alpha/ }));
+    await user.click(await screen.findByRole('option', { name: /Project Alpha/ }));
 
     expect(mocks.update).toHaveBeenCalledWith(
-      { id: 'a', data: { projectId: 'project-1' } },
+      { id: 'a', data: { projectId: 'project-1', areaId: null } },
       expect.anything(),
     );
     expect(mocks.update).toHaveBeenCalledWith(
-      { id: 'b', data: { projectId: 'project-1' } },
+      { id: 'b', data: { projectId: 'project-1', areaId: null } },
       expect.anything(),
     );
     await waitFor(() => expect(useMultiSelectStore.getState().active).toBe(false));

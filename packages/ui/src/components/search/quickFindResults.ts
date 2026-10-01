@@ -7,6 +7,7 @@ import type {
 import { ProjectStatus } from '@taskora/shared';
 
 import { flatParentOrder } from '@/components/feed/groupedFeedLayout';
+import { needleOf, rankByName } from '../../lib/nameMatch';
 
 /**
  * Quick Find 结果推导（`.scratch/quick-find` spec 第 1 节）：纯函数。
@@ -53,33 +54,8 @@ export interface QuickFindInput {
   trashedProjects?: ProjectResponseDto[];
 }
 
-function needleOf(query: string): string {
-  return query.trim().toLowerCase();
-}
-
-/** 0：某个名称以搜索词开头；1：包含；null：不命中。 */
-function nameRank(names: string[], needle: string): 0 | 1 | null {
-  let rank: 0 | 1 | null = null;
-  for (const name of names) {
-    const lower = name.toLowerCase();
-    if (lower.startsWith(needle)) return 0;
-    if (lower.includes(needle)) rank = 1;
-  }
-  return rank;
-}
-
-function rankByName<T>(items: T[], namesOf: (item: T) => string[], needle: string): T[] {
-  const ranked: Array<{ item: T; rank: 0 | 1; index: number }> = [];
-  items.forEach((item, index) => {
-    const rank = nameRank(namesOf(item), needle);
-    if (rank !== null) ranked.push({ item, rank, index });
-  });
-  ranked.sort((a, b) => a.rank - b.rank || a.index - b.index);
-  return ranked.map(({ item }) => item);
-}
-
 /** 可作为导航目标的项目：未了结、未进 Trash（含 Later Project）。 */
-function isOpenProject(project: ProjectResponseDto): boolean {
+export function isOpenProject(project: ProjectResponseDto): boolean {
   return project.status === ProjectStatus.ACTIVE && project.trashedAt == null;
 }
 

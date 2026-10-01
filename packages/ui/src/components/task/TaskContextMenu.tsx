@@ -44,7 +44,7 @@ import { ScheduledDateField } from './fields/ScheduledDateField';
 import { DueDateField } from './fields/DueDateField';
 import { RepeatRuleField } from './fields/RepeatRuleField';
 import { TagsField } from './fields/TagsField';
-import { MoveField } from './fields/MoveField';
+import { MovePicker } from './fields/MovePicker';
 
 interface Props {
   task: TaskResponseDto;
@@ -266,7 +266,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
           <MenuRow icon={Tag} onClick={() => openPicker('tags')}>
             {t('tags')}
           </MenuRow>
-          {/* 移动：更改所属区域/项目（展开行的两个按钮已移除，统一收口到菜单）。 */}
+          {/* 移动：更改所在位置（Inbox / 区域 / 项目），见 MovePicker。 */}
           <MenuRow icon={FolderTree} onClick={() => openPicker('move')}>
             {t('move')}
           </MenuRow>
@@ -306,7 +306,15 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
             <DueDateField current={current} onPatch={patch} onClose={() => setActivePicker(null)} />
           )}
           {activePicker === 'tags' && <TagsField current={current} onPatch={patch} />}
-          {activePicker === 'move' && <MoveField current={current} onPatch={patch} />}
+          {activePicker === 'move' && (
+            <MovePicker
+              current={current}
+              onSelect={(data) => {
+                patch(data);
+                setActivePicker(null);
+              }}
+            />
+          )}
         </PopoverContent>
       </Popover>
     </div>
