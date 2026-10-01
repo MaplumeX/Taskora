@@ -264,11 +264,13 @@ function FieldChip({
           aria-label={label}
           className={cn(
             'inline-flex h-7 max-w-[14rem] items-center gap-1.5 rounded-md bg-muted px-2 text-meta font-medium transition-colors hover:bg-sidebar-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/60 max-md:h-9 [&_svg]:h-3.5 [&_svg]:w-3.5 [&_svg]:shrink-0',
-            urgent ? 'text-deadline' : 'text-foreground [&_svg]:text-muted-foreground',
+            // 图标走 color 继承（默认 muted）；带自身语义色的图标（如今天的黄星）
+            // 由 svg 上的 color 类覆盖继承值。文案单独取前景色。
+            urgent ? 'text-deadline' : 'text-muted-foreground',
           )}
         >
           {icon}
-          <span className="truncate">{text}</span>
+          <span className={cn('truncate', !urgent && 'text-foreground')}>{text}</span>
         </button>
       }
     >

@@ -351,10 +351,14 @@ export function TaskItem({
                       {current.title || t('task:newTaskPlaceholder')}
                     </span>
                   )}
-                  {/* 备注徽标：有备注的任务一眼可见。 */}
-                  <TaskNotesBadge notes={current.notes} className="shrink-0" />
-                  {/* 子任务徽标：有子任务的任务一眼可见，并显示未了结数量。 */}
-                  <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
+                  {/* 备注/子任务徽标：有备注、有子任务的任务一眼可见。展开时备注编辑器
+                与子任务列表已直接可见，行内不再重复这两个徽标。 */}
+                  {!expanded && (
+                    <>
+                      <TaskNotesBadge notes={current.notes} className="shrink-0" />
+                      <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
+                    </>
+                  )}
                 </div>
                 {/* 归属上下文：标题下方一行灰色小字，只显示直接父级一层
               （projectTitle 优先，否则 areaTitle），参考 Things 3。

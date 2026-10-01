@@ -220,6 +220,70 @@ describe('TaskRowExpanded — icon button hints', () => {
   }, 15000);
 });
 
+describe('TaskRowExpanded — 今天 chip 图标色', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useUiInteractionStore.setState({ expandedId: null, pendingAutoEditId: null });
+  });
+
+  it('今天 chip 的黄星保留 text-today，不被 chip 的 muted 图标色覆盖', async () => {
+    const user = userEvent.setup();
+    const task: TaskResponseDto = {
+      ...renderTask,
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2020-01-01',
+    };
+    withQueryClient(<DndList task={task} />);
+
+    await user.click(screen.getByText('My task'));
+
+    const chip = screen.getByRole('button', { name: /^(Date|日期)$/ });
+    const star = chip.querySelector('svg');
+    expect(star).toBeTruthy();
+    expect(star!.classList.contains('fill-today')).toBe(true);
+    expect(star!.classList.contains('text-today')).toBe(true);
+    // 回归：chip 曾用 [&_svg]:text-muted-foreground 强制所有图标变灰，
+    // 覆盖 svg 自身的 text-today，导致黄星带灰描边、和行内徽标不一致。
+    expect(chip.className).not.toContain('[&_svg]:text-muted-foreground');
+  });
+});
+
+describe('TaskItem — 展开时隐藏备注/子任务徽标', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useUiInteractionStore.setState({ expandedId: null, pendingAutoEditId: null });
+  });
+
+  it('收起时显示徽标，展开后隐藏（详情区已直接展示备注与子任务）', async () => {
+    const user = userEvent.setup();
+    const task: TaskResponseDto = {
+      ...renderTask,
+      notes: 'some note',
+      subtasks: [
+        {
+          id: 'sub-1',
+          title: 'Existing subtask',
+          status: TaskStatus.ACTIVE,
+          completedAt: null,
+          taskId: 'task-1',
+          sortOrder: 0,
+          createdAt: '2025-07-31T00:00:00.000Z',
+          updatedAt: '2025-07-31T00:00:00.000Z',
+        },
+      ],
+    };
+    withQueryClient(<DndList task={task} />);
+
+    expect(document.querySelector('[data-notes-badge]')).toBeInTheDocument();
+    expect(document.querySelector('[data-subtasks-badge]')).toBeInTheDocument();
+
+    await user.click(screen.getByText('My task'));
+
+    expect(document.querySelector('[data-notes-badge]')).toBeNull();
+    expect(document.querySelector('[data-subtasks-badge]')).toBeNull();
+  });
+});
+
 describe('TaskRowExpanded — hide subtask empty state', () => {
   beforeEach(() => {
     vi.clearAllMocks();
