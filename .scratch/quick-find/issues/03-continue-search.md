@@ -40,3 +40,11 @@ Blocked by: 02
   - 纯函数：扩展范围下项目的排序与档位；
   - 组件：继续搜索的键盘触发与扩展结果、无结果时的继续搜索、打开 Trash 中的任务、清空输入后复位。
 - 验证：全部包 typecheck 通过，eslint 通过。api 341、ui 373、desktop 51、mobile 72、frontend 16 个测试通过。本 issue 未改动 engine 与 backend。
+
+### 2026-10-01 — 改为主内容区展示
+
+- 对照 Things 3：「继续搜索」的扩展结果在主窗口列表中展示，而不是留在 Quick Find 弹窗里。原实现（弹窗内切换 `extended`）不符合。
+- 面板：「继续搜索」关闭面板并导航到 `/search?q=<输入>`；面板自身不再有扩展范围（移除 `extended` 状态与 Trash feed 读取）。
+- 新增搜索页 `pages/Search.tsx`（三端路由均注册 `/search`）：页头可编辑搜索框写回 `?q=`；分节「区域与项目 → 任务 → 日志 → 废纸篓」，任务 / 日志节用 `TaskListView`（可展开、勾选、键盘 Selection），废纸篓节只读、点击 Reveal 到 Trash。
+- 结果行组件抽到 `components/search/QuickFindRow.tsx`，面板与搜索页共用。spec 第 1、3 节已同步。
+- 测试：`QuickFind.test.tsx` 的继续搜索用例改为断言关闭面板并跳转；新增 `pages/Search.test.tsx`（扩展范围、分节、跳转与 Reveal、搜索框同步地址）。ui 453、api 346、mobile 72、desktop 51、frontend 24 个测试通过；typecheck、eslint 通过。
