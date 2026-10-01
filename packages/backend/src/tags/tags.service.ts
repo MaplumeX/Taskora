@@ -3,7 +3,8 @@ import { randomUUID } from 'node:crypto';
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncHubService } from '../sync/sync-hub.service';
-import { newRowOrder } from '../common/domain-storage';
+import { newRowOrder, orderFields } from '../common/domain-storage';
+import { sortByPosition } from '../common/position-order';
 import { CreateTagDto, UpdateTagDto } from './dto/tags.dto';
 
 /** Tag 的 REST 写路径：写入经 Sync Hub 的合并器（虚拟设备 0）。 */
@@ -32,10 +33,12 @@ export class TagsService {
   }
 
   async findAll(userId: string) {
-    return this.prisma.tag.findMany({
+    const tags = await this.prisma.tag.findMany({
       where: { userId },
       orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
     });
+    // 按有效 Position 排序（与桌面端副本同一口径）
+    return sortByPosition(tags);
   }
 
   async findOne(userId: string, id: string) {
@@ -55,6 +58,23 @@ export class TagsService {
     if (dto.color !== undefined) fields.color = dto.color;
     if (dto.tagGroupId !== undefined) fields.tagGroupId = dto.tagGroupId;
     return this.write(userId, id, fields);
+  }
+
+  async reorder(userId: string, orderedIds: string[]) {
+    const owned = await this.prisma.tag.findMany({
+      where: { id: { in: orderedIds }, userId },
+      select: { id: true, createdAt: true },
+    });
+    if (owned.length !== new Set(orderedIds).size || owned.length !== orderedIds.length) {
+      throw new NotFoundException('Tag not found');
+    }
+    // 双排序键一起写（与 ProjectsService.reorder 同理由）
+    const createdAtOf = new Map(owned.map((t) => [t.id, t.createdAt]));
+    await this.hub.writeAsHub(userId, async (batch) => {
+      for (const [index, id] of orderedIds.entries()) {
+        await batch.write('tag', id, orderFields(index, createdAtOf.get(id)!));
+      }
+    });
   }
 
   async remove(userId: string, id: string) {

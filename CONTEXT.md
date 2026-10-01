@@ -31,7 +31,11 @@ Project 内的静态分组标题，用于组织 Project 内的 Tasks。
 _Avoid_: Section
 
 **Tag / Tag Group**:
-可带颜色与排序、可附加在 Task/Project/Area 上的标签；Tag Group 是 Tag 的分组容器。
+可带颜色与排序、可附加在 Task/Project/Area 上的标签；Tag Group 是 Tag 的分组容器（只有一层，本身不可打标），按 Group 过滤即命中该 Group 下任一 Tag。
+
+**Effective Tags（有效 Tag）**:
+过滤与查询时使用的 Tag 集合：Task 的有效 Tag = 自身 ∪ 所属 Project ∪ 所属 Area（直接归属或经 Project）；Project 的有效 Tag = 自身 ∪ 所属 Area。只用于过滤（tagId 查询、列表过滤栏、Tag 详情页），行上显示仍只用自身 Tag；继承来的 Tag 不能在 Task 上单独去掉。纯推导，不存储、不同步（ADR 0015）。
+_Avoid_: 继承标签写入、复制标签
 
 **Account Time Zone（账号时区）**:
 用户在各设备上统一使用的时区，决定「今天」、了结日期归属和 Reminder 的触发时刻；切换时区不改变已设定的计划日期与截止日期。

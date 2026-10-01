@@ -45,7 +45,15 @@ const taskRows = VIEW_CONTRACT.tasks.map(({ tagIds, ...task }) => ({
   tags: tagIds.map((tagId) => ({ tagId, tag: tagRows.find((tag) => tag.id === tagId)! })),
 }));
 
-const projectRows = VIEW_CONTRACT.projects.map((project) => ({
+const tagLinks = (tagIds: string[]) =>
+  tagIds.map((tagId) => ({ tagId, tag: tagRows.find((tag) => tag.id === tagId)! }));
+
+const areaRows = VIEW_CONTRACT.areas.map(({ tagIds, ...area }) => ({
+  ...area,
+  tags: tagLinks(tagIds),
+}));
+
+const projectRows = VIEW_CONTRACT.projects.map(({ tagIds, ...project }) => ({
   ...project,
   notes: null,
   scheduledDate: date(project.scheduledDate),
@@ -54,9 +62,8 @@ const projectRows = VIEW_CONTRACT.projects.map((project) => ({
   trashedAt: instant(project.trashedAt),
   createdAt: new Date(project.createdAt),
   updatedAt: new Date(project.createdAt),
-  areaId: null,
   sortOrder: 0,
-  tags: [],
+  tags: tagLinks(tagIds),
 }));
 
 describe('领域规则契约 — hub REST 服务', () => {
@@ -64,6 +71,7 @@ describe('领域规则契约 — hub REST 服务', () => {
     user: { findUnique: vi.fn().mockResolvedValue({ preferences: VIEW_CONTRACT.zones }) },
     task: { findMany: vi.fn().mockResolvedValue(taskRows) },
     project: { findMany: vi.fn().mockResolvedValue(projectRows) },
+    area: { findMany: vi.fn().mockResolvedValue(areaRows) },
   } as unknown as PrismaService;
   const feed = new FeedService(prisma, {} as SyncHubService);
   const tasks = new TasksService(prisma, {} as SyncHubService);

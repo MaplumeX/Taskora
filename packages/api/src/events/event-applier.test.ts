@@ -577,3 +577,53 @@ describe('applyChangeEvents — 稍后项目（spec: later-projects）', () => {
     expect(invalidated({ view: 'today' })).toBe(false);
   });
 });
+
+describe('applyChangeEvents — 有效 Tag（ADR 0015）', () => {
+  let queryClient: QueryClient;
+  beforeEach(() => {
+    queryClient = new QueryClient();
+  });
+  afterEach(() => {
+    queryClient.clear();
+  });
+
+  const tag = { id: 'work', title: 'Work', color: '#3B82F6' } as TagResponseDto;
+
+  it('任务继承所属 Project 的 Tag，进入 tagId 列表', () => {
+    queryClient.setQueryData(projectKeys.all, [
+      { id: 'p1', areaId: null, tags: [tag] } as unknown as ProjectResponseDto,
+    ]);
+    queryClient.setQueryData(taskKeys.list({ tagId: 'work' }), []);
+
+    applyChangeEvents(queryClient, [
+      event('task', 't1', 'created', makeTask({ id: 't1', projectId: 'p1', bucket: TaskBucket.ANYTIME })),
+    ]);
+
+    expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ tagId: 'work' }))).toHaveLength(1);
+  });
+
+  it('任务继承所属 Area 的 Tag', () => {
+    queryClient.setQueryData(['areas'], [{ id: 'a1', tags: [tag] } as unknown as AreaResponseDto]);
+    queryClient.setQueryData(taskKeys.list({ tagId: 'work' }), []);
+
+    applyChangeEvents(queryClient, [
+      event('task', 't1', 'created', makeTask({ id: 't1', areaId: 'a1', bucket: TaskBucket.ANYTIME })),
+    ]);
+
+    expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ tagId: 'work' }))).toHaveLength(1);
+  });
+
+  it('Project / Area 变更使 tagId 任务列表失效', () => {
+    queryClient.setQueryData(taskKeys.list({ tagId: 'work' }), []);
+    queryClient.setQueryData(taskKeys.list({ view: 'today' }), []);
+
+    applyChangeEvents(queryClient, [
+      event('area', 'a1', 'updated', { id: 'a1', tags: [] } as unknown as AreaResponseDto),
+    ]);
+
+    const invalidated = (params: object) =>
+      queryClient.getQueryState(taskKeys.list(params))?.isInvalidated;
+    expect(invalidated({ tagId: 'work' })).toBe(true);
+    expect(invalidated({ view: 'today' })).toBe(false);
+  });
+});

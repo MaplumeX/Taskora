@@ -169,6 +169,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
 import {
   ProjectTaskLayout,
   applyLayoutDrag,
+  filterLayout,
   moveTaskToPlacement,
   normalizeLayout,
   resolveTaskPlacement,
@@ -241,6 +242,19 @@ describe('project task layout normalization', () => {
     expect(normalizeLayout([task('legacy', 'missing')], [heading]).containers.ungrouped).toEqual([
       'legacy',
     ]);
+  });
+});
+
+describe('project task layout tag filter', () => {
+  it('只留可见任务，没有可见任务的 Heading 隐藏', () => {
+    const layout = normalizeLayout(
+      [task('a', null), task('b', 'heading-1'), task('c', 'heading-2')],
+      [heading, secondHeading],
+    );
+    expect(filterLayout(layout, new Set(['c']))).toEqual({
+      headingIds: ['heading-2'],
+      containers: { ungrouped: [], 'heading-1': [], 'heading-2': ['c'] },
+    });
   });
 });
 

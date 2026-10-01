@@ -36,6 +36,8 @@ export type KeyAction =
   | { type: 'newHeading' }
   /** ⌘F/Ctrl+F：打开搜索。 */
   | { type: 'search' }
+  /** ⇧⌘T / Ctrl+Shift+T / Alt+Shift+T：对选中项打开 Tag Picker。 */
+  | { type: 'tags' }
   /**
    * 打字唤起 Quick Find：无修饰（可带 Shift）的单个可打印字符，seed 为该字符；
    * 输入法组合的首键 seed 为空（只打开并聚焦，不带入字符）。
@@ -128,6 +130,16 @@ export function resolveAction(e: KeyEventLike, platform: KeyPlatform): KeyAction
     }
   }
 
+  // --- 标签：mac ⇧⌘T；Windows 桌面 Ctrl+Shift+T；Web Alt+Shift+T
+  //     （Web 的 Ctrl+Shift+T 是浏览器「重新打开标签页」，拦截不了）。 ---
+  if (key === 't' || key === 'T') {
+    if (platform === 'web') {
+      if (e.altKey && e.shiftKey && !e.metaKey && !e.ctrlKey) return { type: 'tags' };
+    } else if (cmd && e.shiftKey && !e.altKey) {
+      return { type: 'tags' };
+    }
+  }
+
   // --- 删除（⌫/Delete，全平台无修饰） ---
   if (bare && (key === 'Backspace' || key === 'Delete')) return { type: 'delete' };
 
@@ -173,7 +185,7 @@ export function resolveAction(e: KeyEventLike, platform: KeyPlatform): KeyAction
 }
 
 /** 按钮上可展示 hint 快捷键的动作（与 docs/keyboard-shortcuts.md 的 P0 键位表一致）。 */
-export type HintableAction = 'search' | 'newTask' | 'newProject' | 'newHeading';
+export type HintableAction = 'search' | 'newTask' | 'newProject' | 'newHeading' | 'tags';
 
 /**
  * 动作 → 平台对应键位的展示文案（⌘⇧⌥ 符号 / Ctrl、Alt 文字）。
@@ -184,6 +196,7 @@ const SHORTCUT_LABELS: Record<HintableAction, Record<KeyPlatform, string>> = {
   newTask: { mac: '⌘N', windows: 'Ctrl+N', web: 'Alt+N' },
   newProject: { mac: '⌥⌘N', windows: 'Ctrl+Alt+N', web: 'Alt+Shift+N' },
   newHeading: { mac: '⇧⌘N', windows: 'Ctrl+Shift+N', web: 'Alt+H' },
+  tags: { mac: '⇧⌘T', windows: 'Ctrl+Shift+T', web: 'Alt+Shift+T' },
 };
 
 export function shortcutLabel(action: HintableAction, platform: KeyPlatform): string {

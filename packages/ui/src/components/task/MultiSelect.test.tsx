@@ -7,7 +7,7 @@ import React from 'react';
 
 import type { TaskResponseDto } from '@taskora/shared';
 import { TaskStatus, TaskBucket, ScheduledType } from '@taskora/shared';
-import { useMultiSelectStore } from '@taskora/api';
+import { useMultiSelectStore, useSelectionStore } from '@taskora/api';
 
 import { TaskItem } from './TaskItem';
 import { MultiSelectToolbar } from './MultiSelectToolbar';
@@ -36,7 +36,14 @@ vi.mock('@taskora/api', async (importOriginal) => ({
     ],
   }),
   useAreasQuery: () => ({ data: [] }),
-  useTagsQuery: () => ({ data: [] }),
+  useTagsQuery: () => ({
+    data: [
+      { id: 'urgent', title: 'Urgent', color: '#EF4444', sortOrder: 0, tagGroupId: null },
+      { id: 'home', title: 'Home', color: '#3B82F6', sortOrder: 1, tagGroupId: null },
+    ],
+  }),
+  useTagGroupsQuery: () => ({ data: [] }),
+  useCreateTag: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 const baseTask: TaskResponseDto = {
@@ -101,6 +108,7 @@ function swipeLeft(target: Element) {
 beforeEach(() => {
   vi.clearAllMocks();
   useMultiSelectStore.setState({ active: false, ids: [] });
+  useSelectionStore.setState({ scopes: {}, scopeOrder: [] });
 });
 
 describe('TaskItem — 左滑多选', () => {
@@ -184,6 +192,34 @@ describe('MultiSelectToolbar', () => {
       expect.anything(),
     );
     await waitFor(() => expect(useMultiSelectStore.getState().active).toBe(false));
+  });
+
+  it('标签：多选三态，各任务在自己原有的标签上增减', async () => {
+    const user = userEvent.setup();
+    useSelectionStore.setState({
+      scopes: {
+        list: [
+          { id: 'a', kind: 'task', tagIds: ['urgent', 'home'] },
+          { id: 'b', kind: 'task', tagIds: [] },
+        ],
+      },
+      scopeOrder: ['list'],
+    });
+    useMultiSelectStore.setState({ active: true, ids: ['a', 'b'] });
+    renderWithProviders(<MultiSelectToolbar />);
+
+    await user.click(screen.getByRole('button', { name: /^(More|更多)$/ }));
+    await user.click(await screen.findByRole('menuitem', { name: /^(Tags|标签)$/ }));
+
+    const urgent = await screen.findByRole('option', { name: 'Urgent' });
+    expect(urgent).toHaveAttribute('aria-checked', 'mixed');
+    await user.click(urgent);
+
+    expect(mocks.update).toHaveBeenCalledTimes(1);
+    expect(mocks.update).toHaveBeenCalledWith(
+      { id: 'b', data: { tagIds: ['urgent'] } },
+      expect.anything(),
+    );
   });
 
   it('未勾选任何项时动作禁用；点「完成」退出模式', async () => {

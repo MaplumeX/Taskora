@@ -22,3 +22,7 @@ export function updateTag(id: string, data: UpdateTagDto): Promise<TagResponseDt
 export function deleteTag(id: string): Promise<void> {
   return apiClient.delete(`/tags/${id}`).then(() => undefined);
 }
+
+export function reorderTags(orderedIds: string[]): Promise<void> {
+  return apiClient.post('/tags/reorder', { orderedIds }).then(() => undefined);
+}

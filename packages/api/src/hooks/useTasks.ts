@@ -57,12 +57,12 @@ export const taskKeys = {
 };
 
 // Engine 模式的查询依赖（local-first-v3 issue 06）：任务行嵌入标签芯片，
-// 详情另含子任务。
+// 详情另含子任务；tagId 按有效 Tag 匹配，还依赖 Project / Area 的 Tag（ADR 0015）。
 export function useTasksQuery(params?: TaskQuery, options?: { enabled?: boolean }) {
   return useReplicaQuery({
     queryKey: taskKeys.list(params),
     queryFn: () => getTasks(params),
-    dependsOn: ['task', 'tag'],
+    dependsOn: params?.tagId ? ['task', 'tag', 'project', 'area'] : ['task', 'tag'],
     enabled: options?.enabled,
   });
 }

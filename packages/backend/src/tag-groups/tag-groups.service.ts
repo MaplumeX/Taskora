@@ -48,6 +48,21 @@ export class TagGroupsService {
     return this.write(userId, id, dto.title === undefined ? {} : { title: dto.title });
   }
 
+  async reorder(userId: string, orderedIds: string[]) {
+    const owned = await this.prisma.tagGroup.findMany({
+      where: { id: { in: orderedIds }, userId },
+      select: { id: true },
+    });
+    if (owned.length !== new Set(orderedIds).size || owned.length !== orderedIds.length) {
+      throw new NotFoundException('TagGroup not found');
+    }
+    await this.hub.writeAsHub(userId, async (batch) => {
+      for (const [index, id] of orderedIds.entries()) {
+        await batch.write('tag-group', id, { sortOrder: index });
+      }
+    });
+  }
+
   async remove(userId: string, id: string) {
     const tagGroup = await this.findOne(userId, id);
     // 删除分组后，其下 Tag 的 tagGroupId 通过 onDelete: SetNull 自动置 null

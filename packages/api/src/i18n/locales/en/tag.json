@@ -16,5 +16,17 @@
   "deleteGroupConfirm": "Delete group \"{{name}}\"? Tags will not be deleted (moved to ungrouped).",
   "groupTitlePlaceholder": "Group name",
   "selectColor": "Select color {{color}}",
-  "noTasks": "No tasks with this tag"
+  "noTasks": "No tasks with this tag",
+  "pickerPlaceholder": "Search or create a tag",
+  "pickerEmpty": "No tags yet — type a name to create one",
+  "createNamed": "Create “{{name}}”",
+  "filterLabel": "Filter by tag",
+  "filterAll": "All",
+  "filterUntagged": "No tag",
+  "filterEmpty": "Nothing matches this tag",
+  "addTag": "New tag in this group",
+  "groupDeletedUndo": "Group deleted; its tags are now ungrouped",
+  "rename": "Rename",
+  "dragHandle": "Drag to reorder",
+  "changeColor": "Change color"
 }

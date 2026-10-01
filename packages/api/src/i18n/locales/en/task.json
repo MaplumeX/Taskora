@@ -16,7 +16,6 @@
   "tags": "Tags",
   "project": "Project",
   "area": "Area",
-  "noTagsHint": "No tags yet. Create some in the Tags page first.",
   "somedayLabel": "Someday",
   "inboxEmpty": "Inbox is empty",
   "todayEmpty": "No tasks today",

@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 
 import type { CreateTagDto, TagResponseDto, UpdateTagDto } from '@taskora/shared';
 
-import { createTag, deleteTag, getTags, updateTag } from '@/api/tags.api';
+import { createTag, deleteTag, getTags, reorderTags, updateTag } from '@/api/tags.api';
 import {
   TAG_EMBEDDING_ROOTS,
   cancelRoots,
@@ -165,6 +165,35 @@ export function useDeleteTag() {
       for (const root of TAG_EMBEDDING_ROOTS) {
         refreshAfterWrite(queryClient, { queryKey: [root] });
       }
+    },
+  });
+}
+
+/** 按目标顺序排列列表（未出现在 orderedIds 中的项保持在末尾的原顺序）。 */
+export function sortByOrderedIds<T extends { id: string }>(list: T[], orderedIds: string[]): T[] {
+  const rank = new Map(orderedIds.map((id, index) => [id, index]));
+  return [...list].sort(
+    (a, b) => (rank.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (rank.get(b.id) ?? Number.MAX_SAFE_INTEGER),
+  );
+}
+
+export function useReorderTags() {
+  const queryClient = useQueryCache();
+  return useMutation({
+    mutationFn: (orderedIds: string[]) => reorderTags(orderedIds),
+    onMutate: async (orderedIds) => {
+      await queryClient.cancelQueries({ queryKey: tagKeys.all });
+      const snapshot = queryClient.getQueriesData<TagResponseDto[]>({ queryKey: tagKeys.all });
+      queryClient.setQueriesData<TagResponseDto[]>({ queryKey: tagKeys.all }, (old) =>
+        old ? sortByOrderedIds(old, orderedIds) : old,
+      );
+      return { snapshot };
+    },
+    onError: (_err, _ids, ctx) => {
+      if (ctx?.snapshot) restoreSnapshot(queryClient, ctx.snapshot);
+    },
+    onSettled: () => {
+      refreshAfterWrite(queryClient, { queryKey: tagKeys.all });
     },
   });
 }

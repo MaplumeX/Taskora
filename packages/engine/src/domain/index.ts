@@ -37,6 +37,13 @@ export {
   type ViewFields,
 } from './views';
 export {
+  effectiveProjectTagIds,
+  effectiveTaskTagIds,
+  tagParentsFrom,
+  type TagOwnerFields,
+  type TagParents,
+} from './tags';
+export {
   planTaskSearch,
   searchNeedle,
   taskInSearchScope,

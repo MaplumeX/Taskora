@@ -16,7 +16,6 @@
   "tags": "标签",
   "project": "项目",
   "area": "区域",
-  "noTagsHint": "暂无标签，请先在 Tags 页创建",
   "somedayLabel": "将来",
   "inboxEmpty": "收件箱是空的",
   "todayEmpty": "今天没有任务",

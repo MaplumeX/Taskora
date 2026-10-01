@@ -42,6 +42,7 @@ export function TaskListView({
         kind: 'task' as const,
         completed: task.status === 'COMPLETED',
         cancelled: task.status === 'CANCELLED',
+        tagIds: (task.tags ?? []).map((tag) => tag.id),
       })),
     [tasks],
   );

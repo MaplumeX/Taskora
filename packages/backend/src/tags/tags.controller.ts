@@ -10,13 +10,18 @@ import {
   Request,
 } from '@nestjs/common';
 import { TagsService } from './tags.service';
-import { CreateTagDto, UpdateTagDto } from './dto/tags.dto';
+import { CreateTagDto, ReorderTagsDto, UpdateTagDto } from './dto/tags.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
 @Controller('tags')
 export class TagsController {
   constructor(private readonly tagsService: TagsService) {}
+
+  @Post('reorder')
+  reorder(@Request() req: { user: { id: string } }, @Body() dto: ReorderTagsDto) {
+    return this.tagsService.reorder(req.user.id, dto.orderedIds);
+  }
 
   @Post()
   create(

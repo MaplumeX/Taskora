@@ -21,6 +21,7 @@ const harness = vi.hoisted(() => ({
   restoreMutate: vi.fn(),
   reorderMutate: vi.fn(),
   createMutate: vi.fn(),
+  updateTaskMutate: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -50,7 +51,13 @@ vi.mock('@taskora/api', async (importOriginal) => {
     useCreateProjectHeading: () => ({ mutate: vi.fn(), isPending: false }),
     useProjectsQuery: () => ({ data: [] }),
     useAreasQuery: () => ({ data: [] }),
-    useTagsQuery: () => ({ data: [] }),
+    useTagsQuery: () => ({
+      data: [{ id: 'urgent', title: 'Urgent', color: '#EF4444', sortOrder: 0, tagGroupId: null }],
+    }),
+    useTagGroupsQuery: () => ({ data: [] }),
+    useCreateTag: () => ({ mutate: vi.fn(), isPending: false }),
+    useUpdateTask: () => ({ mutate: harness.updateTaskMutate }),
+    useUpdateProject: () => ({ mutate: vi.fn() }),
     useContentBottomActionsForRoute: () => ({
       showAddTask: true,
       showAddProject: false,
@@ -82,6 +89,7 @@ function ListPage({ tasks }: { tasks: TaskResponseDto[] }) {
         kind: 'task' as const,
         completed: t.status === 'COMPLETED',
         cancelled: t.status === 'CANCELLED',
+        tagIds: (t.tags ?? []).map((tag) => tag.id),
       })),
     [tasks],
   );
@@ -99,6 +107,7 @@ function ListPage({ tasks }: { tasks: TaskResponseDto[] }) {
           aria-selected={selectedIds.includes(t.id) || undefined}
           onClick={() => setSelection([t.id])}
           data-testid={`row-${t.id}`}
+          data-selection-row={t.id}
         >
           {t.title}
         </div>
@@ -183,6 +192,7 @@ beforeEach(() => {
   harness.restoreMutate.mockReset();
   harness.reorderMutate.mockReset();
   harness.createMutate.mockReset();
+  harness.updateTaskMutate.mockReset();
   useSelectionStore.getState().setSelection([]);
   useSelectionStore.getState().clearSelection();
   useUiInteractionStore.setState({ expandedId: null, searchOpen: false, searchSeed: null });
@@ -236,6 +246,35 @@ describe('KeyboardShortcuts — 导航与选择', () => {
     renderAt('/today', tasks, 'web');
     press('1', { altKey: true });
     expect(screen.getByTestId('inbox-page')).toBeInTheDocument();
+  });
+});
+
+describe('KeyboardShortcuts — 标签（tags-things3 issue 04）', () => {
+  it('⇧⌘T 对选中任务打开 Tag Picker，切换后写入该任务', () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press('T', { metaKey: true, shiftKey: true });
+    const option = screen.getByRole('option', { name: 'Urgent' });
+    expect(option).toHaveAttribute('aria-checked', 'false');
+    act(() => option.click());
+    expect(harness.updateTaskMutate).toHaveBeenCalledWith(
+      { id: 't1', data: { tagIds: ['urgent'] } },
+      expect.anything(),
+    );
+  });
+
+  it('⌘A 后 ⇧⌘T 对全部选中任务批量打标', () => {
+    renderAt('/today', tasks);
+    press('a', { metaKey: true });
+    press('T', { metaKey: true, shiftKey: true });
+    act(() => screen.getByRole('option', { name: 'Urgent' }).click());
+    expect(harness.updateTaskMutate).toHaveBeenCalledTimes(3);
+  });
+
+  it('没有 Selection 时不打开', () => {
+    renderAt('/today', tasks);
+    press('T', { metaKey: true, shiftKey: true });
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
   });
 });
 

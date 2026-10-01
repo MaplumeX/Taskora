@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { useCompleteProject, useProjectQuery, useProjectsQuery, useUncompleteProject, useUpdateProject } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
-import { useTasksQuery } from '@taskora/api';
+import { useEffectiveTags, useTasksQuery } from '@taskora/api';
 import { useProjectHeadingsQuery } from '@taskora/api';
 import { ProjectTaskLayout } from '@/components/project/ProjectTaskLayout';
 import { ProjectMetaRow } from '@/components/project/ProjectMetaRow';
@@ -13,6 +13,7 @@ import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
 import { ProjectMoreMenu } from '@/components/project/ProjectContextMenu';
 import { MarkdownNotesEditor } from '@/components/common/MarkdownNotesEditor';
+import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
 import { toast } from 'sonner';
 
 export default function ProjectDetail() {
@@ -31,6 +32,12 @@ export default function ProjectDetail() {
   });
   const project = foundInList ?? detail;
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ projectId: id });
+  const effectiveTags = useEffectiveTags();
+  const { visible, filtering, bar } = useTagFilter(tasks, effectiveTags.ofTask);
+  const visibleTaskIds = useMemo(
+    () => (filtering ? new Set(visible.map((task) => task.id)) : null),
+    [filtering, visible],
+  );
   const {
     data: headings = [],
     isLoading: headingsLoading,
@@ -112,6 +119,8 @@ export default function ProjectDetail() {
         />
       ) : null}
 
+      {!isLoading && !isError && <TagFilterBar {...bar} />}
+
       {isLoading || headingsLoading ? null : isError || headingsError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
@@ -120,6 +129,8 @@ export default function ProjectDetail() {
           tasks={tasks}
           headings={headings}
           emptyHint={t('project:noTasks')}
+          visibleTaskIds={visibleTaskIds}
+          filteredEmptyHint={t('tag:filterEmpty')}
         />
       )}
 

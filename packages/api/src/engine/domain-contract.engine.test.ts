@@ -27,6 +27,7 @@ describe('领域规则契约 — 设备 Engine 后端', () => {
       deviceId: 'contract-device',
     });
     for (const tag of VIEW_CONTRACT.tags) await engine.create('tag', { ...tag });
+    for (const area of VIEW_CONTRACT.areas) await engine.create('area', { ...area });
     for (const project of VIEW_CONTRACT.projects) await engine.create('project', { ...project });
     for (const task of VIEW_CONTRACT.tasks) await engine.create('task', { ...task });
     backend = createEngineTaskBackend({ engine });

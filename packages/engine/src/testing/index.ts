@@ -36,6 +36,16 @@ export interface ContractProject {
   bucket: 'ANYTIME' | 'SCHEDULED';
   completedAt: string | null;
   trashedAt: string | null;
+  areaId: string | null;
+  tagIds: string[];
+  position: string;
+  createdAt: string;
+}
+
+export interface ContractArea {
+  id: string;
+  title: string;
+  tagIds: string[];
   position: string;
   createdAt: string;
 }
@@ -76,6 +86,8 @@ function project(
     bucket: 'ANYTIME',
     completedAt: null,
     trashedAt: null,
+    areaId: null,
+    tagIds: [],
     position,
     createdAt: CREATED,
     ...fields,
@@ -86,7 +98,15 @@ export const VIEW_CONTRACT = {
   /** 账户在上海：UTC 9-23 17:00 已是当地 9-24 凌晨——「今天」不能按 UTC 算。 */
   zones: { timeZone: 'Asia/Shanghai', legacyDateTimeZone: 'Asia/Shanghai' },
   now: '2026-09-23T17:00:00.000Z',
-  tags: [{ id: 'tag-1', title: 'Focus' }],
+  tags: [
+    { id: 'tag-1', title: 'Focus' },
+    { id: 'tag-2', title: 'Work' },
+    { id: 'tag-3', title: 'Home' },
+  ],
+  /** 有效 Tag（ADR 0015）：area-1 的 Tag 经直接归属或所属 Project 继承。 */
+  areas: [
+    { id: 'area-1', title: 'area-1', tagIds: ['tag-3'], position: 'a0', createdAt: CREATED },
+  ] satisfies ContractArea[],
   tasks: [
     task('t-inbox', 'a0'),
     task('t-anytime', 'a1', { bucket: 'ANYTIME', projectId: 'p-active', tagIds: ['tag-1'] }),
@@ -108,6 +128,7 @@ export const VIEW_CONTRACT = {
     task('t-someday', 'a5', {
       scheduledType: 'SOMEDAY',
       bucket: 'SCHEDULED',
+      areaId: 'area-1',
       notes: 'search in notes',
     }),
     task('t-done', 'a6', {
@@ -125,8 +146,9 @@ export const VIEW_CONTRACT = {
     task('t-in-p-today', 'a9', { bucket: 'ANYTIME', projectId: 'p-today' }),
   ],
   projects: [
-    project('p-active', 'a0'),
+    project('p-active', 'a0', { tagIds: ['tag-2'] }),
     project('p-today', 'a1', {
+      areaId: 'area-1',
       scheduledType: 'DATE',
       scheduledDate: '2026-09-24',
       bucket: 'SCHEDULED',
@@ -167,6 +189,11 @@ export const VIEW_CONTRACT = {
     { query: { projectId: 'p-active' }, ids: ['t-anytime'] },
     { query: { projectId: 'p-active', completed: true }, ids: ['t-anytime', 't-done'] },
     { query: { tagId: 'tag-1' }, ids: ['t-anytime'] },
+    // 继承所属 Project 的 Tag
+    { query: { tagId: 'tag-2' }, ids: ['t-anytime'] },
+    { query: { tagId: 'tag-2', completed: true }, ids: ['t-anytime', 't-done'] },
+    // 继承 Area 的 Tag：直接归属，或经所属 Project
+    { query: { tagId: 'tag-3' }, ids: ['t-someday', 't-in-p-today'] },
     { query: { q: 'search' }, ids: ['t-someday'] },
     // 搜索 + completed：未了结与已了结都在（ADR 0006）
     { query: { q: 'search', completed: true }, ids: ['t-someday', 't-cancelled'] },

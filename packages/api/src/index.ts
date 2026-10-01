@@ -117,6 +117,7 @@ export * from './hooks/useAreas';
 export * from './hooks/useFeed';
 export * from './hooks/useProjectHeadings';
 export * from './hooks/useProjects';
+export * from './hooks/useEffectiveTags';
 export * from './hooks/useTagGroups';
 export * from './hooks/useTags';
 export * from './hooks/useTasks';

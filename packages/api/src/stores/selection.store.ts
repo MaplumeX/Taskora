@@ -25,6 +25,8 @@ export interface SelectionRow {
   completed?: boolean;
   /** 行数据的取消态（仅 task 行有意义），用于批量取消时跳过已取消项。 */
   cancelled?: boolean;
+  /** 行数据的自身 Tag（task / project 行），批量打标时各行在自己的原值上增减。 */
+  tagIds?: string[];
   /**
    * Grouped View：行所属的 Group Header id（组内任务行），或行自身即
    * 组头（组头行，与 id 相同）。未分组行（顶部浮动区）无此字段；

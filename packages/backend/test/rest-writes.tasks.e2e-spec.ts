@@ -292,6 +292,44 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     await expect(h.tasks.cancel(USER, 'missing')).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  // ---------- 有效 Tag（ADR 0015） ----------
+
+  it('findAll tagId：命中自身、所属 Project、所属 Area、Project 所属 Area 的 Tag', async () => {
+    await seedTag('work');
+    await seedTag('other');
+    await testPrisma.area.create({
+      data: { id: 'area-1', userId: USER, title: 'A', tags: { create: [{ tagId: 'work' }] } },
+    });
+    await testPrisma.area.create({ data: { id: 'area-2', userId: USER, title: 'B' } });
+    await testPrisma.project.create({
+      data: { id: 'p-tagged', userId: USER, title: 'P', tags: { create: [{ tagId: 'work' }] } },
+    });
+    await testPrisma.project.create({
+      data: { id: 'p-in-area', userId: USER, title: 'Q', areaId: 'area-1' },
+    });
+    await testPrisma.project.create({ data: { id: 'p-plain', userId: USER, title: 'R' } });
+    await seedTask('t-own', { tags: { create: [{ tagId: 'work' }] } });
+    await seedTask('t-project', { projectId: 'p-tagged', bucket: 'ANYTIME' });
+    await seedTask('t-area', { areaId: 'area-1', bucket: 'ANYTIME' });
+    await seedTask('t-project-area', { projectId: 'p-in-area', bucket: 'ANYTIME' });
+    await seedTask('t-miss', {
+      projectId: 'p-plain',
+      areaId: 'area-2',
+      bucket: 'ANYTIME',
+      tags: { create: [{ tagId: 'other' }] },
+    });
+
+    const hits = await h.tasks.findAll(USER, { tagId: 'work' });
+    expect(hits.map((task) => task.id).sort()).toEqual([
+      't-area',
+      't-own',
+      't-project',
+      't-project-area',
+    ]);
+    // 行上只带自身 Tag
+    expect(hits.find((task) => task.id === 't-project')!.tags).toEqual([]);
+  });
+
   // ---------- 重复派生（ADR-0012） ----------
 
   async function seedRepeating(data: Record<string, unknown> = {}) {

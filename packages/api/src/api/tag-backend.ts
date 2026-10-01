@@ -13,6 +13,7 @@ export interface TagBackend {
   createTag(data: CreateTagDto): Promise<TagResponseDto>;
   updateTag(id: string, data: UpdateTagDto): Promise<TagResponseDto>;
   deleteTag(id: string): Promise<void>;
+  reorderTags(orderedIds: string[]): Promise<void>;
 }
 
 let backend: TagBackend = rest as TagBackend;

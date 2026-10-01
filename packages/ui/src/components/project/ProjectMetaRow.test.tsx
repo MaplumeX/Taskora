@@ -22,6 +22,8 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useTagsQuery: () => ({
     data: [tagA, tagB].map((t) => ({ ...t })),
   }),
+  useTagGroupsQuery: () => ({ data: [] }),
+  useCreateTag: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
 const tagA: TagResponseDto = {
@@ -155,7 +157,7 @@ describe('ProjectMetaRow', () => {
     expect(tagTrigger).not.toBeNull();
     await user.click(tagTrigger!);
     // 选中未勾选的 urgent → 追加到已有 design 之后。
-    await user.click(screen.getByRole('button', { name: 'urgent' }));
+    await user.click(screen.getByRole('option', { name: 'urgent' }));
     await waitFor(() => {
       expect(mutationMocks.update).toHaveBeenCalledWith(
         { id: 'project-1', data: { tagIds: ['tag-a', 'tag-b'] } },
