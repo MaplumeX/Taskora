@@ -126,6 +126,11 @@ export function quickFindRoute(item: QuickFindItem): string | null {
   }
 }
 
+/** 继续搜索：主内容区的搜索页（Things 3 在主窗口列表中展示扩展结果）。 */
+export function searchRoute(query: string): string {
+  return `/search?q=${encodeURIComponent(query)}`;
+}
+
 /** 把文本按命中片段切开（不区分大小写，全部命中处）。 */
 export function highlightParts(
   text: string,

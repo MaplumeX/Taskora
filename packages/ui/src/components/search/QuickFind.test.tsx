@@ -6,7 +6,6 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import {
   i18n,
   useAreasQuery,
-  useFeedQuery,
   useProjectsQuery,
   useRevealTask,
   useTagsQuery,
@@ -18,7 +17,6 @@ import {
   ProjectStatus,
   ScheduledType,
   TaskStatus,
-  type FeedItem,
   type ProjectResponseDto,
   type TaskResponseDto,
   type TaskSearchHit,
@@ -30,7 +28,6 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
   useProjectsQuery: vi.fn(),
   useAreasQuery: vi.fn(),
-  useFeedQuery: vi.fn(),
   useTagsQuery: vi.fn(),
   useTaskSearchQuery: vi.fn(),
   useRevealTask: vi.fn(),
@@ -73,27 +70,13 @@ function hit(id: string, title: string, fields: Partial<TaskSearchHit> = {}): Ta
 }
 
 let hitsByQuery: Record<string, TaskSearchHit[]> = {};
-/** 继续搜索（extended）时的结果。 */
-let extendedHitsByQuery: Record<string, TaskSearchHit[]> = {};
-const TRASH_FEED: FeedItem[] = [
-  {
-    ...PROJECT,
-    id: 'p-trash',
-    title: 'Old groceries',
-    type: 'project',
-    trashedAt: NOW,
-    tags: [],
-    reminderTime: null,
-    repeatRule: null,
-    repeatSourceId: null,
-  },
-];
 // 与真实 hook 一致：同一个搜索词的结果保持同一引用
 const NO_HITS: TaskSearchHit[] = [];
 const reveal = vi.fn(async () => true);
 
 function Location() {
-  return <div data-testid="path">{useLocation().pathname}</div>;
+  const { pathname, search } = useLocation();
+  return <div data-testid="path">{pathname + search}</div>;
 }
 
 function renderQuickFind() {
@@ -113,7 +96,6 @@ beforeEach(() => {
   vi.clearAllMocks();
   void i18n.changeLanguage('en');
   hitsByQuery = {};
-  extendedHitsByQuery = {};
   vi.mocked(useProjectsQuery).mockReturnValue({ data: [PROJECT] } as never);
   vi.mocked(useAreasQuery).mockReturnValue({
     data: [{ id: 'a1', title: 'Home', notes: null, sortOrder: 0, createdAt: NOW, updatedAt: NOW }],
@@ -132,20 +114,16 @@ beforeEach(() => {
     ],
   } as never);
   // 防抖由 hook 负责；这里同步给出结果
-  vi.mocked(useTaskSearchQuery).mockImplementation((q: string, options) => {
+  vi.mocked(useTaskSearchQuery).mockImplementation((q: string) => {
     const searchedQuery = q.trim();
-    const source = options?.extended ? extendedHitsByQuery : hitsByQuery;
     return {
-      data: searchedQuery ? (source[searchedQuery] ?? NO_HITS) : undefined,
+      data: searchedQuery ? (hitsByQuery[searchedQuery] ?? NO_HITS) : undefined,
       isPending: false,
       isError: false,
       searchedQuery,
     } as never;
   });
   vi.mocked(useRevealTask).mockReturnValue(reveal);
-  vi.mocked(useFeedQuery).mockImplementation(
-    (_view, options) => ({ data: options?.enabled ? TRASH_FEED : undefined }) as never,
-  );
 });
 
 describe('QuickFind', () => {
@@ -266,71 +244,14 @@ describe('QuickFind', () => {
     );
   });
 
-  describe('继续搜索', () => {
-    const doneHit = hit('t-done', 'Groceries last week', {
-      task: {
-        id: 't-done',
-        title: 'Groceries last week',
-        status: TaskStatus.COMPLETED,
-        projectId: null,
-        areaId: null,
-        trashedAt: null,
-      } as TaskResponseDto,
-    });
-    const trashedHit = hit('t-trash', 'Groceries draft', {
-      task: {
-        id: 't-trash',
-        title: 'Groceries draft',
-        status: TaskStatus.ACTIVE,
-        projectId: null,
-        areaId: null,
-        trashedAt: NOW,
-      } as TaskResponseDto,
-    });
-
-    it('Enter 触发后纳入已了结与 Trash 的任务和项目，面板保持打开', async () => {
-      extendedHitsByQuery.groceries = [doneHit, trashedHit];
-      const { input, onOpenChange } = renderQuickFind();
-      await user.type(input, 'groceries');
-      expect(screen.queryByRole('option', { name: /Old groceries/ })).toBeNull();
-
-      await user.keyboard('{ArrowUp}{Enter}');
-
-      expect(onOpenChange).not.toHaveBeenCalled();
-      expect(vi.mocked(useTaskSearchQuery)).toHaveBeenLastCalledWith('groceries', {
-        extended: true,
-      });
-      expect(screen.queryByRole('option', { name: /Continue Search/ })).toBeNull();
-      const places = within(screen.getByRole('group', { name: 'Areas & Projects' }));
-      expect(places.getAllByRole('option').map((o) => o.textContent)).toEqual([
-        'GroceriesHome',
-        'Old groceriesHome',
-      ]);
-      expect(
-        within(places.getAllByRole('option')[1]).getByRole('img', { name: 'In Trash' }),
-      ).toBeInTheDocument();
-      const tasks = within(screen.getByRole('group', { name: 'Tasks' })).getAllByRole('option');
-      expect(within(tasks[1]).getByRole('img', { name: 'In Trash' })).toBeInTheDocument();
-    });
-
-    it('打开 Trash 中的任务：Reveal 允许定位到 Trash', async () => {
-      extendedHitsByQuery.draft = [trashedHit];
-      const { input } = renderQuickFind();
-      await user.type(input, 'draft');
-      await user.click(screen.getByRole('option', { name: /Continue Search/ }));
-      await user.click(screen.getByRole('option', { name: /draft/ }));
-      expect(reveal).toHaveBeenCalledWith('t-trash', { allowTrash: true });
-    });
-
-    it('清空输入后恢复默认范围', async () => {
-      const { input } = renderQuickFind();
-      await user.type(input, 'x');
-      await user.click(screen.getByRole('option', { name: /Continue Search/ }));
-      expect(vi.mocked(useTaskSearchQuery)).toHaveBeenLastCalledWith('x', { extended: true });
-      await user.clear(input);
-      await user.type(input, 'y');
-      expect(vi.mocked(useTaskSearchQuery)).toHaveBeenLastCalledWith('y', { extended: false });
-      expect(screen.getByRole('option', { name: /Continue Search/ })).toBeInTheDocument();
+  it('继续搜索：关闭面板，转到主内容区的搜索页', async () => {
+    const { input, onOpenChange } = renderQuickFind();
+    await user.type(input, 'old groceries');
+    await user.keyboard('{ArrowUp}{Enter}');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(screen.getByTestId('path')).toHaveTextContent('/search?q=old%20groceries');
+    expect(vi.mocked(useTaskSearchQuery)).not.toHaveBeenCalledWith(expect.anything(), {
+      extended: true,
     });
   });
 });
