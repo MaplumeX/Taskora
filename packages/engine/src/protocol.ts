@@ -22,8 +22,13 @@ import type { SyncEntity } from './entities';
  * 2：bootstrap 分页（BootstrapRequest / BootstrapResponse.next），快照可
  *    按 settledAfter 省略归档的 Logbook（local-first-v3 issue 08）。hub
  *    对协议 2 以下的请求仍回整包快照。
+ * 3：HLC 按数值裁决，容忍旧版发出的小数墙钟时间戳（见 compareHlc）。
+ *    设备在 hub 声明协议 3 后才整行重推带这类时间戳的行（一次性修复）。
  */
-export const SYNC_PROTOCOL_VERSION = 2;
+export const SYNC_PROTOCOL_VERSION = 3;
+
+/** hub 按数值裁决 HLC 的协议版本（设备据此触发小数时钟修复）。 */
+export const NUMERIC_HLC_PROTOCOL = 3;
 
 /**
  * hub 变更日志的保留期（天）：cursor 早于被清理部分的设备走 bootstrap。
