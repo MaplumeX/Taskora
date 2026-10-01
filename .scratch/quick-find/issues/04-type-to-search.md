@@ -30,7 +30,7 @@ Things 3 在 Mac 上直接打字即可搜索，Taskora 必须先按 `⌘F`。
 - 前提检查（`KeyboardShortcuts` 的 `canTypeToFind`）：没有 Selection、不在 `/agent`（该页不挂载 Quick Find，之前按 `⌘F` 也只会留下一个悬空的 `searchOpen`）、不是粗指针（`(pointer: coarse)`）。可编辑目标和浮层的让路沿用原有逻辑。只有通过检查才 `preventDefault`。
 - store：新增 `searchSeed`、`openSearch(seed?)`、`takeSearchSeed()`；`setSearchOpen(false)` 会清掉 seed。`⌘F` 改用 `openSearch()`，打开时不带字符。
 - 面板：打开时取用 seed 填入输入框；聚焦改为 Radix 的 `onOpenAutoFocus`（Dialog 挂载即聚焦），替换原先的 `setTimeout`，避免首键之后的快速击键落到页面上丢失。
-- 已知限制：输入法用户按下的第一个键会丢失（面板打开后，第二键起在输入框内正常组字），符合 spec。
+- ~~已知限制：输入法用户按下的第一个键会丢失~~ 实际是首键以英文字母带入（页面无可编辑焦点时浏览器不把按键交给输入法）。后续修复：`KeyboardShortcuts` 渲染一个隐藏输入框（`data-type-to-find-sink`），在可以打字唤起且焦点落在 body（或清空 Selection 后残留在旧行上）时持焦；IME 在其中从首键起组字，上屏后以上屏文字为 seed 唤起。keydown 在它上面且处于组字（`isComposing` / `keyCode 229`）时全部让路；其余按键照常派发。
 - 文档：`docs/keyboard-shortcuts.md` 的全局表新增「打字唤起」一行及说明。
 - 测试：
   - keymap：字母、Shift、数字、符号、CJK 字符、输入法首键、空格，以及带修饰键或非字符键不唤起；原来「无修饰字母键不触发动作」和「普通字符输入不触发动作」两条按新语义改写。

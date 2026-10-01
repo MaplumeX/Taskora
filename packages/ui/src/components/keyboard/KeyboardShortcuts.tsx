@@ -3,7 +3,8 @@
  * 解析键位后统一派发动作。键位见 docs/keyboard-shortcuts.md。
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { Search } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import {
@@ -29,6 +30,7 @@ import {
   useUncompleteTask,
   useUiInteractionStore,
 } from '@taskora/api';
+import { cn } from '@/lib/utils';
 import { BUCKET_ROUTES, detectKeyPlatform, resolveAction, type KeyPlatform } from './keymap';
 
 export { detectKeyPlatform };
@@ -44,10 +46,16 @@ declare global {
   }
 }
 
+/** 打字唤起的隐藏输入框（见 TypeToFindSink）。 */
+function isTypeToFindSink(target: EventTarget | null): boolean {
+  return (target as HTMLElement | null)?.dataset?.typeToFindSink !== undefined;
+}
+
 /** 行内编辑（输入框、textarea、tiptap contenteditable）聚焦时快捷键全部让路。 */
 function isEditableTarget(target: EventTarget | null): boolean {
   const el = target as HTMLElement | null;
   if (!el || typeof (el as { closest?: unknown }).closest !== 'function') return false;
+  if (isTypeToFindSink(el)) return false;
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable) return true;
   return !!el.closest('input, textarea, [contenteditable="true"]');
 }
@@ -131,6 +139,8 @@ export function KeyboardShortcuts({ platform }: Props) {
       if ((e.key === ' ' || e.key === 'Enter') && onNativeButton) return;
       // Radix 浮层打开时让路（Esc 等由浮层自行处理）。
       if (hasOpenOverlay()) return;
+      // 输入法在隐藏输入框里组字：按键全归输入法，上屏后由 sink 唤起 Quick Find。
+      if (isTypeToFindSink(e.target) && (e.isComposing || e.keyCode === 229)) return;
 
       const action = resolveAction(e, resolvedPlatform);
       if (!action) return;
@@ -408,5 +418,127 @@ export function KeyboardShortcuts({ platform }: Props) {
     t,
   ]);
 
-  return null;
+  return <TypeToFindSink pathname={pathname} />;
+}
+
+/**
+ * 输入法的打字唤起：浏览器只在可编辑元素聚焦时把按键交给输入法，焦点在
+ * 页面上时中文输入法的首键会以英文字母到达。所以在可以打字唤起、焦点又
+ * 无处可落（body）时，让这个视觉隐藏的输入框持有焦点：非输入法按键仍由
+ * keydown 唤起（preventDefault，不落进来）；输入法从首键起在这里组字，
+ * 上屏后把结果作为 seed 唤起 Quick Find。有 Selection 时归还焦点，单键
+ * 仍是列表操作。
+ */
+function TypeToFindSink({ pathname }: { pathname: string }) {
+  const ref = useRef<HTMLInputElement>(null);
+  const [composing, setComposing] = useState(false);
+  // 点击链接常伴随路由切换、effect 重跑，标记要跨过这一轮
+  const pendingByPointer = useRef(false);
+
+  useEffect(() => {
+    const sink = ref.current;
+    if (!sink) return;
+    let pointerDown = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    /** byPointer：鼠标点完后，点中的链接/按钮留着的焦点也接管（键盘 Tab 来的不抢）。 */
+    const claim = (byPointer = false) => {
+      clearTimeout(timer);
+      pendingByPointer.current ||= byPointer;
+      // 等焦点转移落定（focusout 时 activeElement 还没更新）
+      timer = setTimeout(() => {
+        const byPointer = pendingByPointer.current;
+        pendingByPointer.current = false;
+        if (pointerDown || !canTypeToFind(pathname) || hasOpenOverlay()) return;
+        const active = document.activeElement;
+        const idle =
+          !active ||
+          active === document.body ||
+          (byPointer && active !== sink && !isEditableTarget(active)) ||
+          // 清空 Selection 后焦点残留在旧行上
+          (useSelectionStore.getState().selectedIds.length === 0 &&
+            !!active.closest('[data-selection-row]'));
+        if (!idle) return;
+        // 不打断页面上的文本选择
+        const selection = window.getSelection();
+        if (selection && !selection.isCollapsed) return;
+        sink.focus({ preventScroll: true });
+      });
+    };
+    const release = () => {
+      if (document.activeElement === sink && !canTypeToFind(pathname)) sink.blur();
+    };
+    const onFocusOut = () => claim();
+    const onPointerDown = () => {
+      pointerDown = true;
+    };
+    const onPointerUp = () => {
+      pointerDown = false;
+      claim(true);
+    };
+    const unsubscribe = useSelectionStore.subscribe(() => {
+      release();
+      claim();
+    });
+
+    document.addEventListener('focusout', onFocusOut);
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('pointerup', onPointerUp, true);
+    document.addEventListener('pointercancel', onPointerUp, true);
+    release();
+    claim();
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+      document.removeEventListener('focusout', onFocusOut);
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('pointerup', onPointerUp, true);
+      document.removeEventListener('pointercancel', onPointerUp, true);
+    };
+  }, [pathname]);
+
+  const flush = () => {
+    setComposing(false);
+    const sink = ref.current;
+    if (!sink) return;
+    const text = sink.value;
+    sink.value = '';
+    if (text.trim()) useUiInteractionStore.getState().openSearch(text);
+  };
+
+  // 外形与位置同 Quick Find 的输入栏：平时透明（输入法候选窗也贴着它弹出），
+  // 组字时原地显形，让用户看到拼音进了搜索框；上屏后换成真正的 Quick Find。
+  // input 始终是同一个节点，切换外观不打断组字。
+  return (
+    <>
+      {composing && (
+        <div aria-hidden className="fixed inset-0 z-50 bg-black/20 dark:bg-black/50" />
+      )}
+      <div
+        aria-hidden={!composing}
+        className={cn(
+          'pointer-events-none fixed left-1/2 top-[12dvh] z-50 flex w-full max-w-xl -translate-x-1/2 items-center gap-2 rounded-xl bg-popover px-3 shadow-popover max-md:top-2 max-md:max-w-[calc(100vw-1.5rem)]',
+          !composing && 'opacity-0',
+        )}
+      >
+        <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+        <input
+          ref={ref}
+          data-type-to-find-sink=""
+          type="text"
+          tabIndex={-1}
+          autoComplete="off"
+          onCompositionStart={() => setComposing(true)}
+          // 输入法组字结束（含 Esc 取消，此时为空）即唤起
+          onCompositionEnd={flush}
+          // 不经组字直接上屏的字符（如中文标点）
+          onInput={(e) => {
+            if (!(e.nativeEvent as InputEvent).isComposing) flush();
+          }}
+          onBlur={() => setComposing(false)}
+          className="h-12 min-w-0 flex-1 bg-transparent text-body outline-none"
+        />
+      </div>
+    </>
+  );
 }
