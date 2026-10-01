@@ -7,6 +7,7 @@ import { HeadingStatus, TaskStatus } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { TaskItem } from '@/components/task/TaskItem';
+import { SettledDateBadge } from '@/components/feed/SettledDateBadge';
 import { useTasksQuery, useUncancelTask, useUncompleteTask } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
 import { useProjectHeadingsQuery } from '@taskora/api';
@@ -97,6 +98,11 @@ export function ProjectCompletedTasks({ projectId }: Props) {
       }
       onRowClick={() => handleRowClick(task.id)}
       onToggleComplete={() => handleToggle(task)}
+      settledDateBadge={
+        task.completedAt ? (
+          <SettledDateBadge date={task.completedAt} className="text-primary" />
+        ) : undefined
+      }
     />
   );
 
