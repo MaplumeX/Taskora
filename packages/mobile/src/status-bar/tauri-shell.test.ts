@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { invoke } from '@tauri-apps/api/core';
 
-import { createTauriStatusBarShell } from './tauri-shell';
+import {
+  createTauriStatusBarShell,
+  onStatusBarNavigate,
+  takeStatusBarNavigation,
+} from './tauri-shell';
 
 // 保留真实的 @tauri-apps/api，才能捕获 invoke 命令
 // 名与 ACL 不匹配、addPluginListener 注册路径等跨层回归（issue 01 的传统）。
@@ -9,11 +13,13 @@ import { createTauriStatusBarShell } from './tauri-shell';
 // 测试借此模拟原生 trigger('action') 的真实投递路径。
 const invokeMock = vi.fn<typeof invoke>();
 let failCommand: string | null;
+let takeNavigationResult: string | null;
 let channelCallbacks: Map<number, (raw: { index: number; message: unknown }) => void>;
 let nextCallbackId: number;
 
 beforeEach(() => {
   failCommand = null;
+  takeNavigationResult = null;
   channelCallbacks = new Map();
   nextCallbackId = 1;
   invokeMock.mockReset();
@@ -43,6 +49,8 @@ beforeEach(() => {
       case 'plugin:statusbar|register_listener':
       case 'plugin:statusbar|remove_listener':
         return;
+      case 'plugin:statusbar|take_navigation':
+        return takeNavigationResult;
       default:
         throw new Error(`Command ${command} not allowed by ACL`);
     }
@@ -52,9 +60,11 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals());
 
 /** 提取 addPluginListener 注册的 Channel 回调，模拟原生 trigger 投递。 */
-function registeredActionCallback(): (payload: unknown) => void {
+function registeredCallback(event: string): (payload: unknown) => void {
   const registration = invokeMock.mock.calls.find(
-    ([command]) => command === 'plugin:statusbar|register_listener',
+    ([command, args]) =>
+      command === 'plugin:statusbar|register_listener' &&
+      (args as Record<string, unknown> | undefined)?.event === event,
   );
   expect(registration).toBeDefined();
   // Channel 实例（invoke 序列化发生在 mock 之后）：直接读 id。
@@ -99,12 +109,14 @@ describe('Android status bar plugin shell', () => {
   it('forwards plugin action events with their quick-add input', async () => {
     const events: { actionId: string; inputValue?: string | null }[] = [];
     createTauriStatusBarShell().onAction((event) => events.push(event));
-    await vi.waitFor(() => expect(invokeMock).toHaveBeenCalledWith(
-      'plugin:statusbar|register_listener',
-      expect.objectContaining({ event: 'action' }),
-    ));
+    await vi.waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith(
+        'plugin:statusbar|register_listener',
+        expect.objectContaining({ event: 'action' }),
+      ),
+    );
 
-    const trigger = registeredActionCallback();
+    const trigger = registeredCallback('action');
     trigger({ action: 'next' });
     trigger({ action: 'quick-add', input: '写周报' });
     trigger({});
@@ -114,6 +126,40 @@ describe('Android status bar plugin shell', () => {
       { actionId: 'quick-add', inputValue: '写周报' },
       { actionId: 'tap', inputValue: null },
     ]);
+  });
+
+  it('takes the cold-start navigation destination and maps only today', async () => {
+    takeNavigationResult = 'today';
+    expect(await takeStatusBarNavigation()).toBe('today');
+    expect(invokeMock).toHaveBeenCalledWith('plugin:statusbar|take_navigation');
+
+    takeNavigationResult = 'somewhere-else';
+    expect(await takeStatusBarNavigation()).toBeNull();
+
+    takeNavigationResult = null;
+    expect(await takeStatusBarNavigation()).toBeNull();
+  });
+
+  it('treats a failing navigation take as no request', async () => {
+    failCommand = 'plugin:statusbar|take_navigation';
+    expect(await takeStatusBarNavigation()).toBeNull();
+  });
+
+  it('forwards the navigate event so a live app switches to today', async () => {
+    const destinations: string[] = [];
+    onStatusBarNavigate((destination) => destinations.push(destination));
+    await vi.waitFor(() =>
+      expect(invokeMock).toHaveBeenCalledWith(
+        'plugin:statusbar|register_listener',
+        expect.objectContaining({ event: 'navigate' }),
+      ),
+    );
+
+    const trigger = registeredCallback('navigate');
+    trigger({ destination: 'today' });
+    trigger({});
+
+    expect(destinations).toEqual(['today']);
   });
 
   it('checks native permission instead of the cached Web Notification permission', async () => {

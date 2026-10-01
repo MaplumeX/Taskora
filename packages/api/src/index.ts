@@ -130,12 +130,14 @@ export * from './hooks/useContentBottomActions';
 export * from './hooks/useContentBottomActionsRoute';
 export * from './hooks/useTaskRowSelection';
 export { useRevealTask, useTaskRevealListener } from './hooks/useRevealTask';
+export { useNavigationRequestListener } from './hooks/useNavigationRequest';
 export * from './hooks/useSelectionScope';
 export * from './hooks/usePageTaskContext';
 
 // UI-agnostic UI state stores
 export { useUiInteractionStore, type SettingsTab } from './stores/uiInteraction.store';
 export { requestTaskReveal, useTaskRevealStore } from './stores/taskReveal.store';
+export { requestNavigation, useNavigationRequestStore } from './stores/navigationRequest.store';
 export { revealRouteFor, type RevealRouteOptions, type RevealTarget } from './utils/revealRoute';
 export { useSyncStatusStore, setSyncStatus, type SyncStatus } from './stores/sync-status.store';
 export {

@@ -96,10 +96,19 @@ class StatusBarPlugin(private val activity: Activity) : Plugin(activity) {
 
     }
 
+    /**
+     * 冷启动时点通知带来的导航目标（issue 03），等 JS 取走（插件 load
+     * 时 JS 尚未注册事件监听）。App 存活时改走 onNewIntent 事件。
+     */
+    @Volatile
+    private var launchNavigation: String? = null
+
     override fun load(webView: android.webkit.WebView) {
         super.load(webView)
         instance = this
         activityRef = activity
+        // 冷启动：contentIntent 的导航 extra 先收起，JS 初始化时 take。
+        launchNavigation = readNavigation(activity.intent)
 
         // 冷路径补发：浮层在进程未起时提交的任务标题。
         val prefs = activity.getSharedPreferences(STATUS_BAR_PREFS, Context.MODE_PRIVATE)
@@ -116,6 +125,37 @@ class StatusBarPlugin(private val activity: Activity) : Plugin(activity) {
             activityRef = null
         }
         super.onDestroy()
+    }
+
+    /**
+     * App 存活时点通知本体（MainActivity 为 singleTask）：取出 extra 经
+     * 事件投递给 JS，由 AppShell 导航到 Today。取出即删，避免 Activity
+     * 重建时重复导航。
+     */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        val destination = readNavigation(intent) ?: return
+        val payload = JSObject()
+        payload.put("destination", destination)
+        trigger("navigate", payload)
+    }
+
+    /** 取出并移除意图里的导航目标（避免 Activity 重建时重复导航）。 */
+    private fun readNavigation(intent: Intent?): String? {
+        val destination = intent?.getStringExtra(EXTRA_NAVIGATE) ?: return null
+        intent.removeExtra(EXTRA_NAVIGATE)
+        return destination
+    }
+
+    /** 取走冷启动时点通知携带的导航目标（取出即删）。 */
+    @Command
+    fun takeNavigation(invoke: Invoke) {
+        val destination = launchNavigation
+        launchNavigation = null
+        val result = JSObject()
+        // destination 为 null 时 org.json 不写入该键；Rust 侧 Option 缺省即 None。
+        result.put("destination", destination)
+        invoke.resolve(result)
     }
 
     @Command

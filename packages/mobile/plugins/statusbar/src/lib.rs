@@ -29,6 +29,13 @@ pub struct ShowArgs {
     pub submit_label: String,
 }
 
+/// 点通知本体携带的导航目标（issue 03）：`today` 或缺失。
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(desktop, allow(dead_code))]
+struct NavigationResponse {
+    destination: Option<String>,
+}
+
 /// 状态栏通知的原生侧句柄。
 pub struct StatusBar<R: Runtime> {
     #[cfg(mobile)]
@@ -66,6 +73,21 @@ impl<R: Runtime> StatusBar<R> {
             Ok(())
         }
     }
+
+    /// 取走冷启动时点通知携带的导航目标（取出即删）。
+    pub fn take_navigation(&self) -> Result<Option<String>, String> {
+        #[cfg(mobile)]
+        {
+            self.handle
+                .run_mobile_plugin::<NavigationResponse>("takeNavigation", ())
+                .map(|r| r.destination)
+                .map_err(|e| e.to_string())
+        }
+        #[cfg(desktop)]
+        {
+            Ok(None)
+        }
+    }
 }
 
 pub trait StatusBarExt<R: Runtime> {
@@ -88,9 +110,17 @@ async fn cancel<R: Runtime>(app: tauri::AppHandle<R>) -> Result<(), String> {
     app.statusbar().cancel()
 }
 
+/// 取走冷启动时点通知携带的导航目标（取出即删）。
+#[tauri::command]
+async fn take_navigation<R: Runtime>(
+    app: tauri::AppHandle<R>,
+) -> Result<Option<String>, String> {
+    app.statusbar().take_navigation()
+}
+
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("statusbar")
-        .invoke_handler(tauri::generate_handler![show, cancel])
+        .invoke_handler(tauri::generate_handler![show, cancel, take_navigation])
         .setup(|app, _api| {
             #[cfg(target_os = "android")]
             let handle = _api.register_android_plugin(PLUGIN_IDENTIFIER, "StatusBarPlugin")?;

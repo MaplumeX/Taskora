@@ -343,10 +343,22 @@
           "markdownDescription": "Denies the show command without any pre-configured scope."
         },
         {
-          "description": "Allows showing and cancelling the single-line status bar notification, and subscribing to its actions.\n#### This default permission set includes:\n\n- `allow-show`\n- `allow-cancel`\n- `allow-register-listener`\n- `allow-remove-listener`",
+          "description": "Enables the take_navigation command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-take-navigation",
+          "markdownDescription": "Enables the take_navigation command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the take_navigation command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-take-navigation",
+          "markdownDescription": "Denies the take_navigation command without any pre-configured scope."
+        },
+        {
+          "description": "Allows showing and cancelling the single-line status bar notification, subscribing to its actions, and taking the navigation request carried by a notification tap.\n#### This default permission set includes:\n\n- `allow-show`\n- `allow-cancel`\n- `allow-take-navigation`\n- `allow-register-listener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Allows showing and cancelling the single-line status bar notification, and subscribing to its actions.\n#### This default permission set includes:\n\n- `allow-show`\n- `allow-cancel`\n- `allow-register-listener`\n- `allow-remove-listener`"
+          "markdownDescription": "Allows showing and cancelling the single-line status bar notification, subscribing to its actions, and taking the navigation request carried by a notification tap.\n#### This default permission set includes:\n\n- `allow-show`\n- `allow-cancel`\n- `allow-take-navigation`\n- `allow-register-listener`\n- `allow-remove-listener`"
         }
       ]
     }

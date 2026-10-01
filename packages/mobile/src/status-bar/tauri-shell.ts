@@ -67,3 +67,32 @@ export function createTauriStatusBarShell(): StatusBarShell {
     },
   };
 }
+
+/** 通知点按导航的目标（原生 contentIntent 携带的 extra）。 */
+export type StatusBarNavigateDestination = 'today';
+
+/**
+ * 取走冷启动时点通知携带的导航目标（取出即删）。点通知拉起进程时 JS
+ * 尚未注册事件监听，意图由原生保存在插件实例里，待这里主动取走；
+ * App 存活时的点按走 onStatusBarNavigate。
+ */
+export async function takeStatusBarNavigation(): Promise<StatusBarNavigateDestination | null> {
+  try {
+    const destination = await invoke<string | null>('plugin:statusbar|take_navigation');
+    return destination === 'today' ? 'today' : null;
+  } catch (error) {
+    console.warn('[status-bar] take navigation failed:', error);
+    return null;
+  }
+}
+
+/**
+ * 订阅点通知导航事件（App 存活时 onNewIntent 经 trigger('navigate') 投递）。
+ */
+export function onStatusBarNavigate(cb: (destination: StatusBarNavigateDestination) => void): void {
+  void addPluginListener<{ destination?: string }>('statusbar', 'navigate', (payload) => {
+    if (payload.destination === 'today') cb('today');
+  }).catch((error) => {
+    console.warn('[status-bar] navigate listener failed:', error);
+  });
+}

@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-take-navigation"
+description = "Enables the take_navigation command without any pre-configured scope."
+commands.allow = ["take_navigation"]
+
+[[permission]]
+identifier = "deny-take-navigation"
+description = "Denies the take_navigation command without any pre-configured scope."
+commands.deny = ["take_navigation"]

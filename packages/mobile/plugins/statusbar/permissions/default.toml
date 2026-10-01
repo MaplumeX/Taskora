@@ -1,10 +1,11 @@
 "$schema" = "schemas/schema.json"
 
 [default]
-description = "Allows showing and cancelling the single-line status bar notification, and subscribing to its actions."
+description = "Allows showing and cancelling the single-line status bar notification, subscribing to its actions, and taking the navigation request carried by a notification tap."
 permissions = [
   "allow-show",
   "allow-cancel",
+  "allow-take-navigation",
   "allow-register-listener",
   "allow-remove-listener",
 ]
