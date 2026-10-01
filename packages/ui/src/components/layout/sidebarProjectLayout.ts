@@ -4,6 +4,8 @@ export const STANDALONE_PROJECT_CONTAINER = 'standalone';
 export const PROJECT_DND_PREFIX = 'proj:';
 export const AREA_DND_PREFIX = 'area:';
 export const PROJECT_CONTAINER_DND_PREFIX = 'project-container:';
+/** 「项目」section 标题，作为无区域列表的首位放置目标（与区域标题对称）。 */
+export const STANDALONE_HEADING_DND_ID = 'project-heading:standalone';
 
 export type ProjectContainerId = typeof STANDALONE_PROJECT_CONTAINER | string;
 export type ProjectPlacementEdge = 'before' | 'after';
@@ -110,6 +112,10 @@ export function resolveProjectPlacement(
     const containerId = overKey.slice(AREA_DND_PREFIX.length);
     if (!layout.containers[containerId]) return null;
     return { containerId, index: 0 };
+  }
+
+  if (overKey === STANDALONE_HEADING_DND_ID) {
+    return { containerId: STANDALONE_PROJECT_CONTAINER, index: 0 };
   }
 
   if (overKey.startsWith(PROJECT_CONTAINER_DND_PREFIX)) {
