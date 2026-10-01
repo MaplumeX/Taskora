@@ -153,7 +153,7 @@ describe('AreaDetail 空状态', () => {
 
   it('任务区隐藏空状态，不再传入空提示', () => {
     renderArea();
-    expect(harness.taskListViewProps).toMatchObject({ hideEmptyState: true });
+    expect(harness.taskListViewProps).toMatchObject({ hideEmptyState: true, hideOwnership: true });
     expect(harness.taskListViewProps).not.toHaveProperty('emptyHint');
   });
 });

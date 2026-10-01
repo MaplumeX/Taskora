@@ -43,6 +43,8 @@ interface Props {
   emptyHint?: string;
   /** 为空时不渲染任何空状态（用于区域详情等自身不展示空态的页面）。 */
   hideEmptyState?: boolean;
+  /** 页头已表达归属的页面（区域详情）不在行上重复归属小字。 */
+  hideOwnership?: boolean;
 }
 
 interface SortableTaskItemProps {
@@ -100,6 +102,7 @@ onReorder,
   sortable = true,
   emptyHint,
   hideEmptyState,
+  hideOwnership = false,
 }: Props) {
   const { t } = useTranslation();
   const topTasks = tasks;
@@ -124,8 +127,8 @@ onReorder,
       );
       const itemProps = {
         task,
-        projectTitle: task.projectId ? projects[task.projectId] : undefined,
-        areaTitle: task.areaId ? areas[task.areaId] : undefined,
+        projectTitle: !hideOwnership && task.projectId ? projects[task.projectId] : undefined,
+        areaTitle: !hideOwnership && task.areaId ? areas[task.areaId] : undefined,
         selectionState,
         onToggleComplete: () => onToggleComplete(task),
         onRowClick: onRowClick ? () => onRowClick(task.id) : undefined,

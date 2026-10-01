@@ -16,12 +16,21 @@ interface Props {
   emptyHint?: string;
   /** 为空时不渲染任何空状态（用于区域详情等自身不展示空态的页面）。 */
   hideEmptyState?: boolean;
+  /** 页头已表达归属的页面（区域详情）不在行上重复归属小字。 */
+  hideOwnership?: boolean;
   sortable?: boolean;
   /** 同页多个列表时，该列表在键盘遍历中的先后（见 useSelectionScope）。 */
   selectionRank?: number;
 }
 
-export function TaskListView({ tasks, emptyHint, hideEmptyState, sortable, selectionRank }: Props) {
+export function TaskListView({
+  tasks,
+  emptyHint,
+  hideEmptyState,
+  hideOwnership,
+  sortable,
+  selectionRank,
+}: Props) {
   const { t } = useTranslation();
   const { handleRowClick, handleBlankClick, selectedIds, expandedId } =
     useTaskRowSelection();
@@ -75,6 +84,7 @@ export function TaskListView({ tasks, emptyHint, hideEmptyState, sortable, selec
         sortable={sortable}
         emptyHint={emptyHint}
         hideEmptyState={hideEmptyState}
+        hideOwnership={hideOwnership}
       />
     </div>
   );
