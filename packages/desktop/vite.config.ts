@@ -15,6 +15,9 @@ export default defineConfig({
     target: 'chrome105',
     minify: process.env.TAURI_ENV_DEBUG ? false : true,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    // 字体分片按 unicode-range 惰性加载（见 @taskora/ui 的 tokens.css）：被内联成
+    // base64 会让它随 CSS 无条件下载，破坏按需加载且体积 +33%。woff2 一律独立输出。
+    assetsInlineLimit: (filePath) => (filePath.endsWith('.woff2') ? false : undefined),
   },
   resolve: {
     alias: [

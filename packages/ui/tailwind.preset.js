@@ -12,15 +12,20 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        // 系统字体栈（不依赖网络字体）：macOS/iOS → SF，Windows → Segoe UI Variable，
-        // 中文回退 PingFang / 微软雅黑 / Noto。
+        // 分平台字体策略。靠「字体栈顺序 + web font 惰性加载」实现，无需平台检测：
+        // 浏览器逐字符取第一个含该字形的字体，而 @font-face 只有真被用到才下载。
+        // - macOS/iOS：-apple-system / PingFang SC 本地命中即停，Noto Sans SC 零下载。
+        // - Windows：系统无可用中文字体（微软雅黑观感差），落到自托管的 Noto Sans SC
+        //   （可变字体，101 个 unicode-range 分片按需加载），西文用其自带拉丁字形。
+        // - 其余平台 / 字体加载失败：Segoe UI → 雅黑 → Noto Sans CJK 兜底。
         sans: [
           '-apple-system',
           'BlinkMacSystemFont',
+          '"PingFang SC"',
+          '"Noto Sans SC Variable"',
           '"Segoe UI Variable Text"',
           '"Segoe UI"',
           'system-ui',
-          '"PingFang SC"',
           '"Microsoft YaHei UI"',
           '"Microsoft YaHei"',
           '"Noto Sans CJK SC"',
@@ -32,7 +37,7 @@ export default {
       fontSize: {
         'title-1': ['28px', { lineHeight: '34px', letterSpacing: '-0.01em', fontWeight: '700' }],
         'title-2': ['20px', { lineHeight: '26px', letterSpacing: '-0.005em', fontWeight: '700' }],
-        section: ['13px', { lineHeight: '18px', fontWeight: '600' }],
+        section: ['13px', { lineHeight: '18px', fontWeight: '700' }],
         body: ['14px', { lineHeight: '20px' }],
         meta: ['12px', { lineHeight: '16px' }],
       },
