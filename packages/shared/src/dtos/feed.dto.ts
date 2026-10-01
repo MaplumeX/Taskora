@@ -43,12 +43,31 @@ export interface TaskFeedItem extends FeedItemBase {
 
 export interface ProjectFeedItem extends FeedItemBase {
   type: 'project';
+  /**
+   * Feed Position：项目行在 feed 中与任务混排的位次（与任务 position 同一键
+   * 空间）；为空时 feed 按 position 排。只影响 feed，不影响侧边栏顺序。
+   */
+  feedPosition?: string | null;
   areaId: string | null;
   taskTotalCount: number;
   taskCompletedCount: number;
 }
 
 export type FeedItem = TaskFeedItem | ProjectFeedItem;
+
+/** feed 拖拽重排的一行（任务或项目行），按目标显示顺序排列。 */
+export interface FeedOrderItem {
+  type: FeedItemType;
+  id: string;
+}
+
+/**
+ * feed 拖拽重排：items 为任务与项目行的目标显示顺序。只为必须移动的行
+ * 分配新位次——任务写 position，项目写 feedPosition（不动侧边栏顺序）。
+ */
+export interface ReorderFeedDto {
+  items: FeedOrderItem[];
+}
 
 /**
  * Logbook 的归档部分（local-first-v3 issue 08）：Local Replica 不保留的

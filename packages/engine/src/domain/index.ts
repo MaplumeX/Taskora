@@ -13,7 +13,13 @@ export {
   type CalendarContext,
   type CalendarZones,
 } from './calendar';
-export { effectivePosition, sortByEffectivePosition, type Positioned } from './order';
+export {
+  effectivePosition,
+  feedSortKey,
+  sortByEffectivePosition,
+  type FeedPositioned,
+  type Positioned,
+} from './order';
 export {
   countProjectTasks,
   feedIncludesProjects,

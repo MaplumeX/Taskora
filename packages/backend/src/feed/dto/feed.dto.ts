@@ -1,6 +1,36 @@
 import { Type } from 'class-transformer';
-import { IsEnum, IsInt, IsISO8601, IsOptional, IsString, Max, Min } from 'class-validator';
+import {
+  ArrayMaxSize,
+  IsArray,
+  IsEnum,
+  IsIn,
+  IsInt,
+  IsISO8601,
+  IsOptional,
+  IsString,
+  Max,
+  Min,
+  ValidateNested,
+} from 'class-validator';
 import { FeedView } from '@taskora/shared';
+import type { FeedItemType } from '@taskora/shared';
+
+export class FeedOrderItemDto {
+  @IsIn(['task', 'project'])
+  type!: FeedItemType;
+
+  @IsString()
+  id!: string;
+}
+
+/** feed 拖拽重排：任务与项目行的目标显示顺序。 */
+export class ReorderFeedDto {
+  @IsArray()
+  @ArrayMaxSize(5000)
+  @ValidateNested({ each: true })
+  @Type(() => FeedOrderItemDto)
+  items!: FeedOrderItemDto[];
+}
 
 export class FeedQueryDto {
   @IsOptional()

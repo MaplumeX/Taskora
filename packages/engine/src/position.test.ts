@@ -5,8 +5,10 @@ import {
   positionsBetween,
   rebalancePositions,
   rebalanceSegments,
+  repositionFeed,
   repositionMinimal,
 } from './position';
+import { sortFeedItems } from './domain';
 
 describe('positionBetween', () => {
   it('首条 Position 是 "a0"，追加在末尾则整数部分递增', () => {
@@ -116,6 +118,52 @@ describe('repositionMinimal', () => {
     expect(apply(withNull).sorted).toEqual(['a', 'x', 'b']);
     const reversed = [...rows].reverse();
     expect(apply(reversed).sorted).toEqual(['f', 'e', 'd', 'c', 'b', 'a']);
+  });
+});
+
+describe('repositionFeed（任务与项目行混排）', () => {
+  const [k1, k2, k3] = positionsBetween(null, null, 3);
+
+  it('把项目行拖到两个任务之间：只写项目的键，结果按 feed 排序键落在两者之间', () => {
+    const changes = repositionFeed([
+      { type: 'task', id: 't1', key: k1 },
+      { type: 'project', id: 'p', key: k3 },
+      { type: 'task', id: 't2', key: k2 },
+    ]);
+    expect(changes).toHaveLength(1);
+    expect(changes[0]).toMatchObject({ type: 'project', id: 'p' });
+    expect(k1 < changes[0].position && changes[0].position < k2).toBe(true);
+  });
+
+  it('任务与项目 id 相同也互不混淆', () => {
+    const entries = [
+      { type: 'project' as const, id: 'same', key: k2 },
+      { type: 'task' as const, id: 'same', key: k1 },
+    ];
+    const changes = repositionFeed(entries);
+    expect(changes).toHaveLength(1);
+    const next = new Map(entries.map((entry) => [`${entry.type}:${entry.id}`, entry.key]));
+    for (const change of changes) next.set(`${change.type}:${change.id}`, change.position);
+    expect(next.get('project:same')! < next.get('task:same')!).toBe(true);
+  });
+});
+
+describe('sortFeedItems（Feed Position）', () => {
+  const [k1, k2, k3] = positionsBetween(null, null, 3);
+
+  it('项目有 Feed Position 时按它与任务混排，否则退回 Position', () => {
+    const items = [
+      { id: 't1', position: k1 },
+      { id: 't2', position: k2 },
+      { id: 'moved', position: k3, feedPosition: positionsBetween(k1, k2, 1)[0] },
+      { id: 'legacy', position: k3, feedPosition: null },
+    ];
+    expect(sortFeedItems(items, 'today').map(({ id }) => id)).toEqual([
+      't1',
+      'moved',
+      't2',
+      'legacy',
+    ]);
   });
 });
 

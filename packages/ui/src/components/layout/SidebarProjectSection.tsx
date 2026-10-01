@@ -34,6 +34,15 @@ import { SortableAreaRow } from '@/components/layout/SortableAreaRow';
 import { ProjectItem } from '@/components/project/ProjectItem';
 import { useLaterProjectKind, useReorderProjects, useUpdateProject } from '@taskora/api';
 import { useReorderAreas } from '@taskora/api';
+import {
+  dndListProps,
+  dragOverlayClass,
+  dropAnimation,
+  flipId,
+  noopSortingStrategy,
+  useFlipList,
+  useHeldOrder,
+} from '../../lib/dnd';
 import { cn } from '@/lib/utils';
 import { sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import {
@@ -67,14 +76,12 @@ interface ProjectContainerProps {
   projectIds: string[];
   projectMap: Map<string, ProjectResponseDto>;
   activeProjectId: string | null;
-  projectDragActive: boolean;
 }
 
 function StandaloneProjectContainer({
   projectIds,
   projectMap,
   activeProjectId,
-  projectDragActive,
 }: ProjectContainerProps) {
   const { setNodeRef } = useDroppable({
     id: projectContainerDndId(STANDALONE_PROJECT_CONTAINER),
@@ -83,7 +90,7 @@ function StandaloneProjectContainer({
   return (
     <SortableContext
       items={projectIds.map(projectDndId)}
-      strategy={verticalListSortingStrategy}
+      strategy={noopSortingStrategy}
     >
       <div
         ref={setNodeRef}
@@ -98,7 +105,6 @@ function StandaloneProjectContainer({
               key={id}
               project={project}
               placeholder={id === activeProjectId}
-              projectDragActive={projectDragActive}
             />
           );
         })}
@@ -129,6 +135,7 @@ function LaterProjectsEntry({ count }: { count: number }) {
   const { t } = useTranslation();
   return (
     <NavLink
+      {...flipId('later-projects')}
       to="/later-projects"
       className={({ isActive }) =>
         sidebarRowClass(isActive, isActive ? undefined : 'text-muted-foreground')
@@ -194,6 +201,10 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
   );
+
+  const flip = useFlipList<HTMLDivElement>(layout);
+  // 区域拖拽走标准让位排序；松手后先按本地顺序渲染，等乐观更新追上。
+  const [orderedAreas, holdAreaOrder] = useHeldOrder(areas, areaKey);
 
   const updateRenderedLayout = React.useCallback(
     (next: SidebarProjectLayout) => {
@@ -371,7 +382,9 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
     );
     if (!placement) return;
     const next = moveProjectToPlacement(layoutRef.current, activeId, placement);
-    if (next) updateRenderedLayout(next);
+    if (!next) return;
+    flip.capture();
+    updateRenderedLayout(next);
   };
 
   const handleDragMove = ({ active }: DragMoveEvent) => {
@@ -431,15 +444,15 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
     if (!over || !activeKey.startsWith(AREA_DND_PREFIX)) return;
     const overKey = String(over.id);
     if (!overKey.startsWith(AREA_DND_PREFIX) || activeKey === overKey) return;
-    const areaIds = areas.map((area) => areaDndId(area.id));
+    const areaIds = orderedAreas.map((area) => areaDndId(area.id));
     const oldIndex = areaIds.indexOf(activeKey);
     const newIndex = areaIds.indexOf(overKey);
     if (oldIndex < 0 || newIndex < 0) return;
-    reorderAreas.mutate(
-      arrayMove(areaIds, oldIndex, newIndex).map((id) =>
-        id.slice(AREA_DND_PREFIX.length),
-      ),
+    const reordered = arrayMove(areaIds, oldIndex, newIndex).map((id) =>
+      id.slice(AREA_DND_PREFIX.length),
     );
+    holdAreaOrder(reordered);
+    reorderAreas.mutate(reordered);
   };
 
   const handleDragCancel = () => {
@@ -447,10 +460,9 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
   };
 
   const activeProjectId = activeProject?.id ?? null;
-  const projectDragActive = activeProject !== null;
 
   return (
-    <div className="flex flex-col">
+    <div ref={flip.rootRef} {...dndListProps} className="flex flex-col">
       <DndContext
         sensors={sensors}
         collisionDetection={collisionDetection}
@@ -479,14 +491,13 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
             }
             projectMap={projectMap}
             activeProjectId={activeProjectId}
-            projectDragActive={projectDragActive}
           />
           {laterCount > 0 && <LaterProjectsEntry count={laterCount} />}
           <SortableContext
-            items={areas.map((area) => areaDndId(area.id))}
+            items={orderedAreas.map((area) => areaDndId(area.id))}
             strategy={verticalListSortingStrategy}
           >
-            {areas.map((area) => {
+            {orderedAreas.map((area) => {
               const areaProjects = (layout.containers[area.id] ?? []).flatMap(
                 (id) => {
                   const project = projectMap.get(id);
@@ -499,16 +510,15 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
                   area={area}
                   projects={areaProjects}
                   activeProjectId={activeProjectId}
-                  projectDragActive={projectDragActive}
                 />
               );
             })}
           </SortableContext>
         </div>
-        <DragOverlay>
+        <DragOverlay dropAnimation={dropAnimation}>
           {activeProject ? (
             <div
-              className="pointer-events-none w-56 overflow-hidden rounded-md bg-sidebar shadow-popover"
+              className={cn(dragOverlayClass, 'bg-sidebar')}
               aria-hidden="true"
               {...{ inert: '' }}
             >
@@ -519,4 +529,8 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
       </DndContext>
     </div>
   );
+}
+
+function areaKey(area: AreaResponseDto) {
+  return area.id;
 }

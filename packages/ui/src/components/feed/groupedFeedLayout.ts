@@ -62,6 +62,11 @@ export interface GroupedFeedLayoutInput {
   projects: ProjectResponseDto[];
   areas: AreaResponseDto[];
   groupingEnabled: boolean;
+  /**
+   * 即使视图内已无任务也保留组头的父级 id（拖拽中被拖任务的原组：把组里
+   * 最后一个任务拖走时组头不消失，避免整列跳动）。
+   */
+  retainGroupIds?: ReadonlySet<string>;
 }
 
 /**
@@ -111,9 +116,10 @@ export function flatParentOrder(
 }
 
 export function deriveGroupedFeedLayout(input: GroupedFeedLayoutInput): GroupedFeedLayout {
-  const { items, projects, areas, groupingEnabled } = input;
+  const { items, projects, areas, groupingEnabled, retainGroupIds } = input;
+  const retained = (parentId: string) => retainGroupIds?.has(parentId) ?? false;
 
-  // 开关关闭：恒等推导 —— 与平铺 FeedListView 相同的渲染序列。
+  // 开关关闭：恒等推导 —— 平铺列表（收件箱、不分组的时间视图）的渲染序列。
   if (!groupingEnabled) {
     const blocks: GroupedFeedBlock[] = items.map((item) =>
       item.type === 'task'
@@ -172,7 +178,7 @@ export function deriveGroupedFeedLayout(input: GroupedFeedLayoutInput): GroupedF
     }
     // 项目行：视图内有任务的项目被组头吸收；已了结/已丢弃项目永不成为组头。
     const project = projectById.get(item.id);
-    const hasVisibleTasks = (groupTasks.get(item.id)?.length ?? 0) > 0;
+    const hasVisibleTasks = (groupTasks.get(item.id)?.length ?? 0) > 0 || retained(item.id);
     if (canHostGroup(project) && hasVisibleTasks) continue;
     blocks.push({ kind: 'projectRow', item });
   }
@@ -182,7 +188,7 @@ export function deriveGroupedFeedLayout(input: GroupedFeedLayoutInput): GroupedF
     if (parent.kind === 'project') {
       if (!canHostGroup(parent.project)) continue;
       const tasksInGroup = groupTasks.get(parent.project.id) ?? [];
-      if (tasksInGroup.length === 0) continue;
+      if (tasksInGroup.length === 0 && !retained(parent.project.id)) continue;
       blocks.push({
         kind: 'projectGroupHeader',
         project: parent.project,
@@ -194,7 +200,7 @@ export function deriveGroupedFeedLayout(input: GroupedFeedLayoutInput): GroupedF
       }
     } else {
       const tasksInGroup = groupTasks.get(parent.area.id) ?? [];
-      if (tasksInGroup.length === 0) continue;
+      if (tasksInGroup.length === 0 && !retained(parent.area.id)) continue;
       blocks.push({
         kind: 'areaGroupHeader',
         area: parent.area,

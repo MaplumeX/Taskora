@@ -21,6 +21,7 @@ import type { TaskResponseDto } from '@taskora/shared';
 import { TaskItem } from './TaskItem';
 import { selectionStateOf, type SelectionState } from '@taskora/api';
 import { EmptyState } from '@/components/common/EmptyState';
+import { dndListProps, useHeldOrder } from '../../lib/dnd';
 
 interface ProjectLookup {
   [projectId: string]: string;
@@ -105,7 +106,8 @@ onReorder,
   hideOwnership = false,
 }: Props) {
   const { t } = useTranslation();
-  const topTasks = tasks;
+  // 松手后先按本地顺序渲染，等乐观更新追上，避免条目闪回原位。
+  const [topTasks, holdOrder] = useHeldOrder(tasks, taskKey);
 
   // 鼠标：移动 5px 激活；触摸：按住 300ms 再移动才激活，避免与列表滚动
   // 冲突（PointerSensor 会在触摸滑动 5px 时误触拖拽）。
@@ -151,14 +153,21 @@ onReorder,
     const oldIndex = ids.indexOf(active.id as string);
     const newIndex = ids.indexOf(over.id as string);
     const reordered = arrayMove(ids, oldIndex, newIndex);
+    holdOrder(reordered);
     onReorder(reordered);
   };
 
   return (
     <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
       <SortableContext items={topTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-        <div className="flex flex-col">{renderItems()}</div>
+        <div {...dndListProps} className="flex flex-col">
+          {renderItems()}
+        </div>
       </SortableContext>
     </DndContext>
   );
+}
+
+function taskKey(task: TaskResponseDto) {
+  return task.id;
 }

@@ -128,6 +128,73 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     expect(notifications).toBe(1);
   });
 
+  it('feed 拖拽重排：项目行写 Feed Position、不动侧边栏 Position，并同步到 hub', async () => {
+    const someday = { status: 'ACTIVE', bucket: 'SOMEDAY', scheduledType: 'SOMEDAY', trashedAt: null };
+    const t1 = await engine.create('task', { ...someday, title: 'T1', position: 'a1' });
+    const t2 = await engine.create('task', { ...someday, title: 'T2', position: 'a2' });
+    const p = await engine.create('project', { ...someday, title: 'P', position: 'a5' });
+    await engine.sync();
+    const titles = async () => (await backend.getFeed('someday')).map((item) => item.title);
+    expect(await titles()).toEqual(['T1', 'T2', 'P']);
+
+    // 把项目行拖到 T1、T2 之间：只有项目行移动
+    await backend.reorderFeed([
+      { type: 'task', id: t1 },
+      { type: 'project', id: p },
+      { type: 'task', id: t2 },
+    ]);
+    expect(await titles()).toEqual(['T1', 'P', 'T2']);
+    const row = await engine.get('project', p);
+    expect(row?.fields.position).toBe('a5');
+    expect(row?.fields.feedPosition).toEqual(expect.any(String));
+    expect((await engine.get('task', t1))?.fields.position).toBe('a1');
+    expect((await engine.get('task', t2))?.fields.position).toBe('a2');
+
+    // hub 认识 feedPosition：推送不被拒，Outbox 清空
+    await engine.sync();
+    expect(await engine.pendingCount()).toBe(0);
+  });
+
+  it('re-balance 合并任务 Position 与项目 Feed Position：修复膨胀键后混排顺序不变', async () => {
+    const long = (base: string) => base + 'V'.repeat(30);
+    await engine.create('task', {
+      title: 'A',
+      status: 'ACTIVE',
+      bucket: 'SOMEDAY',
+      scheduledType: 'SOMEDAY',
+      trashedAt: null,
+      position: long('a0'),
+    });
+    await engine.create('project', {
+      title: 'P',
+      status: 'ACTIVE',
+      bucket: 'SOMEDAY',
+      scheduledType: 'SOMEDAY',
+      trashedAt: null,
+      position: 'a5',
+      feedPosition: long('a0') + 'V',
+    });
+    await engine.create('task', {
+      title: 'B',
+      status: 'ACTIVE',
+      bucket: 'SOMEDAY',
+      scheduledType: 'SOMEDAY',
+      trashedAt: null,
+      position: long('a0') + 'W',
+    });
+    const titles = async () => (await backend.getFeed('someday')).map((item) => item.title);
+    expect(await titles()).toEqual(['A', 'P', 'B']);
+
+    await engine.sync();
+
+    const keys = [
+      ...(await engine.list('task')).map((row) => row.fields.position as string),
+      ...(await engine.list('project')).map((row) => row.fields.feedPosition as string),
+    ];
+    expect(keys.every((key) => key.length <= 24)).toBe(true);
+    expect(await titles()).toEqual(['A', 'P', 'B']);
+  });
+
   it('本地写与 hub 收敛：flush/pull 后两端一致，REST 回声幂等', async () => {
     await backend.createTask({ title: '同步验证' });
     expect(await engine.pendingCount()).toBe(1);

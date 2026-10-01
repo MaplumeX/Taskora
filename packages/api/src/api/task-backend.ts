@@ -49,6 +49,11 @@ export interface TaskBackend {
    */
   skipTask(id: string): Promise<TaskResponseDto>;
   reorderTasks(orderedIds: string[]): Promise<void>;
+  /**
+   * feed 拖拽重排（任务与项目行混排）：items 为目标显示顺序。任务写
+   * position，项目写 feedPosition（不动侧边栏顺序）。
+   */
+  reorderFeed(items: import('@taskora/shared').FeedOrderItem[]): Promise<void>;
   convertTaskToProject(id: string): Promise<import('@taskora/shared').ProjectResponseDto>;
   createSubtask(taskId: string, data: CreateSubtaskDto): Promise<SubtaskResponseDto>;
   updateSubtask(id: string, data: UpdateSubtaskDto): Promise<SubtaskResponseDto>;

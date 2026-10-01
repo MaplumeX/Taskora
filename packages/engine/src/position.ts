@@ -316,6 +316,30 @@ export function rebalanceSegments(
   return changes;
 }
 
+/** feed 混排中的一行：任务的键是 Position，项目的键是 feed 排序键。 */
+export interface FeedOrderEntry {
+  type: 'task' | 'project';
+  id: string;
+  key: string | null;
+}
+
+/**
+ * feed 视图（任务与项目行混排）按目标顺序重排：同 repositionMinimal，
+ * 只为必须移动的行分配新键。调用方把任务的结果写入 Task.position、
+ * 项目的结果写入 Project.feedPosition（不动项目的侧边栏 Position）。
+ */
+export function repositionFeed(
+  entries: FeedOrderEntry[],
+): Array<{ type: 'task' | 'project'; id: string; position: string }> {
+  const byKey = new Map(entries.map((entry) => [`${entry.type}:${entry.id}`, entry]));
+  return repositionMinimal(
+    entries.map((entry) => ({ id: `${entry.type}:${entry.id}`, position: entry.key })),
+  ).map(({ id, position }) => {
+    const entry = byKey.get(id)!;
+    return { type: entry.type, id: entry.id, position };
+  });
+}
+
 /**
  * 按目标顺序重排时，只为「必须移动」的行分配新 Position（CONTEXT.md：
  * 插队只需在两个邻居间生成新串，无需重排他人）。

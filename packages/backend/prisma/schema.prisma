@@ -107,6 +107,9 @@ model Project {
   fieldClocks Json?
   /// Position：fractional indexing 排序位次（local-first，ADR-0007）；过渡期与 sortOrder 并存。
   position String?
+  /// Feed Position：项目行在 feed 视图中与任务混排的位次（与 Task.position 同一键空间）；
+  /// 为空时 feed 退回 position。不影响侧边栏顺序（feed-project-ordering spec）。
+  feedPosition String?
   /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
   fieldDigests Json?
 

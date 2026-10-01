@@ -143,6 +143,7 @@ function makeEngineLikeBackend(client: QueryClient): TaskBackend {
       throw new Error('not needed');
     },
     reorderTasks: async () => {},
+    reorderFeed: async () => {},
     convertTaskToProject: async () => {
       throw new Error('not needed');
     },

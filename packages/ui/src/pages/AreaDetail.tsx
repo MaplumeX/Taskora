@@ -40,6 +40,7 @@ import { TaskListView } from '@/components/task/TaskListView';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { AreaMoreMenu } from '@/components/area/AreaMoreMenu';
 import { toast } from 'sonner';
+import { dndListProps, useHeldOrder } from '../lib/dnd';
 
 function SortableProjectRow({
   project,
@@ -89,6 +90,8 @@ export default function AreaDetail() {
     () => areaProjects.filter((p) => p.status !== ProjectStatus.COMPLETED && kindOf(p) === null),
     [areaProjects, kindOf],
   );
+  // 松手后先按本地顺序渲染，等乐观更新追上，避免条目闪回原位。
+  const [orderedProjects, holdProjectOrder] = useHeldOrder(projects, projectKey);
   const reorderProjects = useReorderProjects();
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ areaId: id });
   const updateArea = useUpdateArea();
@@ -103,8 +106,9 @@ export default function AreaDetail() {
   const handleProjectDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
     if (!over || active.id === over.id) return;
-    const ids = projects.map((p) => p.id);
+    const ids = orderedProjects.map((p) => p.id);
     const reordered = arrayMove(ids, ids.indexOf(active.id as string), ids.indexOf(over.id as string));
+    holdProjectOrder(reordered);
     // 以全量顺序为底写回，避免与其他区域 / 隐藏项目的 sortOrder 撞号。
     reorderProjects.mutate(mergeVisibleProjectOrder(allProjects, reordered));
   };
@@ -112,8 +116,8 @@ export default function AreaDetail() {
   // 注册项目段可遍历行（Project 行仅作遍历停留点，⌘K/⌫ 对其无效）。
   // 键盘遍历顺序与页面一致：活跃项目（0）→ 任务（1）→ 稍后项目（2）。
   const projectRows = useMemo(
-    () => projects.map((p) => ({ id: p.id, kind: 'project' as const, completed: false })),
-    [projects],
+    () => orderedProjects.map((p) => ({ id: p.id, kind: 'project' as const, completed: false })),
+    [orderedProjects],
   );
   useSelectionScope(projectRows, 0);
 
@@ -144,11 +148,11 @@ export default function AreaDetail() {
         {area && <AreaMoreMenu area={area} />}
         </div>
 
-      {projects.length > 0 && (
+      {orderedProjects.length > 0 && (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
-          <SortableContext items={projects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-            <div className="flex flex-col">
-              {projects.map((p) => (
+          <SortableContext items={orderedProjects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
+            <div {...dndListProps} className="flex flex-col">
+              {orderedProjects.map((p) => (
                 <SortableProjectRow
                   key={p.id}
                   project={p}
@@ -172,4 +176,8 @@ export default function AreaDetail() {
 
       </div>
   );
+}
+
+function projectKey(project: ProjectResponseDto) {
+  return project.id;
 }

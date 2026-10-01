@@ -66,6 +66,8 @@ export const REPLICA_MIGRATIONS: readonly ReplicaMigration[] = [
   },
   // 5 → 6：task 增加 repeatSourceId（recurring-tasks-v2 issue 01，派生来源）。
   (storage) => addColumnIfMissing(storage, 'task', 'repeatSourceId', 'TEXT'),
+  // 6 → 7：project 增加 feedPosition（feed-project-ordering spec，Feed Position）。
+  (storage) => addColumnIfMissing(storage, 'project', 'feedPosition', 'TEXT'),
 ];
 
 /** 当前代码的副本 schema 版本。 */

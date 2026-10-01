@@ -173,6 +173,21 @@
   *::-webkit-scrollbar-thumb:active {
     background-color: hsl(var(--foreground) / 0.4);
   }
+
+  /*
+   * 拖拽排序进行中（dnd-kit 给被拖条目加 aria-pressed="true"）：
+   * - 全页统一 grabbing 光标（浮层 pointer-events: none，否则显示的是指针
+   *   下方那一行自己的光标）；
+   * - 可拖拽列表（data-dnd-list）不响应指针：指针扫过的行不出现 hover
+   *   高亮。滚轮落到外层滚动容器，拖拽中照常滚动。
+   */
+  html:has([aria-roledescription='sortable'][aria-pressed='true']),
+  html:has([aria-roledescription='sortable'][aria-pressed='true']) * {
+    cursor: grabbing !important;
+  }
+  html:has([aria-roledescription='sortable'][aria-pressed='true']) [data-dnd-list] {
+    pointer-events: none;
+  }
 }
 
 @layer utilities {
