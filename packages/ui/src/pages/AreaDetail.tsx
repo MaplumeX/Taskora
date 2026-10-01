@@ -162,7 +162,8 @@ export default function AreaDetail() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        <TaskListView tasks={tasks} hideEmptyState selectionRank={1} />
+        // 页头已表达区域归属，行上不再重复归属小字。
+        <TaskListView tasks={tasks} hideEmptyState hideOwnership selectionRank={1} />
       )}
 
       {/* 稍后项目放在页面最下方（活跃项目与任务之后）。 */}
