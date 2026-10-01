@@ -20,6 +20,7 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
+import { ProjectStatus } from '@taskora/shared';
 import type { ProjectResponseDto } from '@taskora/shared';
 
 import { useAreasQuery, useSelectionScope, useTaskRowSelection, useUpdateArea } from '@taskora/api';
@@ -83,9 +84,9 @@ export default function AreaDetail() {
     () => allProjects.filter((p) => p.areaId === id),
     [allProjects, id],
   );
-  // 活跃项目可拖拽排序；稍后项目放在下方「计划」/「Someday」小节。
+  // 活跃项目可拖拽排序；稍后项目放在下方「计划」/「Someday」小节，已完成项目不显示。
   const projects = useMemo(
-    () => areaProjects.filter((p) => kindOf(p) === null),
+    () => areaProjects.filter((p) => p.status !== ProjectStatus.COMPLETED && kindOf(p) === null),
     [areaProjects, kindOf],
   );
   const reorderProjects = useReorderProjects();

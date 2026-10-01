@@ -122,6 +122,19 @@ describe('AreaDetail later projects', () => {
     expect(screen.getByRole('region', { name: 'nav:someday' })).toHaveTextContent('Project as');
   });
 
+  it('不显示已完成的项目', () => {
+    harness.projects = [
+      project('a1', 'a', 1),
+      {
+        ...project('ad', 'a', 2),
+        status: ProjectStatus.COMPLETED,
+        completedAt: '2026-08-10T00:00:00.000Z',
+      },
+    ];
+    renderArea();
+    expect(renderedIds()).toEqual(['a1']);
+  });
+
   it('活跃项目拖拽排序以全量顺序写回，稍后与其他区域项目原位不动', () => {
     renderArea();
     act(() => harness.onDragEnd?.({ active: { id: 'a2' }, over: { id: 'a1' } }));
