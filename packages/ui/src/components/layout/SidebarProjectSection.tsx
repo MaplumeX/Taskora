@@ -40,6 +40,7 @@ import {
   AREA_DND_PREFIX,
   PROJECT_CONTAINER_DND_PREFIX,
   PROJECT_DND_PREFIX,
+  STANDALONE_HEADING_DND_ID,
   STANDALONE_PROJECT_CONTAINER,
   areaDndId,
   cloneSidebarProjectLayout,
@@ -87,10 +88,7 @@ function StandaloneProjectContainer({
       <div
         ref={setNodeRef}
         data-project-container={STANDALONE_PROJECT_CONTAINER}
-        className={cn(
-          'flex flex-col gap-px',
-          projectDragActive && projectIds.length === 0 && 'min-h-8',
-        )}
+        className="flex flex-col gap-px"
       >
         {projectIds.map((id) => {
           const project = projectMap.get(id);
@@ -106,6 +104,23 @@ function StandaloneProjectContainer({
         })}
       </div>
     </SortableContext>
+  );
+}
+
+/**
+ * 「项目」section 标题。同时是无区域列表的首位放置目标：无区域列表为空时
+ * 不再在拖拽中预留空白高度，而是靠标题承接拖入。
+ */
+function ProjectSectionHeading() {
+  const { t } = useTranslation();
+  const { setNodeRef } = useDroppable({ id: STANDALONE_HEADING_DND_ID });
+  return (
+    <div
+      ref={setNodeRef}
+      className="px-2 pb-1 text-meta font-semibold text-muted-foreground"
+    >
+      {t('nav:projects')}
+    </div>
   );
 }
 
@@ -290,6 +305,7 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
       return (
         id.startsWith(PROJECT_DND_PREFIX) ||
         id.startsWith(PROJECT_CONTAINER_DND_PREFIX) ||
+        id === STANDALONE_HEADING_DND_ID ||
         id.startsWith(AREA_DND_PREFIX)
       );
     });
@@ -305,7 +321,11 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
       collisions.find(({ id }) =>
         String(id).startsWith(PROJECT_CONTAINER_DND_PREFIX),
       ) ??
-      collisions.find(({ id }) => String(id).startsWith(AREA_DND_PREFIX));
+      collisions.find(
+        ({ id }) =>
+          String(id).startsWith(AREA_DND_PREFIX) ||
+          id === STANDALONE_HEADING_DND_ID,
+      );
     if (!collision) return [];
 
     const overKey = String(collision.id);
@@ -431,9 +451,6 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
 
   return (
     <div className="flex flex-col">
-      <div className="px-2 pb-1 text-meta font-semibold text-muted-foreground">
-        {t('nav:projects')}
-      </div>
       <DndContext
         sensors={sensors}
         collisionDetection={collisionDetection}
@@ -454,6 +471,7 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
         onDragEnd={handleDragEnd}
         onDragCancel={handleDragCancel}
       >
+        <ProjectSectionHeading />
         <div className="flex flex-col gap-px">
           <StandaloneProjectContainer
             projectIds={

@@ -97,10 +97,7 @@ export function SidebarAreaRow({
           <div
             ref={setProjectContainerRef}
             data-project-container={area.id}
-            className={cn(
-              'flex flex-col gap-px',
-              projectDragActive && projects.length === 0 && 'min-h-8',
-            )}
+            className="flex flex-col gap-px"
           >
             {projects.map(renderProject)}
           </div>

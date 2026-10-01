@@ -347,6 +347,25 @@ describe('SidebarProjectSection project drag preview', () => {
     );
   });
 
+  it('uses the section heading as the first standalone slot without reserving empty space', () => {
+    renderSection([project('a1', 'a')]);
+    startProjectDrag('a1');
+
+    const standalone = document.querySelector(
+      '[data-project-container="standalone"]',
+    ) as HTMLElement;
+    expect(standalone).not.toHaveClass('min-h-8');
+
+    dragOver('a1', 'project-heading:standalone');
+    expect(within(standalone).getByTestId('project-placeholder-a1')).toBeInTheDocument();
+
+    endProjectDrag('a1', 'project-heading:standalone');
+    expect(harness.updateProjectMutate).toHaveBeenCalledWith(
+      { id: 'a1', data: { areaId: null } },
+      expect.any(Object),
+    );
+  });
+
   it('accepts the final slot of an empty expanded area container', () => {
     renderSection([project('s', null)]);
     startProjectDrag('s');
