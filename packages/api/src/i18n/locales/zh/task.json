@@ -10,6 +10,7 @@
   "subtasks": "子任务",
   "noSubtasks": "暂无子任务",
   "addSubtask": "添加子任务…",
+  "reorderSubtask": "拖动以排序",
   "scheduledDate": "日期",
   "dueDate": "到期",
   "tags": "标签",

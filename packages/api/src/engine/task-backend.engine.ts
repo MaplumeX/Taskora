@@ -448,10 +448,29 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     async createSubtask(taskId: string, data: CreateSubtaskDto): Promise<SubtaskResponseDto> {
       const task = await engine.get('task', taskId);
       if (!task) throw new Error(`Task not found: ${taskId}`);
-      // sortOrder = max + 1（与 SubtasksService 一致：追加在末尾）
+      if (data.id) {
+        const existing = await engine.get('subtask', data.id);
+        if (existing) return subtaskRowToDto(existing);
+      }
       const existing = await subtasksOf(taskId);
-      const sortOrder = existing.reduce((max, s) => Math.max(max, s.sortOrder), -1) + 1;
+      const afterIndex = data.afterId ? existing.findIndex((s) => s.id === data.afterId) : -1;
+      let sortOrder: number;
+      if (afterIndex < 0) {
+        // sortOrder = max + 1（与 SubtasksService 一致：追加在末尾）
+        sortOrder = existing.reduce((max, s) => Math.max(max, s.sortOrder), -1) + 1;
+      } else {
+        // 插入到 afterId 之后：整体重排为 0..n，插入点之后的各项顺延一位
+        sortOrder = afterIndex + 1;
+        await engine.updateMany(
+          'subtask',
+          existing.flatMap((s, index) => {
+            const next = index < sortOrder ? index : index + 1;
+            return s.sortOrder !== next ? [{ id: s.id, patch: { sortOrder: next } }] : [];
+          }),
+        );
+      }
       const id = await engine.create('subtask', {
+        ...(data.id ? { id: data.id } : {}),
         title: data.title,
         taskId,
         sortOrder,

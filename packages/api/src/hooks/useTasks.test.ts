@@ -4,7 +4,7 @@ import { type ReactNode, createElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
-import type { FeedItem, TaskResponseDto } from '@taskora/shared';
+import type { FeedItem, SubtaskResponseDto, TaskResponseDto } from '@taskora/shared';
 
 // Mock the tasks API module
 vi.mock('@/api/tasks.api', () => ({
@@ -33,8 +33,10 @@ vi.mock('@/api/tasks.api', () => ({
 import {
   cancelTask,
   completeTask,
+  createSubtask,
   createTask,
   deleteTask,
+  reorderSubtasks,
   reorderTasks,
   uncancelTask,
   uncompleteTask,
@@ -44,8 +46,10 @@ import {
   taskKeys,
   useCancelTask,
   useCompleteTask,
+  useCreateSubtask,
   useCreateTask,
   useDeleteTask,
+  useReorderSubtasks,
   useReorderTasks,
   useUncancelTask,
   useUncompleteTask,
@@ -516,5 +520,62 @@ describe('feed 缓存同步乐观更新（Inbox/Today 等视图读 feed）', () 
       const ids = queryClient.getQueryData<FeedItem[]>(['feed', 'inbox'])?.map((item) => item.id);
       expect(ids).toEqual(['task-2']);
     });
+  });
+});
+
+describe('Subtask 插入与重排（optimistic）', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const sub = (id: string, sortOrder: number): SubtaskResponseDto => ({
+    id,
+    title: id,
+    status: TaskStatus.ACTIVE,
+    completedAt: null,
+    sortOrder,
+    taskId: 'task-1',
+    createdAt: '2024-01-01T00:00:00.000Z',
+    updatedAt: '2024-01-01T00:00:00.000Z',
+  });
+  const ids = (queryClient: QueryClient) =>
+    queryClient
+      .getQueryData<TaskResponseDto>(taskKeys.detail('task-1'))
+      ?.subtasks?.map((s) => s.id);
+
+  it('afterId：乐观行即以客户端 id 插到锚点之后，成功后原位保留', async () => {
+    vi.mocked(createSubtask).mockResolvedValue({ ...sub('new', 1), title: '新' });
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(taskKeys.detail('task-1'), {
+      ...baseTask,
+      subtasks: [sub('a', 0), sub('b', 1)],
+    });
+
+    const { result } = renderHook(() => useCreateSubtask(), { wrapper });
+    result.current.mutate({ taskId: 'task-1', data: { id: 'new', title: '新', afterId: 'a' } });
+
+    await waitFor(() => expect(ids(queryClient)).toEqual(['a', 'new', 'b']));
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(ids(queryClient)).toEqual(['a', 'new', 'b']);
+  });
+
+  it('重排乐观生效，失败回滚', async () => {
+    let reject!: (err: Error) => void;
+    vi.mocked(reorderSubtasks).mockReturnValue(
+      new Promise<void>((_, r) => {
+        reject = r;
+      }),
+    );
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(taskKeys.detail('task-1'), {
+      ...baseTask,
+      subtasks: [sub('a', 0), sub('b', 1)],
+    });
+
+    const { result } = renderHook(() => useReorderSubtasks(), { wrapper });
+    result.current.mutate({ taskId: 'task-1', orderedIds: ['b', 'a'] });
+
+    await waitFor(() => expect(ids(queryClient)).toEqual(['b', 'a']));
+    reject(new Error('boom'));
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(ids(queryClient)).toEqual(['a', 'b']);
   });
 });

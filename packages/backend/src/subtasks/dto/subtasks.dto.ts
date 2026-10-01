@@ -1,9 +1,17 @@
-import { IsArray, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsOptional, IsString, IsUUID } from 'class-validator';
 import { TaskStatus } from '@taskora/shared';
 
 export class CreateSubtaskDto {
   @IsString()
   title!: string;
+
+  @IsOptional()
+  @IsUUID()
+  id?: string;
+
+  @IsOptional()
+  @IsString()
+  afterId?: string;
 }
 
 export class UpdateSubtaskDto {

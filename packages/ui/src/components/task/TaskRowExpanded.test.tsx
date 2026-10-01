@@ -33,8 +33,9 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   }),
   useCompleteSubtask: () => ({ mutate: vi.fn(), isPending: false }),
   useUncompleteSubtask: () => ({ mutate: vi.fn(), isPending: false }),
-  useDeleteSubtask: () => ({ mutate: vi.fn(), isPending: false }),
-  useUpdateSubtask: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteSubtask: () => ({ mutate: mutationMocks.deleteSubtask, isPending: false }),
+  useUpdateSubtask: () => ({ mutate: mutationMocks.updateSubtask, isPending: false }),
+  useReorderSubtasks: () => ({ mutate: vi.fn(), isPending: false }),
   useUpdateTask: () => ({ mutate: vi.fn(), isPending: false }),
   useCompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
   useUncompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
@@ -75,6 +76,8 @@ const baseTask = vi.hoisted(() => ({
 
 const mutationMocks = vi.hoisted(() => ({
   createSubtask: vi.fn(),
+  deleteSubtask: vi.fn(),
+  updateSubtask: vi.fn(),
 }));
 
 /* ------------- mocks ------------- */
@@ -178,7 +181,7 @@ describe('TaskRowExpanded — DnD keyboard stuck regression', () => {
     expect(mutationMocks.createSubtask).toHaveBeenCalledWith(
       expect.objectContaining({
         taskId: 'task-1',
-        data: { title: 'New subtask' },
+        data: expect.objectContaining({ title: 'New subtask' }),
       }),
       expect.anything(),
     );
@@ -313,8 +316,6 @@ describe('TaskRowExpanded — hide subtask empty state', () => {
     const addSubtaskBtn = screen.getByRole('button', { name: /Add subtask|添加子任务/ });
     await user.click(addSubtaskBtn);
 
-    // subtask block now visible
-    expect(screen.getByText(/Subtasks|子任务/)).toBeInTheDocument();
     const input = screen.getByPlaceholderText(/Add subtask|添加子任务/) as HTMLInputElement;
     expect(input).toBeInTheDocument();
     await waitFor(() => expect(document.activeElement).toBe(input));
@@ -341,10 +342,10 @@ describe('TaskRowExpanded — hide subtask empty state', () => {
 
     await user.click(screen.getByText('My task'));
 
-    // subtask block visible by default, header shows count
-    expect(screen.getByText(/Subtasks|子任务/)).toBeInTheDocument();
-    expect(screen.getByText('Existing subtask')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText(/Add subtask|添加子任务/)).toBeInTheDocument();
+    // 无标题、无常驻添加输入框：子任务直接以可编辑行展示（Things 3 Checklist）
+    expect(screen.queryByText(/Subtasks|子任务/)).not.toBeInTheDocument();
+    expect(screen.getByDisplayValue('Existing subtask')).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/Add subtask|添加子任务/)).not.toBeInTheDocument();
 
     // Add subtask button should NOT be shown when subtasks already exist
     expect(
@@ -378,5 +379,134 @@ describe('TaskItem — Reveal Task 滚入视野', () => {
     withQueryClient(<DndList task={renderTask} />);
     await new Promise((r) => requestAnimationFrame(() => r(null)));
     expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+});
+
+describe('TaskSubtaskList — Things 3 式就地编辑', () => {
+  const subtask = (id: string, title: string, sortOrder: number) => ({
+    id,
+    title,
+    status: TaskStatus.ACTIVE,
+    completedAt: null,
+    taskId: 'task-1',
+    sortOrder,
+    createdAt: '2025-07-31T00:00:00.000Z',
+    updatedAt: '2025-07-31T00:00:00.000Z',
+  });
+  const taskWith = (...subtasks: ReturnType<typeof subtask>[]): TaskResponseDto => ({
+    ...renderTask,
+    subtasks,
+  });
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useUiInteractionStore.setState({ expandedId: null, pendingAutoEditId: null });
+  });
+
+  it('在某项上 Enter：其下方出现聚焦的新项，输入后带 afterId 与客户端 id 创建', async () => {
+    const user = userEvent.setup();
+    withQueryClient(
+      <DndList task={taskWith(subtask('sub-1', '一', 0), subtask('sub-2', '三', 1))} />,
+    );
+    await user.click(screen.getByText('My task'));
+
+    await user.click(screen.getByDisplayValue('一'));
+    await user.keyboard('{Enter}');
+
+    const draft = screen.getByPlaceholderText(/Add subtask|添加子任务/) as HTMLInputElement;
+    await waitFor(() => expect(document.activeElement).toBe(draft));
+    // 草稿行插在「一」与「三」之间
+    const values = Array.from(document.querySelectorAll('li input')).map(
+      (el) => (el as HTMLInputElement).value || (el as HTMLInputElement).placeholder,
+    );
+    expect(values).toEqual(['一', expect.stringMatching(/Add subtask|添加子任务/), '三']);
+
+    await user.type(draft, '二{Enter}');
+    expect(mutationMocks.createSubtask).toHaveBeenCalledWith(
+      {
+        taskId: 'task-1',
+        data: { id: expect.any(String), title: '二', afterId: 'sub-1' },
+      },
+      expect.anything(),
+    );
+    // 草稿行留下继续输入，且已清空
+    expect(document.activeElement).toBe(draft);
+    expect(draft.value).toBe('');
+  });
+
+  it('连续 Enter：下一项以上一项的客户端 id 为 afterId', async () => {
+    const user = userEvent.setup();
+    withQueryClient(<DndList task={renderTask} />);
+    await user.click(screen.getByText('My task'));
+    await user.click(screen.getByRole('button', { name: /Add subtask|添加子任务/ }));
+
+    const draft = screen.getByPlaceholderText(/Add subtask|添加子任务/);
+    await waitFor(() => expect(document.activeElement).toBe(draft));
+    await user.type(draft, 'a{Enter}b{Enter}');
+
+    const [first, second] = mutationMocks.createSubtask.mock.calls.map((c) => c[0].data);
+    expect(first).toEqual({ id: expect.any(String), title: 'a' });
+    expect(second).toEqual({ id: expect.any(String), title: 'b', afterId: first.id });
+  });
+
+  it('多行粘贴拆成多项并依次链接', async () => {
+    const user = userEvent.setup();
+    withQueryClient(<DndList task={renderTask} />);
+    await user.click(screen.getByText('My task'));
+    await user.click(screen.getByRole('button', { name: /Add subtask|添加子任务/ }));
+
+    const draft = screen.getByPlaceholderText(/Add subtask|添加子任务/);
+    await waitFor(() => expect(document.activeElement).toBe(draft));
+    await user.paste('甲\n\n乙\n丙');
+
+    const data = mutationMocks.createSubtask.mock.calls.map((c) => c[0].data);
+    expect(data.map((d) => d.title)).toEqual(['甲', '乙', '丙']);
+    expect(data[1].afterId).toBe(data[0].id);
+    expect(data[2].afterId).toBe(data[1].id);
+  });
+
+  it('空项上 Backspace 删除该项，焦点回到上一项', async () => {
+    const user = userEvent.setup();
+    withQueryClient(
+      <DndList task={taskWith(subtask('sub-1', '一', 0), subtask('sub-2', 'x', 1))} />,
+    );
+    await user.click(screen.getByText('My task'));
+
+    await user.click(screen.getByDisplayValue('x'));
+    await user.keyboard('{Backspace}');
+    expect(mutationMocks.deleteSubtask).not.toHaveBeenCalled();
+    await user.keyboard('{Backspace}');
+
+    expect(mutationMocks.deleteSubtask).toHaveBeenCalledWith({ id: 'sub-2', taskId: 'task-1' });
+    expect(document.activeElement).toBe(screen.getByDisplayValue('一'));
+  });
+
+  it('↑↓ 在项间移动焦点；失焦提交改名', async () => {
+    const user = userEvent.setup();
+    withQueryClient(
+      <DndList task={taskWith(subtask('sub-1', '一', 0), subtask('sub-2', '二', 1))} />,
+    );
+    await user.click(screen.getByText('My task'));
+
+    await user.click(screen.getByDisplayValue('一'));
+    await user.keyboard('!{ArrowDown}');
+    expect(document.activeElement).toBe(screen.getByDisplayValue('二'));
+    expect(mutationMocks.updateSubtask).toHaveBeenCalledWith(
+      { id: 'sub-1', data: { title: '一!' } },
+      expect.anything(),
+    );
+
+    await user.keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(screen.getByDisplayValue('一!'));
+  });
+
+  it('每项有拖拽排序把手', async () => {
+    const user = userEvent.setup();
+    withQueryClient(
+      <DndList task={taskWith(subtask('sub-1', '一', 0), subtask('sub-2', '二', 1))} />,
+    );
+    await user.click(screen.getByText('My task'));
+
+    expect(screen.getAllByRole('button', { name: /Drag to reorder|拖动以排序/ })).toHaveLength(2);
   });
 });
