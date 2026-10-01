@@ -228,12 +228,31 @@ describe('resolveAction — 通用', () => {
 
 // shortcutLabel 的期望值以 docs/keyboard-shortcuts.md 的 P0 键位表为
 // 独立真值来源（⌘N / Ctrl+N / Alt+N 三平台矩阵）。
+describe('resolveAction — 标签（tags-things3 issue 04）', () => {
+  it('mac ⇧⌘T；⌘T 不触发', () => {
+    expect(resolveAction(key('T', { metaKey: true, shiftKey: true }), 'mac')).toEqual({ type: 'tags' });
+    expect(resolveAction(key('t', { metaKey: true }), 'mac')).toBeNull();
+  });
+
+  it('Windows 桌面 Ctrl+Shift+T', () => {
+    expect(resolveAction(key('T', { ctrlKey: true, shiftKey: true }), 'windows')).toEqual({
+      type: 'tags',
+    });
+  });
+
+  it('Web Alt+Shift+T；Ctrl+Shift+T 让给浏览器', () => {
+    expect(resolveAction(key('T', { altKey: true, shiftKey: true }), 'web')).toEqual({ type: 'tags' });
+    expect(resolveAction(key('T', { ctrlKey: true, shiftKey: true }), 'web')).toBeNull();
+  });
+});
+
 describe('shortcutLabel — 按钮 hint 键位文案', () => {
   it.each([
     ['search', { mac: '⌘F', windows: 'Ctrl+F', web: 'Ctrl+F' }],
     ['newTask', { mac: '⌘N', windows: 'Ctrl+N', web: 'Alt+N' }],
     ['newProject', { mac: '⌥⌘N', windows: 'Ctrl+Alt+N', web: 'Alt+Shift+N' }],
     ['newHeading', { mac: '⇧⌘N', windows: 'Ctrl+Shift+N', web: 'Alt+H' }],
+    ['tags', { mac: '⇧⌘T', windows: 'Ctrl+Shift+T', web: 'Alt+Shift+T' }],
   ] as const)('%s 三平台文案与键位表一致', (action, labels) => {
     expect(shortcutLabel(action, 'mac')).toBe(labels.mac);
     expect(shortcutLabel(action, 'windows')).toBe(labels.windows);

@@ -477,10 +477,15 @@ export function GroupedFeedListView({
               kind: 'task',
               completed: block.item.status === 'COMPLETED',
               cancelled: block.item.status === 'CANCELLED',
+              tagIds: block.item.tags.map((tag) => tag.id),
               groupHeaderId: block.groupHeaderId ?? undefined,
             };
           case 'projectRow':
-            return { id: block.item.id, kind: 'project' };
+            return {
+              id: block.item.id,
+              kind: 'project',
+              tagIds: block.item.tags.map((tag) => tag.id),
+            };
           case 'projectGroupHeader':
             return {
               id: block.project.id,

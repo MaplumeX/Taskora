@@ -22,3 +22,7 @@ export function updateTagGroup(id: string, data: UpdateTagGroupDto): Promise<Tag
 export function deleteTagGroup(id: string): Promise<void> {
   return apiClient.delete(`/tag-groups/${id}`).then(() => undefined);
 }
+
+export function reorderTagGroups(orderedIds: string[]): Promise<void> {
+  return apiClient.post('/tag-groups/reorder', { orderedIds }).then(() => undefined);
+}

@@ -46,7 +46,7 @@ import {
 import { ScheduledDateField } from './fields/ScheduledDateField';
 import { DueDateField } from './fields/DueDateField';
 import { RepeatRuleField } from './fields/RepeatRuleField';
-import { TagsField } from './fields/TagsField';
+import { MultiTagsField } from './fields/TagsField';
 import { MovePicker } from './fields/MovePicker';
 
 type PickerKind = 'scheduled' | 'move' | 'due' | 'tags' | 'repeat';
@@ -56,8 +56,8 @@ type PickerKind = 'scheduled' | 'move' | 'due' | 'tags' | 'repeat';
  * 固定在页面底部，对勾选集合批量执行「计划 / 移动 / 删除」，其余动作收进
  * 「更多」。动作执行完即退出模式；切换页面、点「完成」、系统返回也会退出。
  *
- * 只作用于单个任务才有意义的动作（标签、重复、转换为项目）仅在勾选一项
- * 时出现：批量改写标签会覆盖各任务原有的标签集合。
+ * 只作用于单个任务才有意义的动作（重复、转换为项目）仅在勾选一项时出现。
+ * 标签按三态批量切换：各任务在自己原有的标签上增减（`.scratch/tags-things3`）。
  */
 export function MultiSelectToolbar() {
   const { t } = useTranslation();
@@ -216,12 +216,10 @@ export function MultiSelectToolbar() {
               <CalendarDays className="h-4 w-4" />
               {t('task:dueDate')}
             </DropdownMenuItem>
-            {single && (
-              <DropdownMenuItem onClick={() => openPicker('tags')}>
-                <Tag className="h-4 w-4" />
-                {t('task:tags')}
-              </DropdownMenuItem>
-            )}
+            <DropdownMenuItem onClick={() => openPicker('tags')}>
+              <Tag className="h-4 w-4" />
+              {t('task:tags')}
+            </DropdownMenuItem>
             {canRepeat && (
               <DropdownMenuItem onClick={() => openPicker('repeat')}>
                 <Repeat className="h-4 w-4" />
@@ -266,7 +264,17 @@ export function MultiSelectToolbar() {
         {picker === 'due' && (
           <DueDateField current={current} onPatch={patchAll} onClose={closePicker} />
         )}
-        {picker === 'tags' && single && <TagsField current={single} onPatch={patchAll} />}
+        {picker === 'tags' && (
+          <MultiTagsField
+            items={ids.map((id) => ({ id, tagIds: rowById.get(id)?.tagIds ?? [] }))}
+            onChanges={(changes) => {
+              patchedRef.current = true;
+              for (const { id, tagIds } of changes) {
+                updateTask.mutate({ id, data: { tagIds } }, { onError });
+              }
+            }}
+          />
+        )}
         {picker === 'repeat' && single && <RepeatRuleField current={single} onPatch={patchAll} />}
       </FieldPickerDialog>
     </div>

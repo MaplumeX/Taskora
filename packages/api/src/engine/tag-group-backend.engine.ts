@@ -60,5 +60,18 @@ export function createEngineTagGroupBackend(
     async deleteTagGroup(id: string): Promise<void> {
       await engine.delete('tag-group', [id]);
     },
+
+    async reorderTagGroups(orderedIds: string[]): Promise<void> {
+      const rows = await engine.list('tag-group');
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      await engine.updateMany(
+        'tag-group',
+        orderedIds.flatMap((id, index) =>
+          byId.get(id) && byId.get(id)!.fields.sortOrder !== index
+            ? [{ id, patch: { sortOrder: index } }]
+            : [],
+        ),
+      );
+    },
   };
 }

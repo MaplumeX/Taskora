@@ -23,7 +23,13 @@ import { CSS } from '@dnd-kit/utilities';
 import { ProjectStatus } from '@taskora/shared';
 import type { ProjectResponseDto } from '@taskora/shared';
 
-import { useAreasQuery, useSelectionScope, useTaskRowSelection, useUpdateArea } from '@taskora/api';
+import {
+  useAreasQuery,
+  useEffectiveTags,
+  useSelectionScope,
+  useTaskRowSelection,
+  useUpdateArea,
+} from '@taskora/api';
 import {
   selectionStateOf,
   useLaterProjectKind,
@@ -37,8 +43,10 @@ import { ProjectFeedRow } from '@/components/feed/ProjectFeedRow';
 import { LaterProjectSections } from '@/components/project/LaterProjectSections';
 import { mergeVisibleProjectOrder } from '@/components/layout/sidebarProjectLayout';
 import { TaskListView } from '@/components/task/TaskListView';
+import { EmptyState } from '@/components/common/EmptyState';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { AreaMoreMenu } from '@/components/area/AreaMoreMenu';
+import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
 import { toast } from 'sonner';
 import { dndListProps, useHeldOrder } from '../lib/dnd';
 
@@ -85,15 +93,42 @@ export default function AreaDetail() {
     () => allProjects.filter((p) => p.areaId === id),
     [allProjects, id],
   );
+  const { data: tasks = [], isLoading, isError } = useTasksQuery({ areaId: id });
+  // Tag 过滤（tags-things3 issue 05）：项目与任务各按有效 Tag 判定，过滤栏合并两者的选项。
+  const effectiveTags = useEffectiveTags();
+  const filterItems = useMemo(
+    () => [
+      ...areaProjects
+        .filter((p) => p.status !== ProjectStatus.COMPLETED)
+        .map((project) => ({ project, task: null })),
+      ...tasks.map((task) => ({ project: null, task })),
+    ],
+    [areaProjects, tasks],
+  );
+  const effectiveOfItem = React.useCallback(
+    (item: (typeof filterItems)[number]) =>
+      item.project ? effectiveTags.ofProject(item.project) : effectiveTags.ofTask(item.task!),
+    [effectiveTags],
+  );
+  const { visible, filtering, bar } = useTagFilter(filterItems, effectiveOfItem);
+  const visibleProjects = useMemo(
+    () => visible.flatMap((item) => (item.project ? [item.project] : [])),
+    [visible],
+  );
+  const visibleTasks = useMemo(
+    () => visible.flatMap((item) => (item.task ? [item.task] : [])),
+    [visible],
+  );
+  const shownAreaProjects = filtering ? visibleProjects : areaProjects;
   // 活跃项目可拖拽排序；稍后项目放在下方「计划」/「Someday」小节，已完成项目不显示。
   const projects = useMemo(
-    () => areaProjects.filter((p) => p.status !== ProjectStatus.COMPLETED && kindOf(p) === null),
-    [areaProjects, kindOf],
+    () =>
+      shownAreaProjects.filter((p) => p.status !== ProjectStatus.COMPLETED && kindOf(p) === null),
+    [shownAreaProjects, kindOf],
   );
   // 松手后先按本地顺序渲染，等乐观更新追上，避免条目闪回原位。
   const [orderedProjects, holdProjectOrder] = useHeldOrder(projects, projectKey);
   const reorderProjects = useReorderProjects();
-  const { data: tasks = [], isLoading, isError } = useTasksQuery({ areaId: id });
   const updateArea = useUpdateArea();
   const { selectedIds, expandedId } = useTaskRowSelection();
 
@@ -116,7 +151,13 @@ export default function AreaDetail() {
   // 注册项目段可遍历行（Project 行仅作遍历停留点，⌘K/⌫ 对其无效）。
   // 键盘遍历顺序与页面一致：活跃项目（0）→ 任务（1）→ 稍后项目（2）。
   const projectRows = useMemo(
-    () => orderedProjects.map((p) => ({ id: p.id, kind: 'project' as const, completed: false })),
+    () =>
+      orderedProjects.map((p) => ({
+        id: p.id,
+        kind: 'project' as const,
+        completed: false,
+        tagIds: (p.tags ?? []).map((tag) => tag.id),
+      })),
     [orderedProjects],
   );
   useSelectionScope(projectRows, 0);
@@ -148,6 +189,9 @@ export default function AreaDetail() {
         {area && <AreaMoreMenu area={area} />}
         </div>
 
+      {!isLoading && !isError && <TagFilterBar {...bar} />}
+      {filtering && visible.length === 0 && <EmptyState hint={t('tag:filterEmpty')} />}
+
       {orderedProjects.length > 0 && (
         <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
           <SortableContext items={orderedProjects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
@@ -168,11 +212,11 @@ export default function AreaDetail() {
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
         // 页头已表达区域归属，行上不再重复归属小字。
-        <TaskListView tasks={tasks} hideEmptyState hideOwnership selectionRank={1} />
+        <TaskListView tasks={visibleTasks} hideEmptyState hideOwnership selectionRank={1} />
       )}
 
       {/* 稍后项目放在页面最下方（活跃项目与任务之后）。 */}
-      <LaterProjectSections projects={areaProjects} selectionRank={2} />
+      <LaterProjectSections projects={shownAreaProjects} selectionRank={2} />
 
       </div>
   );

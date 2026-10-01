@@ -25,3 +25,7 @@ export function updateTagGroup(id: string, data: UpdateTagGroupDto): Promise<Tag
 export function deleteTagGroup(id: string): Promise<void> {
   return currentTagGroupBackend().deleteTagGroup(id);
 }
+
+export function reorderTagGroups(orderedIds: string[]): Promise<void> {
+  return currentTagGroupBackend().reorderTagGroups(orderedIds);
+}

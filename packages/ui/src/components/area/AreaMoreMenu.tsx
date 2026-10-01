@@ -94,10 +94,7 @@ export function AreaMoreMenu({ area }: AreaMoreMenuProps) {
         <PopoverAnchor virtualRef={containerRef} />
         <PopoverContent align="end" onClick={(e) => e.stopPropagation()}>
           {activePicker === 'tags' && (
-            <TagsField
-              current={area as unknown as Parameters<typeof TagsField>[0]['current']}
-              onPatch={handlePatch as unknown as Parameters<typeof TagsField>[0]['onPatch']}
-            />
+            <TagsField current={area} onPatch={handlePatch} />
           )}
         </PopoverContent>
       </Popover>

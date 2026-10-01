@@ -1,5 +1,6 @@
 import {
   useCalendarDay,
+  useEffectiveTags,
   useFeedQuery,
   useLogbookArchive,
   useProjectsQuery,
@@ -24,6 +25,7 @@ import {
 } from '@taskora/api';
 import { toast } from 'sonner';
 import { PageHeading } from '@/components/layout/PageHeading';
+import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
 import { EmptyState } from '@/components/common/EmptyState';
 
 export default function Logbook() {
@@ -36,7 +38,7 @@ export default function Logbook() {
   const archive = useLogbookArchive(cutoff);
   const archivedPages = archive.data?.pages;
   const exhausted = !cutoff || (!!archivedPages && !archive.hasNextPage);
-  const { items, archivedIds } = useMemo(
+  const { items: allItems, archivedIds } = useMemo(
     () =>
       mergeLogbookArchive(
         localItems,
@@ -46,6 +48,8 @@ export default function Logbook() {
       ),
     [localItems, archivedPages, cutoff, exhausted],
   );
+  const effectiveTags = useEffectiveTags();
+  const { visible: items, filtering, bar } = useTagFilter(allItems, effectiveTags.ofFeedItem);
   const sentinel = useRef<HTMLDivElement>(null);
   const canLoadMore = !exhausted && !archive.isFetching && !archive.isError && !isLoading;
   const { fetchNextPage } = archive;
@@ -83,6 +87,7 @@ export default function Logbook() {
           kind: 'task' as const,
           completed: item.status === 'COMPLETED',
           cancelled: item.status === 'CANCELLED',
+          tagIds: item.tags.map((tag) => tag.id),
         })),
     [items, archivedIds],
   );
@@ -134,10 +139,11 @@ export default function Logbook() {
   return (
     <div className="flex flex-col gap-4" onClick={handleBlankClick}>
       <PageHeading nav="/logbook">{t('nav:logbook')}</PageHeading>
+      {!isLoading && !isError && <TagFilterBar {...bar} />}
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : !hasAny && exhausted ? (
-        <EmptyState hint={t('task:logbookEmpty')} />
+        <EmptyState hint={filtering ? t('tag:filterEmpty') : t('task:logbookEmpty')} />
       ) : (
         groups.map((group, i) => renderGroup(group.label, group.items, i === 0))
       )}

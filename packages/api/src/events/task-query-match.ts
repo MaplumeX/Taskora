@@ -7,11 +7,14 @@ import {
   SETTLED_TASK_STATUSES,
 } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
+import { effectiveTaskTagIds, type TagParents } from '@taskora/engine';
 
 import type { TaskQuery } from '@/api/tasks.api';
 
 /** 已了结（Settled）状态白名单：与后端共用 @taskora/shared 的单一来源（ADR 0006）。 */
 const SETTLED_STATUSES = SETTLED_TASK_STATUSES;
+
+const NO_TAG_PARENTS: TagParents = { project: () => undefined, area: () => undefined };
 
 function isSettled(status: TaskStatus): boolean {
   return SETTLED_STATUSES.includes(status);
@@ -24,12 +27,16 @@ function isSettled(status: TaskStatus): boolean {
  *
  * `params` comes from the query key (taskKeys.list(params)) and may carry
  * undefined values — those are treated as absent, mirroring axios params.
+ *
+ * tagId 按有效 Tag 判定（ADR 0015）：继承来源取自缓存里的 Project / Area，
+ * 缓存里找不到的父级不贡献 Tag。
  */
 export function taskMatchesQuery(
   task: TaskResponseDto,
   params: unknown,
   now: Date = new Date(),
   isLaterProjectId: (projectId: string) => boolean = () => false,
+  tagParents: TagParents = NO_TAG_PARENTS,
 ): boolean {
   const query = (params ?? {}) as TaskQuery;
 
@@ -43,8 +50,10 @@ export function taskMatchesQuery(
 
   if (query.projectId !== undefined && task.projectId !== query.projectId) return false;
   if (query.areaId !== undefined && task.areaId !== query.areaId) return false;
-  if (query.tagId !== undefined && !(task.tags ?? []).some((t) => t.id === query.tagId)) {
-    return false;
+  if (query.tagId !== undefined) {
+    const own = (task.tags ?? []).map((t) => t.id);
+    const effective = effectiveTaskTagIds({ ...task, tagIds: own }, tagParents);
+    if (!effective.includes(query.tagId)) return false;
   }
   if (query.hasScheduled === true && task.scheduledDate === null) return false;
 

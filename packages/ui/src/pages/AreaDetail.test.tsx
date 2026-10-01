@@ -50,7 +50,16 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useTasksQuery: () => ({ data: [], isLoading: false, isError: false }),
   useUpdateArea: () => ({ mutate: vi.fn() }),
   useReorderProjects: () => ({ mutate: harness.reorderProjectsMutate }),
+  useTagsQuery: () => ({ data: [] }),
+  useTagGroupsQuery: () => ({ data: [] }),
+  useEffectiveTags: () => effectiveTags,
 }));
+
+const effectiveTags = {
+  ofTask: () => [],
+  ofProject: () => [],
+  ofFeedItem: () => [],
+};
 
 import AreaDetail from './AreaDetail';
 

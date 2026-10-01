@@ -195,6 +195,19 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     expect(await engine.get('tag', urgent.id)).toBeNull();
   });
 
+  it('Tag / TagGroup：拖拽重排（Tag 写 Position、Group 写 sortOrder）', async () => {
+    const a = await tags.createTag({ title: 'a' });
+    const b = await tags.createTag({ title: 'b' });
+    const c = await tags.createTag({ title: 'c' });
+    await tags.reorderTags([a.id, c.id, b.id]);
+    expect((await tags.getTags()).map((tag) => tag.title)).toEqual(['a', 'c', 'b']);
+
+    const g1 = await tagGroups.createTagGroup({ title: 'g1' });
+    const g2 = await tagGroups.createTagGroup({ title: 'g2' });
+    await tagGroups.reorderTagGroups([g1.id, g2.id]);
+    expect((await tagGroups.getTagGroups()).map((group) => group.title)).toEqual(['g1', 'g2']);
+  });
+
   it('ProjectHeading：增改/归档/取消归档；删除软删下属 tasks 并物理删 heading', async () => {
     const project = await projects.createProject({ title: '项目' });
     const h1 = await headings.createProjectHeading({ projectId: project.id, title: '阶段一' });

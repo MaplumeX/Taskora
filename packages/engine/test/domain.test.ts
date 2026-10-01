@@ -11,6 +11,8 @@ import {
   buildRepeatPreviews,
   countProjectTasks,
   deriveRepeatInstanceId,
+  effectiveProjectTagIds,
+  effectiveTaskTagIds,
   feedIncludesProjects,
   planConvertTaskToProject,
   planEmptyTrash,
@@ -29,6 +31,7 @@ import {
   repeatDerivationTarget,
   sortFeedItems,
   sortForView,
+  tagParentsFrom,
   taskMatchesQuery,
   taskMatchesView,
   taskSearchRank,
@@ -40,6 +43,10 @@ const UTC = { timeZone: 'UTC', legacyDateTimeZone: 'UTC' };
 
 describe('视图契约（纯函数）', () => {
   const context = { ...VIEW_CONTRACT.zones, now: new Date(VIEW_CONTRACT.now) };
+  const parents = tagParentsFrom(
+    new Map(VIEW_CONTRACT.projects.map((project) => [project.id, project])),
+    new Map(VIEW_CONTRACT.areas.map((area) => [area.id, area])),
+  );
 
   it.each(Object.entries(VIEW_CONTRACT.feeds))('feed %s', (view, expected) => {
     const listView = view as ListView;
@@ -59,10 +66,63 @@ describe('视图契约（纯函数）', () => {
   });
 
   it.each(VIEW_CONTRACT.queries)('tasks $query', ({ query, ids }) => {
-    const visible = VIEW_CONTRACT.tasks.filter((task) => taskMatchesQuery(task, query, context));
+    const visible = VIEW_CONTRACT.tasks.filter((task) =>
+      taskMatchesQuery(task, query, context, parents),
+    );
     expect(sortForView(visible, query.view, (task) => task.settledAt).map((t) => t.id)).toEqual(
       ids,
     );
+  });
+});
+
+describe('有效 Tag（ADR 0015）', () => {
+  const parents = tagParentsFrom(
+    new Map([
+      ['p-1', { areaId: 'area-1', tagIds: ['work'] }],
+      ['p-2', { areaId: null, tagIds: [] }],
+    ]),
+    new Map([
+      ['area-1', { tagIds: ['home', 'work'] }],
+      ['area-2', { tagIds: ['errand'] }],
+    ]),
+  );
+
+  it('Task：自身 ∪ Project ∪ Project 所属 Area，去重', () => {
+    expect(
+      effectiveTaskTagIds({ tagIds: ['focus'], projectId: 'p-1', areaId: null }, parents),
+    ).toEqual(['focus', 'work', 'home']);
+  });
+
+  it('Task：直接归属的 Area', () => {
+    expect(effectiveTaskTagIds({ tagIds: [], projectId: null, areaId: 'area-2' }, parents)).toEqual(
+      ['errand'],
+    );
+  });
+
+  it('Task：找不到的 Project / Area 不贡献 Tag', () => {
+    expect(
+      effectiveTaskTagIds({ tagIds: ['focus'], projectId: 'gone', areaId: 'gone' }, parents),
+    ).toEqual(['focus']);
+  });
+
+  it('Project：自身 ∪ 所属 Area', () => {
+    expect(effectiveProjectTagIds({ tagIds: ['x'], areaId: 'area-2' }, parents)).toEqual([
+      'x',
+      'errand',
+    ]);
+  });
+
+  it('tagId 查询缺少 parents 时报错', () => {
+    expect(() =>
+      taskMatchesQuery(
+        VIEW_CONTRACT.tasks[0]!,
+        { tagId: 'tag-1' },
+        {
+          ...VIEW_CONTRACT.zones,
+          now: new Date(VIEW_CONTRACT.now),
+        },
+      ),
+    ).toThrow();
   });
 });
 

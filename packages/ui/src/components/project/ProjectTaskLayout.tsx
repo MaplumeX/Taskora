@@ -72,6 +72,13 @@ interface Props {
   tasks: TaskResponseDto[];
   headings: ProjectHeadingResponseDto[];
   emptyHint: string;
+  /**
+   * Tag 过滤（tags-things3 issue 05）：只显示这些任务，没有可见任务的
+   * Heading 隐藏，拖拽停用（过滤后的布局不能整组写回）。null 表示不过滤。
+   */
+  visibleTaskIds?: ReadonlySet<string> | null;
+  /** 过滤后没有任何可见任务时的提示。 */
+  filteredEmptyHint?: string;
 }
 
 function normalizeLayout(
@@ -90,6 +97,17 @@ function normalizeLayout(
     containers[container].push(task.id);
   });
   return { headingIds, containers };
+}
+
+/** 过滤后的显示布局：容器只留可见任务，没有可见任务的 Heading 去掉。 */
+function filterLayout(layout: LayoutState, visible: ReadonlySet<string>): LayoutState {
+  const containers = Object.fromEntries(
+    Object.entries(layout.containers).map(([id, ids]) => [id, ids.filter((t) => visible.has(t))]),
+  );
+  return {
+    headingIds: layout.headingIds.filter((id) => (containers[id] ?? []).length > 0),
+    containers,
+  };
 }
 
 function serializeLayout(projectId: string, layout: LayoutState): ReorderProjectHeadingLayoutDto {
@@ -385,7 +403,14 @@ function SortableHeadingBlock({
   );
 }
 
-export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Props) {
+export function ProjectTaskLayout({
+  projectId,
+  tasks,
+  headings,
+  emptyHint,
+  visibleTaskIds = null,
+  filteredEmptyHint,
+}: Props) {
   const { t } = useTranslation();
   const serverLayout = React.useMemo(() => normalizeLayout(tasks, headings), [tasks, headings]);
   const [layout, setLayout] = React.useState(serverLayout);
@@ -411,31 +436,38 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
   const uncompleteTask = useUncompleteTask();
   const saveLayout = useReorderProjectHeadingLayout();
   // 注册可遍历行：ungrouped 任务 → 每个 Heading 后跟其分组任务。
+  const shown = React.useMemo(
+    () => (visibleTaskIds ? filterLayout(layout, visibleTaskIds) : layout),
+    [layout, visibleTaskIds],
+  );
   const selectionRows = React.useMemo(() => {
     const rows: Array<{
       id: string;
       kind: 'task' | 'heading';
       completed?: boolean;
       cancelled?: boolean;
-    }> = (layout.containers[UNGROUPED] ?? []).map((id) => ({
+      tagIds?: string[];
+    }> = (shown.containers[UNGROUPED] ?? []).map((id) => ({
       id,
       kind: 'task' as const,
       completed: taskMap.get(id)?.status === 'COMPLETED',
       cancelled: taskMap.get(id)?.status === 'CANCELLED',
+      tagIds: (taskMap.get(id)?.tags ?? []).map((tag) => tag.id),
     }));
-    for (const hid of layout.headingIds) {
+    for (const hid of shown.headingIds) {
       rows.push({ id: hid, kind: 'heading' });
-      for (const id of layout.containers[hid] ?? []) {
+      for (const id of shown.containers[hid] ?? []) {
         rows.push({
           id,
           kind: 'task' as const,
           completed: taskMap.get(id)?.status === 'COMPLETED',
           cancelled: taskMap.get(id)?.status === 'CANCELLED',
+          tagIds: (taskMap.get(id)?.tags ?? []).map((tag) => tag.id),
         });
       }
     }
     return rows;
-  }, [layout, taskMap]);
+  }, [shown, taskMap]);
   useSelectionScope(selectionRows);
   const keyboardCoordinates = React.useCallback<KeyboardCoordinateGetter>((event, args) => {
     if (event.code === 'ArrowDown' || event.code === 'ArrowRight') {
@@ -447,11 +479,13 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
   }, []);
   // 鼠标：移动 5px 激活；触摸：按住 300ms 再移动才激活，避免与列表滚动冲突
   // （滚动期间移动超过容差即取消，不会误触拖拽）。
-  const sensors = useSensors(
+  const dragSensors = useSensors(
     useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: keyboardCoordinates }),
   );
+  const noSensors = useSensors();
+  const sensors = visibleTaskIds ? noSensors : dragSensors;
 
   const flip = useFlipList<HTMLDivElement>(layout);
 
@@ -659,6 +693,8 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
     onToggleComplete: toggleComplete,
   };
   const hasContent = taskMap.size > 0 || headings.length > 0;
+  const filteredEmpty =
+    !!visibleTaskIds && Object.values(shown.containers).every((ids) => ids.length === 0);
 
   return (
     <div
@@ -667,8 +703,8 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
       className="flex flex-col"
       onClick={handleBlankClick}
     >
-      {!hasContent ? (
-        <EmptyState hint={emptyHint} />
+      {!hasContent || filteredEmpty ? (
+        <EmptyState hint={filteredEmpty ? (filteredEmptyHint ?? emptyHint) : emptyHint} />
       ) : (
         <DndContext
           sensors={sensors}
@@ -684,13 +720,13 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
           <TaskContainer
             {...commonContainerProps}
             id={UNGROUPED}
-            taskIds={layout.containers[UNGROUPED] ?? []}
+            taskIds={shown.containers[UNGROUPED] ?? []}
           />
           <SortableContext
-            items={layout.headingIds.map(headingId)}
+            items={shown.headingIds.map(headingId)}
             strategy={verticalListSortingStrategy}
           >
-            {layout.headingIds.map((id) => {
+            {shown.headingIds.map((id) => {
               const heading = headingMap.get(id);
               if (!heading) return null;
               return (
@@ -698,7 +734,7 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
                   key={id}
                   {...commonContainerProps}
                   heading={heading}
-                  taskIds={layout.containers[id] ?? []}
+                  taskIds={shown.containers[id] ?? []}
                 />
               );
             })}
@@ -724,4 +760,4 @@ export function ProjectTaskLayout({ projectId, tasks, headings, emptyHint }: Pro
   );
 }
 
-export { applyLayoutDrag, normalizeLayout, serializeLayout };
+export { applyLayoutDrag, filterLayout, normalizeLayout, serializeLayout };

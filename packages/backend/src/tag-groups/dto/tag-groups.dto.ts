@@ -1,4 +1,4 @@
-import { IsOptional, IsString } from 'class-validator';
+import { IsArray, IsOptional, IsString } from 'class-validator';
 
 export class CreateTagGroupDto {
   @IsString()
@@ -9,4 +9,9 @@ export class UpdateTagGroupDto {
   @IsOptional()
   @IsString()
   title?: string;
+}
+export class ReorderTagGroupsDto {
+  @IsArray()
+  @IsString({ each: true })
+  orderedIds!: string[];
 }

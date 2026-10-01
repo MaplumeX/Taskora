@@ -46,6 +46,7 @@ export function LaterProjectSections({ projects, selectionRank }: Props) {
         id: p.id,
         kind: 'project' as const,
         completed: false,
+        tagIds: (p.tags ?? []).map((tag) => tag.id),
       })),
     [groups],
   );

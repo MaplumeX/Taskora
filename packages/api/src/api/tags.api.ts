@@ -25,3 +25,7 @@ export function updateTag(id: string, data: UpdateTagDto): Promise<TagResponseDt
 export function deleteTag(id: string): Promise<void> {
   return currentTagBackend().deleteTag(id);
 }
+
+export function reorderTags(orderedIds: string[]): Promise<void> {
+  return currentTagBackend().reorderTags(orderedIds);
+}

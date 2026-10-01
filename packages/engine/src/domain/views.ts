@@ -18,6 +18,7 @@ import {
 
 import { dateKeyOf, instantMs, todayKey, type CalendarContext } from './calendar';
 import { feedSortKey, sortByEffectivePosition, type FeedPositioned, type Positioned } from './order';
+import { effectiveTaskTagIds, type TagParents } from './tags';
 
 export type ListView = 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
 
@@ -120,6 +121,7 @@ export interface TaskQueryFields extends TaskViewFields {
   notes: unknown;
   projectId: unknown;
   areaId: unknown;
+  /** 自身 Tag；tagId 查询按有效 Tag（并上所属 Project / Area 的 Tag）判定。 */
   tagIds: readonly string[];
 }
 
@@ -132,11 +134,13 @@ function includesText(value: unknown, needle: string): boolean {
  * - view：按视图判定，忽略其余条件。
  * - 否则按归属 / 标签 / 有计划日期过滤；状态默认只含未了结，completed
  *   时含已了结（搜索时为 ACTIVE + 已了结三值，ADR 0006）。均不含 Trash。
+ * - tagId 按有效 Tag 判定（ADR 0015），此时必须传入 parents。
  */
 export function taskMatchesQuery(
   task: TaskQueryFields,
   query: TaskListQuery,
   context: CalendarContext,
+  parents?: TagParents,
 ): boolean {
   if (query.q) {
     const needle = query.q.toLowerCase();
@@ -145,7 +149,10 @@ export function taskMatchesQuery(
   if (query.view) return taskMatchesView(task, query.view, context);
   if (query.projectId && task.projectId !== query.projectId) return false;
   if (query.areaId && task.areaId !== query.areaId) return false;
-  if (query.tagId && !task.tagIds.includes(query.tagId)) return false;
+  if (query.tagId) {
+    if (!parents) throw new Error('taskMatchesQuery: tagId 查询需要 TagParents');
+    if (!effectiveTaskTagIds(task, parents).includes(query.tagId)) return false;
+  }
   if (query.hasScheduled === true && task.scheduledDate == null) return false;
   if (task.trashedAt != null) return false;
   if (query.q && query.completed) {

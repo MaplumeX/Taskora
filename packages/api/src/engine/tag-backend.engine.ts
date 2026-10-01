@@ -6,7 +6,7 @@
  */
 
 import type { Engine } from '@taskora/engine';
-import { positionAfter } from '@taskora/engine';
+import { positionAfter, repositionMinimal } from '@taskora/engine';
 import type { CreateTagDto, TagResponseDto, UpdateTagDto } from '@taskora/shared';
 
 import type { TagBackend } from '../api/tag-backend';
@@ -59,6 +59,24 @@ export function createEngineTagBackend(options: EngineTagBackendOptions): TagBac
 
     async deleteTag(id: string): Promise<void> {
       await engine.delete('tag', [id]);
+    },
+
+    async reorderTags(orderedIds: string[]): Promise<void> {
+      // 只给必须移动的行分配新 Position（同 reorderProjects）
+      const rows = await engine.list('tag');
+      const byId = new Map(rows.map((row) => [row.id, row]));
+      const changes = repositionMinimal(
+        orderedIds.flatMap((id) => {
+          const row = byId.get(id);
+          if (!row) return [];
+          const position = row.fields.position;
+          return [{ id, position: typeof position === 'string' ? position : null }];
+        }),
+      );
+      await engine.updateMany(
+        'tag',
+        changes.map(({ id, position }) => ({ id, patch: { position } })),
+      );
     },
   };
 }

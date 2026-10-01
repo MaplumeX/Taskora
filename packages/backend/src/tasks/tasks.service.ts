@@ -13,12 +13,14 @@ import {
   searchNeedle,
   sortForView,
   subtaskStatusPatch,
+  tagParentsFrom,
   taskCancelPatch,
   taskMatchesQuery,
   taskReopenPatch,
   taskRestorePatch,
   taskTrashPatch,
   viewNeedsCalendar,
+  type TagParents,
   type TaskSearchOptions,
 } from '@taskora/engine';
 import { TaskStatus } from '@taskora/shared';
@@ -181,7 +183,18 @@ export class TasksService {
       if (query.projectId) where.projectId = query.projectId;
       if (query.areaId) where.areaId = query.areaId;
       if (query.tagId) {
-        where.tags = { some: { tagId: query.tagId } };
+        // 有效 Tag（ADR 0015）：自身，或继承所属 Project / Area 的 Tag
+        const hasTag = { some: { tagId: query.tagId } };
+        where.AND = [
+          {
+            OR: [
+              { tags: hasTag },
+              { project: { tags: hasTag } },
+              { project: { area: { tags: hasTag } } },
+              { area: { tags: hasTag } },
+            ],
+          },
+        ];
       }
       if (query.hasScheduled === true) {
         where.scheduledDate = { not: null };
@@ -221,13 +234,37 @@ export class TasksService {
     const hiddenProjectIds = hideLaterProjectTasks
       ? await laterProjectIds(this.prisma, userId, context, context.now)
       : new Set<string>();
+    const parents = query.tagId ? await this.tagParents(userId) : undefined;
     const visible = tasks.filter(
       (task) =>
         (!task.projectId || !hiddenProjectIds.has(task.projectId)) &&
-        taskMatchesQuery({ ...task, tagIds: task.tags.map((tt) => tt.tagId) }, query, context),
+        taskMatchesQuery(
+          { ...task, tagIds: task.tags.map((tt) => tt.tagId) },
+          query,
+          context,
+          parents,
+        ),
     );
     return sortForView(visible, query.view, (task) => task.settledAt).map((t) =>
       settledToCompletedAt(withRepeatRuleDto({ ...t, tags: t.tags.map((tt) => tt.tag) })),
+    );
+  }
+
+  /** 有效 Tag 的继承来源（ADR 0015）：用户全部 Project / Area 的自身 Tag。 */
+  private async tagParents(userId: string): Promise<TagParents> {
+    const tagIds = { select: { tagId: true } } as const;
+    const [projects, areas] = await Promise.all([
+      this.prisma.project.findMany({
+        where: { userId },
+        select: { id: true, areaId: true, tags: tagIds },
+      }),
+      this.prisma.area.findMany({ where: { userId }, select: { id: true, tags: tagIds } }),
+    ]);
+    return tagParentsFrom(
+      new Map(
+        projects.map((p) => [p.id, { areaId: p.areaId, tagIds: p.tags.map((t) => t.tagId) }]),
+      ),
+      new Map(areas.map((a) => [a.id, { tagIds: a.tags.map((t) => t.tagId) }])),
     );
   }
 

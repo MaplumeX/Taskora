@@ -1,5 +1,6 @@
 import {
   useCalendarDay,
+  useEffectiveTags,
   useFeedQuery,
   useProjectsQuery,
   useAreasQuery,
@@ -25,11 +26,14 @@ import {
 import { buildUpcomingLayout, type UpcomingDay } from '@taskora/api';
 import { toast } from 'sonner';
 import { PageHeading } from '@/components/layout/PageHeading';
+import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
 
 export default function Upcoming() {
   const calendarDay = useCalendarDay();
   const { t } = useTranslation();
-  const { data: items = [], isLoading, isError } = useFeedQuery('upcoming');
+  const { data: allItems = [], isLoading, isError } = useFeedQuery('upcoming');
+  const effectiveTags = useEffectiveTags();
+  const { visible: items, filtering, bar } = useTagFilter(allItems, effectiveTags.ofFeedItem);
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const previews = useRepeatPreviews();
@@ -43,9 +47,10 @@ export default function Upcoming() {
   );
   const areaMap = useMemo(() => Object.fromEntries(areas.map((a) => [a.id, a.title])), [areas]);
 
+  // 过滤时不显示下次预告（预告不是条目，没有 Tag）
   const layout = useMemo(
-    () => buildUpcomingLayout(items, new Date(), previews),
-    [items, previews, calendarDay],
+    () => buildUpcomingLayout(items, new Date(), filtering ? [] : previews),
+    [items, previews, filtering, calendarDay],
   );
 
   // 注册可遍历行（按渲染顺序：本周每天，之后各月）。
@@ -56,6 +61,7 @@ export default function Upcoming() {
         kind: item.type === 'task' ? ('task' as const) : ('project' as const),
         completed: item.type === 'task' ? item.status === 'COMPLETED' : false,
         cancelled: item.type === 'task' ? item.status === 'CANCELLED' : false,
+        tagIds: item.tags.map((tag) => tag.id),
       })),
     [items],
   );
@@ -123,6 +129,7 @@ export default function Upcoming() {
   return (
     <div className="flex flex-col gap-4" onClick={handleBlankClick}>
       <PageHeading nav="/upcoming">{t('nav:upcoming')}</PageHeading>
+      {!isLoading && !isError && <TagFilterBar {...bar} />}
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (

@@ -13,6 +13,7 @@ export interface TagGroupBackend {
   createTagGroup(data: CreateTagGroupDto): Promise<TagGroupResponseDto>;
   updateTagGroup(id: string, data: UpdateTagGroupDto): Promise<TagGroupResponseDto>;
   deleteTagGroup(id: string): Promise<void>;
+  reorderTagGroups(orderedIds: string[]): Promise<void>;
 }
 
 let backend: TagGroupBackend = rest as TagGroupBackend;

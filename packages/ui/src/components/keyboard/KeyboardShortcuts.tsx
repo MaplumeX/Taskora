@@ -32,6 +32,7 @@ import {
 } from '@taskora/api';
 import { cn } from '@/lib/utils';
 import { BUCKET_ROUTES, detectKeyPlatform, resolveAction, type KeyPlatform } from './keymap';
+import { KeyboardTagPicker, taggableSelection } from './KeyboardTagPicker';
 
 export { detectKeyPlatform };
 export type { KeyPlatform };
@@ -114,11 +115,14 @@ export function KeyboardShortcuts({ platform }: Props) {
   const reorderTasks = useReorderTasks();
   const createTask = useCreateTask();
   const createTaskContext = usePageTaskContext();
+  /** ⇧⌘T 打开的 Tag Picker 作用的行（打开时的 Selection 快照）。 */
+  const [tagPickerIds, setTagPickerIds] = useState<string[] | null>(null);
 
   // 页面切换后 Selection 重置，不残留对已不可见行的选中（story 25）。
   const clearSelection = useSelectionStore((s) => s.clearSelection);
   useEffect(() => {
     clearSelection();
+    setTagPickerIds(null);
   }, [pathname, clearSelection]);
 
   useEffect(() => {
@@ -391,6 +395,12 @@ export function KeyboardShortcuts({ platform }: Props) {
           useUiInteractionStore.getState().openSearch();
           return;
         }
+        case 'tags': {
+          const targets = taggableSelection(selection.selectedIds);
+          if (targets.length === 0) return;
+          setTagPickerIds(targets.map((row) => row.id));
+          return;
+        }
       }
     };
 
@@ -418,7 +428,26 @@ export function KeyboardShortcuts({ platform }: Props) {
     t,
   ]);
 
-  return <TypeToFindSink pathname={pathname} />;
+  return (
+    <>
+      <TypeToFindSink pathname={pathname} />
+      {tagPickerIds && (
+        <KeyboardTagPicker
+          ids={tagPickerIds}
+          onClose={() => {
+            setTagPickerIds(null);
+            // 焦点还给最后一个选中行，Selection 不变
+            const id = tagPickerIds.at(-1);
+            requestAnimationFrame(() => {
+              document
+                .querySelector<HTMLElement>(`[data-selection-row="${id}"]`)
+                ?.focus({ preventScroll: true });
+            });
+          }}
+        />
+      )}
+    </>
+  );
 }
 
 /**

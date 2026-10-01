@@ -16,5 +16,17 @@
   "deleteGroupConfirm": "确认删除分组「{{name}}」？标签不会被删除（变为未分组）。",
   "groupTitlePlaceholder": "分组名称",
   "selectColor": "选择颜色 {{color}}",
-  "noTasks": "该标签下没有任务"
+  "noTasks": "该标签下没有任务",
+  "pickerPlaceholder": "搜索或新建标签",
+  "pickerEmpty": "还没有标签，输入名称即可新建",
+  "createNamed": "新建「{{name}}」",
+  "filterLabel": "按标签过滤",
+  "filterAll": "全部",
+  "filterUntagged": "无标签",
+  "filterEmpty": "没有符合该标签的条目",
+  "addTag": "在此分组新建标签",
+  "groupDeletedUndo": "分组已删除，其中的标签变为未分组",
+  "rename": "重命名",
+  "dragHandle": "拖动排序",
+  "changeColor": "更改颜色"
 }

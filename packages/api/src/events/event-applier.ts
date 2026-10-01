@@ -1,7 +1,8 @@
 import { QueryClient } from '@tanstack/react-query';
 import { hidesTasksInLaterProjects, HeadingStatus } from '@taskora/shared';
-import { synthPosition } from '@taskora/engine';
+import { synthPosition, type TagParents } from '@taskora/engine';
 import type {
+  AreaResponseDto,
   ChangeEvent,
   ProjectHeadingResponseDto,
   ProjectResponseDto,
@@ -94,6 +95,7 @@ export function applyChangeEvents(queryClient: QueryClient, batch: ChangeEvent[]
           overwriteDetail(queryClient, ['project', event.id], event.data);
         }
         invalidate.add('feed');
+        invalidateTagTaskLists(queryClient);
         // 项目进出「稍后」会改变其下任务在 Anytime / Someday 列表中的归属。
         void queryClient.invalidateQueries({
           predicate: (query) =>
@@ -125,6 +127,7 @@ export function applyChangeEvents(queryClient: QueryClient, batch: ChangeEvent[]
           upsertInLists(queryClient, 'areas', event.data, () => true);
           overwriteDetail(queryClient, ['area', event.id], event.data);
         }
+        invalidateTagTaskLists(queryClient);
         break;
       }
       case 'tag': {
@@ -203,10 +206,11 @@ function upsertTaskLists(queryClient: QueryClient, task: TaskResponseDto): void 
     }
     return false;
   };
+  const tagParents = cachedTagParents(queryClient);
   for (const cache of listCaches(queryClient, 'tasks')) {
     const list = cache.data as TaskResponseDto[];
     const params = cache.key[1];
-    const matches = taskMatchesQuery(task, params, new Date(), isLaterProjectId);
+    const matches = taskMatchesQuery(task, params, new Date(), isLaterProjectId, tagParents);
     const without = list.filter((t) => t.id !== task.id);
     const next = matches ? [...without, task] : without;
     // logbook lists are ordered by completedAt desc server-side; every
@@ -220,6 +224,37 @@ function upsertTaskLists(queryClient: QueryClient, task: TaskResponseDto): void 
       queryClient.setQueryData(cache.key, [...next].sort(taskComparator));
     }
   }
+}
+
+/** 有效 Tag 的继承来源（ADR 0015）：从缓存的 Project / Area 列表里查。 */
+function cachedTagParents(queryClient: QueryClient): TagParents {
+  const find = <T extends { id: string }>(root: string, id: string): T | undefined => {
+    for (const cache of listCaches(queryClient, root)) {
+      const hit = (cache.data as T[]).find((item) => item.id === id);
+      if (hit) return hit;
+    }
+    return undefined;
+  };
+  const tagIdsOf = (entity: { tags?: { id: string }[] }) => (entity.tags ?? []).map((t) => t.id);
+  return {
+    project: (id) => {
+      const project = find<ProjectResponseDto>('projects', id);
+      return project && { areaId: project.areaId, tagIds: tagIdsOf(project) };
+    },
+    area: (id) => {
+      const area = find<AreaResponseDto>('areas', id);
+      return area && { tagIds: tagIdsOf(area) };
+    },
+  };
+}
+
+/** Project / Area 的 Tag 或归属变化会改变其下任务在 tagId 列表中的去留（ADR 0015）。 */
+function invalidateTagTaskLists(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({
+    predicate: (query) =>
+      query.queryKey[0] === 'tasks' &&
+      (query.queryKey[1] as { tagId?: string } | undefined)?.tagId !== undefined,
+  });
 }
 
 function mergeTaskDetail(queryClient: QueryClient, task: TaskResponseDto): void {

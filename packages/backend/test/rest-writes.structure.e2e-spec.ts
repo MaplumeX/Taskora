@@ -449,6 +449,23 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     );
   });
 
+  it('Tag / TagGroup reorder：findAll 按新顺序返回；不属于本人的 id 拒绝', async () => {
+    const a = await h.tags.create(USER, { title: 'a' });
+    const b = await h.tags.create(USER, { title: 'b' });
+    const c = await h.tags.create(USER, { title: 'c' });
+    await h.tags.reorder(USER, [c.id, a.id, b.id]);
+    expect((await h.tags.findAll(USER)).map((tag) => tag.title)).toEqual(['c', 'a', 'b']);
+    await expectLoggedAsStored('tag', a.id);
+
+    const g1 = await h.tagGroups.create(USER, { title: 'g1' });
+    const g2 = await h.tagGroups.create(USER, { title: 'g2' });
+    await h.tagGroups.reorder(USER, [g1.id, g2.id]);
+    expect((await h.tagGroups.findAll(USER)).map((group) => group.title)).toEqual(['g1', 'g2']);
+
+    await expect(h.tags.reorder(USER, [a.id, 'missing'])).rejects.toBeInstanceOf(NotFoundException);
+    await expect(h.tagGroups.reorder(USER, ['missing'])).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   // ---------- 清空 Trash ----------
 
   it('emptyTrash：Trash 里的任务、项目及其下全部任务物理删除，级联 Subtask / 分组，同事务广播', async () => {

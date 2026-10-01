@@ -1,56 +1,43 @@
-import { useTranslation } from 'react-i18next';
-import { Check } from 'lucide-react';
-
 import type { TagsFieldCurrent, TagsFieldPatch } from './fieldProps';
 
-import { cn } from '@/lib/utils';
-import { useTagsQuery } from '@taskora/api';
+import { TagPicker } from './TagPicker';
+import { tagSelectionState, toggleTagAcross } from './tagPickerOptions';
 
 interface FieldProps {
   current: TagsFieldCurrent;
   onPatch: (data: TagsFieldPatch) => void;
 }
 
+/** 单个 Task / Project / Area 的 Tag 选择：TagPicker 的单对象适配（整组写 tagIds）。 */
 export function TagsField({ current, onPatch }: FieldProps) {
-  const { t } = useTranslation();
-  const { data: tags = [] } = useTagsQuery();
-
+  const ownIds = (current.tags ?? []).map((tag) => tag.id);
   return (
-    <div className="flex max-h-64 flex-col gap-0.5 overflow-y-auto max-md:max-h-none">
-      {tags.length === 0 ? (
-        <span className="px-2 py-1.5 text-xs text-muted-foreground/60 max-md:py-3 max-md:text-sm">
-          {t('task:noTagsHint')}
-        </span>
-      ) : (
-        tags.map((tag) => {
-          const selected = (current.tags ?? []).some((it) => it.id === tag.id);
-          return (
-            <button
-              key={tag.id}
-              type="button"
-              onClick={() => {
-                const currentIds = (current.tags ?? []).map((it) => it.id);
-                const next = selected
-                  ? currentIds.filter((id) => id !== tag.id)
-                  : [...currentIds, tag.id];
-                onPatch({ tagIds: next });
-              }}
-              className={cn(
-                'flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left text-sm hover:bg-accent max-md:min-h-11 max-md:gap-2.5 max-md:py-2.5 max-md:text-[15px]',
-                selected ? 'opacity-100' : 'opacity-50',
-              )}
-              style={{ color: tag.color }}
-            >
-              <span
-                className="h-2.5 w-2.5 rounded-full"
-                style={{ backgroundColor: tag.color }}
-              />
-              {tag.title}
-              {selected && <Check className="ml-auto h-3.5 w-3.5" />}
-            </button>
-          );
+    <TagPicker
+      stateOf={(tagId) => (ownIds.includes(tagId) ? 'all' : 'none')}
+      onToggle={(tagId) =>
+        onPatch({
+          tagIds: ownIds.includes(tagId)
+            ? ownIds.filter((id) => id !== tagId)
+            : [...ownIds, tagId],
         })
-      )}
-    </div>
+      }
+    />
+  );
+}
+
+interface MultiFieldProps {
+  /** 被编辑的多个对象及各自的自身 Tag。 */
+  items: readonly { id: string; tagIds: readonly string[] }[];
+  /** 只含实际变化的项；每项是该对象新的完整 tagIds。 */
+  onChanges: (changes: Array<{ id: string; tagIds: string[] }>) => void;
+}
+
+/** 多个对象批量打标（三态）：各项在自己的原值上增减，不覆盖其它 Tag。 */
+export function MultiTagsField({ items, onChanges }: MultiFieldProps) {
+  return (
+    <TagPicker
+      stateOf={(tagId) => tagSelectionState(items, tagId)}
+      onToggle={(tagId) => onChanges(toggleTagAcross(items, tagId))}
+    />
   );
 }

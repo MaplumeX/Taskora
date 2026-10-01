@@ -16,6 +16,7 @@ import type {
   Engine,
   ListWhere,
   ReplicaRow,
+  TagParents,
 } from '@taskora/engine';
 import {
   countProjectTasks,
@@ -40,6 +41,7 @@ import {
   sortFeedItems,
   sortForView,
   subtaskStatusPatch,
+  tagParentsFrom,
   taskCancelPatch,
   taskMatchesQuery,
   taskMatchesView,
@@ -232,15 +234,28 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     return new Set(rows.filter((row) => isLaterProjectRow(row)).map((row) => row.id));
   }
 
+  /** 有效 Tag 的继承来源（ADR 0015）：副本中的 Project / Area 自身 Tag。 */
+  async function tagParents(): Promise<TagParents> {
+    const [projects, areas] = await Promise.all([engine.list('project'), engine.list('area')]);
+    return tagParentsFrom(
+      new Map(
+        projects.map((row) => [row.id, { areaId: row.fields.areaId, tagIds: tagIdsOf(row) }]),
+      ),
+      new Map(areas.map((row) => [row.id, { tagIds: tagIdsOf(row) }])),
+    );
+  }
+
   return {
     async getTasks(params?: TaskQuery): Promise<TaskResponseDto[]> {
       const rows = await engine.list('task', { where: tasksPrefilter(params) });
       const index = await tagIndex();
       const context = calendar();
       const inActiveProject = notInLaterProject(await laterProjectIdsFor(params?.view));
+      const parents = params?.tagId ? await tagParents() : undefined;
       const visible = rows.filter(
         (row) =>
-          inActiveProject(row) && taskMatchesQuery(queryFieldsOf(row), params ?? {}, context),
+          inActiveProject(row) &&
+          taskMatchesQuery(queryFieldsOf(row), params ?? {}, context, parents),
       );
       return sortForView(
         visible.map((row) => taskRowToDto(row, index)),
