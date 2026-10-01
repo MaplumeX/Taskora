@@ -10,6 +10,90 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > Android 小节，端专属改动标注 `(desktop)` / `(android)`。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.7.2] - 2026-10-01
+
+### Added
+
+- **ui/api/backend/engine/shared**: Tags 对齐 Things 3 (#134) — 补齐「打标」「过滤」
+  「管理」三个环节。新增**有效 Tag** 语义：过滤与查询时 Task 的有效 Tag =
+  自身 Tag ∪ 所属 Project 的 Tag ∪ 所属 Area 的 Tag（Project 同理），显示时只用
+  自身 Tag，纯推导、不写入字段、不影响 LWW；`tagId` 查询在 engine / 后端 / 事件
+  流缓存三处统一改用有效 Tag，Project / Area 的 Tag 变化会失效任务缓存。原有的
+  `TagsField` 勾选列换成可搜索的 **Tag Picker**：桌面端自动聚焦，支持前缀 / 包含
+  相关度排序、`↑`/`↓` 移动、`Enter` 连续切换、`Esc` 关闭，无同名 Tag 时列表末尾
+  出现即时新建；多选时每个 Tag 显示三态（✓ / – / 空），逐条计算各自的新 `tagIds`
+  而非整组替换。Inbox / Today / Upcoming / Anytime / Someday / Logbook、Project 与
+  Area 详情页标题下方新增 **Tag 过滤栏**：只列当前列表实际出现的有效 Tag，选中
+  Group 出现第二行收窄，再点取消；纯客户端过滤，切路由重置。Tag 详情页改用有效
+  Tag 查询并额外列出带该 Tag 的 Project，按 Area / Project 分组展示；Tags 管理页
+  改为可折叠大纲，支持拖拽排序（写 fractional `position`，跨 Group 即改
+  `tagGroupId`，Group 本身也可排序）、双击改名、色点选色，删除改为 toast 加撤销、
+  去掉 `window.confirm`。快捷键 ⇧⌘T / Ctrl+Shift+T（Web 端 Alt+Shift+T）。
+
+- **ui/api/engine**: 可搜索的 Move Picker (#132) — 把右键菜单与触控多选工具栏
+  共用的平铺「移动」面板换成 Things 3 式的归属选择器：Inbox 固定第一，其后按
+  侧边栏顺序列出 Area（本身可选）与其下缩进的 Project（Later 项目弱化），图标
+  沿用 Quick Find；支持 `↑`/`↓`、`Enter`、`Esc`，输入搜索词后变扁平结果并按
+  「前缀命中 > 包含命中」排序、项目行尾灰字标出所属区域。同时修正 Inbox 语义：
+  Inbox 是「尚未整理」的状态，获得归属即转为 ANYTIME，移入 Inbox 会清除归属
+  **并清除计划**；规则放进 `resolveTaskBucket`，创建、编辑与合并修复三条写入
+  路径一起归正。写入改为区域 / 项目互斥，换项目时清除 `headingId`。
+
+- **ui**: Quick Find 的继续搜索结果独立成搜索页 (#133) — 弹窗末尾常驻的「继续
+  搜索」不再就地展开，而是关闭面板、导航到新的 `/search?q=`：页头是可编辑搜索
+  框（改动以 replace 方式写回 `?q=`），范围扩大到已了结（Logbook）与 Trash，结果
+  分「区域与项目 → 任务 → 日志 → 废纸篓」四节，任务 / 日志节用普通 `TaskListView`
+  行（可展开、勾选、参与键盘 Selection），废纸篓节只读、点击定位到 Trash 页。
+
+- **ui/engine/shared**: Feed 中独立项目行可拖拽排序 (#131) — Project 新增
+  **Feed Position**（`feedPosition`，可空 fractional key），项目行在 feed 里与任务
+  混排的位次与 Task `position` 同处一个键空间；为空时退回 `position`（既有混排
+  结果不变），侧边栏顺序仍只由 `position` 决定。`feedSortKey` / `sortFeedItems` /
+  `reorderFeed` 与 re-balance 在 hub REST 与设备副本共用，设备写 Engine（进
+  Outbox）、web 走 `POST /feed/reorder`；拖拽时实时预览落点，跨组进入顶部区才写
+  顺序。同步新增 `Project.feedPosition` 列（迁移 `20261001120000_project_feed_position`，
+  Local Replica schema 6 → 7），经实体注册表进入 wire，旧 hub 拒绝的写入由设备
+  留在 Outbox 待其升级后重推。
+
+- **ui/api/backend/shared**: 展开行内联可编辑的子任务列表 (#126) — 任务展开卡片
+  里的子任务从静态列表变成可直接编辑的列表：内联输入标题、勾选完成 / 取消完成、
+  长按或拖拽调整顺序（insert-after 排序）、就地删除，底栏「添加子任务」在末尾
+  打开草稿行（空行不落库、不同步）。新增 / 调整 `insert-after` 排序接口，设备端
+  与 REST 端共用同一语义。
+
+- **ui**: 桌面端 IME 打字唤起 Quick Find (#129) — 空闲焦点改由一个视觉隐藏的
+  输入框持有，IME 从首键起在其中组字，`compositionend` 后以上屏文字为 seed 打开
+  面板，中文等输入法首字符不再丢失；有 Selection、助手页、触控设备时不持焦。
+
+- **ui**: 项目页已完成任务行显示了结日期徽标 (#128) — `ProjectCompletedTasks`
+  每行补上 settled 日期，和 Logbook 中的展现一致。
+
+### Changed
+
+- **ui**: 任务展开时隐藏备注 / 子任务徽标 (#124) — 行内的备注与子任务徽标改为仅在
+  折叠态显示，展开后内容已直接可见，不再重复；同时精简 chip 样式。
+
+- **ui**: 侧边栏未分组项目列表的拖放目标改为「项目」小节标题 (#125) — 独立项目
+  行拖回该区时命中标题而非行间空隙。
+
+- **ui**: 区域页项目列表隐藏已完成项目 (#127) — 与项目页「已完成」单独成节的做法
+  保持一致，区域页不再把已完成项目混在未了结项目里。
+
+- **ui**: 区域页任务行不再重复显示区域名 (#130) — `TaskList` 新增 `hideOwnership`，
+  页头已表达归属的页面抑制行内归属小字；TagDetail / CalendarDaySheet 等跨容器
+  页面保持原样。
+
+### Fixed
+
+- **engine**: HLC 按数值比较并修复小数墙钟 (#135) — 带校准偏移的墙钟常带 `.5`
+  （如 `1790857242098.5`），旧实现直接按字符串字典序比较，该小数时间戳会压过
+  所有正常时间戳，导致 hub 与设备按错误顺序裁决、比它真正更新的写被丢弃（典型
+  表现：新建任务后输入的标题本机可见，hub 与其他设备仍为空）。现在
+  `compareHlc` 对非规范时间戳按 `(wallMs, counter, deviceId)` 数值比较，
+  `formatHlc` / `setWallOffset` / 恢复状态一律向上取整，收到旧小数时间戳时
+  取整吸收；并对副本中带小数时间戳的行做一次性修复：按原时钟整行重推（不重新
+  打时间戳）、游标归零后走 bootstrap 收回本机当初丢弃的远端写。
+
 ## [0.7.1] - 2026-09-30
 
 ### Added
