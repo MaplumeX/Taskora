@@ -16,11 +16,6 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useFeedQuery: () => ({ data: [] }),
 }));
 
-// 下拉刷新依赖 Engine 同步，测试里静默 no-op。
-vi.mock('./engine/mobile-engine', () => ({
-  requestPullSync: vi.fn().mockResolvedValue(undefined),
-}));
-
 import { MainApp } from './MainApp';
 
 // 页面是 lazy() 路由：CI 冷启动时首次 import + transform 可能超过默认 1s。

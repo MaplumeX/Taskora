@@ -4,8 +4,6 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from '@taskora/ui/components/layout/AppShell';
 import { RootRedirect } from '@taskora/ui/components/layout/RootRedirect';
 import { ProtectedRoute } from './ProtectedRoute';
-import { PullToRefresh } from './components/PullToRefresh';
-import { requestPullSync } from './engine/mobile-engine';
 
 function PageFallback() {
   return (
@@ -38,38 +36,37 @@ const Upcoming = lazy(() => import('@taskora/ui/pages/Upcoming'));
  * - BrowserRouter（而非 MemoryRouter）：返回手势级联依赖真实浏览器
  *   历史（`window.history.state.idx`，见 back-navigation.ts）。单窗口
  *   壳不存在 desktop 的 quick-add 双窗口问题。
- * - PullToRefresh 包裹内容区：下拉刷新手动触发同步（issue 04）。
+ * - 不做下拉刷新：下拉手势留给 Quick Find（MainContent）；同步由启动、
+ *   本地写、回前台与 SSE 自动触发（见 mobile-engine.ts）。
  */
 export function MainApp() {
   return (
     <BrowserRouter>
       <Suspense fallback={<PageFallback />}>
-        <PullToRefresh onRefresh={() => requestPullSync()}>
-          <Routes>
-            <Route element={<ProtectedRoute />}>
-              <Route element={<AppShell />}>
-                <Route path="/" element={<RootRedirect />} />
-                <Route path="/home" element={<Home />} />
-                <Route path="/inbox" element={<Inbox />} />
-                <Route path="/today" element={<Today />} />
-                <Route path="/upcoming" element={<Upcoming />} />
-                <Route path="/calendar" element={<Calendar />} />
-                <Route path="/anytime" element={<Anytime />} />
-                <Route path="/someday" element={<Someday />} />
-                <Route path="/later-projects" element={<LaterProjects />} />
-                <Route path="/logbook" element={<Logbook />} />
-                <Route path="/projects/:id" element={<ProjectDetail />} />
-                <Route path="/areas/:id" element={<AreaDetail />} />
-                <Route path="/tags" element={<Tags />} />
-                <Route path="/tags/:tagId" element={<TagDetail />} />
-                <Route path="/trash" element={<Trash />} />
-                <Route path="/search" element={<Search />} />
-                <Route path="/agent" element={<AgentPage />} />
-                <Route path="*" element={<Navigate to="/today" replace />} />
-              </Route>
+        <Routes>
+          <Route element={<ProtectedRoute />}>
+            <Route element={<AppShell />}>
+              <Route path="/" element={<RootRedirect />} />
+              <Route path="/home" element={<Home />} />
+              <Route path="/inbox" element={<Inbox />} />
+              <Route path="/today" element={<Today />} />
+              <Route path="/upcoming" element={<Upcoming />} />
+              <Route path="/calendar" element={<Calendar />} />
+              <Route path="/anytime" element={<Anytime />} />
+              <Route path="/someday" element={<Someday />} />
+              <Route path="/later-projects" element={<LaterProjects />} />
+              <Route path="/logbook" element={<Logbook />} />
+              <Route path="/projects/:id" element={<ProjectDetail />} />
+              <Route path="/areas/:id" element={<AreaDetail />} />
+              <Route path="/tags" element={<Tags />} />
+              <Route path="/tags/:tagId" element={<TagDetail />} />
+              <Route path="/trash" element={<Trash />} />
+              <Route path="/search" element={<Search />} />
+              <Route path="/agent" element={<AgentPage />} />
+              <Route path="*" element={<Navigate to="/today" replace />} />
             </Route>
-          </Routes>
-        </PullToRefresh>
+          </Route>
+        </Routes>
       </Suspense>
     </BrowserRouter>
   );

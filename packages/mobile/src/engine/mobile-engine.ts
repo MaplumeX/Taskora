@@ -7,8 +7,8 @@
  * Outbox 保证断网写不丢）。四个触发点：
  *   1. 启动（Engine 装配后首次 pull / bootstrap）；
  *   2. 每次本地写（Outbox flush 后防抖 push）；
- *   3. 回前台（visibilitychange / focus）pull；
- *   4. 下拉刷新（requestPullSync()，由 PullToRefresh 调用）。
+ *   3. 回前台（visibilitychange / focus）pull。
+ * 不做下拉刷新：下拉手势归 Quick Find，上述触发点已覆盖手动刷新的场景。
  * 另有 SSE（前台存活的 Event Stream）作为「远端有变更」的提示通道触发
  * pull——它是前台内的传输层提示，不是推送基建（ADR-0007 同口径）。
  *
@@ -316,14 +316,6 @@ export function syncNow(): Promise<boolean> {
       }
     });
   return syncInFlight;
-}
-
-/**
- * 下拉刷新（触发点 4）：手动确认服务器上的最新变更。
- * 副本非空时同样走 flush + pull（Outbox 优先收敛，避免读旧写晚）。
- */
-export async function requestPullSync(): Promise<void> {
-  await syncNow();
 }
 
 /**
