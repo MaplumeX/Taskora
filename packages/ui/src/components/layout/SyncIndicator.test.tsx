@@ -15,16 +15,14 @@ describe('SyncIndicator（V2：离线可见性）', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('同步中 / 已同步：呈现状态、不拦截操作（pointer-events-none）', () => {
+  it('同步中 / 已同步：正常态不渲染，不遮挡内容', () => {
     useSyncStatusStore.setState({ status: 'syncing' });
-    const { rerender } = render(<SyncIndicator />);
-    expect(screen.getByRole('status')).toHaveAttribute('data-sync-status', 'syncing');
+    const { container, rerender } = render(<SyncIndicator />);
+    expect(container).toBeEmptyDOMElement();
 
     useSyncStatusStore.setState({ status: 'synced' });
     rerender(<SyncIndicator />);
-    const synced = screen.getByRole('status');
-    expect(synced).toHaveAttribute('data-sync-status', 'synced');
-    expect(synced.className).toContain('pointer-events-none');
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('离线：显示待同步条数，由 sync 成败驱动而非 navigator.onLine', () => {
@@ -33,6 +31,7 @@ describe('SyncIndicator（V2：离线可见性）', () => {
     const offline = screen.getByRole('status');
     expect(offline).toHaveAttribute('data-sync-status', 'offline');
     expect(offline.textContent).toContain('3');
+    expect(offline.className).toContain('pointer-events-none');
   });
 
   it('需要升级：常驻提示（hub 要求更高协议版本或副本来自更新版本）', () => {
