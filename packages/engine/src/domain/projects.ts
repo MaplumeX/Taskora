@@ -85,6 +85,22 @@ export function planProjectUpdate(
   return patch;
 }
 
+/**
+ * 在 Trash 中编辑项目时是否隐式放回（规则同 taskUpdatePutsBack）：改计划、
+ * 截止日期、Bucket、区域或标签即放回，调用方按 planProjectRestore 级联；
+ * 只改标题 / 备注不放回。
+ */
+export function projectUpdatePutsBack(input: UpdateProjectDto): boolean {
+  return (
+    input.scheduledType !== undefined ||
+    input.scheduledDate !== undefined ||
+    input.dueDate !== undefined ||
+    input.bucket !== undefined ||
+    input.areaId !== undefined ||
+    input.tagIds !== undefined
+  );
+}
+
 export function projectCompletePatch(now: string): ProjectPatch {
   return { status: ProjectStatus.COMPLETED, completedAt: now };
 }

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import type { QueryCacheFacade } from '../engine/live-queries';
+import { taskUpdatePutsBack } from '@taskora/engine';
 import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
 import type {
   CreateSubtaskDto,
@@ -283,13 +284,16 @@ export function useUpdateTask() {
       const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
       const now = new Date().toISOString();
+      // Trash 中改日期 / 归属 / 标签等即放回（同 planTaskUpdate）
+      const putBack = taskUpdatePutsBack(data) ? { trashedAt: null } : {};
       patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           ...data,
+          ...putBack,
           updatedAt: now,
         }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
-        old ? { ...old, ...data, updatedAt: now } : old,
+        old ? { ...old, ...data, ...putBack, updatedAt: now } : old,
       );
       return { snapshot, detailSnapshot, id };
     },
@@ -555,15 +559,10 @@ export function useRestoreTask() {
       await cancelTaskLists(queryClient);
       const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
-      patchTaskInLists(queryClient, id, (task) => ({
-          ...task,
-          trashedAt: null,
-          // "从垃圾桶捡回"始终是未了结（spec: task-cancelled story 19）。
-          status: TaskStatus.ACTIVE,
-          completedAt: null,
-        }));
+      // 放回只清 trashedAt，了结状态保留（spec: trash-things3）。
+      patchTaskInLists(queryClient, id, (task) => ({ ...task, trashedAt: null }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
-        old ? { ...old, trashedAt: null, status: TaskStatus.ACTIVE, completedAt: null } : old,
+        old ? { ...old, trashedAt: null } : old,
       );
       return { snapshot, detailSnapshot, id };
     },

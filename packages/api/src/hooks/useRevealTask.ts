@@ -9,8 +9,8 @@ import { revealRouteFor } from '@/utils/revealRoute';
 /**
  * Reveal Task（reminder-actions spec）：导航到最能容纳该任务的视图并
  * 展开它、滚入视野。任务不存在或已进 Trash 时不导航，返回 false。
- * allowTrash（Quick Find 的继续搜索）：Trash 中的任务导航到 Trash 并选中
- * 该行（Trash 行不展开）。
+ * allowTrash（Quick Find 的继续搜索）：Trash 中的任务导航到 Trash，同样
+ * 展开该行。
  */
 export function useRevealTask(): (
   taskId: string,
@@ -32,7 +32,7 @@ export function useRevealTask(): (
       // 覆盖在列表之上的浮层会挡住目标行
       ui.closeSettings();
       ui.setSearchOpen(false);
-      ui.setExpandedId(route === '/trash' ? null : taskId);
+      ui.setExpandedId(taskId);
       ui.setRevealId(taskId);
       navigate(route);
       return true;

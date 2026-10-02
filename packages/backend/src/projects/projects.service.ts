@@ -11,6 +11,7 @@ import {
   positionBetween,
   projectCompletePatch,
   projectReopenPatch,
+  projectUpdatePutsBack,
 } from '@taskora/engine';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncHubService } from '../sync/sync-hub.service';
@@ -118,9 +119,23 @@ export class ProjectsService {
   async update(userId: string, id: string, dto: UpdateProjectDto) {
     const existing = await this.requireProject(userId, id);
     const patch = planProjectUpdate(existing, dto, await userCalendarZones(this.prisma, userId));
+    // Trash 中改日期 / 区域 / 标签等即放回，级联同 restore
+    const restore =
+      existing.trashedAt != null && projectUpdatePutsBack(dto)
+        ? planProjectRestore(
+            existing.trashedAt,
+            await this.prisma.task.findMany({
+              where: { projectId: id, userId, trashedAt: { not: null } },
+              select: { id: true, trashedAt: true },
+            }),
+          )
+        : null;
     const updated = await this.hub.writeAsHub(userId, async (batch) => {
       // 全量 set 语义：tagIds 传 undefined 不动；传数组则整组替换
-      await batch.write('project', id, toWireFields(patch));
+      await batch.write('project', id, toWireFields({ ...patch, ...restore?.project }));
+      for (const task of restore?.tasks ?? []) {
+        await batch.write('task', task.id, toWireFields(task.patch));
+      }
       return batch.tx.project.findUniqueOrThrow({
         where: { id },
         include: { tags: { include: { tag: true } } },

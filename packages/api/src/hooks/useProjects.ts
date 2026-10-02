@@ -1,6 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 
 import type { QueryCacheFacade } from '../engine/live-queries';
+import { projectUpdatePutsBack } from '@taskora/engine';
 import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
 import type {
   CreateProjectDto,
@@ -179,13 +180,16 @@ export function useUpdateProject() {
       const snapshot = snapshotProjectLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<ProjectResponseDto>(projectKeys.detail(id));
       const now = new Date().toISOString();
+      // Trash 中改日期 / 区域 / 标签等即放回（同 projectUpdatePutsBack）
+      const putBack = projectUpdatePutsBack(data) ? { trashedAt: null } : {};
       patchProjectInLists(queryClient, id, (project) => ({
         ...project,
         ...data,
+        ...putBack,
         updatedAt: now,
       }));
       queryClient.setQueryData<ProjectResponseDto>(projectKeys.detail(id), (old) =>
-        old ? { ...old, ...data, updatedAt: now } : old,
+        old ? { ...old, ...data, ...putBack, updatedAt: now } : old,
       );
       return { snapshot, detailSnapshot, id };
     },

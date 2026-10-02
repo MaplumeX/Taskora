@@ -13,7 +13,9 @@ Key decisions, in the order they matter:
   Terminal-state semantics: `ACTIVE` (open), `COMPLETED` (finished), and
   `CANCELLED` (abandoned). Both endings are kept, reversible, and recorded
   in the Logbook; Trash stays orthogonal (a restored task returns to
-  `ACTIVE` regardless of its prior terminal state).
+  `ACTIVE` regardless of its prior terminal state — *superseded*: restore
+  ("put back") now only clears `trashedAt` and keeps the terminal state,
+  see Amendment below).
 
 - **One `settledAt` column, not `completedAt` + `cancelledAt`.** The status
   already says *how* the task was settled; the timestamp only needs to record
@@ -77,3 +79,12 @@ Consequences:
   have no cancelled state) and drops the settle time.
 - Subtask checkboxes remain complete/reopen only; cancelling a subtask goes
   through its context menu, so a stray click cannot cancel anything.
+
+## Amendment (2026-10): put back keeps the terminal state
+
+Restoring a task from Trash ("put back", aligned with Things 3) only clears
+`trashedAt`: a completed or cancelled task returns to the Logbook with its
+`settledAt` intact, instead of being reopened. This makes single-task restore
+agree with project-cascade restore, which already kept task status, and now
+that Trash rows show their real status, reopening on put back would silently
+discard a visible decision. See `.scratch/trash-things3/spec.md`.

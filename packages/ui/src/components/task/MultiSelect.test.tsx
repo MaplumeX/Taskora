@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   update: vi.fn(),
   del: vi.fn(),
   complete: vi.fn(),
+  restore: vi.fn(),
 }));
 
 vi.mock('@taskora/api', async (importOriginal) => ({
@@ -28,7 +29,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useCancelTask: () => ({ mutate: vi.fn(), isPending: false }),
   useUncancelTask: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteTask: () => ({ mutate: mocks.del, isPending: false }),
-  useRestoreTask: () => ({ mutate: vi.fn(), isPending: false }),
+  useRestoreTask: () => ({ mutate: mocks.restore, isPending: false }),
   useConvertTaskToProject: () => ({ mutate: vi.fn(), isPending: false }),
   useProjectsQuery: () => ({
     data: [
@@ -69,13 +70,13 @@ const baseTask: TaskResponseDto = {
   updatedAt: '2025-07-31T00:00:00.000Z',
 };
 
-function renderWithProviders(ui: React.ReactElement) {
+function renderWithProviders(ui: React.ReactElement, path = '/today') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
     <QueryClientProvider client={client}>
-      <MemoryRouter initialEntries={['/today']}>{ui}</MemoryRouter>
+      <MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>
     </QueryClientProvider>,
   );
 }
@@ -140,6 +141,19 @@ describe('TaskItem — 左滑多选', () => {
     expect(onToggleComplete).not.toHaveBeenCalled();
   });
 
+  it('Trash 行同样可左滑进入多选', () => {
+    renderWithProviders(
+      <TaskItem
+        task={{ ...baseTask, trashedAt: '2026-09-01T00:00:00.000Z' }}
+        onToggleComplete={() => {}}
+        onRowClick={() => {}}
+      />,
+      '/trash',
+    );
+    swipeLeft(screen.getByText('My task'));
+    expect(useMultiSelectStore.getState()).toMatchObject({ active: true, ids: ['task-1'] });
+  });
+
   it('触屏长按派发的 contextmenu 不打开菜单（长按只负责拖动）', () => {
     renderWithProviders(<TaskItem task={baseTask} onToggleComplete={() => {}} />);
 
@@ -171,6 +185,20 @@ describe('MultiSelectToolbar', () => {
 
     expect(mocks.del).toHaveBeenCalledWith('a', expect.anything());
     expect(mocks.del).toHaveBeenCalledWith('b', expect.anything());
+    expect(useMultiSelectStore.getState().active).toBe(false);
+  });
+
+  it('Trash 页：「删除」换成「放回」，作用于全部勾选项并退出；无转换为项目', async () => {
+    const user = userEvent.setup();
+    useMultiSelectStore.setState({ active: true, ids: ['a', 'b'] });
+    renderWithProviders(<MultiSelectToolbar />, '/trash');
+
+    expect(screen.queryByRole('button', { name: /^(Delete|删除)$/ })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /^(Put Back|放回)$/ }));
+
+    expect(mocks.restore).toHaveBeenCalledWith('a', expect.anything());
+    expect(mocks.restore).toHaveBeenCalledWith('b', expect.anything());
+    expect(mocks.del).not.toHaveBeenCalled();
     expect(useMultiSelectStore.getState().active).toBe(false);
   });
 

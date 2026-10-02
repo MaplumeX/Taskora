@@ -103,8 +103,8 @@ export function ProjectFeedRow({
         <span
           className={cn(
             'flex-1 truncate text-left text-body font-semibold',
-            settled || trashed
-              ? plainSettledTitle && !trashed
+            settled
+              ? plainSettledTitle
                 ? cancelled
                   ? 'text-foreground line-through'
                   : 'text-foreground'

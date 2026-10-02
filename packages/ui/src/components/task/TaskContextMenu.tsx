@@ -21,7 +21,7 @@ import { ScheduledType, TaskStatus } from '@taskora/shared';
 
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { MenuRow } from '@/components/common/MenuRow';
-import { isTouchContextMenu, useLongPress } from '../../lib/useLongPress';
+import { isTouchContextMenu } from '../../lib/useLongPress';
 import {
   currentLegacyDateTimeZone,
   getClientKind,
@@ -177,7 +177,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
     setActivePicker(kind);
   };
 
-  /** 以坐标为锚点打开主菜单（右键与 Trash 行的触屏长按共用）。 */
+  /** 以坐标为锚点打开主菜单。 */
   const openMenuAt = (x: number, y: number) => {
     virtualAnchorRef.current = {
       getBoundingClientRect: () =>
@@ -199,15 +199,11 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
 
   const onContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
-    // 触屏长按派发的 contextmenu 不开菜单：普通行长按只负责拖动（操作走
-    // 左滑多选工具栏），Trash 行由下方 useLongPress 接管。
+    // 触屏长按派发的 contextmenu 不开菜单：长按只负责拖动（对齐 Things 3），
+    // 操作走左滑多选工具栏（Trash 行同样如此，工具栏提供「放回」）。
     if (isTouchContextMenu(e)) return;
     openMenuAt(e.clientX, e.clientY);
   };
-
-  // 触屏长按开菜单仅限 Trash：该页行不可拖动，长按是恢复的唯一入口。
-  // 其余行长按只负责拖动（对齐 Things 3），操作走左滑多选工具栏。
-  const longPress = useLongPress((p) => openMenuAt(p.x, p.y));
 
   // Auto-focus first menu item when opened.
   React.useEffect(() => {
@@ -218,12 +214,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   }, [menuOpen]);
 
   return (
-    <div
-      ref={containerRef}
-      className="flex flex-col"
-      onContextMenu={onContextMenu}
-      {...(variant === 'trash' ? longPress : undefined)}
-    >
+    <div ref={containerRef} className="flex flex-col" onContextMenu={onContextMenu}>
       {children}
 
       {/* Main context menu (anchored to the right-click coordinates). */}
@@ -284,7 +275,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
             destructive
             onClick={variant === 'trash' ? handleRestore : handleDelete}
           >
-            {variant === 'trash' ? tc('restore') : tc('delete')}
+            {variant === 'trash' ? tc('putBack') : tc('delete')}
           </MenuRow>
         </PopoverContent>
       </Popover>

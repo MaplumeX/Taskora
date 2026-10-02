@@ -207,7 +207,11 @@ export function TaskItem({
       }}
     >
       <div className={cn('flex min-h-0 flex-col', exiting && 'overflow-hidden')}>
-        <TaskContextMenu task={task} current={current}>
+        <TaskContextMenu
+          task={task}
+          current={current}
+          variant={current.trashedAt != null ? 'trash' : 'default'}
+        >
           <div
             className="relative"
             {...swipe.handlers}

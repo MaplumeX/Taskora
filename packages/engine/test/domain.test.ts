@@ -32,12 +32,14 @@ import {
   planTaskSearch,
   planTaskUpdate,
   projectMatchesView,
+  projectUpdatePutsBack,
   repeatDerivationTarget,
   sortFeedItems,
   sortForView,
   tagParentsFrom,
   taskMatchesQuery,
   taskMatchesView,
+  taskRestorePatch,
   taskSearchRank,
   type ListView,
 } from '../src/index';
@@ -210,6 +212,32 @@ describe('任务写入规则', () => {
       headingId: null,
     });
     expect(planTaskUpdate(base, { repeatRule: { unit: 'bogus' } as never }, UTC)).toEqual({});
+  });
+
+  it('Trash 中编辑：改日期 / 归属 / 标签放回；改标题 / 备注不放回', () => {
+    const trashed = { ...base, trashedAt: '2026-09-20T00:00:00.000Z' };
+    expect(planTaskUpdate(trashed, { dueDate: '2026-10-01' }, UTC)).toMatchObject({
+      trashedAt: null,
+    });
+    expect(planTaskUpdate(trashed, { projectId: 'p2' }, UTC)).toMatchObject({ trashedAt: null });
+    expect(planTaskUpdate(trashed, { tagIds: ['t1'] }, UTC)).toMatchObject({ trashedAt: null });
+    expect(planTaskUpdate(trashed, { title: 'y', notes: 'n' }, UTC)).toEqual({
+      title: 'y',
+      notes: 'n',
+    });
+    // 不在 Trash：不写 trashedAt
+    expect(planTaskUpdate(base, { dueDate: '2026-10-01' }, UTC)).not.toHaveProperty('trashedAt');
+  });
+
+  it('放回只清 trashedAt：了结状态保留', () => {
+    expect(taskRestorePatch()).toEqual({ trashedAt: null });
+  });
+
+  it('Trash 中编辑项目：改日期 / 区域 / 标签放回；改标题 / 备注不放回', () => {
+    expect(projectUpdatePutsBack({ scheduledDate: '2026-10-01' })).toBe(true);
+    expect(projectUpdatePutsBack({ areaId: null })).toBe(true);
+    expect(projectUpdatePutsBack({ tagIds: [] })).toBe(true);
+    expect(projectUpdatePutsBack({ title: 'y', notes: 'n' })).toBe(false);
   });
 
   it('已完成的任务再次完成：不做任何事（不刷新了结时间、不二次派生）', () => {

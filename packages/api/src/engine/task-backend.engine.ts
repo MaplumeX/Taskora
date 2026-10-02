@@ -354,6 +354,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
           projectId: (f.projectId as string | null) ?? null,
           areaId: (f.areaId as string | null) ?? null,
           headingId: (f.headingId as string | null) ?? null,
+          trashedAt: f.trashedAt,
         },
         data,
         zones(),
