@@ -17,25 +17,18 @@ import {
 } from 'lucide-react';
 
 import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
-import { ScheduledType, TaskStatus } from '@taskora/shared';
+import { ScheduledType } from '@taskora/shared';
 
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { MenuRow } from '@/components/common/MenuRow';
 import { isTouchContextMenu } from '../../lib/useLongPress';
 import {
-  currentLegacyDateTimeZone,
   getClientKind,
-  i18n,
-  parseCalendarDate,
-  RepeatSkipBlockedError,
-  skipOccurrenceDate,
   useCancelTask,
   useCompleteTask,
   useConvertTaskToProject,
   useDeleteTask,
-  usePreferencesStore,
   useRestoreTask,
-  useSkipTask,
   useUncancelTask,
   useUncompleteTask,
   useUpdateTask,
@@ -45,6 +38,7 @@ import { DueDateField } from './fields/DueDateField';
 import { RepeatRuleField } from './fields/RepeatRuleField';
 import { TagsField } from './fields/TagsField';
 import { MovePicker } from './fields/MovePicker';
+import { useSkipOccurrence } from './useSkipOccurrence';
 
 interface Props {
   task: TaskResponseDto;
@@ -67,8 +61,6 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const deleteTask = useDeleteTask();
   const restoreTask = useRestoreTask();
   const convertToProjectTask = useConvertTaskToProject();
-  const skipTask = useSkipTask();
-  const timeZone = usePreferencesStore((s) => s.timeZone);
 
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
@@ -81,26 +73,10 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const cancelled = current.status === 'CANCELLED';
   const isDate = (current.scheduledType ?? ScheduledType.NONE) === ScheduledType.DATE;
 
-  // 跳过本次：仅未了结、未进 Trash 的重复任务；链已到头（until）时禁用。
-  // 「下一次已存在」需查数据，由数据层拒绝后提示。
-  const canOfferSkip =
-    variant === 'default' &&
-    isDate &&
-    !!current.repeatRule &&
-    current.status === TaskStatus.ACTIVE &&
-    !current.trashedAt;
-  const skipTarget = React.useMemo(
-    () =>
-      menuOpen && canOfferSkip && current.repeatRule
-        ? skipOccurrenceDate(current.repeatRule, {
-            scheduledDate: current.scheduledDate,
-            now: new Date(),
-            timeZone,
-            legacyDateTimeZone: currentLegacyDateTimeZone(),
-          })
-        : null,
-    [menuOpen, canOfferSkip, current.repeatRule, current.scheduledDate, timeZone],
-  );
+  // 跳过本次：链已到头（until）时禁用。
+  const skipOccurrence = useSkipOccurrence(current, menuOpen);
+  const canOfferSkip = variant === 'default' && skipOccurrence.available;
+  const skipTarget = skipOccurrence.target;
 
   const patch = (data: UpdateTaskDto) =>
     updateTask.mutate(
@@ -129,25 +105,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
 
   const handleSkip = () => {
     closeMenu();
-    skipTask.mutate(task.id, {
-      onSuccess: (skipped) => {
-        if (!skipped.scheduledDate) return;
-        const date = new Intl.DateTimeFormat(i18n.language, {
-          month: 'short',
-          day: 'numeric',
-          weekday: 'short',
-        }).format(parseCalendarDate(skipped.scheduledDate));
-        toast.success(t('skipOccurrenceDone', { date }));
-      },
-      onError: (error) =>
-        toast.error(
-          error instanceof RepeatSkipBlockedError && error.reason === 'next-exists'
-            ? t('skipOccurrenceNextExists')
-            : error instanceof RepeatSkipBlockedError && error.reason === 'no-next'
-              ? t('skipOccurrenceLast')
-              : tc('saveFailed'),
-        ),
-    });
+    skipOccurrence.skip();
   };
 
   const handleDelete = () => {
