@@ -10,6 +10,88 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > Android 小节，端专属改动标注 `(desktop)` / `(android)`。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.7.4] - 2026-10-02
+
+### Added
+
+- **api/ui/desktop/mobile**: Quick Add 升级为完整草稿卡片 (#147) — 桌面浮窗
+  （`QuickAddApp`）与 Android 状态栏浮层（`QuickAddActivity`）从「只能输入标题、
+  固定进 Inbox」升级为可在创建前设好备注、计划日期、Tag 与归属的草稿卡片。两端
+  共用 `packages/api` 新增的 `QuickAddDraft` 与 `createFromQuickAddDraft(draft)`，
+  落库规则只有一份：标题去首尾空白后为空不落库、已删除或已进回收站的 Tag 丢弃、
+  归属的项目 / 区域缺失时回落 Inbox，并返回实际落入的位置。桌面浮窗改为窗口透明、
+  内部圆角卡片（macOS 毛玻璃）、高度随内容，字段栏与展开任务一致（左侧已设 chip、
+  右侧未设图标），归属 chip 默认 Inbox，支持「添加并继续」（保留归属、清空其余
+  字段）与键位对齐主应用；主窗口隐藏时创建失败改用系统通知。Android 浮层改为原生
+  卡片：可折叠备注、今天 / 明天 / 周末 / Someday 日期 chip 与原生日期选择器、归属 /
+  Tag 底部列表（顺序与 `MovePicker` 一致、排除稍后项目）、本机记忆的连续添加开关，
+  以及「在应用中继续」把截止日期 / Reminder / 子任务交回 App 并凭 `navigate=task:<id>`
+  展开该任务。原生端只展示 JS 写入的 Areas / Projects / Tags / 账号时区与文案快照，
+  离线或快照过期也安全（落库前再校验）。提交由单个标题字符串改为 SharedPreferences
+  中的 JSON 队列由 JS 按序取走，修掉冷启动连续添加时前一条被覆盖丢失的问题；落库
+  失败发系统通知而非静默吞掉。
+
+- **ui**: 可停靠的助手面板 (desktop) (#145) — 新增右侧 Assistant Panel，与全屏
+  `/agent` 是同一组 Conversation 的两种视图：当前会话与流式状态（增量文本、运行中
+  工具、`agentActive`）提升到全局 store，助手运行中途在面板与全屏之间切换，打字
+  效果与运行状态不中断、不出现两份。面板默认宽 360px，可拖左边缘调宽（320px ～
+  半视口，双击复位，聚焦后 ←/→ 步进，宽度存本机）；视口 ≥1440px 且当前不是
+  `/calendar` 时推挤主区并排显示，否则覆盖在主区之上（Esc 或点面板外收起）。顶栏
+  可切换 / 新建会话并跳转全屏，反向支持从全屏「收回到面板」。入口为内容区底部动作
+  条紧邻搜索的 ✦ 按钮与快捷键 ⌘J（Windows Ctrl+J、Web Alt+J），移动端不提供面板。
+
+- **ui**: 多选工具栏新增「跳过本次」(#149) — 抽出 `useSkipOccurrence`（原先只有
+  右键菜单可用），触屏多选工具栏与「更多」Action Sheet 现在也能对选中的重复任务
+  跳过本次，并对链已到头 / 下一次已存在的拒绝给出对应提示。同时加固触屏
+  `contextmenu` 识别：Android WebView 触屏选词也会派发 `contextmenu` 且事件本身
+  不带 `pointerType`，改以最近一次 `pointerdown` 的指针类型兜底，避免误开菜单。
+
+### Changed
+
+- **api/ui/engine/backend**: Trash 行对齐 Things 3 (#146) — 删除 `TrashTaskRow` /
+  `TrashProjectRow`，改由 `FeedItemRow` 渲染任务行与项目行：行样式与状态回到普通
+  视图（复选框按完成 / 取消 / 未完成显示且可照常勾选，保留截止日期、标签、备注
+  图标、子任务进度与所属项目 / 区域），任务行可展开详情编辑；恢复统一走右键菜单 /
+  多选工具栏的「放回」（新键 `putBack`），项目行去掉常驻「恢复」按钮。放回只清
+  `trashedAt`、保留了结状态：已完成 / 已取消的任务回到 Logbook，未完成的回原视图。
+  在 Trash 中改状态（完成 / 取消 / 撤销）留原地，改计划日期、截止日期、移动、标签、
+  重复规则等其他编辑隐式放回，改标题 / 备注 / 子任务不触发放回；进 Trash 时清掉的
+  `reminderTime` 不随放回恢复。规则落在 engine 写入层（`planTaskUpdate` 一侧）与
+  REST 后端，使菜单、详情、多选工具栏与 Agent 工具行为一致。触屏 Trash 行接入
+  左滑多选，工具栏「删除」位置换成「放回」。
+
+- **api/ui**: 助手对话按轮次分组，过程折叠为一行摘要 (#144) — 每轮助手回复改由
+  `AgentTurn` 呈现：工具调用与过程步骤折叠成可展开的一行摘要（如「已更改 2 项」），
+  正文与批准卡片照常展示，长对话不再被逐条工具输出淹没。
+
+### Fixed
+
+- **backend/engine**: 修复 `drop_sort_order` contract 迁移在有历史数据的库上失败并
+  永久卡在 P3009 (#142) — 已发布的 `20261002180000_drop_sort_order` 假设中间版本
+  hub 会在启动时物化 Position，但该 hook 已删除且 `migrate deploy` 先于应用启动，
+  旧库直升会在 guard 失败后无法启动，空库 CI 无法发现。修正后的迁移在同一显式事务
+  内按历史 Engine 算法补齐七张表的空 Position（O(log sortOrder)，不依赖会话时区）
+  再断言、删列；backend bootstrap 用专用 PostgreSQL 会话锁串行化检查、恢复与部署，
+  仅对「原 checksum + 明确 guard 错误 + 完整旧列状态」的唯一失败记录自动
+  `migrate resolve --rolled-back` 后重跑，未知失败或部分删列状态一律保留供人工检查。
+  已有 Position、updatedAt、字段时钟与同步日志不变，回填值与协议 4 Local Replica
+  7 → 9 逐字一致。CI 新增 `migration-smoke.mjs`，在实际镜像上验证 v0.7.1 / v0.7.2
+  历史 DDL + 合成数据、P3009 与空库的启动健康；恢复步骤与发布纪律记入
+  `docs/versioning-and-deployment.md`，ADR-0007 更正原先对阶段发布的错误假设。
+
+- **mobile**: Android 系统栏安全区回退 (#150) — edge-to-edge 下内容铺到状态栏 /
+  手势条后面，而部分 Android WebView 的 `env(safe-area-inset-*)` 仍为 0，导致内容
+  被遮挡。background 插件改为从 `WindowInsets` 读取真实高度，启动时取一次并经
+  `insets` 事件推送旋转 / 切换导航方式后的变化，JS 写入 `--native-safe-top/bottom`，
+  ui 的 `--safe-area-top/bottom` 取它与 env() 的较大者。
+
+- **ui**: 触控多选工具栏抬到 Android 手势条之上 (#148) — 右下角悬浮胶囊此前贴着
+  屏幕底边，与系统手势条重叠。
+
+- **ui**: 备注编辑器在可排序祖先内显示文本光标 (#143) — 可排序行容器带
+  `role="button"`，其 `cursor: pointer` 被 `.ProseMirror` 继承，悬停笔记区显示手型
+  而非文本光标；显式设回 `cursor: text`。
+
 ## [0.7.3] - 2026-10-02
 
 ### Added
@@ -52,7 +134,7 @@ project adheres to [Semantic Versioning](https://semver.org/).
   排序，与真实 Position 顺序脱节。现在读取点一律只读 Position，重排只给必须
   移动的行分配新 key（`planReorder` / `repositionMinimal`）；存量空 position
   的行按 hub 原先下发 legacy 行的同一口径（`synthPosition(sortOrder,
-  createdAt)`）补齐，本地副本在 7 → 8 迁移里完成，值与设备早已收到的 wire 值
+createdAt)`）补齐，本地副本在 7 → 8 迁移里完成，值与设备早已收到的 wire 值
   逐字相同、不产生可见变化。wire 不再携带 `sortOrder`，
   `SYNC_PROTOCOL_VERSION` 3 → 4，hub 的 `minProtocolVersion` 同步升到 4：
   协议 ≤ 3 的客户端会收到 426、停止同步并保留 Outbox，提示升级（协议 3 客户端
