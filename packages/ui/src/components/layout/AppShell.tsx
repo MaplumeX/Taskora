@@ -32,7 +32,7 @@ export function AppShell() {
       <MultiSelectToolbar />
       <SettingsModal />
       <KeyboardShortcuts />
-      {/* 同步指示器（V2）：仅桌面端有 Engine 时渲染，常驻角落不拦操作 */}
+      {/* 同步指示器（V2）：仅在离线 / 需要升级时出现在角落，不拦操作 */}
       <SyncIndicator />
     </div>
   );

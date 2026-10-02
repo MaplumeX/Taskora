@@ -48,8 +48,6 @@
   "newArea": "New Area",
   "more": "More",
   "clear": "Clear",
-  "syncStatusSynced": "Synced",
-  "syncStatusSyncing": "Syncing…",
   "syncStatusOffline": "Offline · {{count}} pending",
   "syncStatusUpgradeRequired": "Update Taskora to sync",
   "undo": "Undo"
