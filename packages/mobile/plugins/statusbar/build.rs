@@ -6,6 +6,9 @@ const COMMANDS: &[&str] = &[
     "show",
     "cancel",
     "take_navigation",
+    "take_pending_quick_adds",
+    "set_quick_add_data",
+    "notify_quick_add_failed",
     "register_listener",
     "remove_listener",
 ];

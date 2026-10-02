@@ -20,6 +20,11 @@ interface Props {
   tooltip?: boolean;
   /** 触发按钮（asChild 注入 trigger 行为）。 */
   trigger: React.ReactElement;
+  /** hint 上附带的键位文案（宽屏、tooltip 为真时）。 */
+  shortcut?: string;
+  /** 受控打开（如快捷键直接打开选择器）；不传则自管。 */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
   children: React.ReactNode | ((close: () => void) => React.ReactNode);
 }
 
@@ -32,9 +37,22 @@ interface Props {
  *
  * 字段组件不感知容器，通过 `close` 回调在选定后关闭。
  */
-export function FieldPicker({ label, tooltip = false, trigger, children }: Props) {
+export function FieldPicker({
+  label,
+  tooltip = false,
+  trigger,
+  shortcut,
+  open: controlledOpen,
+  onOpenChange,
+  children,
+}: Props) {
   const isDesktop = useIsDesktop();
-  const [open, setOpen] = React.useState(false);
+  const [uncontrolledOpen, setUncontrolledOpen] = React.useState(false);
+  const open = controlledOpen ?? uncontrolledOpen;
+  const setOpen = (next: boolean) => {
+    if (controlledOpen === undefined) setUncontrolledOpen(next);
+    onOpenChange?.(next);
+  };
   const close = () => setOpen(false);
   const body = typeof children === 'function' ? children(close) : children;
 
@@ -42,7 +60,13 @@ export function FieldPicker({ label, tooltip = false, trigger, children }: Props
     const popoverTrigger = <PopoverTrigger asChild>{trigger}</PopoverTrigger>;
     return (
       <Popover open={open} onOpenChange={setOpen}>
-        {tooltip ? <Hint label={label}>{popoverTrigger}</Hint> : popoverTrigger}
+        {tooltip ? (
+          <Hint label={label} shortcut={shortcut}>
+            {popoverTrigger}
+          </Hint>
+        ) : (
+          popoverTrigger
+        )}
         <PopoverContent align="start" className="p-1.5">
           {body}
         </PopoverContent>

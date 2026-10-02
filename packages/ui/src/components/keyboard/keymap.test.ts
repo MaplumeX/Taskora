@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveAction, shortcutLabel, type KeyEventLike } from './keymap';
+import {
+  quickAddShortcutLabel,
+  resolveAction,
+  resolveQuickAddAction,
+  shortcutLabel,
+  type KeyEventLike,
+} from './keymap';
 
 /** 快捷构造事件（默认无修饰键）。 */
 function key(key: string, mods: Partial<KeyEventLike> = {}): KeyEventLike {
@@ -36,8 +42,12 @@ describe('resolveAction — mac 桌面（Things 原键位）', () => {
   it('↑/↓ 移动、Alt+↑/↓ 首末', () => {
     expect(resolveAction(key('ArrowUp'), platform)).toEqual({ type: 'moveUp' });
     expect(resolveAction(key('ArrowDown'), platform)).toEqual({ type: 'moveDown' });
-    expect(resolveAction(key('ArrowUp', { altKey: true }), platform)).toEqual({ type: 'moveFirst' });
-    expect(resolveAction(key('ArrowDown', { altKey: true }), platform)).toEqual({ type: 'moveLast' });
+    expect(resolveAction(key('ArrowUp', { altKey: true }), platform)).toEqual({
+      type: 'moveFirst',
+    });
+    expect(resolveAction(key('ArrowDown', { altKey: true }), platform)).toEqual({
+      type: 'moveLast',
+    });
   });
 
   it('裸 ←/→ 不派发动作（分组不可折叠）；带修饰同样不触发', () => {
@@ -69,12 +79,12 @@ describe('resolveAction — mac 桌面（Things 原键位）', () => {
 
   it('⌘N 新任务、⇧⌘N Heading、⌥⌘N 项目', () => {
     expect(resolveAction(key('n', { metaKey: true }), platform)).toEqual({ type: 'newTask' });
-    expect(
-      resolveAction(key('n', { metaKey: true, shiftKey: true }), platform),
-    ).toEqual({ type: 'newHeading' });
-    expect(
-      resolveAction(key('n', { metaKey: true, altKey: true }), platform),
-    ).toEqual({ type: 'newProject' });
+    expect(resolveAction(key('n', { metaKey: true, shiftKey: true }), platform)).toEqual({
+      type: 'newHeading',
+    });
+    expect(resolveAction(key('n', { metaKey: true, altKey: true }), platform)).toEqual({
+      type: 'newProject',
+    });
   });
 
   it('⌘F 搜索', () => {
@@ -101,24 +111,28 @@ describe('resolveAction — Windows 桌面（Ctrl 自适应）', () => {
     expect(resolveAction(key('a', { ctrlKey: true }), platform)).toEqual({ type: 'selectAll' });
     expect(resolveAction(key('k', { ctrlKey: true }), platform)).toEqual({ type: 'complete' });
     expect(resolveAction(key('n', { ctrlKey: true }), platform)).toEqual({ type: 'newTask' });
-    expect(
-      resolveAction(key('n', { ctrlKey: true, shiftKey: true }), platform),
-    ).toEqual({ type: 'newHeading' });
-    expect(
-      resolveAction(key('n', { ctrlKey: true, altKey: true }), platform),
-    ).toEqual({ type: 'newProject' });
+    expect(resolveAction(key('n', { ctrlKey: true, shiftKey: true }), platform)).toEqual({
+      type: 'newHeading',
+    });
+    expect(resolveAction(key('n', { ctrlKey: true, altKey: true }), platform)).toEqual({
+      type: 'newProject',
+    });
   });
 
   it('Ctrl+F 搜索、Alt+↑/↓ 首末', () => {
     expect(resolveAction(key('f', { ctrlKey: true }), platform)).toEqual({ type: 'search' });
-    expect(resolveAction(key('ArrowUp', { altKey: true }), platform)).toEqual({ type: 'moveFirst' });
+    expect(resolveAction(key('ArrowUp', { altKey: true }), platform)).toEqual({
+      type: 'moveFirst',
+    });
   });
 
   it('Ctrl+Alt+K 取消；与 Ctrl+K 完成不冲突', () => {
     expect(resolveAction(key('k', { ctrlKey: true, altKey: true }), platform)).toEqual({
       type: 'cancel',
     });
-    expect(resolveAction(key('k', { ctrlKey: true, altKey: true, shiftKey: true }), platform)).toBeNull();
+    expect(
+      resolveAction(key('k', { ctrlKey: true, altKey: true, shiftKey: true }), platform),
+    ).toBeNull();
   });
 });
 
@@ -135,7 +149,9 @@ describe('resolveAction — Web（Alt 系降级）', () => {
 
   it('Alt+← 不派发（浏览器后退同效）；Alt+↑/↓ 首末', () => {
     expect(resolveAction(key('ArrowLeft', { altKey: true }), platform)).toBeNull();
-    expect(resolveAction(key('ArrowUp', { altKey: true }), platform)).toEqual({ type: 'moveFirst' });
+    expect(resolveAction(key('ArrowUp', { altKey: true }), platform)).toEqual({
+      type: 'moveFirst',
+    });
   });
 
   it('Ctrl+K 完成任务（原为搜索，破坏性改绑）；mac 浏览器 ⌘K 同效', () => {
@@ -155,9 +171,9 @@ describe('resolveAction — Web（Alt 系降级）', () => {
 
   it('Alt+N 新任务、Alt+Shift+N 项目、Alt+H Heading', () => {
     expect(resolveAction(key('n', { altKey: true }), platform)).toEqual({ type: 'newTask' });
-    expect(
-      resolveAction(key('n', { altKey: true, shiftKey: true }), platform),
-    ).toEqual({ type: 'newProject' });
+    expect(resolveAction(key('n', { altKey: true, shiftKey: true }), platform)).toEqual({
+      type: 'newProject',
+    });
     expect(resolveAction(key('h', { altKey: true }), platform)).toEqual({ type: 'newHeading' });
   });
 });
@@ -221,16 +237,21 @@ describe('resolveAction — 通用', () => {
     },
   );
 
-  it.each(['mac', 'windows', 'web'] as const)('%s: Shift+Enter 不展开（保留扩展语义）', (platform) => {
-    expect(resolveAction(key('Enter', { shiftKey: true }), platform)).toBeNull();
-  });
+  it.each(['mac', 'windows', 'web'] as const)(
+    '%s: Shift+Enter 不展开（保留扩展语义）',
+    (platform) => {
+      expect(resolveAction(key('Enter', { shiftKey: true }), platform)).toBeNull();
+    },
+  );
 });
 
 // shortcutLabel 的期望值以 docs/keyboard-shortcuts.md 的 P0 键位表为
 // 独立真值来源（⌘N / Ctrl+N / Alt+N 三平台矩阵）。
 describe('resolveAction — 标签（tags-things3 issue 04）', () => {
   it('mac ⇧⌘T；⌘T 不触发', () => {
-    expect(resolveAction(key('T', { metaKey: true, shiftKey: true }), 'mac')).toEqual({ type: 'tags' });
+    expect(resolveAction(key('T', { metaKey: true, shiftKey: true }), 'mac')).toEqual({
+      type: 'tags',
+    });
     expect(resolveAction(key('t', { metaKey: true }), 'mac')).toBeNull();
   });
 
@@ -241,7 +262,9 @@ describe('resolveAction — 标签（tags-things3 issue 04）', () => {
   });
 
   it('Web Alt+Shift+T；Ctrl+Shift+T 让给浏览器', () => {
-    expect(resolveAction(key('T', { altKey: true, shiftKey: true }), 'web')).toEqual({ type: 'tags' });
+    expect(resolveAction(key('T', { altKey: true, shiftKey: true }), 'web')).toEqual({
+      type: 'tags',
+    });
     expect(resolveAction(key('T', { ctrlKey: true, shiftKey: true }), 'web')).toBeNull();
   });
 });
@@ -286,5 +309,44 @@ describe('shortcutLabel — 按钮 hint 键位文案', () => {
   it('与 resolveAction 的解析键位一一对应（抽查 mac 搜索 / web 新任务）', () => {
     expect(resolveAction(key('f', { metaKey: true }), 'mac')?.type).toBe('search');
     expect(resolveAction(key('n', { altKey: true }), 'web')?.type).toBe('newTask');
+  });
+});
+
+describe('resolveQuickAddAction — Quick Add 卡片', () => {
+  it('mac：⌘ 系字段键与提交键', () => {
+    const mac = 'mac' as const;
+    expect(resolveQuickAddAction(key('s', { metaKey: true }), mac)).toBe('when');
+    expect(resolveQuickAddAction(key('t', { metaKey: true }), mac)).toBe('today');
+    expect(resolveQuickAddAction(key('o', { metaKey: true }), mac)).toBe('someday');
+    expect(resolveQuickAddAction(key('D', { metaKey: true, shiftKey: true }), mac)).toBe(
+      'deadline',
+    );
+    expect(resolveQuickAddAction(key('T', { metaKey: true, shiftKey: true }), mac)).toBe('tags');
+    expect(resolveQuickAddAction(key('M', { metaKey: true, shiftKey: true }), mac)).toBe('move');
+    expect(resolveQuickAddAction(key('Enter', { metaKey: true }), mac)).toBe('submit');
+    expect(resolveQuickAddAction(key('Enter', { metaKey: true, shiftKey: true }), mac)).toBe(
+      'submitAndContinue',
+    );
+  });
+
+  it('mac 上 Ctrl 不算主修饰键；Windows 用 Ctrl', () => {
+    expect(resolveQuickAddAction(key('s', { ctrlKey: true }), 'mac')).toBeNull();
+    expect(resolveQuickAddAction(key('s', { ctrlKey: true }), 'windows')).toBe('when');
+    expect(resolveQuickAddAction(key('T', { ctrlKey: true, shiftKey: true }), 'windows')).toBe(
+      'tags',
+    );
+  });
+
+  it('无修饰、带 Alt、输入法组字中均不解析', () => {
+    expect(resolveQuickAddAction(key('s'), 'mac')).toBeNull();
+    expect(resolveQuickAddAction(key('s', { metaKey: true, altKey: true }), 'mac')).toBeNull();
+    expect(
+      resolveQuickAddAction(key('Enter', { metaKey: true, isComposing: true }), 'mac'),
+    ).toBeNull();
+  });
+
+  it('键位文案按平台', () => {
+    expect(quickAddShortcutLabel('move', 'mac')).toBe('⇧⌘M');
+    expect(quickAddShortcutLabel('move', 'windows')).toBe('Ctrl+Shift+M');
   });
 });

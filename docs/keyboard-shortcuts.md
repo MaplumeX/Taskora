@@ -81,6 +81,21 @@ Grouped View（今天/随时/将来按项目/领域分组）补充规则：
 
 Quick Add 从 `Cmd/Ctrl+Space` 改为 `Cmd/Ctrl+Shift+Space`：Windows 上 Ctrl+Space 是中文输入法切换键，macOS 上 ⌘Space 是 Spotlight。
 
+#### Quick Add 卡片内（桌面）
+
+| 动作 | macOS | Windows |
+|---|---|---|
+| 添加并关闭 | ↵（标题框内）/ ⌘↵（任意位置） | Enter / Ctrl+Enter |
+| 添加并继续（不关窗、清空草稿、保留归属） | ⇧⌘↵ | Ctrl+Shift+Enter |
+| 打开计划日期 | ⌘S | Ctrl+S |
+| 设为今天 / Someday | ⌘T / ⌘O | Ctrl+T / Ctrl+O |
+| 打开截止日期 | ⇧⌘D | Ctrl+Shift+D |
+| 打开 Tag | ⇧⌘T | Ctrl+Shift+T |
+| 打开归属（放在哪） | ⇧⌘M | Ctrl+Shift+M |
+| 关闭选择器 / 放弃草稿并关窗 | Esc（有选择器开着时先关选择器） | 同左 |
+
+字段键位沿用下方 P1 / P2 的规划键位（主应用里尚未实现，Quick Add 先用上），解析在 `keymap.ts` 的 `resolveQuickAddAction`。浮窗是独立 webview，不装配主应用的 KeyboardShortcuts。输入法组字中不响应任何卡片快捷键。
+
 ## P1（日期 + 侧边栏）
 
 | 动作 | macOS 桌面 | Windows 桌面 | Web |

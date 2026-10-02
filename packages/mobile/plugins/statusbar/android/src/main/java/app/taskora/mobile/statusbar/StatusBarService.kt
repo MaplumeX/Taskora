@@ -31,6 +31,9 @@ const val NAVIGATE_TODAY = "today"
 /** 内容快照与 pending 快速添加共用的 SharedPreferences 文件。 */
 const val STATUS_BAR_PREFS = "taskora-statusbar"
 
+/** 快速添加浮层的数据快照（JSON，格式见 mobile/src/status-bar/quick-add-snapshot.ts）。 */
+const val QUICK_ADD_DATA_KEY = "quickAddData"
+
 /**
  * 持有状态栏常驻通知的前台服务（specialUse 类型）。
  *

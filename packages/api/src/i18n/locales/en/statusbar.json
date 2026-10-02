@@ -2,5 +2,15 @@
   "quickAddEntry": "Quick add task",
   "quickAddPlaceholder": "Task title",
   "quickAddSubmit": "Add",
-  "channelName": "Status bar"
+  "channelName": "Status bar",
+  "quickAddFailed": "Couldn't add task",
+  "quickAddFailedChannelName": "Quick add",
+  "quickAddAddNotes": "+ Notes",
+  "quickAddTomorrow": "Tomorrow",
+  "quickAddWeekend": "This weekend",
+  "quickAddPickDate": "Pick a date",
+  "quickAddSearch": "Search",
+  "quickAddContinuous": "Keep adding",
+  "quickAddContinueInApp": "Continue in app",
+  "quickAddAdded": "Added"
 }

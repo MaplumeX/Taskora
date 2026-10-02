@@ -14,6 +14,7 @@
  * 户不立即重发，下次数据变更/进前台自然恢复）。
  */
 
+import { parseQuickAddInput, quickAddOpensInApp, type QuickAddDraft } from '../quick-add/draft';
 import { carouselTitle, sortStatusBarTasks, type StatusBarTaskInput } from './content';
 import type { StatusBarShell } from './shell';
 
@@ -27,8 +28,19 @@ export interface StatusBarControllerOptions {
   t: TranslateFn;
   /** Today 口径未完成任务（计划日期 ≤ 今天，含逾期）。 */
   listTodayTasks(): Promise<StatusBarTaskInput[]>;
-  /** 快速添加落库（默认进 Inbox，由后端默认口径决定）。 */
-  createTask(title: string): Promise<void>;
+  /**
+   * 快速添加落库（共用的 createFromQuickAddDraft：校验引用、缺省进 Inbox）。
+   * 返回新任务 id（空标题等未落库时为 null），供「在应用中继续」定位。
+   */
+  createDraft(draft: QuickAddDraft): Promise<{ taskId: string } | null>;
+  /** 「在应用中继续」：落库后在应用中定位并展开这条任务。 */
+  revealTask?(taskId: string): void;
+  /**
+   * 把快速添加浮层所需的数据快照推给原生（quick-add-android issue 02）。
+   * 与常驻通知同一时机：每次发布后调用（开关开启、登录、数据变更防抖）。
+   * 失败只记日志，不影响通知本身；内容未变时由实现侧跳过写入。
+   */
+  syncQuickAddData?(): Promise<void>;
   storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
   /** 数据变更后的刷新防抖（默认 500ms；测试可设 0）。 */
   refreshDebounceMs?: number;
@@ -108,6 +120,11 @@ export function createStatusBarController(
           persistIndex();
         }
         await postCurrent();
+        if (effectiveActive() && options.syncQuickAddData) {
+          await options.syncQuickAddData().catch((error: unknown) => {
+            console.warn('[status-bar] quick add data sync failed:', error);
+          });
+        }
       } while (refreshPending && effectiveActive());
     })().finally(() => {
       refreshInFlight = null;
@@ -131,13 +148,28 @@ export function createStatusBarController(
   options.shell.onAction((event) => {
     if (destroyed) return;
     if (event.actionId === 'quick-add') {
-      const title = event.inputValue?.trim();
-      if (!title) return;
+      // 浮层送草稿 JSON；旧版本 / 冷启动补发的旧条目是纯标题，同样接受。
+      const draft = parseQuickAddInput(event.inputValue);
+      if (!draft?.title.trim()) return;
+      const openInApp = quickAddOpensInApp(event.inputValue);
       // 落库后引擎 onChange 会再触发一次防抖刷新；这里立即刷新是为了
       // 在系统因动作撤下可见通知后立刻补回（插件行为：动作即 dismiss）。
       void options
-        .createTask(title)
-        .catch(() => undefined)
+        .createDraft(draft)
+        .then((result) => {
+          if (openInApp && result) options.revealTask?.(result.taskId);
+        })
+        .catch((error: unknown) => {
+          // 浮层已关闭、App 多半不在前台：失败只能经系统通知告知，标题放
+          // 进正文，用户不至于丢掉输入。
+          console.warn('[status-bar] quick add failed:', error);
+          return options.shell
+            .notifyQuickAddFailed({
+              title: options.t('statusbar:quickAddFailed'),
+              text: draft.title.trim(),
+            })
+            .catch(() => undefined);
+        })
         .then(() => refreshNow())
         .catch(reportRefreshFailure);
     } else if (event.actionId === 'next') {

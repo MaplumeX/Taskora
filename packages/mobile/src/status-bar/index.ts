@@ -14,11 +14,13 @@
  */
 
 import {
+  createFromQuickAddDraft,
   createStatusBarController,
   currentTaskBackend,
   i18n,
   registerStatusBarController,
   requestNavigation,
+  requestTaskReveal,
   setStatusBarShell,
   useAuthStore,
   type StatusBarController,
@@ -26,6 +28,7 @@ import {
 } from '@taskora/api';
 
 import { isTauriRuntime } from '../engine/tauri-storage';
+import { syncQuickAddData } from './quick-add-snapshot';
 import {
   createTauriStatusBarShell,
   onStatusBarNavigate,
@@ -60,9 +63,9 @@ export function initStatusBar(): void {
         position: task.position ?? null,
       }));
     },
-    createTask: async (title) => {
-      await currentTaskBackend().createTask({ title });
-    },
+    createDraft: (draft) => createFromQuickAddDraft(draft),
+    revealTask: requestTaskReveal,
+    syncQuickAddData,
   });
   registerStatusBarController(controller);
 

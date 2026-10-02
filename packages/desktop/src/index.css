@@ -1,1 +1,11 @@
 @import '@taskora/ui/styles/tokens.css';
+
+/*
+ * Quick Add 浮窗（quick-add-v2 issue 02）：透明窗口，页面本身不铺底色，
+ * 只画卡片；卡片下方的透明区域留给弹出的字段选择器。
+ */
+html.quick-add-window,
+html.quick-add-window body,
+html.quick-add-window #root {
+  background: transparent;
+}

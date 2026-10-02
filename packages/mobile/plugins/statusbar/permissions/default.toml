@@ -1,11 +1,14 @@
 "$schema" = "schemas/schema.json"
 
 [default]
-description = "Allows showing and cancelling the single-line status bar notification, subscribing to its actions, and taking the navigation request carried by a notification tap."
+description = "Allows showing and cancelling the single-line status bar notification, subscribing to its actions, taking the navigation request carried by a notification tap, taking queued quick-add submissions, writing the quick-add data snapshot, and posting the quick-add failure notification."
 permissions = [
   "allow-show",
   "allow-cancel",
   "allow-take-navigation",
+  "allow-take-pending-quick-adds",
+  "allow-set-quick-add-data",
+  "allow-notify-quick-add-failed",
   "allow-register-listener",
   "allow-remove-listener",
 ]

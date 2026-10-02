@@ -26,15 +26,23 @@ async function mount() {
   const kind = new URLSearchParams(window.location.search).get('window');
 
   if (kind === 'quick-add') {
+    document.documentElement.classList.add('quick-add-window');
     await bootQuickAdd().catch(() => undefined);
     // The Quick Add window is its own webview with its own cache and its
-    // own Event Stream connection (ADR 0005).
-    const { QueryClient } = await import('@tanstack/react-query');
+    // own Event Stream connection (ADR 0005). Entity lists come from the
+    // main window's snapshot (quick-add-client), so cached data never goes
+    // stale on its own — no background REST refetches.
+    const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
     const { initEventStream } = await import('@taskora/api');
-    initEventStream(new QueryClient());
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { staleTime: Infinity, retry: false } },
+    });
+    initEventStream(queryClient);
     ReactDOM.createRoot(document.getElementById('root')!).render(
       <React.StrictMode>
-        <QuickAddApp />
+        <QueryClientProvider client={queryClient}>
+          <QuickAddApp />
+        </QueryClientProvider>
       </React.StrictMode>,
     );
     return;

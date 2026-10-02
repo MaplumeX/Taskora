@@ -10,6 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
+    "macOSPrivateApi": true,
     "windows": [
       {
         "label": "main",
@@ -25,11 +26,12 @@
         "label": "quick-add",
         "title": "Quick Add",
         "url": "index.html?window=quick-add",
-        "width": 520,
-        "height": 120,
+        "width": 600,
+        "height": 640,
         "resizable": false,
         "decorations": false,
-        "transparent": false,
+        "transparent": true,
+        "shadow": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "visible": false,

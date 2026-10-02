@@ -76,5 +76,11 @@
   "skipOccurrenceLast": "已是最后一次，无法跳过",
   "skipOccurrenceNextExists": "下一次已存在，无法跳过",
   "skipOccurrenceDone": "已跳到 {{date}}",
-  "repeatPreviewHint": "重复任务的下一次"
+  "repeatPreviewHint": "重复任务的下一次",
+  "quickAddTitlePlaceholder": "新任务",
+  "quickAddPlacement": "放在哪",
+  "quickAddSubmitHint": "添加",
+  "quickAddContinueHint": "添加并继续",
+  "quickAddCloseHint": "关闭",
+  "quickAddAddedTo": "已添加到「{{place}}」"
 }
