@@ -27,6 +27,7 @@
     "@nestjs/passport": "^11.0.0",
     "@nestjs/platform-express": "^11.0.0",
     "@prisma/client": "^6.0.0",
+    "@taskora/engine": "workspace:*",
     "@taskora/shared": "workspace:*",
     "bcryptjs": "^3.0.2",
     "class-transformer": "^0.5.1",
@@ -34,10 +35,10 @@
     "cookie-parser": "^1.4.7",
     "passport": "^0.7.0",
     "passport-jwt": "^4.0.1",
+    "pg": "^8.23.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typebox": "1.3.7",
-    "@taskora/engine": "workspace:*"
+    "typebox": "1.3.7"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
@@ -48,6 +49,7 @@
     "@types/express": "^5.0.0",
     "@types/node": "^22.0.0",
     "@types/passport-jwt": "^4.0.1",
+    "@types/pg": "^8.23.1",
     "@types/supertest": "^7.2.1",
     "prisma": "^6.0.0",
     "supertest": "^7.2.2",

@@ -162,6 +162,58 @@ LABEL org.opencontainers.image.version="${VERSION}"
 LABEL org.opencontainers.image.revision="${GIT_SHA}"
 ```
 
+## 四·五、数据库升级与故障恢复（migration recovery）
+
+### 升级契约
+
+- backend 在启动 HTTP 服务之前执行数据库迁移。迁移失败时不开放 API，不应通过放宽 frontend 的健康依赖掩盖故障。
+- expand → 数据迁移 → contract 按发布阶段推进，但**历史数据转换必须保留在迁移路径内**。用户允许跳过中间版本，不能依赖某个中间版本的应用启动 hook。
+- 执行 contract 前停止所有不兼容的旧 backend。新 bootstrap 的专用 PostgreSQL 会话锁只串行化新实例的检查 / resolve / deploy，不会阻止旧应用写入；不要同时运行外部手工迁移和自动启动。
+- schema 迁移仍用 `prisma migrate deploy`；已失败的迁移不能仅靠追加后续 SQL 解锁。
+- CI 的 `migrations.e2e-spec.ts` 使用独立 schema + 真实 Prisma CLI 覆盖事务、算法一致性、重复部署、并发和失败恢复；`migration-smoke.mjs` 在实际镜像上验证 v0.7.1 / v0.7.2 历史 DDL + 合成数据、P3009、空库的启动健康状态。新增 contract 应同步扩展受支持的历史版本与数据 fixture。
+
+### Position 升级故障补丁
+
+`20261002180000_drop_sort_order` 曾在回填前拒绝空 Position，导致自建旧库无法启动。补丁将历史合成算法冻结在同一事务中，先回填七张表的空值，再断言并删列。已有 Position、updatedAt、字段时钟和同步日志保持不变；Local Replica 7 → 8 的结果必须逐字一致。
+
+这是**修正已发布迁移的受控例外**：原文件 SHA-256 为 `88b8e90e25caed20e687f04e20645e4cb1758fdc67d568fcc1415becc9a0a134`，原文件保留在 `packages/backend/test/fixtures/drop-sort-order.original.sql`。已经成功应用原文件的库不会重跑或重写历史 checksum；`migrate deploy` 的此路径有真库测试。若开发库的 `migrate dev` 提示历史文件被修改，只对可丢弃开发库重建；不得对生产执行 `migrate reset` 或手改 checksum。
+
+新版 backend 只自动恢复**唯一失败记录 + 原 checksum + 原 guard 错误 + 完整旧列状态**的已知故障：在专用直连会话持锁期间，执行一次 `migrate resolve --rolled-back`，再 deploy 修正后的迁移。未知失败、部分删列、修正后迁移被中断等状态一律保留供人工检查，不循环 resolve。数据库 URL 必须能建立会话级直连，不支持经过 transaction-pooling 代理来持此锁。
+
+### 已卡住实例的操作步骤
+
+1. 停止 backend / frontend，保留 postgres，先备份并确认备份可用。
+2. 拉取包含修复的 backend 镜像，再 `docker compose up -d --wait`；上述已知 guard 失败会自动恢复。
+3. 若仍失败，停止重启循环，检查状态与迁移日志：
+
+```bash
+docker compose stop backend frontend
+docker compose logs --tail=200 backend
+docker compose run --rm --no-deps backend \
+  node node_modules/prisma/build/index.js migrate status
+```
+
+在目标 schema 中查询：
+
+```sql
+SELECT migration_name, checksum, logs, started_at, finished_at, rolled_back_at
+FROM "_prisma_migrations"
+WHERE finished_at IS NULL AND rolled_back_at IS NULL;
+```
+
+确认失败操作已全部回滚或已人工恢复到可重跑状态后，才执行：
+
+```bash
+docker compose run --rm --no-deps backend \
+  node node_modules/prisma/build/index.js migrate resolve \
+  --rolled-back 20261002180000_drop_sort_order
+docker compose run --rm --no-deps backend \
+  node node_modules/prisma/build/index.js migrate deploy
+docker compose up -d --wait
+```
+
+`resolve --rolled-back` **不执行数据库回滚**，只修改迁移记录。不要删除 `_prisma_migrations` 行，不要盲目 resolve 未知失败；删列成功后也不能直接切回依赖 sortOrder 的旧镜像。恢复后的检查包括七表 Position 非空、sortOrder 已删除、无未解决失败记录、`/api/v1/health` 返回 200。
+
 ## 五、多端数据同步（未来设计，现在不做）
 
 ### 同步协议演进路径

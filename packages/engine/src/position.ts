@@ -398,7 +398,7 @@ export function repositionMinimal(
   return changes;
 }
 
-// ---------- Legacy 行的 Position 合成（REST 写 / 兜底共用） ----------
+// ---------- 历史数据迁移的 Position 合成（Local Replica / hub SQL parity） ----------
 
 const MAX_TS = 4_102_444_800_000; // 2100-01-01，分数编码的值域上界
 const FRACTION_WIDTH = 9;
@@ -430,10 +430,10 @@ function toBase62(value: number): string {
  * 的定宽 base62 + 非零哨兵（防尾零）。createdAt 越大排越前（REST 排序
  * 的 createdAt desc 语义）。纯函数，重复序列化结果稳定。
  *
- * 用于 legacy 行（REST 创建、position 为 null）的确定性合成——hub
- * 侧 wireViewOfRow 与 REST reorder 写 position 时共用同一实现，
- * 保证「写下的 position」与「未写时 hub 合成的 position」完全一致，
- * 两端排序口径不因写与不写而漂移。
+ * 历史 hub 曾在 wire / REST 上使用此口径；协议 4 后运行期不再合成。
+ * 保留给 Local Replica 7 → 8 迁移；hub 的 drop_sort_order SQL 迁移冻结
+ * 了等价实现，backend 的 migrations.e2e-spec.ts 对两者逐字比较。
+ * 不得随新建 / 重排规则修改此历史转换，否则跳版升级会产生排序漂移。
  */
 export function synthPosition(sortOrder: number, createdAt: Date): string {
   const descending = toBase62(Math.max(0, MAX_TS - createdAt.getTime()));

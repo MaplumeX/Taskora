@@ -176,16 +176,24 @@ Key decisions, in the order they matter:
 - **Position is the only ordering key** (amended 2026-10-02). Every synced
   entity (Task, Subtask, Project, Project Heading, Area, Tag, Tag Group) now
   carries a Position; the integer `sortOrder` left the wire in protocol 4.
-  Legacy rows were materialized once on hub startup with the key the hub used
-  to synthesize on the fly (`sortOrder` + `createdAt`), and the Local Replica
-  did the same in its 7 → 8 migration, so no device saw a change. Reorders on
-  both sides assign new keys only to the rows that must move
-  (`planReorder`). The hub's minimum protocol is 4: protocol-3 clients still
-  order four entity types by `sortOrder` and would write reorders the hub no
-  longer accepts, losing them silently. The column was dropped in a later
-  release (the Prisma migration refuses to run while any Position is still
-  null; the replica drops it in its 8 → 9 migration). See
-  `.scratch/retire-sort-order`.
+  Legacy rows use the key the hub formerly synthesized on the fly
+  (`sortOrder` + `createdAt`); the Local Replica materializes it in its 7 → 8
+  migration. Reorders on both sides assign new keys only to rows that must
+  move (`planReorder`). The hub's minimum protocol is 4: protocol-3 clients
+  still order four entity types by `sortOrder` and would write reorders the
+  hub no longer accepts, losing them silently.
+  **Upgrade repair (retire-sort-order issue 06):** the intended separate
+  expand/materialize/contract releases did not protect users skipping the
+  intermediate hub startup hook. The released contract guard blocked those
+  databases before the app could start. The corrected Prisma migration now
+  materializes null Positions and drops sortOrder in one transaction, using
+  a frozen SQL equivalent verified byte-for-byte against the Engine. Existing
+  Positions and sync metadata stay untouched. Bootstrap only resolves the
+  fingerprinted original guard failure, under a dedicated session lock;
+  unknown failures remain blocked. The replica still drops the column in
+  8 → 9. Future contract migrations must retain their historical conversion
+  path regardless of staged releases. See `.scratch/retire-sort-order` and
+  `docs/versioning-and-deployment.md` for the published-migration exception.
 - **Migration is a vertical slice, desktop first**: Task CRUD in
   Inbox/Today buckets moves to the Engine first; the rest of `packages/api` and
   the old HTTP CRUD surface retire slice by slice. Web follows desktop once
