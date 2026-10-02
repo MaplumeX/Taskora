@@ -17,13 +17,14 @@ export function AppShell() {
   useNavigationRequestListener();
   // h-[calc(100dvh-var(--kb-inset,0px))]：Android 键盘避让（mobile 壳的
   // visualViewport 驱动，其余端未设置 → 0px，等价 h-dvh）。
+  // 手机端主列顶部让出状态栏（edge-to-edge 下内容铺到系统栏后面）。
   return (
     <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] w-full">
       {/* 桌面侧边栏（手机端隐藏） */}
       <div className="hidden md:flex">
         <Sidebar />
       </div>
-      <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] min-w-0 flex-1 flex-col">
+      <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] min-w-0 flex-1 flex-col max-md:pt-[var(--safe-area-top)]">
         <MobileTopBar />
         <MainContent />
         <ContentBottomBar />

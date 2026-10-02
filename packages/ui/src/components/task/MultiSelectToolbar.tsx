@@ -187,7 +187,7 @@ export function MultiSelectToolbar() {
     <div
       data-multi-select-toolbar
       // 悬浮胶囊：从 FAB 所在的右下角展开，与 FAB 同属浮层体系；略高于 FAB，避开 Android 手势条。
-      className="fixed inset-x-3 bottom-[calc(1.75rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-md origin-bottom-right duration-base ease-spring animate-in fade-in-0 zoom-in-90 slide-in-from-bottom-4"
+      className="fixed inset-x-3 bottom-[calc(1.75rem+var(--safe-area-bottom))] z-40 mx-auto max-w-md origin-bottom-right duration-base ease-spring animate-in fade-in-0 zoom-in-90 slide-in-from-bottom-4"
     >
       <div className="flex h-14 items-center gap-1 rounded-full border bg-background/85 pl-3 pr-1.5 shadow-popover backdrop-blur-xl">
         {/* key 随数量变化重挂载，勾选增减时数字弹一下。 */}

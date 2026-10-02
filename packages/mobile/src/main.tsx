@@ -7,6 +7,7 @@ import '@taskora/api';
 import { setAppVersion } from '@taskora/api';
 import { App } from './App';
 import { installKeyboardInset } from './keyboard-inset';
+import { installSafeAreaInsets } from './safe-area-insets';
 import './index.css';
 
 /**
@@ -75,12 +76,21 @@ async function mount() {
   // 键盘避让（issue 05）：visualViewport → --kb-inset CSS 变量。
   installKeyboardInset();
 
+  // 系统栏安全区：原生 WindowInsets → --native-safe-* CSS 变量（env() 兜底）。
+  void installSafeAreaInsets();
+
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
         {/* 原生窗口装饰：App 直接铺满视口（h-dvh），返回手势级联见 back-navigation.ts。 */}
         <App />
-        <Toaster richColors position="top-center" />
+        {/* 顶部 toast 让出状态栏：sonner 默认偏移（手机 16px / 平板 24px）+ 安全区。 */}
+        <Toaster
+          richColors
+          position="top-center"
+          offset={{ top: 'calc(24px + var(--safe-area-top))' }}
+          mobileOffset={{ top: 'calc(16px + var(--safe-area-top))' }}
+        />
       </QueryClientProvider>
     </React.StrictMode>,
   );

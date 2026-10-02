@@ -21,7 +21,7 @@ export function SyncIndicator() {
   const panelOpen = useAssistantUiStore((s) => s.panelOpen);
   const panelWidth = useAssistantUiStore((s) => s.panelWidth);
   const className = cn(
-    'pointer-events-none fixed bottom-[calc(0.75rem+var(--kb-inset,0px))] right-3 z-40 max-md:bottom-[calc(1.75rem+env(safe-area-inset-bottom)+var(--kb-inset,0px))] max-md:right-auto max-md:left-3 flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-xs text-destructive backdrop-blur-sm',
+    'pointer-events-none fixed bottom-[calc(0.75rem+var(--kb-inset,0px))] right-3 z-40 max-md:bottom-[calc(1.75rem+var(--safe-area-bottom)+var(--kb-inset,0px))] max-md:right-auto max-md:left-3 flex items-center gap-1.5 rounded-full border border-destructive/30 bg-destructive/10 px-3 py-1 text-xs text-destructive backdrop-blur-sm',
     panelOpen && 'md:right-[calc(var(--assistant-panel-w)+0.75rem)]',
   );
   const style = { '--assistant-panel-w': `${panelWidth}px` } as CSSProperties;

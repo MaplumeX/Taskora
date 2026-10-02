@@ -1,10 +1,13 @@
 ## Default Permission
 
-Allows moving the app task to the background (back to home) instead of exiting the process.
+Allows moving the app task to the background (back to home) instead of exiting the process, and reading / subscribing to the system bar safe-area insets.
 
 #### This default permission set includes the following:
 
 - `allow-move-to-back`
+- `allow-safe-area-insets`
+- `allow-register-listener`
+- `allow-remove-listener`
 
 ## Permission Table
 
@@ -37,6 +40,84 @@ Enables the move_to_back command without any pre-configured scope.
 <td>
 
 Denies the move_to_back command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`background:allow-register-listener`
+
+</td>
+<td>
+
+Enables the register_listener command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`background:deny-register-listener`
+
+</td>
+<td>
+
+Denies the register_listener command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`background:allow-remove-listener`
+
+</td>
+<td>
+
+Enables the remove_listener command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`background:deny-remove-listener`
+
+</td>
+<td>
+
+Denies the remove_listener command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`background:allow-safe-area-insets`
+
+</td>
+<td>
+
+Enables the safe_area_insets command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`background:deny-safe-area-insets`
+
+</td>
+<td>
+
+Denies the safe_area_insets command without any pre-configured scope.
 
 </td>
 </tr>

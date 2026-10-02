@@ -157,7 +157,7 @@ export function QuickFind({ open, onOpenChange }: Props) {
           e.preventDefault();
           inputRef.current?.focus();
         }}
-        className="top-[12dvh] max-w-xl translate-y-0 gap-0 overflow-hidden p-0 max-md:top-2"
+        className="top-[12dvh] max-w-xl translate-y-0 gap-0 overflow-hidden p-0 max-md:top-[calc(0.5rem+var(--safe-area-top))]"
       >
         <DialogTitle className="sr-only">{t('search:title')}</DialogTitle>
         <div className="flex items-center gap-2 border-b border-border px-3">

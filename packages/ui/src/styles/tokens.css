@@ -83,6 +83,15 @@
     /* 阴影色：亮色用前景色，暗色用纯黑 */
     --shadow-color: 220 9% 15%;
     --shadow-strength: 1;
+
+    /*
+     * 系统栏安全区（状态栏 / 手势条）：取 env() 与 Android 壳注入的
+     * --native-safe-* 中的较大者。部分 Android WebView 在 edge-to-edge 下
+     * env(safe-area-inset-*) 仍为 0，原生侧（background 插件）读
+     * WindowInsets 兜底；web / desktop 未注入时等价于 env()。
+     */
+    --safe-area-top: max(env(safe-area-inset-top, 0px), var(--native-safe-top, 0px));
+    --safe-area-bottom: max(env(safe-area-inset-bottom, 0px), var(--native-safe-bottom, 0px));
   }
 
   .dark {

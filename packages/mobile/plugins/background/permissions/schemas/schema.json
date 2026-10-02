@@ -307,10 +307,46 @@
           "markdownDescription": "Denies the move_to_back command without any pre-configured scope."
         },
         {
-          "description": "Allows moving the app task to the background (back to home) instead of exiting the process.\n#### This default permission set includes:\n\n- `allow-move-to-back`",
+          "description": "Enables the register_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-register-listener",
+          "markdownDescription": "Enables the register_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the register_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-register-listener",
+          "markdownDescription": "Denies the register_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the remove_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-remove-listener",
+          "markdownDescription": "Enables the remove_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the remove_listener command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-remove-listener",
+          "markdownDescription": "Denies the remove_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the safe_area_insets command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-safe-area-insets",
+          "markdownDescription": "Enables the safe_area_insets command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the safe_area_insets command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-safe-area-insets",
+          "markdownDescription": "Denies the safe_area_insets command without any pre-configured scope."
+        },
+        {
+          "description": "Allows moving the app task to the background (back to home) instead of exiting the process, and reading / subscribing to the system bar safe-area insets.\n#### This default permission set includes:\n\n- `allow-move-to-back`\n- `allow-safe-area-insets`\n- `allow-register-listener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Allows moving the app task to the background (back to home) instead of exiting the process.\n#### This default permission set includes:\n\n- `allow-move-to-back`"
+          "markdownDescription": "Allows moving the app task to the background (back to home) instead of exiting the process, and reading / subscribing to the system bar safe-area insets.\n#### This default permission set includes:\n\n- `allow-move-to-back`\n- `allow-safe-area-insets`\n- `allow-register-listener`\n- `allow-remove-listener`"
         }
       ]
     }

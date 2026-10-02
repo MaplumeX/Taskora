@@ -192,7 +192,7 @@ export function MobileSettingsContent() {
         e.preventDefault();
         nav.pop();
       }}
-      className="h-[calc(100dvh-var(--kb-inset,0px))] bg-muted pt-[env(safe-area-inset-top)] dark:bg-background"
+      className="h-[calc(100dvh-var(--kb-inset,0px))] bg-muted pt-[var(--safe-area-top)] dark:bg-background"
     >
       {/* 顶栏（Material small top app bar）：左侧 ← 返回（首页即关闭设置）、标题靠左，
           无「完成」按钮——Android 靠返回键 / 返回手势离开。 */}
@@ -220,7 +220,7 @@ export function MobileSettingsContent() {
               key={depth}
               hidden={!top}
               className={cn(
-                'min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-4',
+                'min-h-0 flex-1 overflow-y-auto px-4 pb-[calc(1.5rem+var(--safe-area-bottom))] pt-4',
                 top &&
                   depth > 0 &&
                   pushedRef.current &&

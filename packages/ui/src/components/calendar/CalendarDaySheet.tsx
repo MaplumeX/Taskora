@@ -52,7 +52,7 @@ export function CalendarDaySheet({ date, tasks, previews = [], onClose }: Props)
         onOpenAutoFocus={(e) => e.preventDefault()}
         className={cn(
           // 窄屏：底部面板（随键盘上移）
-          'bottom-[var(--kb-inset,0px)] left-0 right-0 top-auto flex max-h-[85dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-b-none rounded-t-2xl border-x-0 border-b-0 p-0 pb-[env(safe-area-inset-bottom)] data-[state=closed]:zoom-out-100 data-[state=open]:zoom-in-100 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:rounded-b-none sm:rounded-t-2xl max-md:max-w-none',
+          'bottom-[var(--kb-inset,0px)] left-0 right-0 top-auto flex max-h-[85dvh] w-full max-w-none translate-x-0 translate-y-0 flex-col gap-0 rounded-b-none rounded-t-2xl border-x-0 border-b-0 p-0 pb-[var(--safe-area-bottom)] data-[state=closed]:zoom-out-100 data-[state=open]:zoom-in-100 data-[state=closed]:slide-out-to-bottom data-[state=open]:slide-in-from-bottom sm:rounded-b-none sm:rounded-t-2xl max-md:max-w-none',
           // 宽屏：居中卡片
           'md:bottom-auto md:left-1/2 md:right-auto md:top-1/2 md:max-h-[70vh] md:w-[28rem] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border md:pb-0 md:data-[state=closed]:slide-out-to-bottom-2 md:data-[state=open]:slide-in-from-bottom-2',
         )}
