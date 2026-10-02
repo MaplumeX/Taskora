@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-safe-area-insets"
+description = "Enables the safe_area_insets command without any pre-configured scope."
+commands.allow = ["safe_area_insets"]
+
+[[permission]]
+identifier = "deny-safe-area-insets"
+description = "Denies the safe_area_insets command without any pre-configured scope."
+commands.deny = ["safe_area_insets"]

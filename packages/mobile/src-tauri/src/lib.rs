@@ -5,7 +5,8 @@
 //! - `session`：会话令牌的应用私有目录明文存储（ADR-0011；Keystore
 //!   JNI 桥已移除，见 ADR-0011 的取舍记录）；
 //! - `background` 插件：返回手势级联的根页「退到后台」（back-navigation.ts
-//!   调用；moveTaskToBack，不结束进程）。
+//!   调用；moveTaskToBack，不结束进程）+ 系统栏安全区（WindowInsets 兜底
+//!   env()，safe-area-insets.ts 消费）。
 mod session;
 mod sqlite;
 

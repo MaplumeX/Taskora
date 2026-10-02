@@ -3,7 +3,7 @@ name = "tauri-plugin-background"
 version = "0.1.0"
 edition = "2021"
 rust-version = "1.77.2"
-description = "Taskora Android background control: move the app task to the background (back to home) instead of exiting the process (android-app issue 08)"
+description = "Taskora Android activity control: move the app task to the background (back to home) instead of exiting the process (android-app issue 08), and expose the system bar safe-area insets"
 license = "MIT"
 links = "tauri-plugin-background"
 

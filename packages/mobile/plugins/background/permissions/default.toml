@@ -1,7 +1,10 @@
 "$schema" = "schemas/schema.json"
 
 [default]
-description = "Allows moving the app task to the background (back to home) instead of exiting the process."
+description = "Allows moving the app task to the background (back to home) instead of exiting the process, and reading / subscribing to the system bar safe-area insets."
 permissions = [
   "allow-move-to-back",
+  "allow-safe-area-insets",
+  "allow-register-listener",
+  "allow-remove-listener",
 ]
