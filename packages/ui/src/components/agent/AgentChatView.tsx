@@ -18,17 +18,11 @@ import {
 } from '@taskora/api';
 import type { AgentMessageJson, ApprovalDecision, ConversationMessageDto } from '@taskora/shared';
 
-import { buildChatItems, type ChatItem } from './buildChatItems';
+import { buildChatItems, buildTurns, type ChatBlock } from './buildChatItems';
+import { AgentTurn } from './AgentTurn';
 import { ApprovalCard } from './ApprovalCard';
 import { ComposerControls } from './ComposerControls';
-import {
-  AssistantBubble,
-  ErrorBubble,
-  ThinkingBlock,
-  ToolCallCard,
-  TypingIndicator,
-  UserBubble,
-} from './bubbles';
+import { ErrorBubble, UserBubble } from './bubbles';
 import { useAgentStream } from './useAgentStream';
 
 /**
@@ -53,14 +47,27 @@ export function AgentChatView({ conversationId }: { conversationId: string }) {
 
   const stream = useAgentStream(conversationId);
 
-  const items: ChatItem[] = useMemo(
+  const blocks: ChatBlock[] = useMemo(
     () =>
-      buildChatItems(
-        messages.map((m) => m.message),
-        stream.runningToolCallIds,
-        stream.agentActive,
+      buildTurns(
+        buildChatItems(
+          messages.map((m) => m.message),
+          stream.runningToolCallIds,
+          stream.agentActive,
+        ),
+        {
+          active: stream.agentActive,
+          thinking: stream.streamingThinking,
+          text: stream.streamingText,
+        },
       ),
-    [messages, stream.runningToolCallIds, stream.agentActive],
+    [
+      messages,
+      stream.runningToolCallIds,
+      stream.agentActive,
+      stream.streamingThinking,
+      stream.streamingText,
+    ],
   );
 
   const handleScroll = () => {
@@ -72,7 +79,7 @@ export function AgentChatView({ conversationId }: { conversationId: string }) {
   useEffect(() => {
     const el = scrollRef.current;
     if (el && stickToBottomRef.current) el.scrollTop = el.scrollHeight;
-  }, [items, stream.streamingText, stream.streamingThinking, approvals.length]);
+  }, [blocks, approvals.length]);
 
   const handleSend = () => {
     const content = input.trim();
@@ -122,54 +129,15 @@ export function AgentChatView({ conversationId }: { conversationId: string }) {
 
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
         <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-6 pt-6 md:px-6">
-          {items.map((item, i) => {
-            // Sub-elements (thinking/tool) belong to the assistant turn above
-            // them — tighten the gap so they read as part of that turn
-            // instead of standalone messages.
-            const prev = items[i - 1]?.kind;
-            const tight =
-              (item.kind === 'tool' && prev && prev !== 'user') ||
-              (item.kind === 'assistant' && prev === 'thinking');
-            const className = tight ? '-mt-2.5' : undefined;
-            if (item.kind === 'user')
-              return (
-                <div key={item.id} className={className}>
-                  <UserBubble text={item.text} />
-                </div>
-              );
-            if (item.kind === 'assistant')
-              return (
-                <div key={item.id} className={className}>
-                  <AssistantBubble text={item.text} />
-                </div>
-              );
-            if (item.kind === 'thinking')
-              return (
-                <div key={item.id} className={className}>
-                  <ThinkingBlock text={item.text} />
-                </div>
-              );
-            if (item.kind === 'tool')
-              return (
-                <div key={item.id} className={className}>
-                  <ToolCallCard item={item} />
-                </div>
-              );
-            return (
-              <div key={item.id} className={className}>
-                <ErrorBubble text={item.text} />
-              </div>
-            );
-          })}
-
-          {stream.streamingThinking ? (
-            <ThinkingBlock text={stream.streamingThinking} streaming={!stream.streamingText} />
-          ) : null}
-          {stream.streamingText !== null ? (
-            <AssistantBubble text={stream.streamingText} />
-          ) : stream.agentActive && !stream.streamingThinking ? (
-            <TypingIndicator />
-          ) : null}
+          {blocks.map((block) =>
+            block.kind === 'user' ? (
+              <UserBubble key={block.id} text={block.text} />
+            ) : block.kind === 'turn' ? (
+              <AgentTurn key={block.id} turn={block} />
+            ) : (
+              <ErrorBubble key={block.id} text={block.text} />
+            ),
+          )}
 
           {approvals.map((approval) => (
             <ApprovalCard

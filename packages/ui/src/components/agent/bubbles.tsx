@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { createElement, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Brain, Check, ChevronDown, Loader2, X } from 'lucide-react';
+import { ChevronDown, Loader2, X } from 'lucide-react';
 
 import { cn } from '@/lib/utils';
-import { summarizeArgs, type ChatItem } from './buildChatItems';
+import type { ToolChatItem } from './buildChatItems';
 import { Markdown } from './Markdown';
+import { toolIcon, toolLabel, toolSubject } from './toolPresentation';
 
 /** User message: right-aligned solid bubble (ChatGPT-style). */
 export function UserBubble({ text }: { text: string }) {
@@ -32,52 +33,10 @@ export function AssistantBubble({ text }: { text: string }) {
   );
 }
 
-/**
- * Reasoning/thinking block — a sub-element of the assistant turn, indented
- * to align with the reply text (Claude-style log line + fold). Collapsed by
- * default once persisted, live and expanded while the model is still
- * thinking (streaming).
- */
-export function ThinkingBlock({ text, streaming = false }: { text: string; streaming?: boolean }) {
-  const { t } = useTranslation(['agent']);
-  const [open, setOpen] = useState(false);
-  const expanded = streaming || open;
-  const preview = text.trim().split('\n')[0]?.slice(0, 80) ?? '';
-
-  return (
-    <div className="ml-4 min-w-0">
-      <button
-        type="button"
-        className="flex w-full items-center gap-1.5 rounded-lg py-1 text-left text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
-        aria-expanded={expanded}
-        onClick={() => setOpen((v) => !v)}
-      >
-        {streaming ? (
-          <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
-        ) : (
-          <ChevronDown
-            className={cn('h-3.5 w-3.5 shrink-0 transition-transform', expanded && 'rotate-180')}
-          />
-        )}
-        <Brain className="h-3.5 w-3.5 shrink-0" />
-        {streaming ? t('thinking') : t('thoughtProcess')}
-        {!streaming && !open && preview ? (
-          <span className="min-w-0 truncate opacity-70">· {preview}</span>
-        ) : null}
-      </button>
-      {expanded ? (
-        <div className="whitespace-pre-wrap break-words border-l-2 border-border pl-3 text-xs leading-relaxed text-muted-foreground">
-          {text}
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
 export function ErrorBubble({ text }: { text: string }) {
   const { t } = useTranslation(['agent']);
   return (
-    <div className="ml-4 min-w-0">
+    <div className="min-w-0">
       <div className="rounded-xl border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive">
         <p className="mb-0.5 font-medium">{t('error')}</p>
         <p className="whitespace-pre-wrap break-words opacity-90">{text}</p>
@@ -86,115 +45,75 @@ export function ErrorBubble({ text }: { text: string }) {
   );
 }
 
-/**
- * Collapsible tool-call card — a sub-element of the assistant turn, indented
- * to align with the reply text. Collapsed: one quiet log line (status icon +
- * tool name + arg summary); expanded: args & result.
- */
-export function ToolCallCard({ item }: { item: Extract<ChatItem, { kind: 'tool' }> }) {
-  const { t } = useTranslation(['agent']);
-  const [open, setOpen] = useState(false);
-  const argSummary = summarizeArgs(item.args);
-  const hasDetails = Boolean(argSummary || item.resultText);
-  const isError = item.status === 'error';
-
-  return (
-    <div className="ml-4 min-w-0">
-      <div
-        className={cn(
-          'min-w-0 rounded-xl border text-xs transition-colors',
-          isError
-            ? 'border-destructive/40 bg-destructive/10'
-            : 'border-border bg-muted/30 hover:border-border/80',
-        )}
-      >
-        <button
-          type="button"
-          className="flex w-full items-center gap-2 px-3 py-2 text-left"
-          aria-expanded={open}
-          disabled={!hasDetails}
-          onClick={() => setOpen((v) => !v)}
-        >
-          {item.status === 'running' ? (
-            <Loader2 className="h-3 w-3 shrink-0 animate-spin text-muted-foreground" />
-          ) : item.status === 'error' ? (
-            <X className="h-3 w-3 shrink-0 text-destructive" />
-          ) : (
-            <Check className="h-3 w-3 shrink-0 text-muted-foreground" />
-          )}
-          <span className="shrink-0 font-mono font-medium text-foreground">{item.toolName}</span>
-          <span
-            className={cn(
-              'shrink-0 text-[11px]',
-              item.status === 'running'
-                ? 'text-muted-foreground'
-                : isError
-                  ? 'text-destructive'
-                  : 'text-muted-foreground/70',
-            )}
-          >
-            {item.status === 'running'
-              ? t('toolRunning')
-              : item.status === 'error'
-                ? t('toolFailedShort')
-                : t('toolDoneShort')}
-          </span>
-          {argSummary && !open ? (
-            <span className="min-w-0 truncate text-muted-foreground/80">{argSummary}</span>
-          ) : null}
-          {hasDetails ? (
-            <ChevronDown
-              className={cn(
-                'ml-auto h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform',
-                open && 'rotate-180',
-              )}
-            />
-          ) : null}
-        </button>
-        {open ? (
-          <div className="space-y-2 border-t border-border/60 px-3 py-2">
-            {argSummary ? (
-              <div>
-                <p className="mb-1 text-meta font-medium text-muted-foreground">
-                  {t('toolArgs')}
-                </p>
-                <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-background/70 p-2 font-mono text-[11px] leading-relaxed text-foreground/90">
-                  {JSON.stringify(item.args, null, 2)}
-                </pre>
-              </div>
-            ) : null}
-            {item.resultText && item.status !== 'running' ? (
-              <div>
-                <p className="mb-1 text-meta font-medium text-muted-foreground">
-                  {t('toolResult')}
-                </p>
-                <pre
-                  className={cn(
-                    'max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-lg p-2 font-mono text-[11px] leading-relaxed',
-                    isError
-                      ? 'bg-destructive/10 text-destructive'
-                      : 'bg-background/70 text-foreground/90',
-                  )}
-                >
-                  {item.resultText}
-                </pre>
-              </div>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    </div>
-  );
+function ToolStatusIcon({ item }: { item: ToolChatItem }) {
+  if (item.status === 'running') return <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />;
+  if (item.status === 'error') return <X className="h-3.5 w-3.5 shrink-0 text-destructive" />;
+  return createElement(toolIcon(item.toolName), { className: 'h-3.5 w-3.5 shrink-0' });
 }
 
-export function TypingIndicator() {
+/**
+ * One tool call as a log line: action icon + human label + subject (entity
+ * title / query / view). Spinner while running, red ✗ on failure. Clicking
+ * reveals the raw args & result.
+ */
+export function ToolCallLine({ item }: { item: ToolChatItem }) {
   const { t } = useTranslation(['agent']);
+  const [open, setOpen] = useState(false);
+  const isError = item.status === 'error';
+  const subject = toolSubject(item, t);
+  const hasArgs = Object.keys(item.args).length > 0;
+  const hasDetails = hasArgs || Boolean(item.resultText);
+
   return (
-    <div className="ml-4 flex items-center gap-1.5 py-2">
-      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:0ms]" />
-      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:150ms]" />
-      <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-muted-foreground [animation-delay:300ms]" />
-      <span className="sr-only">{t('thinking')}</span>
+    <div className="min-w-0">
+      <button
+        type="button"
+        className={cn(
+          'group flex w-full min-w-0 items-center gap-1.5 rounded-lg py-1 text-left text-xs transition-colors',
+          isError ? 'text-destructive' : 'text-muted-foreground hover:text-foreground',
+        )}
+        aria-expanded={open}
+        disabled={!hasDetails}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <ToolStatusIcon item={item} />
+        <span className="shrink-0 font-medium">{toolLabel(item.toolName, t)}</span>
+        {subject ? <span className="min-w-0 truncate opacity-80">{subject}</span> : null}
+        {isError ? <span className="shrink-0">· {t('toolFailedShort')}</span> : null}
+        {hasDetails ? (
+          <ChevronDown
+            className={cn(
+              'h-3 w-3 shrink-0 opacity-0 transition group-hover:opacity-100',
+              open && 'rotate-180 opacity-100',
+            )}
+          />
+        ) : null}
+      </button>
+      {open ? (
+        <div className="mb-1 ml-[7px] space-y-2 border-l-2 border-border py-1 pl-3">
+          {hasArgs ? (
+            <div>
+              <p className="mb-1 text-meta font-medium text-muted-foreground">{t('toolArgs')}</p>
+              <pre className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-muted/40 p-2 font-mono text-[11px] leading-relaxed text-foreground/90">
+                {JSON.stringify(item.args, null, 2)}
+              </pre>
+            </div>
+          ) : null}
+          {item.resultText && item.status !== 'running' ? (
+            <div>
+              <p className="mb-1 text-meta font-medium text-muted-foreground">{t('toolResult')}</p>
+              <pre
+                className={cn(
+                  'max-h-60 overflow-auto whitespace-pre-wrap break-words rounded-lg p-2 font-mono text-[11px] leading-relaxed',
+                  isError ? 'bg-destructive/10 text-destructive' : 'bg-muted/40 text-foreground/90',
+                )}
+              >
+                {item.resultText}
+              </pre>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

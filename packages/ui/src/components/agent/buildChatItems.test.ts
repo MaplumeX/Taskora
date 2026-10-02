@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildChatItems } from './buildChatItems';
+import { buildChatItems, buildTurns, type ChatItem } from './buildChatItems';
 import type { AgentMessageJson } from '@taskora/shared';
 
 describe('buildChatItems', () => {
@@ -74,6 +74,7 @@ describe('buildChatItems', () => {
         args: { view: 'today' },
         status: 'done',
         resultText: '{"count":2}',
+        entityTitle: null,
       },
     ]);
   });
@@ -101,6 +102,7 @@ describe('buildChatItems', () => {
         args: { id: 'x' },
         status: 'error',
         resultText: 'blocked',
+        entityTitle: null,
       },
     ]);
   });
@@ -145,5 +147,109 @@ describe('buildChatItems', () => {
       },
     ]);
     expect(items).toEqual([{ kind: 'error', text: 'user declined', id: 'orphan-gone' }]);
+  });
+
+  it('resolves target entity titles from earlier tool results and renames', () => {
+    const items = buildChatItems([
+      {
+        role: 'assistant',
+        content: [{ type: 'toolCall', id: 'c1', name: 'list_tasks', arguments: {} }],
+      },
+      {
+        role: 'toolResult',
+        toolCallId: 'c1',
+        content: [
+          { type: 'text', text: '{"items":[{"id":"t1","title":"Old"},{"id":"t2","title":"Two"}]}' },
+        ],
+      },
+      {
+        role: 'assistant',
+        content: [
+          { type: 'toolCall', id: 'c2', name: 'delete_task', arguments: { id: 't2' } },
+          {
+            type: 'toolCall',
+            id: 'c3',
+            name: 'update_task',
+            arguments: { id: 't1', title: 'New' },
+          },
+          { type: 'toolCall', id: 'c4', name: 'get_task', arguments: { id: 'unknown' } },
+        ],
+      },
+    ]);
+    expect(items.map((i) => i.kind === 'tool' && i.entityTitle)).toEqual([
+      null,
+      'Two',
+      'New',
+      null,
+    ]);
+  });
+});
+
+describe('buildTurns', () => {
+  const tool = (
+    id: string,
+    toolName = 'list_tasks',
+    status: 'done' | 'running' = 'done',
+  ): ChatItem => ({
+    kind: 'tool',
+    id,
+    toolCallId: id,
+    toolName,
+    args: {},
+    status,
+    resultText: null,
+    entityTitle: null,
+  });
+  const user = (id: string): ChatItem => ({ kind: 'user', text: 'hi', id });
+  const text = (id: string, value: string): ChatItem => ({ kind: 'assistant', text: value, id });
+  const thinking = (id: string): ChatItem => ({ kind: 'thinking', text: 'hmm', id });
+
+  it('splits a turn into the process and the trailing answer', () => {
+    const blocks = buildTurns([
+      user('u1'),
+      thinking('th1'),
+      text('n1', 'let me check'),
+      tool('c1', 'list_tasks'),
+      tool('c2', 'update_task'),
+      text('a1', 'done!'),
+      user('u2'),
+      text('a2', 'plain reply'),
+    ]);
+    expect(blocks.map((b) => b.kind)).toEqual(['user', 'turn', 'user', 'turn']);
+    const [, first, , second] = blocks;
+    expect(first).toMatchObject({
+      id: 't-u1',
+      steps: [{ id: 'th1' }, { id: 'n1' }, { id: 'c1' }, { id: 'c2' }],
+      answer: 'done!',
+      active: false,
+    });
+    expect(second).toMatchObject({ steps: [], answer: 'plain reply' });
+  });
+
+  it('keeps text followed by tool calls as narration, not the answer', () => {
+    const [, turn] = buildTurns([user('u1'), text('n1', 'checking'), tool('c1')]);
+    expect(turn).toMatchObject({ steps: [{ id: 'n1' }, { id: 'c1' }], answer: null });
+  });
+
+  it('merges the live run into the last turn', () => {
+    const live = { active: true, thinking: 'pondering', text: null };
+    const [, turn] = buildTurns([user('u1'), tool('c1', 'search', 'running')], live);
+    expect(turn).toMatchObject({
+      active: true,
+      answerStreaming: false,
+      steps: [{ id: 'c1' }, { kind: 'thinking', text: 'pondering', streaming: true }],
+    });
+
+    const [, answering] = buildTurns([user('u1'), tool('c1')], {
+      active: true,
+      thinking: null,
+      text: 'Here',
+    });
+    expect(answering).toMatchObject({ answer: 'Here', answerStreaming: true });
+  });
+
+  it('opens an empty active turn right after the user message', () => {
+    const blocks = buildTurns([user('u1')], { active: true, thinking: null, text: '' });
+    expect(blocks[1]).toMatchObject({ kind: 'turn', steps: [], answer: null, active: true });
   });
 });
