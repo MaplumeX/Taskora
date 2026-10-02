@@ -93,10 +93,26 @@ export function useLongPress(
   };
 }
 
+// 最近一次按下的指针类型（全局 capture 监听）。Android WebView 在触屏
+// 连点标题（展开后在输入框内双击/三击选词）时，会因文本选择派发
+// contextmenu，而这类事件的 pointerType 不是 'touch'、sourceCapabilities
+// 也可能为空，单看事件本身无法识别；用最近一次 pointerdown 兜底。
+// 鼠标右键前总会先有一次 mouse pointerdown，因此混合设备上不会误伤。
+let lastPointerType: string | null = null;
+if (typeof window !== 'undefined') {
+  window.addEventListener(
+    'pointerdown',
+    (e) => {
+      lastPointerType = e.pointerType;
+    },
+    { capture: true, passive: true },
+  );
+}
+
 /**
- * 该次 contextmenu 事件是否由触屏长按产生（Android WebView / Chrome 在
- * 长按时也会派发 contextmenu）。可拖拽的行上长按只负责拖动，这类事件
- * 应只 preventDefault、不开菜单；鼠标右键不受影响。
+ * 该次 contextmenu 事件是否由触屏产生（Android WebView / Chrome 在
+ * 长按、触屏选词时也会派发 contextmenu）。可拖拽的行上长按只负责拖动，
+ * 这类事件应只 preventDefault、不开菜单；鼠标右键不受影响。
  */
 export function isTouchContextMenu(e: React.MouseEvent): boolean {
   const native = e.nativeEvent as MouseEvent & {
@@ -104,5 +120,6 @@ export function isTouchContextMenu(e: React.MouseEvent): boolean {
     sourceCapabilities?: { firesTouchEvents?: boolean } | null;
   };
   if (native.pointerType === 'touch' || native.pointerType === 'pen') return true;
-  return native.sourceCapabilities?.firesTouchEvents === true;
+  if (native.sourceCapabilities?.firesTouchEvents === true) return true;
+  return lastPointerType === 'touch' || lastPointerType === 'pen';
 }

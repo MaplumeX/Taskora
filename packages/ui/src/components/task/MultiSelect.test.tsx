@@ -17,12 +17,15 @@ const mocks = vi.hoisted(() => ({
   del: vi.fn(),
   complete: vi.fn(),
   restore: vi.fn(),
+  skip: vi.fn(),
+  task: null as TaskResponseDto | null,
 }));
 
 vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
   taskKeys: { detail: (id: string) => ['task', id] },
-  useTaskQuery: () => ({ data: null }),
+  useTaskQuery: () => ({ data: mocks.task }),
+  useSkipTask: () => ({ mutate: mocks.skip, isPending: false }),
   useUpdateTask: () => ({ mutate: mocks.update, isPending: false }),
   useCompleteTask: () => ({ mutate: mocks.complete, isPending: false }),
   useUncompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
@@ -167,6 +170,21 @@ describe('TaskItem — 左滑多选', () => {
     expect(event.defaultPrevented).toBe(true);
     expect(screen.queryByRole('button', { name: /^(Move|移动)/ })).not.toBeInTheDocument();
   });
+
+  it('触屏连点后派发的无 pointerType 的 contextmenu 也不打开菜单', () => {
+    renderWithProviders(<TaskItem task={baseTask} onToggleComplete={() => {}} />);
+    const title = screen.getByText('My task');
+
+    // Android WebView 触屏选词派发的 contextmenu 不带 touch 标记，靠最近一次 pointerdown 识别。
+    fireEvent(title, new PointerEvent('pointerdown', { bubbles: true, pointerType: 'touch' }));
+    fireEvent.contextMenu(title);
+    expect(screen.queryByRole('button', { name: /^(Move|移动)/ })).not.toBeInTheDocument();
+
+    // 随后用鼠标右键仍能正常打开。
+    fireEvent(title, new PointerEvent('pointerdown', { bubbles: true, pointerType: 'mouse' }));
+    fireEvent.contextMenu(title);
+    expect(screen.getByRole('button', { name: /^(Move|移动)/ })).toBeInTheDocument();
+  });
 });
 
 describe('MultiSelectToolbar', () => {
@@ -247,6 +265,26 @@ describe('MultiSelectToolbar', () => {
       { id: 'b', data: { tagIds: ['urgent'] } },
       expect.anything(),
     );
+  });
+
+  it('勾选单个重复任务时「更多」提供跳过本次', async () => {
+    const user = userEvent.setup();
+    mocks.task = {
+      ...baseTask,
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2026-02-05',
+      bucket: TaskBucket.SCHEDULED,
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+    };
+    useMultiSelectStore.setState({ active: true, ids: ['task-1'] });
+    renderWithProviders(<MultiSelectToolbar />);
+
+    await user.click(screen.getByRole('button', { name: /^(More|更多)$/ }));
+    await user.click(await screen.findByRole('button', { name: /^(Skip Occurrence|跳过本次)$/ }));
+
+    expect(mocks.skip).toHaveBeenCalledWith('task-1', expect.anything());
+    expect(useMultiSelectStore.getState().active).toBe(false);
+    mocks.task = null;
   });
 
   it('未勾选任何项时动作禁用；点「完成」退出模式', async () => {

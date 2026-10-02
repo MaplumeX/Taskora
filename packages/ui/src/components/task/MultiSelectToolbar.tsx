@@ -13,6 +13,7 @@ import {
   MoreHorizontal,
   Repeat,
   RotateCcw,
+  SkipForward,
   Tag,
   Trash2,
   type LucideIcon,
@@ -50,6 +51,7 @@ import { DueDateField } from './fields/DueDateField';
 import { RepeatRuleField } from './fields/RepeatRuleField';
 import { MultiTagsField } from './fields/TagsField';
 import { MovePicker } from './fields/MovePicker';
+import { useSkipOccurrence } from './useSkipOccurrence';
 
 type PickerKind = 'scheduled' | 'move' | 'due' | 'tags' | 'repeat';
 
@@ -58,7 +60,7 @@ type PickerKind = 'scheduled' | 'move' | 'due' | 'tags' | 'repeat';
  * 以悬浮胶囊浮在页面底部，对勾选集合批量执行「计划 / 移动 / 删除」，其余
  * 动作收进「更多」（底部 Action Sheet）。动作执行完即退出模式；切换页面、点「完成」、系统返回也会退出。
  *
- * 只作用于单个任务才有意义的动作（重复、转换为项目）仅在勾选一项时出现。
+ * 只作用于单个任务才有意义的动作（重复、跳过本次、转换为项目）仅在勾选一项时出现。
  * Trash 页「删除」换成「放回」、不提供转换为项目（同右键菜单的 trash 变体）；
  * 计划 / 移动等编辑照常，由数据层隐式放回（spec: trash-things3）。
  * 标签按三态批量切换：各任务在自己原有的标签上增减（`.scratch/tags-things3`）。
@@ -93,6 +95,7 @@ export function MultiSelectToolbar() {
   const cancelTask = useCancelTask();
   const uncancelTask = useUncancelTask();
   const convertToProject = useConvertTaskToProject();
+  const skipOccurrence = useSkipOccurrence(single, active);
 
   const [picker, setPicker] = React.useState<PickerKind | null>(null);
   // 字段卡片关闭时：改过字段 → 视为动作完成、退出模式；未改 → 留在模式中。
@@ -155,6 +158,11 @@ export function MultiSelectToolbar() {
     exit();
   };
 
+  const handleSkip = () => {
+    skipOccurrence.skip();
+    exit();
+  };
+
   const handleConvertToProject = () => {
     if (!single) return;
     convertToProject.mutate(single.id, {
@@ -178,8 +186,8 @@ export function MultiSelectToolbar() {
   return (
     <div
       data-multi-select-toolbar
-      // 悬浮胶囊：从 FAB 所在的右下角展开，与 FAB 同属浮层体系。
-      className="fixed inset-x-3 bottom-[calc(0.75rem+var(--safe-area-bottom))] z-40 mx-auto max-w-md origin-bottom-right duration-base ease-spring animate-in fade-in-0 zoom-in-90 slide-in-from-bottom-4"
+      // 悬浮胶囊：从 FAB 所在的右下角展开，与 FAB 同属浮层体系；略高于 FAB，避开 Android 手势条。
+      className="fixed inset-x-3 bottom-[calc(1.75rem+var(--safe-area-bottom))] z-40 mx-auto max-w-md origin-bottom-right duration-base ease-spring animate-in fade-in-0 zoom-in-90 slide-in-from-bottom-4"
     >
       <div className="flex h-14 items-center gap-1 rounded-full border bg-background/85 pl-3 pr-1.5 shadow-popover backdrop-blur-xl">
         {/* key 随数量变化重挂载，勾选增减时数字弹一下。 */}
@@ -241,6 +249,15 @@ export function MultiSelectToolbar() {
               {canRepeat && (
                 <ActionSheetItem icon={Repeat} onClick={() => openPicker('repeat')}>
                   {t('task:repeat')}
+                </ActionSheetItem>
+              )}
+              {skipOccurrence.available && (
+                <ActionSheetItem
+                  icon={SkipForward}
+                  disabled={skipOccurrence.target === null}
+                  onClick={handleSkip}
+                >
+                  {t('task:skipOccurrence')}
                 </ActionSheetItem>
               )}
               {single && !inTrash && (
