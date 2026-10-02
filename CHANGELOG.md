@@ -10,6 +10,70 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > Android 小节，端专属改动标注 `(desktop)` / `(android)`。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.7.3] - 2026-10-02
+
+### Added
+
+- **ui**: 自托管 Noto Sans SC，修复 Windows 中文渲染 (#137) — Windows 除微软雅黑外
+  没有可用的中文 UI 字体，而雅黑在本界面依赖的 12–13px 字号下观感很差。经
+  `@fontsource-variable/noto-sans-sc` 自托管 Noto Sans SC 可变字体（SIL OFL），
+  包按 unicode-range 切成 101 个 woff2 分片，浏览器只下载实际用到的片。字体栈
+  按「本地命中即停」排序：macOS / iOS 命中 `-apple-system` / PingFang SC 后
+  不再下载任何分片（已用无头 Chromium 验证：本地字体覆盖字形时不发 woff2
+  请求），Windows 落到 Noto Sans SC，其余平台仍以 Segoe UI / 雅黑 /
+  Noto Sans CJK 兜底。同时把 `section` 字号步进的字重从 600 提到 700（调用点
+  本已传 `font-bold`，旧组合依赖类名顺序），并让 Vite 不再内联 `.woff2`
+  （内联会绕过 unicode-range 惰性加载，还多付 33% 的 base64 体积）。
+
+- **ui**: 新增底部 Action Sheet，触控多选工具栏改为悬浮胶囊 (#141) — 新增基于
+  Radix Dialog 的 `ActionSheet` 组件（iOS 形态的底部圆角卡片，整行大触控目标，
+  Escape / 点遮罩 / Android 系统返回均可关闭），供触屏替代朝上弹出的
+  DropdownMenu。触控多选工具栏由贴着屏幕底边的整条工具栏改为右下角悬浮胶囊：
+  胶囊内直接放「计划 / 移动 / 删除」三个图标按钮与「完成」，勾选数用可弹跳的
+  圆形徽标显示，其余动作（完成 / 取消完成、截止日期、标签、重复、转换为项目）
+  收进「更多」打开的 Action Sheet。图标按钮补上 `aria-label` / `title`。
+
+- **api/mobile**: 点状态栏通知跳转 Today (android) (#136) — 状态栏常驻通知此前
+  只用于查看，点按不落到应用内。现在点通知在冷启动（JS 尚未挂载，原生侧暂存
+  意图，壳主动 `takeNavigation` 取走）与热启动（原生 `onNewIntent` 投递
+  `navigate` 事件）两条路径都会请求导航到 `/today`：新增 `navigationRequest`
+  store 与 `useNavigationRequestListener`，沿用 `taskReveal` 的「壳投递、
+  Router 内消费」模式。窄屏默认落 `/home`，因此必须显式请求。
+
+### Changed
+
+- **engine/api/backend/shared**: Position 成为唯一排序键，`sortOrder` 退役
+  (#138) — 全部可排序实体（Task / Subtask / Project / Project Heading / Area /
+  Tag / Tag Group）统一用可空的 fractional Position（字段级 LWW），Area /
+  ProjectHeading / TagGroup / Subtask 由此新增 `position`。此前这四类只有整数
+  `sortOrder`，重排要整列重写序号，并发拖拽不会收敛；Task / Project / Tag 上
+  `sortOrder` 与 Position 冗余，且写入路径口径不一，导致侧边栏未分组项目的
+  底序、稍后项目「计划 / Someday」两节、Android 状态栏同日任务按 `sortOrder`
+  排序，与真实 Position 顺序脱节。现在读取点一律只读 Position，重排只给必须
+  移动的行分配新 key（`planReorder` / `repositionMinimal`）；存量空 position
+  的行按 hub 原先下发 legacy 行的同一口径（`synthPosition(sortOrder,
+  createdAt)`）补齐，本地副本在 7 → 8 迁移里完成，值与设备早已收到的 wire 值
+  逐字相同、不产生可见变化。wire 不再携带 `sortOrder`，
+  `SYNC_PROTOCOL_VERSION` 3 → 4，hub 的 `minProtocolVersion` 同步升到 4：
+  协议 ≤ 3 的客户端会收到 426、停止同步并保留 Outbox，提示升级（协议 3 客户端
+  对上述四类实体的重排只写 `sortOrder`，会被 hub 永久拒收而静默丢失，属损害
+  而非仅「看不到新功能」）。Prisma 迁移 `20261002120000_sort_order_entity_positions`
+  加列，`20261002180000_drop_sort_order` 删七张表的 `sortOrder`（仍有空
+  position 时主动失败，避免丢掉唯一的排序信息）；Local Replica schema 由 7
+  升到 9。
+
+- **ui**: 同步指示器只在离线或需要升级时出现 (#140) — 此前常驻角落的「同步中 /
+  已同步」小标签在正常态也一直占着右下角。现在 `idle` / `syncing` / `synced`
+  一律不渲染，只在 `offline`（显示 Outbox 待同步条数）与需升级（hub 要求更高
+  的同步协议，或副本来自更新版本）两种异常态出现，直到恢复或安装新版本。
+
+### Removed
+
+- **mobile**: 移除下拉刷新同步 (#139) — 下拉手势归还 Quick Find，移动端不再用
+  `PullToRefresh` 包裹内容区，一并删除只为它存在的 `requestPullSync()`。同步仍
+  由启动、本地写（Outbox flush 后防抖）、回前台以及前台存活的 SSE 提示触发，
+  已覆盖手动刷新的场景。
+
 ## [0.7.2] - 2026-10-01
 
 ### Added
