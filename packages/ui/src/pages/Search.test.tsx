@@ -51,7 +51,6 @@ const PROJECT: ProjectResponseDto = {
   title: 'Groceries',
   notes: null,
   areaId: null,
-  sortOrder: 0,
   status: ProjectStatus.ACTIVE,
   bucket: ProjectBucket.ANYTIME,
   scheduledType: ScheduledType.NONE,

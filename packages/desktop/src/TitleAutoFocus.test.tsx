@@ -53,7 +53,6 @@ function makeProject(id: string, title: string) {
     title,
     notes: null,
     areaId: null,
-    sortOrder: 0,
     status: 'ACTIVE',
     bucket: 'ANYTIME',
     scheduledType: 'NONE',

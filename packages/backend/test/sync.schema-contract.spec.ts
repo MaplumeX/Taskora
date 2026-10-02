@@ -100,17 +100,14 @@ describe('Engine SQL schema ↔ Prisma schema 契约', () => {
   it('反向：Prisma 新增的标量列不会被静默漏同步（注册表必须覆盖或显式豁免）', () => {
     /** 有意不进 wire 注册表的 Prisma 列（各有替代承载方式）。 */
     const EXCLUDED_COLUMNS: Record<string, Set<string>> = {
-      Task: new Set(['userId', 'fieldClocks', 'fieldDigests', 'position']),
+      Task: new Set(['userId', 'fieldClocks', 'fieldDigests']),
       Subtask: new Set(['userId', 'fieldClocks', 'fieldDigests']),
-      Project: new Set(['userId', 'fieldClocks', 'fieldDigests', 'position']),
+      Project: new Set(['userId', 'fieldClocks', 'fieldDigests']),
       ProjectHeading: new Set(['userId', 'fieldClocks', 'fieldDigests']),
       Area: new Set(['userId', 'fieldClocks', 'fieldDigests']),
-      Tag: new Set(['userId', 'fieldClocks', 'fieldDigests', 'position']),
+      Tag: new Set(['userId', 'fieldClocks', 'fieldDigests']),
       TagGroup: new Set(['userId', 'fieldClocks', 'fieldDigests']),
     };
-    // position 豁免仅限过渡期：Engine 以真实 position 同步，Prisma 列由
-    // 注释声明为 legacy；而 sortOrder 是 legacy REST 列但仍在 wire 上承载
-    // （过渡期并存，spec 切片退役时一并处理）。
 
     for (const [entity, modelName] of Object.entries(PRISMA_MODEL_NAMES)) {
       const def = ENTITIES[entity as keyof typeof ENTITIES];

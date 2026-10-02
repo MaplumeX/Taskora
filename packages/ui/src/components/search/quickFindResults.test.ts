@@ -29,7 +29,6 @@ function project(
     title,
     notes: null,
     areaId: null,
-    sortOrder: 0,
     status: ProjectStatus.ACTIVE,
     bucket: ProjectBucket.ANYTIME,
     scheduledType: ScheduledType.NONE,
@@ -46,7 +45,7 @@ function project(
 }
 
 function area(id: string, title: string): AreaResponseDto {
-  return { id, title, notes: null, sortOrder: 0, createdAt: NOW, updatedAt: NOW };
+  return { id, title, notes: null, createdAt: NOW, updatedAt: NOW };
 }
 
 function tag(id: string, title: string): TagResponseDto {
@@ -54,7 +53,6 @@ function tag(id: string, title: string): TagResponseDto {
     id,
     title,
     color: '#3B82F6',
-    sortOrder: 0,
     tagGroupId: null,
     createdAt: NOW,
     updatedAt: NOW,

@@ -123,13 +123,11 @@ class ChangedRows {
 }
 
 /**
- * 写入值归一化：与 hub 侧落库口径对齐——sortOrder 是 Prisma 不可空列
- * （Int @default(0)），null 落库后变 0；tagIds 经关系表读回时排序。
+ * 写入值归一化：与 hub 侧落库口径对齐——tagIds 经关系表读回时排序。
  * 设备本地值与 hub 合并态保持逐字段一致，自身回声在 LWW 平局
  * （时钟持平、保留本地）下不会留下两端口径分叉。
  */
 function normalizeWriteValue(field: FieldDef, value: unknown): unknown {
-  if (field.name === 'sortOrder' && value == null) return 0;
   if (field.name === 'tagIds' && Array.isArray(value)) return [...value].sort();
   return value;
 }
@@ -356,14 +354,12 @@ export class LocalReplica {
     return rows[0] ? this.rowToState(entity, rows[0]) : null;
   }
 
-  /** 全量实体行（UI 查询面），按 Position / sortOrder 排序。 */
+  /** 全量实体行（UI 查询面），按 Position 排序。 */
   async list(entity: SyncEntity, options: ListOptions = {}): Promise<ReplicaRow[]> {
     await this.readGate();
     const def = entityDef(entity);
-    const order =
-      def.orderField === 'position'
-        ? 'ORDER BY position IS NULL ASC, position ASC, createdAt DESC'
-        : 'ORDER BY sortOrder ASC, createdAt DESC';
+    // 与 domain sortByEffectivePosition 同口径：空 Position 排最前（防御）
+    const order = 'ORDER BY position ASC, id ASC';
     const conditions: string[] = [];
     const params: unknown[] = [];
     for (const [name, value] of Object.entries(options.where ?? {})) {

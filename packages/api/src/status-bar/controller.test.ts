@@ -93,8 +93,12 @@ async function flush(): Promise<void> {
   await vi.runAllTimersAsync();
 }
 
-function task(title: string, scheduledDate: string | null, sortOrder = 0): StatusBarTaskInput {
-  return { title, scheduledDate, sortOrder };
+function task(
+  title: string,
+  scheduledDate: string | null,
+  position: string | null = 'a0',
+): StatusBarTaskInput {
+  return { title, scheduledDate, position };
 }
 
 describe('createStatusBarController', () => {
@@ -119,7 +123,7 @@ describe('createStatusBarController', () => {
 
   it('开启并登录：发布首条任务标题（多条带位置指示）', async () => {
     const h = installHarness({
-      tasks: [task('今天一', TODAY, 1), task('逾期', YESTERDAY), task('今天二', TODAY, 2)],
+      tasks: [task('今天一', TODAY, 'a1'), task('逾期', YESTERDAY), task('今天二', TODAY, 'a2')],
     });
     h.controller.syncSession(true);
     expect(await h.controller.setEnabled(true)).toBe(true);
@@ -209,7 +213,7 @@ describe('createStatusBarController', () => {
   it('「>」轮播：游标前进并持久化，越界回绕', async () => {
     const h = installHarness({
       enabledInStorage: true,
-      tasks: [task('a', TODAY, 1), task('b', TODAY, 2), task('c', TODAY, 3)],
+      tasks: [task('a', TODAY, 'a1'), task('b', TODAY, 'a2'), task('c', TODAY, 'a3')],
     });
     h.controller.syncSession(true);
     await flush();
@@ -231,7 +235,7 @@ describe('createStatusBarController', () => {
     const h = installHarness({
       enabledInStorage: true,
       storedIndex: 2,
-      tasks: [task('a', TODAY, 1), task('b', TODAY, 2), task('c', TODAY, 3)],
+      tasks: [task('a', TODAY, 'a1'), task('b', TODAY, 'a2'), task('c', TODAY, 'a3')],
     });
     h.controller.syncSession(true);
     await flush();
@@ -294,7 +298,7 @@ describe('createStatusBarController', () => {
     const h = installHarness({
       enabledInStorage: true,
       storedIndex: 5,
-      tasks: [task('a', TODAY, 1), task('b', TODAY, 2)],
+      tasks: [task('a', TODAY, 'a1'), task('b', TODAY, 'a2')],
     });
     h.controller.syncSession(true);
     await flush();

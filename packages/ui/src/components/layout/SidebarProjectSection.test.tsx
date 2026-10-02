@@ -127,7 +127,6 @@ function area(id: string): AreaResponseDto {
     id,
     title: `Area ${id}`,
     notes: null,
-    sortOrder: 0,
     tags: [],
     createdAt: '2026-08-09T00:00:00.000Z',
     updatedAt: '2026-08-09T00:00:00.000Z',
@@ -140,7 +139,6 @@ function project(id: string, areaId: string | null): ProjectResponseDto {
     title: `Project ${id}`,
     notes: null,
     areaId,
-    sortOrder: 0,
     status: ProjectStatus.ACTIVE,
     bucket: ProjectBucket.ANYTIME,
     scheduledType: ScheduledType.NONE,
@@ -633,9 +631,9 @@ describe('SidebarProjectSection later projects', () => {
 
   it('排序持久化保留隐藏项目的槽位', () => {
     renderSection([
-      { ...project('s', null), sortOrder: 0 },
-      { ...later('ls', null, ScheduledType.SOMEDAY), sortOrder: 1 },
-      { ...project('t', null), sortOrder: 2 },
+      { ...project('s', null), position: 'a0' },
+      { ...later('ls', null, ScheduledType.SOMEDAY), position: 'a1' },
+      { ...project('t', null), position: 'a2' },
     ]);
     startProjectDrag('t');
     detectProjectTarget('t', ['proj:s'], 11, [['proj:s', { top: 10, height: 40 }]]);

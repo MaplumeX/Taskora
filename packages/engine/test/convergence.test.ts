@@ -340,13 +340,13 @@ describe('Engine 端到端收敛（主接缝）', () => {
     expect(before).not.toBeNull();
 
     await a.sync(); // 自己的回声：hub 侧列值被归一化（updatedAt =
-    // maxWall+1、sortOrder null → 0、tagIds 排序），但时钟保持合并
+    // maxWall+1、tagIds 排序），但时钟保持合并
     // 结果 → 逐字段持平 → 零应用、零通知、本地值不被改写。
     expect(notifications).toBe(2);
     const after = await a.get('task', id);
     expect(after).not.toBeNull();
     expect(after!.fields.updatedAt).toBe(before!.fields.updatedAt);
-    expect(after!.fields.sortOrder).toBe(before!.fields.sortOrder);
+    expect(after!.fields.position).toBe(before!.fields.position);
 
     unsubscribe();
     await a.close();
@@ -833,14 +833,12 @@ describe('Position re-balance（sync 后台摊平超长键）', () => {
       color: '#000000',
       tagGroupId: null,
       position: 'a0',
-      sortOrder: 0,
     });
     const tagT = await b.create('tag', {
       title: 'T',
       color: '#111111',
       tagGroupId: null,
       position: 'a1',
-      sortOrder: 0,
     });
     const task = await createTask(b, '带标签', { tagIds: [tagX, tagT] });
     await b.sync();
@@ -879,14 +877,12 @@ describe('Position re-balance（sync 后台摊平超长键）', () => {
       color: '#000000',
       tagGroupId: null,
       position: 'a0',
-      sortOrder: 0,
     });
     const tagT = await b.create('tag', {
       title: 'T',
       color: '#111111',
       tagGroupId: null,
       position: 'a1',
-      sortOrder: 0,
     });
     const task = await createTask(b, '带标签', { tagIds: [tagX, tagT] });
     await b.sync();
@@ -925,14 +921,12 @@ describe('Position re-balance（sync 后台摊平超长键）', () => {
       color: '#000000',
       tagGroupId: null,
       position: 'a0',
-      sortOrder: 0,
     });
     const tagT = await b.create('tag', {
       title: 'T',
       color: '#111111',
       tagGroupId: null,
       position: 'a1',
-      sortOrder: 0,
     });
     const task = await createTask(b, '带标签', { tagIds: [tagX, tagT] });
     await b.sync();
@@ -959,7 +953,6 @@ describe('Position re-balance（sync 后台摊平超长键）', () => {
     const sub = await b.create('subtask', {
       title: '步骤',
       taskId: task,
-      sortOrder: 0,
       status: 'ACTIVE',
       settledAt: null,
     });

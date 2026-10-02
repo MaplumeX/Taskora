@@ -26,7 +26,6 @@ const headings: ProjectHeadingResponseDto[] = [
     id: 'heading-1',
     projectId: 'project-1',
     title: 'First',
-    sortOrder: 0,
     status: HeadingStatus.ACTIVE,
     completedAt: null,
     createdAt: '2026-07-31T00:00:00.000Z',
@@ -88,7 +87,6 @@ describe('project heading hooks', () => {
       ...headings[0],
       id: 'heading-2',
       title: 'Second',
-      sortOrder: 1,
     };
     queryClient.setQueryData(projectHeadingKeys.list('project-1'), [headings[0], secondHeading]);
     const taskQueryKey = taskKeys.list({ projectId: 'project-1' });
@@ -96,12 +94,10 @@ describe('project heading hooks', () => {
       {
         id: 'task-1',
         headingId: 'heading-1',
-        sortOrder: 0,
       } as TaskResponseDto,
       {
         id: 'task-2',
         headingId: 'heading-2',
-        sortOrder: 0,
       } as TaskResponseDto,
     ]);
     const { result } = renderHook(() => useReorderProjectHeadingLayout(), { wrapper });
@@ -118,18 +114,15 @@ describe('project heading hooks', () => {
     expect(
       queryClient
         .getQueryData<ProjectHeadingResponseDto[]>(projectHeadingKeys.list('project-1'))
-        ?.map((heading) => [heading.id, heading.sortOrder]),
-    ).toEqual([
-      ['heading-2', 0],
-      ['heading-1', 1],
-    ]);
+        ?.map((heading) => heading.id),
+    ).toEqual(['heading-2', 'heading-1']);
     expect(
       queryClient
         .getQueryData<TaskResponseDto[]>(taskQueryKey)
-        ?.map((task) => [task.id, task.headingId, task.sortOrder]),
+        ?.map((task) => [task.id, task.headingId]),
     ).toEqual([
-      ['task-2', null, 0],
-      ['task-1', 'heading-2', 0],
+      ['task-2', null],
+      ['task-1', 'heading-2'],
     ]);
   });
 });

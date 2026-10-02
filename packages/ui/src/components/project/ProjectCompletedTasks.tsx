@@ -38,7 +38,7 @@ export function ProjectCompletedTasks({ projectId }: Props) {
   const uncancelTask = useUncancelTask();
   const { selectedId, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
 
-  // Keep server-returned order (sortOrder asc, createdAt desc) — do NOT re-sort
+  // Keep the list order (Position) — do NOT re-sort
   // by completedAt. This preserves the pre-archive structural distribution.
   // 口径：已了结（完成 + 取消），与 taskCompletedCount 统计一致（ADR 0006）。
   const settledTasks = useMemo(
@@ -57,7 +57,7 @@ export function ProjectCompletedTasks({ projectId }: Props) {
   );
 
   // Partition: ungrouped tasks (no headingId or headingId not in archived set)
-  // on top, then archived heading blocks (in sortOrder) with their grouped tasks.
+  // on top, then archived heading blocks (in Position order) with their grouped tasks.
   const { ungroupedTasks, groupedTasks } = useMemo(() => {
     const archivedHeadingIds = new Set(archivedHeadings.map((h) => h.id));
     const grouped: Record<string, TaskResponseDto[]> = {};

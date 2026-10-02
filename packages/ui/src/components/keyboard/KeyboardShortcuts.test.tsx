@@ -52,7 +52,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
     useProjectsQuery: () => ({ data: [] }),
     useAreasQuery: () => ({ data: [] }),
     useTagsQuery: () => ({
-      data: [{ id: 'urgent', title: 'Urgent', color: '#EF4444', sortOrder: 0, tagGroupId: null }],
+      data: [{ id: 'urgent', title: 'Urgent', color: '#EF4444', tagGroupId: null }],
     }),
     useTagGroupsQuery: () => ({ data: [] }),
     useCreateTag: () => ({ mutate: vi.fn(), isPending: false }),
@@ -131,7 +131,6 @@ function task(id: string, completed = false): TaskResponseDto {
     status: completed ? TaskStatus.COMPLETED : TaskStatus.ACTIVE,
     completedAt: null,
     trashedAt: null,
-    sortOrder: 0,
     projectId: null,
     headingId: null,
     areaId: null,

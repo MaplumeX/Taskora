@@ -37,7 +37,6 @@ function trashedTask(id: string): TaskFeedItem {
     bucket: TaskBucket.INBOX,
     completedAt: null,
     trashedAt: NOW,
-    sortOrder: 0,
     createdAt: NOW,
     updatedAt: NOW,
     tags: [],

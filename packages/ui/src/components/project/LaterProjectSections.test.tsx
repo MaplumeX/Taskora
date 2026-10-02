@@ -35,14 +35,14 @@ function project(
   id: string,
   scheduledType: ScheduledType,
   scheduledDate: string | null = null,
-  sortOrder = 0,
+  position: string | null = null,
 ): ProjectResponseDto {
   return {
     id,
     title: `Project ${id}`,
     notes: null,
     areaId: null,
-    sortOrder,
+    position,
     status: ProjectStatus.ACTIVE,
     bucket: ProjectBucket.SCHEDULED,
     scheduledType,
@@ -73,7 +73,7 @@ function idsIn(section: HTMLElement) {
 }
 
 describe('groupLaterProjects', () => {
-  it('计划按日期升序（同日按 sortOrder），Someday 按 sortOrder，活跃项目被忽略', () => {
+  it('计划按日期升序（同日按 Position），Someday 按 Position，活跃项目被忽略', () => {
     const kinds: Record<string, 'scheduled' | 'someday' | null> = {
       late: 'scheduled',
       early2: 'scheduled',
@@ -85,11 +85,11 @@ describe('groupLaterProjects', () => {
     const groups = groupLaterProjects(
       [
         project('late', ScheduledType.DATE, '2099-03-01'),
-        project('early2', ScheduledType.DATE, '2099-01-01', 2),
-        project('s2', ScheduledType.SOMEDAY, null, 5),
+        project('early2', ScheduledType.DATE, '2099-01-01', 'a2'),
+        project('s2', ScheduledType.SOMEDAY, null, 'a5'),
         project('active', ScheduledType.NONE),
-        project('early1', ScheduledType.DATE, '2099-01-01', 1),
-        project('s1', ScheduledType.SOMEDAY, null, 3),
+        project('early1', ScheduledType.DATE, '2099-01-01', 'a1'),
+        project('s1', ScheduledType.SOMEDAY, null, 'a3'),
       ],
       (p) => kinds[p.id],
     );

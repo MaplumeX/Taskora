@@ -29,7 +29,6 @@ function project(id: string, title: string, areaId: string | null = null): Proje
     title,
     notes: null,
     areaId,
-    sortOrder: 0,
     status: ProjectStatus.ACTIVE,
     bucket: ProjectBucket.ANYTIME,
     scheduledType: ScheduledType.NONE,
@@ -61,9 +60,7 @@ beforeEach(() => {
     data: [project('p-loose', 'Reading'), project('p-report', 'Report', 'a-work')],
   } as never);
   vi.mocked(useAreasQuery).mockReturnValue({
-    data: [
-      { id: 'a-work', title: 'Work', notes: null, sortOrder: 0, createdAt: NOW, updatedAt: NOW },
-    ],
+    data: [{ id: 'a-work', title: 'Work', notes: null, createdAt: NOW, updatedAt: NOW }],
   } as never);
   vi.mocked(useLaterProjectKind).mockReturnValue(() => null);
 });

@@ -33,22 +33,33 @@ describe('AreasService', () => {
   });
 
   describe('findAll', () => {
-    it('should return all areas for a user ordered by sortOrder asc, createdAt desc', async () => {
+    it('should return all areas for a user ordered by Position', async () => {
       const userId = 'user-1';
-      const expected = [
-        { id: 'area-1', title: 'Work', notes: null, userId, sortOrder: 0, tags: [] },
-        { id: 'area-2', title: 'Personal', notes: null, userId, sortOrder: 1, tags: [] },
-      ];
-      mockPrisma.area.findMany.mockResolvedValue(expected);
+      const work = {
+        id: 'area-1',
+        title: 'Work',
+        notes: null,
+        userId,
+        position: 'a0',
+        tags: [],
+      };
+      const personal = {
+        id: 'area-2',
+        title: 'Personal',
+        notes: null,
+        userId,
+        position: 'a1',
+        tags: [],
+      };
+      mockPrisma.area.findMany.mockResolvedValue([personal, work]);
 
       const result = await service.findAll(userId);
 
       expect(mockPrisma.area.findMany).toHaveBeenCalledWith({
         where: { userId },
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
         include: { tags: { include: { tag: true } } },
       });
-      expect(result).toEqual(expected);
+      expect(result).toEqual([work, personal]);
     });
 
     it('should map tags from join table to tag array', async () => {
@@ -57,13 +68,12 @@ describe('AreasService', () => {
         id: 'tag-1',
         title: 'Urgent',
         color: '#FF0000',
-        sortOrder: 0,
         tagGroupId: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
       mockPrisma.area.findMany.mockResolvedValue([
-        { id: 'area-1', title: 'Work', notes: null, userId, sortOrder: 0, tags: [{ tag }] },
+        { id: 'area-1', title: 'Work', notes: null, userId, tags: [{ tag }] },
       ]);
 
       const result = await service.findAll(userId);

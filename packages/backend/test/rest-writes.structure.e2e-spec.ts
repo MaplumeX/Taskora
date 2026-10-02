@@ -6,7 +6,7 @@
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
 import { afterAll, beforeEach, expect, it } from 'vitest';
 
-import { effectivePosition, synthPosition } from '@taskora/engine';
+import { positionBetween } from '@taskora/engine';
 import { HeadingStatus, ProjectStatus, TaskStatus } from '@taskora/shared';
 
 import { disconnectTestDb, testPrisma } from './db';
@@ -55,7 +55,7 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     await seedTask('task-1');
     const first = await h.subtasks.create(USER, 'task-1', { title: '一' });
     const second = await h.subtasks.create(USER, 'task-1', { title: '二' });
-    expect([first.sortOrder, second.sortOrder]).toEqual([0, 1]);
+    expect(first.position! < second.position!).toBe(true);
     expect(first.status).toBe(TaskStatus.ACTIVE);
 
     expect((await h.subtasks.update(USER, first.id, { title: '一改' })).title).toBe('一改');
@@ -71,7 +71,7 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     await expectLoggedAsStored('subtask', first.id);
 
     await h.subtasks.reorder(USER, 'task-1', [second.id, first.id]);
-    const ordered = await testPrisma.subtask.findMany({ orderBy: { sortOrder: 'asc' } });
+    const ordered = (await h.tasks.findOne(USER, 'task-1')).subtasks ?? [];
     expect(ordered.map((s) => s.id)).toEqual([second.id, first.id]);
 
     await h.subtasks.remove(USER, first.id);
@@ -87,16 +87,15 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     const third = await h.subtasks.create(USER, 'task-1', { title: '三' });
     const id = '6f1c2a3b-4d5e-4f60-8a7b-9c0d1e2f3a4b';
     const second = await h.subtasks.create(USER, 'task-1', { title: '二', id, afterId: first.id });
-    expect([second.id, second.sortOrder]).toEqual([id, 1]);
-    await expectLoggedAsStored('subtask', third.id);
+    expect(second.id).toBe(id);
+    await expectLoggedAsStored('subtask', second.id);
+    // Position 只给新行分配（插在「一」「三」之间），其余行不动
+    const thirdNow = await testPrisma.subtask.findUniqueOrThrow({ where: { id: third.id } });
+    expect(thirdNow.position).toBe(third.position);
+    expect(first.position! < second.position! && second.position! < third.position!).toBe(true);
 
     const titles = async () =>
-      (
-        await testPrisma.subtask.findMany({
-          where: { taskId: 'task-1' },
-          orderBy: { sortOrder: 'asc' },
-        })
-      ).map((s) => s.title);
+      ((await h.tasks.findOne(USER, 'task-1')).subtasks ?? []).map((s) => s.title);
     expect(await titles()).toEqual(['一', '二', '三']);
 
     expect(
@@ -135,14 +134,16 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
 
   // ---------- Project ----------
 
-  it('Project：create 排在末尾（sortOrder = max + 1，同口径 Position）', async () => {
+  it('Project：create 排在末尾（字节序最大的 Position 之后）', async () => {
     const empty = await h.projects.create(USER, { title: '第一个' });
-    expect(empty.sortOrder).toBe(0);
-    await seedProject('p-high', { sortOrder: 4 });
+    expect(empty.position).toBe(positionBetween(null, null));
+    // 大小写混排：Postgres 默认排序规则会把 'a0z' 排在 'a0Z' 前，字节序相反
+    await seedProject('p-upper', { position: 'a0Z' });
+    await seedProject('p-lower', { position: 'a0z' });
     const created = await h.projects.create(USER, { title: '新项目' });
-    expect(created).toMatchObject({ sortOrder: 5, taskTotalCount: 0, taskCompletedCount: 0 });
-    const row = await testPrisma.project.findUniqueOrThrow({ where: { id: created.id } });
-    expect(row.position).toBe(synthPosition(5, row.createdAt));
+    expect(created).toMatchObject({ taskTotalCount: 0, taskCompletedCount: 0 });
+    expect(created.position).toBe(positionBetween('a0z', null));
+    expect((await h.projects.findAll(USER)).at(-1)?.id).toBe(created.id);
     await expectLoggedAsStored('project', created.id);
   });
 
@@ -187,8 +188,8 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
 
   it('Project：update 标签整组替换；complete / uncomplete；reorder 双排序键', async () => {
     await testPrisma.tag.create({ data: { id: 'tag-1', userId: USER, title: 't' } });
-    await seedProject('p-1', { createdAt: createdAt(1) });
-    await seedProject('p-2', { createdAt: createdAt(2), sortOrder: 1 });
+    await seedProject('p-1', { position: 'a0' });
+    await seedProject('p-2', { position: 'a1' });
     await seedProject('foreign', {}, OTHER_USER);
 
     const updated = await h.projects.update(USER, 'p-1', { title: '改名', tagIds: ['tag-1'] });
@@ -197,11 +198,12 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     expect((await h.projects.uncomplete(USER, 'p-1')).status).toBe(ProjectStatus.ACTIVE);
 
     await h.projects.reorder(USER, ['p-2', 'p-1']);
+    expect((await h.projects.findAll(USER)).map((p) => p.id)).toEqual(['p-2', 'p-1']);
+    // 只移动一行（最长有序子序列之外的那一行）
     const p1 = await testPrisma.project.findUniqueOrThrow({ where: { id: 'p-1' } });
     const p2 = await testPrisma.project.findUniqueOrThrow({ where: { id: 'p-2' } });
-    expect([p2.sortOrder, p2.position]).toEqual([0, synthPosition(0, createdAt(2))]);
-    expect([p1.sortOrder, p1.position]).toEqual([1, synthPosition(1, createdAt(1))]);
-    await expectLoggedAsStored('project', 'p-1');
+    expect([p1.position === 'a0', p2.position === 'a1'].filter(Boolean)).toHaveLength(1);
+    await expectLoggedAsStored('project', p1.position === 'a0' ? 'p-2' : 'p-1');
 
     await expect(h.projects.reorder(USER, ['p-1', 'foreign'])).rejects.toBeInstanceOf(
       NotFoundException,
@@ -215,9 +217,10 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
 
   it('Heading：create 追加在末尾；update 改名；他人的分组 → 404', async () => {
     await seedProject('p-1');
-    await seedHeading('h-0', 'p-1', { sortOrder: 2 });
+    await seedHeading('h-0', 'p-1', { position: 'a2' });
     const created = await h.headings.create(USER, { projectId: 'p-1', title: '新分组' });
-    expect(created).toMatchObject({ sortOrder: 3, status: HeadingStatus.ACTIVE, userId: USER });
+    expect(created).toMatchObject({ status: HeadingStatus.ACTIVE, userId: USER });
+    expect(created.position).toBe(positionBetween('a2', null));
     await expectLoggedAsStored('project-heading', created.id);
 
     expect((await h.headings.update(USER, created.id, { title: '改名' }))!.title).toBe('改名');
@@ -264,7 +267,7 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
   it('Heading：转项目——新项目继承区域、排在末尾；全部任务（含 Trash）移入；分组走 Compact', async () => {
     const area = await testPrisma.area.create({ data: { userId: USER, title: 'A' } });
     await seedProject('p-1', { areaId: area.id });
-    await seedProject('p-last', { sortOrder: 5 });
+    await seedProject('p-last', { position: 'a5' });
     await seedHeading('h-1', 'p-1', { title: 'Build' });
     await seedTask('t-1', { projectId: 'p-1', headingId: 'h-1' });
     await seedTask('t-trashed', { projectId: 'p-1', headingId: 'h-1', trashedAt: createdAt(1) });
@@ -273,7 +276,7 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     expect(project).toMatchObject({
       title: 'Build',
       areaId: area.id,
-      sortOrder: 6,
+      position: positionBetween('a5', null),
       status: ProjectStatus.ACTIVE,
       tags: [],
     });
@@ -301,10 +304,10 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
 
   it('Heading：布局重排一起写分组顺序、归属与任务双排序键；与当前数据不符 → 400', async () => {
     await seedProject('p-1');
-    await seedHeading('h-1', 'p-1');
-    await seedHeading('h-2', 'p-1', { sortOrder: 1 });
-    await seedTask('task-1', { projectId: 'p-1', createdAt: createdAt(1) });
-    await seedTask('task-2', { projectId: 'p-1', createdAt: createdAt(2), headingId: 'h-1' });
+    await seedHeading('h-1', 'p-1', { position: 'a0' });
+    await seedHeading('h-2', 'p-1', { position: 'a1' });
+    await seedTask('task-1', { projectId: 'p-1', position: 'a0' });
+    await seedTask('task-2', { projectId: 'p-1', position: 'a1', headingId: 'h-1' });
 
     await h.headings.reorder(USER, {
       projectId: 'p-1',
@@ -314,23 +317,17 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
         { headingId: 'h-1', taskIds: [] },
       ],
     });
-    const headings = await testPrisma.projectHeading.findMany({ orderBy: { sortOrder: 'asc' } });
-    expect(headings.map((heading) => heading.id)).toEqual(['h-2', 'h-1']);
+    expect((await h.headings.findAll(USER, 'p-1')).map((heading) => heading.id)).toEqual([
+      'h-2',
+      'h-1',
+    ]);
     const t1 = await testPrisma.task.findUniqueOrThrow({ where: { id: 'task-1' } });
     const t2 = await testPrisma.task.findUniqueOrThrow({ where: { id: 'task-2' } });
-    // 视觉顺序（ungrouped 在前：task-2 为 0，h-2 分组的 task-1 为 1）决定 position
-    expect([t1.headingId, t1.sortOrder, t1.position]).toEqual([
-      'h-2',
-      0,
-      synthPosition(1, createdAt(1)),
-    ]);
-    expect([t2.headingId, t2.sortOrder, effectivePosition(t2)]).toEqual([
-      null,
-      0,
-      synthPosition(0, createdAt(2)),
-    ]);
+    // 视觉顺序（ungrouped 在前：task-2，再 h-2 分组的 task-1）决定 position，只移动一行
+    expect([t1.headingId, t2.headingId]).toEqual(['h-2', null]);
+    expect(t2.position! < t1.position!).toBe(true);
+    expect([t1.position === 'a0', t2.position === 'a1'].filter(Boolean)).toHaveLength(1);
     await expectLoggedAsStored('task', 'task-1');
-    await expectLoggedAsStored('project-heading', 'h-2');
 
     for (const layout of [
       { ungroupedTaskIds: ['task-1', 'task-1'], groups: [] },
@@ -392,7 +389,7 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     await testPrisma.tag.create({ data: { id: 'tag-2', userId: USER, title: 't2' } });
     const first = await h.areas.create(USER, { title: '工作', tagIds: ['tag-1', 'tag-1'] });
     const second = await h.areas.create(USER, { title: '生活' });
-    expect([first.sortOrder, second.sortOrder]).toEqual([0, 1]);
+    expect(first.position! < second.position!).toBe(true);
     expect(first.tags.map((tag) => tag.id)).toEqual(['tag-1']);
 
     const renamed = await h.areas.update(USER, first.id, { notes: '备注' });
@@ -406,9 +403,14 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     await expectLoggedAsStored('area', first.id);
 
     await h.areas.reorder(USER, [second.id, first.id]);
+    expect((await h.areas.findAll(USER)).map((area) => area.id)).toEqual([second.id, first.id]);
+    // 只有被移动的一行换了 Position
+    const [secondNow, firstNow] = await h.areas.findAll(USER);
     expect(
-      (await testPrisma.area.findMany({ orderBy: { sortOrder: 'asc' } })).map((area) => area.id),
-    ).toEqual([second.id, first.id]);
+      [secondNow.position !== second.position, firstNow.position !== first.position].filter(
+        Boolean,
+      ),
+    ).toHaveLength(1);
     await expect(h.areas.reorder(USER, [first.id, 'missing'])).rejects.toBeInstanceOf(
       NotFoundException,
     );
@@ -425,12 +427,13 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
 
   it('Tag / TagGroup：create 默认值；update；删除走 Compact（分组删除后标签解除归属）', async () => {
     const group = await h.tagGroups.create(USER, { title: '上下文' });
-    expect(group).toMatchObject({ title: '上下文', sortOrder: 0, tags: [] });
+    expect(group).toMatchObject({ title: '上下文', tags: [] });
     const tag = await h.tags.create(USER, { title: '电脑', tagGroupId: group.id });
-    expect(tag).toMatchObject({ color: '#3B82F6', tagGroupId: group.id, sortOrder: 0 });
-    expect(tag.position).toBe(synthPosition(0, tag.createdAt));
+    expect(tag).toMatchObject({ color: '#3B82F6', tagGroupId: group.id });
     const colored = await h.tags.create(USER, { title: '电话', color: '#EF4444' });
     expect(colored.color).toBe('#EF4444');
+    // 新标签排最前
+    expect(colored.position! < tag.position!).toBe(true);
 
     expect((await h.tags.update(USER, tag.id, { title: '笔记本' })).title).toBe('笔记本');
     expect((await h.tagGroups.update(USER, group.id, { title: '场景' })).title).toBe('场景');
@@ -459,6 +462,8 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
 
     const g1 = await h.tagGroups.create(USER, { title: 'g1' });
     const g2 = await h.tagGroups.create(USER, { title: 'g2' });
+    // 新建排最前
+    expect((await h.tagGroups.findAll(USER)).map((group) => group.title)).toEqual(['g2', 'g1']);
     await h.tagGroups.reorder(USER, [g1.id, g2.id]);
     expect((await h.tagGroups.findAll(USER)).map((group) => group.title)).toEqual(['g1', 'g2']);
 

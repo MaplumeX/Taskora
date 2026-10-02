@@ -181,7 +181,6 @@ const heading: ProjectHeadingResponseDto = {
   id: 'heading-1',
   projectId: 'project-1',
   title: 'Build',
-  sortOrder: 0,
   status: HeadingStatus.ACTIVE,
   completedAt: null,
   createdAt: '2026-07-31T00:00:00.000Z',
@@ -192,7 +191,6 @@ const secondHeading: ProjectHeadingResponseDto = {
   ...heading,
   id: 'heading-2',
   title: 'Ship',
-  sortOrder: 1,
 };
 
 function task(id: string, headingId: string | null): TaskResponseDto {
@@ -210,7 +208,6 @@ function task(id: string, headingId: string | null): TaskResponseDto {
     status: TaskStatus.ACTIVE,
     completedAt: null,
     trashedAt: null,
-    sortOrder: 0,
     projectId: 'project-1',
     headingId,
     areaId: null,

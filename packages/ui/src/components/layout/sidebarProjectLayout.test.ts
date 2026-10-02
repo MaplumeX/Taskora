@@ -19,7 +19,6 @@ function area(id: string): AreaResponseDto {
     id,
     title: id,
     notes: null,
-    sortOrder: 0,
     tags: [],
     createdAt: '2026-08-09T00:00:00.000Z',
     updatedAt: '2026-08-09T00:00:00.000Z',
@@ -32,7 +31,6 @@ function project(id: string, areaId: string | null): ProjectResponseDto {
     title: id,
     notes: null,
     areaId,
-    sortOrder: 0,
     status: ProjectStatus.ACTIVE,
     bucket: ProjectBucket.ANYTIME,
     scheduledType: ScheduledType.NONE,
@@ -200,7 +198,10 @@ describe('sidebar project layout serialization', () => {
 });
 
 describe('mergeVisibleProjectOrder', () => {
-  const withOrder = (id: string, sortOrder: number) => ({ ...project(id, null), sortOrder });
+  const withOrder = (id: string, index: number) => ({
+    ...project(id, null),
+    position: `a${index}`,
+  });
 
   it('可见项目按新顺序填回原槽位，隐藏项目原位不动', () => {
     const all = [withOrder('v2', 2), withOrder('h1', 1), withOrder('v1', 0), withOrder('h3', 3), withOrder('v4', 4)];

@@ -30,7 +30,10 @@ import {
   planTaskCreate,
   planTaskSearch,
   planTaskUpdate,
+  planReorder,
   positionAfter,
+  positionAfterRow,
+  positionAtEnd,
   projectMatchesView,
   repeatDerivationTarget,
   RepeatSkipBlockedError,
@@ -75,6 +78,7 @@ import type {
 import type { TaskBackend, TaskQuery, TaskSearchOptions } from '../api/task-backend';
 import {
   SETTLED_TASK_STATUSES as SETTLED_STATUSES,
+  positionedRows,
   projectRowToDto,
   subtaskRowToDto,
   tagIndexFor,
@@ -121,7 +125,6 @@ function searchFieldsOf(row: ReplicaRow) {
     status: f.status,
     trashedAt: f.trashedAt,
     position: typeof f.position === 'string' ? f.position : null,
-    sortOrder: typeof f.sortOrder === 'number' ? f.sortOrder : null,
     createdAt: typeof f.createdAt === 'string' ? f.createdAt : null,
   };
 }
@@ -181,10 +184,9 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         areaId: (f.areaId as string | null) ?? null,
         tagIds: tagIdsOf(parent),
       },
-      subtasks.map((row) => ({
-        title: (row.fields.title as string) ?? '',
-        sortOrder: row.fields.sortOrder,
-        createdAt: row.fields.createdAt,
+      positionedRows(subtasks).map((subtask, index) => ({
+        ...subtask,
+        title: (subtasks[index].fields.title as string) ?? '',
       })),
       settledAt,
       zones(),
@@ -213,13 +215,10 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       allTasks,
       allTasks.length > 0 ? allTasks[allTasks.length - 1].id : null,
     );
-    const sortOrder =
-      allTasks.reduce((max, row) => Math.max(max, (row.fields.sortOrder as number) ?? 0), -1) + 1;
     const instanceId = await engine.create('task', {
       ...(target === 'planned' ? { id: plan.id } : {}),
       ...plan.task,
       position,
-      sortOrder,
     });
     for (const subtask of plan.subtasksFor(instanceId)) {
       await engine.create('subtask', { ...subtask });
@@ -274,12 +273,10 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       const subtaskRows = await engine.list('subtask');
       const hits = planTaskSearch(
         taskRows.map((row) => ({ ...searchFieldsOf(row), row })),
-        subtaskRows.map((row) => ({
-          id: row.id,
-          taskId: row.fields.taskId,
-          title: row.fields.title,
-          sortOrder: row.fields.sortOrder,
-          createdAt: row.fields.createdAt,
+        positionedRows(subtaskRows).map((subtask, index) => ({
+          ...subtask,
+          taskId: subtaskRows[index].fields.taskId,
+          title: subtaskRows[index].fields.title,
         })),
         q,
         options,
@@ -445,8 +442,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       const rows = await engine.list('task', { where: { id: { in: orderedIds } } });
       const byId = new Map(rows.map((row) => [row.id, row]));
       // 只给必须移动的行分配新 Position（单次拖动 = 一条写），一个事务
-      // 一次通知。列表读序只看有效 Position（domain sortByEffectivePosition），
-      // 不再需要稠密 sortOrder。
+      // 一次通知。列表读序只看 Position（domain sortByEffectivePosition）。
       const changes = repositionMinimal(
         orderedIds.flatMap((id) => {
           const row = byId.get(id);
@@ -484,8 +480,6 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
             position: typeof row.fields.position === 'string' ? row.fields.position : null,
             feedPosition:
               typeof row.fields.feedPosition === 'string' ? row.fields.feedPosition : null,
-            sortOrder: typeof row.fields.sortOrder === 'number' ? row.fields.sortOrder : null,
-            createdAt: (row.fields.createdAt as string | null) ?? null,
           }),
         ]),
       );
@@ -521,26 +515,16 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       }
       const existing = await subtasksOf(taskId);
       const afterIndex = data.afterId ? existing.findIndex((s) => s.id === data.afterId) : -1;
-      let sortOrder: number;
-      if (afterIndex < 0) {
-        // sortOrder = max + 1（与 SubtasksService 一致：追加在末尾）
-        sortOrder = existing.reduce((max, s) => Math.max(max, s.sortOrder), -1) + 1;
-      } else {
-        // 插入到 afterId 之后：整体重排为 0..n，插入点之后的各项顺延一位
-        sortOrder = afterIndex + 1;
-        await engine.updateMany(
-          'subtask',
-          existing.flatMap((s, index) => {
-            const next = index < sortOrder ? index : index + 1;
-            return s.sortOrder !== next ? [{ id: s.id, patch: { sortOrder: next } }] : [];
-          }),
-        );
-      }
+      // Position 插在 afterId 之后（缺省追加末尾），其余行不动
+      const position =
+        afterIndex < 0
+          ? positionAtEnd(existing)
+          : positionAfterRow(existing, existing[afterIndex].id);
       const id = await engine.create('subtask', {
         ...(data.id ? { id: data.id } : {}),
         title: data.title,
         taskId,
-        sortOrder,
+        position,
         status: TaskStatus.ACTIVE,
         settledAt: null,
       });
@@ -582,14 +566,12 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     async reorderSubtasks(taskId: string, orderedIds: string[]): Promise<void> {
       // 与 reorderTasks 同惯例：顺序未变的行不动，一个事务一次通知
       const rows = await engine.list('subtask', { where: { taskId } });
-      const sortOrderOf = new Map(rows.map((row) => [row.id, row.fields.sortOrder]));
       await engine.updateMany(
         'subtask',
-        orderedIds.flatMap((id, index) =>
-          sortOrderOf.has(id) && sortOrderOf.get(id) !== index
-            ? [{ id, patch: { sortOrder: index } }]
-            : [],
-        ),
+        planReorder(positionedRows(rows), orderedIds).map(({ id, patch }) => ({
+          id,
+          patch: { ...patch },
+        })),
       );
     },
 
@@ -629,7 +611,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         zones(),
       );
 
-      // 新 Project 排在末尾（sortOrder = max + 1，Position 追加）
+      // 新 Project 排在末尾（Position 追加）
       const projects = await engine.list('project');
       const projectId = await engine.create('project', {
         ...plan.project,
@@ -637,8 +619,6 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
           projects,
           projects.length > 0 ? projects[projects.length - 1].id : null,
         ),
-        sortOrder:
-          projects.reduce((max, p) => Math.max(max, (p.fields.sortOrder as number) ?? 0), -1) + 1,
       });
 
       // 提升出的 Task 逐条插到最前：每条都插在上一条之前
@@ -708,7 +688,6 @@ function projectRowToFeedItem(
     bucket: (f.bucket as ProjectBucket) ?? ProjectBucket.ANYTIME,
     completedAt: (f.completedAt as string | null) ?? null,
     trashedAt: (f.trashedAt as string | null) ?? null,
-    sortOrder: (f.sortOrder as number) ?? 0,
     position: typeof f.position === 'string' ? f.position : null,
     feedPosition: typeof f.feedPosition === 'string' ? f.feedPosition : null,
     areaId: (f.areaId as string | null) ?? null,

@@ -193,8 +193,6 @@ import {
   useUiInteractionStore,
 } from '@taskora/api';
 
-let feedPosition = 0;
-
 function taskItem(
   id: string,
   opts: { projectId?: string | null; areaId?: string | null } = {},
@@ -214,7 +212,6 @@ function taskItem(
     bucket: TaskBucket.ANYTIME,
     completedAt: null,
     trashedAt: null,
-    sortOrder: feedPosition++,
     createdAt: '2026-07-31T00:00:00.000Z',
     updatedAt: '2026-07-31T00:00:00.000Z',
     tags: [],
@@ -240,7 +237,6 @@ function projectItem(id: string): ProjectFeedItem {
     bucket: ProjectBucket.SCHEDULED,
     completedAt: null,
     trashedAt: null,
-    sortOrder: feedPosition++,
     createdAt: '2026-07-31T00:00:00.000Z',
     updatedAt: '2026-07-31T00:00:00.000Z',
     tags: [],
@@ -265,7 +261,6 @@ function project(
     title: id,
     notes: null,
     areaId: opts.areaId ?? null,
-    sortOrder: 0,
     status: opts.status ?? ProjectStatus.ACTIVE,
     bucket: ProjectBucket.ANYTIME,
     scheduledType: ScheduledType.NONE,
@@ -286,7 +281,6 @@ function area(id: string): AreaResponseDto {
     id,
     title: id,
     notes: null,
-    sortOrder: 0,
     tags: [],
     createdAt: '2026-07-31T00:00:00.000Z',
     updatedAt: '2026-07-31T00:00:00.000Z',
@@ -356,7 +350,6 @@ function headerOf(parentId: string): HTMLElement {
 }
 
 beforeEach(() => {
-  feedPosition = 0;
   harness.dndProps = null;
   harness.projects = [];
   harness.areas = [];

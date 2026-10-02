@@ -78,7 +78,7 @@ describe('TasksService — logbook view', () => {
     ).toBe(true);
   });
 
-  it('orders by settledAt desc (not the default sortOrder asc + createdAt desc)', async () => {
+  it('orders by settledAt desc (not Position)', async () => {
     const userId = 'user-1';
     mockPrisma.task.findMany.mockResolvedValue([]);
 

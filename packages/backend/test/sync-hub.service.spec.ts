@@ -22,7 +22,6 @@ const taskRow = {
   settledAt: null,
   trashedAt: null,
   position: null,
-  sortOrder: 0,
   projectId: null,
   headingId: null,
   areaId: null,
@@ -450,7 +449,6 @@ describe('SyncHubService（合并器集成）', () => {
         title: '步骤',
         status: 'ACTIVE',
         settledAt: null,
-        sortOrder: 0,
         taskId: 'task-1',
         createdAt: new Date('2026-01-01T00:00:00Z'),
         updatedAt: new Date('2026-01-02T00:00:00Z'),
@@ -501,7 +499,7 @@ describe('SyncHubService（合并器集成）', () => {
     expect(changes).toHaveLength(0);
   });
 
-  it('bootstrap：全量快照（含 legacy 基线时钟与合成 Position）', async () => {
+  it('bootstrap：全量快照（含 legacy 基线时钟；Position 原样，不合成）', async () => {
     mockPrisma.task.findMany.mockResolvedValue([taskRow]);
     mockPrisma.compactedEntity.findMany.mockResolvedValue([
       { entity: 'task', entityId: 'task-deleted' },
@@ -515,7 +513,8 @@ describe('SyncHubService（合并器集成）', () => {
     expect(entry.clocks.title).toBe(
       formatHlc({ wallMs: new Date('2026-01-02T00:00:00Z').getTime(), counter: 0, deviceId: '0' }),
     );
-    expect(typeof entry.fields.position).toBe('string');
+    expect(entry.fields.position).toBe(taskRow.position);
+    expect(entry.fields).not.toHaveProperty('sortOrder');
     expect(result.cursor).toBe(await buffer.currentSeq(USER));
     expect(result.compacted).toEqual([{ entity: 'task', ids: ['task-deleted'] }]);
   });
@@ -544,7 +543,6 @@ describe('SyncHubService（合并器集成）', () => {
         title: '步骤',
         status: 'ACTIVE',
         settledAt: null,
-        sortOrder: 0,
         taskId: 'task-1',
         createdAt: new Date('2026-01-01T00:00:00Z'),
         updatedAt: new Date('2026-01-02T00:00:00Z'),
@@ -694,7 +692,6 @@ describe('SyncHubService（合并器集成）', () => {
         title: '步骤',
         status: 'ACTIVE',
         settledAt: null,
-        sortOrder: 0,
         taskId: 'task-alive',
         createdAt: new Date('2026-01-01T00:00:00Z'),
         updatedAt: new Date('2026-01-02T00:00:00Z'),

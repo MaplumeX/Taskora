@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { planReorder, positionAtEnd } from '@taskora/engine';
+import { sortByPosition } from '../common/position-order';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncHubService } from '../sync/sync-hub.service';
 import { CreateAreaDto, UpdateAreaDto } from './dto/areas.dto';
@@ -25,14 +27,15 @@ export class AreasService {
   }
 
   async create(userId: string, dto: CreateAreaDto) {
-    const max = await this.prisma.area.aggregate({
+    // 追加末尾
+    const existing = await this.prisma.area.findMany({
       where: { userId },
-      _max: { sortOrder: true },
+      select: { id: true, position: true },
     });
     return this.write(userId, randomUUID(), {
       title: dto.title,
       notes: dto.notes ?? null,
-      sortOrder: (max._max.sortOrder ?? -1) + 1,
+      position: positionAtEnd(existing),
       tagIds: dto.tagIds ?? [],
     });
   }
@@ -40,10 +43,9 @@ export class AreasService {
   async findAll(userId: string) {
     const areas = await this.prisma.area.findMany({
       where: { userId },
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
       include: TAG_INCLUDE,
     });
-    return areas.map((a) => ({ ...a, tags: a.tags.map((at) => at.tag) }));
+    return sortByPosition(areas).map((a) => ({ ...a, tags: a.tags.map((at) => at.tag) }));
   }
 
   async findOne(userId: string, id: string) {
@@ -76,16 +78,15 @@ export class AreasService {
   async reorder(userId: string, orderedIds: string[]) {
     const owned = await this.prisma.area.findMany({
       where: { id: { in: orderedIds }, userId },
-      select: { id: true },
+      select: { id: true, position: true },
     });
-    const ownedSet = new Set(owned.map((a) => a.id));
-    if (ownedSet.size !== orderedIds.length) {
+    if (owned.length !== new Set(orderedIds).size || owned.length !== orderedIds.length) {
       throw new NotFoundException('Area not found');
     }
 
     await this.hub.writeAsHub(userId, async (batch) => {
-      for (const [index, id] of orderedIds.entries()) {
-        await batch.write('area', id, { sortOrder: index });
+      for (const { id, patch } of planReorder(owned, orderedIds)) {
+        await batch.write('area', id, patch);
       }
     });
   }

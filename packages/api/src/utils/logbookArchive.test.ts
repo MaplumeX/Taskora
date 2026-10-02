@@ -7,7 +7,7 @@ import { mergeLogbookArchive } from './logbookArchive';
 const CUTOFF = '2025-09-30T00:00:00.000Z';
 
 function settled(id: string, completedAt: string): TaskFeedItem {
-  return { id, type: 'task', completedAt, position: null, sortOrder: 0 } as unknown as TaskFeedItem;
+  return { id, type: 'task', completedAt, position: null } as unknown as TaskFeedItem;
 }
 
 function ids(items: FeedItem[]): string[] {

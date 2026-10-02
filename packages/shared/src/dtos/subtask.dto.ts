@@ -19,7 +19,8 @@ export interface SubtaskResponseDto {
   status: TaskStatus;
   /** 了结时间（Settled At，ADR 0006）：status 为 COMPLETED/CANCELLED 时的了结时刻；字段名保留 completedAt 以兼容前端。 */
   completedAt: string | null;
-  sortOrder: number;
+  /** 列表位次（fractional indexing 字符串，ADR-0007）；列表顺序只看它。 */
+  position?: string | null;
   taskId: string;
   createdAt: string;
   updatedAt: string;

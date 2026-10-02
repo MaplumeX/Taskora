@@ -11,7 +11,6 @@ function subtask(status: TaskStatus): SubtaskResponseDto {
     title: '子任务',
     status,
     completedAt: null,
-    sortOrder: 0,
     taskId: 'task-1',
     createdAt: '2025-01-01T00:00:00.000Z',
     updatedAt: '2025-01-01T00:00:00.000Z',

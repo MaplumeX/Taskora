@@ -13,13 +13,8 @@ import {
   nextOccurrenceDate,
   skipOccurrenceDate,
 } from '../repeat';
-import {
-  dateKeyOf,
-  daysBetweenKeys,
-  instantMs,
-  shiftDateKey,
-  type CalendarZones,
-} from './calendar';
+import { dateKeyOf, daysBetweenKeys, shiftDateKey, type CalendarZones } from './calendar';
+import { sortByEffectivePosition, type Positioned } from './order';
 import type { TaskFields, TaskPatch } from './tasks';
 
 export interface RepeatParent {
@@ -36,17 +31,15 @@ export interface RepeatParent {
   tagIds: readonly string[];
 }
 
-export interface RepeatParentSubtask {
+export interface RepeatParentSubtask extends Positioned {
   title: string;
-  sortOrder: unknown;
-  createdAt: unknown;
 }
 
 export interface RepeatSubtaskFields {
   id: string;
   title: string;
   taskId: string;
-  sortOrder: number;
+  position: string | null;
   status: TaskStatus;
   settledAt: null;
 }
@@ -72,7 +65,7 @@ export function repeatInstanceId(
 /**
  * 完成时派生的实例：复制标题 / 备注 / 标签 / 提醒时刻 / 归属 / 规则，
  * 计划到下一个日期；Subtask 复制并重置为未完成（序号决定确定性 id，
- * 按 sortOrder 升序、平局后建的在前——两端列表同一口径）。
+ * 按有效 Position——两端列表同一口径；新实例沿用原 Position）。
  *
  * 调用方先经 repeatDerivationTarget 决定跳过 / 用确定性 id / 换新 id，
  * 再用 subtasksFor(实际 id) 生成 Subtask。parent 取结算前的状态。
@@ -89,11 +82,7 @@ export function planRepeatInstance(
 } | null {
   const target = repeatInstanceId(parent, settledAt, zones);
   if (!target) return null;
-  const ordered = [...subtasks].sort(
-    (a, b) =>
-      ((a.sortOrder as number) ?? 0) - ((b.sortOrder as number) ?? 0) ||
-      (instantMs(b.createdAt) ?? 0) - (instantMs(a.createdAt) ?? 0),
-  );
+  const ordered = sortByEffectivePosition(subtasks);
   return {
     id: target.id,
     task: {
@@ -119,7 +108,7 @@ export function planRepeatInstance(
         id: deriveSubtaskId(instanceId, index),
         title: subtask.title,
         taskId: instanceId,
-        sortOrder: index,
+        position: subtask.position ?? null,
         status: TaskStatus.ACTIVE,
         settledAt: null,
       })),

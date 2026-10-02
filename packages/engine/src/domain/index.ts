@@ -16,6 +16,10 @@ export {
 export {
   effectivePosition,
   feedSortKey,
+  planReorder,
+  positionAfterRow,
+  positionAtEnd,
+  positionAtStart,
   sortByEffectivePosition,
   type FeedPositioned,
   type Positioned,

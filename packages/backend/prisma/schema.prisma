@@ -57,7 +57,8 @@ model Area {
   tasks     Task[]
   tags      AreaTag[]
 
-  sortOrder Int @default(0)
+  /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
+  position String?
 
   @@index([userId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
   fieldClocks Json?
@@ -90,7 +91,6 @@ model Project {
   tasks     Task[]
   headings  ProjectHeading[]
 
-  sortOrder Int @default(0)
 
   status        ProjectStatus @default(ACTIVE)
   bucket        ProjectBucket @default(ANYTIME)
@@ -105,7 +105,7 @@ model Project {
   @@index([userId])
   @@index([areaId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
   fieldClocks Json?
-  /// Position：fractional indexing 排序位次（local-first，ADR-0007）；过渡期与 sortOrder 并存。
+  /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
   position String?
   /// Feed Position：项目行在 feed 视图中与任务混排的位次（与 Task.position 同一键空间）；
   /// 为空时 feed 退回 position。不影响侧边栏顺序（feed-project-ordering spec）。
@@ -167,7 +167,8 @@ enum HeadingStatus {
 model TagGroup {
   id        String   @id @default(uuid())
   title     String
-  sortOrder Int      @default(0)
+  /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
+  position String?
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   tags      Tag[]
@@ -185,7 +186,6 @@ model Tag {
   id         String       @id @default(uuid())
   title      String
   color      String       @default("#3B82F6")
-  sortOrder  Int          @default(0)
   tagGroupId String?
   tagGroup   TagGroup?    @relation(fields: [tagGroupId], references: [id], onDelete: SetNull)
   userId     String
@@ -199,7 +199,7 @@ model Tag {
   @@index([userId])
   @@index([tagGroupId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
   fieldClocks Json?
-  /// Position：fractional indexing 排序位次（local-first，ADR-0007）；过渡期与 sortOrder 并存。
+  /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
   position String?
   /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
   fieldDigests Json?
@@ -237,7 +237,6 @@ model Task {
   status        TaskStatus    @default(ACTIVE)
   settledAt     DateTime?
   trashedAt     DateTime?
-  sortOrder     Int           @default(0)
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
@@ -264,7 +263,7 @@ model Task {
   @@index([repeatSourceId])
   @@index([areaId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
   fieldClocks Json?
-  /// Position：fractional indexing 排序位次（local-first，ADR-0007）；过渡期与 sortOrder 并存。
+  /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
   position String?
   /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
   fieldDigests Json?
@@ -276,7 +275,8 @@ model Subtask {
   title       String
   status      TaskStatus @default(ACTIVE)
   settledAt   DateTime?
-  sortOrder   Int        @default(0)
+  /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
+  position String?
   taskId      String
   task        Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
   createdAt   DateTime   @default(now())
@@ -292,7 +292,8 @@ model Subtask {
 model ProjectHeading {
   id          String        @id @default(uuid())
   title       String
-  sortOrder   Int           @default(0)
+  /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
+  position String?
   userId      String
   user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
   projectId   String

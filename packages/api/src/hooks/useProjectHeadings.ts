@@ -141,12 +141,10 @@ export function useReorderProjectHeadingLayout() {
         projectHeadingKeys.list(layout.projectId),
         (old) =>
           old
-            ? [...old]
-                .map((heading) => ({
-                  ...heading,
-                  sortOrder: headingOrder.get(heading.id) ?? heading.sortOrder,
-                }))
-                .sort((a, b) => a.sortOrder - b.sortOrder)
+            ? [...old].sort(
+                (a, b) =>
+                  (headingOrder.get(a.id) ?? Infinity) - (headingOrder.get(b.id) ?? Infinity),
+              )
             : old,
       );
 
@@ -154,22 +152,22 @@ export function useReorderProjectHeadingLayout() {
         string,
         {
           headingId: string | null;
-          sortOrder: number;
+          index: number;
         }
       >();
-      layout.ungroupedTaskIds.forEach((id, sortOrder) => {
-        taskLayout.set(id, { headingId: null, sortOrder });
+      layout.ungroupedTaskIds.forEach((id, index) => {
+        taskLayout.set(id, { headingId: null, index });
       });
       layout.groups.forEach((group) => {
-        group.taskIds.forEach((id, sortOrder) => {
-          taskLayout.set(id, { headingId: group.headingId, sortOrder });
+        group.taskIds.forEach((id, index) => {
+          taskLayout.set(id, { headingId: group.headingId, index });
         });
       });
       queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) => {
         if (!old) return old;
         const updated = old.map((task) => {
           const next = taskLayout.get(task.id);
-          return next ? { ...task, ...next } : task;
+          return next ? { ...task, headingId: next.headingId } : task;
         });
         const containerOrder = new Map<string | null, number>([
           [null, -1],
@@ -184,7 +182,7 @@ export function useReorderProjectHeadingLayout() {
           const containerDelta =
             (containerOrder.get(aLayout.headingId) ?? 0) -
             (containerOrder.get(bLayout.headingId) ?? 0);
-          return containerDelta || aLayout.sortOrder - bLayout.sortOrder;
+          return containerDelta || aLayout.index - bLayout.index;
         });
       });
     },

@@ -15,7 +15,9 @@ import {
   planHeadingDelete,
   planHeadingLayout,
   planHeadingToProject,
+  planReorder,
   positionAfter,
+  positionAtEnd,
   repositionMinimal,
   sortHeadings,
 } from '@taskora/engine';
@@ -23,7 +25,7 @@ import { HeadingStatus } from '@taskora/shared';
 import type { ProjectHeadingResponseDto } from '@taskora/shared';
 
 import type { ProjectHeadingBackend } from '../api/project-heading-backend';
-import { projectHeadingRowToDto, projectRowToDto, tagRowToDto } from './mappers';
+import { positionedRows, projectHeadingRowToDto, projectRowToDto, tagRowToDto } from './mappers';
 
 export interface EngineProjectHeadingBackendOptions {
   engine: Engine;
@@ -60,13 +62,10 @@ export function createEngineProjectHeadingBackend(
       const headings = (await engine.list('project-heading', { where: { projectId } })).filter(
         (row) => options?.includeArchived || row.fields.status === HeadingStatus.ACTIVE,
       );
-      return sortHeadings(
-        headings.map((row) => ({
-          row,
-          sortOrder: row.fields.sortOrder,
-          createdAt: row.fields.createdAt,
-        })),
-      ).map(({ row }) => projectHeadingRowToDto(row));
+      const rowById = new Map(headings.map((row) => [row.id, row]));
+      return sortHeadings(positionedRows(headings)).map(({ id }) =>
+        projectHeadingRowToDto(rowById.get(id)!),
+      );
     },
 
     async createProjectHeading(data) {
@@ -74,12 +73,11 @@ export function createEngineProjectHeadingBackend(
       const siblings = await engine.list('project-heading', {
         where: { projectId: data.projectId },
       });
-      const sortOrder =
-        siblings.reduce((max, h) => Math.max(max, (h.fields.sortOrder as number) ?? 0), -1) + 1;
       const id = await engine.create('project-heading', {
         projectId: data.projectId,
         title: data.title,
-        sortOrder,
+        // 追加末尾
+        position: positionAtEnd(positionedRows(siblings)),
         status: HeadingStatus.ACTIVE,
         completedAt: null,
       });
@@ -120,7 +118,7 @@ export function createEngineProjectHeadingBackend(
         (source.fields.areaId as string | null) ?? null,
       );
 
-      // 新项目排末尾（sortOrder = max + 1，Position 追加）
+      // 新项目排末尾（Position 追加）
       const projects = await engine.list('project');
       const projectId = await engine.create('project', {
         ...plan.project,
@@ -128,8 +126,6 @@ export function createEngineProjectHeadingBackend(
           projects,
           projects.length > 0 ? projects[projects.length - 1].id : null,
         ),
-        sortOrder:
-          projects.reduce((max, p) => Math.max(max, (p.fields.sortOrder as number) ?? 0), -1) + 1,
       });
 
       const tasks = await tasksUnderHeading(id);
@@ -160,7 +156,7 @@ export function createEngineProjectHeadingBackend(
         projectTasks.map((row) => row.id),
       );
 
-      // 只写真正变化的字段，一个事务一次通知：heading 的 sortOrder、task
+      // 只写真正变化的字段，一个事务一次通知：heading 的位次、task
       // 的 headingId（跨组移动）与 position（按整页视觉顺序，只给必须
       // 移动的行分配新键）。
       const taskById = new Map(projectTasks.map((row) => [row.id, row]));
@@ -183,12 +179,12 @@ export function createEngineProjectHeadingBackend(
       );
       for (const { id, position } of moved) patchOf(id).position = position;
 
-      const headingById = new Map(headings.map((row) => [row.id, row]));
       await engine.updateMany(
         'project-heading',
-        plan.headingOrder
-          .filter(({ id, sortOrder }) => headingById.get(id)?.fields.sortOrder !== sortOrder)
-          .map(({ id, sortOrder }) => ({ id, patch: { sortOrder } })),
+        planReorder(positionedRows(headings), plan.headingOrder).map(({ id, patch }) => ({
+          id,
+          patch: { ...patch },
+        })),
       );
       await engine.updateMany(
         'task',

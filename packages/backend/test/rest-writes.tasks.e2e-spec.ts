@@ -11,10 +11,9 @@ import { afterAll, beforeEach, expect, it } from 'vitest';
 import {
   deriveRepeatInstanceId,
   deriveSubtaskId,
-  effectivePosition,
   formatHlc,
   hlcWallMs,
-  synthPosition,
+  positionBetween,
   type RepeatRule,
 } from '@taskora/engine';
 import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
@@ -66,9 +65,12 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
 
   // ---------- create ----------
 
-  it('create：全部领域字段落库，与日志同事务；位次口径 sortOrder 0 + 合成 Position', async () => {
+  it('create：全部领域字段落库，与日志同事务；排在字节序最前的 Position 之前', async () => {
     await seedTag('tag-a');
     await seedTag('tag-b');
+    // 大小写混排：Postgres 默认排序规则会把 'a0a' 排在 'a0B' 前，字节序相反
+    await seedTask('t-lower', { position: 'a0a' });
+    await seedTask('t-upper', { position: 'a0B' });
     const dto = await h.tasks.create(USER, {
       title: '写周报',
       areaId: undefined,
@@ -85,8 +87,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
       bucket: TaskBucket.INBOX,
       scheduledType: ScheduledType.NONE,
       status: TaskStatus.ACTIVE,
-      sortOrder: 0,
-      position: synthPosition(0, row.createdAt),
+      position: positionBetween(null, 'a0B'),
     });
     expect(row.tags.map((tt) => tt.tagId).sort()).toEqual(['tag-a', 'tag-b']);
     expect(dto.tags.map((tag) => tag.id).sort()).toEqual(['tag-a', 'tag-b']);
@@ -342,7 +343,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
       bucket: 'SCHEDULED',
       reminderTime: '09:00',
       repeatRule: dailyRuleJson,
-      sortOrder: 3,
+      position: 'a3',
       tags: { create: [{ tagId: 'tag-1' }] },
       ...data,
     });
@@ -353,8 +354,8 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     await seedRepeating();
     await testPrisma.subtask.createMany({
       data: [
-        { id: 'st-1', taskId: 'task-1', title: '客厅', sortOrder: 0, status: 'COMPLETED' },
-        { id: 'st-2', taskId: 'task-1', title: '阳台', sortOrder: 1 },
+        { id: 'st-1', taskId: 'task-1', title: '客厅', position: 'a0', status: 'COMPLETED' },
+        { id: 'st-2', taskId: 'task-1', title: '阳台', position: 'a1' },
       ],
     });
 
@@ -364,7 +365,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
 
     const instance = await testPrisma.task.findUniqueOrThrow({
       where: { id: expectedInstanceId },
-      include: { tags: true, subtasks: { orderBy: { sortOrder: 'asc' } } },
+      include: { tags: true, subtasks: { orderBy: { id: 'asc' } } },
     });
     expect(instance).toMatchObject({
       userId: USER,
@@ -376,12 +377,15 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
       repeatRule: dailyRuleJson,
       bucket: TaskBucket.SCHEDULED,
       status: TaskStatus.ACTIVE,
-      sortOrder: 4,
+      // 派生实例追加到列表末尾
+      position: positionBetween('a3', null),
     });
     expect(instance.tags.map((tt) => tt.tagId)).toEqual(['tag-1']);
-    expect(instance.subtasks.map((s) => [s.id, s.title, s.status])).toEqual([
-      [deriveSubtaskId(expectedInstanceId, 0), '客厅', TaskStatus.ACTIVE],
-      [deriveSubtaskId(expectedInstanceId, 1), '阳台', TaskStatus.ACTIVE],
+    const subtasks = [...instance.subtasks].sort((a, b) => (a.position! < b.position! ? -1 : 1));
+    // 子任务沿用原 Position
+    expect(subtasks.map((s) => [s.id, s.title, s.status, s.position])).toEqual([
+      [deriveSubtaskId(expectedInstanceId, 0), '客厅', TaskStatus.ACTIVE, 'a0'],
+      [deriveSubtaskId(expectedInstanceId, 1), '阳台', TaskStatus.ACTIVE, 'a1'],
     ]);
     await expectLoggedAsStored('task', expectedInstanceId);
     await expectLoggedAsStored('subtask', deriveSubtaskId(expectedInstanceId, 0));
@@ -514,7 +518,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
   it('convertToProject：新项目 + 按原顺序提升的任务 + 原任务物理删除，一个事务', async () => {
     const area = await testPrisma.area.create({ data: { userId: USER, title: 'A' } });
     await seedTag('tag-1');
-    await testPrisma.project.create({ data: { userId: USER, title: '旧项目', sortOrder: 7 } });
+    await testPrisma.project.create({ data: { userId: USER, title: '旧项目', position: 'a7' } });
     await seedTask('task-1', {
       title: '大任务',
       areaId: area.id,
@@ -522,13 +526,17 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     });
     await testPrisma.subtask.createMany({
       data: [
-        { id: 'st-2', taskId: 'task-1', title: '第二步', sortOrder: 1, status: 'COMPLETED' },
-        { id: 'st-1', taskId: 'task-1', title: '第一步', sortOrder: 0 },
+        { id: 'st-2', taskId: 'task-1', title: '第二步', position: 'a1', status: 'COMPLETED' },
+        { id: 'st-1', taskId: 'task-1', title: '第一步', position: 'a0' },
       ],
     });
 
     const project = await h.tasks.convertToProject(USER, 'task-1');
-    expect(project).toMatchObject({ title: '大任务', areaId: area.id, sortOrder: 8 });
+    expect(project).toMatchObject({
+      title: '大任务',
+      areaId: area.id,
+      position: positionBetween('a7', null),
+    });
     expect(project.tags.map((tag) => tag.id)).toEqual(['tag-1']);
 
     const promoted = await testPrisma.task.findMany({ where: { projectId: project.id } });
@@ -553,28 +561,20 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     );
   });
 
-  it('reorder：sortOrder 与同口径 Position 一起写；越权 / 不存在 / 重复 id → 404', async () => {
-    const created = {
-      'task-1': new Date('2026-01-01T00:00:00Z'),
-      'task-2': new Date('2026-01-02T00:00:00Z'),
-    };
-    await seedTask('task-1', { createdAt: created['task-1'] });
-    await seedTask('task-2', { createdAt: created['task-2'] });
+  it('reorder：只给被移动的行写 Position；越权 / 不存在 / 重复 id → 404', async () => {
+    await seedTask('task-1', { position: 'a0' });
+    await seedTask('task-2', { position: 'a1' });
+    await seedTask('task-3', { position: 'a2' });
     await seedTask('foreign', {}, OTHER_USER);
 
-    await h.tasks.reorder(USER, ['task-2', 'task-1']);
+    await h.tasks.reorder(USER, ['task-1', 'task-3', 'task-2']);
     const rows = await testPrisma.task.findMany({ where: { userId: USER } });
     const byId = Object.fromEntries(rows.map((row) => [row.id, row]));
-    // task-2 的 legacy 行 position 为空、sortOrder 本就是 0：有效位次已相同，不写
-    expect([byId['task-2'].sortOrder, effectivePosition(byId['task-2'])]).toEqual([
-      0,
-      synthPosition(0, created['task-2']),
-    ]);
-    expect(byId['task-1']).toMatchObject({
-      sortOrder: 1,
-      position: synthPosition(1, created['task-1']),
-    });
-    await expectLoggedAsStored('task', 'task-1');
+    expect(byId['task-1'].position).toBe('a0');
+    // 最长有序子序列之外只有一行要动：task-3 插到 task-1、task-2 之间
+    expect(byId['task-2'].position).toBe('a1');
+    expect(byId['task-3'].position).toBe(positionBetween('a0', 'a1'));
+    await expectLoggedAsStored('task', 'task-3');
 
     for (const ids of [
       ['task-1', 'foreign'],

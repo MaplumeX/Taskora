@@ -26,7 +26,7 @@ Key decisions, in the order they matter:
   deliberately: task fields are small and independently editable, and the
   alternatives (document CRDT, OT) fight the relational data model.
 - **Fractional-indexing strings for Position.** Ordering is a plain field of
-  Task/Project/Tag entities inside the LWW system, not a separate CRDT list.
+  every synced entity inside the LWW system, not a separate CRDT list.
   Concurrent drags converge without touching other rows' positions; a
   background re-balance keeps strings from growing unboundedly.
 - **Cross-field invariants are repaired after every hub merge** (amended
@@ -173,6 +173,19 @@ Key decisions, in the order they matter:
   forever) and scrubs references to missing entities that are not in the
   same push. A device drops Outbox writes for entities it learns were
   compacted. See `.scratch/local-first-v3/issues/08`.
+- **Position is the only ordering key** (amended 2026-10-02). Every synced
+  entity (Task, Subtask, Project, Project Heading, Area, Tag, Tag Group) now
+  carries a Position; the integer `sortOrder` left the wire in protocol 4.
+  Legacy rows were materialized once on hub startup with the key the hub used
+  to synthesize on the fly (`sortOrder` + `createdAt`), and the Local Replica
+  did the same in its 7 → 8 migration, so no device saw a change. Reorders on
+  both sides assign new keys only to the rows that must move
+  (`planReorder`). The hub's minimum protocol is 4: protocol-3 clients still
+  order four entity types by `sortOrder` and would write reorders the hub no
+  longer accepts, losing them silently. The column was dropped in a later
+  release (the Prisma migration refuses to run while any Position is still
+  null; the replica drops it in its 8 → 9 migration). See
+  `.scratch/retire-sort-order`.
 - **Migration is a vertical slice, desktop first**: Task CRUD in
   Inbox/Today buckets moves to the Engine first; the rest of `packages/api` and
   the old HTTP CRUD surface retire slice by slice. Web follows desktop once

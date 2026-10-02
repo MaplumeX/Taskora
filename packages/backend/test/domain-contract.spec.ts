@@ -24,7 +24,6 @@ const instant = (iso: string | null) => (iso ? new Date(iso) : null);
 const tagRows = VIEW_CONTRACT.tags.map((tag) => ({
   ...tag,
   color: '#3B82F6',
-  sortOrder: 0,
   tagGroupId: null,
   createdAt: new Date(VIEW_CONTRACT.now),
   updatedAt: new Date(VIEW_CONTRACT.now),
@@ -41,7 +40,6 @@ const taskRows = VIEW_CONTRACT.tasks.map(({ tagIds, ...task }) => ({
   reminderTime: null,
   repeatRule: null,
   headingId: null,
-  sortOrder: 0,
   tags: tagIds.map((tagId) => ({ tagId, tag: tagRows.find((tag) => tag.id === tagId)! })),
 }));
 
@@ -62,7 +60,6 @@ const projectRows = VIEW_CONTRACT.projects.map(({ tagIds, ...project }) => ({
   trashedAt: instant(project.trashedAt),
   createdAt: new Date(project.createdAt),
   updatedAt: new Date(project.createdAt),
-  sortOrder: 0,
   tags: tagLinks(tagIds),
 }));
 
@@ -120,7 +117,6 @@ describe('任务搜索契约 — hub REST 服务', () => {
     reminderTime: null,
     repeatRule: null,
     headingId: null,
-    sortOrder: 0,
     tags: tagIds.map((tagId) => ({ tagId, tag: tagRows.find((tag) => tag.id === tagId)! })),
     subtasks: subtaskRows.filter((subtask) => subtask.taskId === task.id),
   }));

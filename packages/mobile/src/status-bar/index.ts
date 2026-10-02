@@ -57,7 +57,7 @@ export function initStatusBar(): void {
       return tasks.map((task) => ({
         title: task.title,
         scheduledDate: task.scheduledDate,
-        sortOrder: task.sortOrder,
+        position: task.position ?? null,
       }));
     },
     createTask: async (title) => {

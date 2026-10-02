@@ -70,7 +70,6 @@ const baseTask: TaskResponseDto = {
   status: TaskStatus.ACTIVE,
   completedAt: null,
   trashedAt: null,
-  sortOrder: 0,
   projectId: null,
   headingId: null,
   areaId: null,
@@ -526,12 +525,12 @@ describe('feed 缓存同步乐观更新（Inbox/Today 等视图读 feed）', () 
 describe('Subtask 插入与重排（optimistic）', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  const sub = (id: string, sortOrder: number): SubtaskResponseDto => ({
+  const sub = (id: string, index: number): SubtaskResponseDto => ({
     id,
     title: id,
     status: TaskStatus.ACTIVE,
     completedAt: null,
-    sortOrder,
+    position: `a${index}`,
     taskId: 'task-1',
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z',

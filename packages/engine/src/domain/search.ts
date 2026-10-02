@@ -8,8 +8,7 @@
 
 import { SETTLED_TASK_STATUSES, TaskStatus, type TaskSearchRank } from '@taskora/shared';
 
-import { instantMs } from './calendar';
-import { effectivePosition, type Positioned } from './order';
+import { effectivePosition, sortByEffectivePosition, type Positioned } from './order';
 
 export interface SearchTaskFields extends Positioned {
   id: string;
@@ -19,12 +18,10 @@ export interface SearchTaskFields extends Positioned {
   trashedAt: unknown;
 }
 
-export interface SearchSubtaskFields {
+export interface SearchSubtaskFields extends Positioned {
   id: string;
   taskId: unknown;
   title: unknown;
-  sortOrder?: unknown;
-  createdAt?: unknown;
 }
 
 export interface TaskSearchOptions {
@@ -84,12 +81,7 @@ function compareStrings(a: string, b: string): number {
 }
 
 function sortSubtasks<S extends SearchSubtaskFields>(subtasks: S[]): S[] {
-  return subtasks.sort(
-    (a, b) =>
-      (Number(a.sortOrder) || 0) - (Number(b.sortOrder) || 0) ||
-      (instantMs(a.createdAt) ?? 0) - (instantMs(b.createdAt) ?? 0) ||
-      compareStrings(a.id, b.id),
-  );
+  return sortByEffectivePosition(subtasks);
 }
 
 /**

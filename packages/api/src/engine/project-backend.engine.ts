@@ -87,7 +87,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
     },
 
     async createProject(data: CreateProjectDto): Promise<ProjectResponseDto> {
-      // 新项目排末尾（sortOrder = max + 1，Position 追加）
+      // 新项目排末尾（Position 追加）
       const existing = await engine.list('project');
       const id = await engine.create('project', {
         ...planProjectCreate(data, zones()),
@@ -95,8 +95,6 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
           existing,
           existing.length > 0 ? existing[existing.length - 1].id : null,
         ),
-        sortOrder:
-          existing.reduce((max, p) => Math.max(max, (p.fields.sortOrder as number) ?? 0), -1) + 1,
       });
       return projectDto(id);
     },

@@ -24,7 +24,6 @@ function task(id: string, scheduledDate: string | null): FeedItem {
     bucket: TaskBucket.SCHEDULED,
     completedAt: null,
     trashedAt: null,
-    sortOrder: 0,
     createdAt: '2026-08-26T00:00:00.000Z',
     updatedAt: '2026-08-26T00:00:00.000Z',
     tags: [],

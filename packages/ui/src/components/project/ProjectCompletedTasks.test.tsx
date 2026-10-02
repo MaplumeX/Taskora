@@ -80,7 +80,6 @@ function makeTask(overrides: Partial<TaskResponseDto> = {}): TaskResponseDto {
     status: TaskStatus.COMPLETED,
     completedAt: '2025-08-08T00:00:00.000Z',
     trashedAt: null,
-    sortOrder: 0,
     projectId: 'project-1',
     headingId: null,
     areaId: null,
@@ -142,7 +141,6 @@ function makeHeading(overrides: Partial<ProjectHeadingResponseDto> = {}): Projec
     id: 'heading-1',
     projectId: 'project-1',
     title: 'Archived group',
-    sortOrder: 0,
     status: HeadingStatus.COMPLETED,
     completedAt: '2025-08-08T00:00:00.000Z',
     createdAt: '2025-08-08T00:00:00.000Z',
@@ -279,21 +277,19 @@ describe('ProjectCompletedTasks', () => {
     expect(screen.queryByText('Trashed')).not.toBeInTheDocument();
   });
 
-  it('preserves server sortOrder instead of re-sorting by completedAt', async () => {
+  it('preserves list order (Position) instead of re-sorting by completedAt', async () => {
     const user = userEvent.setup();
-    // sortOrder dictates display order: t-first (sortOrder 0) then t-second (1).
+    // The list order dictates display order: t-first then t-second.
     // completedAt desc would put t-second first — assert that does NOT happen.
     mockQuery([
       makeTask({
         id: 't-first',
         title: 'First',
-        sortOrder: 0,
         completedAt: '2025-08-01T00:00:00.000Z',
       }),
       makeTask({
         id: 't-second',
         title: 'Second',
-        sortOrder: 1,
         completedAt: '2025-08-10T00:00:00.000Z',
       }),
     ]);
@@ -309,17 +305,17 @@ describe('ProjectCompletedTasks', () => {
 
   /* --------------------------- archived heading grouping --------------------------- */
 
-  it('renders ungrouped tasks first, then archived heading blocks in sortOrder', async () => {
+  it('renders ungrouped tasks first, then archived heading blocks in Position order', async () => {
     const user = userEvent.setup();
-    const h1 = makeHeading({ id: 'h-1', title: 'Sprint 1', sortOrder: 0 });
-    const h2 = makeHeading({ id: 'h-2', title: 'Sprint 2', sortOrder: 1 });
+    const h1 = makeHeading({ id: 'h-1', title: 'Sprint 1', position: 'a0' });
+    const h2 = makeHeading({ id: 'h-2', title: 'Sprint 2', position: 'a1' });
     mockHeadings([h1, h2]);
     mockQuery([
       // ungrouped tasks (headingId null) come first
-      makeTask({ id: 't-flat-1', title: 'Flat 1', headingId: null, sortOrder: 0 }),
-      makeTask({ id: 't-flat-2', title: 'Flat 2', headingId: null, sortOrder: 1 }),
+      makeTask({ id: 't-flat-1', title: 'Flat 1', headingId: null, position: 'a0' }),
+      makeTask({ id: 't-flat-2', title: 'Flat 2', headingId: null, position: 'a1' }),
       // grouped under h-1
-      makeTask({ id: 't-g1', title: 'Grouped 1', headingId: 'h-1', sortOrder: 0 }),
+      makeTask({ id: 't-g1', title: 'Grouped 1', headingId: 'h-1', position: 'a2' }),
       // grouped under h-2 (empty of tasks, heading still shows)
     ]);
     mockUncomplete();

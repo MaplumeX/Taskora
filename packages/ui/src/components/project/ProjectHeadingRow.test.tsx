@@ -41,7 +41,6 @@ const heading: ProjectHeadingResponseDto = {
   id: 'heading-1',
   projectId: 'project-1',
   title: 'Build',
-  sortOrder: 0,
   status: HeadingStatus.ACTIVE,
   completedAt: null,
   createdAt: '2026-07-31T00:00:00.000Z',

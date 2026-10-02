@@ -28,17 +28,14 @@ describe('TagsService', () => {
     it('should return all tags for a user', async () => {
       const userId = 'user-1';
       const expected = [
-        { id: 'tag-1', title: 'Urgent', color: '#3B82F6', userId },
-        { id: 'tag-2', title: 'Low', color: '#10B981', userId },
+        { id: 'tag-1', title: 'Urgent', color: '#3B82F6', userId, position: 'a0' },
+        { id: 'tag-2', title: 'Low', color: '#10B981', userId, position: 'a1' },
       ];
-      mockPrisma.tag.findMany.mockResolvedValue(expected);
+      mockPrisma.tag.findMany.mockResolvedValue([expected[1], expected[0]]);
 
       const result = await service.findAll(userId);
 
-      expect(mockPrisma.tag.findMany).toHaveBeenCalledWith({
-        where: { userId },
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
-      });
+      expect(mockPrisma.tag.findMany).toHaveBeenCalledWith({ where: { userId } });
       expect(result).toEqual(expected);
     });
   });

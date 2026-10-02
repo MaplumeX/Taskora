@@ -64,7 +64,6 @@ function toTaskFeedItem(t: TaskWithTags): TaskFeedItem {
     // DTO 字段名保持 completedAt，承载 Settled At 语义（ADR 0006）。
     completedAt: t.settledAt ? t.settledAt.toISOString() : null,
     trashedAt: t.trashedAt ? t.trashedAt.toISOString() : null,
-    sortOrder: t.sortOrder,
     position: t.position,
     projectId: t.projectId,
     headingId: t.headingId,
@@ -96,7 +95,7 @@ function mapTag(tag: {
   id: string;
   title: string;
   color: string;
-  sortOrder: number;
+  position: string | null;
   tagGroupId: string | null;
   createdAt: Date;
   updatedAt: Date;
@@ -105,7 +104,7 @@ function mapTag(tag: {
     id: tag.id,
     title: tag.title,
     color: tag.color,
-    sortOrder: tag.sortOrder,
+    position: tag.position,
     tagGroupId: tag.tagGroupId,
     createdAt: tag.createdAt.toISOString(),
     updatedAt: tag.updatedAt.toISOString(),
@@ -134,7 +133,7 @@ export class FeedService {
       }),
       this.prisma.project.findMany({
         where: { id: { in: projectIds }, userId },
-        select: { id: true, position: true, feedPosition: true, sortOrder: true, createdAt: true },
+        select: { id: true, position: true, feedPosition: true },
       }),
     ]);
     if (tasks.length !== new Set(taskIds).size || projects.length !== new Set(projectIds).size) {
@@ -240,7 +239,6 @@ export class FeedService {
         bucket: p.bucket as ProjectBucket,
         completedAt: p.completedAt ? p.completedAt.toISOString() : null,
         trashedAt: p.trashedAt ? p.trashedAt.toISOString() : null,
-        sortOrder: p.sortOrder,
         position: p.position,
         feedPosition: p.feedPosition,
         areaId: p.areaId,

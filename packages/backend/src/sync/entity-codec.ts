@@ -3,14 +3,11 @@
  *
  * wire 字段名与 Prisma 列名一致（契约测试对齐，ADR-0007），例外：
  * - tagIds：hub 侧物化为关系表（TaskTag/ProjectTag/AreaTag）；
- * - 日期：wire 为 ISO 字符串，Prisma 为 Date；
- * - position：legacy 行（REST 创建、尚未被设备写过）为 null 时，
- *   由 sortOrder + createdAt 合成确定性 Position，保证新旧排序一致。
+ * - 日期：wire 为 ISO 字符串，Prisma 为 Date。
  */
 
 import {
   formatHlc,
-  synthPosition,
   type EntityDef,
   type FieldClocks,
   type SyncEntity,
@@ -264,26 +261,15 @@ function wireValueOf(codec: EntityCodec, row: PrismaRow, fieldName: string): unk
 
 /**
  * Prisma 行的 wire 字段视图（serializeRow 的字段归一化：tagIds 排序、
- * Date → ISO、legacy Position 合成）。
+ * Date → ISO）。
  */
 export function wireViewOfRow(codec: EntityCodec, row: PrismaRow): Record<string, unknown> {
   const fields: Record<string, unknown> = {};
   for (const field of codec.def.fields) {
     fields[field.name] = wireValueOf(codec, row, field.name);
   }
-  if (codec.def.orderField === 'position' && fields.position == null) {
-    fields.position = synthPosition(
-      typeof row.sortOrder === 'number' ? row.sortOrder : 0,
-      row.createdAt as Date,
-    );
-  }
   return fields;
 }
-
-// ---------- Position 合成 ----------
-// 实现下沉在 @taskora/engine（position.ts）：hub 的 legacy 行合成与
-// REST reorder 的 position 写入共用同一纯函数，保证两端排序口径一致。
-export { synthPosition };
 
 // ---------- 合并态 → Prisma 写数据 ----------
 
@@ -291,7 +277,7 @@ export { synthPosition };
  * DMMF 派生：模型名（小写）→ 不可为 null 的列集合。
  *
  * 注册表（entities.ts）面向 SQLite 副本、字段一律可空；Prisma 侧却有
- * 不可空列（如 Task.sortOrder Int @default(0)）。设备事件里这些列的
+ * 不可空列（如 Task.bucket 带默认值的枚举列）。设备事件里这些列的
  * null 值若照透传，unchecked create/update 校验会失败（错误常被
  * Prisma 报成 checked 变体的「Argument user is missing」，极具迷惑性
  * —— v0.4.2「同步后任务变 Inbox」事故的第二根因），因此 null 一律
@@ -346,9 +332,8 @@ export function toPrismaData(
       continue;
     }
     const value = fields[fieldName];
-    // 不可空列不接受 null（sortOrder 等）：剔除，交给 Prisma 列默认值
-    // 不是「剔除」：设备写入时做同样的规整（normalizeWriteValue：sortOrder
-    // null → 0），两端值一致，回声须保持平局，不纠正时钟。
+    // 不可空列不接受 null：剔除，交给 Prisma 列默认值（不计入 rejected，
+    // 不纠正时钟）。
     if (value === null && NON_NULLABLE_COLUMNS.get(codec.model.toLowerCase())?.has(fieldName)) {
       continue;
     }

@@ -38,8 +38,8 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useAreasQuery: () => ({ data: [] }),
   useTagsQuery: () => ({
     data: [
-      { id: 'urgent', title: 'Urgent', color: '#EF4444', sortOrder: 0, tagGroupId: null },
-      { id: 'home', title: 'Home', color: '#3B82F6', sortOrder: 1, tagGroupId: null },
+      { id: 'urgent', title: 'Urgent', color: '#EF4444', tagGroupId: null },
+      { id: 'home', title: 'Home', color: '#3B82F6', tagGroupId: null },
     ],
   }),
   useTagGroupsQuery: () => ({ data: [] }),
@@ -60,7 +60,6 @@ const baseTask: TaskResponseDto = {
   status: TaskStatus.ACTIVE,
   completedAt: null,
   trashedAt: null,
-  sortOrder: 0,
   projectId: null,
   headingId: null,
   areaId: null,

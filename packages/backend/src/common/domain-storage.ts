@@ -7,7 +7,8 @@
  * SyncHubService.writeAsHub，由 hub 的实体编解码器落成 Postgres 存储形态。
  */
 
-import { canonicalRepeatRule, synthPosition } from '@taskora/engine';
+import type { Prisma } from '@prisma/client';
+import { canonicalRepeatRule } from '@taskora/engine';
 import type { RepeatRule } from '@taskora/shared';
 
 import type { PrismaService } from '../prisma/prisma.service';
@@ -30,19 +31,23 @@ export function toWireFields(patch: object): Record<string, unknown> {
 }
 
 /**
- * 按序号排列的行的排序字段：sortOrder 与同口径合成的 Position 一起写
- * （web 的旧排序键与设备副本的 Position 一致，ADR-0007）。
+ * 本用户某实体列表两端的 Position（新建置顶 / 追加末尾的邻居）。只取一行：
+ * Postgres 的默认排序规则不是字节序，用 COLLATE "C" 与设备副本、domain
+ * sortByEffectivePosition 同一口径。
  */
-export function orderFields(
-  index: number,
-  createdAt: Date,
-): { sortOrder: number; position: string } {
-  return { sortOrder: index, position: synthPosition(index, createdAt) };
-}
-
-/** 新建行的排序字段与创建时间（Position 按同一个 createdAt 合成）。 */
-export function newRowOrder(index: number, now = new Date()) {
-  return { ...orderFields(index, now), createdAt: now.toISOString() };
+export async function edgePositions(
+  client: Pick<Prisma.TransactionClient, '$queryRawUnsafe'>,
+  table: 'Task' | 'Project' | 'Tag',
+  userId: string,
+): Promise<{ first: string | null; last: string | null }> {
+  const edge = async (direction: 'ASC' | 'DESC') => {
+    const rows = await client.$queryRawUnsafe<Array<{ position: string }>>(
+      `SELECT "position" FROM "${table}" WHERE "userId" = $1 AND "position" IS NOT NULL ORDER BY "position" COLLATE "C" ${direction} LIMIT 1`,
+      userId,
+    );
+    return rows[0]?.position ?? null;
+  };
+  return { first: await edge('ASC'), last: await edge('DESC') };
 }
 
 /** 视图判定的上下文：只有 Today / Upcoming 需要查账户时区。 */

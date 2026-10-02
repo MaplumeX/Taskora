@@ -209,7 +209,7 @@ export interface ContractSubtask {
   title: string;
   status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
   settledAt: string | null;
-  sortOrder: number;
+  position: string;
   createdAt: string;
 }
 
@@ -217,7 +217,7 @@ function subtask(
   id: string,
   taskId: string,
   title: string,
-  sortOrder: number,
+  index: number,
   fields: Partial<ContractSubtask> = {},
 ): ContractSubtask {
   return {
@@ -226,7 +226,7 @@ function subtask(
     title,
     status: 'ACTIVE',
     settledAt: null,
-    sortOrder,
+    position: `a${index}`,
     createdAt: CREATED,
     ...fields,
   };

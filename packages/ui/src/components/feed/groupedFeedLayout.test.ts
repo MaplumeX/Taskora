@@ -36,9 +36,6 @@ function blockSummary(layout: GroupedFeedLayout): string[] {
   });
 }
 
-// 仅让 fixture 的 sortOrder 互不相同；推导按 feed 数组顺序而非 sortOrder。
-let feedPosition = 0;
-
 function taskItem(
   id: string,
   opts: { projectId?: string | null; areaId?: string | null } = {},
@@ -58,7 +55,6 @@ function taskItem(
     bucket: TaskBucket.ANYTIME,
     completedAt: null,
     trashedAt: null,
-    sortOrder: feedPosition++,
     createdAt: '2026-07-31T00:00:00.000Z',
     updatedAt: '2026-07-31T00:00:00.000Z',
     tags: [],
@@ -84,7 +80,6 @@ function projectItem(id: string, opts: { areaId?: string | null } = {}): Project
     bucket: ProjectBucket.SCHEDULED,
     completedAt: null,
     trashedAt: null,
-    sortOrder: feedPosition++,
     createdAt: '2026-07-31T00:00:00.000Z',
     updatedAt: '2026-07-31T00:00:00.000Z',
     tags: [],
@@ -107,7 +102,6 @@ function project(
     title: id,
     notes: null,
     areaId: opts.areaId ?? null,
-    sortOrder: 0,
     status: opts.status ?? ProjectStatus.ACTIVE,
     bucket: ProjectBucket.ANYTIME,
     scheduledType: ScheduledType.NONE,
@@ -128,7 +122,6 @@ function area(id: string): AreaResponseDto {
     id,
     title: id,
     notes: null,
-    sortOrder: 0,
     tags: [],
     createdAt: '2026-07-31T00:00:00.000Z',
     updatedAt: '2026-07-31T00:00:00.000Z',

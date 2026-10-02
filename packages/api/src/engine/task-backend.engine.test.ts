@@ -282,8 +282,7 @@ describe('EngineTaskBackend（V2：Subtask / convert / emptyTrash 全离线）',
     const task = await backend.createTask({ title: '父任务' });
     const s1 = await backend.createSubtask(task.id, { title: '步骤一' });
     const s2 = await backend.createSubtask(task.id, { title: '步骤二' });
-    expect(s1.sortOrder).toBe(0);
-    expect(s2.sortOrder).toBe(1);
+    expect(s1.position! < s2.position!).toBe(true);
 
     const detail = await backend.getTask(task.id);
     expect(detail.subtasks?.map((s) => s.title)).toEqual(['步骤一', '步骤二']);
@@ -318,9 +317,9 @@ describe('EngineTaskBackend（V2：Subtask / convert / emptyTrash 全离线）',
 
     const titles = async () => (await backend.getTask(task.id)).subtasks?.map((s) => s.title);
     expect(await titles()).toEqual(['一', '二', '二点五', '三']);
-    expect((await backend.getTask(task.id)).subtasks?.find((s) => s.id === s3.id)?.sortOrder).toBe(
-      3,
-    );
+    const s3Row = (await backend.getTask(task.id)).subtasks?.find((s) => s.id === s3.id);
+    // Position 只给新行分配，「三」不动
+    expect(s3Row?.position).toBe(s3.position);
 
     await backend.createSubtask(task.id, { title: '二', id, afterId: s1.id });
     expect(await titles()).toEqual(['一', '二', '二点五', '三']);

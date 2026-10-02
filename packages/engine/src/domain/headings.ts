@@ -4,20 +4,14 @@
 
 import { HeadingStatus, ProjectStatus, ScheduledType, TaskStatus } from '@taskora/shared';
 
-import { instantMs } from './calendar';
 import { resolveProjectBucket } from './bucket';
+import { sortByEffectivePosition, type Positioned } from './order';
 import type { ProjectFields } from './projects';
 import { taskTrashPatch, type TaskPatch } from './tasks';
 
-/** 分组列表顺序：sortOrder 升序，平局先建的在前。 */
-export function sortHeadings<T extends { sortOrder?: unknown; createdAt?: unknown }>(
-  headings: readonly T[],
-): T[] {
-  return [...headings].sort(
-    (a, b) =>
-      ((a.sortOrder as number) ?? 0) - ((b.sortOrder as number) ?? 0) ||
-      (instantMs(a.createdAt) ?? 0) - (instantMs(b.createdAt) ?? 0),
-  );
+/** 分组列表顺序：有效 Position（与其他列表同一口径）。 */
+export function sortHeadings<T extends Positioned>(headings: readonly T[]): T[] {
+  return sortByEffectivePosition(headings);
 }
 
 interface HeadingTask {
@@ -129,7 +123,7 @@ export function planHeadingLayout(
   activeHeadingIds: string[],
   layoutTaskIds: string[],
 ): {
-  headingOrder: Array<{ id: string; sortOrder: number }>;
+  headingOrder: string[];
   taskHeading: Array<{ id: string; headingId: string | null }>;
   visualTaskIds: string[];
 } {
@@ -144,7 +138,7 @@ export function planHeadingLayout(
   ];
   assertExactIdSet(visualTaskIds, layoutTaskIds, 'task');
   return {
-    headingOrder: layout.groups.map((group, sortOrder) => ({ id: group.headingId, sortOrder })),
+    headingOrder: layout.groups.map((group) => group.headingId),
     taskHeading: [
       ...layout.ungroupedTaskIds.map((id) => ({ id, headingId: null })),
       ...layout.groups.flatMap((group) =>

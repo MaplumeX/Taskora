@@ -19,7 +19,7 @@ async function main() {
     data: {
       title: 'Work',
       notes: 'Work-related tasks',
-      sortOrder: 0,
+      position: 'a0',
       userId: user.id,
     },
   });
@@ -29,13 +29,14 @@ async function main() {
       title: 'Taskora',
       notes: 'Build the Taskora app',
       areaId: area.id,
-      sortOrder: 0,
+      position: 'a0',
       userId: user.id,
     },
   });
 
   await prisma.task.create({
     data: {
+      position: 'a0',
       title: 'Set up backend',
       bucket: TaskBucket.INBOX,
       status: TaskStatus.ACTIVE,
@@ -45,6 +46,7 @@ async function main() {
 
   await prisma.task.create({
     data: {
+      position: 'a1',
       title: 'Implement frontend',
       bucket: TaskBucket.ANYTIME,
       status: TaskStatus.ACTIVE,
@@ -55,6 +57,7 @@ async function main() {
 
   await prisma.task.create({
     data: {
+      position: 'a2',
       title: 'Design database schema',
       bucket: TaskBucket.SCHEDULED,
       scheduledType: ScheduledType.SOMEDAY,
