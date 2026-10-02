@@ -209,7 +209,7 @@ describe('MultiSelectToolbar', () => {
     renderWithProviders(<MultiSelectToolbar />);
 
     await user.click(screen.getByRole('button', { name: /^(More|更多)$/ }));
-    await user.click(await screen.findByRole('menuitem', { name: /^(Tags|标签)$/ }));
+    await user.click(await screen.findByRole('button', { name: /^(Tags|标签)$/ }));
 
     const urgent = await screen.findByRole('option', { name: 'Urgent' });
     expect(urgent).toHaveAttribute('aria-checked', 'mixed');

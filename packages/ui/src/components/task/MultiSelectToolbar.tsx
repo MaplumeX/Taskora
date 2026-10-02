@@ -37,12 +37,12 @@ import {
 import { cn } from '@/lib/utils';
 import { FieldPickerDialog } from '@/components/common/FieldPicker';
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+  ActionSheet,
+  ActionSheetContent,
+  ActionSheetItem,
+  ActionSheetSeparator,
+  ActionSheetTrigger,
+} from '@/components/ui/action-sheet';
 import { ScheduledDateField } from './fields/ScheduledDateField';
 import { DueDateField } from './fields/DueDateField';
 import { RepeatRuleField } from './fields/RepeatRuleField';
@@ -53,8 +53,8 @@ type PickerKind = 'scheduled' | 'move' | 'due' | 'tags' | 'repeat';
 
 /**
  * 触控多选模式的底部工具栏（对齐 Things 3 iPhone）：左滑任务行进入模式后
- * 固定在页面底部，对勾选集合批量执行「计划 / 移动 / 删除」，其余动作收进
- * 「更多」。动作执行完即退出模式；切换页面、点「完成」、系统返回也会退出。
+ * 以悬浮胶囊浮在页面底部，对勾选集合批量执行「计划 / 移动 / 删除」，其余
+ * 动作收进「更多」（底部 Action Sheet）。动作执行完即退出模式；切换页面、点「完成」、系统返回也会退出。
  *
  * 只作用于单个任务才有意义的动作（重复、转换为项目）仅在勾选一项时出现。
  * 标签按三态批量切换：各任务在自己原有的标签上增减（`.scratch/tags-things3`）。
@@ -165,78 +165,80 @@ export function MultiSelectToolbar() {
   return (
     <div
       data-multi-select-toolbar
-      className="fixed inset-x-0 bottom-0 z-40 border-t bg-background/95 pb-[env(safe-area-inset-bottom)] backdrop-blur"
+      // 悬浮胶囊：从 FAB 所在的右下角展开，与 FAB 同属浮层体系。
+      className="fixed inset-x-3 bottom-[calc(0.75rem+env(safe-area-inset-bottom))] z-40 mx-auto max-w-md origin-bottom-right duration-base ease-spring animate-in fade-in-0 zoom-in-90 slide-in-from-bottom-4"
     >
-      <div className="mx-auto flex max-w-3xl items-center justify-between pl-4 pr-2 pt-1">
-        <span className="text-meta text-muted-foreground">
-          {t('task:multiSelectCount', { count: ids.length })}
+      <div className="flex h-14 items-center gap-1 rounded-full border bg-background/85 pl-3 pr-1.5 shadow-popover backdrop-blur-xl">
+        {/* key 随数量变化重挂载，勾选增减时数字弹一下。 */}
+        <span
+          key={ids.length}
+          role="status"
+          aria-label={t('task:multiSelectCount', { count: ids.length })}
+          className="flex h-7 min-w-[1.75rem] shrink-0 items-center justify-center rounded-full bg-primary px-2 text-sm font-semibold tabular-nums text-primary-foreground duration-fast animate-in zoom-in-75"
+        >
+          {ids.length}
         </span>
+        <div className="flex flex-1 items-center justify-around">
+          <ToolbarButton
+            icon={CalendarClock}
+            label={t('task:multiSelectSchedule')}
+            disabled={empty}
+            onClick={() => openPicker('scheduled')}
+          />
+          <ToolbarButton
+            icon={FolderTree}
+            label={t('task:move')}
+            disabled={empty}
+            onClick={() => openPicker('move')}
+          />
+          <ToolbarButton
+            icon={Trash2}
+            label={t('common:delete')}
+            disabled={empty}
+            onClick={handleDelete}
+            className="text-destructive"
+          />
+          <ActionSheet>
+            <ActionSheetTrigger asChild>
+              <ToolbarButton icon={MoreHorizontal} label={t('common:more')} disabled={empty} />
+            </ActionSheetTrigger>
+            <ActionSheetContent title={t('task:multiSelectCount', { count: ids.length })}>
+              <ActionSheetItem icon={allCompleted ? Circle : Check} onClick={handleToggleComplete}>
+                {allCompleted ? t('task:markIncomplete') : t('task:markComplete')}
+              </ActionSheetItem>
+              <ActionSheetItem icon={CircleSlash} onClick={handleToggleCancel}>
+                {allCancelled ? t('task:markUncancelled') : t('task:markCancelled')}
+              </ActionSheetItem>
+              <ActionSheetSeparator />
+              <ActionSheetItem icon={CalendarDays} onClick={() => openPicker('due')}>
+                {t('task:dueDate')}
+              </ActionSheetItem>
+              <ActionSheetItem icon={Tag} onClick={() => openPicker('tags')}>
+                {t('task:tags')}
+              </ActionSheetItem>
+              {canRepeat && (
+                <ActionSheetItem icon={Repeat} onClick={() => openPicker('repeat')}>
+                  {t('task:repeat')}
+                </ActionSheetItem>
+              )}
+              {single && (
+                <>
+                  <ActionSheetSeparator />
+                  <ActionSheetItem icon={FolderInput} onClick={handleConvertToProject}>
+                    {t('task:convertToProject')}
+                  </ActionSheetItem>
+                </>
+              )}
+            </ActionSheetContent>
+          </ActionSheet>
+        </div>
         <button
           type="button"
           onClick={exit}
-          className="h-9 rounded-md px-3 text-sm font-medium text-primary active:bg-accent"
+          className="h-10 shrink-0 rounded-full bg-primary/10 px-4 text-sm font-medium text-primary transition-colors active:bg-primary/20"
         >
           {t('common:done')}
         </button>
-      </div>
-      <div className="mx-auto grid max-w-3xl grid-cols-4 px-2 pb-1">
-        <ToolbarButton
-          icon={CalendarClock}
-          label={t('task:multiSelectSchedule')}
-          disabled={empty}
-          onClick={() => openPicker('scheduled')}
-        />
-        <ToolbarButton
-          icon={FolderTree}
-          label={t('task:move')}
-          disabled={empty}
-          onClick={() => openPicker('move')}
-        />
-        <ToolbarButton
-          icon={Trash2}
-          label={t('common:delete')}
-          disabled={empty}
-          onClick={handleDelete}
-        />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <ToolbarButton icon={MoreHorizontal} label={t('common:more')} disabled={empty} />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="end" className="w-48">
-            <DropdownMenuItem onClick={handleToggleComplete}>
-              {allCompleted ? <Circle className="h-4 w-4" /> : <Check className="h-4 w-4" />}
-              {allCompleted ? t('task:markIncomplete') : t('task:markComplete')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={handleToggleCancel}>
-              <CircleSlash className="h-4 w-4" />
-              {allCancelled ? t('task:markUncancelled') : t('task:markCancelled')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => openPicker('due')}>
-              <CalendarDays className="h-4 w-4" />
-              {t('task:dueDate')}
-            </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => openPicker('tags')}>
-              <Tag className="h-4 w-4" />
-              {t('task:tags')}
-            </DropdownMenuItem>
-            {canRepeat && (
-              <DropdownMenuItem onClick={() => openPicker('repeat')}>
-                <Repeat className="h-4 w-4" />
-                {t('task:repeat')}
-              </DropdownMenuItem>
-            )}
-            {single && (
-              <>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem onClick={handleConvertToProject}>
-                  <FolderInput className="h-4 w-4" />
-                  {t('task:convertToProject')}
-                </DropdownMenuItem>
-              </>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
       </div>
 
       <FieldPickerDialog
@@ -291,14 +293,15 @@ const ToolbarButton = React.forwardRef<HTMLButtonElement, ToolbarButtonProps>(
     <button
       ref={ref}
       type="button"
+      aria-label={label}
+      title={label}
       className={cn(
-        'flex h-14 flex-col items-center justify-center gap-0.5 rounded-lg text-primary transition-colors active:bg-accent disabled:text-muted-foreground disabled:opacity-60',
+        'flex h-11 w-11 items-center justify-center rounded-full text-primary transition-colors active:bg-accent disabled:text-muted-foreground disabled:opacity-60',
         className,
       )}
       {...props}
     >
-      <Icon className="h-5 w-5" />
-      <span className="text-[11px] leading-none">{label}</span>
+      <Icon className="h-[22px] w-[22px]" />
     </button>
   ),
 );
