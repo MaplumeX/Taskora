@@ -166,10 +166,11 @@ describe('SettingsGeneral — Android status bar', () => {
         clear: async () => {},
         onAction: () => {},
         openSettings: async () => {},
+        notifyQuickAddFailed: async () => {},
       },
       t: (key) => key,
       listTodayTasks: async () => [],
-      createTask: async () => {},
+      createDraft: async () => null,
     });
     controller.syncSession(true);
     registerStatusBarController(controller);

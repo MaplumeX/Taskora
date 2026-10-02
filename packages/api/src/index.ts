@@ -223,6 +223,18 @@ export {
   type TranslateFn as StatusBarTranslateFn,
 } from './status-bar/controller';
 
+// Quick Add 草稿落库（桌面浮窗与 Android 状态栏浮层共用）
+export {
+  createFromQuickAddDraft,
+  parseQuickAddInput,
+  quickAddOpensInApp,
+  toQuickAddDraft,
+  type QuickAddDraft,
+  type QuickAddWhen,
+  type QuickAddPlacement,
+  type QuickAddResult,
+} from './quick-add/draft';
+
 // Utilities
 export * from './utils/date';
 // 列表顺序（ADR-0007 Position）：UI 与两种后端同一口径。

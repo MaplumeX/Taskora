@@ -307,6 +307,18 @@
           "markdownDescription": "Denies the cancel command without any pre-configured scope."
         },
         {
+          "description": "Enables the notify_quick_add_failed command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-notify-quick-add-failed",
+          "markdownDescription": "Enables the notify_quick_add_failed command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the notify_quick_add_failed command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-notify-quick-add-failed",
+          "markdownDescription": "Denies the notify_quick_add_failed command without any pre-configured scope."
+        },
+        {
           "description": "Enables the register_listener command without any pre-configured scope.",
           "type": "string",
           "const": "allow-register-listener",
@@ -329,6 +341,18 @@
           "type": "string",
           "const": "deny-remove-listener",
           "markdownDescription": "Denies the remove_listener command without any pre-configured scope."
+        },
+        {
+          "description": "Enables the set_quick_add_data command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-set-quick-add-data",
+          "markdownDescription": "Enables the set_quick_add_data command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the set_quick_add_data command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-set-quick-add-data",
+          "markdownDescription": "Denies the set_quick_add_data command without any pre-configured scope."
         },
         {
           "description": "Enables the show command without any pre-configured scope.",
@@ -355,10 +379,22 @@
           "markdownDescription": "Denies the take_navigation command without any pre-configured scope."
         },
         {
-          "description": "Allows showing and cancelling the single-line status bar notification, subscribing to its actions, and taking the navigation request carried by a notification tap.\n#### This default permission set includes:\n\n- `allow-show`\n- `allow-cancel`\n- `allow-take-navigation`\n- `allow-register-listener`\n- `allow-remove-listener`",
+          "description": "Enables the take_pending_quick_adds command without any pre-configured scope.",
+          "type": "string",
+          "const": "allow-take-pending-quick-adds",
+          "markdownDescription": "Enables the take_pending_quick_adds command without any pre-configured scope."
+        },
+        {
+          "description": "Denies the take_pending_quick_adds command without any pre-configured scope.",
+          "type": "string",
+          "const": "deny-take-pending-quick-adds",
+          "markdownDescription": "Denies the take_pending_quick_adds command without any pre-configured scope."
+        },
+        {
+          "description": "Allows showing and cancelling the single-line status bar notification, subscribing to its actions, taking the navigation request carried by a notification tap, taking queued quick-add submissions, writing the quick-add data snapshot, and posting the quick-add failure notification.\n#### This default permission set includes:\n\n- `allow-show`\n- `allow-cancel`\n- `allow-take-navigation`\n- `allow-take-pending-quick-adds`\n- `allow-set-quick-add-data`\n- `allow-notify-quick-add-failed`\n- `allow-register-listener`\n- `allow-remove-listener`",
           "type": "string",
           "const": "default",
-          "markdownDescription": "Allows showing and cancelling the single-line status bar notification, subscribing to its actions, and taking the navigation request carried by a notification tap.\n#### This default permission set includes:\n\n- `allow-show`\n- `allow-cancel`\n- `allow-take-navigation`\n- `allow-register-listener`\n- `allow-remove-listener`"
+          "markdownDescription": "Allows showing and cancelling the single-line status bar notification, subscribing to its actions, taking the navigation request carried by a notification tap, taking queued quick-add submissions, writing the quick-add data snapshot, and posting the quick-add failure notification.\n#### This default permission set includes:\n\n- `allow-show`\n- `allow-cancel`\n- `allow-take-navigation`\n- `allow-take-pending-quick-adds`\n- `allow-set-quick-add-data`\n- `allow-notify-quick-add-failed`\n- `allow-register-listener`\n- `allow-remove-listener`"
         }
       ]
     }

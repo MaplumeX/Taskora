@@ -6,6 +6,7 @@ import {
   STATUS_BAR_ENABLED_KEY,
   type StatusBarController,
 } from './controller';
+import type { QuickAddDraft } from '../quick-add/draft';
 import type { StatusBarActionEvent, StatusBarShell } from './shell';
 
 const NOW = new Date(2026, 8, 25, 15, 0, 0);
@@ -18,6 +19,8 @@ const t: (key: string, options?: Record<string, unknown>) => string = (key) => {
   switch (key) {
     case 'statusbar:quickAddEntry':
       return '快速添加任务';
+    case 'statusbar:quickAddFailed':
+      return '未能添加任务';
     default:
       return key;
   }
@@ -26,10 +29,11 @@ const t: (key: string, options?: Record<string, unknown>) => string = (key) => {
 interface Harness {
   shell: StatusBarShell & {
     posted: Array<{ title: string }>;
+    failures: Array<{ title: string; text: string }>;
     cleared: number;
     emitAction(event: StatusBarActionEvent): void;
   };
-  created: string[];
+  created: QuickAddDraft[];
   setTasks(tasks: StatusBarTaskInput[]): void;
   controller: StatusBarController;
 }
@@ -39,13 +43,18 @@ function installHarness(options?: {
   tasks?: StatusBarTaskInput[];
   enabledInStorage?: boolean;
   storedIndex?: number;
+  createFails?: boolean;
+  syncQuickAddData?: () => Promise<void>;
+  revealTask?: (taskId: string) => void;
 }): Harness {
   const posted: Array<{ title: string }> = [];
-  const created: string[] = [];
+  const failures: Array<{ title: string; text: string }> = [];
+  const created: QuickAddDraft[] = [];
   let actionCb: ((event: StatusBarActionEvent) => void) | null = null;
   let tasks = options?.tasks ?? [];
   const shell = {
     posted,
+    failures,
     cleared: 0,
     isPermissionGranted: vi.fn(async () => options?.granted ?? true),
     requestPermission: vi.fn(async () => options?.granted ?? true),
@@ -59,6 +68,9 @@ function installHarness(options?: {
       actionCb = cb;
     },
     openSettings: vi.fn(async () => {}),
+    notifyQuickAddFailed: vi.fn(async (content: { title: string; text: string }) => {
+      failures.push(content);
+    }),
     emitAction(event: StatusBarActionEvent) {
       actionCb?.(event);
     },
@@ -73,9 +85,13 @@ function installHarness(options?: {
     shell,
     t,
     listTodayTasks: async () => tasks,
-    createTask: async (title) => {
-      created.push(title);
+    createDraft: async (draft) => {
+      if (options?.createFails) throw new Error('engine down');
+      created.push(draft);
+      return { taskId: `task-${created.length}` };
     },
+    syncQuickAddData: options?.syncQuickAddData,
+    revealTask: options?.revealTask,
     refreshDebounceMs: 0,
     now: () => NOW,
   });
@@ -250,11 +266,38 @@ describe('createStatusBarController', () => {
 
     h.shell.emitAction({ actionId: 'quick-add', inputValue: '  买牛奶  ' });
     await flush();
-    expect(h.created).toEqual(['买牛奶']);
+    expect(h.created).toEqual([{ title: '买牛奶' }]);
     expect(h.shell.posted.length).toBeGreaterThan(before);
 
     h.shell.emitAction({ actionId: 'quick-add', inputValue: '   ' });
     expect(h.created).toHaveLength(1);
+  });
+
+  it('quick-add：草稿 JSON 解析后整份落库', async () => {
+    const h = installHarness({ enabledInStorage: true, tasks: [] });
+    h.controller.syncSession(true);
+    await flush();
+
+    h.shell.emitAction({
+      actionId: 'quick-add',
+      inputValue: JSON.stringify({ title: '写周报', when: { type: 'someday' }, tagIds: ['t1'] }),
+    });
+    await flush();
+    expect(h.created).toEqual([{ title: '写周报', when: { type: 'someday' }, tagIds: ['t1'] }]);
+  });
+
+  it('quick-add：落库失败发系统通知（正文为标题），之后照常刷新', async () => {
+    const h = installHarness({ enabledInStorage: true, tasks: [], createFails: true });
+    h.controller.syncSession(true);
+    await flush();
+    const before = h.shell.posted.length;
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    h.shell.emitAction({ actionId: 'quick-add', inputValue: '{"title":" 买牛奶 "}' });
+    await flush();
+    expect(h.shell.failures).toEqual([{ title: '未能添加任务', text: '买牛奶' }]);
+    expect(h.shell.posted.length).toBeGreaterThan(before);
+    warn.mockRestore();
   });
 
   it('tap / dismiss 不触发写或发布', async () => {
@@ -304,5 +347,45 @@ describe('createStatusBarController', () => {
     await flush();
     // 游标 5 越界收敛回 0
     expect(h.shell.posted.at(-1)?.title).toBe('a (1/2)');
+  });
+
+  it('快速添加数据快照：每次发布后同步；未生效时不同步；失败不影响通知', async () => {
+    const sync = vi.fn(async () => {});
+    const h = installHarness({ enabledInStorage: true, tasks: [], syncQuickAddData: sync });
+    await flush();
+    expect(sync).not.toHaveBeenCalled(); // 未登录
+
+    h.controller.syncSession(true);
+    await flush();
+    expect(sync).toHaveBeenCalledTimes(1);
+
+    h.controller.scheduleRefresh();
+    await flush();
+    expect(sync).toHaveBeenCalledTimes(2);
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    sync.mockRejectedValueOnce(new Error('plugin missing'));
+    const before = h.shell.posted.length;
+    h.controller.scheduleRefresh();
+    await flush();
+    expect(h.shell.posted.length).toBe(before + 1);
+    warn.mockRestore();
+  });
+
+  it('quick-add：openInApp 的提交落库后定位到新任务；普通提交不定位', async () => {
+    const revealTask = vi.fn();
+    const h = installHarness({ enabledInStorage: true, tasks: [], revealTask });
+    h.controller.syncSession(true);
+    await flush();
+
+    h.shell.emitAction({ actionId: 'quick-add', inputValue: '{"title":"普通"}' });
+    h.shell.emitAction({
+      actionId: 'quick-add',
+      inputValue: '{"title":"继续编辑","openInApp":true}',
+    });
+    await flush();
+    expect(h.created).toEqual([{ title: '普通' }, { title: '继续编辑' }]);
+    expect(revealTask).toHaveBeenCalledTimes(1);
+    expect(revealTask).toHaveBeenCalledWith('task-2');
   });
 });

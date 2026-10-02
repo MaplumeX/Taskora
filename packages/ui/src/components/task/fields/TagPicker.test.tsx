@@ -23,9 +23,9 @@ function tag(id: string, title: string, tagGroupId: string | null = null): TagRe
 const user = userEvent.setup();
 const createMutate = vi.fn();
 
-function renderField(own: TagResponseDto[] = []) {
+function renderField(own: TagResponseDto[] = [], allowCreate?: boolean) {
   const onPatch = vi.fn();
-  render(<TagsField current={{ tags: own }} onPatch={onPatch} />);
+  render(<TagsField current={{ tags: own }} onPatch={onPatch} allowCreate={allowCreate} />);
   return { onPatch, input: screen.getByRole('combobox') };
 }
 
@@ -72,5 +72,17 @@ describe('TagsField / TagPicker', () => {
     expect(createMutate).toHaveBeenCalledWith({ title: 'Trip' }, expect.anything());
     expect(onPatch).toHaveBeenLastCalledWith({ tagIds: ['trip'] });
     expect(input).toHaveValue('');
+  });
+
+  it('allowCreate=false：不出现新建行，回车不新建', async () => {
+    const { onPatch, input } = renderField([], false);
+    await user.type(input, 'off');
+    expect(optionNames()).toEqual(['Office']);
+
+    await user.clear(input);
+    await user.type(input, 'Trip{Enter}');
+    expect(optionNames()).toEqual([]);
+    expect(createMutate).not.toHaveBeenCalled();
+    expect(onPatch).not.toHaveBeenCalled();
   });
 });

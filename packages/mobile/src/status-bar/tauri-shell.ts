@@ -7,9 +7,10 @@
  * 只能出现在系统 action 行，且无自定义布局）。
  *
  * - 发布/撤下：`plugin:statusbar|show` / `plugin:statusbar|cancel`；
- * - 动作回调：插件 trigger('action')，载荷 { action: 'next' } 或
- *   { action: 'quick-add', input }（「＋」拉起 QuickAddActivity 浮层，
- *   提交文本经 input 带回；冷启动输入由原生落盘补发）；
+ * - 动作回调：插件 trigger('action')，载荷 { action: 'next' }；
+ * - 快速添加（quick-add-android issue 01）：浮层提交的草稿 JSON 由原生
+ *   入队，这里注册监听后取一次（冷启动时提交早于 JS 就绪），之后每次
+ *   收到 quick-add-available 再取；逐条转成 { actionId: 'quick-add' }；
  * - 权限请求走 notification-bridge 的实时原生复查（不缓存 web 权限，
  *   与 reminders 同一口径）；渠道被用户在系统设置关闭时 show 会 reject，
  *   控制器据此回滚开关（issue 01 行为保留）。
@@ -61,9 +62,33 @@ export function createTauriStatusBarShell(): StatusBarShell {
       }).catch((error) => {
         console.warn('[status-bar] action listener failed:', error);
       });
+
+      // 原生取出即删，重复取只会拿到空列表，无需在 JS 侧去重。
+      const drainQuickAdds = async () => {
+        try {
+          const items = await invoke<string[]>('plugin:statusbar|take_pending_quick_adds');
+          for (const input of items) cb({ actionId: 'quick-add', inputValue: input });
+        } catch (error) {
+          console.warn('[status-bar] take quick adds failed:', error);
+        }
+      };
+      void addPluginListener('statusbar', 'quick-add-available', () => void drainQuickAdds())
+        .then(drainQuickAdds)
+        .catch((error) => {
+          console.warn('[status-bar] quick-add listener failed:', error);
+        });
     },
     async openSettings() {
       await invoke('open_notification_settings');
+    },
+    async notifyQuickAddFailed(content) {
+      await invoke('plugin:statusbar|notify_quick_add_failed', {
+        args: {
+          title: content.title,
+          text: content.text,
+          channelName: i18n.t('statusbar:quickAddFailedChannelName'),
+        },
+      });
     },
   };
 }

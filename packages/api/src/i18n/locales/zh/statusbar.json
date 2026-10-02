@@ -2,5 +2,15 @@
   "quickAddEntry": "快速添加任务",
   "quickAddPlaceholder": "输入任务标题",
   "quickAddSubmit": "添加",
-  "channelName": "状态栏"
+  "channelName": "状态栏",
+  "quickAddFailed": "未能添加任务",
+  "quickAddFailedChannelName": "快速添加",
+  "quickAddAddNotes": "+ 备注",
+  "quickAddTomorrow": "明天",
+  "quickAddWeekend": "周末",
+  "quickAddPickDate": "选择日期",
+  "quickAddSearch": "搜索",
+  "quickAddContinuous": "连续添加",
+  "quickAddContinueInApp": "在应用中继续",
+  "quickAddAdded": "已添加"
 }

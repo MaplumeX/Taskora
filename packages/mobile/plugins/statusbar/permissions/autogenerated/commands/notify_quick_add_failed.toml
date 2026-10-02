@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-notify-quick-add-failed"
+description = "Enables the notify_quick_add_failed command without any pre-configured scope."
+commands.allow = ["notify_quick_add_failed"]
+
+[[permission]]
+identifier = "deny-notify-quick-add-failed"
+description = "Denies the notify_quick_add_failed command without any pre-configured scope."
+commands.deny = ["notify_quick_add_failed"]

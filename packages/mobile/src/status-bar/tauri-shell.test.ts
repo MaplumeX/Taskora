@@ -14,12 +14,14 @@ import {
 const invokeMock = vi.fn<typeof invoke>();
 let failCommand: string | null;
 let takeNavigationResult: string | null;
+let pendingQuickAdds: string[];
 let channelCallbacks: Map<number, (raw: { index: number; message: unknown }) => void>;
 let nextCallbackId: number;
 
 beforeEach(() => {
   failCommand = null;
   takeNavigationResult = null;
+  pendingQuickAdds = [];
   channelCallbacks = new Map();
   nextCallbackId = 1;
   invokeMock.mockReset();
@@ -48,9 +50,12 @@ beforeEach(() => {
       case 'plugin:statusbar|cancel':
       case 'plugin:statusbar|register_listener':
       case 'plugin:statusbar|remove_listener':
+      case 'plugin:statusbar|notify_quick_add_failed':
         return;
       case 'plugin:statusbar|take_navigation':
         return takeNavigationResult;
+      case 'plugin:statusbar|take_pending_quick_adds':
+        return pendingQuickAdds.splice(0);
       default:
         throw new Error(`Command ${command} not allowed by ACL`);
     }
@@ -106,6 +111,13 @@ describe('Android status bar plugin shell', () => {
     await expect(shell.clear()).resolves.toBeUndefined();
   });
 
+  it('posts the quick-add failure notification with a localized channel name', async () => {
+    await createTauriStatusBarShell().notifyQuickAddFailed({ title: 'failed', text: '买牛奶' });
+    expect(invokeMock).toHaveBeenCalledWith('plugin:statusbar|notify_quick_add_failed', {
+      args: { title: 'failed', text: '买牛奶', channelName: expect.any(String) },
+    });
+  });
+
   it('forwards plugin action events with their quick-add input', async () => {
     const events: { actionId: string; inputValue?: string | null }[] = [];
     createTauriStatusBarShell().onAction((event) => events.push(event));
@@ -118,14 +130,29 @@ describe('Android status bar plugin shell', () => {
 
     const trigger = registeredCallback('action');
     trigger({ action: 'next' });
-    trigger({ action: 'quick-add', input: '写周报' });
     trigger({});
 
     expect(events).toEqual([
       { actionId: 'next', inputValue: null },
-      { actionId: 'quick-add', inputValue: '写周报' },
       { actionId: 'tap', inputValue: null },
     ]);
+  });
+
+  it('drains queued quick adds once listening, then again on each availability signal', async () => {
+    pendingQuickAdds = ['{"title":"冷启动 1"}', '冷启动 2'];
+    const events: { actionId: string; inputValue?: string | null }[] = [];
+    createTauriStatusBarShell().onAction((event) => events.push(event));
+
+    await vi.waitFor(() => expect(events).toHaveLength(2));
+    expect(events).toEqual([
+      { actionId: 'quick-add', inputValue: '{"title":"冷启动 1"}' },
+      { actionId: 'quick-add', inputValue: '冷启动 2' },
+    ]);
+
+    pendingQuickAdds = ['{"title":"热启动"}'];
+    registeredCallback('quick-add-available')({});
+    await vi.waitFor(() => expect(events).toHaveLength(3));
+    expect(events[2]).toEqual({ actionId: 'quick-add', inputValue: '{"title":"热启动"}' });
   });
 
   it('takes the cold-start navigation destination and maps only today', async () => {

@@ -18,6 +18,11 @@ interface Props {
   stateOf: (tagId: string) => TagSelectionState;
   /** 切换一个 Tag（含刚新建的）；怎么写入由调用方决定。 */
   onToggle: (tagId: string) => void;
+  /**
+   * 是否提供「新建 Tag」行（默认 true）。Quick Add 浮窗传 false：新建是
+   * 写操作，浮窗不装配 Engine，不能在那里落库。
+   */
+  allowCreate?: boolean;
 }
 
 /**
@@ -25,7 +30,7 @@ interface Props {
  * 可输入过滤，输入不存在的名字可当场新建并打上。`↑`/`↓` 移动高亮，
  * `Enter` 切换高亮项且不关闭（便于连续打多个），`Esc` 由宿主关闭。
  */
-export function TagPicker({ stateOf, onToggle }: Props) {
+export function TagPicker({ stateOf, onToggle, allowCreate = true }: Props) {
   const { t } = useTranslation();
   const { data: tags = [] } = useTagsQuery();
   const { data: groups = [] } = useTagGroupsQuery();
@@ -35,7 +40,10 @@ export function TagPicker({ stateOf, onToggle }: Props) {
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const rows = useMemo(() => buildTagPickerRows({ tags, groups, query }), [tags, groups, query]);
+  const rows = useMemo(() => {
+    const all = buildTagPickerRows({ tags, groups, query });
+    return allowCreate ? all : all.filter((row) => row.kind !== 'create');
+  }, [tags, groups, query, allowCreate]);
   const options = useMemo(() => selectableRows(rows), [rows]);
   const active = Math.min(activeIndex, Math.max(options.length - 1, 0));
   const optionId = (index: number) => `${listboxId}-option-${index}`;

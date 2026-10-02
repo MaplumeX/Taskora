@@ -6,19 +6,20 @@ import { tagSelectionState, toggleTagAcross } from './tagPickerOptions';
 interface FieldProps {
   current: TagsFieldCurrent;
   onPatch: (data: TagsFieldPatch) => void;
+  /** 见 TagPicker.allowCreate。 */
+  allowCreate?: boolean;
 }
 
 /** 单个 Task / Project / Area 的 Tag 选择：TagPicker 的单对象适配（整组写 tagIds）。 */
-export function TagsField({ current, onPatch }: FieldProps) {
+export function TagsField({ current, onPatch, allowCreate }: FieldProps) {
   const ownIds = (current.tags ?? []).map((tag) => tag.id);
   return (
     <TagPicker
+      allowCreate={allowCreate}
       stateOf={(tagId) => (ownIds.includes(tagId) ? 'all' : 'none')}
       onToggle={(tagId) =>
         onPatch({
-          tagIds: ownIds.includes(tagId)
-            ? ownIds.filter((id) => id !== tagId)
-            : [...ownIds, tagId],
+          tagIds: ownIds.includes(tagId) ? ownIds.filter((id) => id !== tagId) : [...ownIds, tagId],
         })
       }
     />

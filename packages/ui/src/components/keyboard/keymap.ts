@@ -214,3 +214,47 @@ const SHORTCUT_LABELS: Record<HintableAction, Record<KeyPlatform, string>> = {
 export function shortcutLabel(action: HintableAction, platform: KeyPlatform): string {
   return SHORTCUT_LABELS[action][platform];
 }
+
+/**
+ * Quick Add 卡片内的动作（quick-add-v2 issue 04）。浮窗是独立 webview，不
+ * 装配主应用的 KeyboardShortcuts，但键位沿用同一套约定（docs/keyboard-
+ * shortcuts.md 的 P1 / P2 表：⌘S When、⌘T Today、⌘O Someday、⇧⌘D
+ * Deadline、⇧⌘T Tags、⇧⌘M 移动）。仅桌面（mac / windows）使用。
+ */
+export type QuickAddKeyAction =
+  'when' | 'today' | 'someday' | 'deadline' | 'tags' | 'move' | 'submit' | 'submitAndContinue';
+
+export function resolveQuickAddAction(
+  e: KeyEventLike,
+  platform: KeyPlatform,
+): QuickAddKeyAction | null {
+  if (e.isComposing || e.altKey || !primary(e, platform)) return null;
+  const key = e.key.toLowerCase();
+  if (key === 'enter') return e.shiftKey ? 'submitAndContinue' : 'submit';
+  if (!e.shiftKey) {
+    if (key === 's') return 'when';
+    if (key === 't') return 'today';
+    if (key === 'o') return 'someday';
+    return null;
+  }
+  if (key === 'd') return 'deadline';
+  if (key === 't') return 'tags';
+  if (key === 'm') return 'move';
+  return null;
+}
+
+const QUICK_ADD_SHORTCUT_LABELS: Record<QuickAddKeyAction, { mac: string; other: string }> = {
+  when: { mac: '⌘S', other: 'Ctrl+S' },
+  today: { mac: '⌘T', other: 'Ctrl+T' },
+  someday: { mac: '⌘O', other: 'Ctrl+O' },
+  deadline: { mac: '⇧⌘D', other: 'Ctrl+Shift+D' },
+  tags: { mac: '⇧⌘T', other: 'Ctrl+Shift+T' },
+  move: { mac: '⇧⌘M', other: 'Ctrl+Shift+M' },
+  submit: { mac: '⌘↵', other: 'Ctrl+Enter' },
+  submitAndContinue: { mac: '⇧⌘↵', other: 'Ctrl+Shift+Enter' },
+};
+
+export function quickAddShortcutLabel(action: QuickAddKeyAction, platform: KeyPlatform): string {
+  const labels = QUICK_ADD_SHORTCUT_LABELS[action];
+  return platform === 'mac' ? labels.mac : labels.other;
+}

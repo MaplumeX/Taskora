@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 快速添加浮层（QuickAddActivity）：全屏遮罩压暗下层，顶部卡片式输入框。 -->
+<!--
+    快速添加浮层（QuickAddActivity，quick-add-android issue 03 / 04）：全屏
+    遮罩压暗下层，顶部草稿卡片。chip 与选择器行由代码生成（文案来自 JS
+    快照）。选择器是卡片内的面板：打开时替换掉 chip 区与底部操作行，键盘
+    保持弹出，不另叠一层。
+-->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/quick_add_root"
     android:layout_width="match_parent"
@@ -26,31 +31,196 @@
         android:orientation="vertical"
         android:paddingHorizontal="16dp"
         android:paddingTop="8dp"
-        android:paddingBottom="4dp">
+        android:paddingBottom="8dp">
 
-        <EditText
-            android:id="@+id/quick_add_input"
+        <!-- 标题行：装饰复选框 + 标题（可折行，回车即提交）。 -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginBottom="4dp"
-            android:background="@android:color/transparent"
-            android:imeOptions="actionDone"
-            android:importantForAutofill="no"
-            android:inputType="text|textCapSentences"
-            android:minHeight="48dp"
-            android:textColor="@color/quick_add_text"
-            android:textColorHint="@color/quick_add_text_hint"
-            android:textSize="16sp" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <View
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginEnd="10dp"
+                android:background="@drawable/bg_quick_add_checkbox" />
+
+            <EditText
+                android:id="@+id/quick_add_input"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:background="@android:color/transparent"
+                android:imeOptions="actionDone"
+                android:importantForAutofill="no"
+                android:inputType="text|textCapSentences"
+                android:maxLines="3"
+                android:minHeight="48dp"
+                android:textColor="@color/quick_add_text"
+                android:textColorHint="@color/quick_add_text_hint"
+                android:textSize="16sp" />
+        </LinearLayout>
 
         <TextView
-            android:id="@+id/quick_add_submit"
+            android:id="@+id/quick_add_notes_toggle"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_gravity="end"
-            android:paddingHorizontal="12dp"
-            android:paddingVertical="10dp"
-            android:textColor="@color/quick_add_accent"
-            android:textSize="15sp"
-            android:textStyle="bold" />
+            android:layout_marginStart="24dp"
+            android:paddingVertical="6dp"
+            android:textColor="@color/quick_add_text_hint"
+            android:textSize="14sp" />
+
+        <EditText
+            android:id="@+id/quick_add_notes"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="24dp"
+            android:background="@android:color/transparent"
+            android:gravity="top|start"
+            android:importantForAutofill="no"
+            android:inputType="textMultiLine|textCapSentences"
+            android:maxLines="5"
+            android:minHeight="40dp"
+            android:textColor="@color/quick_add_text"
+            android:textColorHint="@color/quick_add_text_hint"
+            android:textSize="14sp"
+            android:visibility="gone" />
+
+        <!-- 字段区：日期 chip 行 + 归属 / Tag chip 行（选择器打开时隐藏）。 -->
+        <LinearLayout
+            android:id="@+id/quick_add_fields"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/quick_add_date_chips"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+
+            <HorizontalScrollView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:scrollbars="none">
+
+                <LinearLayout
+                    android:id="@+id/quick_add_meta_chips"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal" />
+            </HorizontalScrollView>
+
+            <!-- 底部操作：在应用中继续 · 连续添加 · 添加。 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/quick_add_open_in_app"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingVertical="10dp"
+                    android:paddingEnd="12dp"
+                    android:textColor="@color/quick_add_text_hint"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/quick_add_continuous"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/bg_quick_add_chip"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="6dp"
+                    android:textColor="@color/quick_add_text"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/quick_add_status"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:alpha="0"
+                    android:gravity="end"
+                    android:paddingHorizontal="8dp"
+                    android:textColor="@color/quick_add_text_hint"
+                    android:textSize="13sp" />
+
+                <TextView
+                    android:id="@+id/quick_add_submit"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="10dp"
+                    android:textColor="@color/quick_add_accent"
+                    android:textSize="15sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
+
+        <!-- 选择器面板（归属 / Tag）：搜索框 + 列表 + 完成。 -->
+        <LinearLayout
+            android:id="@+id/quick_add_picker"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="@color/quick_add_divider" />
+
+            <EditText
+                android:id="@+id/quick_add_picker_search"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_quick_add_search"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:paddingHorizontal="12dp"
+                android:singleLine="true"
+                android:textColor="@color/quick_add_text"
+                android:textColorHint="@color/quick_add_text_hint"
+                android:textSize="14sp" />
+
+            <ScrollView
+                android:id="@+id/quick_add_picker_scroll"
+                android:layout_width="match_parent"
+                android:layout_height="220dp"
+                android:layout_marginTop="4dp">
+
+                <LinearLayout
+                    android:id="@+id/quick_add_picker_list"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical" />
+            </ScrollView>
+
+            <TextView
+                android:id="@+id/quick_add_picker_done"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="end"
+                android:paddingHorizontal="12dp"
+                android:paddingVertical="10dp"
+                android:textColor="@color/quick_add_accent"
+                android:textSize="15sp"
+                android:textStyle="bold" />
+        </LinearLayout>
     </LinearLayout>
 </FrameLayout>

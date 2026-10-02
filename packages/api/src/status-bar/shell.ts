@@ -13,7 +13,7 @@ export interface StatusBarActionEvent {
    * 'tap'（点按通知本体，系统已拉起 Activity）| 'dismiss'（划掉）。
    */
   actionId: string;
-  /** RemoteInput 文本（actionId 为 'quick-add' 时可能有值）。 */
+  /** 快速添加浮层提交的草稿 JSON（旧版本为纯标题文本；actionId 为 'quick-add' 时有值）。 */
   inputValue?: string | null;
 }
 
@@ -30,6 +30,8 @@ export interface StatusBarShell {
   onAction(cb: (event: StatusBarActionEvent) => void): void;
   /** 跳转系统通知设置页（权限被拒后的引导）。 */
   openSettings(): Promise<void>;
+  /** 快速添加落库失败的一次性通知（点按打开 App）；正文为任务标题。 */
+  notifyQuickAddFailed(content: { title: string; text: string }): Promise<void>;
 }
 
 let shell: StatusBarShell | null = null;

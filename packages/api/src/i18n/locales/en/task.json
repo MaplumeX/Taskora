@@ -76,5 +76,11 @@
   "skipOccurrenceLast": "This is the last occurrence",
   "skipOccurrenceNextExists": "The next occurrence already exists",
   "skipOccurrenceDone": "Skipped to {{date}}",
-  "repeatPreviewHint": "Next occurrence of a repeating task"
+  "repeatPreviewHint": "Next occurrence of a repeating task",
+  "quickAddTitlePlaceholder": "New task",
+  "quickAddPlacement": "Where",
+  "quickAddSubmitHint": "Add",
+  "quickAddContinueHint": "Add & continue",
+  "quickAddCloseHint": "Close",
+  "quickAddAddedTo": "Added to {{place}}"
 }

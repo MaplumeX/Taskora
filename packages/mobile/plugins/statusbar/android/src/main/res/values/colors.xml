@@ -5,4 +5,8 @@
     <color name="quick_add_text_hint">#61000000</color>
     <color name="quick_add_accent">#3B82C4</color>
     <color name="quick_add_scrim">#66000000</color>
+    <color name="quick_add_chip_stroke">#1F000000</color>
+    <color name="quick_add_chip_selected_bg">#1F3B82C4</color>
+    <color name="quick_add_divider">#14000000</color>
+    <color name="quick_add_checkbox">#80000000</color>
 </resources>
