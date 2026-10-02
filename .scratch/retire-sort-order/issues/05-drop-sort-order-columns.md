@@ -28,3 +28,5 @@ Blocked by: 04
 `git grep sortOrder -- packages` 剩下的只有：历史迁移文件、副本迁移 7 → 9 本身（及其测试）、`synthPosition` 的参数名、协议版本注释，以及断言 wire 上没有 sortOrder 的测试。
 
 CHANGELOG：仓库的 CHANGELOG 只有已发布版本的小节（由发版流程写），没有 Unreleased，这次没有加；发版时需要写明协议 4 会让旧客户端停止同步。
+
+**升级故障修正：见 [06](06-repair-contract-upgrade.md)。** 上述 guard + 删除 hub 物化的组合无法支持跳过中间版本的自建升级。contract 已改为事务内自包含回填再删列，启动器只对原始 guard 的已知失败指纹自动 resolve；不再要求先启动中间 hub。

@@ -2,34 +2,19 @@ import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { ValidationPipe, Logger } from '@nestjs/common';
-import { execSync } from 'child_process';
-import { resolve } from 'path';
 import cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 import { AllExceptionsFilter } from './common/filters/all-exceptions.filter';
-
-const backendRoot = resolve(__dirname, '..');
-
-function runDatabaseMigrations(): void {
-  try {
-    Logger.log('Checking for pending database migrations...', 'Bootstrap');
-    execSync('node node_modules/prisma/build/index.js migrate deploy', {
-      cwd: backendRoot,
-      stdio: 'inherit',
-    });
-    Logger.log('Database migrations are up to date.', 'Bootstrap');
-  } catch (error) {
-    Logger.error(
-      'Database migration failed. Aborting startup.',
-      error,
-      'Bootstrap',
-    );
-    process.exit(1);
-  }
-}
+import { deployDatabase, MIGRATION_FAILURE_HELP } from './migrations/deploy';
 
 async function bootstrap() {
-  runDatabaseMigrations();
+  try {
+    await deployDatabase({ log: (message) => Logger.log(message, 'Bootstrap') });
+  } catch (error) {
+    Logger.error(MIGRATION_FAILURE_HELP, error, 'Bootstrap');
+    process.exitCode = 1;
+    return;
+  }
 
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
@@ -62,4 +47,7 @@ async function bootstrap() {
   Logger.log(`Server running on http://localhost:${port}`, 'Bootstrap');
 }
 
-bootstrap();
+bootstrap().catch((error) => {
+  Logger.error('Application startup failed.', error, 'Bootstrap');
+  process.exitCode = 1;
+});

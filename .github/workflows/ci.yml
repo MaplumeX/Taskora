@@ -28,6 +28,8 @@ jobs:
       TEST_DATABASE_URL: postgresql://taskora:taskora@localhost:5432/taskora_test?schema=public
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # migration smoke reads historical release DDL
 
       - uses: pnpm/action-setup@v4
 
@@ -53,6 +55,9 @@ jobs:
       # 验证镜像可构建（不推送）
       - name: Build backend image
         run: docker build -f packages/backend/Dockerfile -t taskora-backend:ci .
+
+      - name: Smoke-test image upgrades and P3009 recovery
+        run: node packages/backend/scripts/migration-smoke.mjs taskora-backend:ci
 
       - name: Build frontend image
         run: docker build -f packages/frontend/Dockerfile -t taskora-frontend:ci .
