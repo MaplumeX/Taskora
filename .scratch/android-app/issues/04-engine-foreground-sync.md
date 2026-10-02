@@ -25,3 +25,9 @@ Android 端与桌面端同语义接入 Engine：全量 Local Replica，读写全
 - [ ] 手机与桌面双端并发编辑同一 Task 后按字段级 LWW 收敛
 
 ## Comments
+
+### 2026-10-02：移除下拉刷新
+
+下拉刷新（同步触发点 4，含 spec 用户故事 21 与 issue 05 真机待验证项中的「下拉刷新」）已移除。Quick Find（#121）上线后，列表页下拉同时触发刷新与搜索，手势冲突；下拉现在只归 Quick Find。
+
+手动刷新的场景已被其余触发点覆盖：启动 pull、本地写后 push、回前台 pull，以及 SSE 远端变更提示触发 pull。`PullToRefresh` 组件与 `requestPullSync()` 一并删除，前台同步收敛为三个触发点（见 `packages/mobile/src/engine/mobile-engine.ts`）。

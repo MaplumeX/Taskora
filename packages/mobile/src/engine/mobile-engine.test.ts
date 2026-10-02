@@ -2,8 +2,8 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
 
 /**
- * 前台同步四场景（issue 04 验收）：启动 pull、本地写后 push（防抖）、
- * 回前台 pull、下拉刷新 pull。断言全部针对外部可观察行为
+ * 前台同步三场景（issue 04 验收）：启动 pull、本地写后 push（防抖）、
+ * 回前台 pull。断言全部针对外部可观察行为
  * （engine.sync 调用时机与 SyncIndicator 状态），不测实现细节。
  */
 
@@ -194,8 +194,8 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
     __resetForTest();
   });
 
-  it('场景 4 — 下拉刷新：requestPullSync 手动触发 pull，在飞期间的触发合并为一次补跑', async () => {
-    const { initMobileEngine, requestPullSync } = await loadEngine();
+  it('在飞期间的多次 syncNow 合并为一次补跑', async () => {
+    const { initMobileEngine, syncNow } = await loadEngine();
     initMobileEngine(renderQueryClient());
 
     await vi.waitFor(() => {
@@ -205,7 +205,7 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
 
     // 在飞期间的多次触发合并为一个在飞 sync + 结束后补跑一轮（期间可能
     // 有新的远端变更或本地写，不能等下个周期）
-    await Promise.all([requestPullSync(), requestPullSync(), requestPullSync()]);
+    await Promise.all([syncNow(), syncNow(), syncNow()]);
     await vi.waitFor(() => {
       expect(fakeEngine.sync).toHaveBeenCalledTimes(2);
     });
@@ -230,7 +230,7 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
   it('hub 要求升级（426）：显示升级提示，此后不再发起同步，Outbox 保留', async () => {
     const { useSyncStatusStore } = await import('@taskora/api');
     const { SyncUpgradeRequiredError } = await import('@taskora/engine');
-    const { initMobileEngine, requestPullSync } = await loadEngine();
+    const { initMobileEngine, syncNow } = await loadEngine();
     fakeEngine.sync.mockRejectedValueOnce(new SyncUpgradeRequiredError(2));
     fakeEngine.pendingCount.mockResolvedValueOnce(3);
 
@@ -241,7 +241,7 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
     });
     expect(useSyncStatusStore.getState().pendingCount).toBe(3);
     const calls = fakeEngine.sync.mock.calls.length;
-    await requestPullSync();
+    await syncNow();
     expect(fakeEngine.sync).toHaveBeenCalledTimes(calls);
     expect(fakeEngine.close).not.toHaveBeenCalled(); // 本地读写照常
   });
