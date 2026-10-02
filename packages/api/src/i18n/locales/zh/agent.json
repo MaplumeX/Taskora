@@ -79,5 +79,11 @@
   "thinkingLevel_medium": "中",
   "thinkingLevel_high": "高",
   "thinkingLevel_xhigh": "超高",
-  "thinkingLevel_max": "最大"
+  "thinkingLevel_max": "最大",
+  "assistantPanel": "助手面板",
+  "closePanel": "关闭面板",
+  "openFullScreen": "全屏打开",
+  "dockToPanel": "收回到面板",
+  "allConversations": "所有会话…",
+  "resizePanel": "调整面板宽度"
 }

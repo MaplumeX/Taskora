@@ -107,11 +107,11 @@ const SKIP_BLOCK_MESSAGES: Record<string, string> = {
 export type AnyAgentTool = TaskoraAgentTool<any>;
 
 /**
- * Read-only tools are named `list_*` / `get_*` / `search_*`; every other
+ * Read-only tools are named `list_*` / `get_*` / `search*`; every other
  * tool mutates the user's data. The runtime uses this to emit `data_changed`
  * SSE events so clients can refetch their domain caches.
  */
-const READ_ONLY_TOOL_NAME = /^(list_|get_|search_)/;
+const READ_ONLY_TOOL_NAME = /^(list_|get_|search)/;
 
 export function isReadOnlyToolName(name: string): boolean {
   return READ_ONLY_TOOL_NAME.test(name);

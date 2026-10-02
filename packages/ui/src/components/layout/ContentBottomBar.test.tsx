@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { ContentBottomBar } from './ContentBottomBar';
-import { useContentBottomActionsForRoute, i18n } from '@taskora/api';
+import { useAssistantUiStore, useContentBottomActionsForRoute, i18n } from '@taskora/api';
 
 // 与 MobileFab.test 同一 harness 模式：mock route-aware hook 而非底层 mutation。
 vi.mock('@taskora/api', async (importOriginal) => ({
@@ -77,5 +77,30 @@ describe('ContentBottomBar — 按钮 hint 提示', () => {
     await user.hover(screen.getByRole('button', { name: 'Add heading' }));
     expect(await screen.findByText('Add heading')).toBeInTheDocument();
     expect(screen.getByText('Alt+H')).toBeInTheDocument();
+  });
+});
+
+describe('ContentBottomBar — 助手面板入口（assistant-panel issue 03）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHook.mockReturnValue({ ...baseActions } as never);
+    void i18n.changeLanguage('en');
+    useAssistantUiStore.setState({ panelOpen: false });
+  });
+
+  it('点击开关面板，按下态跟随面板状态，hint 带键位', async () => {
+    renderBar();
+    const button = screen.getByRole('button', { name: 'Assistant panel' });
+    expect(button).toHaveAttribute('aria-pressed', 'false');
+
+    await user.hover(button);
+    expect(await screen.findByText('Alt+J')).toBeInTheDocument();
+
+    await user.click(button);
+    expect(useAssistantUiStore.getState().panelOpen).toBe(true);
+    expect(button).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(button);
+    expect(useAssistantUiStore.getState().panelOpen).toBe(false);
   });
 });

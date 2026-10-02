@@ -1,11 +1,16 @@
 import { useLocation } from 'react-router-dom';
-import { FolderPlus, Heading, Plus, Search } from 'lucide-react';
+import { Bot, FolderPlus, Heading, Plus, Search } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { QuickFind } from '@/components/search/QuickFind';
-import { useContentBottomActionsForRoute, useUiInteractionStore } from '@taskora/api';
+import {
+  useAssistantUiStore,
+  useContentBottomActionsForRoute,
+  useUiInteractionStore,
+} from '@taskora/api';
+import { cn } from '@/lib/utils';
 
 export function ContentBottomBar() {
   const { t } = useTranslation();
@@ -14,6 +19,8 @@ export function ContentBottomBar() {
   // uiInteraction store；本组件只负责挂载 QuickFind。
   const searchOpen = useUiInteractionStore((s) => s.searchOpen);
   const setSearchOpen = useUiInteractionStore((s) => s.setSearchOpen);
+  const panelOpen = useAssistantUiStore((s) => s.panelOpen);
+  const togglePanel = useAssistantUiStore((s) => s.togglePanel);
   const {
     showAddTask,
     showAddProject,
@@ -40,6 +47,19 @@ export function ContentBottomBar() {
             onClick={() => setSearchOpen(true)}
           >
             <Search className="h-5 w-5" />
+          </Button>
+        </Hint>
+        {/* 助手面板开关：底部栏只在桌面非助手页出现，正好是面板的适用范围 */}
+        <Hint label={t('agent:assistantPanel')} action="toggleAssistantPanel">
+          <Button
+            variant="ghost"
+            size="icon"
+            aria-label={t('agent:assistantPanel')}
+            aria-pressed={panelOpen}
+            className={cn(panelOpen && 'bg-accent text-primary')}
+            onClick={togglePanel}
+          >
+            <Bot className="h-5 w-5" />
           </Button>
         </Hint>
         {showAddProject && (

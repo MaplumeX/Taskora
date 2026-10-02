@@ -25,7 +25,7 @@ import { cn } from '@/lib/utils';
 const CANVAS_ROUTES = ['/calendar'];
 const FULL_BLEED_ROUTES = ['/agent'];
 
-function isCanvasRoute(pathname: string): boolean {
+export function isCanvasRoute(pathname: string): boolean {
   return CANVAS_ROUTES.includes(pathname);
 }
 

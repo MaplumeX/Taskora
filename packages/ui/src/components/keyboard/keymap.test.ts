@@ -246,6 +246,29 @@ describe('resolveAction — 标签（tags-things3 issue 04）', () => {
   });
 });
 
+describe('resolveAction — 助手面板（assistant-panel issue 03）', () => {
+  const toggle = { type: 'toggleAssistantPanel' };
+
+  it('mac ⌘J；带 ⇧/⌥ 不触发', () => {
+    expect(resolveAction(key('j', { metaKey: true }), 'mac')).toEqual(toggle);
+    expect(resolveAction(key('J', { metaKey: true, shiftKey: true }), 'mac')).toBeNull();
+    expect(resolveAction(key('j', { metaKey: true, altKey: true }), 'mac')).toBeNull();
+  });
+
+  it('Windows 桌面 Ctrl+J', () => {
+    expect(resolveAction(key('j', { ctrlKey: true }), 'windows')).toEqual(toggle);
+  });
+
+  it('Web Alt+J；Ctrl+J 让给浏览器（下载页）', () => {
+    expect(resolveAction(key('j', { altKey: true }), 'web')).toEqual(toggle);
+    expect(resolveAction(key('j', { ctrlKey: true }), 'web')).toBeNull();
+  });
+
+  it('裸 j 仍是打字唤起', () => {
+    expect(resolveAction(key('j'), 'mac')).toEqual({ type: 'typeToFind', seed: 'j' });
+  });
+});
+
 describe('shortcutLabel — 按钮 hint 键位文案', () => {
   it.each([
     ['search', { mac: '⌘F', windows: 'Ctrl+F', web: 'Ctrl+F' }],
@@ -253,6 +276,7 @@ describe('shortcutLabel — 按钮 hint 键位文案', () => {
     ['newProject', { mac: '⌥⌘N', windows: 'Ctrl+Alt+N', web: 'Alt+Shift+N' }],
     ['newHeading', { mac: '⇧⌘N', windows: 'Ctrl+Shift+N', web: 'Alt+H' }],
     ['tags', { mac: '⇧⌘T', windows: 'Ctrl+Shift+T', web: 'Alt+Shift+T' }],
+    ['toggleAssistantPanel', { mac: '⌘J', windows: 'Ctrl+J', web: 'Alt+J' }],
   ] as const)('%s 三平台文案与键位表一致', (action, labels) => {
     expect(shortcutLabel(action, 'mac')).toBe(labels.mac);
     expect(shortcutLabel(action, 'windows')).toBe(labels.windows);

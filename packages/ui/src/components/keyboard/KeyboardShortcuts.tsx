@@ -9,6 +9,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 
 import {
   flattenSelectionRows,
+  useAssistantUiStore,
   useSelectionStore,
   type SelectionRow,
 } from '@taskora/api';
@@ -33,6 +34,7 @@ import {
 import { cn } from '@/lib/utils';
 import { BUCKET_ROUTES, detectKeyPlatform, resolveAction, type KeyPlatform } from './keymap';
 import { KeyboardTagPicker, taggableSelection } from './KeyboardTagPicker';
+import { useDockToPanel } from '@/components/agent/AssistantPanel';
 
 export { detectKeyPlatform };
 export type { KeyPlatform };
@@ -59,6 +61,12 @@ function isEditableTarget(target: EventTarget | null): boolean {
   if (isTypeToFindSink(el)) return false;
   if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable) return true;
   return !!el.closest('input, textarea, [contenteditable="true"]');
+}
+
+/** 事件来自助手面板内部（如面板输入框）。 */
+function isInAssistantPanel(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  return typeof el?.closest === 'function' && !!el.closest('[data-assistant-panel]');
 }
 
 /** Radix 浮层（Dialog/Popover/DropdownMenu/Listbox）打开时让路。 */
@@ -115,6 +123,7 @@ export function KeyboardShortcuts({ platform }: Props) {
   const reorderTasks = useReorderTasks();
   const createTask = useCreateTask();
   const createTaskContext = usePageTaskContext();
+  const dockToPanel = useDockToPanel();
   /** ⇧⌘T 打开的 Tag Picker 作用的行（打开时的 Selection 快照）。 */
   const [tagPickerIds, setTagPickerIds] = useState<string[] | null>(null);
 
@@ -129,6 +138,16 @@ export function KeyboardShortcuts({ platform }: Props) {
     const resolvedPlatform = platform ?? detectKeyPlatform();
 
     const on_keydown = (e: KeyboardEvent) => {
+      // 助手面板开关（⌘J）：面板输入框里也要能收起面板，先于编辑态让路处理。
+      if (resolveAction(e, resolvedPlatform)?.type === 'toggleAssistantPanel') {
+        if (isEditableTarget(e.target) && !isInAssistantPanel(e.target)) return;
+        // 面板只在桌面宽度出现（与 useIsDesktop 同阈值）。
+        if (hasOpenOverlay() || !window.matchMedia('(min-width: 768px)').matches) return;
+        e.preventDefault();
+        if (pathname.startsWith('/agent')) dockToPanel();
+        else useAssistantUiStore.getState().togglePanel();
+        return;
+      }
       // 编辑态让路（story 22）：行内编辑聚焦时快捷键全部让路。
       if (isEditableTarget(e.target)) return;
       // Space/Enter 走原生 button 的激活路径（如 Tab 聚焦 checkbox 后按
@@ -425,6 +444,7 @@ export function KeyboardShortcuts({ platform }: Props) {
     reorderTasks,
     createTask,
     createTaskContext,
+    dockToPanel,
     t,
   ]);
 

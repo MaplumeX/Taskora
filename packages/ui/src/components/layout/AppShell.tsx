@@ -7,6 +7,7 @@ import { MobileFab } from '@/components/layout/MobileFab';
 import { MultiSelectToolbar } from '@/components/task/MultiSelectToolbar';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { SyncIndicator } from './SyncIndicator';
+import { AssistantPanel } from '@/components/agent/AssistantPanel';
 import { useNavigationRequestListener, useTaskRevealListener } from '@taskora/api';
 
 export function AppShell() {
@@ -27,6 +28,8 @@ export function AppShell() {
         <MainContent />
         <ContentBottomBar />
       </div>
+      {/* 桌面右侧助手面板：宽屏与列表并排，窄屏 / 日历覆盖在内容上 */}
+      <AssistantPanel />
       <MobileFab />
       {/* 触控多选模式（左滑任务行进入）的底部工具栏，模式中替代 FAB。 */}
       <MultiSelectToolbar />

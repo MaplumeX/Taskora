@@ -83,5 +83,11 @@
   "thinkingLevel_medium": "Medium",
   "thinkingLevel_high": "High",
   "thinkingLevel_xhigh": "X-high",
-  "thinkingLevel_max": "Max"
+  "thinkingLevel_max": "Max",
+  "assistantPanel": "Assistant panel",
+  "closePanel": "Close panel",
+  "openFullScreen": "Open full screen",
+  "dockToPanel": "Dock to panel",
+  "allConversations": "All conversations…",
+  "resizePanel": "Resize panel"
 }

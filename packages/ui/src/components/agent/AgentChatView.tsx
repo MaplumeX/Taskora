@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { Textarea } from '@/components/ui/textarea';
+import { cn } from '@/lib/utils';
 import {
   agentKeys,
   useAgentConfig,
@@ -30,7 +31,14 @@ import { useAgentStream } from './useAgentStream';
  * approval cards + composer. ChatGPT-style: a centered max-width column for
  * both the transcript and the floating composer — no panel chrome.
  */
-export function AgentChatView({ conversationId }: { conversationId: string }) {
+export function AgentChatView({
+  conversationId,
+  variant = 'page',
+}: {
+  conversationId: string;
+  /** `panel`: the narrow side panel — full width with tighter gutters. */
+  variant?: 'page' | 'panel';
+}) {
   const { t } = useTranslation(['agent', 'common']);
   const queryClient = useQueryClient();
   const { data: messages = [] } = useConversationMessages(conversationId);
@@ -110,6 +118,9 @@ export function AgentChatView({ conversationId }: { conversationId: string }) {
   };
 
   const busy = sendMessage.isPending || stream.agentActive;
+  // Transcript and composer share one column: centered on the page, edge to
+  // edge in the panel.
+  const column = variant === 'panel' ? 'px-3' : 'max-w-3xl px-4 md:px-6';
 
   return (
     <div className="flex h-full min-h-0 flex-1 flex-col">
@@ -128,7 +139,13 @@ export function AgentChatView({ conversationId }: { conversationId: string }) {
       ) : null}
 
       <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
-        <div className="mx-auto w-full max-w-3xl space-y-5 px-4 pb-6 pt-6 md:px-6">
+        <div
+          className={cn(
+            'mx-auto w-full space-y-5 pb-6',
+            column,
+            variant === 'panel' ? 'pt-4' : 'pt-6',
+          )}
+        >
           {blocks.map((block) =>
             block.kind === 'user' ? (
               <UserBubble key={block.id} text={block.text} />
@@ -159,7 +176,7 @@ export function AgentChatView({ conversationId }: { conversationId: string }) {
 
       {/* 悬浮输入框：与消息同宽居中，底部渐变过渡 */}
       <div className="shrink-0 bg-gradient-to-t from-background via-background to-background/80 pb-3 pt-2">
-        <div className="mx-auto w-full max-w-3xl px-4 md:px-6">
+        <div className={cn('mx-auto w-full', column)}>
           {!stream.connected ? (
             <div className="flex items-center justify-center gap-1.5 pb-1.5 text-xs text-muted-foreground">
               <WifiOff className="h-3 w-3" />

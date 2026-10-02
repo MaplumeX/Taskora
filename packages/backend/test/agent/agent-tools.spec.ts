@@ -1,7 +1,7 @@
 import { ConflictException } from '@nestjs/common';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AgentToolsService } from '../../src/agent/tools/agent-tools';
+import { AgentToolsService, isReadOnlyToolName } from '../../src/agent/tools/agent-tools';
 
 /**
  * Unit tests for the agent tool layer. Services are mocked: we verify the
@@ -450,6 +450,23 @@ describe('AgentToolsService', () => {
       expect(t.name).toMatch(/^[a-z_]+$/);
       expect(t.label.length).toBeGreaterThan(0);
       expect(t.description.length).toBeGreaterThan(10);
+    }
+  });
+});
+
+describe('isReadOnlyToolName', () => {
+  it('treats lookups (including the bare `search` tool) as read-only', () => {
+    for (const name of ['list_tasks', 'get_task', 'search']) {
+      expect(isReadOnlyToolName(name)).toBe(true);
+    }
+    for (const name of [
+      'create_task',
+      'update_task',
+      'delete_task',
+      'empty_trash',
+      'reorder_tasks',
+    ]) {
+      expect(isReadOnlyToolName(name)).toBe(false);
     }
   });
 });
