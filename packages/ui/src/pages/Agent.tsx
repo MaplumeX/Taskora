@@ -1,18 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Menu, MessageSquare, Plus } from 'lucide-react';
+import { Menu, PanelRight, Plus } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer';
-import {
-  useAgentConfig,
-  useConversations,
-  useCreateConversation,
-  useUiInteractionStore,
-} from '@taskora/api';
+import { useActiveConversation, useCreateConversation } from '@taskora/api';
 
 import { AgentChatView } from '@/components/agent/AgentChatView';
+import { AgentEmptyState } from '@/components/agent/AgentEmptyState';
+import { useDockToPanel } from '@/components/agent/AssistantPanel';
 import { MobileBackButton } from '@/components/layout/MobileTopBar';
 import { ConversationList } from '@/components/agent/ConversationList';
 
@@ -23,20 +20,11 @@ import { ConversationList } from '@/components/agent/ConversationList';
  */
 export default function AgentPage() {
   const { t } = useTranslation(['agent']);
-  const { data: conversations = [], isLoading } = useConversations();
-  const { data: config } = useAgentConfig();
+  // Shared with the Assistant panel: both views show the same conversation.
+  const { conversations, isLoading, active, activeId, setActiveId } = useActiveConversation();
   const create = useCreateConversation();
-  const openSettings = useUiInteractionStore((s) => s.openSettings);
-  const [activeId, setActiveId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-
-  // Select the most recent conversation (list is updatedAt-desc).
-  useEffect(() => {
-    if (activeId && conversations.some((c) => c.id === activeId)) return;
-    setActiveId(conversations[0]?.id ?? null);
-  }, [conversations, activeId]);
-
-  const active = conversations.find((c) => c.id === activeId) ?? null;
+  const dockToPanel = useDockToPanel();
 
   const newConversation = () => create.mutate(undefined, { onSuccess: (c) => setActiveId(c.id) });
 
@@ -57,6 +45,18 @@ export default function AgentPage() {
           </span>
         </Button>
         <div className="flex-1" />
+        {/* 收回到面板：面板只在桌面端存在 */}
+        <Hint label={t('agent:dockToPanel')} action="toggleAssistantPanel">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="hidden h-8 w-8 md:inline-flex"
+            aria-label={t('agent:dockToPanel')}
+            onClick={dockToPanel}
+          >
+            <PanelRight className="h-4 w-4" />
+          </Button>
+        </Hint>
         <Hint label={t('agent:newConversation')}>
           <Button
             variant="ghost"
@@ -75,31 +75,7 @@ export default function AgentPage() {
         {activeId ? (
           <AgentChatView key={activeId} conversationId={activeId} />
         ) : (
-          <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
-            <MessageSquare className="h-10 w-10 text-muted-foreground/40" />
-            {isLoading ? null : config && !config.configured ? (
-              <>
-                <p className="max-w-sm text-sm text-muted-foreground">
-                  {t('agent:notConfiguredHint')}
-                </p>
-                <Button variant="outline" size="sm" onClick={() => openSettings('assistant')}>
-                  {t('agent:openSettings')}
-                </Button>
-              </>
-            ) : (
-              <>
-                <p className="max-w-sm text-sm text-muted-foreground">{t('agent:emptyState')}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={create.isPending}
-                  onClick={newConversation}
-                >
-                  {t('agent:newConversation')}
-                </Button>
-              </>
-            )}
-          </div>
+          <AgentEmptyState loading={isLoading} />
         )}
       </div>
 

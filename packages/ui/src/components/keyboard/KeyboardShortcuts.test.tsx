@@ -3,7 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { TaskResponseDto } from '@taskora/shared';
 import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * KeyboardShortcuts 页面级接缝测试（spec Testing Decisions）：
@@ -77,6 +77,8 @@ vi.mock('@taskora/api', async (importOriginal) => {
 import { KeyboardShortcuts } from './KeyboardShortcuts';
 import { useSelectionStore } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
+import { useAssistantUiStore } from '@taskora/api';
+import { mockDesktop } from '@/test/media';
 import { useSelectionScope } from '@taskora/api';
 import { type SelectionRow } from '@taskora/api';
 
@@ -790,5 +792,63 @@ describe('KeyboardShortcuts — 输入法打字唤起（隐藏输入框）', () 
     renderAt('/agent', tasks);
     await settle();
     expect(sink()).not.toHaveFocus();
+  });
+});
+
+describe('KeyboardShortcuts — 助手面板（assistant-panel issue 03）', () => {
+  let restoreMedia: () => void;
+  beforeEach(() => {
+    restoreMedia = mockDesktop(true);
+    useAssistantUiStore.setState({ panelOpen: false });
+  });
+  afterEach(() => restoreMedia());
+
+  it('⌘J 开关面板', () => {
+    renderAt('/today', tasks);
+    press('j', { metaKey: true });
+    expect(useAssistantUiStore.getState().panelOpen).toBe(true);
+    press('j', { metaKey: true });
+    expect(useAssistantUiStore.getState().panelOpen).toBe(false);
+  });
+
+  it('面板输入框里也能收起；其他输入框里让路', () => {
+    useAssistantUiStore.setState({ panelOpen: true });
+    renderAt('/today', tasks);
+    const other = document.createElement('textarea');
+    document.body.appendChild(other);
+    const panel = document.createElement('aside');
+    panel.setAttribute('data-assistant-panel', '');
+    const composer = document.createElement('textarea');
+    panel.appendChild(composer);
+    document.body.appendChild(panel);
+
+    act(() => {
+      other.dispatchEvent(new KeyboardEvent('keydown', { key: 'j', metaKey: true, bubbles: true }));
+    });
+    expect(useAssistantUiStore.getState().panelOpen).toBe(true);
+
+    act(() => {
+      composer.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'j', metaKey: true, bubbles: true }),
+      );
+    });
+    expect(useAssistantUiStore.getState().panelOpen).toBe(false);
+    other.remove();
+    panel.remove();
+  });
+
+  it('助手页 ⌘J 收回到面板（无历史时去 Today）', () => {
+    renderAt('/agent', tasks);
+    press('j', { metaKey: true });
+    expect(useAssistantUiStore.getState().panelOpen).toBe(true);
+    expect(screen.getByText('list')).toBeInTheDocument();
+  });
+
+  it('窄屏不响应（面板只在桌面端存在）', () => {
+    restoreMedia();
+    restoreMedia = mockDesktop(false);
+    renderAt('/today', tasks);
+    press('j', { metaKey: true });
+    expect(useAssistantUiStore.getState().panelOpen).toBe(false);
   });
 });

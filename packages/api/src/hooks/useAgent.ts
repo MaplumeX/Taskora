@@ -22,6 +22,8 @@ import type {
   UpdateAgentConfigDto,
 } from '@taskora/shared';
 
+import { useAssistantUiStore } from '@/stores/assistantUi.store';
+
 import { areaKeys } from './useAreas';
 import { feedKeys } from './useFeed';
 import { projectHeadingKeys } from './useProjectHeadings';
@@ -114,15 +116,36 @@ export function useConversations() {
   });
 }
 
+/**
+ * The Conversation shown by both Assistant views (panel and `/agent`): the
+ * stored choice while it is still in the list, else the most recent one
+ * (list is updatedAt-desc). Derived, so a deleted choice falls back without
+ * an effect and both views always agree.
+ */
+export function useActiveConversation() {
+  const query = useConversations();
+  const conversations = query.data ?? [];
+  const storedId = useAssistantUiStore((s) => s.activeConversationId);
+  const setActiveId = useAssistantUiStore((s) => s.setActiveConversationId);
+  const active = conversations.find((c) => c.id === storedId) ?? conversations[0] ?? null;
+  return {
+    conversations,
+    isLoading: query.isLoading,
+    active,
+    activeId: active?.id ?? null,
+    setActiveId,
+  };
+}
+
 export function useCreateConversation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (title?: string) => createConversation(title),
     onSuccess: (conversation) => {
       // Optimistically prepend before invalidating: callers switch to the new
-      // conversation on success, and the fallback "select most recent" effect
-      // would otherwise see a stale list (refetch still in flight) and switch
-      // back to the previous conversation.
+      // conversation on success, and useActiveConversation would otherwise
+      // not find it in the stale list (refetch still in flight) and keep
+      // showing the previous conversation.
       queryClient.setQueryData<ConversationDto[]>(
         agentKeys.conversations,
         (current) => [conversation, ...(current ?? [])],

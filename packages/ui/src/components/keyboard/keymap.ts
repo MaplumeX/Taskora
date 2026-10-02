@@ -38,6 +38,8 @@ export type KeyAction =
   | { type: 'search' }
   /** ⇧⌘T / Ctrl+Shift+T / Alt+Shift+T：对选中项打开 Tag Picker。 */
   | { type: 'tags' }
+  /** ⌘J / Ctrl+J / Alt+J：开关助手面板（`/agent` 页为「收回到面板」）。 */
+  | { type: 'toggleAssistantPanel' }
   /**
    * 打字唤起 Quick Find：无修饰（可带 Shift）的单个可打印字符，seed 为该字符；
    * 输入法组合的首键 seed 为空（只打开并聚焦，不带入字符）。
@@ -120,6 +122,14 @@ export function resolveAction(e: KeyEventLike, platform: KeyPlatform): KeyAction
     if (key === 'f' || key === 'F') return { type: 'search' };
   }
 
+  // --- 助手面板：mac ⌘J；Windows 桌面 Ctrl+J；Web Alt+J
+  //     （Web 的 Ctrl+J 是浏览器下载页）。 ---
+  if (key === 'j' || key === 'J') {
+    if (platform === 'web' ? altOnly : cmd && !e.altKey && !e.shiftKey) {
+      return { type: 'toggleAssistantPanel' };
+    }
+  }
+
   // --- 取消：mac ⌥⌘K；Windows 桌面 Ctrl+Alt+K；Web Alt+Shift+K
   //     （Web 的 Ctrl+Alt 系被浏览器/输入法占用，降级为 Alt+Shift）。 ---
   if (key === 'k' || key === 'K') {
@@ -185,7 +195,8 @@ export function resolveAction(e: KeyEventLike, platform: KeyPlatform): KeyAction
 }
 
 /** 按钮上可展示 hint 快捷键的动作（与 docs/keyboard-shortcuts.md 的 P0 键位表一致）。 */
-export type HintableAction = 'search' | 'newTask' | 'newProject' | 'newHeading' | 'tags';
+export type HintableAction =
+  'search' | 'newTask' | 'newProject' | 'newHeading' | 'tags' | 'toggleAssistantPanel';
 
 /**
  * 动作 → 平台对应键位的展示文案（⌘⇧⌥ 符号 / Ctrl、Alt 文字）。
@@ -197,6 +208,7 @@ const SHORTCUT_LABELS: Record<HintableAction, Record<KeyPlatform, string>> = {
   newProject: { mac: '⌥⌘N', windows: 'Ctrl+Alt+N', web: 'Alt+Shift+N' },
   newHeading: { mac: '⇧⌘N', windows: 'Ctrl+Shift+N', web: 'Alt+H' },
   tags: { mac: '⇧⌘T', windows: 'Ctrl+Shift+T', web: 'Alt+Shift+T' },
+  toggleAssistantPanel: { mac: '⌘J', windows: 'Ctrl+J', web: 'Alt+J' },
 };
 
 export function shortcutLabel(action: HintableAction, platform: KeyPlatform): string {

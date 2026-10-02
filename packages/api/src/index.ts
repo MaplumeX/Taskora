@@ -149,6 +149,11 @@ export {
 } from './stores/selection.store';
 export { useMultiSelectStore } from './stores/multiSelect.store';
 export { useProjectUiPrefsStore } from './stores/projectUiPrefs.store';
+export {
+  useAssistantUiStore,
+  ASSISTANT_PANEL_DEFAULT_WIDTH,
+  ASSISTANT_PANEL_MIN_WIDTH,
+} from './stores/assistantUi.store';
 
 // Preferences (theme / language / week start)
 export { usePreferencesStore, hydrateFromServer } from './stores/preferences.store';

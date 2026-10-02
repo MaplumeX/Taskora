@@ -1,13 +1,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, renderHook } from '@testing-library/react';
 import { type ReactNode, createElement } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { AgentSseEvent } from '@taskora/shared';
 
 import { invalidateDomainData, subscribeAgentEvents } from '@taskora/api';
 
-import { useAgentStream } from './useAgentStream';
+import { STREAM_RELEASE_DELAY_MS, resetAgentStreams, useAgentStream } from './useAgentStream';
 
 // The SSE transport is faked: tests capture the event handler and dispatch
 // events synchronously. invalidateDomainData is observed (not executed) so
@@ -22,17 +22,24 @@ vi.mock('@taskora/api', async (importOriginal) => {
 });
 
 let emit: ((event: AgentSseEvent) => void) | undefined;
+const dispose = vi.fn();
 
 beforeEach(() => {
+  vi.mocked(subscribeAgentEvents).mockReset();
   vi.mocked(subscribeAgentEvents).mockImplementation((_id, onEvent) => {
     emit = onEvent;
-    return () => undefined;
+    return dispose;
   });
   vi.mocked(invalidateDomainData).mockClear();
+  dispose.mockClear();
 });
 
-function renderStream(conversationId: string) {
-  const queryClient = new QueryClient();
+afterEach(() => {
+  resetAgentStreams();
+  vi.useRealTimers();
+});
+
+function renderStream(conversationId: string, queryClient = new QueryClient()) {
   const wrapper = ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client: queryClient }, children);
   const stream = renderHook(() => useAgentStream(conversationId), { wrapper });
@@ -62,5 +69,47 @@ describe('useAgentStream data sync', () => {
     );
 
     expect(invalidateDomainData).not.toHaveBeenCalled();
+  });
+});
+
+describe('useAgentStream sharing between views', () => {
+  it('shares one subscription and live state across consumers', () => {
+    const panel = renderStream('c1');
+    const fullScreen = renderStream('c1', panel.queryClient);
+
+    expect(subscribeAgentEvents).toHaveBeenCalledTimes(1);
+
+    act(() => emit?.({ type: 'agent_start' }));
+
+    expect(panel.result.current.agentActive).toBe(true);
+    expect(fullScreen.result.current.agentActive).toBe(true);
+  });
+
+  it('keeps the stream across a view switch within the grace period', () => {
+    vi.useFakeTimers();
+    const panel = renderStream('c1');
+    act(() => emit?.({ type: 'agent_start' }));
+
+    panel.unmount();
+    vi.advanceTimersByTime(STREAM_RELEASE_DELAY_MS - 1);
+    const fullScreen = renderStream('c1', panel.queryClient);
+
+    expect(subscribeAgentEvents).toHaveBeenCalledTimes(1);
+    expect(dispose).not.toHaveBeenCalled();
+    expect(fullScreen.result.current.agentActive).toBe(true);
+  });
+
+  it('disposes the subscription after the last consumer is gone', () => {
+    vi.useFakeTimers();
+    const panel = renderStream('c1');
+
+    panel.unmount();
+    vi.advanceTimersByTime(STREAM_RELEASE_DELAY_MS);
+
+    expect(dispose).toHaveBeenCalledTimes(1);
+
+    const again = renderStream('c1', panel.queryClient);
+    expect(subscribeAgentEvents).toHaveBeenCalledTimes(2);
+    expect(again.result.current.agentActive).toBe(false);
   });
 });

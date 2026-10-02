@@ -73,8 +73,11 @@ Grouped View（今天/随时/将来按项目/领域分组）补充规则：
 | 快速查找（Quick Find） | ⌘F | Ctrl+F | Ctrl+F |
 | 快速查找（打字唤起） | 直接输入 | 同左 | 同左 |
 | Quick Add（系统级） | ⌘⇧Space | Ctrl+Shift+Space | — |
+| 开关助手面板 | ⌘J | Ctrl+J | Alt+J |
 
 打字唤起：没有行被选中、焦点不在输入框、没有弹窗时，敲任意可打印字符（可带 Shift，空格除外）即打开快速查找，并把该字符填入输入框；开着中文输入法时，从首键起就在输入法里组字，上屏后再以上屏的文字打开快速查找（页面空闲时由一个隐藏输入框持有焦点来接住输入法）。有 Selection 时单键属于列表操作，不唤起；触控设备与助手页不生效。
+
+助手面板：仅桌面宽度生效；焦点在面板输入框里时同样可以收起面板（其他输入框里让路）。在全屏助手页（`/agent`）按下等同「收回到面板」：回到上一个页面并在面板中打开同一个对话。Web 的 Ctrl+J 是浏览器下载页，降级为 Alt+J。
 
 Quick Add 从 `Cmd/Ctrl+Space` 改为 `Cmd/Ctrl+Shift+Space`：Windows 上 Ctrl+Space 是中文输入法切换键，macOS 上 ⌘Space 是 Spotlight。
 
