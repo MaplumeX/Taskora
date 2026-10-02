@@ -75,64 +75,23 @@ if "signingConfigs" not in src:
 else:
     print("app/build.gradle.kts already has signingConfigs (skipped)")
 
-# --- 3. MainActivity.kt: system-bar insets + strip tinting --------------------
+# --- 3. MainActivity.kt: edge-to-edge ---------------------------------------
 
+# 只开 edge-to-edge（状态栏 / 导航栏透明，WebView 铺满整个窗口），不在原生层
+# 消费 insets 或给内容视图加 padding：系统栏避让由前端 --safe-area-top/bottom
+# 处理（background 插件读 WindowInsets 兜底 env()），系统栏图标明暗由前端按
+# App 实际主题经 background 插件设置。原生 padding 会把 WebView 挤到状态栏
+# 下方（状态栏变成一条固定色带），且与前端安全区双重避让。
 main_activity = """\
 package app.taskora.mobile
 
-import android.content.res.Configuration
 import android.os.Bundle
-import android.view.ViewGroup
 import androidx.activity.enableEdgeToEdge
-import androidx.core.view.ViewCompat
-import androidx.core.view.WindowCompat
-import androidx.core.view.WindowInsetsCompat
-import androidx.core.view.WindowInsetsControllerCompat
 
 class MainActivity : TauriActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     enableEdgeToEdge()
     super.onCreate(savedInstanceState)
-
-    // 系统栏避让：Android WebView 不保证报告 safe-area-inset-*（取值 0
-    // 时页面顶栏被状态栏遮挡、底栏被导航栏遮挡），在原生层消费 insets
-    // 给内容视图加 padding，WebView 整体布局在系统栏之间。
-    val content = findViewById<ViewGroup>(android.R.id.content)
-    ViewCompat.setOnApplyWindowInsetsListener(content) { view, insets ->
-      val bars = insets.getInsets(
-        WindowInsetsCompat.Type.systemBars() or WindowInsetsCompat.Type.displayCutout()
-      )
-      view.setPadding(bars.left, bars.top, bars.right, bars.bottom)
-      insets
-    }
-
-    applySystemBarColors()
-  }
-
-  // 状态栏/导航栏 strip 背景 = App 主题背景色（ui/src/index.css 的
-  // --background）：亮色 hsl(40 33% 97%)，暗色 hsl(270 14% 9%)。
-  // 跟随系统 DayNight；manifest 的 configChanges 含 uiMode，主题切换
-  // 不重建 Activity，靠 onConfigurationChanged 重刷。
-  // 已知取舍：App 内手动指定主题（非 system）时 strip 仍按系统主题着色。
-  private fun applySystemBarColors() {
-    val night =
-      (resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
-        Configuration.UI_MODE_NIGHT_YES
-    val background = if (night) 0xFF14171A.toInt() else 0xFFFAF8F5.toInt()
-
-    val content = findViewById<ViewGroup>(android.R.id.content)
-    content.setBackgroundColor(background)
-
-    // strip 由我们着色，系统栏图标的明暗需显式匹配（浅底用深色图标）。
-    WindowCompat.getInsetsController(window, content).apply {
-      isAppearanceLightStatusBars = !night
-      isAppearanceLightNavigationBars = !night
-    }
-  }
-
-  override fun onConfigurationChanged(newConfig: Configuration) {
-    super.onConfigurationChanged(newConfig)
-    applySystemBarColors()
   }
 }
 """

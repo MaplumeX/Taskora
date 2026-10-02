@@ -8,6 +8,7 @@ import { setAppVersion } from '@taskora/api';
 import { App } from './App';
 import { installKeyboardInset } from './keyboard-inset';
 import { installSafeAreaInsets } from './safe-area-insets';
+import { installSystemBarAppearance } from './system-bar-appearance';
 import './index.css';
 
 /**
@@ -78,6 +79,8 @@ async function mount() {
 
   // 系统栏安全区：原生 WindowInsets → --native-safe-* CSS 变量（env() 兜底）。
   void installSafeAreaInsets();
+  // 系统栏图标明暗跟随 App 主题（edge-to-edge 下系统栏透明）。
+  installSystemBarAppearance();
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>

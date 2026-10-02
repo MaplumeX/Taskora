@@ -75,7 +75,7 @@ jobs:
       # 实文件）：Tauri CLI 不读 TAURI_ANDROID_* 环境变量，官方方式是写
       # gen/android/keystore.properties 并给 app/build.gradle.kts 注入
       # signingConfigs（https://v2.tauri.app/distribute/sign/android/）；
-      # 系统栏避让/着色的 MainActivity 也要重写（gen/ 不入库）。嵌套
+      # edge-to-edge 的 MainActivity 也要重写（gen/ 不入库）。嵌套
       # heredoc 会因浅缩进文本破坏 run: | 块，故用脚本文件。
       - name: Configure signing and MainActivity (scripts/android-signing.py)
         env:
