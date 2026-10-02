@@ -50,7 +50,7 @@ export const ActionSheetItem = React.forwardRef<HTMLButtonElement, ActionSheetIt
         ref={ref}
         type="button"
         className={cn(
-          'flex h-12 w-full items-center gap-3 px-4 text-left text-[15px] transition-colors active:bg-accent',
+          'flex h-12 w-full items-center gap-3 px-4 text-left text-[15px] transition-colors active:bg-accent disabled:opacity-50',
           destructive && 'text-destructive',
           className,
         )}
