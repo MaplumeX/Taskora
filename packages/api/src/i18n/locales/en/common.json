@@ -34,6 +34,7 @@
   "group": "Group",
   "ungrouped": "Ungrouped",
   "restore": "Restore",
+  "putBack": "Put Back",
   "restored": "Restored",
   "restoreFailed": "Failed to restore",
   "emptyTrash": "Empty Trash",

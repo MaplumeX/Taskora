@@ -12,6 +12,7 @@ import {
   FolderTree,
   MoreHorizontal,
   Repeat,
+  RotateCcw,
   Tag,
   Trash2,
   type LucideIcon,
@@ -27,6 +28,7 @@ import {
   useConvertTaskToProject,
   useDeleteTask,
   useMultiSelectStore,
+  useRestoreTask,
   useSelectionStore,
   useTaskQuery,
   useUncancelTask,
@@ -57,6 +59,8 @@ type PickerKind = 'scheduled' | 'move' | 'due' | 'tags' | 'repeat';
  * 动作收进「更多」（底部 Action Sheet）。动作执行完即退出模式；切换页面、点「完成」、系统返回也会退出。
  *
  * 只作用于单个任务才有意义的动作（重复、转换为项目）仅在勾选一项时出现。
+ * Trash 页「删除」换成「放回」、不提供转换为项目（同右键菜单的 trash 变体）；
+ * 计划 / 移动等编辑照常，由数据层隐式放回（spec: trash-things3）。
  * 标签按三态批量切换：各任务在自己原有的标签上增减（`.scratch/tags-things3`）。
  */
 export function MultiSelectToolbar() {
@@ -67,6 +71,7 @@ export function MultiSelectToolbar() {
   // 订阅各列表登记的行（完成 / 取消态），变化时重渲染；读取见下方 rowById。
   useSelectionStore((s) => s.scopes);
   const { pathname } = useLocation();
+  const inTrash = pathname === '/trash';
 
   // 多选只在当前页内有意义：切换页面即退出。
   const pathnameRef = React.useRef(pathname);
@@ -82,6 +87,7 @@ export function MultiSelectToolbar() {
 
   const updateTask = useUpdateTask();
   const deleteTask = useDeleteTask();
+  const restoreTask = useRestoreTask();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const cancelTask = useCancelTask();
@@ -121,6 +127,13 @@ export function MultiSelectToolbar() {
   const handleDelete = () => {
     for (const id of ids) {
       deleteTask.mutate(id, { onError: () => toast.error(t('task:deleteFailed')) });
+    }
+    exit();
+  };
+
+  const handlePutBack = () => {
+    for (const id of ids) {
+      restoreTask.mutate(id, { onError: () => toast.error(t('common:restoreFailed')) });
     }
     exit();
   };
@@ -191,13 +204,22 @@ export function MultiSelectToolbar() {
             disabled={empty}
             onClick={() => openPicker('move')}
           />
-          <ToolbarButton
-            icon={Trash2}
-            label={t('common:delete')}
-            disabled={empty}
-            onClick={handleDelete}
-            className="text-destructive"
-          />
+          {inTrash ? (
+            <ToolbarButton
+              icon={RotateCcw}
+              label={t('common:putBack')}
+              disabled={empty}
+              onClick={handlePutBack}
+            />
+          ) : (
+            <ToolbarButton
+              icon={Trash2}
+              label={t('common:delete')}
+              disabled={empty}
+              onClick={handleDelete}
+              className="text-destructive"
+            />
+          )}
           <ActionSheet>
             <ActionSheetTrigger asChild>
               <ToolbarButton icon={MoreHorizontal} label={t('common:more')} disabled={empty} />
@@ -221,7 +243,7 @@ export function MultiSelectToolbar() {
                   {t('task:repeat')}
                 </ActionSheetItem>
               )}
-              {single && (
+              {single && !inTrash && (
                 <>
                   <ActionSheetSeparator />
                   <ActionSheetItem icon={FolderInput} onClick={handleConvertToProject}>

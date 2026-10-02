@@ -1,7 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { Folder, Trash2 } from 'lucide-react';
+import { Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -12,45 +11,72 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { TaskCheckbox } from '@/components/task/TaskCheckbox';
-import { TaskContextMenu } from '@/components/task/TaskContextMenu';
-import { TaskDateBadge } from '@/components/task/TaskDateBadge';
 import {
+  selectionStateOf,
+  useAreasQuery,
+  useCompleteTask,
   useEmptyTrash,
   useFeedQuery,
+  useProjectsQuery,
   useSelectionScope,
-  useSelectionStore,
   useTaskRowSelection,
-  useUiInteractionStore,
+  useUncancelTask,
+  useUncompleteTask,
 } from '@taskora/api';
-import { useRestoreProject } from '@taskora/api';
 import { toast } from 'sonner';
 
-import type { FeedItem, TaskResponseDto } from '@taskora/shared';
-import { cn } from '@/lib/utils';
+import type { FeedItem } from '@taskora/shared';
+import { FeedItemRow } from '@/components/feed/FeedItemRow';
 import { EmptyState } from '@/components/common/EmptyState';
 import { PageHeading } from '@/components/layout/PageHeading';
 
+/**
+ * Trash（对齐 Things 3）：条目与其他视图同样呈现、同样可编辑；独有的只有
+ * 菜单「放回」与「清空废纸篓」。改状态留在 Trash，改日期 / 归属 / 标签等
+ * 即放回（数据层规则，spec: trash-things3）。
+ */
 export default function Trash() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const { data: items = [], isLoading, isError } = useFeedQuery('trash');
-  const restoreProject = useRestoreProject();
+  const { data: projects = [] } = useProjectsQuery();
+  const { data: areas = [] } = useAreasQuery();
   const emptyTrashMutation = useEmptyTrash();
+  const completeTask = useCompleteTask();
+  const uncompleteTask = useUncompleteTask();
+  const uncancelTask = useUncancelTask();
   const [confirmOpen, setConfirmOpen] = useState(false);
-  const { selectedIds, handleRowClick, handleBlankClick } = useTaskRowSelection();
-  // 注册可遍历行：任务行 + 项目行（Project 行仅作遍历停留点，⌫ 对其
-  // 无效——恢复仍走行内「恢复」按钮；⌫ 对任务行遵循本页恢复约定）。
+  const { selectedIds, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
+
+  const projectMap = useMemo(
+    () => Object.fromEntries(projects.map((p) => [p.id, p.title])),
+    [projects],
+  );
+  const areaMap = useMemo(() => Object.fromEntries(areas.map((a) => [a.id, a.title])), [areas]);
+
+  // 注册可遍历行：任务行 + 项目行（⌫ 在本页为放回）。
   const rows = useMemo(
     () =>
-      items.map((item) => ({
-        id: item.id,
-        kind: item.type === 'task' ? ('task' as const) : ('project' as const),
-        completed: false,
-      })),
+      items.map((item) =>
+        item.type === 'task'
+          ? {
+              id: item.id,
+              kind: 'task' as const,
+              completed: item.status === 'COMPLETED',
+              cancelled: item.status === 'CANCELLED',
+              tagIds: item.tags.map((tag) => tag.id),
+            }
+          : { id: item.id, kind: 'project' as const, tagIds: item.tags.map((tag) => tag.id) },
+      ),
     [items],
   );
   useSelectionScope(rows);
+
+  const toggleComplete = (item: FeedItem) => {
+    if (item.type !== 'task') return;
+    if (item.status === 'CANCELLED') uncancelTask.mutate(item.id);
+    else if (item.status === 'COMPLETED') uncompleteTask.mutate(item.id);
+    else completeTask.mutate(item.id, { onError: () => toast.error(t('common:operationFailed')) });
+  };
 
   return (
     <div className="flex flex-col gap-4">
@@ -72,28 +98,21 @@ export default function Trash() {
       ) : items.length === 0 ? (
         <EmptyState hint={t('task:trashEmpty')} />
       ) : (
-        <div className="flex flex-col" onClick={handleBlankClick}>
-          {items.map((item) =>
-            item.type === 'task' ? (
-              <TrashTaskRow
+        <div className="flex flex-col gap-1" onClick={handleBlankClick}>
+          {items.map((item) => {
+            const isTask = item.type === 'task';
+            return (
+              <FeedItemRow
                 key={item.id}
                 item={item}
-                selected={selectedIds.includes(item.id)}
-                onRowClick={() => handleRowClick(item.id)}
+                projectTitle={isTask && item.projectId ? projectMap[item.projectId] : undefined}
+                areaTitle={isTask && item.areaId ? areaMap[item.areaId] : undefined}
+                selectionState={selectionStateOf(selectedIds, expandedId, item.id)}
+                onToggleComplete={() => toggleComplete(item)}
+                onRowClick={isTask ? () => handleRowClick(item.id) : undefined}
               />
-            ) : (
-              <TrashProjectRow
-                key={item.id}
-                item={item}
-                onRestore={() =>
-                  restoreProject.mutate(item.id, {
-                    onError: () => toast.error(t('common:restoreFailed')),
-                  })
-                }
-                onNavigate={() => navigate(`/projects/${item.id}`)}
-              />
-            ),
-          )}
+            );
+          })}
         </div>
       )}
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
@@ -128,90 +147,6 @@ export default function Trash() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
-  );
-}
-
-function TrashTaskRow({
-  item,
-  selected,
-  onRowClick,
-}: {
-  item: FeedItem;
-  selected?: boolean;
-  onRowClick?: () => void;
-}) {
-  const task = { ...item, subtasks: [] } as TaskResponseDto;
-  const rowRef = useRef<HTMLDivElement>(null);
-  // Reveal Task（Quick Find 的继续搜索）：Trash 行不展开，改为选中并滚到
-  // 视野中央，一次性。晚一帧执行，排在换页清空 Selection 之后。
-  const revealing = useUiInteractionStore((s) => s.revealId === item.id);
-  useEffect(() => {
-    if (!revealing) return;
-    const id = requestAnimationFrame(() => {
-      rowRef.current?.scrollIntoView?.({ block: 'center' });
-      useSelectionStore.getState().setSelection([item.id]);
-      useUiInteractionStore.getState().setRevealId(null);
-    });
-    return () => cancelAnimationFrame(id);
-  }, [revealing, item.id]);
-  return (
-    <div
-      ref={rowRef}
-      data-task-item
-      aria-selected={selected || undefined}
-      className={cn('group flex flex-col transition-colors', selected && 'bg-accent rounded-lg')}
-    >
-      <TaskContextMenu task={task} current={task} variant="trash">
-        <div
-          role={onRowClick ? 'button' : undefined}
-          tabIndex={onRowClick ? 0 : undefined}
-          onClick={(e) => {
-            if (!onRowClick) return;
-            e.stopPropagation();
-            onRowClick();
-          }}
-          className="flex h-12 cursor-pointer items-center gap-3 px-2 text-sm text-muted-foreground"
-        >
-          <TaskCheckbox checked={false} onToggle={() => {}} disabled />
-          <span className="flex-1 truncate line-through">{item.title}</span>
-          <TaskDateBadge scheduledDate={item.scheduledDate} />
-        </div>
-      </TaskContextMenu>
-    </div>
-  );
-}
-
-function TrashProjectRow({
-  item,
-  onRestore,
-  onNavigate,
-}: {
-  item: FeedItem;
-  onRestore: () => void;
-  onNavigate: () => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <div
-      data-task-item
-      className="group flex h-12 cursor-pointer items-center gap-3 px-2 text-sm text-muted-foreground hover:bg-accent/40"
-      onClick={onNavigate}
-    >
-      <Folder className="h-4 w-4 text-muted-foreground" />
-      <span className="flex-1 truncate line-through">
-        {item.title || t('project:newItemPlaceholder')}
-      </span>
-      <button
-        className="ml-auto rounded px-1 py-2 text-xs text-muted-foreground hover:text-foreground max-md:-my-2"
-        onClick={(e) => {
-          e.stopPropagation();
-          onRestore();
-        }}
-      >
-        {t('common:restore')}
-      </button>
-      <TaskDateBadge scheduledDate={item.scheduledDate} />
     </div>
   );
 }

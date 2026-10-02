@@ -105,7 +105,7 @@ export function ProjectMenuPanel({
         destructive
         onClick={variant === 'trash' ? handleRestore : handleDelete}
       >
-        {variant === 'trash' ? tc('restore') : tc('delete')}
+        {variant === 'trash' ? tc('putBack') : tc('delete')}
       </MenuRow>
     </div>
   );

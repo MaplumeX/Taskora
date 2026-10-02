@@ -77,6 +77,27 @@ export interface TaskUpdateBase {
   projectId: string | null;
   areaId: string | null;
   headingId: string | null;
+  /** 在 Trash 中（非空）时，改日期 / 归属 / 标签等编辑会隐式放回。 */
+  trashedAt?: unknown;
+}
+
+/**
+ * 在 Trash 中编辑时是否隐式放回：改计划、提醒、重复、截止日期、Bucket、
+ * 归属或标签即放回；只改标题 / 备注不放回（状态与子任务走各自的写入，
+ * 同样不放回）。
+ */
+export function taskUpdatePutsBack(input: UpdateTaskDto): boolean {
+  return (
+    input.scheduledType !== undefined ||
+    input.scheduledDate !== undefined ||
+    input.reminderTime !== undefined ||
+    input.repeatRule !== undefined ||
+    input.dueDate !== undefined ||
+    input.bucket !== undefined ||
+    input.projectId !== undefined ||
+    input.areaId !== undefined ||
+    input.tagIds !== undefined
+  );
 }
 
 /**
@@ -87,6 +108,7 @@ export interface TaskUpdateBase {
  *   spec）；DATE 下按输入写，重复规则写入前规范化，非法对象忽略。
  * - Bucket 按新的计划类型与归属重新推导，有变化或显式改计划 / Bucket 时写。
  * - 换项目解除分组归属（分组只属于原项目）。
+ * - 在 Trash 中时，taskUpdatePutsBack 的编辑同时放回（清 trashedAt）。
  */
 export function planTaskUpdate(
   existing: TaskUpdateBase,
@@ -148,6 +170,7 @@ export function planTaskUpdate(
   ) {
     patch.headingId = null;
   }
+  if (existing.trashedAt != null && taskUpdatePutsBack(input)) patch.trashedAt = null;
   return patch;
 }
 
@@ -158,9 +181,12 @@ export function taskTrashPatch(now: string): TaskPatch {
   return { trashedAt: now, reminderTime: null };
 }
 
-/** 从 Trash 恢复：「捡回」一律回到未了结，与终态正交。 */
+/**
+ * 放回（从 Trash 恢复）：只清 trashedAt，回到删除前的位置与状态——已了结
+ * 的回到 Logbook。进 Trash 时清掉的提醒不恢复。
+ */
 export function taskRestorePatch(): TaskPatch {
-  return { trashedAt: null, status: TaskStatus.ACTIVE, settledAt: null };
+  return { trashedAt: null };
 }
 
 /**

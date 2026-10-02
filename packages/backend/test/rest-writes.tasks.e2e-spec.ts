@@ -236,7 +236,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
 
   // ---------- 生命周期 ----------
 
-  it('remove / restore：只动任务本身；进 Trash 不改状态、清除提醒；恢复回 ACTIVE', async () => {
+  it('remove / restore：只动任务本身；进 Trash 不改状态、清除提醒；放回保留了结状态、不恢复提醒', async () => {
     await seedTask('task-1', {
       status: 'COMPLETED',
       settledAt: new Date('2026-02-01T00:00:00Z'),
@@ -256,12 +256,27 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     await h.tasks.restore(USER, 'task-1');
     row = await testPrisma.task.findUniqueOrThrow({ where: { id: 'task-1' } });
     expect(row.trashedAt).toBeNull();
-    expect(row.status).toBe(TaskStatus.ACTIVE);
-    expect(row.settledAt).toBeNull();
+    expect(row.status).toBe(TaskStatus.COMPLETED);
+    expect(row.settledAt).toEqual(new Date('2026-02-01T00:00:00Z'));
+    expect(row.reminderTime).toBeNull();
     await expectLoggedAsStored('task', 'task-1');
 
     await expect(h.tasks.remove(USER, 'missing')).rejects.toBeInstanceOf(NotFoundException);
     await expect(h.tasks.restore(USER, 'missing')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
+  it('update 在 Trash 中：改日期 / 归属 / 标签放回，改标题 / 备注不放回', async () => {
+    const trashedAt = new Date('2026-02-01T00:00:00Z');
+    await seedTask('task-1', { trashedAt });
+    await h.tasks.update(USER, 'task-1', { title: '改名', notes: 'n' });
+    expect(
+      (await testPrisma.task.findUniqueOrThrow({ where: { id: 'task-1' } })).trashedAt,
+    ).toEqual(trashedAt);
+    await h.tasks.update(USER, 'task-1', { dueDate: '2026-03-01' });
+    expect(
+      (await testPrisma.task.findUniqueOrThrow({ where: { id: 'task-1' } })).trashedAt,
+    ).toBeNull();
+    await expectLoggedAsStored('task', 'task-1');
   });
 
   it('cancel / complete 直接互改终态；uncancel / uncomplete 回 ACTIVE；了结清除提醒', async () => {

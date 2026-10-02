@@ -18,6 +18,7 @@ import {
   positionAfter,
   projectCompletePatch,
   projectReopenPatch,
+  projectUpdatePutsBack,
   repositionMinimal,
 } from '@taskora/engine';
 import type {
@@ -108,6 +109,25 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
         data,
         zones(),
       );
+      // Trash 中改日期 / 区域 / 标签等即放回，级联同 restoreProject
+      if (f.trashedAt != null && projectUpdatePutsBack(data)) {
+        const tasks = await engine.list('task', {
+          where: { projectId: id, trashedAt: { notNull: true } },
+        });
+        const plan = planProjectRestore(
+          f.trashedAt,
+          tasks.map((row) => ({ id: row.id, trashedAt: row.fields.trashedAt })),
+        );
+        await engine.update('project', id, { ...patch, ...plan.project });
+        await engine.updateMany(
+          'task',
+          plan.tasks.map(({ id: taskId, patch: taskPatch }) => ({
+            id: taskId,
+            patch: { ...taskPatch },
+          })),
+        );
+        return projectDto(id);
+      }
       await engine.update('project', id, { ...patch });
       return projectDto(id);
     },

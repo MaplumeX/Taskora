@@ -125,6 +125,26 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     expect((await engine.get('task', taskId))?.fields.trashedAt).not.toBeNull();
   });
 
+  it('Project：Trash 中改日期即放回并级联捡回任务；改标题不放回', async () => {
+    const project = await projects.createProject({ title: '要删的项目' });
+    const taskId = await engine.create('task', {
+      title: '下属任务',
+      status: 'ACTIVE',
+      bucket: 'ANYTIME',
+      projectId: project.id,
+      trashedAt: null,
+      settledAt: null,
+    });
+    await projects.deleteProject(project.id);
+
+    await projects.updateProject(project.id, { title: '改名' });
+    expect((await engine.get('project', project.id))?.fields.trashedAt).not.toBeNull();
+
+    await projects.updateProject(project.id, { dueDate: '2026-10-01' });
+    expect((await engine.get('project', project.id))?.fields.trashedAt).toBeNull();
+    expect((await engine.get('task', taskId))?.fields.trashedAt).toBeNull();
+  });
+
   it('Project：完成/重开语义与拖拽重排（Position 生效）', async () => {
     const a = await projects.createProject({ title: 'A' });
     const b = await projects.createProject({ title: 'B' });

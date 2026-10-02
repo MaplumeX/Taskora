@@ -186,6 +186,26 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     await expect(h.projects.restore(USER, 'missing')).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it('Project：Trash 中 update 改日期即放回并级联捡回任务；改标题不放回', async () => {
+    await seedProject('p-1');
+    await seedTask('t-out', { projectId: 'p-1' });
+    await h.projects.remove(USER, 'p-1');
+
+    await h.projects.update(USER, 'p-1', { title: '改名' });
+    expect(
+      (await testPrisma.project.findUniqueOrThrow({ where: { id: 'p-1' } })).trashedAt,
+    ).not.toBeNull();
+
+    await h.projects.update(USER, 'p-1', { dueDate: '2026-03-01' });
+    expect(
+      (await testPrisma.project.findUniqueOrThrow({ where: { id: 'p-1' } })).trashedAt,
+    ).toBeNull();
+    expect(
+      (await testPrisma.task.findUniqueOrThrow({ where: { id: 't-out' } })).trashedAt,
+    ).toBeNull();
+    await expectLoggedAsStored('task', 't-out');
+  });
+
   it('Project：update 标签整组替换；complete / uncomplete；reorder 双排序键', async () => {
     await testPrisma.tag.create({ data: { id: 'tag-1', userId: USER, title: 't' } });
     await seedProject('p-1', { position: 'a0' });

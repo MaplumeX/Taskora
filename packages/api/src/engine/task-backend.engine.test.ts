@@ -88,7 +88,25 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     expect(after.scheduledDate).toBeNull();
   });
 
-  it('Trash / 恢复：软删除是普通字段变更，恢复一律回 ACTIVE', async () => {
+  it('Trash / 放回：放回保留了结状态；改日期放回，完成 / 改标题不放回', async () => {
+    const task = await backend.createTask({ title: '已完成' });
+    await backend.completeTask(task.id);
+    await backend.deleteTask(task.id);
+    const restored = await backend.restoreTask(task.id);
+    expect(restored.status).toBe(TaskStatus.COMPLETED);
+    expect(restored.completedAt).not.toBeNull();
+    expect((await backend.getFeed('logbook')).map((i) => i.title)).toEqual(['已完成']);
+
+    const other = await backend.createTask({ title: '编辑' });
+    await backend.deleteTask(other.id);
+    await backend.uncompleteTask(other.id);
+    await backend.updateTask(other.id, { title: '改名' });
+    expect((await backend.getTask(other.id)).trashedAt).not.toBeNull();
+    await backend.updateTask(other.id, { dueDate: '2026-10-01' });
+    expect((await backend.getTask(other.id)).trashedAt).toBeNull();
+  });
+
+  it('Trash / 恢复：软删除是普通字段变更，未了结任务放回 Inbox', async () => {
     const task = await backend.createTask({ title: '要删的' });
     await backend.deleteTask(task.id);
     expect(await backend.getFeed('inbox')).toHaveLength(0);

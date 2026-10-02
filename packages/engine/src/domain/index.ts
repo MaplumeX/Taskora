@@ -67,6 +67,7 @@ export {
   taskReopenPatch,
   taskRestorePatch,
   taskTrashPatch,
+  taskUpdatePutsBack,
   type ConvertedProjectFields,
   type TaskFields,
   type TaskPatch,
@@ -80,6 +81,7 @@ export {
   planProjectUpdate,
   projectCompletePatch,
   projectReopenPatch,
+  projectUpdatePutsBack,
   type ProjectFields,
   type ProjectPatch,
 } from './projects';

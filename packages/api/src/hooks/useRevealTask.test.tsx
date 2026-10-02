@@ -127,7 +127,7 @@ describe('useRevealTask — Quick Find 的继续搜索', () => {
   });
   afterEach(() => setTaskBackend(undefined));
 
-  it('allowTrash：Trash 中的任务导航到 Trash 并请求定位，不展开', async () => {
+  it('allowTrash：Trash 中的任务导航到 Trash，展开并请求定位', async () => {
     useFakeTasks([dto({ id: 't1', trashedAt: '2026-02-05T00:00:00.000Z' })]);
     render(
       <MemoryRouter initialEntries={['/inbox']}>
@@ -141,7 +141,7 @@ describe('useRevealTask — Quick Find 的继续搜索', () => {
     expect(revealed).toBe(true);
     expect(screen.getByTestId('path').textContent).toBe('/trash');
     expect(useUiInteractionStore.getState()).toMatchObject({
-      expandedId: null,
+      expandedId: 't1',
       revealId: 't1',
       searchOpen: false,
     });
