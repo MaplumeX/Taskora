@@ -233,7 +233,6 @@ export function useCreateTask() {
         status: TaskStatus.ACTIVE,
         completedAt: null,
         trashedAt: null,
-        sortOrder: 0,
         projectId: data.projectId ?? null,
         headingId: null,
         areaId: data.areaId ?? null,
@@ -242,8 +241,7 @@ export function useCreateTask() {
         createdAt: now,
         updatedAt: now,
       };
-      // 乐观插入置顶：与两种后端的列表语义一致（REST：sortOrder 同为 0、
-      // createdAt desc；Engine：positionAfter 头部），避免回填真实值后任务
+      // 乐观插入置顶：与两种后端的列表语义一致（新任务 Position 排最前），避免回填真实值后任务
       // 从底部跳到顶部的视觉抖动。
       queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
         old ? [tempTask, ...old] : old,
@@ -659,7 +657,6 @@ export function useCreateSubtask() {
         title: data.title,
         status: TaskStatus.ACTIVE,
         completedAt: null,
-        sortOrder: snapshot?.subtasks?.length ?? 0,
         taskId,
         createdAt: now,
         updatedAt: now,
@@ -670,7 +667,7 @@ export function useCreateSubtask() {
           if (afterIndex < 0) return [...subtasks, tempSubtask];
           const next = [...subtasks];
           next.splice(afterIndex + 1, 0, tempSubtask);
-          return next.map((s, index) => ({ ...s, sortOrder: index }));
+          return next;
         }),
       );
       return { snapshot, tempId, taskId };
@@ -969,9 +966,7 @@ export function useReorderSubtasks() {
       const rank = new Map(orderedIds.map((id, index) => [id, index]));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(taskId), (old) =>
         applyToSubtasks(old, (subtasks) =>
-          [...subtasks]
-            .sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity))
-            .map((s, index) => ({ ...s, sortOrder: index })),
+          [...subtasks].sort((a, b) => (rank.get(a.id) ?? Infinity) - (rank.get(b.id) ?? Infinity)),
         ),
       );
       return { snapshot };

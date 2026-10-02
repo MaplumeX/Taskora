@@ -17,11 +17,14 @@ import { FetchEntitiesDto, PushRequestDto, RegisterDeviceDto } from './dto/sync.
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 /**
- * hub 仍接受的最低同步协议版本（ADR-0007「协议版本」）。0 = 不带版本头的
- * 客户端（协议版本出现之前的桌面 / 移动安装）。只在旧客户端会把数据
- * 写坏或无法理解 hub 下发的内容时才提高它。
+ * hub 仍接受的最低同步协议版本（ADR-0007「协议版本」）。只在旧客户端会把
+ * 数据写坏或无法理解 hub 下发的内容时才提高它。
+ *
+ * 4（retire-sort-order）：协议 3 及更早的客户端只按 sortOrder 排 Area /
+ * ProjectHeading / TagGroup / Subtask，重排也只写 sortOrder——hub 不再认识
+ * 这个字段，它们的重排会被永久拒在 Outbox 里、在其他设备上静默丢失。
  */
-export const MIN_SYNC_PROTOCOL_VERSION = 0;
+export const MIN_SYNC_PROTOCOL_VERSION = 4;
 
 /** HTTP 426 Upgrade Required（Nest 的 HttpStatus 未收录）。 */
 const UPGRADE_REQUIRED = 426;

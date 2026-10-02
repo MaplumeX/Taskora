@@ -143,7 +143,7 @@ describe('useEngineQuery（Engine 模式的列表视图）', () => {
     const before = calls.getTasks;
 
     await act(async () => {
-      await engine.create('area', { title: 'Home', sortOrder: 0 });
+      await engine.create('area', { title: 'Home' });
     });
     await waitFor(() => expect(areas.result.current.data).toHaveLength(1));
     await settle();

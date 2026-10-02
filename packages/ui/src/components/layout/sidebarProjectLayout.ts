@@ -1,3 +1,4 @@
+import { sortByEffectivePosition } from '@taskora/api';
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 
 export const STANDALONE_PROJECT_CONTAINER = 'standalone';
@@ -177,9 +178,10 @@ export function serializeProjectOrder(
 }
 
 /**
- * 侧边栏隐藏了部分项目（稍后项目、已完成项目），而 reorder 会按传入下标重写
- * 全部 sortOrder。只传可见项目会让隐藏项目与之撞号，因此以全量顺序为底，
- * 把可见项目的新顺序依次填回可见项原来占的槽位，隐藏项目原位不动。
+ * 侧边栏隐藏了部分项目（稍后项目、已完成项目），而 reorder 按传入的全量顺序
+ * 分配 Position。只传可见项目会让隐藏项目的相对位置漂移，因此以全量顺序
+ * （有效 Position）为底，把可见项目的新顺序依次填回可见项原来占的槽位，
+ * 隐藏项目原位不动。
  */
 export function mergeVisibleProjectOrder(
   allProjects: ProjectResponseDto[],
@@ -187,8 +189,8 @@ export function mergeVisibleProjectOrder(
 ): string[] {
   const visible = new Set(visibleOrder);
   const pending = [...visibleOrder];
-  const merged = [...allProjects]
-    .sort((a, b) => a.sortOrder - b.sortOrder)
-    .map((project) => (visible.has(project.id) ? pending.shift()! : project.id));
+  const merged = sortByEffectivePosition(allProjects).map((project) =>
+    visible.has(project.id) ? pending.shift()! : project.id,
+  );
   return [...merged, ...pending];
 }

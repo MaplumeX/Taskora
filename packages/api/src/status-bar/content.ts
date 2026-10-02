@@ -11,7 +11,8 @@ export interface StatusBarTaskInput {
   title: string;
   /** 计划日期（ISO 8601）；Today 口径下必有值，防御 null。 */
   scheduledDate: string | null;
-  sortOrder: number;
+  /** 列表位次（Position，与 Today 列表同一排序键）。 */
+  position: string | null;
 }
 
 /** 逾期 = 计划日期的日历日早于今天（账号时区口径，与 Today 视图同源）。 */
@@ -24,7 +25,7 @@ function isOverdueDate(scheduledDate: string | null, now: Date): boolean {
   }
 }
 
-/** Today 口径任务按展示顺序排序：日期升序（逾期在前）、同日 sortOrder。 */
+/** Today 口径任务按展示顺序排序：日期升序（逾期在前）、同日按 Position。 */
 export function sortStatusBarTasks(tasks: StatusBarTaskInput[]): StatusBarTaskInput[] {
   return [...tasks].sort((a, b) => {
     const da = a.scheduledDate ? toDateKey(a.scheduledDate) : '';
@@ -34,7 +35,9 @@ export function sortStatusBarTasks(tasks: StatusBarTaskInput[]): StatusBarTaskIn
       if (!db) return -1;
       return da < db ? -1 : 1;
     }
-    return a.sortOrder - b.sortOrder;
+    const pa = a.position ?? '';
+    const pb = b.position ?? '';
+    return pa < pb ? -1 : pa > pb ? 1 : 0;
   });
 }
 

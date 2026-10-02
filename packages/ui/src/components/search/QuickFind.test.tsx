@@ -40,7 +40,6 @@ const PROJECT: ProjectResponseDto = {
   title: 'Groceries',
   notes: null,
   areaId: 'a1',
-  sortOrder: 0,
   status: ProjectStatus.ACTIVE,
   bucket: ProjectBucket.ANYTIME,
   scheduledType: ScheduledType.NONE,
@@ -98,7 +97,7 @@ beforeEach(() => {
   hitsByQuery = {};
   vi.mocked(useProjectsQuery).mockReturnValue({ data: [PROJECT] } as never);
   vi.mocked(useAreasQuery).mockReturnValue({
-    data: [{ id: 'a1', title: 'Home', notes: null, sortOrder: 0, createdAt: NOW, updatedAt: NOW }],
+    data: [{ id: 'a1', title: 'Home', notes: null, createdAt: NOW, updatedAt: NOW }],
   } as never);
   vi.mocked(useTagsQuery).mockReturnValue({
     data: [
@@ -106,7 +105,6 @@ beforeEach(() => {
         id: 'g1',
         title: 'Errand',
         color: '#3B82F6',
-        sortOrder: 0,
         tagGroupId: null,
         createdAt: NOW,
         updatedAt: NOW,

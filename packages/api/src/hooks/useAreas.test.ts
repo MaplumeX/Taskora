@@ -22,7 +22,6 @@ const mockAreas: AreaResponseDto[] = [
     id: 'area-1',
     title: 'Work',
     notes: 'Work area',
-    sortOrder: 0,
     createdAt: '2024-01-01T00:00:00.000Z',
     updatedAt: '2024-01-01T00:00:00.000Z',
   },
@@ -30,7 +29,6 @@ const mockAreas: AreaResponseDto[] = [
     id: 'area-2',
     title: 'Personal',
     notes: null,
-    sortOrder: 1,
     createdAt: '2024-01-02T00:00:00.000Z',
     updatedAt: '2024-01-02T00:00:00.000Z',
   },
@@ -87,7 +85,6 @@ describe('useCreateArea', () => {
       id: 'area-3',
       title: 'Health',
       notes: null,
-      sortOrder: 2,
       createdAt: '2024-01-03T00:00:00.000Z',
       updatedAt: '2024-01-03T00:00:00.000Z',
     };
@@ -118,7 +115,6 @@ describe('useCreateArea', () => {
       id: 'area-real',
       title: 'Health',
       notes: null,
-      sortOrder: 2,
       createdAt: '2024-01-03T00:00:00.000Z',
       updatedAt: '2024-01-03T00:00:00.000Z',
     };
@@ -165,7 +161,6 @@ describe('useCreateArea', () => {
       id: 'area-real',
       title: 'Health',
       notes: null,
-      sortOrder: 2,
       createdAt: '2024-01-03T00:00:00.000Z',
       updatedAt: '2024-01-03T00:00:00.000Z',
     };

@@ -12,7 +12,7 @@ import {
 const NOW = '2026-09-01T00:00:00.000Z';
 
 function tag(id: string, title: string, tagGroupId: string | null = null): TagResponseDto {
-  return { id, title, color: '#3B82F6', sortOrder: 0, tagGroupId, createdAt: NOW, updatedAt: NOW };
+  return { id, title, color: '#3B82F6', tagGroupId, createdAt: NOW, updatedAt: NOW };
 }
 
 const tags = [

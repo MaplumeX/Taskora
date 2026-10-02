@@ -17,10 +17,20 @@
  * - 数据迁移（改值而非加列）同样写成一步，拿到的是事务内的 storage。
  */
 
-import { schemaDdl } from './entities';
+import { ENTITIES, schemaDdl } from './entities';
+import { synthPosition } from './position';
 import { inTransaction, type SqlStorage } from './storage';
 
 export type ReplicaMigration = (storage: SqlStorage) => Promise<void>;
+
+const ENTITY_TABLES = Object.values(ENTITIES).map((def) => def.table);
+
+async function columnNames(storage: SqlStorage, table: string): Promise<string[]> {
+  const columns = await storage.all<{ name: string }>(
+    `SELECT name FROM pragma_table_info('${table}')`,
+  );
+  return columns.map((row) => row.name);
+}
 
 async function addColumnIfMissing(
   storage: SqlStorage,
@@ -28,11 +38,51 @@ async function addColumnIfMissing(
   column: string,
   definition: string,
 ): Promise<void> {
-  const columns = await storage.all<{ name: string }>(
-    `SELECT name FROM pragma_table_info('${table}')`,
-  );
-  if (!columns.some((row) => row.name === column)) {
+  if (!(await columnNames(storage, table)).includes(column)) {
     await storage.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+
+/**
+ * 7 → 8：Area / ProjectHeading / TagGroup / Subtask 增加 position；全部实体
+ * 中仍为空的 position 按 hub 下发 legacy 行的同一口径（synthPosition(
+ * sortOrder, createdAt)）填充（retire-sort-order issue 02 / 03）。值与 hub
+ * 的 wire 视图逐字相同，不写时钟、不入 Outbox。
+ */
+async function addPositionToSortOrderEntities(storage: SqlStorage): Promise<void> {
+  for (const table of ['subtask', 'project_heading', 'area', 'tag_group']) {
+    await addColumnIfMissing(storage, table, 'position', 'TEXT');
+  }
+  for (const table of ENTITY_TABLES) {
+    // 第 1 步按当前 DDL 补建的表没有 sortOrder 列（协议 4 起注册表不含它）
+    const hasSortOrder = (await columnNames(storage, table)).includes('sortOrder');
+    const rows = await storage.all<{
+      id: string;
+      sortOrder: number | null;
+      createdAt: string | null;
+    }>(
+      `SELECT id, ${hasSortOrder ? 'sortOrder' : 'NULL AS sortOrder'}, createdAt FROM ${table} WHERE position IS NULL`,
+    );
+    for (const row of rows) {
+      const createdMs = row.createdAt ? Date.parse(row.createdAt) : NaN;
+      const position = synthPosition(
+        typeof row.sortOrder === 'number' ? row.sortOrder : 0,
+        new Date(Number.isNaN(createdMs) ? 0 : createdMs),
+      );
+      await storage.run(`UPDATE ${table} SET position = ? WHERE id = ?`, [position, row.id]);
+    }
+  }
+}
+
+/**
+ * 8 → 9：删除 sortOrder 列（retire-sort-order issue 05）。协议 4 起它不在
+ * 注册表里，7 → 8 已用它填好 position；第 1 步补建的表本来就没有它。
+ */
+async function dropSortOrder(storage: SqlStorage): Promise<void> {
+  for (const table of ENTITY_TABLES) {
+    if ((await columnNames(storage, table)).includes('sortOrder')) {
+      await storage.exec(`ALTER TABLE ${table} DROP COLUMN sortOrder`);
+    }
   }
 }
 
@@ -68,6 +118,10 @@ export const REPLICA_MIGRATIONS: readonly ReplicaMigration[] = [
   (storage) => addColumnIfMissing(storage, 'task', 'repeatSourceId', 'TEXT'),
   // 6 → 7：project 增加 feedPosition（feed-project-ordering spec，Feed Position）。
   (storage) => addColumnIfMissing(storage, 'project', 'feedPosition', 'TEXT'),
+  // 7 → 8：Area / ProjectHeading / TagGroup / Subtask 增加 position（retire-sort-order）。
+  addPositionToSortOrderEntities,
+  // 8 → 9：删除 sortOrder 列（retire-sort-order）。
+  dropSortOrder,
 ];
 
 /** 当前代码的副本 schema 版本。 */

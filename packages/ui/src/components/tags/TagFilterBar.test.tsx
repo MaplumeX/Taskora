@@ -16,7 +16,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
 
 const NOW = '2026-09-01T00:00:00.000Z';
 function tag(id: string, title: string, tagGroupId: string | null = null): TagResponseDto {
-  return { id, title, color: '#3B82F6', sortOrder: 0, tagGroupId, createdAt: NOW, updatedAt: NOW };
+  return { id, title, color: '#3B82F6', tagGroupId, createdAt: NOW, updatedAt: NOW };
 }
 
 interface Item {
@@ -69,7 +69,7 @@ beforeEach(() => {
     data: [tag('urgent', 'Urgent'), tag('office', 'Office', 'g'), tag('home', 'Home', 'g')],
   } as never);
   vi.mocked(useTagGroupsQuery).mockReturnValue({
-    data: [{ id: 'g', title: 'Place', sortOrder: 0, tags: [], createdAt: NOW, updatedAt: NOW }],
+    data: [{ id: 'g', title: 'Place', tags: [], createdAt: NOW, updatedAt: NOW }],
   } as never);
 });
 

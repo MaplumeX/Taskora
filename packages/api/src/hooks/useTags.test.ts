@@ -21,7 +21,6 @@ const baseTag: TagResponseDto = {
   id: 'tag-1',
   title: 'Important',
   color: '#3B82F6',
-  sortOrder: 0,
   tagGroupId: null,
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-01T00:00:00.000Z',

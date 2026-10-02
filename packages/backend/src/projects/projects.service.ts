@@ -7,13 +7,15 @@ import {
   planProjectRestore,
   planProjectTrash,
   planProjectUpdate,
+  planReorder,
+  positionBetween,
   projectCompletePatch,
   projectReopenPatch,
 } from '@taskora/engine';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncHubService } from '../sync/sync-hub.service';
 import { sortByPosition } from '../common/position-order';
-import { countedTasksOf, newRowOrder, orderFields, toWireFields } from '../common/domain-storage';
+import { countedTasksOf, edgePositions, toWireFields } from '../common/domain-storage';
 import { userCalendarZones } from '../users/account-time-zone';
 import { CreateProjectDto, UpdateProjectDto } from './dto/projects.dto';
 
@@ -58,15 +60,13 @@ export class ProjectsService {
 
   async create(userId: string, dto: CreateProjectDto) {
     const fields = planProjectCreate(dto, await userCalendarZones(this.prisma, userId));
-    const max = await this.prisma.project.aggregate({
-      where: { userId },
-      _max: { sortOrder: true },
-    });
     const id = randomUUID();
     const created = await this.hub.writeAsHub(userId, async (batch) => {
+      // 新项目排在末尾
+      const { last } = await edgePositions(batch.tx, 'Project', userId);
       await batch.write('project', id, {
         ...toWireFields(fields),
-        ...newRowOrder((max._max.sortOrder ?? -1) + 1),
+        position: positionBetween(last, null),
       });
       return batch.tx.project.findUniqueOrThrow({
         where: { id },
@@ -85,7 +85,6 @@ export class ProjectsService {
     // 软删除（trashedAt != null）的项目不进入常规列表，仅在废纸篓 feed 中展示
     const projects = await this.prisma.project.findMany({
       where: { userId, trashedAt: null },
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
       include: { tags: { include: { tag: true } } },
     });
 
@@ -179,18 +178,17 @@ export class ProjectsService {
   async reorder(userId: string, orderedIds: string[]) {
     const owned = await this.prisma.project.findMany({
       where: { id: { in: orderedIds }, userId },
-      select: { id: true, createdAt: true },
+      select: { id: true, position: true },
     });
     const ownedSet = new Set(owned.map((p) => p.id));
     if (ownedSet.size !== orderedIds.length) {
       throw new NotFoundException('Project not found');
     }
 
-    // 双排序键一起写（与 TasksService.reorder 同理由）
-    const createdAtOf = new Map(owned.map((p) => [p.id, p.createdAt]));
+    // 只给必须移动的行分配新 Position（与设备 Engine 后端同一口径）
     await this.hub.writeAsHub(userId, async (batch) => {
-      for (const [index, id] of orderedIds.entries()) {
-        await batch.write('project', id, orderFields(index, createdAtOf.get(id)!));
+      for (const { id, patch } of planReorder(owned, orderedIds)) {
+        await batch.write('project', id, patch);
       }
     });
   }

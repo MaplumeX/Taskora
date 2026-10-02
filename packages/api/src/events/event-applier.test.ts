@@ -38,7 +38,6 @@ function makeTask(overrides: Partial<TaskResponseDto> = {}): TaskResponseDto {
     status: TaskStatus.ACTIVE,
     completedAt: null,
     trashedAt: null,
-    sortOrder: 0,
     projectId: null,
     headingId: null,
     areaId: null,
@@ -274,7 +273,6 @@ describe('applyChangeEvents', () => {
         title: 'Step',
         status: TaskStatus.ACTIVE,
         completedAt: null,
-        sortOrder: 0,
         taskId: 'task-1',
         createdAt: '2026-01-01T00:00:00.000Z',
         updatedAt: '2026-01-01T00:00:00.000Z',
@@ -305,7 +303,6 @@ describe('applyChangeEvents', () => {
       title: 'Step',
       status: TaskStatus.ACTIVE,
       completedAt: null,
-      sortOrder: 0,
       taskId: 'task-1',
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -334,7 +331,6 @@ describe('applyChangeEvents', () => {
       id: 'p1',
       title: 'P',
       notes: null,
-      sortOrder: 0,
       areaId: null,
       status: ProjectStatus.ACTIVE,
       bucket: ProjectBucket.ANYTIME,
@@ -353,7 +349,6 @@ describe('applyChangeEvents', () => {
       id: 'a1',
       title: 'A',
       notes: null,
-      sortOrder: 0,
       tags: [],
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -362,7 +357,6 @@ describe('applyChangeEvents', () => {
       id: 'g1',
       title: 'T',
       color: '#3B82F6',
-      sortOrder: 0,
       tagGroupId: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -370,7 +364,6 @@ describe('applyChangeEvents', () => {
     const group: TagGroupResponseDto = {
       id: 'tg1',
       title: 'G',
-      sortOrder: 0,
       tags: [],
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -431,7 +424,6 @@ describe('applyChangeEvents', () => {
       id: 'g1',
       title: 'Renamed',
       color: '#3B82F6',
-      sortOrder: 0,
       tagGroupId: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
@@ -451,7 +443,6 @@ describe('applyChangeEvents', () => {
       id: 'h1',
       projectId: 'p1',
       title: 'H',
-      sortOrder: 0,
       status: HeadingStatus.ACTIVE,
       completedAt: null,
       createdAt: '2026-01-01T00:00:00.000Z',
@@ -479,9 +470,9 @@ describe('applyChangeEvents', () => {
     expect(queryClient.getQueryData<ProjectHeadingResponseDto[]>(archivedKey)).toEqual([]);
   });
 
-  it('re-sorts upserted task lists by the server ordering (sortOrder, createdAt)', () => {
-    const older = makeTask({ id: 't-old', sortOrder: 5, createdAt: '2026-01-01T00:00:00.000Z' });
-    const newer = makeTask({ id: 't-new', sortOrder: 5, createdAt: '2026-01-02T00:00:00.000Z' });
+  it('re-sorts upserted task lists by the server ordering (Position)', () => {
+    const older = makeTask({ id: 't-old', position: 'a5' });
+    const newer = makeTask({ id: 't-new', position: 'a4' });
     queryClient.setQueryData(taskKeys.list(), [older]);
 
     applyChangeEvents(queryClient, [event('task', 't-new', 'created', newer)]);
@@ -533,7 +524,6 @@ describe('applyChangeEvents — 稍后项目（spec: later-projects）', () => {
     id: 'p1',
     title: 'P',
     notes: null,
-    sortOrder: 0,
     areaId: null,
     status: ProjectStatus.ACTIVE,
     bucket: ProjectBucket.SCHEDULED,

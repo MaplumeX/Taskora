@@ -64,7 +64,6 @@ const baseTask = vi.hoisted(() => ({
   status: 'ACTIVE' as const,
   completedAt: null,
   trashedAt: null,
-  sortOrder: 0,
   projectId: null,
   headingId: null,
   areaId: null,
@@ -269,7 +268,6 @@ describe('TaskItem — 展开时隐藏备注/子任务徽标', () => {
           status: TaskStatus.ACTIVE,
           completedAt: null,
           taskId: 'task-1',
-          sortOrder: 0,
           createdAt: '2025-07-31T00:00:00.000Z',
           updatedAt: '2025-07-31T00:00:00.000Z',
         },
@@ -332,7 +330,6 @@ describe('TaskRowExpanded — hide subtask empty state', () => {
           status: TaskStatus.ACTIVE,
           completedAt: null,
           taskId: 'task-1',
-          sortOrder: 0,
           createdAt: '2025-07-31T00:00:00.000Z',
           updatedAt: '2025-07-31T00:00:00.000Z',
         },
@@ -383,13 +380,13 @@ describe('TaskItem — Reveal Task 滚入视野', () => {
 });
 
 describe('TaskSubtaskList — Things 3 式就地编辑', () => {
-  const subtask = (id: string, title: string, sortOrder: number) => ({
+  const subtask = (id: string, title: string, index: number) => ({
     id,
     title,
     status: TaskStatus.ACTIVE,
     completedAt: null,
     taskId: 'task-1',
-    sortOrder,
+    position: `a${index}`,
     createdAt: '2025-07-31T00:00:00.000Z',
     updatedAt: '2025-07-31T00:00:00.000Z',
   });

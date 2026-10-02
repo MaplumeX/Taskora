@@ -5,8 +5,8 @@
  * wire 上的值一律 JSON 可序列化：日期为 ISO 字符串、枚举为字符串、
  * tagIds 为字符串数组（hub 侧由关系表物化）。
  *
- * `position` 是 Task/Project/Tag 的排序位次（fractional indexing 字符串，
- * CONTEXT.md「引擎与同步」）；`sortOrder` 是过渡期保留的旧 REST 排序列。
+ * `position` 是全部实体的排序位次（fractional indexing 字符串，CONTEXT.md
+ * 「引擎与同步」），list 按它排序。
  * Project 另有 `feedPosition`（Feed Position）：项目行在 feed 视图中与任务
  * 混排的位次，与任务的 `position` 同处一个键空间，不影响侧边栏顺序。
  */
@@ -32,8 +32,6 @@ export interface EntityDef {
   table: string;
   /** wire 字段（不含 id 与 clocks）。 */
   fields: FieldDef[];
-  /** fractional indexing 排序字段（有则 list 按其排序）。 */
-  orderField?: string;
 }
 
 const f = (name: string, opts: Partial<FieldDef> = {}): FieldDef => ({
@@ -47,7 +45,6 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
   task: {
     name: 'task',
     table: 'task',
-    orderField: 'position',
     fields: [
       f('title'),
       f('notes'),
@@ -62,7 +59,6 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('settledAt'),
       f('trashedAt'),
       f('position'),
-      f('sortOrder', { sql: 'INTEGER' }),
       f('projectId'),
       f('headingId'),
       f('areaId'),
@@ -78,7 +74,7 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('title'),
       f('status'),
       f('settledAt'),
-      f('sortOrder', { sql: 'INTEGER' }),
+      f('position'),
       f('taskId'),
       f('createdAt'),
       f('updatedAt'),
@@ -87,7 +83,6 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
   project: {
     name: 'project',
     table: 'project',
-    orderField: 'position',
     fields: [
       f('title'),
       f('notes'),
@@ -100,7 +95,6 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('trashedAt'),
       f('position'),
       f('feedPosition'),
-      f('sortOrder', { sql: 'INTEGER' }),
       f('areaId'),
       f('tagIds', { json: true }),
       f('createdAt'),
@@ -112,7 +106,7 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
     table: 'project_heading',
     fields: [
       f('title'),
-      f('sortOrder', { sql: 'INTEGER' }),
+      f('position'),
       f('status'),
       f('completedAt'),
       f('projectId'),
@@ -126,7 +120,7 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
     fields: [
       f('title'),
       f('notes'),
-      f('sortOrder', { sql: 'INTEGER' }),
+      f('position'),
       f('tagIds', { json: true }),
       f('createdAt'),
       f('updatedAt'),
@@ -135,12 +129,10 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
   tag: {
     name: 'tag',
     table: 'tag',
-    orderField: 'position',
     fields: [
       f('title'),
       f('color'),
       f('position'),
-      f('sortOrder', { sql: 'INTEGER' }),
       f('tagGroupId'),
       f('createdAt'),
       f('updatedAt'),
@@ -149,7 +141,7 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
   'tag-group': {
     name: 'tag-group',
     table: 'tag_group',
-    fields: [f('title'), f('sortOrder', { sql: 'INTEGER' }), f('createdAt'), f('updatedAt')],
+    fields: [f('title'), f('position'), f('createdAt'), f('updatedAt')],
   },
 };
 

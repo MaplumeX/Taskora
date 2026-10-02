@@ -14,7 +14,8 @@ export interface TagResponseDto {
   id: string;
   title: string;
   color: string;
-  sortOrder: number;
+  /** 列表位次（fractional indexing 字符串，ADR-0007）；列表顺序只看它。 */
+  position?: string | null;
   tagGroupId: string | null;
   createdAt: string;
   updatedAt: string;

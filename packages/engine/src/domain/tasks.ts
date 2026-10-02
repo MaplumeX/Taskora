@@ -4,7 +4,7 @@
  * 设备（Engine 后端）与 hub（REST 服务）都只做「读 → 调这里 → 写」。
  * 字段是线上（wire）形态：日历日期为 `YYYY-MM-DD` 日期键，时间戳为
  * ISO 字符串，重复规则为规范化对象；REST 侧在写 Postgres 时换成 Date /
- * 规范 JSON 文本。排序位次（Position / sortOrder）是存储问题，不在此。
+ * 规范 JSON 文本。排序位次（Position）是存储问题，不在此。
  */
 
 import {

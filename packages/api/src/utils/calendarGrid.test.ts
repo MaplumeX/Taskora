@@ -29,7 +29,6 @@ function task(id: string, scheduledDate: string | null): TaskResponseDto {
     status: TaskStatus.ACTIVE,
     completedAt: null,
     trashedAt: null,
-    sortOrder: 0,
     projectId: null,
     headingId: null,
     areaId: null,

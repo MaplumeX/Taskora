@@ -16,6 +16,7 @@ import {
   openEngine,
   readSchemaVersion,
   schemaDdl,
+  synthPosition,
   type ReplicaMigration,
   type SyncEntity,
   type SyncTransport,
@@ -105,6 +106,75 @@ describe('副本 schema 版本', () => {
     );
     expect(row.registered_at).toBeGreaterThanOrEqual(before);
     expect(await engine.isCompacted('task', 'gone')).toBe(true);
+    await engine.close();
+  });
+
+  it('7 → 9：四个实体增加 position，空 position 按 hub 的 legacy 口径填充（不入 Outbox），再删 sortOrder', async () => {
+    const storage = await createNodeSqliteStorage(':memory:');
+    for (const statement of schemaDdl()) await storage.exec(statement);
+    // 版本 7 的副本：七张表都有 sortOrder，四张表还没有 position
+    for (const table of [
+      'task',
+      'project',
+      'tag',
+      'subtask',
+      'project_heading',
+      'area',
+      'tag_group',
+    ]) {
+      await storage.exec(`ALTER TABLE ${table} ADD COLUMN sortOrder INTEGER`);
+    }
+    for (const table of ['subtask', 'project_heading', 'area', 'tag_group']) {
+      await storage.exec(`ALTER TABLE ${table} DROP COLUMN position`);
+    }
+    const createdAt = '2026-09-01T00:00:00.000Z';
+    await storage.run(
+      "INSERT INTO area (id, title, sortOrder, createdAt, clocks) VALUES ('a2', 'Second', 2, ?, '{}')",
+      [createdAt],
+    );
+    await storage.run(
+      "INSERT INTO area (id, title, sortOrder, createdAt, clocks) VALUES ('a1', 'First', 1, ?, '{}')",
+      [createdAt],
+    );
+    await storage.run(
+      "INSERT INTO subtask (id, title, sortOrder, createdAt, clocks) VALUES ('s1', 'Sub', 0, ?, '{}')",
+      [createdAt],
+    );
+    await storage.run(
+      "INSERT INTO task (id, title, sortOrder, createdAt, clocks) VALUES ('t1', 'Legacy', 4, ?, '{}')",
+      [createdAt],
+    );
+    await storage.exec('PRAGMA user_version = 7');
+
+    const engine = await open(storage);
+
+    for (const table of ['subtask', 'project_heading', 'area', 'tag_group']) {
+      expect(await columnsOf(storage, table)).toContain('position');
+    }
+    expect((await engine.get('area', 'a1'))?.fields.position).toBe(
+      synthPosition(1, new Date(createdAt)),
+    );
+    expect((await engine.get('subtask', 's1'))?.fields.position).toBe(
+      synthPosition(0, new Date(createdAt)),
+    );
+    expect((await engine.list('area')).map((row) => row.id)).toEqual(['a1', 'a2']);
+    // Task 早有 position 列：仍为空的同样补齐
+    expect((await engine.get('task', 't1'))?.fields.position).toBe(
+      synthPosition(4, new Date(createdAt)),
+    );
+    // 8 → 9：sortOrder 列删除
+    for (const table of [
+      'task',
+      'project',
+      'tag',
+      'subtask',
+      'project_heading',
+      'area',
+      'tag_group',
+    ]) {
+      expect(await columnsOf(storage, table)).not.toContain('sortOrder');
+    }
+    expect(await engine.pendingCount()).toBe(0);
     await engine.close();
   });
 

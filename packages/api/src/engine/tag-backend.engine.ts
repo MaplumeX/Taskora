@@ -1,8 +1,8 @@
 /**
  * Engine 实现的 Tag 传输层 — 桌面端完全体（V2 spec，ADR-0007）。
  *
- * Tag 增删改全部本地。新建 Tag 排最前（newest-first：Position 插最前，
- * sortOrder 0）；删除走 Delete Request（hub 侧 TaskTag 关联 Cascade 清理）。
+ * Tag 增删改全部本地。新建 Tag 排最前（newest-first：Position 插最前）；
+ * 删除走 Delete Request（hub 侧 TaskTag 关联 Cascade 清理）。
  */
 
 import type { Engine } from '@taskora/engine';
@@ -43,7 +43,6 @@ export function createEngineTagBackend(options: EngineTagBackendOptions): TagBac
         tagGroupId: data.tagGroupId ?? null,
         // 新 Tag 排最前（newest-first）
         position: positionAfter(existing, null),
-        sortOrder: 0,
       });
       return tagDto(id);
     },

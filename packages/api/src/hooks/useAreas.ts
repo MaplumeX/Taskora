@@ -59,7 +59,6 @@ export function useCreateArea() {
         id: tempId,
         title: data.title,
         notes: data.notes ?? null,
-        sortOrder: 0,
         tags: [],
         createdAt: now,
         updatedAt: now,

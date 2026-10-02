@@ -84,7 +84,6 @@ describe('FeedService', () => {
       bucket: 'ANYTIME',
       settledAt: null,
       trashedAt: null,
-      sortOrder: 0,
       projectId,
       headingId: null,
       areaId: null,
@@ -156,7 +155,6 @@ describe('FeedService', () => {
       dueDate: null,
       bucket: 'INBOX',
       trashedAt: null,
-      sortOrder: 0,
       projectId: null,
       headingId: null,
       areaId: null,
@@ -233,7 +231,6 @@ describe('FeedService', () => {
           bucket: 'ANYTIME',
           completedAt: null,
           trashedAt: null,
-          sortOrder: 0,
           areaId: null,
           createdAt: new Date(),
           updatedAt: new Date(),
@@ -270,7 +267,7 @@ describe('FeedService', () => {
         { id: 't2', position: 'a2' },
       ]);
       mockPrisma.project.findMany.mockResolvedValue([
-        { id: 'p', position: 'a5', feedPosition: null, sortOrder: 0, createdAt: new Date(0) },
+        { id: 'p', position: 'a5', feedPosition: null },
       ]);
 
       await writing.reorder('user-1', [

@@ -193,17 +193,22 @@ integrationDescribe('Change Events (service-level integration)', () => {
     }
   });
 
-  it('emits one updated event per reordered task, with monotonic seqs', async () => {
+  it('emits one updated event per moved task, with monotonic seqs', async () => {
     const t1 = await tasks.create(userId, { title: 'r1' });
     const t2 = await tasks.create(userId, { title: 'r2' });
     const t3 = await tasks.create(userId, { title: 'r3' });
     await drain();
 
-    // t3 落在索引 0：排序键与新建时相同，hub 不写它（值未变的字段不写）
+    // 新建置顶：现序 t3 t2 t1。目标 t3 t1 t2 只需移动一行（t1 或 t2）
     await tasks.reorder(userId, [t3.id, t1.id, t2.id]);
+    const single = await drainWhere((e) => e.entity === 'task' && e.action === 'updated');
+    expect(single).toHaveLength(1);
+    expect([t1.id, t2.id]).toContain(single[0].id);
 
+    // 整体倒序：保留最长有序子序列，其余逐行移动
+    await tasks.reorder(userId, [t1.id, t2.id, t3.id]);
     const batch = await drainWhere((e) => e.entity === 'task' && e.action === 'updated');
-    expect(batch.map((e) => e.id).sort()).toEqual([t1.id, t2.id].sort());
+    expect(batch.length).toBeGreaterThan(0);
     expectSeqsMonotonic(batch);
   });
 

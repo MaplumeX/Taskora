@@ -9,14 +9,16 @@ import {
   planHeadingDelete,
   planHeadingLayout,
   planHeadingToProject,
+  planReorder,
+  positionAtEnd,
+  positionBetween,
   sortHeadings,
 } from '@taskora/engine';
 import { HeadingStatus, TaskStatus } from '@taskora/shared';
-import { synthPosition } from '@taskora/engine';
 import type { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { newRowOrder, toWireFields } from '../common/domain-storage';
+import { edgePositions, toWireFields } from '../common/domain-storage';
 import { SyncHubService, type HubWriteBatch } from '../sync/sync-hub.service';
 import {
   CreateProjectHeadingDto,
@@ -61,26 +63,22 @@ export class ProjectHeadingsService {
     if (!includeArchived) {
       where.status = HeadingStatus.ACTIVE;
     }
-    // 顺序以 domain sortHeadings 为准（与设备同一规则）；SQL 排序只是省一次重排
-    return sortHeadings(
-      await this.prisma.projectHeading.findMany({
-        where,
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
-      }),
-    );
+    // 顺序以 domain sortHeadings 为准（与设备同一规则）
+    return sortHeadings(await this.prisma.projectHeading.findMany({ where }));
   }
 
   async create(userId: string, dto: CreateProjectHeadingDto) {
     await this.assertProjectOwnership(userId, dto.projectId);
-    const max = await this.prisma.projectHeading.aggregate({
+    // 追加末尾
+    const siblings = await this.prisma.projectHeading.findMany({
       where: { userId, projectId: dto.projectId },
-      _max: { sortOrder: true },
+      select: { id: true, position: true },
     });
     const id = randomUUID();
     return this.hub.writeAsHub(userId, async (batch) => {
       await batch.write('project-heading', id, {
         title: dto.title,
-        sortOrder: (max._max.sortOrder ?? -1) + 1,
+        position: positionAtEnd(siblings),
         status: HeadingStatus.ACTIVE,
         completedAt: null,
         projectId: dto.projectId,
@@ -120,15 +118,12 @@ export class ProjectHeadingsService {
       const heading = await this.requireHeading(batch, userId, id);
 
       // New project is appended after the user's last project in the sidebar.
-      const maxSort = await batch.tx.project.aggregate({
-        where: { userId },
-        _max: { sortOrder: true },
-      });
+      const { last } = await edgePositions(batch.tx, 'Project', userId);
       const plan = planHeadingToProject(heading.title, heading.project.areaId ?? null);
       const projectId = randomUUID();
       await batch.write('project', projectId, {
         ...toWireFields(plan.project),
-        ...newRowOrder((maxSort._max.sortOrder ?? -1) + 1),
+        position: positionBetween(last, null),
       });
 
       // 分组下的全部任务（含 Trash 里的）移入新项目，只改归属
@@ -184,7 +179,7 @@ export class ProjectHeadingsService {
       const [headings, visibleTasks] = await Promise.all([
         batch.tx.projectHeading.findMany({
           where: { userId, projectId: dto.projectId, status: HeadingStatus.ACTIVE },
-          select: { id: true },
+          select: { id: true, position: true },
         }),
         batch.tx.task.findMany({
           where: {
@@ -193,7 +188,7 @@ export class ProjectHeadingsService {
             trashedAt: null,
             status: TaskStatus.ACTIVE,
           },
-          select: { id: true, createdAt: true, status: true, trashedAt: true },
+          select: { id: true, position: true, status: true, trashedAt: true },
         }),
       ]);
 
@@ -212,26 +207,17 @@ export class ProjectHeadingsService {
         throw error;
       }
 
-      // 任务双排序键一起写：sortOrder（分组内索引，web REST 读）+
-      // position（按整页视觉顺序，由 hub 的合成函数生成）。
-      const createdAtOf = new Map(visibleTasks.map((task) => [task.id, task.createdAt]));
-      const positionOf = new Map(
-        plan.visualTaskIds.map((id, index) => [id, synthPosition(index, createdAtOf.get(id)!)]),
+      // 与设备 Engine 后端同一口径：分组位次与任务位次（按整页视觉顺序）都只给
+      // 必须移动的行分配新键；归属值未变的字段由 hub 跳过。
+      const taskPosition = new Map(
+        planReorder(visibleTasks, plan.visualTaskIds).map(({ id, patch }) => [id, patch.position]),
       );
-      const sortOrderOf = new Map<string, number>([
-        ...dto.ungroupedTaskIds.map((id, index) => [id, index] as const),
-        ...dto.groups.flatMap((group) => group.taskIds.map((id, index) => [id, index] as const)),
-      ]);
-
-      for (const { id, sortOrder } of plan.headingOrder) {
-        await batch.write('project-heading', id, { sortOrder });
+      for (const { id, patch } of planReorder(headings, plan.headingOrder)) {
+        await batch.write('project-heading', id, patch);
       }
       for (const { id, headingId } of plan.taskHeading) {
-        await batch.write('task', id, {
-          headingId,
-          sortOrder: sortOrderOf.get(id)!,
-          position: positionOf.get(id)!,
-        });
+        const position = taskPosition.get(id);
+        await batch.write('task', id, { headingId, ...(position ? { position } : {}) });
       }
     });
   }

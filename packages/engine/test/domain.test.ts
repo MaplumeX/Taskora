@@ -19,6 +19,10 @@ import {
   planHeadingArchive,
   planHeadingDelete,
   planHeadingLayout,
+  planReorder,
+  positionAfterRow,
+  positionAtEnd,
+  positionAtStart,
   planProjectRestore,
   planProjectTrash,
   planRepeatInstance,
@@ -299,7 +303,7 @@ describe('任务写入规则', () => {
     });
   });
 
-  it('重复实例：确定性 id 与字段；子任务按 sortOrder、平局后建在前', () => {
+  it('重复实例：确定性 id 与字段；子任务按 Position，沿用原 Position', () => {
     const parent = {
       id: 'task-1',
       title: 'Water plants',
@@ -313,9 +317,9 @@ describe('任务写入规则', () => {
       tagIds: [],
     };
     const subtasks = [
-      { title: 'b', sortOrder: 1, createdAt: '2026-01-01T00:00:00Z' },
-      { title: 'a-old', sortOrder: 0, createdAt: '2026-01-01T00:00:00Z' },
-      { title: 'a-new', sortOrder: 0, createdAt: '2026-01-02T00:00:00Z' },
+      { title: 'b', position: 'a2' },
+      { title: 'a-old', position: 'a1' },
+      { title: 'a-new', position: 'a0' },
     ];
     const plan = planRepeatInstance(parent, subtasks, '2026-09-24T08:00:00.000Z', UTC)!;
     expect(plan.task).toMatchObject({
@@ -324,6 +328,7 @@ describe('任务写入规则', () => {
       repeatSourceId: 'task-1',
     });
     expect(plan.subtasksFor(plan.id).map((s) => s.title)).toEqual(['a-new', 'a-old', 'b']);
+    expect(plan.subtasksFor(plan.id).map((s) => s.position)).toEqual(['a0', 'a1', 'a2']);
     expect(planRepeatInstance({ ...parent, repeatRule: null }, [], 'x', UTC)).toBeNull();
   });
 
@@ -438,7 +443,7 @@ describe('级联规则', () => {
       groups: [{ headingId: 'h1', taskIds: ['t1'] }],
     };
     expect(planHeadingLayout(layout, ['h1'], ['t1', 't2'])).toEqual({
-      headingOrder: [{ id: 'h1', sortOrder: 0 }],
+      headingOrder: ['h1'],
       taskHeading: [
         { id: 't2', headingId: null },
         { id: 't1', headingId: 'h1' },
@@ -523,5 +528,42 @@ describe('下次预告（Repeat Preview）', () => {
         context,
       ).map((p) => p.sourceTaskId),
     ).toEqual(['discarded', 'instance']);
+  });
+});
+
+describe('排序位次（retire-sort-order）', () => {
+  const rows = [
+    { id: 'a', position: 'a0' },
+    { id: 'b', position: 'a1' },
+    { id: 'c', position: 'a2' },
+  ];
+
+  it('新建：追加到末尾 / 置顶 / 插在某行之后', () => {
+    expect(positionAtEnd(rows) > 'a2').toBe(true);
+    expect(positionAtStart(rows) < 'a0').toBe(true);
+    const between = positionAfterRow(rows, 'a');
+    expect(between > 'a0' && between < 'a1').toBe(true);
+    expect(positionAfterRow(rows, 'missing') > 'a2').toBe(true);
+    expect(positionAtEnd([])).toBe('a0');
+  });
+
+  it('空 Position 只是防御：排在最前，不参与插入邻居', () => {
+    const rows = [
+      { id: 'x', position: 'a1' },
+      { id: 'y', position: null },
+    ];
+    expect(sortForView(rows, undefined).map((r) => r.id)).toEqual(['y', 'x']);
+    expect(positionAtStart(rows) < 'a1').toBe(true);
+    expect(positionAfterRow(rows, 'y') < 'a1').toBe(true);
+  });
+
+  it('重排：只给被移动的行分配 Position', () => {
+    const changes = planReorder(rows, ['b', 'c', 'a']);
+    expect(changes.map(({ id }) => id)).toEqual(['a']);
+    expect(changes[0].patch.position > 'a2').toBe(true);
+  });
+
+  it('重排：顺序未变不产生写；未知 id 忽略', () => {
+    expect(planReorder(rows, ['a', 'ghost', 'b', 'c'])).toEqual([]);
   });
 });

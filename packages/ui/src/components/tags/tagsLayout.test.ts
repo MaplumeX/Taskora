@@ -10,7 +10,6 @@ function tag(id: string, tagGroupId: string | null = null): TagResponseDto {
     id,
     title: id,
     color: '#3B82F6',
-    sortOrder: 0,
     tagGroupId,
     createdAt: NOW,
     updatedAt: NOW,

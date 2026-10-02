@@ -155,7 +155,7 @@ _Avoid_: 整实体覆盖、弹窗合并
 _Avoid_: 服务器时间、纯墙上时钟
 
 **Position**:
-Task 在列表中的排序位次，用 fractional indexing 字符串表达，是 Task 的普通字段，纳入字段级 LWW；插队只需在两个邻居间生成新串，无需重排他人。需要后台偶尔 re-balance 防字符串膨胀。
+实体在列表中的排序位次（Task、Subtask、Project、Project Heading、Area、Tag、Tag Group 都有），用 fractional indexing 字符串表达，是实体的普通字段，纳入字段级 LWW；插队只需在两个邻居间生成新串，无需重排他人。需要后台偶尔 re-balance 防字符串膨胀。列表顺序只看 Position（旧的整数 sortOrder 已随同步协议 4 退役）。
 _Avoid_: 整数序号、sortOrder、order index
 
 **Feed Position**:

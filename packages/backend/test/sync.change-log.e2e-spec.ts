@@ -31,7 +31,7 @@ function areaEvent(id: string, counter: number): OutboxEvent {
     id,
     fields: {
       title: { value: id, hlc },
-      sortOrder: { value: 0, hlc },
+      position: { value: 'a0', hlc },
       tagIds: { value: [], hlc },
       createdAt: { value: now, hlc },
       updatedAt: { value: now, hlc },

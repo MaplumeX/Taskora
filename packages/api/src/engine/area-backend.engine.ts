@@ -2,11 +2,11 @@
  * Engine 实现的 Area 传输层 — 桌面端完全体（V2 spec，ADR-0007）。
  *
  * Area 的增删改/重排全部本地（软引用关系由删除原语按 SetNull 语义
- * 清理）。语义与 AreasService 对齐（sortOrder = max + 1、tagIds 全量
- * set、物理删除）。
+ * 清理）。语义与 AreasService 对齐（新建追加末尾、tagIds 全量 set、
+ * 物理删除）。
  */
 
-import type { Engine } from '@taskora/engine';
+import { planReorder, positionAtEnd, type Engine } from '@taskora/engine';
 import type {
   AreaResponseDto,
   CreateAreaDto,
@@ -15,7 +15,7 @@ import type {
 } from '@taskora/shared';
 
 import type { AreaBackend } from '../api/area-backend';
-import { areaRowToDto, tagIndexFor } from './mappers';
+import { areaRowToDto, positionedRows, tagIndexFor } from './mappers';
 
 export interface EngineAreaBackendOptions {
   engine: Engine;
@@ -45,12 +45,11 @@ export function createEngineAreaBackend(options: EngineAreaBackendOptions): Area
 
     async createArea(data: CreateAreaDto): Promise<AreaResponseDto> {
       const existing = await engine.list('area');
-      const sortOrder =
-        existing.reduce((max, a) => Math.max(max, (a.fields.sortOrder as number) ?? 0), -1) + 1;
+      // 追加末尾
       const id = await engine.create('area', {
         title: data.title,
         notes: data.notes ?? null,
-        sortOrder,
+        position: positionAtEnd(positionedRows(existing)),
         tagIds: data.tagIds ?? [],
       });
       return areaDto(id);
@@ -72,15 +71,14 @@ export function createEngineAreaBackend(options: EngineAreaBackendOptions): Area
     },
 
     async reorderAreas(orderedIds: string[]): Promise<void> {
+      // 只给必须移动的行分配新 Position，一个事务一次通知（同 reorderProjects）
       const rows = await engine.list('area');
-      const byId = new Map(rows.map((row) => [row.id, row]));
-      await Promise.all(
-        orderedIds.map(async (id, index) => {
-          const row = byId.get(id);
-          if (row && row.fields.sortOrder !== index) {
-            await engine.update('area', id, { sortOrder: index });
-          }
-        }),
+      await engine.updateMany(
+        'area',
+        planReorder(positionedRows(rows), orderedIds).map(({ id, patch }) => ({
+          id,
+          patch: { ...patch },
+        })),
       );
     },
   };

@@ -7,8 +7,12 @@ function localIso(year: number, month: number, day: number): string {
   return new Date(year, month - 1, day).toISOString();
 }
 
-function task(title: string, scheduledDate: string | null, sortOrder = 0): StatusBarTaskInput {
-  return { title, scheduledDate, sortOrder };
+function task(
+  title: string,
+  scheduledDate: string | null,
+  position: string | null = 'a0',
+): StatusBarTaskInput {
+  return { title, scheduledDate, position };
 }
 
 // 固定「今天」：2026-09-25 15:00 本地时间。
@@ -18,12 +22,12 @@ const YESTERDAY = localIso(2026, 9, 24);
 const BEFORE = localIso(2026, 9, 20);
 
 describe('sortStatusBarTasks', () => {
-  it('按日期升序（逾期在前），同日按 sortOrder，null 兜底最后', () => {
+  it('按日期升序（逾期在前），同日按 Position，null 兜底最后', () => {
     const sorted = sortStatusBarTasks([
-      task('今天-b', TODAY, 2),
+      task('今天-b', TODAY, 'a2'),
       task('无日期', null),
       task('更早', BEFORE),
-      task('今天-a', TODAY, 1),
+      task('今天-a', TODAY, 'a1'),
       task('昨天', YESTERDAY),
     ]);
     expect(sorted.map((t) => t.title)).toEqual(['更早', '昨天', '今天-a', '今天-b', '无日期']);
@@ -39,7 +43,7 @@ describe('taskLine', () => {
 });
 
 describe('carouselTitle', () => {
-  const tasks = [task('逾期', YESTERDAY), task('今天一', TODAY, 1), task('今天二', TODAY, 2)];
+  const tasks = [task('逾期', YESTERDAY), task('今天一', TODAY, 'a1'), task('今天二', TODAY, 'a2')];
 
   it('空列表返回空串', () => {
     expect(carouselTitle([], 0, NOW)).toBe('');

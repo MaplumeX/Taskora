@@ -642,8 +642,8 @@ export class SyncHubService implements OnModuleInit {
       await delegate(tx, codec.model).create({ data: { ...data, id, userId } });
     }
 
-    // 落库后的真实状态入日志：不可空列的 Prisma 默认值（sortOrder null
-    // → 0）、tagIds 关系表排序、日期格式都以列值为准。
+    // 落库后的真实状态入日志：不可空列的 Prisma 默认值、tagIds 关系表
+    // 排序、日期格式都以列值为准。
     const fresh = await loadRow(tx, codec, id);
     if (!fresh) return null;
     // 被剔除的字段（新版客户端的未知枚举值、非法日期等）：库里留的是旧值

@@ -6,7 +6,7 @@
  * （已删除 Tag 的悬挂 id 被过滤）。
  */
 
-import type { ReplicaRow } from '@taskora/engine';
+import type { Positioned, ReplicaRow } from '@taskora/engine';
 import {
   HeadingStatus,
   ProjectBucket,
@@ -25,6 +25,14 @@ import type {
   TagResponseDto,
   TaskResponseDto,
 } from '@taskora/shared';
+
+/** 副本行的排序视图（domain 的 planReorder / positionAtEnd 等的输入）。 */
+export function positionedRows(rows: readonly ReplicaRow[]): Array<Positioned & { id: string }> {
+  return rows.map((row) => ({
+    id: row.id,
+    position: typeof row.fields.position === 'string' ? row.fields.position : null,
+  }));
+}
 
 export const SETTLED_TASK_STATUSES = new Set<TaskStatus>([
   TaskStatus.COMPLETED,
@@ -52,7 +60,7 @@ export function tagRowToDto(row: ReplicaRow): TagResponseDto {
     id: row.id,
     title: (f.title as string) ?? '',
     color: (f.color as string) ?? '#3B82F6',
-    sortOrder: (f.sortOrder as number) ?? 0,
+    position: typeof f.position === 'string' ? f.position : null,
     tagGroupId: (f.tagGroupId as string | null) ?? null,
     createdAt: (f.createdAt as string) ?? new Date().toISOString(),
     updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),
@@ -77,7 +85,6 @@ export function taskRowToDto(row: ReplicaRow, tags: Map<string, TagResponseDto>)
     // DTO 字段名保留 completedAt，承载 Settled At 语义（ADR 0006）。
     completedAt: (f.settledAt as string | null) ?? null,
     trashedAt: (f.trashedAt as string | null) ?? null,
-    sortOrder: (f.sortOrder as number) ?? 0,
     position: typeof f.position === 'string' ? f.position : null,
     projectId: (f.projectId as string | null) ?? null,
     headingId: (f.headingId as string | null) ?? null,
@@ -95,7 +102,7 @@ export function subtaskRowToDto(row: ReplicaRow): SubtaskResponseDto {
     title: (f.title as string) ?? '',
     status: (f.status as TaskStatus) ?? TaskStatus.ACTIVE,
     completedAt: (f.settledAt as string | null) ?? null,
-    sortOrder: (f.sortOrder as number) ?? 0,
+    position: typeof f.position === 'string' ? f.position : null,
     taskId: (f.taskId as string) ?? '',
     createdAt: (f.createdAt as string) ?? new Date().toISOString(),
     updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),
@@ -115,7 +122,6 @@ export function projectRowToDto(
     title: (f.title as string) ?? '',
     notes: (f.notes as string | null) ?? null,
     areaId: (f.areaId as string | null) ?? null,
-    sortOrder: (f.sortOrder as number) ?? 0,
     position: typeof f.position === 'string' ? f.position : null,
     status: (f.status as ProjectStatus) ?? ProjectStatus.ACTIVE,
     bucket: (f.bucket as ProjectBucket) ?? ProjectBucket.ANYTIME,
@@ -139,7 +145,7 @@ export function areaRowToDto(row: ReplicaRow, tags: Map<string, TagResponseDto>)
     id: row.id,
     title: (f.title as string) ?? '',
     notes: (f.notes as string | null) ?? null,
-    sortOrder: (f.sortOrder as number) ?? 0,
+    position: typeof f.position === 'string' ? f.position : null,
     tags: tagIds.map((id) => tags.get(id)).filter((t): t is TagResponseDto => t !== undefined),
     createdAt: (f.createdAt as string) ?? new Date().toISOString(),
     updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),
@@ -154,7 +160,7 @@ export function tagGroupRowToDto(
   return {
     id: row.id,
     title: (f.title as string) ?? '',
-    sortOrder: (f.sortOrder as number) ?? 0,
+    position: typeof f.position === 'string' ? f.position : null,
     tags: memberTags,
     createdAt: (f.createdAt as string) ?? new Date().toISOString(),
     updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),
@@ -167,7 +173,7 @@ export function projectHeadingRowToDto(row: ReplicaRow): ProjectHeadingResponseD
     id: row.id,
     projectId: (f.projectId as string) ?? '',
     title: (f.title as string) ?? '',
-    sortOrder: (f.sortOrder as number) ?? 0,
+    position: typeof f.position === 'string' ? f.position : null,
     status: (f.status as HeadingStatus) ?? HeadingStatus.ACTIVE,
     completedAt: (f.completedAt as string | null) ?? null,
     createdAt: (f.createdAt as string) ?? new Date().toISOString(),

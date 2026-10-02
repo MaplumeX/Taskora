@@ -35,13 +35,13 @@ describe('ProjectsService', () => {
   });
 
   describe('findAll', () => {
-    it('should return all non-trashed projects ordered by sortOrder asc, createdAt desc', async () => {
+    it('should return all non-trashed projects ordered by Position', async () => {
       const userId = 'user-1';
       const expected = [
-        { id: 'project-1', title: 'A', notes: null, userId, sortOrder: 0, tags: [] },
-        { id: 'project-2', title: 'B', notes: null, userId, sortOrder: 1, tags: [] },
+        { id: 'project-1', title: 'A', notes: null, userId, position: 'a0', tags: [] },
+        { id: 'project-2', title: 'B', notes: null, userId, position: 'a1', tags: [] },
       ];
-      mockPrisma.project.findMany.mockResolvedValue(expected);
+      mockPrisma.project.findMany.mockResolvedValue([expected[1], expected[0]]);
       // 进度计数：非 Trash 任务总数 / 已了结（完成 + 取消）数
       mockPrisma.task.findMany.mockResolvedValue([
         ...Array.from({ length: 2 }, () => ({
@@ -58,7 +58,6 @@ describe('ProjectsService', () => {
 
       expect(mockPrisma.project.findMany).toHaveBeenCalledWith({
         where: { userId, trashedAt: null },
-        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
         include: { tags: { include: { tag: true } } },
       });
       expect(result).toEqual([

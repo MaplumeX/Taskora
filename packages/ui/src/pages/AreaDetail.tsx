@@ -144,7 +144,7 @@ export default function AreaDetail() {
     const ids = orderedProjects.map((p) => p.id);
     const reordered = arrayMove(ids, ids.indexOf(active.id as string), ids.indexOf(over.id as string));
     holdProjectOrder(reordered);
-    // 以全量顺序为底写回，避免与其他区域 / 隐藏项目的 sortOrder 撞号。
+    // 以全量顺序为底写回，其他区域 / 隐藏项目原位不动。
     reorderProjects.mutate(mergeVisibleProjectOrder(allProjects, reordered));
   };
 

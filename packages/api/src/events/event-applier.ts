@@ -1,6 +1,6 @@
 import { QueryClient } from '@tanstack/react-query';
 import { hidesTasksInLaterProjects, HeadingStatus } from '@taskora/shared';
-import { synthPosition, type TagParents } from '@taskora/engine';
+import type { TagParents } from '@taskora/engine';
 import type {
   AreaResponseDto,
   ChangeEvent,
@@ -28,34 +28,19 @@ import { taskMatchesQuery } from './task-query-match';
 
 interface Entity {
   id: string;
-  sortOrder: number;
-  createdAt: string;
   position?: string | null;
 }
 
-/** Server list ordering: sortOrder asc, createdAt desc (headings: asc). */
-function bySortOrder(a: Entity, b: Entity, createdAtOrder: 'asc' | 'desc' = 'desc'): number {
-  if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder;
-  if (a.createdAt === b.createdAt) return 0;
-  const later = a.createdAt > b.createdAt;
-  return (createdAtOrder === 'desc' ? later : !later) ? -1 : 1;
-}
-
-/**
- * Server list ordering for positioned lists (tasks/projects/feed): effective
- * Position, byte order. Rows without a position fall back to the hub's
- * synthesized key, which encodes exactly "sortOrder asc, createdAt desc" —
- * so this also reproduces the legacy order for areas/tags.
- */
+/** Server list ordering (every entity is positioned): Position, byte order. */
 function byPosition(a: Entity, b: Entity): number {
-  const pa = a.position ?? synthPosition(a.sortOrder, new Date(a.createdAt));
-  const pb = b.position ?? synthPosition(b.sortOrder, new Date(b.createdAt));
+  const pa = a.position ?? '';
+  const pb = b.position ?? '';
   return pa < pb ? -1 : pa > pb ? 1 : 0;
 }
 
 const taskComparator = (a: TaskResponseDto, b: TaskResponseDto) => byPosition(a, b);
 const headingComparator = (a: ProjectHeadingResponseDto, b: ProjectHeadingResponseDto) =>
-  bySortOrder(a, b, 'asc');
+  byPosition(a, b);
 
 /** Apply a (coalesced) batch of Change Events to the cache. */
 export function applyChangeEvents(queryClient: QueryClient, batch: ChangeEvent[]): void {
@@ -214,7 +199,7 @@ function upsertTaskLists(queryClient: QueryClient, task: TaskResponseDto): void 
     const without = list.filter((t) => t.id !== task.id);
     const next = matches ? [...without, task] : without;
     // logbook lists are ordered by completedAt desc server-side; every
-    // other list by sortOrder asc + createdAt desc.
+    // other list by effective Position.
     if (params && typeof params === 'object' && (params as { view?: string }).view === 'logbook') {
       queryClient.setQueryData(
         cache.key,
@@ -279,8 +264,7 @@ function mergeSubtaskIntoTaskDetail(queryClient: QueryClient, subtask: SubtaskRe
   queryClient.setQueryData(key, { ...task, subtasks: subtasks.sort(headingSubtaskComparator) });
 }
 
-const headingSubtaskComparator = (a: SubtaskResponseDto, b: SubtaskResponseDto) =>
-  bySortOrder(a, b, 'asc');
+const headingSubtaskComparator = (a: SubtaskResponseDto, b: SubtaskResponseDto) => byPosition(a, b);
 
 // ---------- generic list surgery ----------
 

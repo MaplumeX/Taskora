@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
-import { subtaskStatusPatch } from '@taskora/engine';
+import { planReorder, positionAfterRow, positionAtEnd, subtaskStatusPatch } from '@taskora/engine';
 import { TaskStatus } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncHubService } from '../sync/sync-hub.service';
@@ -61,35 +61,15 @@ export class SubtasksService {
     const id = dto.id ?? randomUUID();
     const fields = { title: dto.title, status: TaskStatus.ACTIVE, settledAt: null, taskId };
 
-    const siblings = dto.afterId
-      ? await this.prisma.subtask.findMany({
-          where: { taskId },
-          orderBy: { sortOrder: 'asc' },
-          select: { id: true, sortOrder: true },
-        })
-      : [];
-    const afterIndex = siblings.findIndex((s) => s.id === dto.afterId);
-    if (afterIndex < 0) {
-      // Compute next sortOrder (max + 1)
-      const max = await this.prisma.subtask.aggregate({
-        where: { taskId },
-        _max: { sortOrder: true },
-      });
-      return this.write(userId, id, { ...fields, sortOrder: (max._max.sortOrder ?? -1) + 1 });
-    }
-
-    // 插入到 afterId 之后：整体重排为 0..n，插入点之后的各项顺延一位
-    const insertAt = afterIndex + 1;
-    return this.hub.writeAsHub(userId, async (batch) => {
-      for (const [index, sibling] of siblings.entries()) {
-        const sortOrder = index < insertAt ? index : index + 1;
-        if (sibling.sortOrder !== sortOrder) {
-          await batch.write('subtask', sibling.id, { sortOrder });
-        }
-      }
-      await batch.write('subtask', id, { ...fields, sortOrder: insertAt });
-      return settledToCompletedAt(await batch.tx.subtask.findUniqueOrThrow({ where: { id } }));
+    // Position 插在 afterId 之后（找不到时追加末尾），其余行不动
+    const siblings = await this.prisma.subtask.findMany({
+      where: { taskId },
+      select: { id: true, position: true },
     });
+    const position = dto.afterId
+      ? positionAfterRow(siblings, dto.afterId)
+      : positionAtEnd(siblings);
+    return this.write(userId, id, { ...fields, position });
   }
 
   async update(userId: string, id: string, dto: UpdateSubtaskDto) {
@@ -138,16 +118,15 @@ export class SubtasksService {
     // Validate all subtask ids belong to this task
     const owned = await this.prisma.subtask.findMany({
       where: { id: { in: orderedIds }, taskId },
-      select: { id: true },
+      select: { id: true, position: true },
     });
-    const ownedSet = new Set(owned.map((s) => s.id));
-    if (ownedSet.size !== orderedIds.length) {
+    if (owned.length !== orderedIds.length) {
       throw new NotFoundException('Subtask not found');
     }
 
     await this.hub.writeAsHub(userId, async (batch) => {
-      for (const [index, id] of orderedIds.entries()) {
-        await batch.write('subtask', id, { sortOrder: index });
+      for (const { id, patch } of planReorder(owned, orderedIds)) {
+        await batch.write('subtask', id, patch);
       }
     });
   }

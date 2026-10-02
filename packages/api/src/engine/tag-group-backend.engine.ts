@@ -5,11 +5,11 @@
  * tagGroupId 引用按 SetNull 语义清理（与 hub 侧 onDelete: SetNull 一致）。
  */
 
-import type { Engine } from '@taskora/engine';
+import { planReorder, positionAtStart, type Engine } from '@taskora/engine';
 import type { CreateTagGroupDto, TagGroupResponseDto, UpdateTagGroupDto } from '@taskora/shared';
 
 import type { TagGroupBackend } from '../api/tag-group-backend';
-import { tagGroupRowToDto, tagRowToDto } from './mappers';
+import { positionedRows, tagGroupRowToDto, tagRowToDto } from './mappers';
 
 export interface EngineTagGroupBackendOptions {
   engine: Engine;
@@ -42,10 +42,11 @@ export function createEngineTagGroupBackend(
     },
 
     async createTagGroup(data: CreateTagGroupDto): Promise<TagGroupResponseDto> {
-      // 新建排最前：sortOrder 0，平局按 createdAt desc
+      // 新建排最前
+      const existing = await engine.list('tag-group');
       const id = await engine.create('tag-group', {
         title: data.title,
-        sortOrder: 0,
+        position: positionAtStart(positionedRows(existing)),
       });
       return groupDto(id);
     },
@@ -63,14 +64,12 @@ export function createEngineTagGroupBackend(
 
     async reorderTagGroups(orderedIds: string[]): Promise<void> {
       const rows = await engine.list('tag-group');
-      const byId = new Map(rows.map((row) => [row.id, row]));
       await engine.updateMany(
         'tag-group',
-        orderedIds.flatMap((id, index) =>
-          byId.get(id) && byId.get(id)!.fields.sortOrder !== index
-            ? [{ id, patch: { sortOrder: index } }]
-            : [],
-        ),
+        planReorder(positionedRows(rows), orderedIds).map(({ id, patch }) => ({
+          id,
+          patch: { ...patch },
+        })),
       );
     },
   };

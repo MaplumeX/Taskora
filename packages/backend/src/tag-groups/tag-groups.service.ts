@@ -1,6 +1,8 @@
 import { randomUUID } from 'node:crypto';
 
 import { Injectable, NotFoundException } from '@nestjs/common';
+import { planReorder, positionAtStart } from '@taskora/engine';
+import { sortByPosition } from '../common/position-order';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncHubService } from '../sync/sync-hub.service';
 import { CreateTagGroupDto, UpdateTagGroupDto } from './dto/tag-groups.dto';
@@ -21,15 +23,21 @@ export class TagGroupsService {
   }
 
   async create(userId: string, dto: CreateTagGroupDto) {
-    return this.write(userId, randomUUID(), { title: dto.title, sortOrder: 0 });
+    // 新建排最前
+    const existing = await this.prisma.tagGroup.findMany({
+      where: { userId },
+      select: { id: true, position: true },
+    });
+    return this.write(userId, randomUUID(), {
+      title: dto.title,
+      position: positionAtStart(existing),
+    });
   }
 
   async findAll(userId: string) {
-    return this.prisma.tagGroup.findMany({
-      where: { userId },
-      include: { tags: true },
-      orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }],
-    });
+    return sortByPosition(
+      await this.prisma.tagGroup.findMany({ where: { userId }, include: { tags: true } }),
+    );
   }
 
   async findOne(userId: string, id: string) {
@@ -51,14 +59,14 @@ export class TagGroupsService {
   async reorder(userId: string, orderedIds: string[]) {
     const owned = await this.prisma.tagGroup.findMany({
       where: { id: { in: orderedIds }, userId },
-      select: { id: true },
+      select: { id: true, position: true },
     });
     if (owned.length !== new Set(orderedIds).size || owned.length !== orderedIds.length) {
       throw new NotFoundException('TagGroup not found');
     }
     await this.hub.writeAsHub(userId, async (batch) => {
-      for (const [index, id] of orderedIds.entries()) {
-        await batch.write('tag-group', id, { sortOrder: index });
+      for (const { id, patch } of planReorder(owned, orderedIds)) {
+        await batch.write('tag-group', id, patch);
       }
     });
   }

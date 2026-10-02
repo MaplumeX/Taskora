@@ -70,7 +70,6 @@ async function seedTask(
     settledAt: null,
     trashedAt: null,
     position: 'a0',
-    sortOrder: 0,
     projectId: null,
     headingId: null,
     areaId: null,

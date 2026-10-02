@@ -26,7 +26,6 @@ export interface FeedItemBase {
   /** 了结时间（Settled At，ADR 0006）：task 的 COMPLETED/CANCELLED 与 project 的 COMPLETED 共用此字段；名称保留 completedAt 以兼容前端。 */
   completedAt: string | null;
   trashedAt: string | null;
-  sortOrder: number;
   /** 列表位次（fractional indexing 字符串，ADR-0007）；web 与桌面端共用的排序键。 */
   position?: string | null;
   createdAt: string;

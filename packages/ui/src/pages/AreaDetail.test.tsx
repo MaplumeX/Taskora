@@ -66,7 +66,7 @@ import AreaDetail from './AreaDetail';
 function project(
   id: string,
   areaId: string | null,
-  sortOrder: number,
+  index: number,
   scheduledType = ScheduledType.NONE,
   scheduledDate: string | null = null,
 ): ProjectResponseDto {
@@ -75,7 +75,7 @@ function project(
     title: `Project ${id}`,
     notes: null,
     areaId,
-    sortOrder,
+    position: `a${index}`,
     status: ProjectStatus.ACTIVE,
     bucket: ProjectBucket.ANYTIME,
     scheduledType,

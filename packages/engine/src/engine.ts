@@ -19,7 +19,8 @@ import {
   type ReplicaRow,
 } from './replica';
 import { HybridClock } from './hlc';
-import { MAX_POSITION_LENGTH, positionBetween, rebalanceSegments, synthPosition } from './position';
+import { positionAfterRow, positionAtStart } from './domain/order';
+import { MAX_POSITION_LENGTH, rebalanceSegments } from './position';
 import type { SyncEntity, WireRow } from './entities';
 import { archiveCutoff, DEFAULT_ARCHIVE_AFTER_DAYS } from './archive';
 import {
@@ -57,7 +58,7 @@ export interface Engine {
   /** 取单个实体行（含 id），不存在返回 null。 */
   get(entity: SyncEntity, id: string): Promise<ReplicaRow | null>;
   /**
-   * 列出某实体的行（按 Position / sortOrder 排序）。options.where 在 SQL
+   * 列出某实体的行（按 Position 排序）。options.where 在 SQL
    * 里预过滤（相等 / IS NULL / IS NOT NULL / IN），options.limit 取前 N 行。
    */
   list(entity: SyncEntity, options?: ListOptions): Promise<ReplicaRow[]>;
@@ -337,7 +338,14 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
    */
   const rebalanceIfInflated = async (): Promise<void> => {
     await rebalanceFeedKeys();
-    for (const entity of ['project', 'tag'] as SyncEntity[]) {
+    for (const entity of [
+      'project',
+      'tag',
+      'area',
+      'project-heading',
+      'tag-group',
+      'subtask',
+    ] as SyncEntity[]) {
       if ((await replica.countInflatedPositions(entity, MAX_POSITION_LENGTH)) === 0) continue;
       const changes = rebalanceSegments(await replica.positionKeys(entity));
       await replica.updateMany(
@@ -390,37 +398,15 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
 
 /**
  * 便捷：为带 Position 的实体生成「插在某行之后」的位次。
- * afterId 为 null 表示插在最前。邻居缺 Position（理论仅防御：hub wire
- * 与本地写总是携带）时，按 sortOrder + createdAt 合成兜底——与 hub
- * 对 legacy 行的合成口径一致，而不是「插到最前」（positionBetween(null,
- * null) 恒为 a0，会让「追加末尾」变成「排到最前」）。
+ * afterId 为 null 表示插在最前；afterId 不在 rows 里时追加到末尾。
  */
 export function positionAfter(
   rows: { id: string; fields: WireRow }[],
   afterId: string | null,
 ): string {
-  const positionOfRow = (row: { fields: WireRow }): string | null => {
-    if (typeof row.fields.position === 'string') return row.fields.position;
-    const sortOrder = typeof row.fields.sortOrder === 'number' ? row.fields.sortOrder : 0;
-    const createdAt =
-      typeof row.fields.createdAt === 'string' && !Number.isNaN(Date.parse(row.fields.createdAt))
-        ? new Date(row.fields.createdAt)
-        : new Date();
-    return synthPosition(sortOrder, createdAt);
-  };
-  const ordered = rows
-    .map((row) => positionOfRow(row))
-    .filter((p): p is string => typeof p === 'string');
-  if (ordered.length === 0) return positionBetween(null, null);
-  if (afterId === null) return positionBetween(null, ordered[0]);
-  const index = rows.findIndex((row) => row.id === afterId);
-  if (index === -1 || index === rows.length - 1) {
-    return positionBetween(ordered[ordered.length - 1], null);
-  }
-  const a = positionOfRow(rows[index]);
-  const b = positionOfRow(rows[index + 1]);
-  if (typeof a === 'string' && typeof b === 'string') {
-    return positionBetween(a, b);
-  }
-  return positionBetween(ordered[ordered.length - 1], null);
+  const positioned = rows.map((row) => ({
+    id: row.id,
+    position: typeof row.fields.position === 'string' ? row.fields.position : null,
+  }));
+  return afterId === null ? positionAtStart(positioned) : positionAfterRow(positioned, afterId);
 }

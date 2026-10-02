@@ -58,13 +58,13 @@ describe('TasksService — search (q param)', () => {
     });
   });
 
-  it('uses default sort (sortOrder asc, createdAt desc) for q search', async () => {
+  it('leaves ordering to sortForView (Position) for q search', async () => {
     mockPrisma.task.findMany.mockResolvedValue([]);
 
     await service.findAll('user-1', { q: 'task' });
 
     const call = mockPrisma.task.findMany.mock.calls[0][0];
-    expect(call.orderBy).toEqual([{ sortOrder: 'asc' }, { createdAt: 'desc' }]);
+    expect(call.orderBy).toBeUndefined();
   });
 
   it('does not set OR or override status when q is empty/undefined', async () => {

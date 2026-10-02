@@ -23,7 +23,7 @@ vi.mock('sonner', () => ({ toast: Object.assign(harness.toast, { error: vi.fn() 
 
 const NOW = '2026-09-01T00:00:00.000Z';
 function tag(id: string, title: string, tagGroupId: string | null = null): TagResponseDto {
-  return { id, title, color: '#3B82F6', sortOrder: 0, tagGroupId, createdAt: NOW, updatedAt: NOW };
+  return { id, title, color: '#3B82F6', tagGroupId, createdAt: NOW, updatedAt: NOW };
 }
 
 vi.mock('@taskora/api', async (importOriginal) => ({
@@ -33,9 +33,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
     isLoading: false,
   }),
   useTagGroupsQuery: () => ({
-    data: [
-      { id: 'g-place', title: 'Place', sortOrder: 0, tags: [], createdAt: NOW, updatedAt: NOW },
-    ],
+    data: [{ id: 'g-place', title: 'Place', tags: [], createdAt: NOW, updatedAt: NOW }],
   }),
   useCreateTag: () => ({ mutate: harness.createTag }),
   useUpdateTag: () => ({ mutate: harness.updateTag }),

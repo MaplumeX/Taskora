@@ -23,7 +23,6 @@ function dto(partial: Partial<TaskResponseDto> & { id: string }): TaskResponseDt
     status: TaskStatus.ACTIVE,
     completedAt: null,
     trashedAt: null,
-    sortOrder: 0,
     projectId: null,
     headingId: null,
     areaId: null,

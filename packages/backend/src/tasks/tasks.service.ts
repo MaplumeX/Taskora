@@ -4,11 +4,14 @@ import { ConflictException, Injectable, NotFoundException } from '@nestjs/common
 import {
   planConvertTaskToProject,
   planRepeatInstance,
+  planReorder,
   planRepeatSkip,
   planTaskComplete,
   planTaskCreate,
   planTaskSearch,
   planTaskUpdate,
+  positionBetween,
+  positionsBetween,
   repeatDerivationTarget,
   searchNeedle,
   sortForView,
@@ -28,12 +31,8 @@ import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncHubService, type HubWriteBatch } from '../sync/sync-hub.service';
-import {
-  calendarContextFor,
-  newRowOrder,
-  orderFields,
-  toWireFields,
-} from '../common/domain-storage';
+import { calendarContextFor, edgePositions, toWireFields } from '../common/domain-storage';
+import { sortByPosition } from '../common/position-order';
 import { userCalendarZones } from '../users/account-time-zone';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
 import {
@@ -46,7 +45,7 @@ import { parseRepeatRule, settledToCompletedAt, withRepeatRuleDto } from './task
 
 /** 派生路径需要的 Task 行形状（含标签关系与子任务）。 */
 type TaskRowWithChildren = Prisma.TaskGetPayload<{
-  include: { tags: true; subtasks: { orderBy: { sortOrder: 'asc' } } };
+  include: { tags: true; subtasks: true };
 }>;
 
 const WITH_TAGS = { tags: { include: { tag: true } } } as const;
@@ -129,14 +128,11 @@ export class TasksService {
     if (target === 'skip') return;
     const instanceId = target === 'planned' ? plan.id : randomUUID();
 
-    const maxSort = await batch.tx.task.aggregate({
-      where: { userId },
-      _max: { sortOrder: true },
-    });
     // 派生实例进入列表末尾（新位次，不继承父任务位次）
+    const { last } = await edgePositions(batch.tx, 'Task', userId);
     await batch.write('task', instanceId, {
       ...toWireFields(plan.task),
-      ...newRowOrder((maxSort._max.sortOrder ?? -1) + 1),
+      position: positionBetween(last, null),
     });
     for (const { id, ...subtask } of plan.subtasksFor(instanceId)) {
       await batch.write('subtask', id, subtask);
@@ -160,8 +156,12 @@ export class TasksService {
     const fields = planTaskCreate(dto, await userCalendarZones(this.prisma, userId));
     const id = randomUUID();
     return this.hub.writeAsHub(userId, async (batch) => {
-      // 新任务的位次口径不变：sortOrder 0 + 同口径合成的 Position
-      await batch.write('task', id, { ...toWireFields(fields), ...newRowOrder(0) });
+      // 新任务排最前（与设备 Engine 后端同一口径）
+      const { first } = await edgePositions(batch.tx, 'Task', userId);
+      await batch.write('task', id, {
+        ...toWireFields(fields),
+        position: positionBetween(null, first),
+      });
       return this.listDto(batch.tx, id);
     });
   }
@@ -213,10 +213,7 @@ export class TasksService {
       }
     }
 
-    const orderBy =
-      query.view === 'logbook'
-        ? [{ settledAt: 'desc' as const }]
-        : [{ sortOrder: 'asc' as const }, { createdAt: 'desc' as const }];
+    const orderBy = query.view === 'logbook' ? [{ settledAt: 'desc' as const }] : undefined; // 其余视图由 sortForView 按 Position 排
 
     const hideLaterProjectTasks = hidesTasksInLaterProjects(query.view);
     const tasks = await this.prisma.task.findMany({
@@ -286,7 +283,7 @@ export class TasksService {
         ...WITH_TAGS,
         subtasks: {
           where: { title: contains },
-          select: { id: true, taskId: true, title: true, sortOrder: true, createdAt: true },
+          select: { id: true, taskId: true, title: true, position: true },
         },
       },
     });
@@ -310,7 +307,7 @@ export class TasksService {
     const task = await this.prisma.task.findFirst({
       where: { id, userId },
       include: {
-        subtasks: { orderBy: { sortOrder: 'asc' } },
+        subtasks: true,
         tags: { include: { tag: true } },
       },
     });
@@ -321,7 +318,7 @@ export class TasksService {
     return settledToCompletedAt({
       ...withRepeatRuleDto(rest),
       tags: taskTags.map((tt) => tt.tag),
-      subtasks: subtasks.map(settledToCompletedAt),
+      subtasks: sortByPosition(subtasks).map(settledToCompletedAt),
     });
   }
 
@@ -357,7 +354,7 @@ export class TasksService {
     return this.hub.writeAsHub(userId, async (batch) => {
       const existing = await batch.tx.task.findFirst({
         where: { id, userId },
-        include: { tags: true, subtasks: { orderBy: { sortOrder: 'asc' } }, project: true },
+        include: { tags: true, subtasks: true, project: true },
       });
       if (!existing) {
         throw new NotFoundException('Task not found');
@@ -376,7 +373,7 @@ export class TasksService {
           tagIds: existing.tags.map((tt) => tt.tagId),
         },
         existing.project?.areaId ?? null,
-        existing.subtasks.map((subtask) => ({
+        sortByPosition(existing.subtasks).map((subtask) => ({
           title: subtask.title,
           status: subtask.status,
           settledAt: subtask.settledAt?.toISOString() ?? null,
@@ -384,23 +381,21 @@ export class TasksService {
         zones,
       );
 
-      // 新项目排在末尾（sortOrder = max + 1）
-      const maxSort = await batch.tx.project.aggregate({
-        where: { userId },
-        _max: { sortOrder: true },
-      });
-      const now = new Date();
+      // 新项目排在末尾
+      const projectEdges = await edgePositions(batch.tx, 'Project', userId);
       const projectId = randomUUID();
       await batch.write('project', projectId, {
         ...toWireFields(plan.project),
-        ...newRowOrder((maxSort._max.sortOrder ?? -1) + 1, now),
+        position: positionBetween(projectEdges.last, null),
       });
 
-      // 提升出的任务保持原 Subtask 的顺序
+      // 提升出的任务插到最前，保持原 Subtask 的顺序（与设备 Engine 后端同一口径）
+      const taskEdges = await edgePositions(batch.tx, 'Task', userId);
+      const positions = positionsBetween(null, taskEdges.first, plan.promotedTasks.length);
       for (const [index, promoted] of plan.promotedTasks.entries()) {
         await batch.write('task', randomUUID(), {
           ...toWireFields({ ...promoted, projectId }),
-          ...newRowOrder(index, now),
+          position: positions[index],
         });
       }
 
@@ -420,7 +415,7 @@ export class TasksService {
       where: { id, userId },
       include: {
         tags: true,
-        subtasks: { orderBy: [{ sortOrder: 'asc' }, { createdAt: 'desc' }] },
+        subtasks: true,
       },
     });
     if (!existing) {
@@ -513,19 +508,17 @@ export class TasksService {
   async reorder(userId: string, orderedIds: string[]) {
     const owned = await this.prisma.task.findMany({
       where: { id: { in: orderedIds }, userId },
-      select: { id: true, createdAt: true },
+      select: { id: true, position: true },
     });
     const ownedSet = new Set(owned.map((t) => t.id));
     if (ownedSet.size !== orderedIds.length) {
       throw new NotFoundException('Task not found');
     }
 
-    // 双排序键一起写：sortOrder 是 web 端 REST 读序列，position 是设备
-    // 副本读序列（fractional indexing），写入值与 hub 的合成函数一致。
-    const createdAtOf = new Map(owned.map((t) => [t.id, t.createdAt]));
+    // 只给必须移动的行分配新 Position（与设备 Engine 后端同一口径）
     await this.hub.writeAsHub(userId, async (batch) => {
-      for (const [index, id] of orderedIds.entries()) {
-        await batch.write('task', id, orderFields(index, createdAtOf.get(id)!));
+      for (const { id, patch } of planReorder(owned, orderedIds)) {
+        await batch.write('task', id, patch);
       }
     });
   }

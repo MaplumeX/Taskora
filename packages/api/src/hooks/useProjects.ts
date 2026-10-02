@@ -127,7 +127,6 @@ export function useCreateProject() {
         title: data.title,
         notes: data.notes ?? null,
         areaId: data.areaId ?? null,
-        sortOrder: 0,
         status: ProjectStatus.ACTIVE,
         bucket: data.bucket ?? ProjectBucket.ANYTIME,
         scheduledType: data.scheduledType ?? ScheduledType.NONE,

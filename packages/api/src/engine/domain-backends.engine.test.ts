@@ -195,7 +195,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     expect(await engine.get('tag', urgent.id)).toBeNull();
   });
 
-  it('Tag / TagGroup：拖拽重排（Tag 写 Position、Group 写 sortOrder）', async () => {
+  it('Tag / TagGroup：拖拽重排（都写 Position）', async () => {
     const a = await tags.createTag({ title: 'a' });
     const b = await tags.createTag({ title: 'b' });
     const c = await tags.createTag({ title: 'c' });
@@ -204,16 +204,32 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
 
     const g1 = await tagGroups.createTagGroup({ title: 'g1' });
     const g2 = await tagGroups.createTagGroup({ title: 'g2' });
+    // 新建排最前
+    expect((await tagGroups.getTagGroups()).map((group) => group.title)).toEqual(['g2', 'g1']);
     await tagGroups.reorderTagGroups([g1.id, g2.id]);
-    expect((await tagGroups.getTagGroups()).map((group) => group.title)).toEqual(['g1', 'g2']);
+    const groups = await tagGroups.getTagGroups();
+    expect(groups.map((group) => group.title)).toEqual(['g1', 'g2']);
+    expect(groups[0].position! < groups[1].position!).toBe(true);
+  });
+
+  it('Area 重排：只给被移动的行分配新 Position，读序只看 Position', async () => {
+    const a = await areas.createArea({ title: 'a' });
+    const b = await areas.createArea({ title: 'b' });
+    const c = await areas.createArea({ title: 'c' });
+    const before = new Map((await areas.getAreas()).map((area) => [area.id, area.position]));
+
+    await areas.reorderAreas([b.id, c.id, a.id]);
+    const after = await areas.getAreas();
+    expect(after.map((area) => area.title)).toEqual(['b', 'c', 'a']);
+    expect(after.find((area) => area.id === b.id)?.position).toBe(before.get(b.id));
+    expect(after.find((area) => area.id === c.id)?.position).toBe(before.get(c.id));
   });
 
   it('ProjectHeading：增改/归档/取消归档；删除软删下属 tasks 并物理删 heading', async () => {
     const project = await projects.createProject({ title: '项目' });
     const h1 = await headings.createProjectHeading({ projectId: project.id, title: '阶段一' });
     const h2 = await headings.createProjectHeading({ projectId: project.id, title: '阶段二' });
-    expect(h1.sortOrder).toBe(0);
-    expect(h2.sortOrder).toBe(1);
+    expect(h1.position! < h2.position!).toBe(true);
 
     // 非本项目的 heading 查询校验归属（404 同语义）
     await expect(headings.getProjectHeadings('no-such-project')).rejects.toThrow();
@@ -440,14 +456,16 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
       'a1',
     ]);
 
-    // 分组归属不变、分组顺序写进 heading.sortOrder
+    // 分组归属不变、分组顺序写进 heading 的 Position
     const byTitle = new Map(
       (await engine.list('task')).map((row) => [row.fields.title as string, row]),
     );
     expect(byTitle.get('b1')!.fields.headingId).toBe(h2.id);
     expect(byTitle.get('a1')!.fields.headingId).toBe(h1.id);
-    expect((await engine.get('project-heading', h2.id))!.fields.sortOrder).toBe(0);
-    expect((await engine.get('project-heading', h1.id))!.fields.sortOrder).toBe(1);
+    expect((await headings.getProjectHeadings(projectId)).map((heading) => heading.id)).toEqual([
+      h2.id,
+      h1.id,
+    ]);
 
     // 再次提交同一布局：没有任何写（Outbox 不增长）
     await engine.sync();
@@ -475,26 +493,9 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
       'a2',
       'a1',
     ]);
-    // web 读序（sortOrder asc, createdAt desc）在分组内与副本读序一致
-    const webOrder = [...(await other.list('task'))].sort((x, y) => {
-      const sx = (x.fields.sortOrder as number) ?? 0;
-      const sy = (y.fields.sortOrder as number) ?? 0;
-      return (
-        sx - sy ||
-        String(y.fields.createdAt ?? '').localeCompare(String(x.fields.createdAt ?? ''))
-      );
-    });
-    for (const headingId of [h1.id, h2.id, null]) {
-      const replicaOrder = (await other.list('task'))
-        .filter((row) => row.fields.headingId === headingId)
-        .map((row) => row.fields.title);
-      const webSameGroup = webOrder
-        .filter((row) => row.fields.headingId === headingId)
-        .map((row) => row.fields.title);
-      expect(replicaOrder).toEqual(webSameGroup);
-    }
     await other.close();
   });
+
   it('Later Project：稍后项目内的任务不进 Anytime / Someday，有日期的任务照常进 Today / Upcoming', async () => {
     const someday = await projects.createProject({ title: '将来', scheduledType: ScheduledType.SOMEDAY });
     const future = await projects.createProject({

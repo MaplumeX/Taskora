@@ -21,7 +21,6 @@ function settledTask(id: string, settledAt: Date): TaskFeedItem {
     bucket: 'LOGBOOK',
     completedAt: settledAt.toISOString(),
     trashedAt: null,
-    sortOrder: 0,
     projectId: null,
     headingId: null,
     areaId: null,
