@@ -275,6 +275,8 @@
        fill it, otherwise the empty area below the first line shows the default
        cursor and clicks there never reach the contenteditable. */
     min-height: inherit;
+    /* Sortable ancestors use role="button"; don't inherit their pointer cursor. */
+    cursor: text;
   }
   .notes-prose .ProseMirror:focus {
     outline: none;
