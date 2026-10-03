@@ -2,8 +2,8 @@ mod launch_at_login;
 mod reminder_notification;
 mod session;
 mod sqlite;
+mod tray_menu;
 use tauri::{
-    menu::{Menu, MenuItem},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
 };
@@ -56,7 +56,7 @@ pub(crate) fn show_main_window(app: &tauri::AppHandle) {
 
 /// Show the floating quick-add window (tray "New Task" entry uses the
 /// same path as the global shortcut).
-fn show_quick_add(app: &tauri::AppHandle) {
+pub(crate) fn show_quick_add(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("quick-add") {
         let _ = window.show();
         let _ = window.set_focus();
@@ -70,14 +70,14 @@ fn show_quick_add(app: &tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .manage(session::SessionLock::default())
-        // Remember main-window size/position across launches. Quick-add is
-        // a centered borderless popup — denylisted so its geometry is not
-        // restored. VISIBLE is excluded: close-to-tray hides the window,
+        // Remember main-window size/position across launches. Quick-add and
+        // the tray menu are borderless popups — denylisted so their geometry
+        // is not restored. VISIBLE is excluded: close-to-tray hides the window,
         // and that hidden state must not leak into the next launch
         // (fresh starts always show the main window).
         .plugin(
             tauri_plugin_window_state::Builder::default()
-                .with_denylist(&["quick-add"])
+                .with_denylist(&["quick-add", tray_menu::WINDOW])
                 .with_state_flags(
                     tauri_plugin_window_state::StateFlags::all()
                         & !tauri_plugin_window_state::StateFlags::VISIBLE,
@@ -117,39 +117,37 @@ pub fn run() {
         .setup(|app| {
             // System tray (desktop shell hardening): re-entry point for a
             // hidden main window + the explicit quit path. Without it, the
-            // Windows/Linux close-to-tray behavior below would leave no way
-            // to bring the app back or exit it.
-            let show = MenuItem::with_id(app, "show", "Show Taskora", true, None::<&str>)?;
-            let quick_add = MenuItem::with_id(app, "quick-add", "New Task", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "Quit Taskora", true, None::<&str>)?;
-            let menu = Menu::with_items(app, &[&show, &quick_add, &quit])?;
-            TrayIconBuilder::with_id("taskora-tray")
+            // close-to-tray behavior below would leave no way to bring the
+            // app back or exit it. Right click opens the custom tray menu
+            // (tray_menu.rs); Linux keeps a native menu because the tray
+            // there reports no click events.
+            let tray = TrayIconBuilder::with_id(tray_menu::TRAY_ID)
                 .icon(
                     app.default_window_icon()
                         .expect("missing window icon")
                         .clone(),
                 )
-                .menu(&menu)
+                // Hover text; without it Windows shows an empty tooltip.
+                .tooltip("Taskora")
                 .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => show_main_window(app),
-                    "quick-add" => show_quick_add(app),
-                    "quit" => app.exit(0),
-                    _ => {}
-                })
                 .on_tray_icon_event(|tray, event| {
-                    // Left click toggles the main window (right click opens
-                    // the menu — the platform default).
                     if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
+                        button,
                         button_state: MouseButtonState::Up,
+                        position,
                         ..
                     } = event
                     {
-                        show_main_window(tray.app_handle());
+                        match button {
+                            MouseButton::Left => show_main_window(tray.app_handle()),
+                            MouseButton::Right => tray_menu::show(tray.app_handle(), position),
+                            _ => {}
+                        }
                     }
-                })
-                .build(app)?;
+                });
+            #[cfg(target_os = "linux")]
+            let tray = tray_menu::attach_native_menu(app, tray)?;
+            tray.build(app)?;
             // 开机自启的 --hidden 启动：主窗口隐藏、仅托盘常驻，避免登录时
             // 弹窗打扰；用户从托盘 / 快捷键 / 再次启动随时唤出。手动启动
             // 不带参数，行为不变。
@@ -168,8 +166,9 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Quick-add window: hide on blur (fill-and-go interaction).
-            if window.label() == "quick-add" {
+            // Quick-add window and tray menu: hide on blur (fill-and-go
+            // interaction / dismiss the menu by clicking elsewhere).
+            if matches!(window.label(), "quick-add" | tray_menu::WINDOW) {
                 if let tauri::WindowEvent::Focused(false) = event {
                     let _ = window.hide();
                 }
@@ -196,7 +195,9 @@ pub fn run() {
             open_notification_settings,
             reminder_notification::show_reminder,
             launch_at_login::launch_at_login_get,
-            launch_at_login::launch_at_login_set
+            launch_at_login::launch_at_login_set,
+            tray_menu::tray_menu_action,
+            tray_menu::tray_set_labels
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
