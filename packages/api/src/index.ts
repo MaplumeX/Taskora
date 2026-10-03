@@ -154,6 +154,14 @@ export {
   ASSISTANT_PANEL_DEFAULT_WIDTH,
   ASSISTANT_PANEL_MIN_WIDTH,
 } from './stores/assistantUi.store';
+export {
+  useSidebarUiStore,
+  clampSidebarWidth,
+  SIDEBAR_DEFAULT_WIDTH,
+  SIDEBAR_MIN_WIDTH,
+  SIDEBAR_MAX_WIDTH,
+  SIDEBAR_COLLAPSE_THRESHOLD,
+} from './stores/sidebarUi.store';
 
 // Preferences (theme / language / week start)
 export { usePreferencesStore, hydrateFromServer } from './stores/preferences.store';
