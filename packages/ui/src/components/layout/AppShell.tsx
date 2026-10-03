@@ -1,4 +1,4 @@
-import { Sidebar } from './Sidebar';
+import { ResizableSidebar } from './ResizableSidebar';
 import { MainContent } from './MainContent';
 import { ContentBottomBar } from '@/components/layout/ContentBottomBar';
 import { KeyboardShortcuts } from '@/components/keyboard/KeyboardShortcuts';
@@ -20,10 +20,8 @@ export function AppShell() {
   // 手机端主列顶部让出状态栏（edge-to-edge 下内容铺到系统栏后面）。
   return (
     <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] w-full">
-      {/* 桌面侧边栏（手机端隐藏） */}
-      <div className="hidden md:flex">
-        <Sidebar />
-      </div>
+      {/* 桌面侧边栏（手机端隐藏）：右缘可拖动调宽 / 拖到折叠 */}
+      <ResizableSidebar />
       <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] min-w-0 flex-1 flex-col max-md:pt-[var(--safe-area-top)]">
         <MobileTopBar />
         <MainContent />

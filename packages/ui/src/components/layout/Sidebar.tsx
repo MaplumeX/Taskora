@@ -141,7 +141,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="flex h-screen w-60 flex-col bg-sidebar">
+    <aside className="flex h-screen w-full flex-col bg-sidebar">
       <div className="px-2 pb-2 pt-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
