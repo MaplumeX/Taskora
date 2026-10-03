@@ -37,6 +37,21 @@
         "visible": false,
         "center": true,
         "focus": true
+      },
+      {
+        "label": "tray-menu",
+        "title": "Taskora",
+        "url": "index.html?window=tray-menu",
+        "width": 240,
+        "height": 160,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true,
+        "shadow": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "visible": false,
+        "focus": false
       }
     ],
     "security": {

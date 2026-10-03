@@ -25,6 +25,17 @@ async function mount() {
 
   const kind = new URLSearchParams(window.location.search).get('window');
 
+  if (kind === 'tray-menu') {
+    document.documentElement.classList.add('tray-menu-window');
+    const { TrayMenuApp } = await import('./TrayMenuApp');
+    ReactDOM.createRoot(document.getElementById('root')!).render(
+      <React.StrictMode>
+        <TrayMenuApp />
+      </React.StrictMode>,
+    );
+    return;
+  }
+
   if (kind === 'quick-add') {
     document.documentElement.classList.add('quick-add-window');
     await bootQuickAdd().catch(() => undefined);
@@ -95,6 +106,10 @@ async function mount() {
   // quick-add 事件中继：主窗口代为执行 quick-add 的任务创建。
   const { initQuickAddRelay } = await import('./quick-add-relay');
   initQuickAddRelay();
+
+  // 托盘悬停提示 / Linux 原生托盘菜单跟随 App 语言。
+  const { installTrayLabels } = await import('./tray-labels');
+  installTrayLabels();
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
