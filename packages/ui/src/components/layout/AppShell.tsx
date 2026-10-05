@@ -7,7 +7,7 @@ import { MobileFab } from '@/components/layout/MobileFab';
 import { MultiSelectToolbar } from '@/components/task/MultiSelectToolbar';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { SyncIndicator } from './SyncIndicator';
-import { AssistantPanel } from '@/components/agent/AssistantPanel';
+import { AssistantPanel, useSidebarYieldsToPanel } from '@/components/agent/AssistantPanel';
 import { useNavigationRequestListener, useTaskRevealListener } from '@taskora/api';
 
 export function AppShell() {
@@ -15,6 +15,8 @@ export function AppShell() {
   useTaskRevealListener();
   // 路由请求：平台壳（点状态栏通知）投递的导航请求同样在 Router 内执行。
   useNavigationRequestListener();
+  // 助手面板打开而窗口放不下三栏时，侧边栏先自动收起（关面板即恢复）。
+  useSidebarYieldsToPanel();
   // h-[calc(100dvh-var(--kb-inset,0px))]：Android 键盘避让（mobile 壳的
   // visualViewport 驱动，其余端未设置 → 0px，等价 h-dvh）。
   // 手机端主列顶部让出状态栏（edge-to-edge 下内容铺到系统栏后面）。
@@ -27,7 +29,7 @@ export function AppShell() {
         <MainContent />
         <ContentBottomBar />
       </div>
-      {/* 桌面右侧助手面板：宽屏与列表并排，窄屏 / 日历覆盖在内容上 */}
+      {/* 桌面右侧助手面板：始终与内容并排，不浮在内容上 */}
       <AssistantPanel />
       <MobileFab />
       {/* 触控多选模式（左滑任务行进入）的底部工具栏，模式中替代 FAB。 */}
