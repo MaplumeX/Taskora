@@ -15,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { Archive, Star, Sunrise } from 'lucide-react';
 
 import type { ScheduledFieldCurrent, ScheduledFieldPatch } from './fieldProps';
-import { ScheduledType } from '@taskora/shared';
+import { ScheduledType, type WhenCandidate } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -24,6 +24,7 @@ import { TimePicker } from '@/components/ui/time-picker';
 
 import { getCalendarLocale } from './calendarFieldUtils';
 import { DateShortcutList } from './DateShortcutList';
+import { WhenQueryInput } from './WhenQueryInput';
 
 interface FieldProps {
   current: ScheduledFieldCurrent;
@@ -148,8 +149,31 @@ export function ScheduledDateField({
     onPatch({ ...rollPastDateToToday(), reminderTime: value });
   };
 
+  // 自然语言输入：选中即关闭（时刻可一并输入，不必停留设提醒）。带时刻
+  // 的候选只在可设提醒的上下文出现，等同开启提醒，一并请求通知授权。
+  const handleQuerySelect = (candidate: WhenCandidate) => {
+    if (candidate.kind === 'someday') return handleSomeday();
+    if (candidate.kind === 'clear') return handleClear();
+    const patch: ScheduledFieldPatch = {
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: candidate.date,
+    };
+    if (showReminder && candidate.time) {
+      void requestPermission();
+      patch.reminderTime = candidate.time;
+    }
+    onPatch(patch);
+    onClose?.();
+  };
+
   return (
-    <div className="flex flex-col">
+    <WhenQueryInput
+      placeholder={t('task:whenQueryPlaceholder')}
+      allowSomeday
+      showTime={showReminder}
+      todayIcon={<Star className="fill-today text-today" />}
+      onSelect={handleQuerySelect}
+    >
       <DateShortcutList
         items={[
           {
@@ -221,6 +245,6 @@ export function ScheduledDateField({
           </Button>
         </div>
       )}
-    </div>
+    </WhenQueryInput>
   );
 }

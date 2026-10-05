@@ -12,11 +12,13 @@ import { useTranslation } from 'react-i18next';
 import { Flag, Sunrise } from 'lucide-react';
 
 import type { DueDateFieldCurrent, DueDateFieldPatch } from './fieldProps';
+import type { WhenCandidate } from '@taskora/shared';
 
 import { Calendar } from '@/components/ui/calendar';
 
 import { getCalendarLocale } from './calendarFieldUtils';
 import { DateShortcutList } from './DateShortcutList';
+import { WhenQueryInput } from './WhenQueryInput';
 
 interface FieldProps {
   current: DueDateFieldCurrent;
@@ -52,8 +54,22 @@ export function DueDateField({ current, onPatch, onClose }: FieldProps) {
     onClose?.();
   };
 
+  // 自然语言输入：截止日期不设时刻，也没有 Someday。
+  const handleQuerySelect = (candidate: WhenCandidate) => {
+    if (candidate.kind === 'clear') return handleClear();
+    if (candidate.kind !== 'date') return;
+    onPatch({ dueDate: candidate.date });
+    onClose?.();
+  };
+
   return (
-    <div className="flex flex-col">
+    <WhenQueryInput
+      placeholder={t('task:deadlineQueryPlaceholder')}
+      allowSomeday={false}
+      showTime={false}
+      todayIcon={<Flag className="text-deadline" />}
+      onSelect={handleQuerySelect}
+    >
       <DateShortcutList
         items={[
           {
@@ -83,6 +99,6 @@ export function DueDateField({ current, onPatch, onClose }: FieldProps) {
         locale={getCalendarLocale(i18n.language)}
         weekStartsOn={weekStartsOn}
       />
-    </div>
+    </WhenQueryInput>
   );
 }

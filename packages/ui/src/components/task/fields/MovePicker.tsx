@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState, type KeyboardEvent } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, Inbox, Layers, Search } from 'lucide-react';
 
@@ -6,6 +6,7 @@ import type { UpdateTaskDto } from '@taskora/shared';
 import { useAreasQuery, useLaterProjectKind, useProjectsQuery } from '@taskora/api';
 
 import { ProjectProgressPie } from '@/components/project/ProjectProgressRing';
+import { useListboxNavigation } from '../../../lib/useListboxNavigation';
 import { cn } from '@/lib/utils';
 import {
   buildMoveTargets,
@@ -32,10 +33,8 @@ export function MovePicker({ current, onSelect }: Props) {
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const kindOf = useLaterProjectKind();
-  const listboxId = useId();
 
   const [query, setQuery] = useState('');
-  const [activeIndex, setActiveIndex] = useState(0);
 
   const inboxNames = useMemo(() => [t('nav:inbox'), i18n.getFixedT('en')('nav:inbox')], [t, i18n]);
   const targets = useMemo(
@@ -50,37 +49,22 @@ export function MovePicker({ current, onSelect }: Props) {
     [query, projects, areas, inboxNames, kindOf],
   );
   const currentId = currentMoveTargetId(current);
-  const active = Math.min(activeIndex, Math.max(targets.length - 1, 0));
-  const optionId = (index: number) => `${listboxId}-option-${index}`;
-
-  // 输入变化回到第一项；无搜索词时从当前位置开始
-  useEffect(() => {
-    const index = query.trim() ? 0 : targets.findIndex((target) => target.id === currentId);
-    setActiveIndex(Math.max(index, 0));
-  }, [query]);
-
-  useEffect(() => {
-    document.getElementById(optionId(active))?.scrollIntoView?.({ block: 'nearest' });
-  }, [active, listboxId]);
 
   const select = (target: MoveTarget) => {
     if (target.id === currentId) return;
     onSelect(moveTargetDto(target));
   };
 
-  const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.nativeEvent.isComposing) return;
-    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (targets.length === 0) return;
-      const step = e.key === 'ArrowDown' ? 1 : -1;
-      setActiveIndex((active + step + targets.length) % targets.length);
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      const target = targets[active];
-      if (target) select(target);
-    }
-  };
+  const { listboxId, active, setActiveIndex, optionId, onKeyDown } = useListboxNavigation(
+    targets,
+    select,
+  );
+
+  // 输入变化回到第一项；无搜索词时从当前位置开始
+  useEffect(() => {
+    const index = query.trim() ? 0 : targets.findIndex((target) => target.id === currentId);
+    setActiveIndex(Math.max(index, 0));
+  }, [query]);
 
   return (
     <div className="flex flex-col gap-1">
