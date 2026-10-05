@@ -1,5 +1,6 @@
 export * from './calendar-date';
 export * from './later-project';
+export * from './when-query';
 export * from './enums/task.enum';
 export * from './enums/project.enum';
 export * from './enums/heading.enum';

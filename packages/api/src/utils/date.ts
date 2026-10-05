@@ -2,6 +2,7 @@ import { i18n } from '@/i18n/config';
 import {
   calendarDateKey,
   instantDateKey,
+  instantWallTime,
   laterProjectKind,
   type LaterProjectFields,
   type LaterProjectKind,
@@ -20,8 +21,16 @@ export function todayDateKey(now = new Date()): string {
   return instantDateKey(now, currentTimeZone());
 }
 
+/** 账号时区的当前时刻（HH:mm）。 */
+export function currentWallTime(now = new Date()): string {
+  return instantWallTime(now.getTime(), currentTimeZone()).time;
+}
+
 /** 客户端 Later Project 判定：按账号时区的今天（见 CONTEXT.md）。 */
-export function projectLaterKind(project: LaterProjectFields, now = new Date()): LaterProjectKind | null {
+export function projectLaterKind(
+  project: LaterProjectFields,
+  now = new Date(),
+): LaterProjectKind | null {
   return laterProjectKind(project, todayDateKey(now), currentLegacyDateTimeZone());
 }
 
