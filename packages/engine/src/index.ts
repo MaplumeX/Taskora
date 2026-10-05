@@ -5,6 +5,8 @@ export {
   nextOccurrenceDate,
   skipOccurrenceDate,
   deriveRepeatInstanceId,
+  deriveRepeatProjectId,
+  deriveRepeatCopyId,
   deriveSubtaskId,
 } from './repeat';
 export {

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { useCompleteProject, useProjectQuery, useProjectsQuery, useUncompleteProject, useUpdateProject } from '@taskora/api';
+import { useProjectQuery, useProjectsQuery, useUpdateProject } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
 import { useEffectiveTags, useTasksQuery } from '@taskora/api';
 import { useProjectHeadingsQuery } from '@taskora/api';
@@ -12,6 +12,7 @@ import { ProjectCompletedTasks } from '@/components/project/ProjectCompletedTask
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
 import { ProjectMoreMenu } from '@/components/project/ProjectContextMenu';
+import { useProjectCompletion } from '@/components/project/useProjectCompletion';
 import { MarkdownNotesEditor } from '@/components/common/MarkdownNotesEditor';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
 import { toast } from 'sonner';
@@ -44,8 +45,7 @@ export default function ProjectDetail() {
     isError: headingsError,
   } = useProjectHeadingsQuery(id);
   const updateProject = useUpdateProject();
-  const completeProject = useCompleteProject();
-  const uncompleteProject = useUncompleteProject();
+  const completion = useProjectCompletion();
 
   const [notes, setNotes] = useState(project?.notes ?? '');
   useEffect(() => setNotes(project?.notes ?? ''), [project?.notes]);
@@ -69,13 +69,7 @@ export default function ProjectDetail() {
               total={project.taskTotalCount}
               completed={project.taskCompletedCount}
               projectStatus={project.status}
-              onToggle={() => {
-                if (!project) return;
-                const completed = project.status === 'COMPLETED';
-                (completed ? uncompleteProject : completeProject).mutate(project.id, {
-                  onError: () => toast.error(t('common:saveFailed')),
-                });
-              }}
+              onToggle={() => completion.toggle(project)}
             />
           ) : null}
           {project ? (
@@ -135,6 +129,7 @@ export default function ProjectDetail() {
       )}
 
       <ProjectCompletedTasks projectId={id ?? ''} />
+      {completion.dialog}
     </div>
   );
 }

@@ -232,8 +232,8 @@ export class FeedService {
         scheduledDate: p.scheduledDate ? p.scheduledDate.toISOString() : null,
         scheduledType: p.scheduledType as ScheduledType,
         reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
-        repeatRule: null, // Project 不设 Repeat Rule（CONTEXT.md）
-        repeatSourceId: null,
+        repeatRule: parseRepeatRule(p.repeatRule),
+        repeatSourceId: p.repeatSourceId,
         dueDate: p.dueDate ? p.dueDate.toISOString() : null,
         status: p.status as ProjectStatus,
         bucket: p.bucket as ProjectBucket,

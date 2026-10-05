@@ -97,12 +97,17 @@ model Project {
   scheduledType ScheduledType @default(NONE)
   scheduledDate DateTime?
   dueDate       DateTime?
+  /// Repeat Rule（recurring-projects spec）：规范形规则对象的 JSON 文本。仅 DATE 项目携带。
+  repeatRule    String?
+  /// 派生来源：派生出本项目的重复项目 id。不设外键，只用于派生幂等。
+  repeatSourceId String?
   completedAt   DateTime?
   trashedAt     DateTime?
 
   tags ProjectTag[]
 
   @@index([userId])
+  @@index([repeatSourceId])
   @@index([areaId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
   fieldClocks Json?
   /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。

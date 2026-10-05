@@ -66,6 +66,7 @@ import type {
   FeedOrderItem,
   FeedView,
   ProjectResponseDto,
+  RepeatRule,
   SubtaskResponseDto,
   TagResponseDto,
   TaskFeedItem,
@@ -682,8 +683,8 @@ function projectRowToFeedItem(
     scheduledDate: (f.scheduledDate as string | null) ?? null,
     scheduledType: (f.scheduledType as ScheduledType) ?? ScheduledType.NONE,
     reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
-    repeatRule: null, // Project 不设 Repeat Rule（CONTEXT.md）
-    repeatSourceId: null,
+    repeatRule: (f.repeatRule as RepeatRule | null) ?? null,
+    repeatSourceId: (f.repeatSourceId as string | null) ?? null,
     dueDate: (f.dueDate as string | null) ?? null,
     status: (f.status as ProjectStatus) ?? ProjectStatus.ACTIVE,
     bucket: (f.bucket as ProjectBucket) ?? ProjectBucket.ANYTIME,

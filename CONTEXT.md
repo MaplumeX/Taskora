@@ -58,12 +58,16 @@ _Avoid_: 闹钟、alarm、通知时间（Reminder 是数据，通知是其触发
 _Avoid_: 延后、推迟提醒（口语可用）、本机临时推迟（Snooze 不是设备本地状态）
 
 **Repeat Rule（重复规则）**:
-Task 上的一个结构化规则字段（单位 × 间隔 × 周模式的星期几集合），声明该 Task 完成后按规则再现；锚点默认从计划日期推算，可选从完成日期推算。仅 ScheduledType 为 DATE 的 Task 可设；移入 Someday/NONE 时自动清除。Project 不设 Repeat Rule。
+Task 或 Project 上的一个结构化规则字段（单位 × 间隔 × 周模式的星期几集合），声明该 Task / Project 完成后按规则再现；锚点默认从计划日期推算，可选从完成日期推算。仅 ScheduledType 为 DATE 的 Task / Project 可设；移入 Someday/NONE 时自动清除。
 _Avoid_: 循环、周期任务、RRULE、模板（无独立模板实体）
 
 **Repeat Instance（重复实例）**:
 带 Repeat Rule 的 Task 完成时由客户端按规则派生出的下一个 Task，携带相同规则使链得以延续。是普通 Task 而非特殊实体；未来日期落 Upcoming，逾期落 Today。派生后即独立：重开（撤销完成 / 撤销取消）来源任务不删除它；实例以 repeatSourceId 记录来源，来源已有未进 Trash 的实例时再次完成不重复派生。
 _Avoid_: 副本、克隆（实例是正式任务，不是复制品）
+
+**Repeat Project Instance（重复项目实例）**:
+带 Repeat Rule 的 Project 完成时派生出的下一轮 Project：项目连同其 Project Headings、Tasks、Subtasks 整份复制，全部重置为未完成——未进 Trash 的任务不论这一轮完成、取消与否都复制（对齐 Things 3：重复项目是每轮重来的清单），项目内重复链的后代除外（只复制链的源头）；任务自身的计划日期与截止日期按项目计划日期的位移平移。普通 Project，`repeatSourceId` 记录来源；派生后即独立，重开来源项目不删除它。完成仍有未了结任务的项目时先询问剩余任务标记为完成还是取消（一并了结时不派生这些任务自己的 Repeat Instance）。Skip Occurrence 同样适用于重复项目：项目与其内未了结任务的日期一起推进。
+_Avoid_: 项目模板、项目副本（实例是正式项目）
 
 **Repeat Chain（重复链）**:
 同一规则沿 Task 字段传递形成的实例序列；无中心模板，编辑某实例的规则只影响该实例及其后代，链自然分叉。链在取消、移出日期或到达 until 日期时终结。

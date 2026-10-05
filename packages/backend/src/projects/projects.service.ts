@@ -1,24 +1,32 @@
 import { randomUUID } from 'node:crypto';
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   countProjectTasks,
+  planProjectComplete,
   planProjectCreate,
+  planProjectRepeatSkip,
   planProjectRestore,
   planProjectTrash,
   planProjectUpdate,
+  planRepeatProjectInstance,
   planReorder,
   positionBetween,
-  projectCompletePatch,
   projectReopenPatch,
   projectUpdatePutsBack,
+  repeatDerivationTarget,
 } from '@taskora/engine';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { SyncHubService } from '../sync/sync-hub.service';
+import { SyncHubService, type HubWriteBatch } from '../sync/sync-hub.service';
+import { parseRepeatRule, withRepeatRuleDto } from '../tasks/task-dto.mapper';
 import { sortByPosition } from '../common/position-order';
 import { countedTasksOf, edgePositions, toWireFields } from '../common/domain-storage';
 import { userCalendarZones } from '../users/account-time-zone';
-import { CreateProjectDto, UpdateProjectDto } from './dto/projects.dto';
+import { CompleteProjectDto, CreateProjectDto, UpdateProjectDto } from './dto/projects.dto';
+
+/** 派生路径需要的 Project 行形状（含标签关系）。 */
+type ProjectRowWithTags = Prisma.ProjectGetPayload<{ include: { tags: true } }>;
 
 /**
  * 项目的 REST 写路径。领域规则（bucket、计划、完成、Trash 级联、进度
@@ -46,13 +54,12 @@ export class ProjectsService {
     return countProjectTasks(projectIds, await countedTasksOf(this.prisma, userId, projectIds));
   }
 
-  private async withCounts<T extends { id: string; tags: Array<{ tag: unknown }> }>(
-    userId: string,
-    project: T,
-  ) {
+  private async withCounts<
+    T extends { id: string; repeatRule: string | null; tags: Array<{ tag: unknown }> },
+  >(userId: string, project: T) {
     const { total, completed } = (await this.counts(userId, [project.id])).get(project.id)!;
     return {
-      ...project,
+      ...withRepeatRuleDto(project),
       tags: project.tags.map((pt) => pt.tag),
       taskTotalCount: total,
       taskCompletedCount: completed,
@@ -75,7 +82,7 @@ export class ProjectsService {
       });
     });
     return {
-      ...created,
+      ...withRepeatRuleDto(created),
       tags: created.tags.map((pt) => pt.tag),
       taskTotalCount: 0,
       taskCompletedCount: 0,
@@ -97,7 +104,7 @@ export class ProjectsService {
     return sortByPosition(projects).map((p) => {
       const { total, completed } = counts.get(p.id)!;
       return {
-        ...p,
+        ...withRepeatRuleDto(p),
         tags: p.tags.map((pt) => pt.tag),
         taskTotalCount: total,
         taskCompletedCount: completed,
@@ -173,21 +180,161 @@ export class ProjectsService {
     return { id, trashedAt: null };
   }
 
-  async complete(userId: string, id: string) {
-    await this.requireProject(userId, id);
-    return this.writeProject(userId, id, projectCompletePatch(new Date().toISOString()));
+  /**
+   * 完成项目（recurring-projects spec）：settleRemaining 给出时一并了结
+   * 剩余任务；带重复规则时代为派生下一轮（web 无本地副本，同任务的
+   * REST 派生，ADR-0012）。已完成的再次完成不改写、不二次派生。
+   */
+  async complete(userId: string, id: string, dto: CompleteProjectDto = {}) {
+    const existing = await this.prisma.project.findFirst({
+      where: { id, userId },
+      include: { tags: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Project not found');
+    }
+    const tasks = await this.prisma.task.findMany({
+      where: { projectId: id, userId },
+      include: { tags: true },
+    });
+    const completedAt = new Date().toISOString();
+    const plan = planProjectComplete(existing.status, completedAt, tasks, dto.settleRemaining);
+    if (!plan) return this.findOne(userId, id);
+    await this.hub.writeAsHub(userId, async (batch) => {
+      await batch.write('project', id, toWireFields(plan.project));
+      for (const task of plan.tasks) await batch.write('task', task.id, toWireFields(task.patch));
+      if (plan.deriveRepeat) {
+        await this.deriveRepeatProject(batch, userId, existing, tasks, completedAt);
+      }
+    });
+    return this.findOne(userId, id);
+  }
+
+  /**
+   * 重复项目服务端派生（规则见 domain planRepeatProjectInstance）：与设备
+   * 派生产出同一组确定性 id，经 hub 字段级 LWW 收敛。parent / tasks 取完成
+   * 前的状态。
+   */
+  private async deriveRepeatProject(
+    batch: HubWriteBatch,
+    userId: string,
+    parent: ProjectRowWithTags,
+    tasks: ReadonlyArray<Prisma.TaskGetPayload<{ include: { tags: true } }>>,
+    completedAt: string,
+  ): Promise<void> {
+    const repeatRule = parseRepeatRule(parent.repeatRule);
+    if (!repeatRule) return; // 非重复项目：不必查账户时区
+    const plan = planRepeatProjectInstance(
+      {
+        id: parent.id,
+        title: parent.title,
+        notes: parent.notes,
+        scheduledDate: parent.scheduledDate,
+        dueDate: parent.dueDate,
+        repeatRule,
+        areaId: parent.areaId,
+        tagIds: parent.tags.map((pt) => pt.tagId),
+      },
+      completedAt,
+      await userCalendarZones(this.prisma, userId),
+    );
+    if (!plan) return;
+    const linked = await batch.tx.project.findFirst({
+      where: { userId, repeatSourceId: parent.id, trashedAt: null },
+      select: { id: true },
+    });
+    const plannedRow = await batch.tx.project.findFirst({
+      where: { id: plan.id, userId },
+      select: { trashedAt: true },
+    });
+    const compacted =
+      !plannedRow &&
+      (await batch.tx.compactedEntity.findFirst({
+        where: { userId, entity: 'project', entityId: plan.id },
+        select: { entityId: true },
+      })) !== null;
+    const target = repeatDerivationTarget({
+      hasLinkedInstance: linked !== null,
+      plannedId: plannedRow
+        ? plannedRow.trashedAt
+          ? 'trashed'
+          : 'live'
+        : compacted
+          ? 'compacted'
+          : 'absent',
+    });
+    if (target === 'skip') return;
+    const instanceId = target === 'planned' ? plan.id : randomUUID();
+
+    // 侧边栏中紧跟来源项目
+    const projects = sortByPosition(
+      await batch.tx.project.findMany({
+        where: { userId },
+        select: { id: true, position: true },
+      }),
+    );
+    const at = projects.findIndex((p) => p.id === parent.id);
+    await batch.write('project', instanceId, {
+      ...toWireFields(plan.project),
+      position: positionBetween(projects[at]?.position ?? null, projects[at + 1]?.position ?? null),
+    });
+
+    const [headings, subtasks] = await Promise.all([
+      batch.tx.projectHeading.findMany({ where: { projectId: parent.id } }),
+      batch.tx.subtask.findMany({ where: { taskId: { in: tasks.map((task) => task.id) } } }),
+    ]);
+    const copy = plan.copyFor(instanceId, {
+      headings,
+      tasks: tasks.map((task) => ({
+        ...task,
+        repeatRule: parseRepeatRule(task.repeatRule),
+        tagIds: task.tags.map((tt) => tt.tagId),
+      })),
+      subtasks,
+    });
+    for (const { id, ...heading } of copy.headings) {
+      await batch.write('project-heading', id, heading);
+    }
+    for (const { id, ...task } of copy.tasks) await batch.write('task', id, toWireFields(task));
+    for (const { id, ...subtask } of copy.subtasks) await batch.write('subtask', id, subtask);
   }
 
   async uncomplete(userId: string, id: string) {
     await this.requireProject(userId, id);
-    return this.writeProject(userId, id, projectReopenPatch());
+    // 只重开项目本身：已了结的任务与已派生的下一轮不动（recurring-projects spec）
+    await this.hub.writeAsHub(userId, async (batch) => {
+      await batch.write('project', id, toWireFields(projectReopenPatch()));
+    });
+    return this.findOne(userId, id);
   }
 
-  private writeProject(userId: string, id: string, patch: object) {
-    return this.hub.writeAsHub(userId, async (batch) => {
-      await batch.write('project', id, toWireFields(patch));
-      return batch.tx.project.findUniqueOrThrow({ where: { id } });
+  /**
+   * 跳过本次（recurring-projects spec）：项目计划日期推进到下一次，项目内
+   * 未了结任务的日期同步平移（规则见 domain planProjectRepeatSkip）。
+   * 不可跳过 → 409，message 为原因（RepeatSkipBlock）。
+   */
+  async skip(userId: string, id: string) {
+    const existing = await this.requireProject(userId, id);
+    const [linked, tasks] = await Promise.all([
+      this.prisma.project.findFirst({
+        where: { userId, repeatSourceId: id, trashedAt: null },
+        select: { id: true },
+      }),
+      this.prisma.task.findMany({ where: { projectId: id, userId } }),
+    ]);
+    const plan = planProjectRepeatSkip(
+      { ...existing, repeatRule: parseRepeatRule(existing.repeatRule) },
+      tasks,
+      linked !== null,
+      new Date().toISOString(),
+      await userCalendarZones(this.prisma, userId),
+    );
+    if ('blocked' in plan) throw new ConflictException(plan.blocked);
+    await this.hub.writeAsHub(userId, async (batch) => {
+      await batch.write('project', id, toWireFields(plan.project));
+      for (const task of plan.tasks) await batch.write('task', task.id, toWireFields(task.patch));
     });
+    return this.findOne(userId, id);
   }
 
   async reorder(userId: string, orderedIds: string[]) {

@@ -1,7 +1,6 @@
 import { useCalendarDay, parseCalendarDate } from '@taskora/api';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { ProjectStatus } from '@taskora/shared';
 import type { ProjectFeedItem, ProjectResponseDto } from '@taskora/shared';
@@ -13,7 +12,9 @@ import { TaskTagCapsules } from '@/components/task/TaskTagCapsules';
 import { TaskTodayBadge } from '@/components/task/TaskTodayBadge';
 import { ProjectContextMenu } from '@/components/project/ProjectContextMenu';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
-import { startOfTomorrow, useCompleteProject, useUncompleteProject } from '@taskora/api';
+import { useProjectCompletion } from '@/components/project/useProjectCompletion';
+import { TaskRepeatBadge } from '@/components/task/TaskRepeatBadge';
+import { startOfTomorrow } from '@taskora/api';
 import type { SelectionState } from '@taskora/api';
 
 interface Props {
@@ -38,8 +39,7 @@ export function ProjectFeedRow({
   useCalendarDay();
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const completeProject = useCompleteProject();
-  const uncompleteProject = useUncompleteProject();
+  const completion = useProjectCompletion();
   const completed = item.status === 'COMPLETED';
   // 取消目前不属于项目模型（ADR 0006 明确 out of scope）；此分支作防御性呈现。
   const cancelled = item.status === ('CANCELLED' as ProjectStatus);
@@ -50,9 +50,7 @@ export function ProjectFeedRow({
 
   const handleToggle = () => {
     // 防御：取消的项目暂不可经此撤销（模型不支持），退化为完成切换。
-    (completed ? uncompleteProject : completeProject).mutate(item.id, {
-      onError: () => toast.error(t('common:saveFailed')),
-    });
+    completion.toggle(item);
   };
 
   return (
@@ -119,10 +117,12 @@ export function ProjectFeedRow({
           {item.title || t('project:newItemPlaceholder')}
         </span>
         <div className="flex items-center gap-2">
+          <TaskRepeatBadge repeatRule={item.repeatRule} className="shrink-0" />
           <TaskTagCapsules tags={item.tags} />
           <TaskDueDateBadge dueDate={item.dueDate} />
         </div>
       </div>
+      {completion.dialog}
     </ProjectContextMenu>
   );
 }

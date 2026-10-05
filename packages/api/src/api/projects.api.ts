@@ -1,4 +1,9 @@
-import type { CreateProjectDto, ProjectResponseDto, UpdateProjectDto } from '@taskora/shared';
+import type {
+  CompleteProjectDto,
+  CreateProjectDto,
+  ProjectResponseDto,
+  UpdateProjectDto,
+} from '@taskora/shared';
 
 import { currentProjectBackend } from './project-backend';
 
@@ -30,8 +35,15 @@ export function restoreProject(id: string): Promise<ProjectResponseDto> {
   return currentProjectBackend().restoreProject(id);
 }
 
-export function completeProject(id: string): Promise<ProjectResponseDto> {
-  return currentProjectBackend().completeProject(id);
+export function completeProject(
+  id: string,
+  options?: CompleteProjectDto,
+): Promise<ProjectResponseDto> {
+  return currentProjectBackend().completeProject(id, options);
+}
+
+export function skipProject(id: string): Promise<ProjectResponseDto> {
+  return currentProjectBackend().skipProject(id);
 }
 
 export function uncompleteProject(id: string): Promise<ProjectResponseDto> {

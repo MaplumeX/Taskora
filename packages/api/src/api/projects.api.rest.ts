@@ -1,4 +1,11 @@
-import type { CreateProjectDto, ProjectResponseDto, UpdateProjectDto } from '@taskora/shared';
+import axios from 'axios';
+import { RepeatSkipBlockedError, type RepeatSkipBlock } from '@taskora/engine';
+import type {
+  CompleteProjectDto,
+  CreateProjectDto,
+  ProjectResponseDto,
+  UpdateProjectDto,
+} from '@taskora/shared';
 
 import { apiClient } from './client';
 
@@ -27,8 +34,26 @@ export function restoreProject(id: string): Promise<ProjectResponseDto> {
   return apiClient.post<ProjectResponseDto>(`/projects/${id}/restore`).then((res) => res.data);
 }
 
-export function completeProject(id: string): Promise<ProjectResponseDto> {
-  return apiClient.post<ProjectResponseDto>(`/projects/${id}/complete`).then((res) => res.data);
+export function completeProject(
+  id: string,
+  options?: CompleteProjectDto,
+): Promise<ProjectResponseDto> {
+  return apiClient
+    .post<ProjectResponseDto>(`/projects/${id}/complete`, options ?? {})
+    .then((res) => res.data);
+}
+
+export function skipProject(id: string): Promise<ProjectResponseDto> {
+  return apiClient
+    .post<ProjectResponseDto>(`/projects/${id}/skip`)
+    .then((res) => res.data)
+    .catch((error: unknown) => {
+      // 409 的 message 即不可跳过的原因（与 Engine 实现抛同一种错误）
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        throw new RepeatSkipBlockedError(error.response.data?.message as RepeatSkipBlock);
+      }
+      throw error;
+    });
 }
 
 export function uncompleteProject(id: string): Promise<ProjectResponseDto> {

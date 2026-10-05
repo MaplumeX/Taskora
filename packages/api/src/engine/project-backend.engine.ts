@@ -8,20 +8,26 @@
  */
 
 import { currentLegacyDateTimeZone, currentTimeZone } from '@/utils/date';
-import type { CalendarZones, Engine } from '@taskora/engine';
+import type { CalendarZones, Engine, ReplicaRow } from '@taskora/engine';
 import {
   countProjectTasks,
+  normalizeRepeatRule,
+  planProjectComplete,
   planProjectCreate,
+  planProjectRepeatSkip,
   planProjectRestore,
   planProjectTrash,
   planProjectUpdate,
+  planRepeatProjectInstance,
   positionAfter,
-  projectCompletePatch,
   projectReopenPatch,
   projectUpdatePutsBack,
+  repeatDerivationTarget,
+  RepeatSkipBlockedError,
   repositionMinimal,
 } from '@taskora/engine';
 import type {
+  CompleteProjectDto,
   CreateProjectDto,
   ProjectResponseDto,
   TagResponseDto,
@@ -29,10 +35,14 @@ import type {
 } from '@taskora/shared';
 
 import type { ProjectBackend } from '../api/project-backend';
-import { projectRowToDto, tagIndexFor } from './mappers';
+import { positionedRows, projectRowToDto, tagIndexFor } from './mappers';
 
 function zones(): CalendarZones {
   return { timeZone: currentTimeZone(), legacyDateTimeZone: currentLegacyDateTimeZone() };
+}
+
+function tagIdsOf(row: ReplicaRow): string[] {
+  return Array.isArray(row.fields.tagIds) ? (row.fields.tagIds as string[]) : [];
 }
 
 export interface EngineProjectBackendOptions {
@@ -70,6 +80,97 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
     if (!row) throw new Error(`Project not found: ${id}`);
     const counts = await projectCounts(id);
     return projectRowToDto(row, await tagIndex(), counts.total, counts.completed);
+  }
+
+  /**
+   * 重复项目派生（recurring-projects spec / ADR-0012）：完成的设备在本地
+   * 派生下一轮项目（规则见 domain planRepeatProjectInstance），连同
+   * Headings / 任务 / Subtask 副本写入 Local Replica、走 Outbox。parent 为
+   * 完成前的项目行，tasks 为完成前项目下的全部任务行。
+   */
+  async function deriveRepeatProject(
+    parent: ReplicaRow,
+    tasks: readonly ReplicaRow[],
+    completedAt: string,
+  ): Promise<void> {
+    const f = parent.fields;
+    const plan = planRepeatProjectInstance(
+      {
+        id: parent.id,
+        title: (f.title as string) ?? '',
+        notes: (f.notes as string | null) ?? null,
+        scheduledDate: f.scheduledDate,
+        dueDate: f.dueDate,
+        repeatRule: normalizeRepeatRule(f.repeatRule),
+        areaId: (f.areaId as string | null) ?? null,
+        tagIds: tagIdsOf(parent),
+      },
+      completedAt,
+      zones(),
+    );
+    if (!plan) return;
+    const linked = await engine.list('project', {
+      where: { repeatSourceId: parent.id, trashedAt: null },
+      limit: 1,
+    });
+    const plannedRow = await engine.get('project', plan.id);
+    const target = repeatDerivationTarget({
+      hasLinkedInstance: linked.length > 0,
+      plannedId: plannedRow
+        ? plannedRow.fields.trashedAt
+          ? 'trashed'
+          : 'live'
+        : (await engine.isCompacted('project', plan.id))
+          ? 'compacted'
+          : 'absent',
+    });
+    if (target === 'skip') return;
+
+    // 侧边栏中紧跟来源项目
+    const projects = await engine.list('project');
+    const instanceId = await engine.create('project', {
+      ...(target === 'planned' ? { id: plan.id } : {}),
+      ...plan.project,
+      position: positionAfter(projects, parent.id),
+    });
+
+    const [headings, subtasks] = await Promise.all([
+      engine.list('project-heading', { where: { projectId: parent.id } }),
+      engine.list('subtask', { where: { taskId: { in: tasks.map((row) => row.id) } } }),
+    ]);
+    const copy = plan.copyFor(instanceId, {
+      headings: positionedRows(headings).map((heading, index) => ({
+        ...heading,
+        title: (headings[index].fields.title as string) ?? '',
+      })),
+      tasks: positionedRows(tasks).map((task, index) => {
+        const t = tasks[index].fields;
+        return {
+          ...task,
+          title: (t.title as string) ?? '',
+          notes: (t.notes as string | null) ?? null,
+          scheduledType: t.scheduledType,
+          scheduledDate: t.scheduledDate,
+          dueDate: t.dueDate,
+          reminderTime: (t.reminderTime as string | null) ?? null,
+          repeatRule: normalizeRepeatRule(t.repeatRule),
+          repeatSourceId: (t.repeatSourceId as string | null) ?? null,
+          bucket: t.bucket,
+          trashedAt: t.trashedAt,
+          headingId: (t.headingId as string | null) ?? null,
+          areaId: (t.areaId as string | null) ?? null,
+          tagIds: tagIdsOf(tasks[index]),
+        };
+      }),
+      subtasks: positionedRows(subtasks).map((subtask, index) => ({
+        ...subtask,
+        title: (subtasks[index].fields.title as string) ?? '',
+        taskId: (subtasks[index].fields.taskId as string) ?? '',
+      })),
+    });
+    for (const heading of copy.headings) await engine.create('project-heading', { ...heading });
+    for (const task of copy.tasks) await engine.create('task', { ...task });
+    for (const subtask of copy.subtasks) await engine.create('subtask', { ...subtask });
   }
 
   return {
@@ -163,8 +264,66 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
       return projectDto(id);
     },
 
-    async completeProject(id: string): Promise<ProjectResponseDto> {
-      await engine.update('project', id, { ...projectCompletePatch(new Date().toISOString()) });
+    async completeProject(id: string, options?: CompleteProjectDto): Promise<ProjectResponseDto> {
+      const existing = await engine.get('project', id);
+      if (!existing) throw new Error(`Project not found: ${id}`);
+      const tasks = await engine.list('task', { where: { projectId: id } });
+      const completedAt = new Date().toISOString();
+      const plan = planProjectComplete(
+        existing.fields.status,
+        completedAt,
+        tasks.map((row) => ({
+          id: row.id,
+          status: row.fields.status,
+          trashedAt: row.fields.trashedAt,
+        })),
+        options?.settleRemaining,
+      );
+      if (!plan) return projectDto(id);
+      await engine.update('project', id, { ...plan.project });
+      await engine.updateMany(
+        'task',
+        plan.tasks.map(({ id: taskId, patch }) => ({ id: taskId, patch: { ...patch } })),
+      );
+      if (plan.deriveRepeat) await deriveRepeatProject(existing, tasks, completedAt);
+      return projectDto(id);
+    },
+
+    async skipProject(id: string): Promise<ProjectResponseDto> {
+      const existing = await engine.get('project', id);
+      if (!existing) throw new Error(`Project not found: ${id}`);
+      const f = existing.fields;
+      const [linked, tasks] = await Promise.all([
+        engine.list('project', { where: { repeatSourceId: id, trashedAt: null }, limit: 1 }),
+        engine.list('task', { where: { projectId: id } }),
+      ]);
+      const plan = planProjectRepeatSkip(
+        {
+          status: f.status,
+          trashedAt: f.trashedAt,
+          scheduledType: f.scheduledType,
+          scheduledDate: f.scheduledDate,
+          dueDate: f.dueDate,
+          repeatRule: normalizeRepeatRule(f.repeatRule),
+        },
+        tasks.map((row) => ({
+          id: row.id,
+          status: row.fields.status,
+          trashedAt: row.fields.trashedAt,
+          scheduledType: row.fields.scheduledType,
+          scheduledDate: row.fields.scheduledDate,
+          dueDate: row.fields.dueDate,
+        })),
+        linked.length > 0,
+        new Date().toISOString(),
+        zones(),
+      );
+      if ('blocked' in plan) throw new RepeatSkipBlockedError(plan.blocked);
+      await engine.update('project', id, { ...plan.project });
+      await engine.updateMany(
+        'task',
+        plan.tasks.map(({ id: taskId, patch }) => ({ id: taskId, patch: { ...patch } })),
+      );
       return projectDto(id);
     },
 

@@ -10,7 +10,12 @@ import {
   Request,
 } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
-import { CreateProjectDto, UpdateProjectDto, ReorderDto } from './dto/projects.dto';
+import {
+  CompleteProjectDto,
+  CreateProjectDto,
+  UpdateProjectDto,
+  ReorderDto,
+} from './dto/projects.dto';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 
 @UseGuards(JwtAuthGuard)
@@ -71,8 +76,17 @@ export class ProjectsController {
   complete(
     @Request() req: { user: { id: string } },
     @Param('id') id: string,
+    @Body() dto: CompleteProjectDto,
   ) {
-    return this.projectsService.complete(req.user.id, id);
+    return this.projectsService.complete(req.user.id, id, dto);
+  }
+
+  @Post(':id/skip')
+  skip(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.projectsService.skip(req.user.id, id);
   }
 
   @Post(':id/uncomplete')

@@ -301,3 +301,28 @@ export function deriveRepeatInstanceId(
 export function deriveSubtaskId(parentInstanceId: string, ordinal: number): string {
   return stableHash('subtask', parentInstanceId, String(ordinal));
 }
+
+/**
+ * 重复项目实例 id = hash(parentProjectId, canonicalRule, occurrenceDate)
+ * （recurring-projects spec）。与任务实例同一口径，另起命名空间。
+ */
+export function deriveRepeatProjectId(
+  parentProjectId: string,
+  rule: RepeatRule,
+  occurrenceDate: string,
+): string {
+  return stableHash('repeat-project', parentProjectId, canonicalRepeatRule(rule), occurrenceDate);
+}
+
+/**
+ * 重复项目实例内的副本 id = hash(实例项目 id, 实体种类, 来源实体 id)。
+ * 按来源 id 而非序号派生：两端数据尚有未同步的差异时，同一来源仍得到
+ * 同一 id，不会错位。
+ */
+export function deriveRepeatCopyId(
+  instanceProjectId: string,
+  kind: 'project-heading' | 'task' | 'subtask',
+  sourceId: string,
+): string {
+  return stableHash('repeat-copy', instanceProjectId, kind, sourceId);
+}

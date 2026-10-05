@@ -33,5 +33,10 @@
   "archivedHeadingCount": "{{count}} 个已归档标题",
   "laterProjects": "稍后项目",
   "laterProjectsEmpty": "没有稍后项目",
-  "laterProjectCount": "{{count}} 个稍后项目"
+  "laterProjectCount": "{{count}} 个稍后项目",
+  "completeRemainingTitle": "完成项目",
+  "completeRemainingDescription": "项目中还有 {{count}} 个未完成的任务，要如何处理？",
+  "completeRemaining": "全部标记为完成",
+  "cancelRemaining": "全部标记为取消",
+  "repeatInstanceHint": "重复项目"
 }

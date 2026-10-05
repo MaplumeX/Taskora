@@ -418,7 +418,7 @@ export class ChangeEventCollector {
       withTags && Array.isArray(row.tags)
         ? row.tags.map((tt) => (tt as Record<string, unknown>).tag)
         : [];
-    // Task 的 repeatRule 是 TEXT JSON 列：与 HTTP 读路径（findOne/update）
+    // Task / Project 的 repeatRule 是 TEXT JSON 列：与 HTTP 读路径（findOne/update）
     // 一致地经 withRepeatRuleDto 解析成对象后下发，否则客户端从事件拿到
     // 的 detail 缓存会把规则当成字符串（读 DTO 形状违约）。
     let data: Record<string, unknown>;
@@ -429,6 +429,9 @@ export class ChangeEventCollector {
       data = settledToCompletedAt({ ...taskRow, tags } as Record<string, unknown> as {
         settledAt: Date | null;
       });
+    } else if (entity === 'project') {
+      // Project 的 repeatRule 同为 TEXT JSON 列（recurring-projects spec）
+      data = { ...withRepeatRuleDto(row as { repeatRule: string | null }), tags };
     } else if (entity === 'subtask') {
       data = settledToCompletedAt(row as { settledAt: Date | null });
     } else if (withTags) {

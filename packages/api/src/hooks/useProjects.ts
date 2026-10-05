@@ -6,6 +6,7 @@ import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
 import type {
   CreateProjectDto,
   FeedItem,
+  SettleRemainingTasks,
   ProjectResponseDto,
   UpdateProjectDto,
 } from '@taskora/shared';
@@ -18,6 +19,7 @@ import {
   getProjects,
   reorderProjects,
   restoreProject,
+  skipProject,
   uncompleteProject,
   updateProject,
 } from '@/api/projects.api';
@@ -242,11 +244,22 @@ export function useRestoreProject() {
   });
 }
 
+/** 完成项目的参数：项目 id，或带「剩余任务」处理方式（recurring-projects spec）。 */
+export type CompleteProjectVariables =
+  string | { id: string; settleRemaining?: SettleRemainingTasks };
+
+const completeVariablesId = (variables: CompleteProjectVariables) =>
+  typeof variables === 'string' ? variables : variables.id;
+
 export function useCompleteProject() {
   const queryClient = useQueryCache();
   return useMutation({
-    mutationFn: (id: string) => completeProject(id),
-    onMutate: async (id) => {
+    mutationFn: (variables: CompleteProjectVariables) =>
+      typeof variables === 'string'
+        ? completeProject(variables)
+        : completeProject(variables.id, { settleRemaining: variables.settleRemaining }),
+    onMutate: async (variables) => {
+      const id = completeVariablesId(variables);
       await cancelProjectLists(queryClient);
       const snapshot = snapshotProjectLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<ProjectResponseDto>(projectKeys.detail(id));
@@ -269,10 +282,14 @@ export function useCompleteProject() {
         queryClient.setQueryData(projectKeys.detail(ctx.id), ctx.detailSnapshot);
       }
     },
-    onSettled: (_data, _error, id) => {
-      refreshAfterWrite(queryClient, { queryKey: projectKeys.detail(id) });
+    onSettled: (_data, _error, variables) => {
+      // 剩余任务一并了结、重复项目派生出下一轮：任务列表同样要刷新
+      refreshAfterWrite(queryClient, {
+        queryKey: projectKeys.detail(completeVariablesId(variables)),
+      });
       refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['tasks'] });
     },
   });
 }
@@ -307,6 +324,20 @@ export function useUncompleteProject() {
       refreshAfterWrite(queryClient, { queryKey: projectKeys.detail(id) });
       refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+    },
+  });
+}
+
+/** 重复项目「跳过本次」（recurring-projects spec）；不可跳过时报 RepeatSkipBlockedError。 */
+export function useSkipProject() {
+  const queryClient = useQueryCache();
+  return useMutation({
+    mutationFn: (id: string) => skipProject(id),
+    onSettled: (_data, _error, id) => {
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['tasks'] });
     },
   });
 }

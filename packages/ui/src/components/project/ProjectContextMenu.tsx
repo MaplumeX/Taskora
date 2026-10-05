@@ -2,9 +2,20 @@ import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { MoreHorizontal, Check, Circle, CalendarClock, CalendarDays, Tag, Trash2, RotateCcw } from 'lucide-react';
+import {
+  MoreHorizontal,
+  Check,
+  Circle,
+  CalendarClock,
+  CalendarDays,
+  Repeat,
+  SkipForward,
+  Tag,
+  Trash2,
+  RotateCcw,
+} from 'lucide-react';
 
-import type { ProjectResponseDto, UpdateProjectDto } from '@taskora/shared';
+import { ScheduledType, type ProjectResponseDto, type UpdateProjectDto } from '@taskora/shared';
 
 import {
   Popover,
@@ -15,16 +26,14 @@ import {
 import { Button } from '@/components/ui/button';
 import { MenuRow } from '@/components/common/MenuRow';
 import { isTouchContextMenu } from '../../lib/useLongPress';
-import {
-  useCompleteProject,
-  useDeleteProject,
-  useRestoreProject,
-  useUncompleteProject,
-  useUpdateProject,
-} from '@taskora/api';
+import { useDeleteProject, useRestoreProject, useUpdateProject } from '@taskora/api';
 import { ScheduledDateField } from '@/components/task/fields/ScheduledDateField';
 import { DueDateField } from '@/components/task/fields/DueDateField';
+import { RepeatRuleField } from '@/components/task/fields/RepeatRuleField';
 import { TagsField } from '@/components/task/fields/TagsField';
+
+import { useProjectCompletion } from './useProjectCompletion';
+import { useSkipProjectOccurrence } from './useSkipProjectOccurrence';
 
 export interface ProjectMenuProps {
   project: ProjectResponseDto;
@@ -33,7 +42,7 @@ export interface ProjectMenuProps {
   onDeleted?: () => void;
 }
 
-type PickerKind = 'scheduled' | 'due' | 'tags' | null;
+type PickerKind = 'scheduled' | 'repeat' | 'due' | 'tags' | null;
 
 export function ProjectMenuPanel({
   project,
@@ -42,27 +51,35 @@ export function ProjectMenuPanel({
   onDeleted,
   onClose,
   openPicker,
+  onToggleComplete,
   firstItemRef,
 }: ProjectMenuProps & {
   onClose: () => void;
   openPicker: (kind: Exclude<PickerKind, null>) => void;
+  /** 完成 / 取消完成（含剩余任务询问，见 useProjectCompletion；对话框由外层渲染）。 */
+  onToggleComplete: (project: ProjectResponseDto) => void;
   firstItemRef?: React.RefObject<HTMLButtonElement>;
 }) {
   const { t } = useTranslation('task');
   const { t: tc } = useTranslation('common');
 
-  const completeProject = useCompleteProject();
-  const uncompleteProject = useUncompleteProject();
   const deleteProject = useDeleteProject();
   const restoreProject = useRestoreProject();
+  // 面板只在菜单打开时挂载
+  const skipOccurrence = useSkipProjectOccurrence(current, true);
 
   const completed = current.status === 'COMPLETED';
+  const isDate = (current.scheduledType ?? ScheduledType.NONE) === ScheduledType.DATE;
+  const canOfferSkip = variant === 'default' && skipOccurrence.available;
 
   const handleToggleComplete = () => {
     onClose();
-    (completed ? uncompleteProject : completeProject).mutate(project.id, {
-      onError: () => toast.error(tc('saveFailed')),
-    });
+    onToggleComplete(current);
+  };
+
+  const handleSkip = () => {
+    onClose();
+    skipOccurrence.skip();
   };
 
   const handleDelete = () => {
@@ -93,6 +110,22 @@ export function ProjectMenuPanel({
       <MenuRow icon={CalendarClock} onClick={() => openPicker('scheduled')}>
         {t('scheduledDate')}
       </MenuRow>
+      {/* 重复规则：仅 DATE 项目（规则需要计划日期作锚点，recurring-projects spec）。 */}
+      {isDate && (
+        <MenuRow icon={Repeat} onClick={() => openPicker('repeat')}>
+          {t('repeat')}
+        </MenuRow>
+      )}
+      {canOfferSkip && (
+        <MenuRow
+          icon={SkipForward}
+          disabled={skipOccurrence.target === null}
+          title={skipOccurrence.target === null ? t('skipOccurrenceLast') : undefined}
+          onClick={handleSkip}
+        >
+          {t('skipOccurrence')}
+        </MenuRow>
+      )}
       <MenuRow icon={CalendarDays} onClick={() => openPicker('due')}>
         {t('dueDate')}
       </MenuRow>
@@ -138,6 +171,9 @@ function PickerContent({
   if (kind === 'scheduled') {
     return <ScheduledDateField current={current} onPatch={patch} onClose={onClose} />;
   }
+  if (kind === 'repeat') {
+    return <RepeatRuleField current={current} onPatch={patch} />;
+  }
   if (kind === 'due') {
     return <DueDateField current={current} onPatch={patch} onClose={onClose} />;
   }
@@ -165,6 +201,7 @@ export function ProjectContextMenu({
   >(null);
 
   const patch = useProjectPatch(project);
+  const completion = useProjectCompletion();
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -226,6 +263,7 @@ export function ProjectContextMenu({
             variant={variant}
             onClose={closeMenu}
             openPicker={openPicker}
+            onToggleComplete={completion.toggle}
             firstItemRef={firstItemRef}
           />
         </PopoverContent>
@@ -242,6 +280,7 @@ export function ProjectContextMenu({
           )}
         </PopoverContent>
       </Popover>
+      {completion.dialog}
     </div>
   );
 }
@@ -257,6 +296,7 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const patch = useProjectPatch(project);
+  const completion = useProjectCompletion();
 
   const closeMenu = () => setMenuOpen(false);
 
@@ -290,6 +330,7 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
             onDeleted={onDeleted}
             onClose={closeMenu}
             openPicker={openPicker}
+            onToggleComplete={completion.toggle}
           />
         </PopoverContent>
       </Popover>
@@ -305,6 +346,7 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
           )}
         </PopoverContent>
       </Popover>
+      {completion.dialog}
     </div>
   );
 }

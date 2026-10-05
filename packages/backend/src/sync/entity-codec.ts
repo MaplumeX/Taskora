@@ -87,7 +87,7 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
       bucket: new Set(Object.values(ProjectBucket)),
       scheduledType: new Set(Object.values(ScheduledType)),
     },
-    jsonFields: new Set(),
+    jsonFields: new Set(['repeatRule']),
     tagRelation: { model: 'projectTag', fk: 'projectId', relation: 'tags' },
   },
   'project-heading': {

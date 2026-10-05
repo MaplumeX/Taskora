@@ -34,5 +34,11 @@
   "laterProjects": "Later Projects",
   "laterProjectsEmpty": "No later projects",
   "laterProjectCount_one": "{{count}} later project",
-  "laterProjectCount_other": "{{count}} later projects"
+  "laterProjectCount_other": "{{count}} later projects",
+  "completeRemainingTitle": "Complete Project",
+  "completeRemainingDescription_one": "This project still has {{count}} open task. What should happen to it?",
+  "completeRemainingDescription_other": "This project still has {{count}} open tasks. What should happen to them?",
+  "completeRemaining": "Mark All as Completed",
+  "cancelRemaining": "Mark All as Canceled",
+  "repeatInstanceHint": "Repeating project"
 }

@@ -2,10 +2,15 @@ import {
   IsArray,
   IsDateString,
   IsEnum,
+  IsIn,
   IsOptional,
   IsString,
+  ValidateNested,
 } from 'class-validator';
-import { ScheduledType, ProjectBucket } from '@taskora/shared';
+import { Type } from 'class-transformer';
+import { ScheduledType, ProjectBucket, type SettleRemainingTasks } from '@taskora/shared';
+
+import { RepeatRuleDto } from '../../tasks/dto/tasks.dto';
 
 export class CreateProjectDto {
   @IsString()
@@ -74,6 +79,19 @@ export class UpdateProjectDto {
   @IsArray()
   @IsString({ each: true })
   tagIds?: string[];
+
+  /** 重复规则（recurring-projects spec）：仅 DATE 项目生效；null 清除。 */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => RepeatRuleDto)
+  repeatRule?: RepeatRuleDto | null;
+}
+
+/** 完成项目：settleRemaining 给出时一并了结剩余任务（recurring-projects spec）。 */
+export class CompleteProjectDto {
+  @IsOptional()
+  @IsIn(['completed', 'cancelled'])
+  settleRemaining?: SettleRemainingTasks;
 }
 
 export class ReorderDto {

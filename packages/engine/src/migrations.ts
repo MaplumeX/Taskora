@@ -122,6 +122,11 @@ export const REPLICA_MIGRATIONS: readonly ReplicaMigration[] = [
   addPositionToSortOrderEntities,
   // 8 → 9：删除 sortOrder 列（retire-sort-order）。
   dropSortOrder,
+  // 9 → 10：project 增加 repeatRule / repeatSourceId（recurring-projects spec）。
+  async (storage) => {
+    await addColumnIfMissing(storage, 'project', 'repeatRule', 'TEXT');
+    await addColumnIfMissing(storage, 'project', 'repeatSourceId', 'TEXT');
+  },
 ];
 
 /** 当前代码的副本 schema 版本。 */

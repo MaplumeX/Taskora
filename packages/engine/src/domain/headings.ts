@@ -76,6 +76,8 @@ export function planHeadingToProject(
       scheduledType: ScheduledType.NONE,
       scheduledDate: null,
       dueDate: null,
+      repeatRule: null,
+      repeatSourceId: null,
       bucket: resolveProjectBucket(ScheduledType.NONE),
       status: ProjectStatus.ACTIVE,
       completedAt: null,
