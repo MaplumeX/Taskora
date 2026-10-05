@@ -19,15 +19,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { isCanvasRoute } from '@/components/layout/MainContent';
-import { useIsDesktop, useMediaQuery } from '../../lib/use-media-query';
-import { cn } from '@/lib/utils';
+import { useIsDesktop } from '../../lib/use-media-query';
 import {
   ASSISTANT_PANEL_DEFAULT_WIDTH,
   ASSISTANT_PANEL_MIN_WIDTH,
   useActiveConversation,
   useAssistantUiStore,
   useCreateConversation,
+  useSidebarUiStore,
 } from '@taskora/api';
 
 import { AgentChatView } from './AgentChatView';
@@ -36,21 +35,54 @@ import { AgentEmptyState } from './AgentEmptyState';
 /** Recent conversations offered by the panel's title menu. */
 const RECENT_LIMIT = 8;
 
-export type AssistantPanelMode = 'hidden' | 'push' | 'overlay';
+/** Room the content always keeps beside the panel. */
+export const ASSISTANT_PANEL_CONTENT_MIN_WIDTH = 560;
+
+export interface AssistantPanelLayout {
+  /** Only on desktop, never on the full-screen `/agent`. */
+  visible: boolean;
+  viewport: number;
+  /** Widest the panel may get: half the viewport, and the content keeps its minimum. */
+  maxWidth: number;
+  /** The saved panel width within `maxWidth`. */
+  width: number;
+}
 
 /**
- * How the panel shows (assistant-panel spec §3): only on desktop, never on
- * the full-screen `/agent`; side by side with the list on wide viewports,
- * floating over the content on narrower ones and on canvas pages (the
- * calendar grid needs every pixel).
+ * How the panel shares the window (assistant-panel spec §3). It always sits
+ * beside the content — never floating over it — and never squeezes the
+ * content below its minimum width.
  */
-export function useAssistantPanelMode(): AssistantPanelMode {
+export function useAssistantPanelLayout(): AssistantPanelLayout {
   const { pathname } = useLocation();
   const open = useAssistantUiStore((s) => s.panelOpen);
+  const storedWidth = useAssistantUiStore((s) => s.panelWidth);
   const desktop = useIsDesktop();
-  const wide = useMediaQuery('(min-width: 1440px)');
-  if (!open || !desktop || pathname.startsWith('/agent')) return 'hidden';
-  return wide && !isCanvasRoute(pathname) ? 'push' : 'overlay';
+  const viewport = useViewportWidth();
+  const visible = open && desktop && !pathname.startsWith('/agent');
+  const maxWidth = Math.max(
+    ASSISTANT_PANEL_MIN_WIDTH,
+    Math.min(Math.floor(viewport / 2), viewport - ASSISTANT_PANEL_CONTENT_MIN_WIDTH),
+  );
+  return { visible, viewport, maxWidth, width: clampWidth(storedWidth, maxWidth) };
+}
+
+/**
+ * When sidebar + content + panel don't fit, the sidebar collapses first and
+ * expands again once there is room (panel closed, window widened). Only the
+ * panel and the window drive this — resizing the sidebar itself never
+ * collapses it — and once the user opens or closes the sidebar by hand it is
+ * theirs again. Keyed on the saved panel width, so nothing flickers mid-drag.
+ */
+export function useSidebarYieldsToPanel(): void {
+  const { visible, viewport, width } = useAssistantPanelLayout();
+  useEffect(() => {
+    const sidebar = useSidebarUiStore.getState();
+    const crowded =
+      visible && viewport < sidebar.width + ASSISTANT_PANEL_CONTENT_MIN_WIDTH + width;
+    if (crowded && !sidebar.collapsed) sidebar.setAutoCollapsed(true);
+    else if (!crowded && sidebar.autoCollapsed) sidebar.setAutoCollapsed(false);
+  }, [visible, viewport, width]);
 }
 
 /**
@@ -77,12 +109,10 @@ export function useDockToPanel(): () => void {
 export function AssistantPanel() {
   const { t } = useTranslation(['agent']);
   const { pathname } = useLocation();
-  const mode = useAssistantPanelMode();
-  const setPanelOpen = useAssistantUiStore((s) => s.setPanelOpen);
+  const { visible, maxWidth } = useAssistantPanelLayout();
   const storedWidth = useAssistantUiStore((s) => s.panelWidth);
   // Live width while dragging; committed to the store on release.
   const [dragWidth, setDragWidth] = useState<number | null>(null);
-  const maxWidth = Math.max(ASSISTANT_PANEL_MIN_WIDTH, Math.floor(useViewportWidth() / 2));
   const width = clampWidth(dragWidth ?? storedWidth, maxWidth);
 
   // Entering the full-screen view closes the panel, so one conversation is
@@ -92,48 +122,19 @@ export function AssistantPanel() {
     if (pathname.startsWith('/agent')) useAssistantUiStore.getState().setPanelOpen(false);
   }, [pathname]);
 
-  // Overlay mode floats over the content: Esc dismisses it like a sheet
-  // (unless a menu inside it is open — Radix closes that first).
-  useEffect(() => {
-    if (mode !== 'overlay') return;
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (e.key !== 'Escape' || e.defaultPrevented) return;
-      if (document.querySelector('[data-radix-popper-content-wrapper]')) return;
-      setPanelOpen(false);
-    };
-    window.addEventListener('keydown', onKeyDown);
-    return () => window.removeEventListener('keydown', onKeyDown);
-  }, [mode, setPanelOpen]);
+  if (!visible) return null;
 
-  if (mode === 'hidden') return null;
-
-  // Backdrop first and conditional, the aside always second: switching
-  // between push and overlay (window resize, calendar) keeps the panel
-  // mounted — no reconnect, no lost draft.
   return (
-    <>
-      {mode === 'overlay' ? (
-        <div
-          aria-hidden
-          data-testid="assistant-panel-backdrop"
-          className="fixed inset-0 z-40"
-          onPointerDown={() => setPanelOpen(false)}
-        />
-      ) : null}
-      <aside
-        aria-label={t('agent:assistantPanel')}
-        data-assistant-panel=""
-        style={{ width }}
-        className={cn(
-          'flex h-full shrink-0 flex-col border-l border-border bg-background',
-          mode === 'overlay' ? 'fixed inset-y-0 right-0 z-40 shadow-popover' : 'relative',
-        )}
-      >
-        <ResizeHandle width={width} maxWidth={maxWidth} onDrag={setDragWidth} />
-        <PanelFocus />
-        <PanelContent />
-      </aside>
-    </>
+    <aside
+      aria-label={t('agent:assistantPanel')}
+      data-assistant-panel=""
+      style={{ width }}
+      className="relative flex h-full shrink-0 flex-col border-l border-border bg-background"
+    >
+      <ResizeHandle width={width} maxWidth={maxWidth} onDrag={setDragWidth} />
+      <PanelFocus />
+      <PanelContent />
+    </aside>
   );
 }
 

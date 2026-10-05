@@ -5,9 +5,9 @@ import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-rou
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ConversationDto } from '@taskora/shared';
 
-import { agentKeys, i18n, useAssistantUiStore } from '@taskora/api';
+import { agentKeys, i18n, useAssistantUiStore, useSidebarUiStore } from '@taskora/api';
 
-import { AssistantPanel, useDockToPanel } from './AssistantPanel';
+import { AssistantPanel, useDockToPanel, useSidebarYieldsToPanel } from './AssistantPanel';
 
 // The chat view opens an SSE stream; the panel only decides which
 // conversation it shows.
@@ -19,9 +19,11 @@ vi.mock('./AgentChatView', () => ({
   ),
 }));
 
-/** Viewport width drives the panel mode: md (768) and the 1440 push breakpoint. */
+/** Viewport width: desktop (md, 768) vs mobile, and the room left beside the panel. */
 function mockViewport(width: number): () => void {
   const original = window.matchMedia;
+  const originalWidth = window.innerWidth;
+  Object.defineProperty(window, 'innerWidth', { configurable: true, value: width });
   window.matchMedia = (query: string) =>
     ({
       matches: Number(/min-width:\s*(\d+)px/.exec(query)?.[1] ?? Infinity) <= width,
@@ -35,6 +37,7 @@ function mockViewport(width: number): () => void {
     }) as MediaQueryList;
   return () => {
     window.matchMedia = original;
+    Object.defineProperty(window, 'innerWidth', { configurable: true, value: originalWidth });
   };
 }
 
@@ -55,6 +58,11 @@ function Dock() {
   return <button onClick={useDockToPanel()}>dock</button>;
 }
 
+function SidebarYields() {
+  useSidebarYieldsToPanel();
+  return null;
+}
+
 function renderShell(path: string, entries: string[] = [path]) {
   const client = new QueryClient({ defaultOptions: { queries: { staleTime: Infinity } } });
   client.setQueryData(agentKeys.conversations, [
@@ -73,6 +81,7 @@ function renderShell(path: string, entries: string[] = [path]) {
                 <GoTo to="/today" />
                 <Dock />
                 <Path />
+                <SidebarYields />
                 <AssistantPanel />
               </>
             }
@@ -83,45 +92,77 @@ function renderShell(path: string, entries: string[] = [path]) {
   );
 }
 
+const sidebarCollapsed = () => useSidebarUiStore.getState().collapsed;
 const panel = () => screen.queryByRole('complementary', { name: 'Assistant panel' });
-const backdrop = () => screen.queryByTestId('assistant-panel-backdrop');
 
 let restoreViewport: () => void = () => {};
 
 beforeEach(() => {
   void i18n.changeLanguage('en');
   useAssistantUiStore.setState({ panelOpen: true, activeConversationId: null, panelWidth: 360 });
+  useSidebarUiStore.setState({ width: 240, collapsed: false, autoCollapsed: false });
 });
 
 afterEach(() => restoreViewport());
 
 describe('AssistantPanel — layout modes', () => {
-  it('pushes the content on wide viewports (no backdrop)', () => {
+  it('sits beside the content on wide viewports', () => {
     restoreViewport = mockViewport(1600);
     renderShell('/today');
     expect(panel()).toBeInTheDocument();
     expect(panel()).not.toHaveClass('fixed');
-    expect(backdrop()).toBeNull();
     expect(screen.getByTestId('chat')).toHaveAttribute('data-variant', 'panel');
   });
 
-  it('floats over the content below 1440px; Esc and the backdrop close it', () => {
-    restoreViewport = mockViewport(1280);
-    renderShell('/today');
-    expect(panel()).toHaveClass('fixed');
+  it('never floats over the content: narrow windows and the calendar push too', () => {
+    restoreViewport = mockViewport(1024);
+    renderShell('/calendar');
+    expect(panel()).not.toHaveClass('fixed');
 
+    // Esc belongs to the content beside the panel, not to the panel.
     fireEvent.keyDown(window, { key: 'Escape' });
-    expect(useAssistantUiStore.getState().panelOpen).toBe(false);
-
-    act(() => useAssistantUiStore.setState({ panelOpen: true }));
-    fireEvent.pointerDown(backdrop()!);
-    expect(useAssistantUiStore.getState().panelOpen).toBe(false);
+    expect(useAssistantUiStore.getState().panelOpen).toBe(true);
   });
 
-  it('floats over the calendar even on wide viewports', () => {
-    restoreViewport = mockViewport(1600);
-    renderShell('/calendar');
-    expect(backdrop()).toBeInTheDocument();
+  it('keeps the sidebar while sidebar + content + panel fit', () => {
+    restoreViewport = mockViewport(1280);
+    renderShell('/today');
+    expect(sidebarCollapsed()).toBe(false);
+  });
+
+  it('collapses the sidebar when the window is too narrow, and brings it back on close', () => {
+    restoreViewport = mockViewport(1024);
+    renderShell('/today');
+    expect(sidebarCollapsed()).toBe(true);
+
+    act(() => useAssistantUiStore.setState({ panelOpen: false }));
+    expect(sidebarCollapsed()).toBe(false);
+  });
+
+  it('a wider panel or sidebar collapses the sidebar sooner', () => {
+    useAssistantUiStore.setState({ panelWidth: 600 });
+    restoreViewport = mockViewport(1280);
+    renderShell('/today');
+    expect(sidebarCollapsed()).toBe(true);
+  });
+
+  it('leaves a sidebar the user collapsed by hand alone', () => {
+    useSidebarUiStore.setState({ collapsed: true });
+    restoreViewport = mockViewport(1024);
+    renderShell('/today');
+    act(() => useAssistantUiStore.setState({ panelOpen: false }));
+    expect(sidebarCollapsed()).toBe(true);
+  });
+
+  it('once the user reopens the sidebar it stays, and resizing it never collapses it', () => {
+    restoreViewport = mockViewport(1024);
+    renderShell('/today');
+    act(() => useSidebarUiStore.getState().setCollapsed(false));
+    act(() => useSidebarUiStore.getState().setWidth(400));
+    expect(sidebarCollapsed()).toBe(false);
+
+    act(() => useAssistantUiStore.setState({ panelOpen: false }));
+    expect(sidebarCollapsed()).toBe(false);
   });
 
   it('is absent on mobile and when closed', () => {
@@ -189,7 +230,6 @@ describe('AssistantPanel — resizing', () => {
 
   beforeEach(() => {
     restoreViewport = mockViewport(1600);
-    Object.defineProperty(window, 'innerWidth', { configurable: true, value: 1600 });
     // jsdom lacks pointer capture.
     HTMLElement.prototype.setPointerCapture = () => {};
   });
@@ -213,6 +253,17 @@ describe('AssistantPanel — resizing', () => {
     expect(panel()).toHaveStyle({ width: '320px' });
     fireEvent.pointerMove(handle(), { clientX: 0, pointerId: 1 });
     expect(panel()).toHaveStyle({ width: '800px' });
+    fireEvent.pointerUp(handle(), { pointerId: 1 });
+  });
+
+  it('never squeezes the content below its minimum width', () => {
+    restoreViewport();
+    restoreViewport = mockViewport(1024);
+    renderShell('/today');
+    fireEvent.pointerDown(handle(), { button: 0, clientX: 664, pointerId: 1 });
+    fireEvent.pointerMove(handle(), { clientX: 0, pointerId: 1 });
+    // 1024 − 560 content minimum, tighter than half the viewport (512).
+    expect(panel()).toHaveStyle({ width: '464px' });
     fireEvent.pointerUp(handle(), { pointerId: 1 });
   });
 

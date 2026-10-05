@@ -21,9 +21,16 @@ interface SidebarUiState {
   /** 展开时的宽度；折叠时保留，再展开回到这个宽度。 */
   width: number;
   collapsed: boolean;
+  /**
+   * 当前的收起是否由助手面板挤出来的（窗口放不下三栏）：空间够了自动展开。
+   * 用户亲手展开 / 收起即接管，标记清除。
+   */
+  autoCollapsed: boolean;
   setWidth: (width: number) => void;
   setCollapsed: (collapsed: boolean) => void;
   toggleCollapsed: () => void;
+  /** 为助手面板让位（true）或让位结束后展开（false）。 */
+  setAutoCollapsed: (collapsed: boolean) => void;
 }
 
 export const useSidebarUiStore = create<SidebarUiState>()(
@@ -31,9 +38,11 @@ export const useSidebarUiStore = create<SidebarUiState>()(
     (set) => ({
       width: SIDEBAR_DEFAULT_WIDTH,
       collapsed: false,
+      autoCollapsed: false,
       setWidth: (width) => set({ width: clampSidebarWidth(width) }),
-      setCollapsed: (collapsed) => set({ collapsed }),
-      toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed })),
+      setCollapsed: (collapsed) => set({ collapsed, autoCollapsed: false }),
+      toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed, autoCollapsed: false })),
+      setAutoCollapsed: (collapsed) => set({ collapsed, autoCollapsed: collapsed }),
     }),
     { name: 'taskora-sidebar-ui' },
   ),

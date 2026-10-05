@@ -46,3 +46,14 @@ Blocked by: 01
 - push / overlay 的切换阈值仍按视口 1440px，不随面板宽度变：宽屏上拉宽面板，挤的是列表留白，是用户自己的选择。
 - `SyncIndicator` 的避让偏移改用面板宽度（CSS 变量）。
 - 测试：`AssistantPanel.test.tsx` 新增拖动 / 钳制 / 双击 / 键盘。
+
+### 2026-10-05 — 取消覆盖形态
+
+- 用户验收时认为窄屏 / 日历下的浮层不好看，决定不要浮层：面板在任何桌面宽度、任何路由下都推挤主区并排显示。
+- `useAssistantPanelMode()` 收为 `useAssistantPanelVisible()`（非桌面 / 关闭 / `/agent` → 不显示）；去掉透明遮罩、Esc 收起和 1440px 断点。上方「推挤 / 覆盖」及 1280 / `/calendar` 覆盖的验收项作废。
+- 参照桌面应用的常见做法（栏位最小宽度 + 先收起侧边栏，如 macOS `NSSplitView`、VS Code），避免主区被挤得过窄：
+  - `useAssistantPanelLayout()` 给出 `visible` / `maxWidth` / 钳制后的面板宽度。
+  - 主区保底 560px：面板上限 = min(视口一半, 视口 − 560)，下限仍为 320。
+  - `useSidebarYieldsToPanel()`（挂在 `AppShell`）：视口 < 侧边栏宽 + 560 + 面板宽时，经 `sidebarUi.store` 的 `setAutoCollapsed(true)` 收起侧边栏（#153 的折叠，收起后仍可从左缘把手拉出）；空间够了且仍是自动收起的就展开。`autoCollapsed` 持久化，重启后也能恢复；用户 `setCollapsed` / `toggleCollapsed` 会清掉标记。
+  - 只在面板开关、面板宽度、视口变化时判断：拖宽侧边栏不会触发收起；用已保存的面板宽度判断，拖动中不闪。
+  - 768–880px 这段桌面宽度上，面板 320 的下限优先，主区会略低于 560。
