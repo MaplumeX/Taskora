@@ -1,6 +1,5 @@
 import { useMatch, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { ProjectStatus } from '@taskora/shared';
 import type { ProjectResponseDto } from '@taskora/shared';
@@ -9,10 +8,7 @@ import { cn } from '@/lib/utils';
 import { sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import { ProjectContextMenu } from '@/components/project/ProjectContextMenu';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
-import {
-  useCompleteProject,
-  useUncompleteProject,
-} from '@taskora/api';
+import { useProjectCompletion } from '@/components/project/useProjectCompletion';
 
 interface Props {
   project: ProjectResponseDto;
@@ -27,15 +23,12 @@ export function ProjectItem({ project }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const isCurrent = useMatch(`/projects/${project.id}`) !== null;
-  const completeProject = useCompleteProject();
-  const uncompleteProject = useUncompleteProject();
+  const completion = useProjectCompletion();
 
   const isCompleted = project.status === ProjectStatus.COMPLETED;
 
   const handleToggle = () => {
-    (isCompleted ? uncompleteProject : completeProject).mutate(project.id, {
-      onError: () => toast.error(t('common:saveFailed')),
-    });
+    completion.toggle(project);
   };
 
   return (
@@ -73,6 +66,7 @@ export function ProjectItem({ project }: Props) {
           {project.title || t('project:newItemPlaceholder')}
         </span>
       </div>
+      {completion.dialog}
     </ProjectContextMenu>
   );
 }

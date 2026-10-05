@@ -233,6 +233,84 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     );
   });
 
+  it('Project 重复（recurring-projects）：完成时了结剩余任务并派生整份下一轮；幂等；跳过本次', async () => {
+    const rule = { unit: 'week', interval: 1, anchor: 'scheduled' } as const;
+    await seedProject('p-1', {
+      position: 'a0',
+      scheduledType: 'DATE',
+      bucket: 'SCHEDULED',
+      scheduledDate: new Date('2030-01-07T00:00:00Z'),
+      dueDate: new Date('2030-01-09T00:00:00Z'),
+    });
+    await seedProject('p-2', { position: 'a1' });
+    await h.projects.update(USER, 'p-1', { repeatRule: rule });
+    await seedHeading('h-1', 'p-1', { position: 'a0' });
+    await seedTask('t-done', {
+      projectId: 'p-1',
+      headingId: 'h-1',
+      bucket: 'ANYTIME',
+      status: TaskStatus.COMPLETED,
+      settledAt: new Date('2030-01-07T08:00:00Z'),
+    });
+    await testPrisma.subtask.create({
+      data: { id: 's-1', taskId: 't-done', title: 'step', status: TaskStatus.COMPLETED } as never,
+    });
+    await seedTask('t-open', {
+      projectId: 'p-1',
+      bucket: 'SCHEDULED',
+      scheduledType: 'DATE',
+      scheduledDate: new Date('2030-01-08T00:00:00Z'),
+    });
+
+    // 跳过本次：项目与未了结任务一起推进一周，已完成的不动
+    const skipped = await h.projects.skip(USER, 'p-1');
+    expect(skipped.scheduledDate?.toISOString().slice(0, 10)).toBe('2030-01-14');
+    expect(
+      (await testPrisma.task.findUniqueOrThrow({ where: { id: 't-open' } })).scheduledDate,
+    ).toEqual(new Date('2030-01-15T00:00:00Z'));
+
+    const completed = await h.projects.complete(USER, 'p-1', { settleRemaining: 'cancelled' });
+    expect(completed.status).toBe(ProjectStatus.COMPLETED);
+    expect((await testPrisma.task.findUniqueOrThrow({ where: { id: 't-open' } })).status).toBe(
+      TaskStatus.CANCELLED,
+    );
+
+    const all = await h.projects.findAll(USER);
+    expect(all.map((p) => p.id).slice(0, 1)).toEqual(['p-1']);
+    expect(all.at(-1)!.id).toBe('p-2'); // 下一轮紧跟来源项目
+    const next = all[1];
+    expect(next).toMatchObject({
+      status: ProjectStatus.ACTIVE,
+      repeatRule: rule,
+      repeatSourceId: 'p-1',
+      taskTotalCount: 2,
+      taskCompletedCount: 0,
+    });
+    expect(next.scheduledDate?.toISOString().slice(0, 10)).toBe('2030-01-21');
+    await expectLoggedAsStored('project', next.id);
+
+    const heading = await testPrisma.projectHeading.findFirstOrThrow({
+      where: { projectId: next.id },
+    });
+    expect(heading.status).toBe(HeadingStatus.ACTIVE);
+    const copies = await testPrisma.task.findMany({
+      where: { projectId: next.id },
+      include: { subtasks: true },
+    });
+    const done = copies.find((t) => t.title === 't-done')!;
+    expect(done).toMatchObject({ status: TaskStatus.ACTIVE, headingId: heading.id });
+    expect(done.subtasks.map((s) => [s.title, s.status])).toEqual([['step', TaskStatus.ACTIVE]]);
+    expect(copies.find((t) => t.title === 't-open')!.scheduledDate).toEqual(
+      new Date('2030-01-22T00:00:00Z'),
+    );
+
+    // 重开再完成不重复派生；下一轮已存在时不可跳过
+    await h.projects.uncomplete(USER, 'p-1');
+    await expect(h.projects.skip(USER, 'p-1')).rejects.toBeInstanceOf(ConflictException);
+    await h.projects.complete(USER, 'p-1');
+    expect(await testPrisma.project.count({ where: { repeatSourceId: 'p-1' } })).toBe(1);
+  });
+
   // ---------- Project Heading ----------
 
   it('Heading：create 追加在末尾；update 改名；他人的分组 → 404', async () => {

@@ -128,6 +128,8 @@ export function projectRowToDto(
     scheduledType: (f.scheduledType as ScheduledType) ?? ScheduledType.NONE,
     scheduledDate: (f.scheduledDate as string | null) ?? null,
     dueDate: (f.dueDate as string | null) ?? null,
+    repeatRule: (f.repeatRule as RepeatRule | null) ?? null,
+    repeatSourceId: (f.repeatSourceId as string | null) ?? null,
     completedAt: (f.completedAt as string | null) ?? null,
     trashedAt: (f.trashedAt as string | null) ?? null,
     tags: tagIds.map((id) => tags.get(id)).filter((t): t is TagResponseDto => t !== undefined),

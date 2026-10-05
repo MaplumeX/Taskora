@@ -7,7 +7,12 @@
  * 注入模式沿用 TaskBackend 已验证的先例。
  */
 
-import type { CreateProjectDto, ProjectResponseDto, UpdateProjectDto } from '@taskora/shared';
+import type {
+  CompleteProjectDto,
+  CreateProjectDto,
+  ProjectResponseDto,
+  UpdateProjectDto,
+} from '@taskora/shared';
 
 import * as rest from './projects.api.rest';
 
@@ -18,7 +23,16 @@ export interface ProjectBackend {
   updateProject(id: string, data: UpdateProjectDto): Promise<ProjectResponseDto>;
   deleteProject(id: string): Promise<void>;
   restoreProject(id: string): Promise<ProjectResponseDto>;
-  completeProject(id: string): Promise<ProjectResponseDto>;
+  /**
+   * 完成项目；带重复规则时派生下一轮（recurring-projects spec）。
+   * settleRemaining 给出时一并了结剩余任务。
+   */
+  completeProject(id: string, options?: CompleteProjectDto): Promise<ProjectResponseDto>;
+  /**
+   * 重复项目「跳过本次」：计划日期推进到下一次，项目内未了结任务的日期
+   * 同步平移。不可跳过时抛 RepeatSkipBlockedError。
+   */
+  skipProject(id: string): Promise<ProjectResponseDto>;
   uncompleteProject(id: string): Promise<ProjectResponseDto>;
   reorderProjects(orderedIds: string[]): Promise<void>;
 }

@@ -5,11 +5,15 @@
 import {
   ProjectStatus,
   ScheduledType,
+  TaskStatus,
   type CreateProjectDto,
   type ProjectBucket,
+  type RepeatRule,
+  type SettleRemainingTasks,
   type UpdateProjectDto,
 } from '@taskora/shared';
 
+import { normalizeRepeatRule } from '../repeat';
 import { resolveProjectBucket } from './bucket';
 import { dateKeyOf, instantMs, type CalendarZones } from './calendar';
 import { taskTrashPatch, type TaskPatch } from './tasks';
@@ -20,6 +24,10 @@ export interface ProjectFields {
   scheduledType: ScheduledType;
   scheduledDate: string | null;
   dueDate: string | null;
+  /** 重复规则（recurring-projects spec）：仅 DATE 项目可设。 */
+  repeatRule: RepeatRule | null;
+  /** 派生来源：派生出本项目的重复项目 id；非派生为 null。 */
+  repeatSourceId: string | null;
   bucket: ProjectBucket;
   status: ProjectStatus;
   completedAt: string | null;
@@ -39,6 +47,8 @@ export function planProjectCreate(input: CreateProjectDto, zones: CalendarZones)
     scheduledDate:
       scheduledType === ScheduledType.DATE ? dateKeyOf(input.scheduledDate, zones) : null,
     dueDate: dateKeyOf(input.dueDate, zones),
+    repeatRule: null,
+    repeatSourceId: null,
     bucket: resolveProjectBucket(scheduledType),
     status: ProjectStatus.ACTIVE,
     completedAt: null,
@@ -54,7 +64,10 @@ export interface ProjectUpdateBase {
   bucket: unknown;
 }
 
-/** 编辑项目：计划规则同任务（无提醒 / 重复）；Bucket 只由计划类型决定。 */
+/**
+ * 编辑项目：计划规则同任务（无提醒）——离开 DATE 清除重复规则，DATE 下
+ * 规则写入前规范化、非法对象忽略；Bucket 只由计划类型决定。
+ */
 export function planProjectUpdate(
   existing: ProjectUpdateBase,
   input: UpdateProjectDto,
@@ -75,6 +88,12 @@ export function planProjectUpdate(
           ? dateKeyOf(input.scheduledDate, zones)
           : dateKeyOf(existing.scheduledDate, zones);
   }
+  if (scheduledType !== ScheduledType.DATE) {
+    patch.repeatRule = null;
+  } else if (input.repeatRule !== undefined) {
+    const normalized = normalizeRepeatRule(input.repeatRule);
+    if (input.repeatRule === null || normalized !== null) patch.repeatRule = normalized;
+  }
   if (input.dueDate !== undefined) patch.dueDate = dateKeyOf(input.dueDate, zones);
   const bucket = resolveProjectBucket(scheduledType);
   if (schedulingChanged || input.bucket !== undefined || bucket !== existing.bucket) {
@@ -87,13 +106,14 @@ export function planProjectUpdate(
 
 /**
  * 在 Trash 中编辑项目时是否隐式放回（规则同 taskUpdatePutsBack）：改计划、
- * 截止日期、Bucket、区域或标签即放回，调用方按 planProjectRestore 级联；
+ * 重复规则、截止日期、Bucket、区域或标签即放回，调用方按 planProjectRestore 级联；
  * 只改标题 / 备注不放回。
  */
 export function projectUpdatePutsBack(input: UpdateProjectDto): boolean {
   return (
     input.scheduledType !== undefined ||
     input.scheduledDate !== undefined ||
+    input.repeatRule !== undefined ||
     input.dueDate !== undefined ||
     input.bucket !== undefined ||
     input.areaId !== undefined ||
@@ -103,6 +123,52 @@ export function projectUpdatePutsBack(input: UpdateProjectDto): boolean {
 
 export function projectCompletePatch(now: string): ProjectPatch {
   return { status: ProjectStatus.COMPLETED, completedAt: now };
+}
+
+export interface ProjectCompleteTask {
+  id: string;
+  status: unknown;
+  trashedAt: unknown;
+}
+
+/**
+ * 完成项目（recurring-projects spec）：项目写 COMPLETED；给出
+ * settleRemaining 时，项目内未了结、未进 Trash 的任务一并以同一了结时间
+ * 完成 / 取消（清除提醒，Things 3 的「剩余任务」询问）。整体收尾不派生
+ * 任务的 Repeat Instance——实例会落进已完成的项目（同 planHeadingArchive）。
+ * 已完成的项目再次完成（双击 / 重试）返回 null：刷新完成时间会让
+ * 「按完成日期」的规则算出另一个实例。
+ */
+export function planProjectComplete(
+  currentStatus: unknown,
+  now: string,
+  tasks: readonly ProjectCompleteTask[],
+  settleRemaining?: SettleRemainingTasks,
+): {
+  project: ProjectPatch;
+  tasks: Array<{ id: string; patch: TaskPatch }>;
+  deriveRepeat: boolean;
+} | null {
+  if (currentStatus === ProjectStatus.COMPLETED) return null;
+  const status =
+    settleRemaining === 'completed'
+      ? TaskStatus.COMPLETED
+      : settleRemaining === 'cancelled'
+        ? TaskStatus.CANCELLED
+        : null;
+  return {
+    project: projectCompletePatch(now),
+    tasks:
+      status === null
+        ? []
+        : tasks
+            .filter((task) => task.status === TaskStatus.ACTIVE && task.trashedAt == null)
+            .map((task) => ({
+              id: task.id,
+              patch: { status, settledAt: now, reminderTime: null },
+            })),
+    deriveRepeat: true,
+  };
 }
 
 export function projectReopenPatch(): ProjectPatch {

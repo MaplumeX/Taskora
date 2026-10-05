@@ -500,12 +500,26 @@ describe('GroupedFeedListView — 导航与行注册', () => {
   });
 
   it('toggles the project complete state from the header progress ring', () => {
-    harness.projects = [project('p1', { taskTotalCount: 2, taskCompletedCount: 1 })];
+    harness.projects = [project('p1', { taskTotalCount: 2, taskCompletedCount: 2 })];
     renderView([taskItem('a1', { projectId: 'p1' })]);
 
     fireEvent.click(screen.getByRole('checkbox', { name: /mark complete/i }));
     expect(harness.completeProjectMutate).toHaveBeenCalledWith('p1', expect.anything());
     expect(harness.uncompleteProjectMutate).not.toHaveBeenCalled();
+  });
+
+  it('asks how to settle the remaining tasks before completing a project that still has open tasks', () => {
+    harness.projects = [project('p1', { taskTotalCount: 2, taskCompletedCount: 1 })];
+    renderView([taskItem('a1', { projectId: 'p1' })]);
+
+    fireEvent.click(screen.getByRole('checkbox', { name: /mark complete/i }));
+    expect(harness.completeProjectMutate).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: /mark all as canceled/i }));
+    expect(harness.completeProjectMutate).toHaveBeenCalledWith(
+      { id: 'p1', settleRemaining: 'cancelled' },
+      expect.anything(),
+    );
   });
 });
 

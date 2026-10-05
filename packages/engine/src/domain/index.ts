@@ -75,6 +75,7 @@ export {
 } from './tasks';
 export {
   planEmptyTrash,
+  planProjectComplete,
   planProjectCreate,
   planProjectRestore,
   planProjectTrash,
@@ -82,6 +83,7 @@ export {
   projectCompletePatch,
   projectReopenPatch,
   projectUpdatePutsBack,
+  type ProjectCompleteTask,
   type ProjectFields,
   type ProjectPatch,
 } from './projects';
@@ -108,6 +110,20 @@ export {
   type RepeatSkipSource,
   type RepeatSubtaskFields,
 } from './repeat-instance';
+export {
+  planProjectRepeatSkip,
+  planRepeatProjectInstance,
+  repeatProjectInstanceId,
+  type RepeatHeadingFields,
+  type RepeatProjectCopy,
+  type RepeatProjectHeading,
+  type RepeatProjectParent,
+  type RepeatProjectSkipSource,
+  type RepeatProjectSkipTask,
+  type RepeatProjectSubtask,
+  type RepeatProjectSubtaskFields,
+  type RepeatProjectTask,
+} from './repeat-project';
 export {
   buildRepeatPreviews,
   type RepeatPreview,

@@ -10,7 +10,7 @@ export interface ScheduledFieldCurrent {
   scheduledDate?: string | null;
   /** Reminder（HH:mm）：仅 Task 提供（Project 不设 Reminder）。 */
   reminderTime?: string | null;
-  /** Repeat Rule：仅 Task 提供（Project 不设 Repeat Rule）。 */
+  /** Repeat Rule：Task 与 Project 皆可设（仅 DATE）。 */
   repeatRule?: RepeatRule | null;
 }
 

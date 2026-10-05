@@ -117,3 +117,26 @@ which also covers anchor=completion, where re-completing on another day
 yields a different occurrence date and therefore a different deterministic
 id. Deterministic ids stay: they are still what deduplicates *concurrent*
 derivations across devices; `repeatSourceId` handles *sequential* ones.
+
+## Amendment (2026-10-05, recurring-projects): repeating projects
+
+Projects now carry `repeatRule` / `repeatSourceId` too. Completing a
+repeating Project derives the next round — the Project plus a copy of its
+Headings, Tasks and Subtasks, all reset to ACTIVE, dates shifted by the
+Project's occurrence delta (`planRepeatProjectInstance`). Both derivation
+sites (device engine backend, REST `ProjectsService.complete`) call the same
+planner and the same `repeatDerivationTarget` landing decision, keyed by the
+Project's `repeatSourceId`. The hub still never parses a rule.
+
+Ids follow the same deterministic scheme:
+
+```
+projectInstanceId = hash('repeat-project', parentProjectId, rule, occurrenceDate)
+childId           = hash('repeat-copy', projectInstanceId, entityKind, sourceChildId)
+```
+
+Children are keyed by their **source id**, not by ordinal (unlike task
+subtasks): a project copy spans many rows, and two devices whose replicas
+still differ by an unsynced task would otherwise shift every ordinal after
+it and produce two divergent copies. A `fresh` landing (instance id in Trash
+or compacted) changes the project id, so every child id is fresh as well.

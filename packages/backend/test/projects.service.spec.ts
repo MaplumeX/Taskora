@@ -38,8 +38,24 @@ describe('ProjectsService', () => {
     it('should return all non-trashed projects ordered by Position', async () => {
       const userId = 'user-1';
       const expected = [
-        { id: 'project-1', title: 'A', notes: null, userId, position: 'a0', tags: [] },
-        { id: 'project-2', title: 'B', notes: null, userId, position: 'a1', tags: [] },
+        {
+          id: 'project-1',
+          title: 'A',
+          notes: null,
+          userId,
+          position: 'a0',
+          repeatRule: null,
+          tags: [],
+        },
+        {
+          id: 'project-2',
+          title: 'B',
+          notes: null,
+          userId,
+          position: 'a1',
+          repeatRule: null,
+          tags: [],
+        },
       ];
       mockPrisma.project.findMany.mockResolvedValue([expected[1], expected[0]]);
       // 进度计数：非 Trash 任务总数 / 已了结（完成 + 取消）数
@@ -76,6 +92,7 @@ describe('ProjectsService', () => {
         title: 'Taskora',
         notes: null,
         userId,
+        repeatRule: null,
         tags: [],
         taskTotalCount: 5,
         taskCompletedCount: 2,

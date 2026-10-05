@@ -16,9 +16,9 @@ export interface FeedItemBase {
   scheduledType: ScheduledType;
   /** 提醒时刻（Reminder，HH:mm）；project 恒为 null（Project 不设 Reminder）。 */
   reminderTime: string | null;
-  /** 重复规则（Repeat Rule）；project 恒为 null（Project 不设 Repeat Rule）。 */
+  /** 重复规则（Repeat Rule，Task 与 Project 皆可设）。 */
   repeatRule: RepeatRule | null;
-  /** 派生来源（Repeat Instance）；project 恒为 null。 */
+  /** 派生来源（Repeat Instance / 重复项目实例）。 */
   repeatSourceId: string | null;
   dueDate: string | null;
   status: TaskStatus | ProjectStatus;

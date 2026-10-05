@@ -9,7 +9,7 @@
  *
  * 规则与写入路径共用 domain/ 的推导（Engine 后端与 REST 服务都调用）：
  * 冲突时「把状态收紧」的一方获胜——换项目清空分组、离开 DATE 清空提醒
- * 与重复规则。一致的状态返回空：修复只在真的冲突
+ * 与重复规则（任务与项目）。一致的状态返回空：修复只在真的冲突
  * 时发生。纯函数，设备与 hub 共用。
  */
 
@@ -69,6 +69,8 @@ export function repairEntity(
     case 'project': {
       const type = fields.scheduledType;
       if (has('scheduledType')) {
+        // R1：仅 DATE 项目可设重复规则（recurring-projects spec）
+        if (type !== ScheduledType.DATE) fix('repeatRule', null);
         if (type === ScheduledType.NONE || type === ScheduledType.SOMEDAY) {
           fix('scheduledDate', null);
         }

@@ -1,10 +1,10 @@
 /**
- * Repeat Rule（重复规则）— Task 上的结构化规则字段（recurring-tasks spec /
- * ADR-0012）。
+ * Repeat Rule（重复规则）— Task / Project 上的结构化规则字段（recurring-tasks /
+ * recurring-projects spec，ADR-0012）。
  *
- * 声明该 Task 完成后按规则再现：单位 × 间隔 × 周模式的星期几集合，
+ * 声明该 Task / Project 完成后按规则再现：单位 × 间隔 × 周模式的星期几集合，
  * 锚点默认从计划日期（Scheduled Date）推算，可选从完成日期推算。
- * 仅 ScheduledType 为 DATE 的 Task 可设；Project 不设 Repeat Rule。
+ * 仅 ScheduledType 为 DATE 的 Task / Project 可设。
  *
  * 形状刻意与 RRULE 保持可升级（BYSETPOS 等留待未来，无数据迁移）。
  */
