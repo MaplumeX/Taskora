@@ -10,6 +10,72 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > Android 小节，端专属改动标注 `(desktop)` / `(android)`。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.7.5] - 2026-10-05
+
+### Added
+
+- **engine/api/ui/backend/mobile**: 重复项目 (#157) — 把重复任务模型延伸到 Project：Project
+  新增 `repeatRule`（与 Task 同一结构，仅 ScheduledType=DATE 可设，离开 DATE 自动清除）
+  与 `repeatSourceId`。完成带规则的项目时派生下一个 **Repeat Project Instance**——项目连同
+  Headings、任务与 Subtask 整份复制、全部重置为未完成，项目与任务的计划日期按出现日位移、
+  截止日期同步平移；未进 Trash 的任务不论这一轮完成 / 取消都复制（Things 3 的模板语义），
+  但项目内重复链的后代只复制链的源头（否则一个每日重复的任务会留下 7 个实例）。派生沿用
+  确定性 id + `repeatSourceId` 幂等，两台离线设备同时完成同一个重复项目只得到一个下一轮项目。
+  完成仍有未了结任务的项目时先弹确认框：把剩余任务标记为完成 / 取消，还是返回
+  （`completeProject` 新增 `settleRemaining`，一并了结时不触发任务自身的重复派生）。重开项目
+  只重开项目本身，已了结任务与已派生的下一轮不动。另补上「跳过本次」：
+  `POST /projects/:id/skip`（不可跳过返回 409），项目与其内未了结任务的日期一起推进，入口在
+  项目右键 / 更多菜单「重复」旁；项目 feed 行、侧边栏行与项目页标题出现 ↻ 标记。engine 副本
+  迁移 9 → 10（`project.repeatRule` / `project.repeatSourceId`），Prisma 同名列 + `repeatSourceId`
+  索引，sync codec / DTO / 事件 / feed 下发解析后的规则对象，旧客户端忽略新字段。
+
+- **shared/api/ui**: 计划日期与截止日期支持自然语言输入 (#155) — `ScheduledDateField` /
+  `DueDateField` 顶部新增输入框（桌面端打开即聚焦，触控端不聚焦以免弹键盘）。输入为空时
+  保持原有快捷项 + 日历 + 提醒区不变；有输入时整块换成候选列表（最多 6 条，`↑` / `↓`
+  移动、`Enter` 选中、IME 组字期间忽略按键，无候选显示「无法识别」行）。中英文规则同时
+  生效，与界面语言无关：关键词（`today` / `明天` / `后天`）、星期（`fri` / 下周五 / 本周五）、
+  相对（`3天后` / `in 2 weeks` / `1个月后`，月末收敛）、模糊（`下周` / `周末` / `月底` /
+  `明年`）与绝对（`8/12` / `2026年10月12日`）日期，并可在任意日期前后附时刻
+  （`9点` / `9:30pm` / `中午` / `晚上`）；只有时刻时落今天、时刻已过则明天。解析器是 `shared`
+  里的纯函数 `parseWhenQuery`（Temporal `PlainDate`，不涉及时区），每次输入逐字重新解析并按
+  前缀补全。计划日期带时刻且上下文可设提醒时一并写入 `reminderTime`，截止日期忽略时刻；
+  从输入框选中一律关闭弹层。MovePicker 的 `activeIndex` / 滚动 / `↑↓/Enter` / IME 保护抽成
+  `useListboxNavigation` 复用。
+
+- **desktop**: 自绘托盘右键菜单，跟随主题与语言 (#152) — Windows / macOS 的托盘右键不再用
+  系统原生菜单，改为同 App 主题、同语言的 `tray-menu` webview 窗口（透明无边框，在光标处
+  弹出并夹进显示器工作区、失焦隐藏、支持 `↑↓` / `Enter` / `Esc`）；菜单项为「显示
+  Taskora」/「新建任务」（Quick Add，带全局快捷键提示）/「退出」。Linux 托盘
+  （AppIndicator）不上报点击事件，仍挂原生菜单，文案由主窗口经 `tray_set_labels` 同步，
+  同样跟随 App 语言。
+
+- **api/ui**: 桌面侧边栏可拖动调宽、可折叠 (#153) — 侧边栏右缘新增把手：拖动调整宽度
+  （200–400px，默认 240；双击恢复默认，聚焦后 `←` / `→` 每次 16px）；拖到最小宽度以下
+  松手会先停住、停顿后依阈值收起或弹回最小宽度（Things 式），折叠后从窗口左缘拉出即可
+  恢复。折叠期间侧边栏保持挂载（滚动位置与展开状态不丢）并被 `inert`；宽度与折叠状态
+  只存本机，不跨设备同步。
+
+### Changed
+
+- **ui**: 助手面板始终并排，空间不足时让位侧边栏 (#154) — 面板取消覆盖（浮层）形态，
+  任何桌面宽度、任何路由（含 `/calendar`）都与内容并排，不再带遮罩，Esc 交还主区。
+  主区保底 560px：面板宽度上限取「视口一半」与「视口 − 560」中较小者，下限仍为 320px。
+  侧边栏宽 + 主区保底 + 面板宽放不下时，侧边栏先自动收起（复用其折叠，收起后仍可从左缘
+  拉出），关闭面板或窗口变宽即自动展开；自动收起状态持久化、重启后也能恢复，用户亲手
+  展开 / 收起后即由用户接管、不再自动恢复。
+
+### Fixed
+
+- **mobile**: 系统栏图标明暗跟随 App 主题 (#151) — edge-to-edge 下状态栏 / 导航栏透明，
+  图标明暗此前按系统 DayNight 判断，App 内手动指定亮 / 暗主题时会出现深底深图标。改为
+  主窗口监听 `<html>` 的 `class` 变化、经 background 插件设置（含手动主题）。同时
+  `android-signing.py` 生成的 `MainActivity` 去掉原生 insets padding（会把 WebView 挤到
+  状态栏下方，并与前端安全区双重避让），只保留 edge-to-edge，系统栏避让完全交给前端
+  `--safe-area-top/bottom`。
+
+- **ui**: Upcoming 月份分组显示计划日期 chip (#156) — 月份分组标题只到月，任务行与
+  「下次预告」行补上计划日期 chip；本周按天分组的标题已含日期，行上不再重复显示。
+
 ## [0.7.4] - 2026-10-02
 
 ### Added
