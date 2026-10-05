@@ -73,7 +73,8 @@ export default function Upcoming() {
     else completeTask.mutate(item.id, { onError: () => toast.error(t('common:operationFailed')) });
   };
 
-  const renderItem = (item: FeedItem) => {
+  // 本周按天分组时日期已在标题里，行上不再显示；月份分组只到月，行上补计划日期 chip。
+  const renderItem = (item: FeedItem, showScheduledBadge = false) => {
     const isTask = item.type === 'task';
     const taskItem = item as { projectId: string | null; areaId: string | null };
     const selectionState = isTask ? selectionStateOf(selectedIds, expandedId, item.id) : 'idle';
@@ -86,16 +87,17 @@ export default function Upcoming() {
         selectionState={selectionState}
         onToggleComplete={() => toggleComplete(item)}
         onRowClick={isTask ? () => handleRowClick(item.id) : undefined}
-        showScheduledBadge={false}
+        showScheduledBadge={showScheduledBadge}
       />
     );
   };
 
   // 下次预告：只读、不进 Selection（rows 只注册真实条目）
-  const renderPreview = (preview: RepeatPreview) => (
+  const renderPreview = (preview: RepeatPreview, showDate = false) => (
     <RepeatPreviewRow
       key={`preview:${preview.sourceTaskId}`}
       preview={preview}
+      showDate={showDate}
       projectTitle={preview.projectId ? projectMap[preview.projectId] : undefined}
       areaTitle={preview.areaId ? areaMap[preview.areaId] : undefined}
     />
@@ -111,16 +113,14 @@ export default function Upcoming() {
     return (
       <div key={day.dateKey} className="flex flex-col gap-1">
         <div className="flex items-center gap-3">
-          <span className="text-title-1 tabular-nums leading-none">
-            {day.numberLabel}
-          </span>
+          <span className="text-title-1 tabular-nums leading-none">{day.numberLabel}</span>
           <span className="text-body tabular-nums text-muted-foreground">{label}</span>
           <div className="min-w-4 flex-1 border-t border-border" aria-hidden="true" />
         </div>
         {/* 空日期只留一行高度（仍是放置目标），避免一周空档把列表拉得过长。 */}
         <div className="flex min-h-6 flex-col">
-          {day.items.map(renderItem)}
-          {day.previews.map(renderPreview)}
+          {day.items.map((item) => renderItem(item))}
+          {day.previews.map((preview) => renderPreview(preview))}
         </div>
       </div>
     );
@@ -147,8 +147,8 @@ export default function Upcoming() {
               </h2>
               <div className="flex min-h-12 flex-col gap-1">
                 {month.days.flatMap((day) => [
-                  ...day.items.map(renderItem),
-                  ...day.previews.map(renderPreview),
+                  ...day.items.map((item) => renderItem(item, true)),
+                  ...day.previews.map((preview) => renderPreview(preview, true)),
                 ])}
               </div>
             </div>

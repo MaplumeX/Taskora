@@ -4,12 +4,15 @@ import { useTranslation } from 'react-i18next';
 import type { RepeatPreview } from '@taskora/api';
 
 import { cn } from '@/lib/utils';
+import { TaskDateBadge } from './TaskDateBadge';
 
 interface Props {
   preview: RepeatPreview;
   /** 归属小字（projectTitle 优先，否则 areaTitle），与任务行同一口径。 */
   projectTitle?: string;
   areaTitle?: string;
+  /** 分组标题不含具体日期时（Upcoming 月份分组），行首显示下一次的日期 chip。 */
+  showDate?: boolean;
 }
 
 /**
@@ -17,7 +20,7 @@ interface Props {
  * 投影。与任务行同高同对齐，但整行弱化、无复选框（槽位放 ↻）、不可
  * 点击 / 拖拽，也不进 Selection——它不是 Task。
  */
-export function RepeatPreviewRow({ preview, projectTitle, areaTitle }: Props) {
+export function RepeatPreviewRow({ preview, projectTitle, areaTitle, showDate = false }: Props) {
   const { t } = useTranslation();
   const tag = projectTitle ?? areaTitle;
   return (
@@ -32,6 +35,7 @@ export function RepeatPreviewRow({ preview, projectTitle, areaTitle }: Props) {
       <span className="flex h-5 w-5 shrink-0 items-center justify-center">
         <Repeat className="h-3.5 w-3.5" aria-hidden />
       </span>
+      {showDate && <TaskDateBadge scheduledDate={preview.dateKey} className="shrink-0" />}
       <div className="flex min-w-0 flex-1 flex-col justify-center gap-0.5">
         <span className="truncate text-body">{preview.title || t('task:newTaskPlaceholder')}</span>
         {tag && <span className="truncate text-meta">{tag}</span>}
