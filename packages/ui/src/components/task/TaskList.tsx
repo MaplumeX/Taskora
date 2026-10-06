@@ -66,7 +66,12 @@ function SortableTaskItem({
   onRowClick,
 }: SortableTaskItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: task.id });
+    // 展开态下行内是可编辑卡片，整行 listeners 会把框选文字的鼠标移动识别为拖拽，
+    // 因此展开时不可拖（仍作为放置目标）。
+    useSortable({
+      id: task.id,
+      disabled: { draggable: selectionState === 'expanded', droppable: false },
+    });
 
   return (
     <div

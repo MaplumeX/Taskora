@@ -287,6 +287,9 @@ function SortableFeedRow({
   const { attributes, listeners, setNodeRef } = useSortable({
     id: dndId,
     animateLayoutChanges: noLayoutAnimation,
+    // 展开态下行内是可编辑卡片，整行 listeners 会把框选文字的鼠标移动识别为拖拽，
+    // 因此展开时不可拖（仍作为放置目标）。
+    disabled: { draggable: selectionState === 'expanded', droppable: false },
   });
 
   return (
