@@ -13,6 +13,7 @@ import {
   startOfToday,
   toInputDateValue,
   useAreasQuery,
+  useKeybindingsStore,
   useProjectsQuery,
   useTagsQuery,
   type QuickAddDraft,
@@ -133,7 +134,10 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
   /** 由快捷键打开的选择器（点击打开时各 FieldPicker 同样经此受控）。 */
   const [openField, setOpenField] = React.useState<PickerField | null>(null);
   const platform = React.useMemo(detectKeyPlatform, []);
-  const keyLabel = (action: QuickAddKeyAction) => quickAddShortcutLabel(action, platform);
+  // 用户自定义键位（设置 → 快捷键）；主窗口改绑后经 storage 事件同步到本浮窗。
+  const keyOverrides = useKeybindingsStore((s) => s.overrides);
+  const keyLabel = (action: QuickAddKeyAction) =>
+    quickAddShortcutLabel(action, platform, keyOverrides) ?? undefined;
   const pickerProps = (field: PickerField) => ({
     open: openField === field,
     onOpenChange: (open: boolean) => setOpenField(open ? field : null),
@@ -204,8 +208,12 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
   // 下行到编辑器。⌘S 等同时要拦住 webview 的默认行为。
   const onKeyDownCapture = (e: React.KeyboardEvent) => {
     if (!ownKey(e)) return;
-    const { key, metaKey, ctrlKey, altKey, shiftKey } = e;
-    const action = resolveQuickAddAction({ key, metaKey, ctrlKey, altKey, shiftKey }, platform);
+    const { key, code, metaKey, ctrlKey, altKey, shiftKey } = e;
+    const action = resolveQuickAddAction(
+      { key, code, metaKey, ctrlKey, altKey, shiftKey },
+      platform,
+      keyOverrides,
+    );
     if (!action) return;
     e.preventDefault();
     e.stopPropagation();

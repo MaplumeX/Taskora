@@ -23,6 +23,7 @@ import {
 } from './SettingsList';
 
 const SettingsAppearance = lazy(() => import('@/components/settings/SettingsAppearance'));
+const SettingsShortcuts = lazy(() => import('@/components/settings/SettingsShortcuts'));
 const SettingsGeneral = lazy(() => import('@/components/settings/SettingsGeneral'));
 const SettingsAccount = lazy(() => import('@/components/settings/SettingsAccount'));
 const SettingsData = lazy(() => import('@/components/settings/SettingsData'));
@@ -32,6 +33,7 @@ const SettingsAssistant = lazy(() => import('@/components/settings/SettingsAssis
 const TAB_TITLE_KEY: Record<SettingsTab, string> = {
   general: 'settings:general',
   appearance: 'settings:appearance',
+  shortcuts: 'settings:shortcuts',
   account: 'settings:account',
   data: 'settings:data',
   assistant: 'settings:assistant',
@@ -44,6 +46,8 @@ function renderTab(tab: SettingsTab): ReactNode {
       return <SettingsGeneral />;
     case 'appearance':
       return <SettingsAppearance />;
+    case 'shortcuts':
+      return <SettingsShortcuts />;
     case 'account':
       return <SettingsAccount />;
     case 'data':

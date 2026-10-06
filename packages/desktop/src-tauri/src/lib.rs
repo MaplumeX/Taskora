@@ -1,4 +1,5 @@
 mod launch_at_login;
+mod quick_add_shortcut;
 mod reminder_notification;
 mod session;
 mod sqlite;
@@ -40,11 +41,6 @@ fn open_notification_settings() -> Result<(), String> {
     Ok(())
 }
 
-/// Global quick-add shortcut (Things-style): Cmd/Ctrl + Shift + Space.
-/// (Plain Cmd/Ctrl+Space was dropped: Ctrl+Space is the IME toggle on
-/// Windows and Cmd+Space is Spotlight on macOS — see ADR-0004.)
-const QUICK_ADD_SHORTCUT: &str = "CmdOrCtrl+Shift+Space";
-
 /// Bring the (possibly hidden) main window to the front.
 pub(crate) fn show_main_window(app: &tauri::AppHandle) {
     if let Some(window) = app.get_webview_window("main") {
@@ -70,6 +66,7 @@ pub(crate) fn show_quick_add(app: &tauri::AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .manage(session::SessionLock::default())
+        .manage(quick_add_shortcut::QuickAddShortcut::default())
         // Remember main-window size/position across launches. Quick-add and
         // the tray menu are borderless popups — denylisted so their geometry
         // is not restored. VISIBLE is excluded: close-to-tray hides the window,
@@ -97,9 +94,9 @@ pub fn run() {
             Some(vec!["--hidden"]),
         ))
         .plugin(
+            // Global quick-add shortcut (Things-style, default Cmd/Ctrl+Shift+Space):
+            // registered in setup from the user's binding (quick_add_shortcut.rs).
             tauri_plugin_global_shortcut::Builder::new()
-                .with_shortcuts([QUICK_ADD_SHORTCUT])
-                .expect("failed to register quick-add shortcut")
                 .with_handler(|app, shortcut, event| {
                     if event.state != ShortcutState::Pressed {
                         return;
@@ -158,6 +155,7 @@ pub fn run() {
             }
             // 补回被安装包覆盖安装删掉的自启项，并刷新可执行文件路径。
             launch_at_login::reconcile(app.handle());
+            quick_add_shortcut::install(app.handle());
             // Local Replica 状态注册（ADR-0007）。注意：Builder 的 setup /
             // invoke_handler 都是「替换」语义，不能由模块各自链一次 ——
             // v0.4.0 曾因此让 sqlite::install 覆盖掉 session 命令注册与
@@ -196,6 +194,8 @@ pub fn run() {
             reminder_notification::show_reminder,
             launch_at_login::launch_at_login_get,
             launch_at_login::launch_at_login_set,
+            quick_add_shortcut::quick_add_shortcut_get,
+            quick_add_shortcut::quick_add_shortcut_set,
             tray_menu::tray_menu_action,
             tray_menu::tray_set_labels
         ])

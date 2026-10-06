@@ -8,7 +8,7 @@
  * 主题与语言：本窗口是独立 webview，每次打开从共享的 localStorage 重读偏好，
  * 与主窗口当前设置保持一致。视觉沿用 App 内 DropdownMenu 的样式。
  */
-import { useEffect, useLayoutEffect, useRef } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -16,7 +16,12 @@ import { LogicalSize, getCurrentWindow } from '@tauri-apps/api/window';
 import { AppWindow, Plus, Power, type LucideIcon } from 'lucide-react';
 
 import { applyTheme, i18n, usePreferencesStore } from '@taskora/api';
-import { detectKeyPlatform } from '@taskora/ui/components/keyboard/keymap';
+import {
+  acceleratorToChord,
+  detectKeyPlatform,
+  formatChord,
+} from '@taskora/ui/components/keyboard/keymap';
+import { getQuickAddAccelerator } from '@taskora/ui/components/keyboard/quickAddHotkey';
 
 type TrayAction = 'show' | 'quick-add' | 'quit';
 
@@ -24,19 +29,23 @@ interface TrayItem {
   action: TrayAction;
   labelKey: 'show' | 'newTask' | 'quit';
   icon: LucideIcon;
-  shortcut?: string;
 }
-
-/** 全局 Quick Add 快捷键（lib.rs QUICK_ADD_SHORTCUT）的展示文案。 */
-const QUICK_ADD_SHORTCUT = detectKeyPlatform() === 'mac' ? '⇧⌘Space' : 'Ctrl+Shift+Space';
 
 const GROUPS: TrayItem[][] = [
   [
     { action: 'show', labelKey: 'show', icon: AppWindow },
-    { action: 'quick-add', labelKey: 'newTask', icon: Plus, shortcut: QUICK_ADD_SHORTCUT },
+    { action: 'quick-add', labelKey: 'newTask', icon: Plus },
   ],
   [{ action: 'quit', labelKey: 'quit', icon: Power }],
 ];
+
+/** 系统级 Quick Add 快捷键（用户可改绑，quick_add_shortcut.rs）的展示文案。 */
+async function quickAddShortcutText(): Promise<string | null> {
+  const accelerator = await getQuickAddAccelerator();
+  if (!accelerator) return null;
+  const platform = detectKeyPlatform();
+  return formatChord(acceleratorToChord(accelerator, platform), platform);
+}
 
 /** 从 localStorage 重读偏好（主窗口可能刚改过主题 / 语言）。 */
 async function syncPreferences() {
@@ -66,6 +75,7 @@ export function TrayMenuApp() {
   const { t } = useTranslation('tray');
   const rootRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
+  const [quickAddShortcut, setQuickAddShortcut] = useState<string | null>(null);
 
   // 窗口尺寸贴合菜单内容（含阴影留白），Rust 侧据此计算弹出位置。
   useLayoutEffect(() => {
@@ -82,9 +92,13 @@ export function TrayMenuApp() {
   }, []);
 
   useEffect(() => {
+    const syncShortcut = () =>
+      void quickAddShortcutText().then(setQuickAddShortcut, () => undefined);
     void syncPreferences().catch(() => undefined);
+    syncShortcut();
     const unlisten = listen('tray-menu://open', () => {
       void syncPreferences().catch(() => undefined);
+      syncShortcut();
       playEnter(surfaceRef.current);
       surfaceRef.current?.focus();
     });
@@ -126,26 +140,29 @@ export function TrayMenuApp() {
         {GROUPS.map((group, i) => (
           <div key={i} role="group">
             {i > 0 && <div role="separator" className="-mx-1 my-1 h-px bg-border" />}
-            {group.map(({ action, labelKey, icon: Icon, shortcut }) => (
-              <button
-                key={action}
-                type="button"
-                role="menuitem"
-                data-tray-item
-                onClick={() => run(action)}
-                onMouseEnter={(e) => e.currentTarget.focus()}
-                onMouseLeave={() => surfaceRef.current?.focus()}
-                className="group flex h-7 w-full cursor-default items-center gap-2 rounded-md px-2 text-left text-sm outline-none focus:bg-primary focus:text-primary-foreground"
-              >
-                <Icon className="h-4 w-4 shrink-0 text-muted-foreground group-focus:text-primary-foreground" />
-                <span className="flex-1 truncate">{t(labelKey)}</span>
-                {shortcut && (
-                  <span className="text-xs text-muted-foreground group-focus:text-primary-foreground/80">
-                    {shortcut}
-                  </span>
-                )}
-              </button>
-            ))}
+            {group.map(({ action, labelKey, icon: Icon }) => {
+              const shortcut = action === 'quick-add' ? quickAddShortcut : null;
+              return (
+                <button
+                  key={action}
+                  type="button"
+                  role="menuitem"
+                  data-tray-item
+                  onClick={() => run(action)}
+                  onMouseEnter={(e) => e.currentTarget.focus()}
+                  onMouseLeave={() => surfaceRef.current?.focus()}
+                  className="group flex h-7 w-full cursor-default items-center gap-2 rounded-md px-2 text-left text-sm outline-none focus:bg-primary focus:text-primary-foreground"
+                >
+                  <Icon className="h-4 w-4 shrink-0 text-muted-foreground group-focus:text-primary-foreground" />
+                  <span className="flex-1 truncate">{t(labelKey)}</span>
+                  {shortcut && (
+                    <span className="text-xs text-muted-foreground group-focus:text-primary-foreground/80">
+                      {shortcut}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
         ))}
       </div>

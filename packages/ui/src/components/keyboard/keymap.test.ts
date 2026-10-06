@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  acceleratorToChord,
+  chordFromEvent,
+  chordToAccelerator,
+  findChordOwner,
+  formatChord,
   quickAddShortcutLabel,
+  visibleBindings,
   resolveAction,
   resolveQuickAddAction,
   shortcutLabel,
@@ -312,6 +318,102 @@ describe('shortcutLabel — 按钮 hint 键位文案', () => {
   });
 });
 
+describe('自定义键位（ADR-0017）', () => {
+  it('chordFromEvent 规范化：修饰键固定顺序、字母大写、空格为 Space', () => {
+    expect(chordFromEvent(key('t', { metaKey: true, shiftKey: true }))).toBe('Shift+Meta+T');
+    expect(chordFromEvent(key('k', { ctrlKey: true, altKey: true }))).toBe('Ctrl+Alt+K');
+    expect(chordFromEvent(key(' '))).toBe('Space');
+    expect(chordFromEvent(key('ArrowUp', { altKey: true }))).toBe('Alt+ArrowUp');
+  });
+
+  it('带 ⌥/⇧ 时字母数字按物理键还原（mac ⌥N 的 key 为 Dead / ˜）', () => {
+    expect(chordFromEvent(key('Dead', { altKey: true, metaKey: true, code: 'KeyN' }))).toBe(
+      'Alt+Meta+N',
+    );
+    expect(chordFromEvent(key('˚', { altKey: true, metaKey: true, code: 'KeyK' }))).toBe(
+      'Alt+Meta+K',
+    );
+    expect(chordFromEvent(key('!', { shiftKey: true, ctrlKey: true, code: 'Digit1' }))).toBe(
+      'Ctrl+Shift+1',
+    );
+    expect(resolveAction(key('Dead', { altKey: true, metaKey: true, code: 'KeyN' }), 'mac')).toEqual(
+      { type: 'newProject' },
+    );
+  });
+
+  it('单按修饰键、输入法组字不产生键位', () => {
+    expect(chordFromEvent(key('Shift', { shiftKey: true }))).toBeNull();
+    expect(chordFromEvent(key('Meta', { metaKey: true }))).toBeNull();
+    expect(chordFromEvent(key('a', { isComposing: true }))).toBeNull();
+  });
+
+  it('覆盖后新键位生效、旧键位失效', () => {
+    const overrides = { complete: ['Meta+D'] };
+    expect(resolveAction(key('d', { metaKey: true }), 'mac', overrides)).toEqual({
+      type: 'complete',
+    });
+    expect(resolveAction(key('k', { metaKey: true }), 'mac', overrides)).toBeNull();
+    expect(shortcutLabel('complete', 'mac', overrides)).toBe('⌘D');
+  });
+
+  it('解绑（空数组）后不派发，hint 无键位', () => {
+    const overrides = { search: [] };
+    expect(resolveAction(key('f', { metaKey: true }), 'mac', overrides)).toBeNull();
+    expect(shortcutLabel('search', 'mac', overrides)).toBeNull();
+  });
+
+  it('绑定裸字母后该字母不再打字唤起，其他字母照旧', () => {
+    const overrides = { newTask: ['N'] };
+    expect(resolveAction(key('n'), 'mac', overrides)).toEqual({ type: 'newTask' });
+    expect(resolveAction(key('m'), 'mac', overrides)).toEqual({ type: 'typeToFind', seed: 'm' });
+  });
+
+  it('findChordOwner 找出占用键位的其他动作', () => {
+    expect(findChordOwner('Meta+K', 'mac')).toBe('complete');
+    expect(findChordOwner('Meta+K', 'mac', undefined, 'complete')).toBeNull();
+    expect(findChordOwner('Meta+K', 'mac', { complete: ['Meta+D'] })).toBeNull();
+    expect(findChordOwner('Alt+H', 'web')).toBe('newHeading');
+  });
+
+  it('Web 上 Ctrl / ⌘ 成对的键位按操作系统只展示一个，两者都仍可触发', () => {
+    expect(visibleBindings('complete', 'web', undefined, false)).toEqual(['Ctrl+K']);
+    expect(visibleBindings('complete', 'web', undefined, true)).toEqual(['Meta+K']);
+    expect(shortcutLabel('search', 'web', undefined, true)).toBe('⌘F');
+    expect(shortcutLabel('search', 'web', undefined, false)).toBe('Ctrl+F');
+    // 非成对的键位照常展示（如 Windows 上自己录的 ⌘ 键位、成对已被拆开）
+    expect(visibleBindings('complete', 'web', { complete: ['Meta+D'] }, false)).toEqual(['Meta+D']);
+    expect(visibleBindings('delete', 'web', undefined, true)).toEqual(['Backspace', 'Delete']);
+    expect(resolveAction(key('k', { ctrlKey: true }), 'web')).toEqual({ type: 'complete' });
+    expect(resolveAction(key('k', { metaKey: true }), 'web')).toEqual({ type: 'complete' });
+  });
+
+  it('formatChord 按平台展示', () => {
+    expect(formatChord('Ctrl+Alt+Shift+Meta+K', 'mac')).toBe('⌃⌥⇧⌘K');
+    expect(formatChord('Meta+ArrowLeft', 'mac')).toBe('⌘←');
+    expect(formatChord('Backspace', 'mac')).toBe('⌫');
+    expect(formatChord('Ctrl+Shift+T', 'windows')).toBe('Ctrl+Shift+T');
+    expect(formatChord('Meta+K', 'web', false)).toBe('Win+K');
+    expect(formatChord('Meta+K', 'web', true)).toBe('⌘K');
+    expect(formatChord('Alt+Shift+N', 'web', true)).toBe('⌥⇧N');
+    expect(formatChord('Space', 'windows')).toBe('Space');
+  });
+});
+
+describe('系统级 Quick Add 快捷键（Tauri accelerator）', () => {
+  it('accelerator ↔ 规范键位', () => {
+    expect(acceleratorToChord('CmdOrCtrl+Shift+Space', 'mac')).toBe('Shift+Meta+Space');
+    expect(acceleratorToChord('CmdOrCtrl+Shift+Space', 'windows')).toBe('Ctrl+Shift+Space');
+    expect(acceleratorToChord('Alt+Super+K', 'mac')).toBe('Alt+Meta+K');
+    expect(chordToAccelerator('Shift+Meta+Space')).toBe('Shift+Super+Space');
+    expect(chordToAccelerator('Ctrl+Alt+N')).toBe('Ctrl+Alt+N');
+  });
+
+  it('必须带 Ctrl / Alt / ⌘', () => {
+    expect(chordToAccelerator('K')).toBeNull();
+    expect(chordToAccelerator('Shift+K')).toBeNull();
+  });
+});
+
 describe('resolveQuickAddAction — Quick Add 卡片', () => {
   it('mac：⌘ 系字段键与提交键', () => {
     const mac = 'mac' as const;
@@ -343,6 +445,17 @@ describe('resolveQuickAddAction — Quick Add 卡片', () => {
     expect(
       resolveQuickAddAction(key('Enter', { metaKey: true, isComposing: true }), 'mac'),
     ).toBeNull();
+  });
+
+  it('可改绑；与主窗口键位分属不同作用域，互不冲突', () => {
+    const overrides = { quickAddWhen: ['Meta+E'] };
+    expect(resolveQuickAddAction(key('e', { metaKey: true }), 'mac', overrides)).toBe('when');
+    expect(resolveQuickAddAction(key('s', { metaKey: true }), 'mac', overrides)).toBeNull();
+    expect(quickAddShortcutLabel('when', 'mac', overrides)).toBe('⌘E');
+    // ⇧⌘T 在主窗口是标签、在卡片里也是标签，各自解析
+    expect(findChordOwner('Shift+Meta+T', 'mac', undefined, 'quickAddTags')).toBeNull();
+    expect(findChordOwner('Meta+T', 'mac', undefined, 'quickAddWhen')).toBe('quickAddToday');
+    expect(resolveAction(key('s', { metaKey: true }), 'mac')).toBeNull();
   });
 
   it('键位文案按平台', () => {

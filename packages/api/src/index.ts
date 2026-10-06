@@ -141,6 +141,7 @@ export {
 } from './stores/selection.store';
 export { useMultiSelectStore } from './stores/multiSelect.store';
 export { useProjectUiPrefsStore } from './stores/projectUiPrefs.store';
+export { useKeybindingsStore } from './stores/keybindings.store';
 export {
   useAssistantUiStore,
   ASSISTANT_PANEL_DEFAULT_WIDTH,

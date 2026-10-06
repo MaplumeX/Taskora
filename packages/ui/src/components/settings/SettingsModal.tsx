@@ -1,6 +1,15 @@
 import { Suspense, lazy } from 'react';
 import { useTranslation } from 'react-i18next';
-import { SunMedium, User, Download, Info, Bot, SlidersHorizontal, type LucideIcon } from 'lucide-react';
+import {
+  SunMedium,
+  User,
+  Download,
+  Info,
+  Bot,
+  Keyboard,
+  SlidersHorizontal,
+  type LucideIcon,
+} from 'lucide-react';
 
 import { cn } from '@/lib/utils';
 import { useIsDesktop } from '../../lib/use-media-query';
@@ -15,6 +24,7 @@ import { useUiInteractionStore, type SettingsTab } from '@taskora/api';
 import { MobileSettingsContent } from './MobileSettings';
 
 const SettingsAppearance = lazy(() => import('@/components/settings/SettingsAppearance'));
+const SettingsShortcuts = lazy(() => import('@/components/settings/SettingsShortcuts'));
 const SettingsGeneral = lazy(() => import('@/components/settings/SettingsGeneral'));
 const SettingsAccount = lazy(() => import('@/components/settings/SettingsAccount'));
 const SettingsData = lazy(() => import('@/components/settings/SettingsData'));
@@ -30,6 +40,7 @@ interface SettingsNavItem {
 const settingsNav: SettingsNavItem[] = [
   { tab: 'general', labelKey: 'settings:general', icon: SlidersHorizontal },
   { tab: 'appearance', labelKey: 'settings:appearance', icon: SunMedium },
+  { tab: 'shortcuts', labelKey: 'settings:shortcuts', icon: Keyboard },
   { tab: 'account', labelKey: 'settings:account', icon: User },
   { tab: 'data', labelKey: 'settings:data', icon: Download },
   { tab: 'assistant', labelKey: 'settings:assistant', icon: Bot },
@@ -58,6 +69,8 @@ export function SettingsModal() {
         return <SettingsGeneral />;
       case 'appearance':
         return <SettingsAppearance />;
+      case 'shortcuts':
+        return <SettingsShortcuts />;
       case 'account':
         return <SettingsAccount />;
       case 'data':

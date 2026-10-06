@@ -19,7 +19,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { WebviewWindow } from '@tauri-apps/api/webviewWindow';
 import { listen } from '@tauri-apps/api/event';
-import { i18n, useAuthStore, type QuickAddDraft } from '@taskora/api';
+import { i18n, useAuthStore, useKeybindingsStore, type QuickAddDraft } from '@taskora/api';
 import { QuickAddCard, type QuickAddCardHandle } from '@taskora/ui/components/task/QuickAddCard';
 import { cn } from '@taskora/ui/lib/utils';
 import { bootQuickAdd } from './quickAddBoot';
@@ -86,6 +86,8 @@ export function QuickAddApp() {
   // Focus the title whenever the shortcut re-opens the window.
   useEffect(() => {
     const unlisten = listen('quick-add://open', () => {
+      // 兜底：webview 未投递 storage 事件时，每次唤出重读自定义键位。
+      void useKeybindingsStore.persist.rehydrate();
       void bootQuickAdd()
         .then(async () => {
           if (!useAuthStore.getState().token) {
