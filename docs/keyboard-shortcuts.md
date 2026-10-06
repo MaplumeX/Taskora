@@ -5,7 +5,7 @@
 
 - 桌面端（Tauri）：macOS 用 ⌘，Windows 用 Ctrl，保持 Things 原键位。
 - Web 端：浏览器保留键（Ctrl+N/T/W/数字）无法拦截，降级为 Alt 系。
-- 键位硬编码，不做用户配置。
+- 以下为默认键位；用户可在「设置 → 快捷键」中改绑（仅存本机，不跨设备同步），见 [ADR-0017](./adr/0017-user-customizable-keybindings.md)。系统级 Quick Add 与 Quick Add 卡片内键位同样可改（仅桌面端显示）；⌘Enter 保存、卡片内的 Enter / Esc 与打字唤起不可改绑。
 - 支持 macOS 与 Windows。
 
 ## P0（选择模型 + 导航 + 创建 + 完成/删除）
@@ -106,7 +106,7 @@ Quick Add 从 `Cmd/Ctrl+Space` 改为 `Cmd/Ctrl+Shift+Space`：Windows 上 Ctrl+
 | 打开归属（放在哪） | ⇧⌘M | Ctrl+Shift+M |
 | 关闭选择器 / 放弃草稿并关窗 | Esc（有选择器开着时先关选择器） | 同左 |
 
-字段键位沿用下方 P1 / P2 的规划键位（主应用里尚未实现，Quick Add 先用上），解析在 `keymap.ts` 的 `resolveQuickAddAction`。浮窗是独立 webview，不装配主应用的 KeyboardShortcuts。输入法组字中不响应任何卡片快捷键。
+字段键位沿用下方 P1 / P2 的规划键位（主应用里尚未实现，Quick Add 先用上），解析在 `keymap.ts` 的 `resolveQuickAddAction`（注册表 `quickAdd` 作用域，可在设置中改绑，只与卡片内键位判冲突）。系统级唤起键位由 `quick_add_shortcut.rs` 注册与持久化，可在设置中改绑，须含 Ctrl / Alt / ⌘。浮窗是独立 webview，不装配主应用的 KeyboardShortcuts。输入法组字中不响应任何卡片快捷键。
 
 ## P1（日期 + 侧边栏）
 
