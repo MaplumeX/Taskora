@@ -281,6 +281,9 @@ function SortableTask({
   const { attributes, listeners, setNodeRef } = useSortable({
     id: taskId(task.id),
     animateLayoutChanges: noLayoutAnimation,
+    // 展开态下行内是可编辑卡片，整行 listeners 会把框选文字的鼠标移动识别为拖拽，
+    // 因此展开时不可拖（仍作为放置目标）。
+    disabled: { draggable: expanded, droppable: false },
   });
   // dnd-kit KeyboardSensor 默认把 Enter/Space 当作「开始拖拽」的启动键，
   // 而行焦点按 Enter=展开 / Space=下方新建是全局键位（ADR-0004）。
