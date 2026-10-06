@@ -3,7 +3,7 @@
 /*
  * Quick Add 浮窗（quick-add-v2 issue 02）：透明窗口，页面本身不铺底色，
  * 只画卡片；卡片下方的透明区域留给弹出的字段选择器。
- * 托盘菜单（tray_menu.rs）同理：透明留白只用于画阴影。
+ * 托盘菜单（tray_menu.rs）同理：窗口贴合菜单，圆角外的角落保持透明。
  */
 html.quick-add-window,
 html.quick-add-window body,
@@ -11,5 +11,13 @@ html.quick-add-window #root,
 html.tray-menu-window,
 html.tray-menu-window body,
 html.tray-menu-window #root {
+  background: transparent;
+}
+
+/*
+ * Quick Add 窗口宽 600px，低于 md 断点，字段选择器走窄屏的居中 Dialog；
+ * 遮罩在透明窗口里会铺成一整块灰底，这里只保留卡片、去掉遮罩底色。
+ */
+html.quick-add-window [data-dialog-overlay] {
   background: transparent;
 }

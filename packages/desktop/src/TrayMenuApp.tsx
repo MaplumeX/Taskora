@@ -67,7 +67,7 @@ export function TrayMenuApp() {
   const rootRef = useRef<HTMLDivElement>(null);
   const surfaceRef = useRef<HTMLDivElement>(null);
 
-  // 窗口尺寸贴合菜单内容（含阴影留白），Rust 侧据此计算弹出位置。
+  // 窗口尺寸贴合菜单内容，Rust 侧据此计算弹出位置。
   useLayoutEffect(() => {
     const el = rootRef.current;
     if (!el) return;
@@ -114,14 +114,15 @@ export function TrayMenuApp() {
   };
 
   return (
-    <div ref={rootRef} className="inline-block p-2">
+    // 不画投影：透明窗口会把超出边界的阴影裁成矩形灰底，菜单边缘只靠边框区分。
+    <div ref={rootRef} className="inline-block">
       <div
         ref={surfaceRef}
         tabIndex={-1}
         role="menu"
         aria-label="Taskora"
         onKeyDown={onKeyDown}
-        className="w-56 select-none rounded-[10px] border border-border/60 bg-popover p-1 text-popover-foreground shadow-popover outline-none"
+        className="w-56 select-none rounded-[10px] border border-border bg-popover p-1 text-popover-foreground outline-none"
       >
         {GROUPS.map((group, i) => (
           <div key={i} role="group">
