@@ -3,12 +3,7 @@
  * （quick-add-relay）与 quick-add 窗口（quick-add-client）共用。
  */
 
-import type {
-  AreaResponseDto,
-  ProjectResponseDto,
-  TagGroupResponseDto,
-  TagResponseDto,
-} from '@taskora/shared';
+import type { AreaResponseDto, ProjectResponseDto, TagResponseDto } from '@taskora/shared';
 import type { QuickAddDraft, QuickAddPlacement } from '@taskora/api';
 
 /** quick-add → 主窗口的提交事件名。 */
@@ -35,8 +30,8 @@ export interface QuickAddSnapshot {
   requestId: string;
   projects: ProjectResponseDto[];
   areas: AreaResponseDto[];
+  /** 含 parentId：Tag Picker 按 Tag 树缩进（嵌套 Tag，ADR-0016）。 */
   tags: TagResponseDto[];
-  tagGroups: TagGroupResponseDto[];
 }
 
 export type QuickAddResultPayload =

@@ -2,62 +2,48 @@ import { describe, expect, it } from 'vitest';
 
 import type { TagResponseDto } from '@taskora/shared';
 
-import {
-  buildTagPickerRows,
-  selectableRows,
-  tagSelectionState,
-  toggleTagAcross,
-} from './tagPickerOptions';
+import { buildTagPickerRows, tagSelectionState, toggleTagAcross } from './tagPickerOptions';
 
 const NOW = '2026-09-01T00:00:00.000Z';
 
-function tag(id: string, title: string, tagGroupId: string | null = null): TagResponseDto {
-  return { id, title, color: '#3B82F6', tagGroupId, createdAt: NOW, updatedAt: NOW };
+function tag(id: string, title: string, parentId: string | null = null): TagResponseDto {
+  return { id, title, color: '#3B82F6', parentId, createdAt: NOW, updatedAt: NOW };
 }
 
 const tags = [
   tag('urgent', 'Urgent'),
-  tag('office', 'Office', 'g-place'),
-  tag('home', 'Home', 'g-place'),
-  tag('low', 'Low energy', 'g-energy'),
-];
-const groups = [
-  { id: 'g-place', title: 'Place' },
-  { id: 'g-energy', title: 'Energy' },
-  { id: 'g-empty', title: 'Empty' },
+  tag('place', 'Place'),
+  tag('office', 'Office', 'place'),
+  tag('desk', 'Desk', 'office'),
+  tag('home', 'Home', 'place'),
 ];
 
 const describeRows = (query: string) =>
-  buildTagPickerRows({ tags, groups, query }).map((row) =>
-    row.kind === 'header'
-      ? `# ${row.title}`
-      : row.kind === 'tag'
-        ? row.tag.title
-        : `+ ${row.title}`,
+  buildTagPickerRows({ tags, query }).map((row) =>
+    row.kind === 'tag'
+      ? `${'  '.repeat(row.depth)}${row.tag.title}${row.path.length ? ` (${row.path.join(' › ')})` : ''}`
+      : `+ ${row.title}`,
   );
 
 describe('buildTagPickerRows', () => {
-  it('无搜索词：按 Group 分节（跳过空 Group），未分组的放最后', () => {
-    expect(describeRows('')).toEqual([
-      '# Place',
-      'Office',
-      'Home',
-      '# Energy',
-      'Low energy',
-      'Urgent',
-    ]);
+  it('无搜索词：按 Tag 树先序排列、逐层缩进，父 Tag 也是可选行', () => {
+    expect(describeRows('')).toEqual(['Urgent', 'Place', '  Office', '    Desk', '  Home']);
   });
 
-  it('有搜索词：扁平结果，前缀命中在前，末尾可新建', () => {
-    expect(describeRows('o')).toEqual(['Office', 'Home', 'Low energy', '+ o']);
+  it('有搜索词：扁平结果带父路径，前缀命中在前，末尾可新建', () => {
+    expect(describeRows('e')).toEqual([
+      'Urgent',
+      'Place',
+      'Office (Place)',
+      'Desk (Place › Office)',
+      'Home (Place)',
+      '+ e',
+    ]);
+    expect(describeRows('d')).toEqual(['Desk (Place › Office)', '+ d']);
   });
 
   it('与已有 Tag 同名（大小写、空白不同）时不出现新建项', () => {
     expect(describeRows('  urgent ')).toEqual(['Urgent']);
-  });
-
-  it('selectableRows 去掉小标题', () => {
-    expect(selectableRows(buildTagPickerRows({ tags, groups, query: '' }))).toHaveLength(4);
   });
 });
 

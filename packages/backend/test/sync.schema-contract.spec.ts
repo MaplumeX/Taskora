@@ -18,7 +18,6 @@ const PRISMA_MODEL_NAMES: Record<string, string> = {
   'project-heading': 'ProjectHeading',
   area: 'Area',
   tag: 'Tag',
-  'tag-group': 'TagGroup',
 };
 
 type PrismaMapping =
@@ -106,7 +105,6 @@ describe('Engine SQL schema ↔ Prisma schema 契约', () => {
       ProjectHeading: new Set(['userId', 'fieldClocks', 'fieldDigests']),
       Area: new Set(['userId', 'fieldClocks', 'fieldDigests']),
       Tag: new Set(['userId', 'fieldClocks', 'fieldDigests']),
-      TagGroup: new Set(['userId', 'fieldClocks', 'fieldDigests']),
     };
 
     for (const [entity, modelName] of Object.entries(PRISMA_MODEL_NAMES)) {

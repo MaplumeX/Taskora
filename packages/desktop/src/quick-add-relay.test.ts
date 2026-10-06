@@ -8,7 +8,6 @@ const mocks = vi.hoisted(() => ({
   getProjects: vi.fn(),
   getAreas: vi.fn(),
   getTags: vi.fn(),
-  getTagGroups: vi.fn(),
   toastError: vi.fn(),
   isTauri: vi.fn(() => true),
 }));
@@ -21,7 +20,6 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   getProjects: mocks.getProjects,
   getAreas: mocks.getAreas,
   getTags: mocks.getTags,
-  getTagGroups: mocks.getTagGroups,
 }));
 vi.mock('@taskora/ui/components/ui/sonner', () => ({
   toast: { error: mocks.toastError },
@@ -118,11 +116,10 @@ describe('quick-add 事件中继：提交', () => {
 });
 
 describe('quick-add 事件中继：快照', () => {
-  it('从当前 backend 读 Projects / Areas / Tags / Tag Groups 回发给 quick-add', async () => {
+  it('从当前 backend 读 Projects / Areas / Tags 回发给 quick-add', async () => {
     mocks.getProjects.mockResolvedValue([{ id: 'p1' }]);
     mocks.getAreas.mockResolvedValue([{ id: 'a1' }]);
     mocks.getTags.mockResolvedValue([{ id: 't1' }]);
-    mocks.getTagGroups.mockResolvedValue([{ id: 'g1' }]);
     initQuickAddRelay();
     await handlerFor(QUICK_ADD_SNAPSHOT_REQUEST_EVENT)({ payload: { requestId: 'r3' } });
 
@@ -131,7 +128,6 @@ describe('quick-add 事件中继：快照', () => {
       projects: [{ id: 'p1' }],
       areas: [{ id: 'a1' }],
       tags: [{ id: 't1' }],
-      tagGroups: [{ id: 'g1' }],
     });
   });
 

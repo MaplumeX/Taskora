@@ -22,7 +22,6 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useTagsQuery: () => ({
     data: [tagA, tagB].map((t) => ({ ...t })),
   }),
-  useTagGroupsQuery: () => ({ data: [] }),
   useCreateTag: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 
@@ -30,7 +29,7 @@ const tagA: TagResponseDto = {
   id: 'tag-a',
   title: 'design',
   color: '#3B82F6',
-  tagGroupId: null,
+  parentId: null,
   createdAt: '2026-07-01T00:00:00.000Z',
   updatedAt: '2026-07-01T00:00:00.000Z',
 };
@@ -39,7 +38,7 @@ const tagB: TagResponseDto = {
   id: 'tag-b',
   title: 'urgent',
   color: '#EF4444',
-  tagGroupId: null,
+  parentId: null,
   createdAt: '2026-07-01T00:00:00.000Z',
   updatedAt: '2026-07-01T00:00:00.000Z',
 };

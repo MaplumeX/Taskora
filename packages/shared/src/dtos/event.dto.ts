@@ -2,7 +2,6 @@ import type { AreaResponseDto } from './area.dto';
 import type { ProjectHeadingResponseDto } from './project-heading.dto';
 import type { ProjectResponseDto } from './project.dto';
 import type { SubtaskResponseDto } from './subtask.dto';
-import type { TagGroupResponseDto } from './tag-group.dto';
 import type { TagResponseDto } from './tag.dto';
 import type { TaskResponseDto } from './task.dto';
 
@@ -15,8 +14,7 @@ import type { TaskResponseDto } from './task.dto';
  */
 
 /** Entities that emit Change Events. Feed (derived view) and users do not. */
-export type ChangeEntity =
-  'task' | 'subtask' | 'project' | 'project-heading' | 'area' | 'tag' | 'tag-group';
+export type ChangeEntity = 'task' | 'subtask' | 'project' | 'project-heading' | 'area' | 'tag';
 
 /** Actions are deliberately dumb: view semantics stay in entity fields. */
 export type ChangeAction = 'created' | 'updated' | 'deleted';
@@ -29,7 +27,6 @@ export interface ChangeEventPayloadMap {
   'project-heading': ProjectHeadingResponseDto;
   area: AreaResponseDto;
   tag: TagResponseDto;
-  'tag-group': TagGroupResponseDto;
 }
 
 /** One Change Event on a user's Event Stream. `seq` is per-user, monotonic. */

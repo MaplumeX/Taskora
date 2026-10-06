@@ -9,6 +9,7 @@
 import { SETTLED_TASK_STATUSES, TaskStatus, type TaskSearchRank } from '@taskora/shared';
 
 import { effectivePosition, sortByEffectivePosition, type Positioned } from './order';
+import { effectiveTaskTagIds, tagHit, type TagParents } from './tags';
 
 export interface SearchTaskFields extends Positioned {
   id: string;
@@ -16,6 +17,10 @@ export interface SearchTaskFields extends Positioned {
   notes: unknown;
   status: unknown;
   trashedAt: unknown;
+  /** 自身 Tag 与归属：只在带 Tag 条件时用于算有效 Tag。 */
+  tagIds?: readonly string[];
+  projectId?: unknown;
+  areaId?: unknown;
 }
 
 export interface SearchSubtaskFields extends Positioned {
@@ -27,6 +32,11 @@ export interface SearchSubtaskFields extends Positioned {
 export interface TaskSearchOptions {
   /** 继续搜索：在未了结之外纳入已了结（Logbook）与 Trash 中的任务。 */
   extended?: boolean;
+  /**
+   * Tag 条件（Quick Find 的 `#tag`）：各个 Tag 之间是 AND，每个按有效 Tag
+   * 的子树命中（ADR 0015 / 0016）。有 Tag 条件时搜索词可以为空。
+   */
+  tagIds?: readonly string[];
 }
 
 export interface PlannedSearchHit<T, S> {
@@ -42,6 +52,14 @@ export function searchNeedle(q: string | null | undefined): string {
 
 function lower(value: unknown): string {
   return typeof value === 'string' ? value.toLowerCase() : '';
+}
+
+/** 是否有可搜的条件：搜索词或 Tag 条件，都没有时不搜索。 */
+export function hasSearchCriteria(
+  q: string | null | undefined,
+  options?: TaskSearchOptions,
+): boolean {
+  return searchNeedle(q) !== '' || (options?.tagIds?.length ?? 0) > 0;
 }
 
 /** 默认：未了结且不在 Trash；extended：再加已了结与 Trash。 */
@@ -85,21 +103,39 @@ function sortSubtasks<S extends SearchSubtaskFields>(subtasks: S[]): S[] {
 }
 
 /**
- * 搜索：范围过滤 → 标题 / 备注 / Subtask 标题命中 → 排序（档位 → 范围层级
- * → 有效 Position → id）。subtasks 可以比候选任务的子任务更宽，这里会按
- * taskId 与标题重新判定。Subtask 自身的状态不影响命中。
+ * 搜索：范围过滤 → Tag 条件 → 标题 / 备注 / Subtask 标题命中 → 排序（档位
+ * → 范围层级 → 有效 Position → id）。subtasks 可以比候选任务的子任务更宽，
+ * 这里会按 taskId 与标题重新判定。Subtask 自身的状态不影响命中。
+ *
+ * 带 Tag 条件时必须传入 parents（有效 Tag 的继承来源与 Tag 树）。只有 Tag
+ * 条件、没有搜索词时，范围内命中全部 Tag 的任务都算命中，档位记为 other，
+ * 顺序退化为范围层级 → 有效 Position。
  */
 export function planTaskSearch<T extends SearchTaskFields, S extends SearchSubtaskFields>(
   tasks: readonly T[],
   subtasks: readonly S[],
   q: string,
   options?: TaskSearchOptions,
+  parents?: TagParents,
 ): PlannedSearchHit<T, S>[] {
   const needle = searchNeedle(q);
-  if (!needle) return [];
+  const tagIds = options?.tagIds ?? [];
+  if (!needle && tagIds.length === 0) return [];
+  if (tagIds.length > 0 && !parents) {
+    throw new Error('planTaskSearch: Tag 条件需要 TagParents');
+  }
+  const inTags = (task: T): boolean => {
+    if (tagIds.length === 0 || !parents) return true;
+    const effective = effectiveTaskTagIds(
+      { tagIds: task.tagIds ?? [], projectId: task.projectId, areaId: task.areaId },
+      parents,
+    );
+    return tagIds.every((tagId) => tagHit(effective, tagId, parents));
+  };
 
   const matchedByTask = new Map<string, S[]>();
   for (const subtask of subtasks) {
+    if (!needle) break;
     if (typeof subtask.taskId !== 'string' || !lower(subtask.title).includes(needle)) continue;
     const list = matchedByTask.get(subtask.taskId);
     if (list) list.push(subtask);
@@ -108,9 +144,9 @@ export function planTaskSearch<T extends SearchTaskFields, S extends SearchSubta
 
   const hits: Array<PlannedSearchHit<T, S> & { key: string }> = [];
   for (const task of tasks) {
-    if (!taskInSearchScope(task, options)) continue;
+    if (!taskInSearchScope(task, options) || !inTags(task)) continue;
     const matched = matchedByTask.get(task.id) ?? [];
-    const rank = taskSearchRank(task, matched.length > 0, needle);
+    const rank = needle ? taskSearchRank(task, matched.length > 0, needle) : 'other';
     if (rank === null) continue;
     hits.push({ task, matchedSubtasks: sortSubtasks(matched), rank, key: effectivePosition(task) });
   }

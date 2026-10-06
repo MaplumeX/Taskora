@@ -37,12 +37,19 @@ export function getTasks(params?: TaskQuery): Promise<TaskResponseDto[]> {
 export interface TaskSearchOptions {
   /** 继续搜索：纳入已了结（Logbook）与 Trash 中的任务。 */
   extended?: boolean;
+  /** Tag 条件（Quick Find `#tag`）：各 Tag 之间 AND，按有效 Tag 的子树命中。 */
+  tagIds?: readonly string[];
 }
 
 export function searchTasks(q: string, options?: TaskSearchOptions): Promise<TaskSearchHit[]> {
   return apiClient
     .get<TaskSearchHit[]>('/tasks/search', {
-      params: { q, extended: options?.extended || undefined },
+      params: {
+        q,
+        extended: options?.extended || undefined,
+        // 逗号分隔（Tag id 是 uuid，不含逗号）
+        tagIds: options?.tagIds?.length ? options.tagIds.join(',') : undefined,
+      },
     })
     .then((res) => res.data);
 }

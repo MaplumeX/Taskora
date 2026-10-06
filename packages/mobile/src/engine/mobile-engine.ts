@@ -32,8 +32,6 @@ import {
   createEngineAreaBackend,
   setTagBackend,
   createEngineTagBackend,
-  setTagGroupBackend,
-  createEngineTagGroupBackend,
   setProjectHeadingBackend,
   createEngineProjectHeadingBackend,
   setSyncStatus,
@@ -126,7 +124,6 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     setProjectBackend(createEngineProjectBackend({ engine }));
     setAreaBackend(createEngineAreaBackend({ engine }));
     setTagBackend(createEngineTagBackend({ engine }));
-    setTagGroupBackend(createEngineTagGroupBackend({ engine }));
     setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine }));
     // 注册失败不阻塞本地使用；成功时启用提醒的后台同步（issue 09）
     void registerDevice(deviceId)
@@ -240,7 +237,6 @@ function resetBackends(): void {
   setProjectBackend(undefined);
   setAreaBackend(undefined);
   setTagBackend(undefined);
-  setTagGroupBackend(undefined);
   setProjectHeadingBackend(undefined);
 }
 

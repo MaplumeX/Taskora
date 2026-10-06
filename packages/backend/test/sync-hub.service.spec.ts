@@ -78,7 +78,6 @@ describe('SyncHubService（合并器集成）', () => {
       projectHeading: emptyDelegate(),
       area: emptyDelegate(),
       tag: emptyDelegate(),
-      tagGroup: emptyDelegate(),
       compactedEntity: {
         findUnique: vi.fn().mockResolvedValue(null),
         findMany: vi.fn().mockResolvedValue([]),

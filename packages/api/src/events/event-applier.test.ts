@@ -13,7 +13,6 @@ import type {
   ProjectHeadingResponseDto,
   ProjectResponseDto,
   SubtaskResponseDto,
-  TagGroupResponseDto,
   TagResponseDto,
   TaskResponseDto,
 } from '@taskora/shared';
@@ -357,14 +356,7 @@ describe('applyChangeEvents', () => {
       id: 'g1',
       title: 'T',
       color: '#3B82F6',
-      tagGroupId: null,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-    };
-    const group: TagGroupResponseDto = {
-      id: 'tg1',
-      title: 'G',
-      tags: [],
+      parentId: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     };
@@ -372,30 +364,25 @@ describe('applyChangeEvents', () => {
     queryClient.setQueryData(['projects'], []);
     queryClient.setQueryData(['areas'], []);
     queryClient.setQueryData(['tags'], []);
-    queryClient.setQueryData(['tag-groups'], []);
 
     applyChangeEvents(queryClient, [
       event('project', 'p1', 'created', project),
       event('area', 'a1', 'created', area),
       event('tag', 'g1', 'created', tag),
-      event('tag-group', 'tg1', 'created', group),
     ]);
 
     expect(queryClient.getQueryData<ProjectResponseDto[]>(['projects'])).toEqual([project]);
     expect(queryClient.getQueryData<AreaResponseDto[]>(['areas'])).toEqual([area]);
     expect(queryClient.getQueryData<TagResponseDto[]>(['tags'])).toEqual([tag]);
-    expect(queryClient.getQueryData<TagGroupResponseDto[]>(['tag-groups'])).toEqual([group]);
 
     applyChangeEvents(queryClient, [
       event('project', 'p1', 'deleted'),
       event('area', 'a1', 'deleted'),
       event('tag', 'g1', 'deleted'),
-      event('tag-group', 'tg1', 'deleted'),
     ]);
     expect(queryClient.getQueryData<ProjectResponseDto[]>(['projects'])).toEqual([]);
     expect(queryClient.getQueryData<AreaResponseDto[]>(['areas'])).toEqual([]);
     expect(queryClient.getQueryData<TagResponseDto[]>(['tags'])).toEqual([]);
-    expect(queryClient.getQueryData<TagGroupResponseDto[]>(['tag-groups'])).toEqual([]);
   });
 
   it('invalidates feed once per batch for task events', () => {
@@ -424,7 +411,7 @@ describe('applyChangeEvents', () => {
       id: 'g1',
       title: 'Renamed',
       color: '#3B82F6',
-      tagGroupId: null,
+      parentId: null,
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     };
@@ -433,8 +420,8 @@ describe('applyChangeEvents', () => {
     const invalidatedRoots = new Set(
       spy.mock.calls.map(([arg]) => (arg as { queryKey: readonly unknown[] }).queryKey[0]),
     );
-    // Tasks/projects/areas/feed/tag-groups all embed tag chips.
-    expect(invalidatedRoots).toEqual(new Set(['tag-groups', 'tasks', 'projects', 'areas', 'feed']));
+    // Tasks/projects/areas/feed all embed tag chips.
+    expect(invalidatedRoots).toEqual(new Set(['tasks', 'projects', 'areas', 'feed']));
     spy.mockRestore();
   });
 

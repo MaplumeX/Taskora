@@ -10,6 +10,7 @@ import {
   validatePosition,
   positionsBetween,
   migrateReplica,
+  REPLICA_MIGRATIONS,
   schemaDdl,
 } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
@@ -224,6 +225,10 @@ dbDescribe('historical Position migration (real PostgreSQL + Prisma CLI)', () =>
     ];
     try {
       for (const statement of schemaDdl()) await storage.exec(statement);
+      // 当时的副本还有 tag_group 表（10 → 11 才退役）
+      await storage.exec(
+        "CREATE TABLE tag_group (id TEXT PRIMARY KEY, title TEXT, position TEXT, createdAt TEXT, updatedAt TEXT, clocks TEXT NOT NULL DEFAULT '{}')",
+      );
       for (let i = 0; i < TABLES.length; i++) {
         const table = replicaTables[i];
         await storage.exec(`ALTER TABLE ${table} ADD COLUMN sortOrder INTEGER`);
@@ -235,7 +240,8 @@ dbDescribe('historical Position migration (real PostgreSQL + Prisma CLI)', () =>
         }
       }
       await storage.exec('PRAGMA user_version = 7');
-      await migrateReplica(storage);
+      // 只升到 9（sortOrder 退役），之后的步骤与本用例无关
+      await migrateReplica(storage, REPLICA_MIGRATIONS.slice(0, 9));
       await s.copyThrough(CONTRACT);
       await deployDatabase(s.options);
       const after = await snapshot(s.client);
@@ -247,6 +253,155 @@ dbDescribe('historical Position migration (real PostgreSQL + Prisma CLI)', () =>
           expect(row.position).toBe(after[TABLES[i]].find((r) => r.id === row.id)!.position);
       }
       expect(await storage.all('SELECT * FROM _outbox')).toHaveLength(0);
+    } finally {
+      await storage.close();
+    }
+  }, 60_000);
+
+  it('nested tags: hub migration and Local Replica 10 -> 11 convert Tag Groups identically', async () => {
+    const s = await sandbox();
+    await s.copyThrough('20261005120000_project_repeat');
+    await runPrismaMigrate(['deploy'], s.options);
+    const clock = (field: string) => `1800000000000:0:${field}`;
+    await s.client.query(
+      `INSERT INTO "User" (id, email, "passwordHash", "updatedAt")
+       VALUES ('tag-user', 'tags@example.test', 'x', TIMESTAMP '2026-10-01 00:00:00')`,
+    );
+    const groups = [
+      {
+        id: 'g1',
+        title: '场景',
+        position: 'a1',
+        clocks: { title: clock('g1t'), position: clock('g1p') },
+      },
+      { id: 'g2', title: '精力', position: 'a2', clocks: null },
+    ];
+    const tags = [
+      {
+        id: 't1',
+        title: '办公室',
+        color: '#FF0000',
+        position: 'a0',
+        group: 'g1',
+        clocks: { tagGroupId: clock('t1g'), title: clock('t1t') },
+      },
+      { id: 't2', title: '在家', color: '#00FF00', position: 'a3', group: 'g1', clocks: null },
+      {
+        id: 't3',
+        title: '紧急',
+        color: '#0000FF',
+        position: 'a4',
+        group: null,
+        clocks: { color: clock('t3c') },
+      },
+    ];
+    for (const group of groups) {
+      await s.client.query(
+        `INSERT INTO "TagGroup" (id, title, position, "userId", "createdAt", "updatedAt", "fieldClocks")
+         VALUES ($1, $2, $3, 'tag-user', TIMESTAMP '2026-10-01 00:00:00', TIMESTAMP '2026-10-02 00:00:00', $4)`,
+        [group.id, group.title, group.position, group.clocks && JSON.stringify(group.clocks)],
+      );
+    }
+    for (const tag of tags) {
+      await s.client.query(
+        `INSERT INTO "Tag" (id, title, color, position, "tagGroupId", "userId", "createdAt", "updatedAt", "fieldClocks")
+         VALUES ($1, $2, $3, $4, $5, 'tag-user', TIMESTAMP '2026-10-01 00:00:00', TIMESTAMP '2026-10-02 00:00:00', $6)`,
+        [
+          tag.id,
+          tag.title,
+          tag.color,
+          tag.position,
+          tag.group,
+          tag.clocks && JSON.stringify(tag.clocks),
+        ],
+      );
+    }
+    await s.client.query(
+      `INSERT INTO "CompactedEntity" (id, "userId", entity, "entityId") VALUES ('c1', 'tag-user', 'tag-group', 'gone')`,
+    );
+
+    // 同一份数据在版本 10 的副本里（hub 下发的 wire 视图：时间为 ISO、时钟为空对象而非 null）
+    const storage = await createNodeSqliteStorage(':memory:');
+    try {
+      for (const statement of schemaDdl()) await storage.exec(statement);
+      await storage.exec(
+        "CREATE TABLE tag_group (id TEXT PRIMARY KEY, title TEXT, position TEXT, createdAt TEXT, updatedAt TEXT, clocks TEXT NOT NULL DEFAULT '{}')",
+      );
+      await storage.exec('DROP INDEX tag_parent');
+      await storage.exec('ALTER TABLE tag DROP COLUMN parentId');
+      await storage.exec('ALTER TABLE tag ADD COLUMN tagGroupId TEXT');
+      for (const group of groups) {
+        await storage.run(
+          'INSERT INTO tag_group (id, title, position, createdAt, updatedAt, clocks) VALUES (?, ?, ?, ?, ?, ?)',
+          [
+            group.id,
+            group.title,
+            group.position,
+            '2026-10-01T00:00:00.000Z',
+            '2026-10-02T00:00:00.000Z',
+            JSON.stringify(group.clocks ?? {}),
+          ],
+        );
+      }
+      for (const tag of tags) {
+        await storage.run(
+          'INSERT INTO tag (id, title, color, position, tagGroupId, createdAt, updatedAt, clocks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            tag.id,
+            tag.title,
+            tag.color,
+            tag.position,
+            tag.group,
+            '2026-10-01T00:00:00.000Z',
+            '2026-10-02T00:00:00.000Z',
+            JSON.stringify(tag.clocks ?? {}),
+          ],
+        );
+      }
+      await storage.exec('PRAGMA user_version = 10');
+      await migrateReplica(storage);
+
+      await s.copyThrough('99999999999999');
+      await deployDatabase(s.options);
+
+      const hubRows = (
+        await s.client.query<{
+          id: string;
+          title: string;
+          color: string;
+          position: string;
+          parentId: string | null;
+          fieldClocks: Record<string, string> | null;
+        }>('SELECT id, title, color, position, "parentId", "fieldClocks" FROM "Tag" ORDER BY id')
+      ).rows;
+      const replicaRows = await storage.all<{
+        id: string;
+        title: string;
+        color: string;
+        position: string;
+        parentId: string | null;
+        clocks: string;
+      }>('SELECT id, title, color, position, parentId, clocks FROM tag ORDER BY id');
+      expect(replicaRows.map((row) => ({ ...row, clocks: JSON.parse(row.clocks) }))).toEqual(
+        hubRows.map(({ fieldClocks, ...row }) => ({ ...row, clocks: fieldClocks ?? {} })),
+      );
+      expect(hubRows.map((row) => [row.id, row.parentId])).toEqual([
+        ['g1', null],
+        ['g2', null],
+        ['t1', 'g1'],
+        ['t2', 'g1'],
+        ['t3', null],
+      ]);
+      expect(hubRows.find((row) => row.id === 't1')!.fieldClocks).toEqual({
+        parentId: clock('t1g'),
+        title: clock('t1t'),
+      });
+      expect(
+        (await s.client.query('SELECT entity, "entityId" FROM "CompactedEntity"')).rows,
+      ).toEqual([{ entity: 'tag', entityId: 'gone' }]);
+      expect(
+        (await s.client.query(`SELECT to_regclass('"TagGroup"') AS present`)).rows[0].present,
+      ).toBeNull();
     } finally {
       await storage.close();
     }

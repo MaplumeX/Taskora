@@ -24,7 +24,6 @@ const TABLE_NAMES: Record<string, string> = {
   'project-heading': 'ProjectHeading',
   area: 'Area',
   tag: 'Tag',
-  'tag-group': 'TagGroup',
 };
 
 const BATCH_SIZE = 500;

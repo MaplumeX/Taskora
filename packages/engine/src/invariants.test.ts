@@ -73,7 +73,7 @@ describe('repairEntity — task', () => {
 
   it('R4：分组必须属于任务所在项目；未知分组不动', () => {
     const owners: Record<string, string> = { h1: 'p1' };
-    const probe = (id: string) => owners[id];
+    const probe = { headingProject: (id: string) => owners[id] };
     const inProject = (projectId: string, headingId: string) =>
       task({ bucket: 'ANYTIME', projectId, headingId });
     expect(repairEntity('task', inProject('p2', 'h1'), probe)).toEqual({ headingId: null });
@@ -136,5 +136,21 @@ describe('resolveTaskBucket', () => {
     expect(resolveTaskBucket('INBOX', 'NONE', null, 'a1')).toBe('ANYTIME');
     expect(resolveTaskBucket('INBOX', 'NONE', null, null)).toBe('INBOX');
     expect(resolveTaskBucket('INBOX', 'SOMEDAY', 'p1', null)).toBe('SCHEDULED');
+  });
+});
+
+describe('repairEntity — tag', () => {
+  const parents: Record<string, string | null> = { b: 'a', c: 'b' };
+  const probes = { tagParent: (id: string) => parents[id] };
+
+  it('R1：改父 Tag 成环时回到顶层', () => {
+    expect(repairEntity('tag', { parentId: 'c' }, probes, 'a')).toEqual({ parentId: null });
+    expect(repairEntity('tag', { parentId: 'a' }, probes, 'a')).toEqual({ parentId: null });
+  });
+
+  it('不成环、顶层或不知道自身 id 时不动', () => {
+    expect(repairEntity('tag', { parentId: 'a' }, probes, 'x')).toEqual({});
+    expect(repairEntity('tag', { parentId: null }, probes, 'a')).toEqual({});
+    expect(repairEntity('tag', { parentId: 'c' }, probes)).toEqual({});
   });
 });

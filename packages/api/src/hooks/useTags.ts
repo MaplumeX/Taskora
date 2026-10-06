@@ -65,7 +65,7 @@ export function useCreateTag() {
         id: tempId,
         title: data.title,
         color: data.color ?? '#3B82F6',
-        tagGroupId: data.tagGroupId ?? null,
+        parentId: data.parentId ?? null,
         createdAt: now,
         updatedAt: now,
       };

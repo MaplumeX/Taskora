@@ -17,7 +17,6 @@ import { SubtasksService } from '../src/subtasks/subtasks.service';
 import { codecFor, loadRow, serializeRow } from '../src/sync/entity-codec';
 import { PrismaSyncChangeLog } from '../src/sync/prisma-sync-change-log.service';
 import { SyncHubService } from '../src/sync/sync-hub.service';
-import { TagGroupsService } from '../src/tag-groups/tag-groups.service';
 import { TagsService } from '../src/tags/tags.service';
 import { TasksService } from '../src/tasks/tasks.service';
 import { resetDb, testPrisma, testPrismaService } from './db';
@@ -48,7 +47,6 @@ export async function createHarness(timeZone = 'UTC') {
     headings: new ProjectHeadingsService(prisma, hub),
     areas: new AreasService(prisma, hub),
     tags: new TagsService(prisma, hub),
-    tagGroups: new TagGroupsService(prisma, hub),
     feed: new FeedService(prisma, hub),
   };
 }

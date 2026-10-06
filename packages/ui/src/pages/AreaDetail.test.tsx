@@ -51,7 +51,6 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useUpdateArea: () => ({ mutate: vi.fn() }),
   useReorderProjects: () => ({ mutate: harness.reorderProjectsMutate }),
   useTagsQuery: () => ({ data: [] }),
-  useTagGroupsQuery: () => ({ data: [] }),
   useEffectiveTags: () => effectiveTags,
 }));
 

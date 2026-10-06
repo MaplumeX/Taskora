@@ -77,13 +77,16 @@ describe('任务搜索契约 — 设备 Engine 后端', () => {
       storage: await createNodeSqliteStorage(':memory:'),
       deviceId: 'search-contract-device',
     });
+    for (const tag of SEARCH_CONTRACT.tags) await engine.create('tag', { ...tag });
+    for (const area of SEARCH_CONTRACT.areas) await engine.create('area', { ...area });
     for (const task of SEARCH_CONTRACT.tasks) await engine.create('task', { ...task });
     for (const subtask of SEARCH_CONTRACT.subtasks) await engine.create('subtask', { ...subtask });
     backend = createEngineTaskBackend({ engine });
   });
 
-  it.each(SEARCH_CONTRACT.cases)('q=$q extended=$extended', async ({ q, extended, hits }) => {
-    const result = await backend.searchTasks(q, { extended });
+  it.each(SEARCH_CONTRACT.cases)('q=$q extended=$extended tagIds=$tagIds', async (contract) => {
+    const { q, extended, tagIds, hits } = contract;
+    const result = await backend.searchTasks(q, { extended, tagIds });
     expect(
       result.map((hit) => ({ id: hit.task.id, subtasks: hit.matchedSubtasks.map((s) => s.id) })),
     ).toEqual(hits);

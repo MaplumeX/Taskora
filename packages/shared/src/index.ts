@@ -14,7 +14,6 @@ export * from './dtos/auth.dto';
 export * from './dtos/tag.dto';
 export * from './dtos/reorder.dto';
 export * from './dtos/user.dto';
-export * from './dtos/tag-group.dto';
 export * from './dtos/project-heading.dto';
 export * from './dtos/agent.dto';
 export * from './dtos/event.dto';

@@ -24,7 +24,6 @@ const instant = (iso: string | null) => (iso ? new Date(iso) : null);
 const tagRows = VIEW_CONTRACT.tags.map((tag) => ({
   ...tag,
   color: '#3B82F6',
-  tagGroupId: null,
   createdAt: new Date(VIEW_CONTRACT.now),
   updatedAt: new Date(VIEW_CONTRACT.now),
 }));
@@ -69,6 +68,7 @@ describe('领域规则契约 — hub REST 服务', () => {
     task: { findMany: vi.fn().mockResolvedValue(taskRows) },
     project: { findMany: vi.fn().mockResolvedValue(projectRows) },
     area: { findMany: vi.fn().mockResolvedValue(areaRows) },
+    tag: { findMany: vi.fn().mockResolvedValue(tagRows) },
   } as unknown as PrismaService;
   const feed = new FeedService(prisma, {} as SyncHubService);
   const tasks = new TasksService(prisma, {} as SyncHubService);
@@ -117,16 +117,30 @@ describe('任务搜索契约 — hub REST 服务', () => {
     reminderTime: null,
     repeatRule: null,
     headingId: null,
-    tags: tagIds.map((tagId) => ({ tagId, tag: tagRows.find((tag) => tag.id === tagId)! })),
+    tags: tagIds.map((tagId) => ({
+      tagId,
+      tag: { ...SEARCH_CONTRACT.tags.find((tag) => tag.id === tagId)!, color: '#3B82F6' },
+    })),
     subtasks: subtaskRows.filter((subtask) => subtask.taskId === task.id),
   }));
   const prisma = {
     task: { findMany: vi.fn().mockResolvedValue(searchRows) },
+    project: { findMany: vi.fn().mockResolvedValue([]) },
+    area: {
+      findMany: vi.fn().mockResolvedValue(
+        SEARCH_CONTRACT.areas.map(({ tagIds, ...area }) => ({
+          ...area,
+          tags: tagIds.map((tagId) => ({ tagId })),
+        })),
+      ),
+    },
+    tag: { findMany: vi.fn().mockResolvedValue(SEARCH_CONTRACT.tags) },
   } as unknown as PrismaService;
   const tasks = new TasksService(prisma, {} as SyncHubService);
 
-  it.each(SEARCH_CONTRACT.cases)('q=$q extended=$extended', async ({ q, extended, hits }) => {
-    const result = await tasks.search('user-1', q, { extended });
+  it.each(SEARCH_CONTRACT.cases)('q=$q extended=$extended tagIds=$tagIds', async (contract) => {
+    const { q, extended, tagIds, hits } = contract;
+    const result = await tasks.search('user-1', q, { extended, tagIds });
     expect(
       result.map((hit) => ({ id: hit.task.id, subtasks: hit.matchedSubtasks.map((s) => s.id) })),
     ).toEqual(hits);

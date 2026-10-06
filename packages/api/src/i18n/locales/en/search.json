@@ -3,7 +3,7 @@
   "title": "Quick Find",
   "inputPlaceholder": "Search tasks, projects, areas, tags…",
   "clearSearch": "Clear search",
-  "emptyHint": "Type to find tasks, or jump to a list, project, area, or tag",
+  "emptyHint": "Type to find tasks, or jump to a list, project, area, or tag. Type # to narrow by tag",
   "searchFailed": "Search failed, please try again.",
   "noResults": "No matches",
   "groupLists": "Lists",
@@ -12,5 +12,7 @@
   "groupTasks": "Tasks",
   "continueSearch": "Continue Search",
   "continueSearchHint": "Include Logbook and Trash",
-  "inTrash": "In Trash"
+  "inTrash": "In Trash",
+  "tagCompletionEmpty": "No matching tags",
+  "removeTag": "Remove tag \"{{name}}\""
 }

@@ -13,7 +13,6 @@ import { emitTo, listen } from '@tauri-apps/api/event';
 import {
   areaKeys,
   projectKeys,
-  tagGroupKeys,
   tagKeys,
   usePreferencesStore,
   type QuickAddDraft,
@@ -68,7 +67,6 @@ export function applyQuickAddSnapshot(queryClient: QueryClient, snapshot: QuickA
   queryClient.setQueryData(projectKeys.all, snapshot.projects);
   queryClient.setQueryData(areaKeys.all, snapshot.areas);
   queryClient.setQueryData(tagKeys.all, snapshot.tags);
-  queryClient.setQueryData(tagGroupKeys.all, snapshot.tagGroups);
 }
 
 /**

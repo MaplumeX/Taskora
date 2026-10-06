@@ -175,8 +175,10 @@ export class TaskQueryDto {
 
 /** 任务搜索（Quick Find）：GET /tasks/search。 */
 export class TaskSearchQueryDto {
+  /** 有 Tag 条件时可以为空。 */
+  @IsOptional()
   @IsString()
-  q!: string;
+  q?: string;
 
   @IsOptional()
   @IsBoolean()
@@ -187,6 +189,15 @@ export class TaskSearchQueryDto {
     return value;
   })
   extended?: boolean;
+
+  /** Tag 条件，逗号分隔（Quick Find `#tag`）：各 Tag 之间 AND，按有效 Tag 的子树命中。 */
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  @Transform(({ value }) =>
+    typeof value === 'string' ? value.split(',').filter((id) => id !== '') : value,
+  )
+  tagIds?: string[];
 }
 
 export class ReorderDto {

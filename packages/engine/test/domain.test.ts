@@ -9,11 +9,13 @@ import { describe, expect, it } from 'vitest';
 import {
   HeadingLayoutMismatchError,
   buildRepeatPreviews,
+  buildTagTree,
   countProjectTasks,
   deriveRepeatInstanceId,
   effectiveProjectTagIds,
   effectiveTaskTagIds,
   feedIncludesProjects,
+  hasSearchCriteria,
   planConvertTaskToProject,
   planEmptyTrash,
   planHeadingArchive,
@@ -36,6 +38,8 @@ import {
   repeatDerivationTarget,
   sortFeedItems,
   sortForView,
+  tagHit,
+  tagParentCreatesCycle,
   tagParentsFrom,
   taskMatchesQuery,
   taskMatchesView,
@@ -52,6 +56,7 @@ describe('视图契约（纯函数）', () => {
   const parents = tagParentsFrom(
     new Map(VIEW_CONTRACT.projects.map((project) => [project.id, project])),
     new Map(VIEW_CONTRACT.areas.map((area) => [area.id, area])),
+    VIEW_CONTRACT.tags,
   );
 
   it.each(Object.entries(VIEW_CONTRACT.feeds))('feed %s', (view, expected) => {
@@ -91,6 +96,7 @@ describe('有效 Tag（ADR 0015）', () => {
       ['area-1', { tagIds: ['home', 'work'] }],
       ['area-2', { tagIds: ['errand'] }],
     ]),
+    [{ id: 'life' }, { id: 'home', parentId: 'life' }, { id: 'errand', parentId: 'home' }],
   );
 
   it('Task：自身 ∪ Project ∪ Project 所属 Area，去重', () => {
@@ -118,6 +124,14 @@ describe('有效 Tag（ADR 0015）', () => {
     ]);
   });
 
+  it('tagHit：命中 Tag 的整棵子树，不展开祖先', () => {
+    expect(tagHit(['errand'], 'life', parents)).toBe(true);
+    expect(tagHit(['home'], 'home', parents)).toBe(true);
+    expect(tagHit(['life'], 'home', parents)).toBe(false);
+    expect(tagHit(['x'], 'unknown', parents)).toBe(false);
+    expect(tagHit(['unknown'], 'unknown', parents)).toBe(true);
+  });
+
   it('tagId 查询缺少 parents 时报错', () => {
     expect(() =>
       taskMatchesQuery(
@@ -132,14 +146,86 @@ describe('有效 Tag（ADR 0015）', () => {
   });
 });
 
+describe('嵌套 Tag 树（ADR-0016）', () => {
+  it('子树、祖先、子 Tag 保持输入顺序', () => {
+    const tree = buildTagTree([
+      { id: 'work', parentId: null },
+      { id: 'meeting', parentId: 'work' },
+      { id: 'weekly', parentId: 'meeting' },
+      { id: 'travel', parentId: 'work' },
+      { id: 'urgent' },
+    ]);
+    expect(tree.childrenOf(null)).toEqual(['work', 'urgent']);
+    expect(tree.childrenOf('work')).toEqual(['meeting', 'travel']);
+    expect([...tree.descendantsOf('work')].sort()).toEqual(
+      ['meeting', 'travel', 'weekly', 'work'].sort(),
+    );
+    expect(tree.ancestorsOf('weekly')).toEqual(['meeting', 'work']);
+    expect(tree.parentOf('urgent')).toBeNull();
+  });
+
+  it('自指与悬空的父 Tag 按顶层处理', () => {
+    const tree = buildTagTree([
+      { id: 'a', parentId: 'a' },
+      { id: 'b', parentId: 'deleted' },
+    ]);
+    expect(tree.childrenOf(null)).toEqual(['a', 'b']);
+    expect(tree.ancestorsOf('b')).toEqual([]);
+  });
+
+  it('环：环上 id 最小的视作顶层，结果与输入顺序无关', () => {
+    const rows = [
+      { id: 'c', parentId: 'b' },
+      { id: 'b', parentId: 'a' },
+      { id: 'a', parentId: 'c' },
+      { id: 'd', parentId: 'c' },
+    ];
+    for (const input of [rows, [...rows].reverse()]) {
+      const tree = buildTagTree(input);
+      expect(tree.parentOf('a')).toBeNull();
+      expect(tree.ancestorsOf('d')).toEqual(['c', 'b', 'a']);
+      expect(tree.descendantsOf('a').size).toBe(4);
+    }
+  });
+
+  it('改父 Tag 是否成环', () => {
+    const parents: Record<string, string | null> = { meeting: 'work', weekly: 'meeting' };
+    const parentOf = (id: string) => parents[id];
+    expect(tagParentCreatesCycle('work', 'weekly', parentOf)).toBe(true);
+    expect(tagParentCreatesCycle('work', 'work', parentOf)).toBe(true);
+    expect(tagParentCreatesCycle('weekly', 'work', parentOf)).toBe(false);
+    expect(tagParentCreatesCycle('work', null, parentOf)).toBe(false);
+    // 现有数据里的环不会让它死循环
+    expect(tagParentCreatesCycle('x', 'p', (id) => ({ p: 'q', q: 'p' })[id])).toBe(false);
+  });
+});
+
 describe('任务搜索（纯函数）', () => {
-  it.each(SEARCH_CONTRACT.cases)('契约 q=$q extended=$extended', ({ q, extended, hits }) => {
-    const result = planTaskSearch(SEARCH_CONTRACT.tasks, SEARCH_CONTRACT.subtasks, q, {
-      extended,
-    });
+  const searchParents = tagParentsFrom(
+    new Map(),
+    new Map(SEARCH_CONTRACT.areas.map((area) => [area.id, area])),
+    SEARCH_CONTRACT.tags,
+  );
+
+  it.each(SEARCH_CONTRACT.cases)('契约 q=$q extended=$extended tagIds=$tagIds', (contract) => {
+    const { q, extended, tagIds, hits } = contract;
+    const result = planTaskSearch(
+      SEARCH_CONTRACT.tasks,
+      SEARCH_CONTRACT.subtasks,
+      q,
+      { extended, tagIds },
+      searchParents,
+    );
     expect(
       result.map((hit) => ({ id: hit.task.id, subtasks: hit.matchedSubtasks.map((s) => s.id) })),
     ).toEqual(hits);
+  });
+
+  it('Tag 条件缺少 parents 时报错；没有搜索词也没有 Tag 时不搜索', () => {
+    expect(() => planTaskSearch(SEARCH_CONTRACT.tasks, [], '', { tagIds: ['st-home'] })).toThrow();
+    expect(hasSearchCriteria('  ', { tagIds: [] })).toBe(false);
+    expect(hasSearchCriteria('', { tagIds: ['x'] })).toBe(true);
+    expect(hasSearchCriteria('milk')).toBe(true);
   });
 
   it('相关度档位', () => {

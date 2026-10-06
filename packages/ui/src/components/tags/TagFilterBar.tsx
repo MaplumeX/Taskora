@@ -3,13 +3,15 @@ import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import type { TagResponseDto } from '@taskora/shared';
-import { useTagGroupsQuery, useTagsQuery } from '@taskora/api';
+import { useTagsQuery } from '@taskora/api';
 
 import { cn } from '@/lib/utils';
 import {
   collectFilterOptions,
   filterInOptions,
+  filterLevels,
   matchesTagFilter,
+  toggleFilterTag,
   type TagFilter,
   type TagFilterOptions,
 } from './tagFilter';
@@ -23,27 +25,33 @@ interface TagFilterBarProps {
 /**
  * 列表页的 Tag 过滤（`.scratch/tags-things3` issue 05）：返回过滤后的条目
  * 与过滤栏的 props。状态只属于当前页面（路由变化即失效），选中的 Tag
- * 不再出现在列表里时自动失效。
+ * 不再出现在列表里时自动失效。root 给定时（Tag 详情页）第一行只列它的
+ * 子 Tag。
  */
-export function useTagFilter<T>(items: T[], effectiveOf: (item: T) => string[]) {
+export function useTagFilter<T>(
+  items: T[],
+  effectiveOf: (item: T) => string[],
+  root: string | null = null,
+) {
   const { pathname } = useLocation();
   const { data: tags = [] } = useTagsQuery();
-  const { data: groups = [] } = useTagGroupsQuery();
   const [state, setState] = useState<{ pathname: string; filter: TagFilter } | null>(null);
   // 同一页面组件跨路由复用时（如项目 A → 项目 B → 回到 A）也不恢复旧过滤
   useEffect(() => setState(null), [pathname]);
 
   const effective = useMemo(() => items.map(effectiveOf), [items, effectiveOf]);
   const options = useMemo(
-    () => collectFilterOptions(effective, tags, groups),
-    [effective, tags, groups],
+    () => collectFilterOptions(effective, tags, root),
+    [effective, tags, root],
   );
   const selected = state?.pathname === pathname ? state.filter : null;
   const filter = selected && filterInOptions(selected, options) ? selected : null;
   const visible = useMemo(
     () =>
-      filter ? items.filter((_, index) => matchesTagFilter(effective[index], filter, tags)) : items,
-    [items, effective, filter, tags],
+      filter && options
+        ? items.filter((_, index) => matchesTagFilter(effective[index], filter, options.forest))
+        : items,
+    [items, effective, filter, options],
   );
 
   const bar: TagFilterBarProps = {
@@ -58,70 +66,42 @@ export function TagFilterBar({ options, filter, onChange }: TagFilterBarProps) {
   const { t } = useTranslation();
   if (!options) return null;
 
-  const group =
-    filter?.kind === 'group' ? options.groups.find((g) => g.id === filter.groupId) : undefined;
-  // 再点一次已选中的项即取消
-  const toggle = (next: TagFilter, active: boolean) => onChange(active ? null : next);
+  const path = filter?.kind === 'tag' ? filter.path : [];
+  const levels = filterLevels(options, path);
 
   return (
     <div role="toolbar" aria-label={t('tag:filterLabel')} className="flex flex-col gap-1.5">
-      <div className="flex flex-wrap items-center gap-1.5">
-        <Chip active={filter === null} onClick={() => onChange(null)}>
-          {t('tag:filterAll')}
-        </Chip>
-        {options.groups.map((g) => {
-          const active = filter?.kind === 'group' && filter.groupId === g.id;
-          return (
-            <Chip
-              key={g.id}
-              active={active}
-              onClick={() => toggle({ kind: 'group', groupId: g.id, tagId: null }, active)}
-            >
-              {g.title}
+      {levels.map((level, index) => (
+        <div
+          key={index === 0 ? 'root' : path[index - 1]}
+          className="flex flex-wrap items-center gap-1.5"
+          style={index > 0 ? { paddingLeft: `${index * 0.75}rem` } : undefined}
+        >
+          {index === 0 && (
+            <Chip active={filter === null} onClick={() => onChange(null)}>
+              {t('tag:filterAll')}
             </Chip>
-          );
-        })}
-        {options.tags.map((tag) => {
-          const active = filter?.kind === 'tag' && filter.tagId === tag.id;
-          return (
+          )}
+          {level.map((tag) => (
             <Chip
               key={tag.id}
-              active={active}
-              onClick={() => toggle({ kind: 'tag', tagId: tag.id }, active)}
+              active={path[index] === tag.id}
+              onClick={() => onChange(toggleFilterTag(filter, index, tag.id))}
             >
               <TagDot tag={tag} />
               {tag.title}
             </Chip>
-          );
-        })}
-        {options.untagged && (
-          <Chip
-            active={filter?.kind === 'untagged'}
-            onClick={() => toggle({ kind: 'untagged' }, filter?.kind === 'untagged')}
-          >
-            {t('tag:filterUntagged')}
-          </Chip>
-        )}
-      </div>
-      {group && filter?.kind === 'group' && (
-        <div className="flex flex-wrap items-center gap-1.5 pl-3">
-          {group.tags.map((tag) => {
-            const active = filter.tagId === tag.id;
-            return (
-              <Chip
-                key={tag.id}
-                active={active}
-                onClick={() =>
-                  onChange({ kind: 'group', groupId: group.id, tagId: active ? null : tag.id })
-                }
-              >
-                <TagDot tag={tag} />
-                {tag.title}
-              </Chip>
-            );
-          })}
+          ))}
+          {index === 0 && options.untagged && (
+            <Chip
+              active={filter?.kind === 'untagged'}
+              onClick={() => onChange(filter?.kind === 'untagged' ? null : { kind: 'untagged' })}
+            >
+              {t('tag:filterUntagged')}
+            </Chip>
+          )}
         </div>
-      )}
+      ))}
     </div>
   );
 }

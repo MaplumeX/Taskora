@@ -41,6 +41,10 @@ Area events.
 
 ## Tag Group stays a container
 
+> **Superseded (2026-10-06)** by [ADR-0016](./0016-nested-tags.md): tags now
+> nest, a parent tag is an ordinary tag, and Tag Group is retired. Effective
+> tags above are unchanged; matching additionally covers a tag's subtree.
+
 Things 3 also nests tags (a parent tag is itself taggable, and filtering by a
 parent includes its children). We keep `TagGroup` as a one-level,
 non-taggable container and only borrow the filtering semantics: filtering by a

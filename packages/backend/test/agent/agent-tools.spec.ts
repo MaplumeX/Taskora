@@ -48,8 +48,8 @@ function createService() {
       findAll: vi.fn().mockResolvedValue([]),
       findOne: vi.fn().mockRejectedValue(new Error('not found')),
       create: vi.fn().mockResolvedValue({ id: 'g1', title: 'tag', color: '#fff' }),
+      update: vi.fn().mockResolvedValue({ id: 'g1', title: 'tag', color: '#fff', parentId: 'p' }),
     },
-    tagGroups: { findAll: vi.fn().mockResolvedValue([]) },
     subtasks: {
       create: vi.fn().mockResolvedValue({ id: 's1', title: 'Step', taskId: 't1' }),
       update: vi.fn().mockResolvedValue({ id: 's1', title: 'Step', status: 'COMPLETED' }),
@@ -78,7 +78,6 @@ function build(service: ReturnType<typeof createService>, userId = 'user-1') {
     service.projects as never,
     service.areas as never,
     service.tags as never,
-    service.tagGroups as never,
     service.subtasks as never,
     service.projectHeadings as never,
     service.feed as never,
@@ -116,6 +115,7 @@ describe('AgentToolsService', () => {
       'update_task',
       'create_subtask',
       'create_tag',
+      'update_tag',
       'restore_task',
       'reorder_tasks',
       'reorder_projects',
@@ -162,7 +162,6 @@ describe('AgentToolsService', () => {
       service2.projects as never,
       service2.areas as never,
       service2.tags as never,
-      service2.tagGroups as never,
       service2.subtasks as never,
       service2.projectHeadings as never,
       service2.feed as never,
@@ -278,6 +277,21 @@ describe('AgentToolsService', () => {
       't1',
       expect.objectContaining({ dueDate: null, projectId: null }),
     );
+  });
+
+  it('update_tag moves a tag under another tag or back to the top level', async () => {
+    await tool('update_tag').execute('call-1', { id: 'g1', parentId: 'p' } as never);
+    expect(service.tags.update).toHaveBeenCalledWith('user-1', 'g1', {
+      title: undefined,
+      color: undefined,
+      parentId: 'p',
+    });
+    await tool('update_tag').execute('call-2', { id: 'g1', parentId: null } as never);
+    expect(service.tags.update).toHaveBeenLastCalledWith('user-1', 'g1', {
+      title: undefined,
+      color: undefined,
+      parentId: null,
+    });
   });
 
   it('empty_trash calls the feed service', async () => {

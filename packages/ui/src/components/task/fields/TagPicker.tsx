@@ -3,15 +3,10 @@ import { useTranslation } from 'react-i18next';
 import { Check, Minus, Plus, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { useCreateTag, useTagGroupsQuery, useTagsQuery } from '@taskora/api';
+import { useCreateTag, useTagsQuery } from '@taskora/api';
 
 import { cn } from '@/lib/utils';
-import {
-  buildTagPickerRows,
-  selectableRows,
-  type SelectableTagRow,
-  type TagSelectionState,
-} from './tagPickerOptions';
+import { buildTagPickerRows, type TagPickerRow, type TagSelectionState } from './tagPickerOptions';
 
 interface Props {
   /** 某个 Tag 在被编辑对象上的状态；单个对象只会是 all / none。 */
@@ -27,24 +22,23 @@ interface Props {
 
 /**
  * Tag 选择器（对齐 Things 3 的 Tags 输入，`.scratch/tags-things3` issue 02）：
- * 可输入过滤，输入不存在的名字可当场新建并打上。`↑`/`↓` 移动高亮，
+ * 按 Tag 树缩进列出（父 Tag 也可勾选），可输入过滤，输入不存在的名字可
+ * 当场新建并打上（新建的 Tag 在顶层）。`↑`/`↓` 移动高亮，
  * `Enter` 切换高亮项且不关闭（便于连续打多个），`Esc` 由宿主关闭。
  */
 export function TagPicker({ stateOf, onToggle, allowCreate = true }: Props) {
   const { t } = useTranslation();
   const { data: tags = [] } = useTagsQuery();
-  const { data: groups = [] } = useTagGroupsQuery();
   const createTag = useCreateTag();
   const listboxId = useId();
 
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
 
-  const rows = useMemo(() => {
-    const all = buildTagPickerRows({ tags, groups, query });
+  const options = useMemo(() => {
+    const all = buildTagPickerRows({ tags, query });
     return allowCreate ? all : all.filter((row) => row.kind !== 'create');
-  }, [tags, groups, query, allowCreate]);
-  const options = useMemo(() => selectableRows(rows), [rows]);
+  }, [tags, query, allowCreate]);
   const active = Math.min(activeIndex, Math.max(options.length - 1, 0));
   const optionId = (index: number) => `${listboxId}-option-${index}`;
 
@@ -56,7 +50,7 @@ export function TagPicker({ stateOf, onToggle, allowCreate = true }: Props) {
     document.getElementById(optionId(active))?.scrollIntoView?.({ block: 'nearest' });
   }, [active, listboxId]);
 
-  const choose = (row: SelectableTagRow) => {
+  const choose = (row: TagPickerRow) => {
     if (row.kind === 'tag') {
       onToggle(row.id);
       return;
@@ -88,7 +82,6 @@ export function TagPicker({ stateOf, onToggle, allowCreate = true }: Props) {
     }
   };
 
-  let optionIndex = -1;
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-2 border-b border-border px-2 pb-1.5">
@@ -118,20 +111,7 @@ export function TagPicker({ stateOf, onToggle, allowCreate = true }: Props) {
         {options.length === 0 && (
           <p className="px-2 py-2 text-meta text-muted-foreground">{t('tag:pickerEmpty')}</p>
         )}
-        {rows.map((row) => {
-          if (row.kind === 'header') {
-            return (
-              <div
-                key={row.id}
-                role="presentation"
-                className="px-2 pb-0.5 pt-1.5 text-meta font-medium text-muted-foreground"
-              >
-                {row.title}
-              </div>
-            );
-          }
-          optionIndex += 1;
-          const index = optionIndex;
+        {options.map((row, index) => {
           const state = row.kind === 'tag' ? stateOf(row.id) : 'none';
           return (
             <div
@@ -148,6 +128,11 @@ export function TagPicker({ stateOf, onToggle, allowCreate = true }: Props) {
                 'flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm max-md:py-2.5',
                 index === active && 'bg-accent',
               )}
+              style={
+                row.kind === 'tag' && row.depth > 0
+                  ? { paddingLeft: `${0.5 + row.depth * 1.125}rem` }
+                  : undefined
+              }
             >
               {row.kind === 'tag' ? (
                 <>
@@ -157,6 +142,11 @@ export function TagPicker({ stateOf, onToggle, allowCreate = true }: Props) {
                     style={{ backgroundColor: row.tag.color }}
                   />
                   <span className="truncate">{row.tag.title}</span>
+                  {row.path.length > 0 && (
+                    <span className="min-w-0 shrink truncate text-meta text-muted-foreground">
+                      {row.path.join(' › ')}
+                    </span>
+                  )}
                   <SelectionMark state={state} />
                 </>
               ) : (

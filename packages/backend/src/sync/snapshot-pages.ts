@@ -26,7 +26,6 @@ export const SNAPSHOT_PHASES: ReadonlyArray<{
   entity: SyncEntity;
   where?: Record<string, unknown>;
 }> = [
-  { entity: 'tag-group' },
   { entity: 'tag' },
   { entity: 'area' },
   { entity: 'project' },

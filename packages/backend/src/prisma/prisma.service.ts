@@ -55,9 +55,6 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get projectHeading() {
     return this.extended.projectHeading;
   }
-  get tagGroup() {
-    return this.extended.tagGroup;
-  }
   get tag() {
     return this.extended.tag;
   }

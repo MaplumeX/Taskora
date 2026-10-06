@@ -18,12 +18,30 @@
  */
 
 import { ENTITIES, schemaDdl } from './entities';
+import { DEFAULT_TAG_COLOR } from './domain/tags';
 import { synthPosition } from './position';
 import { inTransaction, type SqlStorage } from './storage';
 
 export type ReplicaMigration = (storage: SqlStorage) => Promise<void>;
 
 const ENTITY_TABLES = Object.values(ENTITIES).map((def) => def.table);
+
+/**
+ * sortOrder 时代（7 → 9）的实体表。已发布的步骤按当时的表集合运行，
+ * 不随注册表变化：tag_group 在 10 → 11 才退役。
+ */
+const SORT_ORDER_ERA_TABLES = [...ENTITY_TABLES, 'tag_group'];
+
+/** 副本迁移完成、等待在协议 5 的 hub 上做一次 bootstrap（_engine_meta 键）。 */
+export const TAG_TREE_RESYNC_META_KEY = 'tagTreeResync';
+
+async function tableExists(storage: SqlStorage, table: string): Promise<boolean> {
+  const rows = await storage.all<{ name: string }>(
+    "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+    [table],
+  );
+  return rows.length > 0;
+}
 
 async function columnNames(storage: SqlStorage, table: string): Promise<string[]> {
   const columns = await storage.all<{ name: string }>(
@@ -38,6 +56,8 @@ async function addColumnIfMissing(
   column: string,
   definition: string,
 ): Promise<void> {
+  // 已退役的表（tag_group）在第 1 步按当前 DDL 补建时不会出现
+  if (!(await tableExists(storage, table))) return;
   if (!(await columnNames(storage, table)).includes(column)) {
     await storage.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
@@ -53,7 +73,8 @@ async function addPositionToSortOrderEntities(storage: SqlStorage): Promise<void
   for (const table of ['subtask', 'project_heading', 'area', 'tag_group']) {
     await addColumnIfMissing(storage, table, 'position', 'TEXT');
   }
-  for (const table of ENTITY_TABLES) {
+  for (const table of SORT_ORDER_ERA_TABLES) {
+    if (!(await tableExists(storage, table))) continue;
     // 第 1 步按当前 DDL 补建的表没有 sortOrder 列（协议 4 起注册表不含它）
     const hasSortOrder = (await columnNames(storage, table)).includes('sortOrder');
     const rows = await storage.all<{
@@ -79,7 +100,7 @@ async function addPositionToSortOrderEntities(storage: SqlStorage): Promise<void
  * 注册表里，7 → 8 已用它填好 position；第 1 步补建的表本来就没有它。
  */
 async function dropSortOrder(storage: SqlStorage): Promise<void> {
-  for (const table of ENTITY_TABLES) {
+  for (const table of SORT_ORDER_ERA_TABLES) {
     if ((await columnNames(storage, table)).includes('sortOrder')) {
       await storage.exec(`ALTER TABLE ${table} DROP COLUMN sortOrder`);
     }
@@ -87,7 +108,94 @@ async function dropSortOrder(storage: SqlStorage): Promise<void> {
 }
 
 async function createMissingTables(storage: SqlStorage): Promise<void> {
+  // 当前 DDL 的索引引用 tag.parentId：已有的旧 tag 表先补列（10 → 11 再把
+  // tagGroupId 迁过来）
+  await addColumnIfMissing(storage, 'tag', 'parentId', 'TEXT');
   for (const statement of schemaDdl()) await storage.exec(statement);
+}
+
+/**
+ * 10 → 11：Tag Group 退役，改为嵌套 Tag（ADR-0016）。规则与 hub 的
+ * Prisma 迁移逐字相同，两端各自转换后无需同步就一致：
+ * - 每个 Tag Group 转成同 id 的顶层 Tag：标题、位次、时间戳与它们的时钟
+ *   原样保留，颜色取默认色（无时钟）；
+ * - 成员 Tag 的 tagGroupId 改为 parentId（值与时钟键都改名）；
+ * - Outbox 与 Compact 登记里的 tag-group 改为 tag、tagGroupId 改为 parentId。
+ * 最后记下「需要一次 bootstrap」：设备先于 hub 升级时，期间旧 hub 下发的
+ * tag-group 事件被跳过，连上协议 5 的 hub 后整体重取一次收敛。
+ */
+async function nestTagGroups(storage: SqlStorage): Promise<void> {
+  await addColumnIfMissing(storage, 'tag', 'parentId', 'TEXT');
+  if ((await columnNames(storage, 'tag')).includes('tagGroupId')) {
+    const members = await storage.all<{ id: string; tagGroupId: string | null; clocks: string }>(
+      'SELECT id, tagGroupId, clocks FROM tag WHERE tagGroupId IS NOT NULL OR clocks LIKE \'%"tagGroupId"%\'',
+    );
+    for (const row of members) {
+      const clocks = JSON.parse(row.clocks || '{}') as Record<string, string>;
+      if ('tagGroupId' in clocks) {
+        clocks.parentId = clocks.tagGroupId;
+        delete clocks.tagGroupId;
+      }
+      await storage.run('UPDATE tag SET parentId = ?, clocks = ? WHERE id = ?', [
+        row.tagGroupId,
+        JSON.stringify(clocks),
+        row.id,
+      ]);
+    }
+    await storage.exec('DROP INDEX IF EXISTS tag_group_member');
+    await storage.exec('ALTER TABLE tag DROP COLUMN tagGroupId');
+  }
+  if (await tableExists(storage, 'tag_group')) {
+    const groups = await storage.all<{
+      id: string;
+      title: string | null;
+      position: string | null;
+      createdAt: string | null;
+      updatedAt: string | null;
+      clocks: string;
+    }>('SELECT id, title, position, createdAt, updatedAt, clocks FROM tag_group');
+    for (const group of groups) {
+      await storage.run(
+        `INSERT OR IGNORE INTO tag (id, title, color, position, parentId, createdAt, updatedAt, clocks)
+         VALUES (?, ?, ?, ?, NULL, ?, ?, ?)`,
+        [
+          group.id,
+          group.title,
+          DEFAULT_TAG_COLOR,
+          group.position,
+          group.createdAt,
+          group.updatedAt,
+          group.clocks || '{}',
+        ],
+      );
+    }
+    await storage.exec('DROP TABLE tag_group');
+  }
+
+  const pending = await storage.all<{ id: number; entity: string; fields: string }>(
+    "SELECT id, entity, fields FROM _outbox WHERE entity IN ('tag', 'tag-group')",
+  );
+  for (const row of pending) {
+    const fields = JSON.parse(row.fields || '{}') as Record<string, unknown>;
+    if ('tagGroupId' in fields) {
+      fields.parentId = fields.tagGroupId;
+      delete fields.tagGroupId;
+    }
+    await storage.run("UPDATE _outbox SET entity = 'tag', fields = ? WHERE id = ?", [
+      JSON.stringify(fields),
+      row.id,
+    ]);
+  }
+  await storage.run(
+    "INSERT OR IGNORE INTO _compacted (entity, entity_id, registered_at) SELECT 'tag', entity_id, registered_at FROM _compacted WHERE entity = 'tag-group'",
+  );
+  await storage.run("DELETE FROM _compacted WHERE entity = 'tag-group'");
+
+  await storage.exec('CREATE INDEX IF NOT EXISTS tag_parent ON tag (parentId)');
+  await storage.run(
+    'INSERT INTO _engine_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    [TAG_TREE_RESYNC_META_KEY, '1'],
+  );
 }
 
 /**
@@ -127,6 +235,8 @@ export const REPLICA_MIGRATIONS: readonly ReplicaMigration[] = [
     await addColumnIfMissing(storage, 'project', 'repeatRule', 'TEXT');
     await addColumnIfMissing(storage, 'project', 'repeatSourceId', 'TEXT');
   },
+  // 10 → 11：Tag Group 转为父 Tag（嵌套 Tag，ADR-0016）。
+  nestTagGroups,
 ];
 
 /** 当前代码的副本 schema 版本。 */

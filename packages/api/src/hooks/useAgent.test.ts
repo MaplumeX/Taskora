@@ -15,8 +15,6 @@ describe('invalidateDomainData', () => {
       ['task', 't1'],
       ['tags'],
       ['tag', 'g1'],
-      ['tag-groups'],
-      ['tag-group', 'gg1'],
       ['project-headings'],
       ['feed', 'today'],
     ];

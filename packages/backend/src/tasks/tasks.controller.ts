@@ -48,7 +48,10 @@ export class TasksController {
 
   @Get('search')
   search(@Request() req: { user: { id: string } }, @Query() query: TaskSearchQueryDto) {
-    return this.tasksService.search(req.user.id, query.q, { extended: query.extended });
+    return this.tasksService.search(req.user.id, query.q ?? '', {
+      extended: query.extended,
+      tagIds: query.tagIds,
+    });
   }
 
   @Get(':id')

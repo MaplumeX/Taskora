@@ -9,6 +9,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  DEFAULT_TAG_COLOR,
   REPLICA_SCHEMA_VERSION,
   ReplicaSchemaTooNewError,
   SyncUpgradeRequiredError,
@@ -51,6 +52,17 @@ async function legacyReplica(): Promise<SqlStorage> {
   await storage.run("INSERT INTO task (id, title, clocks) VALUES ('t1', 'Legacy', '{}')");
   await storage.run("INSERT INTO _outbox (entity, entity_id, fields) VALUES ('task', 't1', '{}')");
   return storage;
+}
+
+/** 嵌套 Tag 之前（版本 10 及更早）的 Tag Group 表与 tag.tagGroupId 列。 */
+async function legacyTagGroups(storage: SqlStorage): Promise<void> {
+  await storage.exec(
+    "CREATE TABLE tag_group (id TEXT PRIMARY KEY, title TEXT, position TEXT, createdAt TEXT, updatedAt TEXT, clocks TEXT NOT NULL DEFAULT '{}')",
+  );
+  await storage.exec('DROP INDEX tag_parent');
+  await storage.exec('ALTER TABLE tag DROP COLUMN parentId');
+  await storage.exec('ALTER TABLE tag ADD COLUMN tagGroupId TEXT');
+  await storage.exec('CREATE INDEX tag_group_member ON tag (tagGroupId)');
 }
 
 function open(storage: SqlStorage, transport?: SyncTransport) {
@@ -112,6 +124,7 @@ describe('副本 schema 版本', () => {
   it('7 → 9：四个实体增加 position，空 position 按 hub 的 legacy 口径填充（不入 Outbox），再删 sortOrder', async () => {
     const storage = await createNodeSqliteStorage(':memory:');
     for (const statement of schemaDdl()) await storage.exec(statement);
+    await legacyTagGroups(storage);
     // 版本 7 的副本：七张表都有 sortOrder，四张表还没有 position
     for (const table of [
       'task',
@@ -148,7 +161,7 @@ describe('副本 schema 版本', () => {
 
     const engine = await open(storage);
 
-    for (const table of ['subtask', 'project_heading', 'area', 'tag_group']) {
+    for (const table of ['subtask', 'project_heading', 'area']) {
       expect(await columnsOf(storage, table)).toContain('position');
     }
     expect((await engine.get('area', 'a1'))?.fields.position).toBe(
@@ -162,19 +175,116 @@ describe('副本 schema 版本', () => {
     expect((await engine.get('task', 't1'))?.fields.position).toBe(
       synthPosition(4, new Date(createdAt)),
     );
-    // 8 → 9：sortOrder 列删除
-    for (const table of [
-      'task',
-      'project',
-      'tag',
-      'subtask',
-      'project_heading',
-      'area',
-      'tag_group',
-    ]) {
+    // 8 → 9：sortOrder 列删除（tag_group 随后在 10 → 11 退役）
+    for (const table of ['task', 'project', 'tag', 'subtask', 'project_heading', 'area']) {
       expect(await columnsOf(storage, table)).not.toContain('sortOrder');
     }
     expect(await engine.pendingCount()).toBe(0);
+    await engine.close();
+  });
+
+  it('10 → 11：Tag Group 转为同 id 的父 Tag，成员改挂 parentId，Outbox 与 Compact 登记一并改写', async () => {
+    const storage = await createNodeSqliteStorage(':memory:');
+    for (const statement of schemaDdl()) await storage.exec(statement);
+    await legacyTagGroups(storage);
+    const clock = (field: string) => `0000000001000:0000:${field}`;
+    await storage.run(
+      'INSERT INTO tag_group (id, title, position, createdAt, updatedAt, clocks) VALUES (?, ?, ?, ?, ?, ?)',
+      [
+        'g1',
+        '场景',
+        'a1',
+        '2026-09-01T00:00:00.000Z',
+        '2026-09-02T00:00:00.000Z',
+        JSON.stringify({ title: clock('title'), position: clock('position') }),
+      ],
+    );
+    await storage.run(
+      'INSERT INTO tag (id, title, color, position, tagGroupId, clocks) VALUES (?, ?, ?, ?, ?, ?)',
+      ['t1', '办公室', '#FF0000', 'a0', 'g1', JSON.stringify({ tagGroupId: clock('group') })],
+    );
+    await storage.run(
+      "INSERT INTO tag (id, title, color, position, tagGroupId, clocks) VALUES ('t2', '紧急', '#00FF00', 'a2', NULL, '{}')",
+    );
+    await storage.run(
+      "INSERT INTO _outbox (entity, entity_id, fields) VALUES ('tag-group', 'g2', ?)",
+      [JSON.stringify({ title: { value: '新组', hlc: clock('g2') } })],
+    );
+    await storage.run("INSERT INTO _outbox (entity, entity_id, fields) VALUES ('tag', 't2', ?)", [
+      JSON.stringify({ tagGroupId: { value: 'g1', hlc: clock('t2') } }),
+    ]);
+    await storage.run(
+      "INSERT INTO _compacted (entity, entity_id, registered_at) VALUES ('tag-group', 'gone', 5)",
+    );
+    await storage.exec('PRAGMA user_version = 10');
+
+    const engine = await open(storage);
+
+    expect(await readSchemaVersion(storage)).toBe(REPLICA_SCHEMA_VERSION);
+    expect(await columnsOf(storage, 'tag_group')).toEqual([]);
+    expect(await columnsOf(storage, 'tag')).not.toContain('tagGroupId');
+    expect(await engine.get('tag', 'g1')).toEqual({
+      id: 'g1',
+      fields: expect.objectContaining({
+        title: '场景',
+        color: DEFAULT_TAG_COLOR,
+        position: 'a1',
+        parentId: null,
+        createdAt: '2026-09-01T00:00:00.000Z',
+      }),
+    });
+    expect((await engine.get('tag', 't1'))?.fields.parentId).toBe('g1');
+    expect((await engine.get('tag', 't2'))?.fields.parentId).toBeNull();
+    const clocks = await storage.all<{ id: string; clocks: string }>(
+      "SELECT id, clocks FROM tag WHERE id IN ('g1', 't1') ORDER BY id",
+    );
+    expect(clocks.map((row) => JSON.parse(row.clocks))).toEqual([
+      { title: clock('title'), position: clock('position') },
+      { parentId: clock('group') },
+    ]);
+    const outbox = await storage.all<{ entity: string; entity_id: string; fields: string }>(
+      'SELECT entity, entity_id, fields FROM _outbox ORDER BY id',
+    );
+    expect(
+      outbox.map((row) => [row.entity, row.entity_id, Object.keys(JSON.parse(row.fields))]),
+    ).toEqual([
+      ['tag', 'g2', ['title']],
+      ['tag', 't2', ['parentId']],
+    ]);
+    expect(await engine.isCompacted('tag', 'gone')).toBe(true);
+    await engine.close();
+  });
+
+  it('10 → 11 之后：连上协议 5 的 hub 才做一次 bootstrap', async () => {
+    let protocol = 4;
+    const hub = new InMemorySyncHub({ protocolVersion: () => protocol });
+    const storage = await createNodeSqliteStorage(':memory:');
+    for (const statement of schemaDdl()) await storage.exec(statement);
+    await legacyTagGroups(storage);
+    await storage.exec(
+      'CREATE TABLE IF NOT EXISTS _engine_meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)',
+    );
+    await storage.run("INSERT INTO _engine_meta (key, value) VALUES ('syncCursor', '7')");
+    await storage.exec('PRAGMA user_version = 10');
+    const bootstraps: number[] = [];
+    const transport = hub.transportFor(USER);
+    const engine = await open(storage, {
+      ...transport,
+      bootstrap: async (request) => {
+        bootstraps.push(protocol);
+        return transport.bootstrap(request);
+      },
+    });
+    const flag = () => storage.all("SELECT value FROM _engine_meta WHERE key = 'tagTreeResync'");
+
+    await engine.sync();
+    expect(await flag()).toHaveLength(1); // 旧 hub：标记留着
+    protocol = 5; // hub 升级
+    await engine.sync();
+    expect(await flag()).toHaveLength(0);
+    await engine.sync();
+    // 协议 4 那次是旧游标引起的常规 resync；协议 5 上恰好一次
+    expect(bootstraps).toEqual([4, 5]);
     await engine.close();
   });
 
@@ -224,11 +334,11 @@ describe('副本 schema 版本', () => {
 
 describe('同步协议版本', () => {
   it('旧 hub 不认识的实体逐条拒绝：其余照常送达，被拒的留在 Outbox，hub 升级后送达', async () => {
-    const known: SyncEntity[] = ['task', 'subtask', 'project', 'area', 'tag', 'project-heading'];
+    const known: SyncEntity[] = ['task', 'subtask', 'project', 'area', 'tag'];
     const hub = new InMemorySyncHub({ knownEntities: known });
     const engine = await open(await createNodeSqliteStorage(':memory:'), hub.transportFor(USER));
 
-    const groupId = await engine.create('tag-group', { title: 'Contexts' });
+    const groupId = await engine.create('project-heading', { title: 'Contexts' });
     const taskId = await engine.create('task', { title: 'Ship it' });
     await engine.sync();
 
@@ -237,7 +347,7 @@ describe('同步协议版本', () => {
     expect(snapshot.some((entry) => entry.id === groupId)).toBe(false);
     expect(await engine.pendingCount()).toBe(1);
 
-    known.push('tag-group'); // hub 升级
+    known.push('project-heading'); // hub 升级
     await engine.sync();
 
     expect(hub.bootstrap(USER).snapshot.some((entry) => entry.id === groupId)).toBe(true);

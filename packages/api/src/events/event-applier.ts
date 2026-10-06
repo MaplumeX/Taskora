@@ -1,12 +1,13 @@
 import { QueryClient } from '@tanstack/react-query';
 import { hidesTasksInLaterProjects, HeadingStatus } from '@taskora/shared';
-import type { TagParents } from '@taskora/engine';
+import { buildTagTree, type TagParents } from '@taskora/engine';
 import type {
   AreaResponseDto,
   ChangeEvent,
   ProjectHeadingResponseDto,
   ProjectResponseDto,
   SubtaskResponseDto,
+  TagResponseDto,
   TaskResponseDto,
 } from '@taskora/shared';
 
@@ -123,23 +124,13 @@ export function applyChangeEvents(queryClient: QueryClient, batch: ChangeEvent[]
           upsertInLists(queryClient, 'tags', event.data, () => true);
           overwriteDetail(queryClient, ['tag', event.id], event.data);
         }
-        // Tag-group caches embed tags, and task/project/area/feed DTOs
-        // carry tag chips — invalidate everything that embeds tags.
-        invalidate.add('tag-groups');
+        // Task/project/area/feed DTOs carry tag chips — invalidate
+        // everything that embeds tags (this also covers tagId task lists,
+        // whose subtree changes when a tag moves, ADR-0016).
         invalidate.add('tasks');
         invalidate.add('projects');
         invalidate.add('areas');
         invalidate.add('feed');
-        break;
-      }
-      case 'tag-group': {
-        if (event.action === 'deleted') {
-          removeFromLists(queryClient, 'tag-groups', event.id);
-          queryClient.removeQueries({ queryKey: ['tag-group', event.id] });
-        } else if (event.data) {
-          upsertInLists(queryClient, 'tag-groups', event.data, () => true);
-          overwriteDetail(queryClient, ['tag-group', event.id], event.data);
-        }
         break;
       }
     }
@@ -211,7 +202,7 @@ function upsertTaskLists(queryClient: QueryClient, task: TaskResponseDto): void 
   }
 }
 
-/** 有效 Tag 的继承来源（ADR 0015）：从缓存的 Project / Area 列表里查。 */
+/** 有效 Tag 的继承来源（ADR 0015）与 Tag 树（ADR-0016）：从缓存的列表里查。 */
 function cachedTagParents(queryClient: QueryClient): TagParents {
   const find = <T extends { id: string }>(root: string, id: string): T | undefined => {
     for (const cache of listCaches(queryClient, root)) {
@@ -221,7 +212,10 @@ function cachedTagParents(queryClient: QueryClient): TagParents {
     return undefined;
   };
   const tagIdsOf = (entity: { tags?: { id: string }[] }) => (entity.tags ?? []).map((t) => t.id);
+  const tags = listCaches(queryClient, 'tags').flatMap((cache) => cache.data as TagResponseDto[]);
+  const tree = buildTagTree(tags);
   return {
+    subtreeOf: (tagId) => tree.descendantsOf(tagId),
     project: (id) => {
       const project = find<ProjectResponseDto>('projects', id);
       return project && { areaId: project.areaId, tagIds: tagIdsOf(project) };

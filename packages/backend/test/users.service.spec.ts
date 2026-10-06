@@ -34,7 +34,6 @@ describe('UsersService', () => {
       project: { findMany: vi.fn() },
       area: { findMany: vi.fn() },
       tag: { findMany: vi.fn() },
-      tagGroup: { findMany: vi.fn() },
       projectHeading: { findMany: vi.fn() },
       refreshToken: { updateMany: vi.fn() },
     } as unknown as InstanceType<typeof PrismaService>;
@@ -260,7 +259,6 @@ describe('UsersService', () => {
       mockPrisma.project.findMany.mockResolvedValue([{ id: 'p1' }]);
       mockPrisma.area.findMany.mockResolvedValue([{ id: 'a1' }]);
       mockPrisma.tag.findMany.mockResolvedValue([{ id: 'tag1' }]);
-      mockPrisma.tagGroup.findMany.mockResolvedValue([{ id: 'tg1' }]);
       mockPrisma.projectHeading.findMany.mockResolvedValue([{ id: 'h1' }]);
 
       const result = await service.exportData(userId);
@@ -272,7 +270,6 @@ describe('UsersService', () => {
       expect(result.projects).toEqual([{ id: 'p1' }]);
       expect(result.areas).toEqual([{ id: 'a1' }]);
       expect(result.tags).toEqual([{ id: 'tag1' }]);
-      expect(result.tagGroups).toEqual([{ id: 'tg1' }]);
       expect(result.projectHeadings).toEqual([{ id: 'h1' }]);
     });
 
@@ -285,7 +282,6 @@ describe('UsersService', () => {
       mockPrisma.project.findMany.mockResolvedValue([]);
       mockPrisma.area.findMany.mockResolvedValue([]);
       mockPrisma.tag.findMany.mockResolvedValue([]);
-      mockPrisma.tagGroup.findMany.mockResolvedValue([]);
       mockPrisma.projectHeading.findMany.mockResolvedValue([]);
 
       await service.exportData(userId);
@@ -300,9 +296,6 @@ describe('UsersService', () => {
         userId,
       });
       expect(mockPrisma.tag.findMany.mock.calls[0][0].where).toEqual({
-        userId,
-      });
-      expect(mockPrisma.tagGroup.findMany.mock.calls[0][0].where).toEqual({
         userId,
       });
       expect(mockPrisma.projectHeading.findMany.mock.calls[0][0].where).toEqual({

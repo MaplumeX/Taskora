@@ -30,11 +30,12 @@ _Avoid_: 休眠项目（口语可用）、inactive project、归档
 Project 内的静态分组标题，用于组织 Project 内的 Tasks。
 _Avoid_: Section
 
-**Tag / Tag Group**:
-可带颜色与排序、可附加在 Task/Project/Area 上的标签；Tag Group 是 Tag 的分组容器（只有一层，本身不可打标），按 Group 过滤即命中该 Group 下任一 Tag。
+**Tag**:
+可带颜色与排序、可附加在 Task/Project/Area 上的标签。Tag 可以嵌套（`parentId`，层数不限），父 Tag 本身也是普通 Tag，可以打标。按 Tag 过滤时命中它的整棵子树（不展开祖先）。删除父 Tag 时子 Tag 提升为顶层（ADR 0016）。
+_Avoid_: Tag Group、标签分组（已退役，旧数据迁移为同 id 的父 Tag）
 
 **Effective Tags（有效 Tag）**:
-过滤与查询时使用的 Tag 集合：Task 的有效 Tag = 自身 ∪ 所属 Project ∪ 所属 Area（直接归属或经 Project）；Project 的有效 Tag = 自身 ∪ 所属 Area。只用于过滤（tagId 查询、列表过滤栏、Tag 详情页），行上显示仍只用自身 Tag；继承来的 Tag 不能在 Task 上单独去掉。纯推导，不存储、不同步（ADR 0015）。
+过滤与查询时使用的 Tag 集合：Task 的有效 Tag = 自身 ∪ 所属 Project ∪ 所属 Area（直接归属或经 Project）；Project 的有效 Tag = 自身 ∪ 所属 Area。只用于过滤（tagId 查询、列表过滤栏、Tag 详情页），且按子树命中：有效 Tag 中有该 Tag 或其任一后代即命中（ADR 0016）；行上显示仍只用自身 Tag；继承来的 Tag 不能在 Task 上单独去掉。纯推导，不存储、不同步（ADR 0015）。
 _Avoid_: 继承标签写入、复制标签
 
 **Account Time Zone（账号时区）**:
@@ -159,7 +160,7 @@ _Avoid_: 整实体覆盖、弹窗合并
 _Avoid_: 服务器时间、纯墙上时钟
 
 **Position**:
-实体在列表中的排序位次（Task、Subtask、Project、Project Heading、Area、Tag、Tag Group 都有），用 fractional indexing 字符串表达，是实体的普通字段，纳入字段级 LWW；插队只需在两个邻居间生成新串，无需重排他人。需要后台偶尔 re-balance 防字符串膨胀。列表顺序只看 Position（旧的整数 sortOrder 已随同步协议 4 退役）。
+实体在列表中的排序位次（Task、Subtask、Project、Project Heading、Area、Tag 都有），用 fractional indexing 字符串表达，是实体的普通字段，纳入字段级 LWW；插队只需在两个邻居间生成新串，无需重排他人。需要后台偶尔 re-balance 防字符串膨胀。列表顺序只看 Position（旧的整数 sortOrder 已随同步协议 4 退役）。
 _Avoid_: 整数序号、sortOrder、order index
 
 **Feed Position**:

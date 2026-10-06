@@ -1,64 +1,51 @@
 import type { TagResponseDto } from '@taskora/shared';
 
+import { flattenTagTree, tagAncestors, tagForest } from '@/components/tags/tagTree';
 import { needleOf, rankByName } from '../../../lib/nameMatch';
 
-/** Tag Picker 的行：Group 小标题（不可选）、Tag、「新建『xxx』」。 */
+/**
+ * Tag Picker 的行：Tag（depth 为树中层级，path 为祖先标题、由远到近）、
+ * 「新建『xxx』」。
+ */
 export type TagPickerRow =
-  | { kind: 'header'; id: string; title: string }
-  | { kind: 'tag'; id: string; tag: TagResponseDto }
+  | { kind: 'tag'; id: string; tag: TagResponseDto; depth: number; path: string[] }
   | { kind: 'create'; id: 'create'; title: string };
 
-export type SelectableTagRow = Exclude<TagPickerRow, { kind: 'header' }>;
-
-interface GroupLike {
-  id: string;
-  title: string;
-}
-
 /**
- * 无搜索词：按 Group 分小节（Group 顺序同 Tags 页），未分组的 Tag 放最后，
- * 组内保持 tags 的列表顺序。有搜索词：扁平结果，前缀命中先于包含命中；
- * 与已有 Tag 不重名（去首尾空白、不区分大小写）时末尾追加新建项。
+ * 无搜索词：按 Tag 树先序排列、逐层缩进（嵌套 Tag，ADR-0016），同级保持
+ * tags 的列表顺序。有搜索词：扁平结果，前缀命中先于包含命中，带父路径
+ * 区分同名 Tag；与已有 Tag 不重名（去首尾空白、不区分大小写）时末尾追加
+ * 新建项。
  */
 export function buildTagPickerRows({
   tags,
-  groups,
   query,
 }: {
   tags: TagResponseDto[];
-  groups: GroupLike[];
   query: string;
 }): TagPickerRow[] {
+  const forest = tagForest(tags);
   const needle = needleOf(query);
   if (needle) {
     const rows: TagPickerRow[] = rankByName(tags, (tag) => [tag.title], needle).map((tag) => ({
       kind: 'tag',
       id: tag.id,
       tag,
+      depth: 0,
+      path: tagAncestors(forest, tag.id).map((ancestor) => ancestor.title),
     }));
     if (!tags.some((tag) => needleOf(tag.title) === needle)) {
       rows.push({ kind: 'create', id: 'create', title: query.trim() });
     }
     return rows;
   }
-
-  const groupIds = new Set(groups.map((group) => group.id));
-  const rows: TagPickerRow[] = [];
-  for (const group of groups) {
-    const members = tags.filter((tag) => tag.tagGroupId === group.id);
-    if (members.length === 0) continue;
-    rows.push({ kind: 'header', id: `group-${group.id}`, title: group.title });
-    for (const tag of members) rows.push({ kind: 'tag', id: tag.id, tag });
-  }
-  for (const tag of tags) {
-    if (!tag.tagGroupId || !groupIds.has(tag.tagGroupId))
-      rows.push({ kind: 'tag', id: tag.id, tag });
-  }
-  return rows;
-}
-
-export function selectableRows(rows: TagPickerRow[]): SelectableTagRow[] {
-  return rows.filter((row): row is SelectableTagRow => row.kind !== 'header');
+  return flattenTagTree(forest).map(({ tag, depth }) => ({
+    kind: 'tag',
+    id: tag.id,
+    tag,
+    depth,
+    path: [],
+  }));
 }
 
 /** 一个 Tag 在被编辑对象（一个或多个）上的状态：全部有 / 部分有 / 都没有。 */

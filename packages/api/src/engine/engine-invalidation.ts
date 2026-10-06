@@ -16,8 +16,6 @@ export const INVALIDATION_BY_ENTITY: Record<SyncEntity, string[][]> = {
   tag: [
     ['tags'],
     ['tag'],
-    ['tag-groups'],
-    ['tag-group'],
     ['tasks'],
     ['task'],
     ['projects'],
@@ -26,7 +24,6 @@ export const INVALIDATION_BY_ENTITY: Record<SyncEntity, string[][]> = {
     ['area'],
     ['feed'],
   ],
-  'tag-group': [['tag-groups'], ['tag-group']],
 };
 
 const ALL_QUERY_ROOTS = [...new Set(Object.values(INVALIDATION_BY_ENTITY).flat())];

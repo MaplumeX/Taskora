@@ -31,6 +31,25 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useFeedQuery: vi.fn(),
   useTaskSearchQuery: vi.fn(),
   useRevealTask: vi.fn(),
+  useTagsQuery: () => ({
+    data: [
+      {
+        id: 'g1',
+        title: 'Errand',
+        color: '#3B82F6',
+        parentId: null,
+        createdAt: '2026-09-01T00:00:00.000Z',
+        updatedAt: '2026-09-01T00:00:00.000Z',
+      },
+    ],
+  }),
+  // 有效 Tag：测试数据里 Project / Area 不带 Tag，直接用自身 Tag
+  useEffectiveTags: () => ({
+    ofTask: (task: { tags?: { id: string }[] }) => (task.tags ?? []).map((tag) => tag.id),
+    ofProject: (project: { tags?: { id: string }[] }) =>
+      (project.tags ?? []).map((tag) => tag.id),
+    ofFeedItem: (item: { tags?: { id: string }[] }) => (item.tags ?? []).map((tag) => tag.id),
+  }),
 }));
 
 // 任务行由 TaskListView 渲染（自有测试）；这里只看分节与传入的任务
@@ -103,9 +122,10 @@ function Location() {
   return <div data-testid="path">{pathname + search}</div>;
 }
 
-function renderSearch(q: string) {
+function renderSearch(q: string, tagIds: string[] = []) {
+  const tags = tagIds.map((id) => `&tag=${id}`).join('');
   render(
-    <MemoryRouter initialEntries={[`/search?q=${encodeURIComponent(q)}`]}>
+    <MemoryRouter initialEntries={[`/search?q=${encodeURIComponent(q)}${tags}`]}>
       <Routes>
         <Route path="/search" element={<Search />} />
         <Route path="*" element={null} />
@@ -148,6 +168,7 @@ describe('Search（继续搜索）', () => {
     expect(screen.getByRole('searchbox', { name: 'Search' })).toHaveValue('groceries');
     expect(vi.mocked(useTaskSearchQuery)).toHaveBeenLastCalledWith('groceries', {
       extended: true,
+      tagIds: [],
     });
     const sections = screen.getAllByRole('region').map((s) => s.getAttribute('aria-label'));
     expect(sections).toEqual(['Areas & Projects', 'Tasks', 'Logbook', 'Trash']);
@@ -184,5 +205,18 @@ describe('Search（继续搜索）', () => {
     expect(screen.getByText('No matches')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Clear search' }));
     expect(screen.getByTestId('path')).toHaveTextContent(/^\/search$/);
+  });
+
+  it('?tag= 显示为 chip 并参与搜索；改搜索词保留 chip，删 chip 写回地址', async () => {
+    renderSearch('gro', ['g1']);
+    expect(screen.getByText('#Errand')).toBeInTheDocument();
+    expect(vi.mocked(useTaskSearchQuery)).toHaveBeenLastCalledWith('gro', {
+      extended: true,
+      tagIds: ['g1'],
+    });
+    await user.type(screen.getByRole('searchbox'), 'x');
+    expect(screen.getByTestId('path')).toHaveTextContent('/search?q=grox&tag=g1');
+    await user.click(screen.getByRole('button', { name: 'Remove tag "Errand"' }));
+    expect(screen.getByTestId('path')).toHaveTextContent(/^\/search\?q=grox$/);
   });
 });

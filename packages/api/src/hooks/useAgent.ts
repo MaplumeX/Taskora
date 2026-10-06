@@ -28,7 +28,6 @@ import { areaKeys } from './useAreas';
 import { feedKeys } from './useFeed';
 import { projectHeadingKeys } from './useProjectHeadings';
 import { projectKeys } from './useProjects';
-import { tagGroupKeys } from './useTagGroups';
 import { tagKeys } from './useTags';
 import { taskKeys } from './useTasks';
 
@@ -58,8 +57,6 @@ const domainQueryKeys: readonly (readonly unknown[])[] = [
   ['task'],
   tagKeys.all,
   ['tag'],
-  tagGroupKeys.all,
-  ['tag-group'],
   projectHeadingKeys.all,
   feedKeys.all,
 ];

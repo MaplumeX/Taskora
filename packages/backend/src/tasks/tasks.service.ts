@@ -13,7 +13,7 @@ import {
   positionBetween,
   positionsBetween,
   repeatDerivationTarget,
-  searchNeedle,
+  hasSearchCriteria,
   sortForView,
   subtaskStatusPatch,
   tagParentsFrom,
@@ -168,6 +168,8 @@ export class TasksService {
 
   async findAll(userId: string, query: TaskQueryDto) {
     const where: Prisma.TaskWhereInput = { userId };
+    // tagId 查询的继承来源与 Tag 树（SQL 粗筛与最终判定共用）
+    const parents = query.tagId && !query.view ? await this.tagParents(userId) : undefined;
 
     if (query.q) {
       where.OR = [
@@ -182,9 +184,10 @@ export class TasksService {
     } else {
       if (query.projectId) where.projectId = query.projectId;
       if (query.areaId) where.areaId = query.areaId;
-      if (query.tagId) {
-        // 有效 Tag（ADR 0015）：自身，或继承所属 Project / Area 的 Tag
-        const hasTag = { some: { tagId: query.tagId } };
+      if (query.tagId && parents) {
+        // 有效 Tag（ADR 0015）：自身，或继承所属 Project / Area 的 Tag；
+        // 命中该 Tag 的整棵子树（嵌套 Tag，ADR-0016）
+        const hasTag = { some: { tagId: { in: [...parents.subtreeOf(query.tagId)] } } };
         where.AND = [
           {
             OR: [
@@ -231,7 +234,6 @@ export class TasksService {
     const hiddenProjectIds = hideLaterProjectTasks
       ? await laterProjectIds(this.prisma, userId, context, context.now)
       : new Set<string>();
-    const parents = query.tagId ? await this.tagParents(userId) : undefined;
     const visible = tasks.filter(
       (task) =>
         (!task.projectId || !hiddenProjectIds.has(task.projectId)) &&
@@ -247,21 +249,26 @@ export class TasksService {
     );
   }
 
-  /** 有效 Tag 的继承来源（ADR 0015）：用户全部 Project / Area 的自身 Tag。 */
+  /**
+   * 有效 Tag 的继承来源（ADR 0015）：用户全部 Project / Area 的自身 Tag，
+   * 以及 Tag 树（ADR-0016）。
+   */
   private async tagParents(userId: string): Promise<TagParents> {
     const tagIds = { select: { tagId: true } } as const;
-    const [projects, areas] = await Promise.all([
+    const [projects, areas, tags] = await Promise.all([
       this.prisma.project.findMany({
         where: { userId },
         select: { id: true, areaId: true, tags: tagIds },
       }),
       this.prisma.area.findMany({ where: { userId }, select: { id: true, tags: tagIds } }),
+      this.prisma.tag.findMany({ where: { userId }, select: { id: true, parentId: true } }),
     ]);
     return tagParentsFrom(
       new Map(
         projects.map((p) => [p.id, { areaId: p.areaId, tagIds: p.tags.map((t) => t.tagId) }]),
       ),
       new Map(areas.map((a) => [a.id, { tagIds: a.tags.map((t) => t.tagId) }])),
+      tags,
     );
   }
 
@@ -270,28 +277,57 @@ export class TasksService {
    * 范围与排序按 domain planTaskSearch（与设备同一规则）。
    */
   async search(userId: string, q: string, options?: TaskSearchOptions) {
+    if (!hasSearchCriteria(q, options)) return [];
     const needle = q.trim();
-    if (!searchNeedle(needle)) return [];
     const contains = { contains: needle, mode: 'insensitive' as const };
+    const tagIds = options?.tagIds ?? [];
+    const parents = tagIds.length > 0 ? await this.tagParents(userId) : undefined;
     const tasks = await this.prisma.task.findMany({
       where: {
         userId,
         ...(options?.extended ? {} : { status: TaskStatus.ACTIVE, trashedAt: null }),
-        OR: [{ title: contains }, { notes: contains }, { subtasks: { some: { title: contains } } }],
+        ...(needle
+          ? {
+              OR: [
+                { title: contains },
+                { notes: contains },
+                { subtasks: { some: { title: contains } } },
+              ],
+            }
+          : {}),
+        // Tag 条件的粗筛：每个 Tag 的子树出现在自身、所属 Project / Area 的 Tag 里
+        ...(parents
+          ? {
+              AND: tagIds.map((tagId) => {
+                const hasTag = { some: { tagId: { in: [...parents.subtreeOf(tagId)] } } };
+                return {
+                  OR: [
+                    { tags: hasTag },
+                    { project: { tags: hasTag } },
+                    { project: { area: { tags: hasTag } } },
+                    { area: { tags: hasTag } },
+                  ],
+                };
+              }),
+            }
+          : {}),
       },
       include: {
         ...WITH_TAGS,
         subtasks: {
           where: { title: contains },
+          // 只有 Tag 条件时不需要 Subtask 命中
+          ...(needle ? {} : { take: 0 }),
           select: { id: true, taskId: true, title: true, position: true },
         },
       },
     });
     const hits = planTaskSearch(
-      tasks,
+      tasks.map((task) => ({ ...task, tagIds: task.tags.map((tt) => tt.tagId) })),
       tasks.flatMap((task) => task.subtasks),
       q,
       options,
+      parents,
     );
     return hits.map(({ task, matchedSubtasks, rank }) => ({
       // 这里的 subtasks 只是命中的那部分，不作为任务的子任务列表下发

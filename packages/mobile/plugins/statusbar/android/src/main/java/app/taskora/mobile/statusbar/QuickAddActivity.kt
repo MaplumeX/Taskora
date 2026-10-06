@@ -350,36 +350,17 @@ class QuickAddActivity : Activity() {
                 }
             }
             Picker.TAGS -> {
-                var pendingHeader: String? = null
-                for (row in data.tags) {
-                    when (row) {
-                        is QuickAddData.TagRow.Header -> pendingHeader = row.title
-                        is QuickAddData.TagRow.Tag -> {
-                            if (!matches(row.title)) continue
-                            // 小标题只在组内有命中项时出现；搜索时不显示分组。
-                            pendingHeader?.takeIf { needle.isEmpty() }?.let(::addPickerHeader)
-                            pendingHeader = null
-                            addPickerRow(row.title, row.id in tagIds, 0, dotColor = row.color) {
-                                if (!tagIds.remove(row.id)) tagIds.add(row.id)
-                                renderPickerList()
-                            }
-                        }
+                for (row in data.tags.filter { matches(it.title) }) {
+                    // 按 Tag 树缩进；有搜索词时结果扁平显示，不缩进。
+                    val indent = if (needle.isEmpty()) row.depth else 0
+                    addPickerRow(row.title, row.id in tagIds, indent, dotColor = row.color) {
+                        if (!tagIds.remove(row.id)) tagIds.add(row.id)
+                        renderPickerList()
                     }
                 }
             }
             null -> Unit
         }
-    }
-
-    private fun addPickerHeader(title: String) {
-        pickerList.addView(
-            TextView(this).apply {
-                text = title
-                textSize = 12f
-                setTextColor(getColor(R.color.quick_add_text_hint))
-                setPadding(dp(8), dp(10), dp(8), dp(2))
-            },
-        )
     }
 
     private fun addPickerRow(

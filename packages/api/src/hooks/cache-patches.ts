@@ -40,8 +40,6 @@ const TAG_EMBEDDING_ROOTS = [
   'project',
   'areas',
   'area',
-  'tag-groups',
-  'tag-group',
 ];
 
 export type CacheSnapshot = [QueryKey, unknown][];

@@ -27,8 +27,17 @@ import type { SyncEntity } from './entities';
  * 4：wire 不再携带 sortOrder，全部实体只按 position 排序（retire-sort-order）。
  *    hub 最低协议同步升到 4：协议 3 的客户端对 Area / ProjectHeading /
  *    TagGroup / Subtask 的重排只写 sortOrder，会被永久拒在 Outbox 里。
+ * 5：嵌套 Tag（ADR-0016）：实体 tag-group 退役，Tag 的 tagGroupId 改为
+ *    parentId。hub 最低协议同步升到 5：协议 4 的客户端还会写 tag-group
+ *    与 tagGroupId，这些写会被永久拒在 Outbox 里。
  */
-export const SYNC_PROTOCOL_VERSION = 4;
+export const SYNC_PROTOCOL_VERSION = 5;
+
+/**
+ * hub 完成 Tag Group → 父 Tag 迁移的协议版本：副本迁移后第一次连上这样
+ * 的 hub 时走一次 bootstrap（见 LocalReplica.consumeTagTreeResync）。
+ */
+export const TAG_TREE_PROTOCOL = 5;
 
 /** hub 按数值裁决 HLC 的协议版本（设备据此触发小数时钟修复）。 */
 export const NUMERIC_HLC_PROTOCOL = 3;

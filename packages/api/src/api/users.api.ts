@@ -16,7 +16,6 @@ export interface ExportDataResponse {
   projects: unknown[];
   areas: unknown[];
   tags: unknown[];
-  tagGroups: unknown[];
   projectHeadings: unknown[];
 }
 

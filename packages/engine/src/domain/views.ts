@@ -18,7 +18,7 @@ import {
 
 import { dateKeyOf, instantMs, todayKey, type CalendarContext } from './calendar';
 import { feedSortKey, sortByEffectivePosition, type FeedPositioned, type Positioned } from './order';
-import { effectiveTaskTagIds, type TagParents } from './tags';
+import { effectiveTaskTagIds, tagHit, type TagParents } from './tags';
 
 export type ListView = 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
 
@@ -134,7 +134,8 @@ function includesText(value: unknown, needle: string): boolean {
  * - view：按视图判定，忽略其余条件。
  * - 否则按归属 / 标签 / 有计划日期过滤；状态默认只含未了结，completed
  *   时含已了结（搜索时为 ACTIVE + 已了结三值，ADR 0006）。均不含 Trash。
- * - tagId 按有效 Tag 判定（ADR 0015），此时必须传入 parents。
+ * - tagId 按有效 Tag 判定（ADR 0015），命中该 Tag 的整棵子树（ADR-0016），
+ *   此时必须传入 parents。
  */
 export function taskMatchesQuery(
   task: TaskQueryFields,
@@ -151,7 +152,7 @@ export function taskMatchesQuery(
   if (query.areaId && task.areaId !== query.areaId) return false;
   if (query.tagId) {
     if (!parents) throw new Error('taskMatchesQuery: tagId 查询需要 TagParents');
-    if (!effectiveTaskTagIds(task, parents).includes(query.tagId)) return false;
+    if (!tagHit(effectiveTaskTagIds(task, parents), query.tagId, parents)) return false;
   }
   if (query.hasScheduled === true && task.scheduledDate == null) return false;
   if (task.trashedAt != null) return false;

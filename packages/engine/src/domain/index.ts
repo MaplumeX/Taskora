@@ -41,13 +41,20 @@ export {
   type ViewFields,
 } from './views';
 export {
+  buildTagTree,
+  DEFAULT_TAG_COLOR,
   effectiveProjectTagIds,
   effectiveTaskTagIds,
+  tagHit,
+  tagParentCreatesCycle,
   tagParentsFrom,
+  type TagNodeFields,
   type TagOwnerFields,
   type TagParents,
+  type TagTree,
 } from './tags';
 export {
+  hasSearchCriteria,
   planTaskSearch,
   searchNeedle,
   taskInSearchScope,

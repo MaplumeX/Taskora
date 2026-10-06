@@ -80,6 +80,7 @@ export {
   SYNC_PROTOCOL_HEADER,
   SYNC_PROTOCOL_VERSION,
   SyncUpgradeRequiredError,
+  TAG_TREE_PROTOCOL,
   type BootstrapRequest,
   type BootstrapResponse,
   type CompactChange,
@@ -115,7 +116,12 @@ export {
   type ReferenceProbe,
   type ReferenceStatus,
 } from './hub';
-export { repairEntity, type HeadingProjectProbe } from './invariants';
+export {
+  repairEntity,
+  type HeadingProjectProbe,
+  type RepairProbes,
+  type TagParentProbe,
+} from './invariants';
 export {
   archiveCutoff,
   DEFAULT_ARCHIVE_AFTER_DAYS,
