@@ -17,7 +17,7 @@ import {
   type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import { SortableContext, useSortable } from '@dnd-kit/sortable';
+import { SortableContext } from '@dnd-kit/sortable';
 import { toast } from 'sonner';
 
 import type {
@@ -33,12 +33,12 @@ import {
   dragOverlayClass,
   dropAnimation,
   flipId,
-  noLayoutAnimation,
   noopSortingStrategy,
   useFlipList,
   useHeldValue,
 } from '../../lib/dnd';
 import { FeedItemRow } from './FeedItemRow';
+import { SortableFeedRow } from './SortableFeedRow';
 import { EmptyState } from '@/components/common/EmptyState';
 import { ProjectGroupHeaderRow } from './ProjectGroupHeaderRow';
 import { AreaGroupHeaderRow } from './AreaGroupHeaderRow';
@@ -57,7 +57,6 @@ import {
   useTaskRowSelection,
   useUncompleteTask,
   useUpdateTask,
-  type SelectionState,
   type SelectionRow,
 } from '@taskora/api';
 
@@ -258,75 +257,6 @@ function feedSignature(layout: GroupedFeedLayout) {
 
 function isRowKey(key: string) {
   return key.startsWith(TASK_DND_PREFIX) || key.startsWith(PROJECT_ROW_DND_PREFIX);
-}
-
-interface SortableFeedRowProps {
-  item: FeedItem;
-  placeholder: boolean;
-  projectTitle?: string;
-  areaTitle?: string;
-  selectionState: SelectionState;
-  onToggleComplete?: () => void;
-  onRowClick?: () => void;
-  showScheduledBadge?: boolean;
-}
-
-/** 可拖拽的 feed 行：任务行，或顶部未分组区的独立项目行。 */
-function SortableFeedRow({
-  item,
-  placeholder,
-  projectTitle,
-  areaTitle,
-  selectionState,
-  onToggleComplete,
-  onRowClick,
-  showScheduledBadge,
-}: SortableFeedRowProps) {
-  // 实时预览：布局随指针重排、位移由 FLIP 动画承担（见 lib/dnd.ts）。
-  const dndId = feedItemDndId(item);
-  const { attributes, listeners, setNodeRef } = useSortable({
-    id: dndId,
-    animateLayoutChanges: noLayoutAnimation,
-    // 展开态下行内是可编辑卡片，整行 listeners 会把框选文字的鼠标移动识别为拖拽，
-    // 因此展开时不可拖（仍作为放置目标）。
-    disabled: { draggable: selectionState === 'expanded', droppable: false },
-  });
-
-  return (
-    <div
-      ref={setNodeRef}
-      {...(item.type === 'task'
-        ? { 'data-sortable-task-id': item.id }
-        : { 'data-sortable-project-id': item.id })}
-      {...flipId(dndId)}
-      {...attributes}
-      {...listeners}
-      tabIndex={-1}
-    >
-      {placeholder ? (
-        // 空位：保留真实行（不可见），高度与被拖行完全一致。
-        <div data-testid={`${item.type}-placeholder-${item.id}`} className="invisible" aria-hidden="true">
-          <FeedItemRow
-            item={item}
-            projectTitle={projectTitle}
-            areaTitle={areaTitle}
-            selectionState="idle"
-            showScheduledBadge={showScheduledBadge}
-          />
-        </div>
-      ) : (
-        <FeedItemRow
-          item={item}
-          projectTitle={projectTitle}
-          areaTitle={areaTitle}
-          selectionState={selectionState}
-          onToggleComplete={onToggleComplete}
-          onRowClick={onRowClick}
-          showScheduledBadge={showScheduledBadge}
-        />
-      )}
-    </div>
-  );
 }
 
 /** 组头行的放置目标（投向组头 = 落在该组末尾）。
@@ -729,6 +659,7 @@ export function GroupedFeedListView({
     return (
       <SortableFeedRow
         key={dndId}
+        dndId={dndId}
         item={item}
         placeholder={activeItem !== null && feedItemDndId(activeItem) === dndId}
         {...rowLabels(item, containerId)}

@@ -75,6 +75,8 @@ export function MainContent() {
         'flex-1 bg-background scroll-smooth',
         // Full-bleed pages own their scrolling; others scroll the main pane.
         fullBleed ? 'overflow-hidden' : 'overflow-y-auto',
+        // 列表增高或跨组拖动时，滚动条出现/消失不能改变任务行宽度。
+        !fullBleed && !canvas && '[scrollbar-gutter:stable]',
       )}
     >
       {pull.distance > 0 && (
