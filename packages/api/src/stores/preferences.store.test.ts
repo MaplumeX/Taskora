@@ -251,6 +251,61 @@ describe('usePreferencesStore hydrateFromServer normalization', () => {
 });
 
 describe('theme side effects', () => {
+  it('native system theme overrides stale WebView queries without changing the preference', async () => {
+    const changes = new EventTarget();
+    const media = { ...window.matchMedia('(prefers-color-scheme: dark)'), matches: true };
+    media.addEventListener = changes.addEventListener.bind(changes);
+    const matchMedia = vi.spyOn(window, 'matchMedia').mockReturnValue(media);
+    try {
+      const { usePreferencesStore: fresh, setSystemTheme } = await importFresh();
+      expect(fresh.getState().resolved).toBe('dark');
+
+      setSystemTheme('light');
+      expect(fresh.getState()).toMatchObject({ theme: 'system', resolved: 'light' });
+      expect(document.documentElement.classList.contains('dark')).toBe(false);
+      expect(readPersistedState()).toMatchObject({ theme: 'system' });
+      expect(readPersistedState()).not.toHaveProperty('resolved');
+
+      // 延迟到达的媒体查询事件不能覆盖原生主题。
+      changes.dispatchEvent(new Event('change'));
+      expect(fresh.getState().resolved).toBe('light');
+
+      fresh.getState().hydrateFromServer({
+        theme: 'system',
+        language: 'en',
+        weekStartsOn: 1,
+        bucketGrouping: true,
+      });
+      expect(fresh.getState().resolved).toBe('light');
+
+      setSystemTheme('dark');
+      expect(fresh.getState().resolved).toBe('dark');
+      expect(document.documentElement.classList.contains('dark')).toBe(true);
+    } finally {
+      matchMedia.mockRestore();
+    }
+  });
+
+  it.each(['light', 'dark'] as const)(
+    'native changes preserve manual %s and switching back uses the latest system theme',
+    async (mode) => {
+      const { usePreferencesStore: fresh, setSystemTheme } = await importFresh();
+      fresh.getState().setTheme(mode);
+      const opposite = mode === 'light' ? 'dark' : 'light';
+      setSystemTheme(opposite);
+      expect(fresh.getState()).toMatchObject({ theme: mode, resolved: mode });
+      expect(document.documentElement.classList.contains('dark')).toBe(mode === 'dark');
+
+      fresh.getState().setTheme('system');
+      expect(fresh.getState().resolved).toBe(opposite);
+      expect(document.documentElement.classList.contains('dark')).toBe(opposite === 'dark');
+
+      setSystemTheme(null);
+      const expected = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      expect(fresh.getState().resolved).toBe(expected);
+    },
+  );
+
   it('setTheme toggles the dark class on the document root', async () => {
     const { usePreferencesStore: fresh } = await importFresh();
     fresh.getState().setTheme('dark');

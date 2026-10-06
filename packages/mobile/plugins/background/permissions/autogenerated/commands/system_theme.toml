@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-system-theme"
+description = "Enables the system_theme command without any pre-configured scope."
+commands.allow = ["system_theme"]
+
+[[permission]]
+identifier = "deny-system-theme"
+description = "Denies the system_theme command without any pre-configured scope."
+commands.deny = ["system_theme"]
