@@ -173,6 +173,31 @@ describe('usePreferencesStore hydrateFromServer normalization', () => {
     expect(state.bucketGrouping).toBe(false);
   });
 
+  it('keeps todayReviewedOn monotonic across local marks and server payloads', async () => {
+    const fresh = await freshStore();
+    expect(fresh.getState().todayReviewedOn).toBeNull();
+    expect(fresh.getState().markTodayReviewed('2026-10-06')).toBe(true);
+    expect(fresh.getState().markTodayReviewed('2026-10-06')).toBe(false);
+    expect(fresh.getState().markTodayReviewed('2026-10-05')).toBe(false);
+    expect(fresh.getState().todayReviewedOn).toBe('2026-10-06');
+
+    const base = {
+      theme: 'system',
+      language: 'en',
+      weekStartsOn: 1,
+      bucketGrouping: true,
+    } as const;
+    // 旧设备写回的较早日期、脏值都不回拨本地基线。
+    fresh.getState().hydrateFromServer({ ...base, todayReviewedOn: '2026-10-01' });
+    expect(fresh.getState().todayReviewedOn).toBe('2026-10-06');
+    fresh.getState().hydrateFromServer({ ...base, todayReviewedOn: 'yesterday' });
+    expect(fresh.getState().todayReviewedOn).toBe('2026-10-06');
+    // 其他设备看过更晚的 Today：采用。
+    fresh.getState().hydrateFromServer({ ...base, todayReviewedOn: '2026-10-07' });
+    expect(fresh.getState().todayReviewedOn).toBe('2026-10-07');
+    expect(readPersistedState().todayReviewedOn).toBe('2026-10-07');
+  });
+
   it('applies a valid server bucketGrouping flag and ignores dirty ones', async () => {
     const fresh = await freshStore();
     fresh.getState().hydrateFromServer({

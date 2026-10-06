@@ -2,6 +2,7 @@ import { BadRequestException, Injectable, NotFoundException } from '@nestjs/comm
 import {
   countProjectTasks,
   feedIncludesProjects,
+  hlcIsoTime,
   feedSortKey,
   repositionFeed,
   planEmptyTrash,
@@ -72,6 +73,15 @@ function toTaskFeedItem(t: TaskWithTags): TaskFeedItem {
     updatedAt: t.updatedAt.toISOString(),
     tags: t.tags.map((tt) => mapTag(tt.tag)),
   };
+}
+
+/**
+ * 计划日期最后一次被写入的时刻（New in Today，见 FeedItemBase.scheduledSetAt）：
+ * 取 hub 存下的该字段时钟；没有时钟的旧行为 null。
+ */
+function scheduledSetAtOf(row: { fieldClocks: unknown }): string | null {
+  const clocks = row.fieldClocks as Record<string, unknown> | null;
+  return hlcIsoTime(clocks?.scheduledDate);
 }
 
 /** 归档分页令牌：上一页最后一条的 (settledAt, id)，base64url JSON。 */
@@ -211,7 +221,11 @@ export class FeedService {
     const taskItems: TaskFeedItem[] = tasks
       .filter((task) => !task.projectId || !hiddenProjectIds.has(task.projectId))
       .filter((task) => taskMatchesView(task, view, context))
-      .map(toTaskFeedItem);
+      .map((task) =>
+        view === 'today'
+          ? { ...toTaskFeedItem(task), scheduledSetAt: scheduledSetAtOf(task) }
+          : toTaskFeedItem(task),
+      );
 
     const visibleProjects = projects.filter((project) =>
       projectMatchesView(project, view, context),
@@ -247,6 +261,7 @@ export class FeedService {
         tags: p.tags.map((pt) => mapTag(pt.tag)),
         taskTotalCount: total,
         taskCompletedCount: completed,
+        ...(view === 'today' ? { scheduledSetAt: scheduledSetAtOf(p) } : {}),
       };
     });
 

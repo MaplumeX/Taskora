@@ -12,6 +12,7 @@ import {
 
 import {
   useAreasQuery,
+  useHasNewInToday,
   useProjectsQuery,
   useUiInteractionStore,
 } from '@taskora/api';
@@ -21,6 +22,7 @@ import { QuickFind } from '@/components/search/QuickFind';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
 import { mainNav, type NavItem } from '@/components/layout/navItems';
 import { useBucketCounts } from '@/components/layout/useBucketCounts';
+import { NewInTodayDot } from '@/components/task/NewInTodayDot';
 import { useIsDesktop } from '../lib/use-media-query';
 import { cn } from '@/lib/utils';
 
@@ -46,17 +48,25 @@ function HomeRow({
   iconClassName,
   label,
   count,
+  hasNew = false,
 }: {
   to: string;
   icon: LucideIcon;
   iconClassName?: string;
   label: string;
   count?: number;
+  /** Today 有尚未看过的新到条目：计数旁带黄点（New in Today）。 */
+  hasNew?: boolean;
 }) {
   return (
     <Link to={to} className={ROW_CLASS}>
       <Icon className={cn('h-5 w-5 shrink-0', iconClassName)} />
       <span className="flex-1 truncate">{label}</span>
+      {hasNew && (
+        <span className="relative h-1.5 w-1.5 shrink-0">
+          <NewInTodayDot className="left-1/2" />
+        </span>
+      )}
       {count !== undefined && count > 0 && (
         <span aria-hidden className="text-sm tabular-nums text-muted-foreground">
           {count}
@@ -81,6 +91,7 @@ export default function Home() {
   const navigate = useNavigate();
   const openSettings = useUiInteractionStore((s) => s.openSettings);
   const { inboxCount, todayCount } = useBucketCounts();
+  const hasNewInToday = useHasNewInToday();
   const { data: allProjects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -127,6 +138,7 @@ export default function Home() {
                 iconClassName={item.colorClass}
                 label={t(item.labelKey)}
                 count={countByRoute[to]}
+                hasNew={to === '/today' && hasNewInToday}
               />
             );
           })}

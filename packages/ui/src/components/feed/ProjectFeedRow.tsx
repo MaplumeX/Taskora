@@ -10,6 +10,7 @@ import { TaskDateBadge } from '@/components/task/TaskDateBadge';
 import { TaskDueDateBadge } from '@/components/task/TaskDueDateBadge';
 import { TaskTagCapsules } from '@/components/task/TaskTagCapsules';
 import { TaskTodayBadge } from '@/components/task/TaskTodayBadge';
+import { NewInTodayDot } from '@/components/task/NewInTodayDot';
 import { ProjectContextMenu } from '@/components/project/ProjectContextMenu';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
 import { useProjectCompletion } from '@/components/project/useProjectCompletion';
@@ -27,6 +28,8 @@ interface Props {
   settledDateBadge?: React.ReactNode;
   /** Logbook 场景：已了结标题保留删除线但不置灰（正常前景色）。 */
   plainSettledTitle?: boolean;
+  /** New in Today 新到条目：行首左侧黄点。 */
+  newInToday?: boolean;
 }
 
 export function ProjectFeedRow({
@@ -35,6 +38,7 @@ export function ProjectFeedRow({
   selectionState = 'idle',
   settledDateBadge,
   plainSettledTitle = false,
+  newInToday = false,
 }: Props) {
   useCalendarDay();
   const { t } = useTranslation();
@@ -65,7 +69,7 @@ export function ProjectFeedRow({
         tabIndex={selectionState !== 'idle' ? 0 : -1}
         aria-selected={selectionState !== 'idle' || undefined}
         className={cn(
-          'group flex h-8 cursor-pointer items-center gap-2.5 rounded-md px-2 hover:bg-accent/60 max-md:h-11',
+          'group relative flex h-8 cursor-pointer items-center gap-2.5 rounded-md px-2 hover:bg-accent/60 max-md:h-11',
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
           selectionState !== 'idle' && 'bg-selection focus-visible:ring-0 hover:bg-selection',
         )}
@@ -82,6 +86,7 @@ export function ProjectFeedRow({
         }}
         role="button"
       >
+        {newInToday && !settled && <NewInTodayDot />}
         <ProjectProgressRing
           total={item.taskTotalCount}
           completed={item.taskCompletedCount}

@@ -12,7 +12,8 @@ import { ProjectStatus } from '@taskora/shared';
  * （镜像 sidebarProjectLayout.ts 的惯例：plain functions + vitest）。
  *
  * 输入：平铺 feed 项 + 项目列表 + 领域列表 + 分组开关。
- * 输出：渲染块序列（未分组任务与独立项目行浮于顶部，随后是按侧边栏
+ * 输出：渲染块序列（New in Today 新到条目最先，未分组任务与独立项目行
+ * 其次，随后是按侧边栏
  * 全局视觉顺序排列的扁平单层 Area/Project 组）与视图任务全量顺序
  * （供 reorder 写回全局 Position）。分组不可折叠：无折叠状态输入，
  * 无 Selection 接管映射。
@@ -23,11 +24,15 @@ export interface GroupedFeedTaskBlock {
   item: TaskFeedItem;
   /** 所属 Group Header 的 id（项目/领域 id）；未分组任务为 null。 */
   groupHeaderId: string | null;
+  /** New in Today 新到条目：置顶于新到区，不进分组（groupHeaderId 为 null）。 */
+  fresh?: boolean;
 }
 
 export interface GroupedFeedProjectRowBlock {
   kind: 'projectRow';
   item: ProjectFeedItem;
+  /** New in Today 新到条目（见 GroupedFeedTaskBlock.fresh）。 */
+  fresh?: boolean;
 }
 
 export interface GroupedFeedProjectGroupHeaderBlock {
@@ -67,6 +72,16 @@ export interface GroupedFeedLayoutInput {
    * 最后一个任务拖走时组头不消失，避免整列跳动）。
    */
   retainGroupIds?: ReadonlySet<string>;
+  /**
+   * New in Today 新到条目的键（`task:<id>` / `project:<id>`）：按 feed 顺序
+   * 置顶于新到区。视图内有任务的项目仍以组头出现，不进新到区。
+   */
+  freshKeys?: ReadonlySet<string>;
+}
+
+/** feed 项的键（与新到键同形）。 */
+export function feedItemKey(item: Pick<FeedItem, 'type' | 'id'>): string {
+  return `${item.type}:${item.id}`;
 }
 
 /**
@@ -116,19 +131,23 @@ export function flatParentOrder(
 }
 
 export function deriveGroupedFeedLayout(input: GroupedFeedLayoutInput): GroupedFeedLayout {
-  const { items, projects, areas, groupingEnabled, retainGroupIds } = input;
+  const { items, projects, areas, groupingEnabled, retainGroupIds, freshKeys } = input;
   const retained = (parentId: string) => retainGroupIds?.has(parentId) ?? false;
+  const isFresh = (item: FeedItem) => freshKeys?.has(feedItemKey(item)) ?? false;
 
-  // 开关关闭：恒等推导 —— 平铺列表（收件箱、不分组的时间视图）的渲染序列。
+  // 开关关闭：恒等推导 —— 平铺列表（收件箱、不分组的时间视图）的渲染序列，
+  // 新到条目整体移到最前。
   if (!groupingEnabled) {
-    const blocks: GroupedFeedBlock[] = items.map((item) =>
-      item.type === 'task'
-        ? { kind: 'task', item, groupHeaderId: null }
-        : { kind: 'projectRow', item },
-    );
+    const ordered = [...items.filter(isFresh), ...items.filter((item) => !isFresh(item))];
+    const blocks: GroupedFeedBlock[] = ordered.map((item) => {
+      const fresh = isFresh(item) || undefined;
+      return item.type === 'task'
+        ? { kind: 'task', item, groupHeaderId: null, fresh }
+        : { kind: 'projectRow', item, fresh };
+    });
     return {
       blocks,
-      taskOrder: items.filter((i) => i.type === 'task').map((i) => i.id),
+      taskOrder: ordered.filter((i) => i.type === 'task').map((i) => i.id),
     };
   }
 
@@ -147,7 +166,7 @@ export function deriveGroupedFeedLayout(input: GroupedFeedLayoutInput): GroupedF
   };
 
   for (const item of items) {
-    if (item.type !== 'task') continue;
+    if (item.type !== 'task' || isFresh(item)) continue;
     if (item.projectId) {
       // 归属以直接父级（项目）为准：项目可成组则进项目组（扁平单层，
       // 不嵌套进 Area 组）；项目已了结/已丢弃/缺失则为孤儿，一律回落
@@ -168,6 +187,22 @@ export function deriveGroupedFeedLayout(input: GroupedFeedLayoutInput): GroupedF
   const blocks: GroupedFeedBlock[] = [];
   const taskOrder: string[] = [];
 
+  /** 项目行是否被组头吸收（视图内有任务的可成组项目）。 */
+  const absorbedByHeader = (item: ProjectFeedItem) =>
+    canHostGroup(projectById.get(item.id)) &&
+    ((groupTasks.get(item.id)?.length ?? 0) > 0 || retained(item.id));
+
+  // ---- 新到区（New in Today）：新到任务与独立项目行按 feed 顺序置顶 ----
+  for (const item of items) {
+    if (!isFresh(item)) continue;
+    if (item.type === 'task') {
+      blocks.push({ kind: 'task', item, groupHeaderId: null, fresh: true });
+      taskOrder.push(item.id);
+    } else if (!absorbedByHeader(item)) {
+      blocks.push({ kind: 'projectRow', item, fresh: true });
+    }
+  }
+
   // ---- 顶部未分组区：未分组任务与独立项目行按合并 feed 顺序交错 ----
   for (const item of items) {
     if (item.type === 'task') {
@@ -177,9 +212,7 @@ export function deriveGroupedFeedLayout(input: GroupedFeedLayoutInput): GroupedF
       continue;
     }
     // 项目行：视图内有任务的项目被组头吸收；已了结/已丢弃项目永不成为组头。
-    const project = projectById.get(item.id);
-    const hasVisibleTasks = (groupTasks.get(item.id)?.length ?? 0) > 0 || retained(item.id);
-    if (canHostGroup(project) && hasVisibleTasks) continue;
+    if (isFresh(item) || absorbedByHeader(item)) continue;
     blocks.push({ kind: 'projectRow', item });
   }
 

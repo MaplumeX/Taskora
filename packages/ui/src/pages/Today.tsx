@@ -1,4 +1,10 @@
-import { useCalendarDay, useEffectiveTags, useFeedQuery, todayDateKey } from '@taskora/api';
+import {
+  useCalendarDay,
+  useEffectiveTags,
+  useFeedQuery,
+  useNewInTodayKeys,
+  todayDateKey,
+} from '@taskora/api';
 import { useTranslation } from 'react-i18next';
 
 import { TimeViewFeedList } from '@/components/feed/TimeViewFeedList';
@@ -13,6 +19,8 @@ export default function Today() {
   const { data: items = [], isLoading, isError } = useFeedQuery('today');
   const effectiveTags = useEffectiveTags();
   const { visible, filtering, bar } = useTagFilter(items, effectiveTags.ofFeedItem);
+  // New in Today：上次查看后新到的条目置顶并带黄点，离开本页后消除。
+  const freshKeys = useNewInTodayKeys(items);
 
   return (
     <div className="flex flex-col gap-4">
@@ -28,6 +36,7 @@ export default function Today() {
           items={visible}
           emptyHint={filtering ? t('tag:filterEmpty') : t('task:todayEmpty')}
           showScheduledBadge={false}
+          freshKeys={freshKeys}
         />
       )}
     </div>

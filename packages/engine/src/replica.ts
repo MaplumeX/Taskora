@@ -54,6 +54,8 @@ const REPAIR_ORDER: SyncEntity[] = ['tag', 'area', 'project', 'project-heading',
 export interface ReplicaRow {
   id: string;
   fields: WireRow;
+  /** ListOptions.clockOf 指定字段的 HLC 时间戳（该字段从未写过为 null）。 */
+  clock?: string | null;
 }
 
 /**
@@ -70,6 +72,11 @@ export interface ListOptions {
   where?: ListWhere;
   /** 只取按列表序的前 N 行（如取首行位次）。 */
   limit?: number;
+  /**
+   * 同时取出该字段的 HLC 时间戳（ReplicaRow.clock），用于推导「字段何时
+   * 被写」（如 New in Today）。SQL 内只抽这一个键，不传整列 clocks。
+   */
+  clockOf?: string;
 }
 
 /**
@@ -393,15 +400,27 @@ export class LocalReplica {
     const where = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
     const limit =
       options.limit !== undefined ? `LIMIT ${Math.max(0, Math.floor(options.limit))}` : '';
-    // 不取 clocks 列：UI 用不到，整表 JSON 经 IPC 传输再丢弃是纯浪费
-    const columns = ['id', ...def.fields.map((field) => field.name)].join(', ');
+    // 不取 clocks 列：UI 用不到，整表 JSON 经 IPC 传输再丢弃是纯浪费；
+    // 需要某字段的时钟时只在 SQL 内抽出那一个键。
+    const clockOf = options.clockOf;
+    if (clockOf !== undefined && !def.fields.some((field) => field.name === clockOf)) {
+      throw new Error(`list: ${entity} 没有字段 ${clockOf}`);
+    }
+    const columns = [
+      'id',
+      ...def.fields.map((field) => field.name),
+      ...(clockOf !== undefined ? [`json_extract(clocks, '$.${clockOf}') AS _clock`] : []),
+    ].join(', ');
     const rows = await this.storage.all<Record<string, unknown>>(
       `SELECT ${columns} FROM ${def.table} ${where} ${order} ${limit}`,
       params,
     );
     return rows.map((row) => {
-      const { id, ...rest } = row;
-      return { id: id as string, fields: this.decodeRow(entity, rest) };
+      const { id, _clock, ...rest } = row;
+      const decoded = { id: id as string, fields: this.decodeRow(entity, rest) };
+      return clockOf !== undefined
+        ? { ...decoded, clock: typeof _clock === 'string' ? _clock : null }
+        : decoded;
     });
   }
 

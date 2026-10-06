@@ -10,6 +10,7 @@ export interface ValidPreferences {
   language: Language;
   weekStartsOn: WeekStartsOn;
   bucketGrouping: boolean;
+  todayReviewedOn: string | null;
 }
 
 export interface PreferencesDefaults {
@@ -18,6 +19,7 @@ export interface PreferencesDefaults {
   language: Language;
   weekStartsOn: WeekStartsOn;
   bucketGrouping: boolean;
+  todayReviewedOn?: string | null;
 }
 
 const THEME_MODES: readonly ThemeMode[] = ['light', 'dark', 'system'];
@@ -63,7 +65,22 @@ export function normalizePreferences(
   const bucketGrouping = typeof groupingRaw === 'boolean' ? groupingRaw : defaults.bucketGrouping;
 
   const timeZone = isValidTimeZone(obj.timeZone) ? obj.timeZone : (defaults.timeZone ?? 'UTC');
-  return { theme, language, weekStartsOn, bucketGrouping, timeZone };
+
+  // 已看日期只进不退：取载荷与默认（本地现状）中较晚者，脏值忽略。
+  const reviewedRaw = isDateKey(obj.todayReviewedOn) ? obj.todayReviewedOn : null;
+  const todayReviewedOn = laterDateKey(reviewedRaw, defaults.todayReviewedOn ?? null);
+  return { theme, language, weekStartsOn, bucketGrouping, timeZone, todayReviewedOn };
+}
+
+function isDateKey(value: unknown): value is string {
+  return typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value);
+}
+
+/** 两个 YYYY-MM-DD 中较晚者（字典序即日期序）；缺失一方取另一方。 */
+export function laterDateKey(a: string | null, b: string | null): string | null {
+  if (a === null) return b;
+  if (b === null) return a;
+  return a > b ? a : b;
 }
 
 /** Whether a raw value is a valid theme mode. */

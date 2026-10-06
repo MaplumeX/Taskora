@@ -98,12 +98,14 @@ vi.mock('@/components/task/TaskItem', async () => {
       areaTitle,
       selectionState = 'idle',
       onRowClick,
+      newInToday = false,
     }: {
       task: TaskFeedItem;
       projectTitle?: string;
       areaTitle?: string;
       selectionState?: string;
       onRowClick?: () => void;
+      newInToday?: boolean;
     }) =>
       ReactModule.createElement(
         'div',
@@ -112,6 +114,7 @@ vi.mock('@/components/task/TaskItem', async () => {
           'data-selection-row': task.id,
           'data-mock-task-id': task.id,
           'data-selection-state': selectionState,
+          'data-new-in-today': newInToday ? '' : undefined,
           role: 'button',
           tabIndex: 0,
           onClick: (e: React.MouseEvent) => {
@@ -287,13 +290,17 @@ function area(id: string): AreaResponseDto {
   };
 }
 
-function renderView(items: FeedItem[], view: 'today' | 'anytime' | 'someday' = 'today') {
+function renderView(
+  items: FeedItem[],
+  view: 'today' | 'anytime' | 'someday' = 'today',
+  freshKeys?: ReadonlySet<string>,
+) {
   return render(
     <MemoryRouter initialEntries={[`/${view}`]}>
       <Routes>
         <Route
           path="/today"
-          element={<GroupedFeedListView items={items} emptyHint="empty" />}
+          element={<GroupedFeedListView items={items} emptyHint="empty" freshKeys={freshKeys} />}
         />
         <Route
           path="/anytime"
@@ -774,6 +781,51 @@ describe('GroupedFeedListView — 拖拽语义', () => {
 
     dragEnd('task:a1', null);
 
+    expect(harness.updateTaskMutate).not.toHaveBeenCalled();
+    expect(harness.reorderFeedMutate).not.toHaveBeenCalled();
+  });
+});
+
+describe('GroupedFeedListView — New in Today', () => {
+  it('renders fresh tasks first with the dot and their project tag, outside the group', () => {
+    harness.projects = [project('p1')];
+    renderView(
+      [taskItem('old', { projectId: 'p1' }), taskItem('new', { projectId: 'p1' })],
+      'today',
+      new Set(['task:new']),
+    );
+
+    const rows = [...document.querySelectorAll<HTMLElement>('[data-mock-task-id]')];
+    expect(rows.map((row) => row.dataset.mockTaskId)).toEqual(['new', 'old']);
+    expect(rows[0]).toHaveAttribute('data-new-in-today');
+    expect(rows[1]).not.toHaveAttribute('data-new-in-today');
+    expect(screen.getByTestId('tag-project-new')).toHaveTextContent('p1');
+    expect(document.querySelector('[data-task-container="fresh"]')).not.toBeNull();
+  });
+
+  it('reorders within the fresh zone without reassigning', () => {
+    harness.projects = [project('p1')];
+    renderView(
+      [taskItem('a', { projectId: 'p1' }), taskItem('b', { projectId: 'p1' })],
+      'today',
+      new Set(['task:a', 'task:b']),
+    );
+
+    dragEnd('task:a', 'task:b', 'task:b');
+    expect(harness.updateTaskMutate).not.toHaveBeenCalled();
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('b', 'a'));
+  });
+
+  it('does not move rows across the fresh zone boundary', () => {
+    harness.projects = [project('p1')];
+    renderView(
+      [taskItem('old', { projectId: 'p1' }), taskItem('new')],
+      'today',
+      new Set(['task:new']),
+    );
+
+    dragEnd('task:old', 'task:new', 'task:new');
+    dragEnd('task:new', 'task:old', 'task:old');
     expect(harness.updateTaskMutate).not.toHaveBeenCalled();
     expect(harness.reorderFeedMutate).not.toHaveBeenCalled();
   });

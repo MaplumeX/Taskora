@@ -16,6 +16,8 @@ interface Props {
   showScheduledBadge?: boolean;
   /** Logbook 场景：显示行内了却日期 */
   showSettledDate?: boolean;
+  /** New in Today 新到条目：行首左侧黄点。 */
+  newInToday?: boolean;
 }
 
 function isTaskFeedItem(item: FeedItem): item is TaskFeedItem {
@@ -31,6 +33,7 @@ export function FeedItemRow({
   onRowClick,
   showScheduledBadge,
   showSettledDate = false,
+  newInToday = false,
 }: Props) {
   if (!isTaskFeedItem(item)) {
     return (
@@ -38,6 +41,7 @@ export function FeedItemRow({
         item={item}
         showScheduledBadge={showScheduledBadge}
         selectionState={selectionState}
+        newInToday={newInToday}
         plainSettledTitle={showSettledDate}
         settledDateBadge={
           showSettledDate && item.completedAt ? (
@@ -66,6 +70,7 @@ export function FeedItemRow({
       onToggleComplete={onToggleComplete ?? (() => {})}
       onRowClick={onRowClick}
       showScheduledBadge={showScheduledBadge}
+      newInToday={newInToday}
       plainSettledTitle={showSettledDate}
       settledDateBadge={
         showSettledDate && item.completedAt ? (

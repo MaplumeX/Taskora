@@ -30,6 +30,7 @@ describe('normalizePreferences', () => {
       language: 'zh',
       weekStartsOn: 0,
       bucketGrouping: false,
+      todayReviewedOn: null,
     });
   });
 
@@ -53,6 +54,7 @@ describe('normalizePreferences', () => {
       language: 'en',
       weekStartsOn: 1,
       bucketGrouping: true,
+      todayReviewedOn: null,
     });
   });
 
@@ -64,6 +66,7 @@ describe('normalizePreferences', () => {
         language: 'en',
         weekStartsOn: 1,
         bucketGrouping: true,
+        todayReviewedOn: null,
       });
     }
   });
@@ -75,6 +78,7 @@ describe('normalizePreferences', () => {
       language: 'en',
       weekStartsOn: 1,
       bucketGrouping: true,
+      todayReviewedOn: null,
     });
     expect(normalizePreferences({ language: 'zh' }, defaults)).toEqual({
       timeZone: 'UTC',
@@ -82,6 +86,7 @@ describe('normalizePreferences', () => {
       language: 'zh',
       weekStartsOn: 1,
       bucketGrouping: true,
+      todayReviewedOn: null,
     });
   });
 
@@ -93,7 +98,22 @@ describe('normalizePreferences', () => {
       language: 'en',
       weekStartsOn: 1,
       bucketGrouping: true,
+      todayReviewedOn: null,
     });
+  });
+
+  it('keeps the later todayReviewedOn of payload and default; ignores dirty values', () => {
+    const local = { ...defaults, todayReviewedOn: '2026-10-05' };
+    expect(normalizePreferences({ todayReviewedOn: '2026-10-06' }, local).todayReviewedOn).toBe(
+      '2026-10-06',
+    );
+    expect(normalizePreferences({ todayReviewedOn: '2026-10-01' }, local).todayReviewedOn).toBe(
+      '2026-10-05',
+    );
+    expect(normalizePreferences({ todayReviewedOn: 'today' }, local).todayReviewedOn).toBe(
+      '2026-10-05',
+    );
+    expect(normalizePreferences({}, defaults).todayReviewedOn).toBeNull();
   });
 
   it('accepts only real booleans for bucketGrouping (invalid/missing → default)', () => {
