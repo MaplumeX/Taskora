@@ -40,7 +40,7 @@ import {
   feedSortKey,
   repositionFeed,
   repositionMinimal,
-  searchNeedle,
+  hasSearchCriteria,
   sortFeedItems,
   sortForView,
   subtaskStatusPatch,
@@ -127,6 +127,9 @@ function searchFieldsOf(row: ReplicaRow) {
     trashedAt: f.trashedAt,
     position: typeof f.position === 'string' ? f.position : null,
     createdAt: typeof f.createdAt === 'string' ? f.createdAt : null,
+    tagIds: tagIdsOf(row),
+    projectId: f.projectId,
+    areaId: f.areaId,
   };
 }
 
@@ -234,14 +237,22 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     return new Set(rows.filter((row) => isLaterProjectRow(row)).map((row) => row.id));
   }
 
-  /** 有效 Tag 的继承来源（ADR 0015）：副本中的 Project / Area 自身 Tag。 */
+  /**
+   * 有效 Tag 的继承来源（ADR 0015）：副本中的 Project / Area 自身 Tag，以及
+   * Tag 树（ADR-0016）。
+   */
   async function tagParents(): Promise<TagParents> {
-    const [projects, areas] = await Promise.all([engine.list('project'), engine.list('area')]);
+    const [projects, areas, tags] = await Promise.all([
+      engine.list('project'),
+      engine.list('area'),
+      engine.list('tag'),
+    ]);
     return tagParentsFrom(
       new Map(
         projects.map((row) => [row.id, { areaId: row.fields.areaId, tagIds: tagIdsOf(row) }]),
       ),
       new Map(areas.map((row) => [row.id, { tagIds: tagIdsOf(row) }])),
+      tags.map((row) => ({ id: row.id, parentId: row.fields.parentId })),
     );
   }
 
@@ -265,7 +276,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     },
 
     async searchTasks(q: string, options?: TaskSearchOptions): Promise<TaskSearchHit[]> {
-      if (!searchNeedle(q)) return [];
+      if (!hasSearchCriteria(q, options)) return [];
       // 副本在本机，全量读出后由 domain 判定命中；默认范围先用 SQL 粗筛
       const taskRows = await engine.list(
         'task',
@@ -281,6 +292,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         })),
         q,
         options,
+        options?.tagIds?.length ? await tagParents() : undefined,
       );
       const index = await tagIndex();
       return hits.map(({ task, matchedSubtasks, rank }) => ({

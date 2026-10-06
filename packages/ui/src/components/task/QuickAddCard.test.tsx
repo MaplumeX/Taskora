@@ -20,13 +20,12 @@ vi.mock('@taskora/api', async (importOriginal) => ({
         id: 't1',
         title: 'Work',
         color: '#3B82F6',
-        tagGroupId: null,
+        parentId: null,
         createdAt: NOW,
         updatedAt: NOW,
       },
     ] satisfies TagResponseDto[],
   }),
-  useTagGroupsQuery: () => ({ data: [] }),
   useCreateTag: () => ({ mutate: createTag, isPending: false }),
   useProjectsQuery: () => ({
     data: [

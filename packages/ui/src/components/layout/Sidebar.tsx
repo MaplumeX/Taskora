@@ -1,13 +1,5 @@
-import * as React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import {
-  ChevronDown,
-  Tags as TagsIcon,
-  Settings,
-  Notebook,
-  Bot,
-  type LucideIcon,
-} from 'lucide-react';
+import { Tags as TagsIcon, Settings, Notebook, Bot } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -41,7 +33,6 @@ const SIDEBAR_UTILITIES_NAV: NavItem[] = [
 import { useUiInteractionStore } from '@taskora/api';
 import { useProjectsQuery } from '@taskora/api';
 import { useAreasQuery } from '@taskora/api';
-import { useTagsQuery } from '@taskora/api';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,60 +61,13 @@ const NavRow = ({ item, count }: { item: NavItem; count?: number }) => {
   );
 };
 
-function CollapsibleSection({
-  labelKey,
-  emptyHintKey,
-  emptyTitlePlaceholderKey,
-  icon: Icon,
-  to,
-  items,
-}: {
-  labelKey: string;
-  emptyHintKey: string;
-  emptyTitlePlaceholderKey: string;
-  icon: LucideIcon;
-  to: string;
-  items: { id: string; title: string; href: string }[];
-}) {
-  const { t } = useTranslation();
-  const [open, setOpen] = React.useState(true);
-  const label = t(labelKey);
-  return (
-    <div className="flex flex-col gap-px">
-      <div className="group/section relative flex items-center">
-        <NavLink to={to} className={({ isActive }) => sidebarRowClass(isActive, 'flex-1')}>
-          <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span className="truncate">{label}</span>
-        </NavLink>
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          aria-label={open ? t('nav:collapse', { label }) : t('nav:expand', { label })}
-          className="absolute right-1 flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-0 hover:bg-sidebar-accent focus-visible:opacity-100 group-hover/section:opacity-100 max-md:opacity-100"
-        >
-          <ChevronDown className={cn('h-3.5 w-3.5 transition-transform', !open && '-rotate-90')} />
-        </button>
-      </div>
-      {open && (
-        <div className="flex flex-col gap-px pl-6">
-          {items.length === 0 ? (
-            <span className="px-2 py-1 text-meta text-muted-foreground">{t(emptyHintKey)}</span>
-          ) : (
-            items.map((item) => (
-              <NavLink
-                key={item.id}
-                to={item.href}
-                className={({ isActive }) => sidebarRowClass(isActive)}
-              >
-                <span className="truncate">{item.title || t(emptyTitlePlaceholderKey)}</span>
-              </NavLink>
-            ))
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
+/** 标签只作为一个入口（进入 Tags 页），侧边栏不列出各个 Tag。 */
+const TAGS_NAV: NavItem = {
+  to: '/tags',
+  labelKey: 'nav:tags',
+  icon: TagsIcon,
+  colorClass: 'text-muted-foreground',
+};
 
 export function Sidebar() {
   const { t } = useTranslation();
@@ -133,7 +77,6 @@ export function Sidebar() {
   const openSettings = useUiInteractionStore((s) => s.openSettings);
   const { data: allProjects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
-  const { data: tags = [] } = useTagsQuery();
   const { inboxCount, todayCount } = useBucketCounts();
   const countByRoute: Record<string, number> = {
     '/inbox': inboxCount,
@@ -206,15 +149,8 @@ export function Sidebar() {
           <SidebarProjectSection projects={allProjects} areas={areas} />
         </div>
 
-        <div className="mb-3 mt-4 flex flex-col">
-          <CollapsibleSection
-            labelKey="nav:tags"
-            icon={TagsIcon}
-            to="/tags"
-            emptyHintKey="nav:emptyTags"
-            emptyTitlePlaceholderKey="tag:new"
-            items={tags.map((t) => ({ id: t.id, title: t.title, href: `/tags/${t.id}` }))}
-          />
+        <div className="mb-3 mt-4 flex flex-col gap-px">
+          <NavRow item={TAGS_NAV} />
         </div>
       </ScrollArea>
 

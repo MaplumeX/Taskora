@@ -10,9 +10,10 @@ export class CreateTagDto {
   })
   color?: string;
 
+  /** 父 Tag（嵌套 Tag，ADR-0016）；null 或缺省为顶层。 */
   @IsOptional()
   @IsString()
-  tagGroupId?: string | null;
+  parentId?: string | null;
 }
 
 export class UpdateTagDto {
@@ -28,7 +29,7 @@ export class UpdateTagDto {
 
   @IsOptional()
   @IsString()
-  tagGroupId?: string | null;
+  parentId?: string | null;
 }
 export class ReorderTagsDto {
   @IsArray()

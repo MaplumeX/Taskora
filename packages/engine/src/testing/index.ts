@@ -98,10 +98,12 @@ export const VIEW_CONTRACT = {
   /** 账户在上海：UTC 9-23 17:00 已是当地 9-24 凌晨——「今天」不能按 UTC 算。 */
   zones: { timeZone: 'Asia/Shanghai', legacyDateTimeZone: 'Asia/Shanghai' },
   now: '2026-09-23T17:00:00.000Z',
+  /** 嵌套 Tag（ADR-0016）：tag-0 是 tag-1、tag-2 的父 Tag。父 Tag 排在前面（外键顺序）。 */
   tags: [
-    { id: 'tag-1', title: 'Focus' },
-    { id: 'tag-2', title: 'Work' },
-    { id: 'tag-3', title: 'Home' },
+    { id: 'tag-0', title: 'Mind', parentId: null },
+    { id: 'tag-1', title: 'Focus', parentId: 'tag-0' },
+    { id: 'tag-2', title: 'Work', parentId: 'tag-0' },
+    { id: 'tag-3', title: 'Home', parentId: null },
   ],
   /** 有效 Tag（ADR 0015）：area-1 的 Tag 经直接归属或所属 Project 继承。 */
   areas: [
@@ -194,6 +196,9 @@ export const VIEW_CONTRACT = {
     { query: { tagId: 'tag-2', completed: true }, ids: ['t-anytime', 't-done'] },
     // 继承 Area 的 Tag：直接归属，或经所属 Project
     { query: { tagId: 'tag-3' }, ids: ['t-someday', 't-in-p-today'] },
+    // 父 Tag 命中整棵子树（自身的 tag-1、经 Project 继承的 tag-2）
+    { query: { tagId: 'tag-0' }, ids: ['t-anytime'] },
+    { query: { tagId: 'tag-0', completed: true }, ids: ['t-anytime', 't-done'] },
     { query: { q: 'search' }, ids: ['t-someday'] },
     // 搜索 + completed：未了结与已了结都在（ADR 0006）
     { query: { q: 'search', completed: true }, ids: ['t-someday', 't-cancelled'] },
@@ -238,17 +243,32 @@ function subtask(
  * subtasks 为命中的 Subtask id（带顺序）。
  */
 export const SEARCH_CONTRACT = {
+  /** Tag 条件（Quick Find `#tag`）：st-kitchen 是 st-home 的子 Tag。父 Tag 排在前面。 */
+  tags: [
+    { id: 'st-home', title: 'Home', parentId: null },
+    { id: 'st-kitchen', title: 'Kitchen', parentId: 'st-home' },
+    { id: 'st-urgent', title: 'Urgent', parentId: null },
+  ],
+  /** 归属 sa-house 的任务继承 st-home（有效 Tag，ADR 0015）。 */
+  areas: [
+    { id: 'sa-house', title: 'House', tagIds: ['st-home'], position: 'a0', createdAt: CREATED },
+  ] satisfies ContractArea[],
   tasks: [
-    task('s-prefix', 'a5', { title: 'Milk the cow' }),
+    task('s-prefix', 'a5', { title: 'Milk the cow', tagIds: ['st-kitchen'] }),
     task('s-prefix-2', 'a0', { title: 'milkshake' }),
-    task('s-title', 'a1', { title: 'Buy milk' }),
+    task('s-title', 'a1', { title: 'Buy milk', areaId: 'sa-house', bucket: 'ANYTIME' }),
     task('s-title-2', 'a3', { title: 'Oat MILK recipe' }),
-    task('s-notes', 'a0', { title: 'Groceries', notes: 'remember milk' }),
+    task('s-notes', 'a0', {
+      title: 'Groceries',
+      notes: 'remember milk',
+      tagIds: ['st-urgent', 'st-kitchen'],
+    }),
     task('s-subtask', 'a2', { title: 'Weekend' }),
     task('s-done', 'a1', {
       title: 'Milk delivery',
       status: 'COMPLETED',
       settledAt: '2026-09-22T10:00:00.000Z',
+      tagIds: ['st-kitchen'],
     }),
     task('s-trashed', 'a0', { title: 'Milky way', trashedAt: '2026-09-21T00:00:00.000Z' }),
     task('s-trashed-parent', 'a0', {
@@ -297,5 +317,39 @@ export const SEARCH_CONTRACT = {
     },
     { q: 'eggs', extended: false, hits: [{ id: 's-subtask', subtasks: ['sub-eggs'] }] },
     { q: '   ', extended: true, hits: [] },
-  ],
+    // Tag 条件：子树命中（st-kitchen）与经 Area 继承（s-title）
+    {
+      q: 'milk',
+      extended: false,
+      tagIds: ['st-home'],
+      hits: [
+        { id: 's-prefix', subtasks: [] },
+        { id: 's-title', subtasks: [] },
+        { id: 's-notes', subtasks: [] },
+      ],
+    },
+    // 多个 Tag 之间是 AND；只有 Tag 条件、没有搜索词也命中
+    {
+      q: '',
+      extended: false,
+      tagIds: ['st-home', 'st-urgent'],
+      hits: [{ id: 's-notes', subtasks: [] }],
+    },
+    // 没有搜索词：范围层级 → Position
+    {
+      q: ' ',
+      extended: true,
+      tagIds: ['st-kitchen'],
+      hits: [
+        { id: 's-notes', subtasks: [] },
+        { id: 's-prefix', subtasks: [] },
+        { id: 's-done', subtasks: [] },
+      ],
+    },
+  ] as Array<{
+    q: string;
+    extended: boolean;
+    tagIds?: string[];
+    hits: Array<{ id: string; subtasks: string[] }>;
+  }>,
 };

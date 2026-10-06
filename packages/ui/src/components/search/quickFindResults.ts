@@ -52,7 +52,18 @@ export interface QuickFindInput {
    */
   extended?: boolean;
   trashedProjects?: ProjectResponseDto[];
+  /**
+   * `#tag` chip（issue 07）：有 chip 时不出现「列表」「标签」组，「区域与
+   * 项目」组只留下 inTags 判定命中全部 chip 的条目；搜索词可以为空。
+   */
+  tagIds?: readonly string[];
+  inTags?: (entry: PlaceEntry) => boolean;
 }
+
+/** 「区域与项目」组的候选。 */
+export type PlaceEntry =
+  | { kind: 'area'; area: AreaResponseDto }
+  | { kind: 'project'; project: ProjectResponseDto };
 
 /** 可作为导航目标的项目：未了结、未进 Trash（含 Later Project）。 */
 export function isOpenProject(project: ProjectResponseDto): boolean {
@@ -61,11 +72,19 @@ export function isOpenProject(project: ProjectResponseDto): boolean {
 
 export function buildQuickFindGroups(input: QuickFindInput): QuickFindGroup[] {
   const needle = needleOf(input.query);
-  if (!needle) return [];
+  const tagged = (input.tagIds?.length ?? 0) > 0;
+  if (!needle && !tagged) return [];
+  /** 有搜索词时按名称排序；只有 chip 时保持视觉顺序。 */
+  const byName = <T>(items: T[], namesOf: (item: T) => string[]): T[] =>
+    needle ? rankByName(items, namesOf, needle) : items;
 
-  const lists: QuickFindItem[] = rankByName(input.lists, (list) => list.names, needle).map(
-    (target) => ({ kind: 'list', id: `list:${target.to}`, target }),
-  );
+  const lists: QuickFindItem[] = tagged
+    ? []
+    : rankByName(input.lists, (list) => list.names, needle).map((target) => ({
+        kind: 'list',
+        id: `list:${target.to}`,
+        target,
+      }));
 
   const parents: ReturnType<typeof flatParentOrder> = flatParentOrder(
     input.projects.filter(isOpenProject),
@@ -79,21 +98,23 @@ export function buildQuickFindGroups(input: QuickFindInput): QuickFindGroup[] {
       parents.push({ kind: 'project', project });
     }
   }
-  const places: QuickFindItem[] = rankByName(
-    parents,
-    (entry) => [entry.kind === 'area' ? entry.area.title : entry.project.title],
-    needle,
-  ).map((entry) =>
+  const inTags = input.inTags;
+  const candidates = tagged && inTags ? parents.filter((entry) => inTags(entry)) : parents;
+  const places: QuickFindItem[] = byName(candidates, (entry) => [
+    entry.kind === 'area' ? entry.area.title : entry.project.title,
+  ]).map((entry) =>
     entry.kind === 'area'
       ? { kind: 'area', id: `area:${entry.area.id}`, area: entry.area }
       : { kind: 'project', id: `project:${entry.project.id}`, project: entry.project },
   );
 
-  const tags: QuickFindItem[] = rankByName(input.tags, (tag) => [tag.title], needle).map((tag) => ({
-    kind: 'tag',
-    id: `tag:${tag.id}`,
-    tag,
-  }));
+  const tags: QuickFindItem[] = tagged
+    ? []
+    : rankByName(input.tags, (tag) => [tag.title], needle).map((tag) => ({
+        kind: 'tag',
+        id: `tag:${tag.id}`,
+        tag,
+      }));
 
   const tasks: QuickFindItem[] = input.hits.map((hit) => ({
     kind: 'task',
@@ -126,9 +147,14 @@ export function quickFindRoute(item: QuickFindItem): string | null {
   }
 }
 
-/** 继续搜索：主内容区的搜索页（Things 3 在主窗口列表中展示扩展结果）。 */
-export function searchRoute(query: string): string {
-  return `/search?q=${encodeURIComponent(query)}`;
+/**
+ * 继续搜索：主内容区的搜索页（Things 3 在主窗口列表中展示扩展结果）。
+ * Tag 条件（`#tag` chip）以重复的 `tag` 参数带过去。
+ */
+export function searchRoute(query: string, tagIds: readonly string[] = []): string {
+  const parts = [`q=${encodeURIComponent(query)}`];
+  for (const id of tagIds) parts.push(`tag=${encodeURIComponent(id)}`);
+  return `/search?${parts.join('&')}`;
 }
 
 /** 把文本按命中片段切开（不区分大小写，全部命中处）。 */

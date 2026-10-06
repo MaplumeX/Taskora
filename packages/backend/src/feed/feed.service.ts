@@ -96,7 +96,7 @@ function mapTag(tag: {
   title: string;
   color: string;
   position: string | null;
-  tagGroupId: string | null;
+  parentId: string | null;
   createdAt: Date;
   updatedAt: Date;
 }): TagResponseDto {
@@ -105,7 +105,7 @@ function mapTag(tag: {
     title: tag.title,
     color: tag.color,
     position: tag.position,
-    tagGroupId: tag.tagGroupId,
+    parentId: tag.parentId,
     createdAt: tag.createdAt.toISOString(),
     updatedAt: tag.updatedAt.toISOString(),
   };

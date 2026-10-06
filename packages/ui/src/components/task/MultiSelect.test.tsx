@@ -42,11 +42,10 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useAreasQuery: () => ({ data: [] }),
   useTagsQuery: () => ({
     data: [
-      { id: 'urgent', title: 'Urgent', color: '#EF4444', tagGroupId: null },
-      { id: 'home', title: 'Home', color: '#3B82F6', tagGroupId: null },
+      { id: 'urgent', title: 'Urgent', color: '#EF4444', parentId: null },
+      { id: 'home', title: 'Home', color: '#3B82F6', parentId: null },
     ],
   }),
-  useTagGroupsQuery: () => ({ data: [] }),
   useCreateTag: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 

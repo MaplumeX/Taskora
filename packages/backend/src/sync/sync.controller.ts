@@ -23,8 +23,12 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
  * 4（retire-sort-order）：协议 3 及更早的客户端只按 sortOrder 排 Area /
  * ProjectHeading / TagGroup / Subtask，重排也只写 sortOrder——hub 不再认识
  * 这个字段，它们的重排会被永久拒在 Outbox 里、在其他设备上静默丢失。
+ *
+ * 5（嵌套 Tag，ADR-0016）：协议 4 的客户端还会写 tag-group 实体与 Tag 的
+ * tagGroupId 字段，hub 已不认识它们；这些写会被永久拒在 Outbox 里，Tag
+ * 层级在其他设备上静默丢失。
  */
-export const MIN_SYNC_PROTOCOL_VERSION = 4;
+export const MIN_SYNC_PROTOCOL_VERSION = 5;
 
 /** HTTP 426 Upgrade Required（Nest 的 HttpStatus 未收录）。 */
 const UPGRADE_REQUIRED = 426;

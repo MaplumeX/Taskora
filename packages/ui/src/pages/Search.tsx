@@ -21,7 +21,9 @@ import {
 
 import { EmptyState } from '@/components/common/EmptyState';
 import { QuickFindRow } from '@/components/search/QuickFindRow';
+import { SearchTagChips } from '@/components/search/SearchTagChips';
 import { buildQuickFindGroups, quickFindRoute } from '@/components/search/quickFindResults';
+import { useSearchTagScope } from '@/components/search/useSearchTagScope';
 import { TaskListView } from '@/components/task/TaskListView';
 
 /**
@@ -30,6 +32,9 @@ import { TaskListView } from '@/components/task/TaskListView';
  * 修改。结果分节：区域与项目（含已了结与 Trash 中的项目）→ 任务（未了结）
  * → 日志（已了结）→ 废纸篓。任务节与日志节是普通任务行，可展开、勾选、
  * 参与键盘 Selection；废纸篓中的任务只读，点击定位到 Trash 页。
+ *
+ * `?tag=` 是从 Quick Find 带来的 `#tag` chip（可重复，tags-things3-v2 issue
+ * 07）：显示在搜索框前，可以删除；有 chip 时搜索词可以为空。
  */
 export default function Search() {
   const { t } = useTranslation();
@@ -37,11 +42,15 @@ export default function Search() {
   const reveal = useRevealTask();
   const [params, setParams] = useSearchParams();
   const query = params.get('q') ?? '';
+  const tagParam = params.getAll('tag').join(',');
+  const tagIds = useMemo(() => (tagParam ? tagParam.split(',') : []), [tagParam]);
+  const { tags, inTags } = useSearchTagScope(tagIds);
 
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
-  const search = useTaskSearchQuery(query, { extended: true });
+  const search = useTaskSearchQuery(query, { extended: true, tagIds });
   const { searchedQuery } = search;
+  const hasQuery = searchedQuery.length > 0 || tagIds.length > 0;
   const { data: trashFeed } = useFeedQuery('trash');
   const trashedProjects = useMemo(
     () =>
@@ -62,9 +71,9 @@ export default function Search() {
   // 新一轮任务结果到达前保留上一轮，避免列表随击键闪烁
   const [hits, setHits] = useState<TaskSearchHit[]>([]);
   useEffect(() => {
-    if (!searchedQuery) setHits([]);
+    if (!hasQuery) setHits([]);
     else if (search.data) setHits(search.data);
-  }, [searchedQuery, search.data]);
+  }, [hasQuery, search.data]);
 
   const places = useMemo(
     () =>
@@ -77,8 +86,10 @@ export default function Search() {
         hits: [],
         extended: true,
         trashedProjects,
+        tagIds,
+        inTags,
       }).flatMap((group) => group.items),
-    [searchedQuery, projects, areas, trashedProjects],
+    [searchedQuery, projects, areas, trashedProjects, tagIds, inTags],
   );
 
   // hits 已按相关度排好；分节保持组内顺序
@@ -96,17 +107,31 @@ export default function Search() {
     return sections;
   }, [hits]);
 
-  const hasQuery = searchedQuery.length > 0;
   const noResults =
     places.length + open.length + settled.length + trashed.length === 0 && !search.isPending;
 
-  const setQuery = (value: string) =>
-    setParams(value ? { q: value } : {}, { replace: true });
+  const writeParams = (value: string, nextTags: readonly string[]) =>
+    setParams(
+      { ...(value ? { q: value } : {}), ...(nextTags.length ? { tag: [...nextTags] } : {}) },
+      { replace: true },
+    );
+  const setQuery = (value: string) => writeParams(value, tagIds);
 
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2.5">
         <SearchIcon aria-hidden className="h-7 w-7 shrink-0 text-muted-foreground" />
+        <SearchTagChips
+          size="lg"
+          tagIds={tagIds}
+          tags={tags}
+          onRemove={(id) =>
+            writeParams(
+              query,
+              tagIds.filter((tagId) => tagId !== id),
+            )
+          }
+        />
         <input
           type="search"
           aria-label={t('search:pageTitle')}
@@ -115,11 +140,11 @@ export default function Search() {
           onChange={(e) => setQuery(e.target.value)}
           className="min-w-0 flex-1 bg-transparent text-title-1 outline-none placeholder:text-muted-foreground [&::-webkit-search-cancel-button]:hidden"
         />
-        {query && (
+        {(query || tagIds.length > 0) && (
           <button
             type="button"
             aria-label={t('search:clearSearch')}
-            onClick={() => setQuery('')}
+            onClick={() => writeParams('', [])}
             className="text-muted-foreground hover:text-foreground"
           >
             <X className="h-5 w-5" />

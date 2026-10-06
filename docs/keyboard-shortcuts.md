@@ -79,6 +79,18 @@ Grouped View（今天/随时/将来按项目/领域分组）补充规则：
 
 助手面板：仅桌面宽度生效；焦点在面板输入框里时同样可以收起面板（其他输入框里让路）。在全屏助手页（`/agent`）按下等同「收回到面板」：回到上一个页面并在面板中打开同一个对话。Web 的 Ctrl+J 是浏览器下载页，降级为 Alt+J。
 
+#### 快速查找面板内：`#tag`
+
+| 动作 | 全平台 |
+|---|---|
+| 进入 Tag 补全 | 在词首输入 `#` |
+| 补全中移动 / 选中（变成 chip） | ↑ / ↓，Enter 或 Tab |
+| 退出补全（`#xxx` 留作普通文字） | Esc（再按一次才关闭面板） |
+| `#名字` 正好对应唯一的 Tag 时直接转成 chip | 空格 |
+| 删掉最后一个 chip | 光标在开头时 Backspace |
+
+有 chip 时只列出命中全部 chip 的区域、项目和任务（按子树命中，chip 之间 AND），搜索词可以为空；「继续搜索」把 chip 带到搜索页（`/search?q=…&tag=…`）。输入法组字中不触发补全和转换。
+
 Quick Add 从 `Cmd/Ctrl+Space` 改为 `Cmd/Ctrl+Shift+Space`：Windows 上 Ctrl+Space 是中文输入法切换键，macOS 上 ⌘Space 是 Spotlight。
 
 #### Quick Add 卡片内（桌面）

@@ -2,7 +2,7 @@
  * 快速添加浮层的数据快照（quick-add-android issue 02）。
  *
  * 原生浮层（QuickAddActivity）没有数据也不跑业务逻辑：归属列表的顺序、
- * 稍后项目的过滤、Tag 的分组都在这里算好，扁平成行列表写进
+ * 稍后项目的过滤、Tag 的层级都在这里算好，扁平成行列表写进
  * SharedPreferences，原生只负责读取与展示（按标题过滤除外）。顺序与桌面 /
  * 主应用的选择器同源（buildMoveTargets / buildTagPickerRows）。
  *
@@ -12,16 +12,10 @@
 
 import { invoke } from '@tauri-apps/api/core';
 
-import type {
-  AreaResponseDto,
-  ProjectResponseDto,
-  TagGroupResponseDto,
-  TagResponseDto,
-} from '@taskora/shared';
+import type { AreaResponseDto, ProjectResponseDto, TagResponseDto } from '@taskora/shared';
 import {
   getAreas,
   getProjects,
-  getTagGroups,
   getTags,
   i18n,
   projectLaterKind,
@@ -37,9 +31,17 @@ export type QuickAddPlacementRow =
   | { kind: 'inbox'; title: string; depth: 0 }
   | { kind: 'area' | 'project'; id: string; title: string; depth: 0 | 1 };
 
-export type QuickAddTagRow =
-  | { kind: 'header'; title: string }
-  | { kind: 'tag'; id: string; title: string; color: string | null };
+/**
+ * Tag 行按 Tag 树先序排列，depth 为嵌套层级（嵌套 Tag，ADR-0016）。旧版
+ * 快照的 header 行（Tag Group 小标题）已不再产出，原生解析时跳过。
+ */
+export interface QuickAddTagRow {
+  kind: 'tag';
+  id: string;
+  title: string;
+  color: string | null;
+  depth: number;
+}
 
 export interface QuickAddNativeSnapshot {
   v: typeof QUICK_ADD_SNAPSHOT_VERSION;
@@ -59,7 +61,6 @@ export interface QuickAddSnapshotInput {
   projects: ProjectResponseDto[];
   areas: AreaResponseDto[];
   tags: TagResponseDto[];
-  tagGroups: TagGroupResponseDto[];
   timeZone: string;
   weekStartsOn: 0 | 1;
   t: Translate;
@@ -120,13 +121,19 @@ export function buildQuickAddSnapshot(input: QuickAddSnapshotInput): QuickAddNat
     }
   });
 
-  const tags = buildTagPickerRows({ tags: input.tags, groups: input.tagGroups, query: '' }).flatMap(
-    (row): QuickAddTagRow[] => {
-      if (row.kind === 'header') return [{ kind: 'header', title: row.title }];
-      if (row.kind === 'tag')
-        return [{ kind: 'tag', id: row.id, title: row.tag.title, color: row.tag.color ?? null }];
-      return [];
-    },
+  const tags = buildTagPickerRows({ tags: input.tags, query: '' }).flatMap(
+    (row): QuickAddTagRow[] =>
+      row.kind === 'tag'
+        ? [
+            {
+              kind: 'tag',
+              id: row.id,
+              title: row.tag.title,
+              color: row.tag.color ?? null,
+              depth: row.depth,
+            },
+          ]
+        : [],
   );
 
   return {
@@ -145,18 +152,12 @@ export function buildQuickAddSnapshot(input: QuickAddSnapshotInput): QuickAddNat
  * JS 侧缓存会失真）。
  */
 export async function syncQuickAddData(): Promise<void> {
-  const [projects, areas, tags, tagGroups] = await Promise.all([
-    getProjects(),
-    getAreas(),
-    getTags(),
-    getTagGroups(),
-  ]);
+  const [projects, areas, tags] = await Promise.all([getProjects(), getAreas(), getTags()]);
   const { timeZone, weekStartsOn } = usePreferencesStore.getState();
   const snapshot = buildQuickAddSnapshot({
     projects,
     areas,
     tags,
-    tagGroups,
     timeZone,
     weekStartsOn,
     t: (key) => i18n.t(key),

@@ -7,14 +7,18 @@ import {
   SETTLED_TASK_STATUSES,
 } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
-import { effectiveTaskTagIds, type TagParents } from '@taskora/engine';
+import { effectiveTaskTagIds, tagHit, type TagParents } from '@taskora/engine';
 
 import type { TaskQuery } from '@/api/tasks.api';
 
 /** 已了结（Settled）状态白名单：与后端共用 @taskora/shared 的单一来源（ADR 0006）。 */
 const SETTLED_STATUSES = SETTLED_TASK_STATUSES;
 
-const NO_TAG_PARENTS: TagParents = { project: () => undefined, area: () => undefined };
+const NO_TAG_PARENTS: TagParents = {
+  project: () => undefined,
+  area: () => undefined,
+  subtreeOf: (tagId) => new Set([tagId]),
+};
 
 function isSettled(status: TaskStatus): boolean {
   return SETTLED_STATUSES.includes(status);
@@ -29,7 +33,8 @@ function isSettled(status: TaskStatus): boolean {
  * undefined values — those are treated as absent, mirroring axios params.
  *
  * tagId 按有效 Tag 判定（ADR 0015）：继承来源取自缓存里的 Project / Area，
- * 缓存里找不到的父级不贡献 Tag。
+ * 缓存里找不到的父级不贡献 Tag；命中该 Tag 的整棵子树（ADR-0016），Tag
+ * 树取自缓存里的 Tag 列表。
  */
 export function taskMatchesQuery(
   task: TaskResponseDto,
@@ -53,7 +58,7 @@ export function taskMatchesQuery(
   if (query.tagId !== undefined) {
     const own = (task.tags ?? []).map((t) => t.id);
     const effective = effectiveTaskTagIds({ ...task, tagIds: own }, tagParents);
-    if (!effective.includes(query.tagId)) return false;
+    if (!tagHit(effective, query.tagId, tagParents)) return false;
   }
   if (query.hasScheduled === true && task.scheduledDate === null) return false;
 

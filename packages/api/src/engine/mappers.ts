@@ -21,7 +21,6 @@ import type {
   ProjectResponseDto,
   RepeatRule,
   SubtaskResponseDto,
-  TagGroupResponseDto,
   TagResponseDto,
   TaskResponseDto,
 } from '@taskora/shared';
@@ -61,7 +60,7 @@ export function tagRowToDto(row: ReplicaRow): TagResponseDto {
     title: (f.title as string) ?? '',
     color: (f.color as string) ?? '#3B82F6',
     position: typeof f.position === 'string' ? f.position : null,
-    tagGroupId: (f.tagGroupId as string | null) ?? null,
+    parentId: typeof f.parentId === 'string' ? f.parentId : null,
     createdAt: (f.createdAt as string) ?? new Date().toISOString(),
     updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),
   };
@@ -149,21 +148,6 @@ export function areaRowToDto(row: ReplicaRow, tags: Map<string, TagResponseDto>)
     notes: (f.notes as string | null) ?? null,
     position: typeof f.position === 'string' ? f.position : null,
     tags: tagIds.map((id) => tags.get(id)).filter((t): t is TagResponseDto => t !== undefined),
-    createdAt: (f.createdAt as string) ?? new Date().toISOString(),
-    updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),
-  };
-}
-
-export function tagGroupRowToDto(
-  row: ReplicaRow,
-  memberTags: TagResponseDto[],
-): TagGroupResponseDto {
-  const f = row.fields;
-  return {
-    id: row.id,
-    title: (f.title as string) ?? '',
-    position: typeof f.position === 'string' ? f.position : null,
-    tags: memberTags,
     createdAt: (f.createdAt as string) ?? new Date().toISOString(),
     updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),
   };

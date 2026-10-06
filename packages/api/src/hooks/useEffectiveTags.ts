@@ -5,6 +5,7 @@ import type { FeedItem, ProjectResponseDto, TaskResponseDto } from '@taskora/sha
 
 import { useAreasQuery } from './useAreas';
 import { useProjectsQuery } from './useProjects';
+import { useTagsQuery } from './useTags';
 
 const ownTagIds = (entity: { tags?: { id: string }[] | null }) =>
   (entity.tags ?? []).map((tag) => tag.id);
@@ -23,10 +24,12 @@ export interface EffectiveTags {
 export function useEffectiveTags(): EffectiveTags {
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
+  const { data: tags = [] } = useTagsQuery();
   return useMemo(() => {
     const parents = tagParentsFrom(
       new Map(projects.map((p) => [p.id, { areaId: p.areaId, tagIds: ownTagIds(p) }])),
       new Map(areas.map((a) => [a.id, { tagIds: ownTagIds(a) }])),
+      tags,
     );
     const ofTask: EffectiveTags['ofTask'] = (task) =>
       effectiveTaskTagIds({ ...task, tagIds: ownTagIds(task) }, parents);
@@ -37,5 +40,5 @@ export function useEffectiveTags(): EffectiveTags {
       ofProject,
       ofFeedItem: (item) => (item.type === 'task' ? ofTask(item) : ofProject(item)),
     };
-  }, [projects, areas]);
+  }, [projects, areas, tags]);
 }

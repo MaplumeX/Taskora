@@ -13,6 +13,7 @@ import {
   buildQuickFindGroups,
   highlightParts,
   quickFindRoute,
+  searchRoute,
   type QuickFindGroup,
   type QuickFindInput,
 } from './quickFindResults';
@@ -53,7 +54,7 @@ function tag(id: string, title: string): TagResponseDto {
     id,
     title,
     color: '#3B82F6',
-    tagGroupId: null,
+    parentId: null,
     createdAt: NOW,
     updatedAt: NOW,
   };
@@ -204,6 +205,46 @@ describe('quickFindRoute', () => {
     expect(quickFindRoute(places.items[0])).toBe('/areas/a1');
     expect(quickFindRoute(tags.items[0])).toBe('/tags/g1');
     expect(quickFindRoute(tasks.items[0])).toBeNull();
+  });
+});
+
+describe('buildQuickFindGroups — `#tag` chip', () => {
+  const projects = [project('p-home', 'Home stuff'), project('p-work', 'Work stuff')];
+  const areas = [area('a-house', 'House')];
+  const inTags = (entry: { kind: 'area' | 'project'; area?: { id: string }; project?: { id: string } }) =>
+    entry.kind === 'project' ? entry.project!.id === 'p-home' : entry.area!.id === 'a-house';
+
+  it('有 chip 时不出现列表与标签组，区域与项目按 chip 过滤', () => {
+    const groups = buildQuickFindGroups(
+      input({
+        query: 'h',
+        projects,
+        areas,
+        tags: [tag('g1', 'Home')],
+        hits: [hit('t1')],
+        tagIds: ['g1'],
+        inTags,
+      }),
+    );
+    expect(summary(groups)).toEqual({
+      places: ['project:p-home', 'area:a-house'],
+      tasks: ['task:t1'],
+    });
+  });
+
+  it('只有 chip、没有搜索词时按视觉顺序列出命中的条目', () => {
+    const groups = buildQuickFindGroups(
+      input({ query: '', projects, areas, hits: [hit('t1')], tagIds: ['g1'], inTags }),
+    );
+    expect(summary(groups)).toEqual({
+      places: ['project:p-home', 'area:a-house'],
+      tasks: ['task:t1'],
+    });
+  });
+
+  it('继续搜索的路由带上 chip', () => {
+    expect(searchRoute('milk report')).toBe('/search?q=milk%20report');
+    expect(searchRoute('', ['g1', 'g2'])).toBe('/search?q=&tag=g1&tag=g2');
   });
 });
 

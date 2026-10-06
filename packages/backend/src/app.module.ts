@@ -7,7 +7,6 @@ import { TasksModule } from './tasks/tasks.module';
 import { ProjectsModule } from './projects/projects.module';
 import { AreasModule } from './areas/areas.module';
 import { TagsModule } from './tags/tags.module';
-import { TagGroupsModule } from './tag-groups/tag-groups.module';
 import { FeedModule } from './feed/feed.module';
 import { ProjectHeadingsModule } from './project-headings/project-headings.module';
 import { SubtasksModule } from './subtasks/subtasks.module';
@@ -26,7 +25,6 @@ import { HealthController } from './health/health.controller';
     ProjectsModule,
     AreasModule,
     TagsModule,
-    TagGroupsModule,
     FeedModule,
     ProjectHeadingsModule,
     SubtasksModule,

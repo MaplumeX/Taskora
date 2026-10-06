@@ -1,6 +1,6 @@
 /**
  * 其余 REST 服务的写路径（真实 Postgres + 真实 Sync Hub，local-first-v3
- * issue 05）：Subtask、Project、Project Heading、Area、Tag、TagGroup、
+ * issue 05）：Subtask、Project、Project Heading、Area、Tag、
  * 清空 Trash。每个写都经合并器，数据与日志同事务。
  */
 import { BadRequestException, ConflictException, NotFoundException } from '@nestjs/common';
@@ -480,7 +480,7 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     expect(await registeredCompacted('project-heading')).toEqual(['h-1', 'h-empty']);
   });
 
-  // ---------- Area / Tag / TagGroup ----------
+  // ---------- Area / Tag ----------
 
   it('Area：create 带标签、排在末尾；update 部分字段与标签整组替换；删除走 Compact；reorder', async () => {
     await testPrisma.tag.create({ data: { id: 'tag-1', userId: USER, title: 't1' } });
@@ -523,34 +523,45 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     await expect(h.areas.remove(USER, first.id)).rejects.toBeInstanceOf(NotFoundException);
   });
 
-  it('Tag / TagGroup：create 默认值；update；删除走 Compact（分组删除后标签解除归属）', async () => {
-    const group = await h.tagGroups.create(USER, { title: '上下文' });
-    expect(group).toMatchObject({ title: '上下文', tags: [] });
-    const tag = await h.tags.create(USER, { title: '电脑', tagGroupId: group.id });
-    expect(tag).toMatchObject({ color: '#3B82F6', tagGroupId: group.id });
+  it('Tag：create 默认值、可挂父 Tag；update；删除父 Tag 走 Compact，子 Tag 提升为顶层', async () => {
+    const parent = await h.tags.create(USER, { title: '上下文' });
+    const tag = await h.tags.create(USER, { title: '电脑', parentId: parent.id });
+    expect(tag).toMatchObject({ color: '#3B82F6', parentId: parent.id });
     const colored = await h.tags.create(USER, { title: '电话', color: '#EF4444' });
-    expect(colored.color).toBe('#EF4444');
+    expect(colored).toMatchObject({ color: '#EF4444', parentId: null });
     // 新标签排最前
     expect(colored.position! < tag.position!).toBe(true);
 
     expect((await h.tags.update(USER, tag.id, { title: '笔记本' })).title).toBe('笔记本');
-    expect((await h.tagGroups.update(USER, group.id, { title: '场景' })).title).toBe('场景');
+    expect((await h.tags.update(USER, colored.id, { parentId: tag.id })).parentId).toBe(tag.id);
     await expectLoggedAsStored('tag', tag.id);
-    await expectLoggedAsStored('tag-group', group.id);
 
-    await h.tagGroups.remove(USER, group.id);
-    expect(
-      (await testPrisma.tag.findUniqueOrThrow({ where: { id: tag.id } })).tagGroupId,
-    ).toBeNull();
-    await h.tags.remove(USER, colored.id);
-    expect(await compactedIdsInLog('tag-group')).toEqual([group.id]);
-    expect(await compactedIdsInLog('tag')).toEqual([colored.id]);
+    await h.tags.remove(USER, parent.id);
+    expect((await testPrisma.tag.findUniqueOrThrow({ where: { id: tag.id } })).parentId).toBeNull();
+    expect(await compactedIdsInLog('tag')).toEqual([parent.id]);
     await expect(h.tags.update(USER, 'missing', { title: 'x' })).rejects.toBeInstanceOf(
       NotFoundException,
     );
   });
 
-  it('Tag / TagGroup reorder：findAll 按新顺序返回；不属于本人的 id 拒绝', async () => {
+  it('Tag：父 Tag 必须存在，且不能挂到自己或自己的后代下面', async () => {
+    const work = await h.tags.create(USER, { title: '工作' });
+    const meeting = await h.tags.create(USER, { title: '会议', parentId: work.id });
+    const weekly = await h.tags.create(USER, { title: '周会', parentId: meeting.id });
+
+    await expect(h.tags.update(USER, work.id, { parentId: weekly.id })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(h.tags.update(USER, work.id, { parentId: work.id })).rejects.toBeInstanceOf(
+      BadRequestException,
+    );
+    await expect(h.tags.create(USER, { title: 'x', parentId: 'missing' })).rejects.toBeInstanceOf(
+      NotFoundException,
+    );
+    expect((await h.tags.update(USER, weekly.id, { parentId: null })).parentId).toBeNull();
+  });
+
+  it('Tag reorder：findAll 按新顺序返回；不属于本人的 id 拒绝', async () => {
     const a = await h.tags.create(USER, { title: 'a' });
     const b = await h.tags.create(USER, { title: 'b' });
     const c = await h.tags.create(USER, { title: 'c' });
@@ -558,15 +569,7 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     expect((await h.tags.findAll(USER)).map((tag) => tag.title)).toEqual(['c', 'a', 'b']);
     await expectLoggedAsStored('tag', a.id);
 
-    const g1 = await h.tagGroups.create(USER, { title: 'g1' });
-    const g2 = await h.tagGroups.create(USER, { title: 'g2' });
-    // 新建排最前
-    expect((await h.tagGroups.findAll(USER)).map((group) => group.title)).toEqual(['g2', 'g1']);
-    await h.tagGroups.reorder(USER, [g1.id, g2.id]);
-    expect((await h.tagGroups.findAll(USER)).map((group) => group.title)).toEqual(['g1', 'g2']);
-
     await expect(h.tags.reorder(USER, [a.id, 'missing'])).rejects.toBeInstanceOf(NotFoundException);
-    await expect(h.tagGroups.reorder(USER, ['missing'])).rejects.toBeInstanceOf(NotFoundException);
   });
 
   // ---------- 清空 Trash ----------

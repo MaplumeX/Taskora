@@ -346,6 +346,51 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     expect(hits.find((task) => task.id === 't-project')!.tags).toEqual([]);
   });
 
+  it('findAll tagId：命中整棵子树（含继承来的子 Tag），不展开祖先', async () => {
+    await seedTag('life');
+    await testPrisma.tag.create({
+      data: { id: 'home', userId: USER, title: 'home', parentId: 'life' },
+    });
+    await testPrisma.tag.create({
+      data: { id: 'errand', userId: USER, title: 'errand', parentId: 'home' },
+    });
+    await testPrisma.project.create({
+      data: { id: 'p-errand', userId: USER, title: 'P', tags: { create: [{ tagId: 'errand' }] } },
+    });
+    await seedTask('t-life', { tags: { create: [{ tagId: 'life' }] } });
+    await seedTask('t-home', { tags: { create: [{ tagId: 'home' }] } });
+    await seedTask('t-in-errand-project', { projectId: 'p-errand', bucket: 'ANYTIME' });
+
+    const ids = async (tagId: string) =>
+      (await h.tasks.findAll(USER, { tagId })).map((task) => task.id).sort();
+    expect(await ids('life')).toEqual(['t-home', 't-in-errand-project', 't-life']);
+    expect(await ids('home')).toEqual(['t-home', 't-in-errand-project']);
+    expect(await ids('errand')).toEqual(['t-in-errand-project']);
+  });
+
+  it('search 带 Tag 条件：子树与继承命中，多个 Tag 取 AND，搜索词可以为空', async () => {
+    await seedTag('life');
+    await testPrisma.tag.create({
+      data: { id: 'home', userId: USER, title: 'home', parentId: 'life' },
+    });
+    await seedTag('urgent');
+    await testPrisma.area.create({
+      data: { id: 'area-home', userId: USER, title: 'H', tags: { create: [{ tagId: 'home' }] } },
+    });
+    await seedTask('t-milk-home', {
+      title: 'Buy milk',
+      tags: { create: [{ tagId: 'home' }, { tagId: 'urgent' }] },
+    });
+    await seedTask('t-milk-area', { title: 'Milk run', areaId: 'area-home', bucket: 'ANYTIME' });
+    await seedTask('t-milk-plain', { title: 'Milk' });
+
+    const ids = async (q: string, tagIds: string[]) =>
+      (await h.tasks.search(USER, q, { tagIds })).map((hit) => hit.task.id).sort();
+    expect(await ids('milk', ['life'])).toEqual(['t-milk-area', 't-milk-home']);
+    expect(await ids('', ['life', 'urgent'])).toEqual(['t-milk-home']);
+    expect(await ids('  ', ['home'])).toEqual(['t-milk-area', 't-milk-home']);
+  });
+
   // ---------- 重复派生（ADR-0012） ----------
 
   async function seedRepeating(data: Record<string, unknown> = {}) {

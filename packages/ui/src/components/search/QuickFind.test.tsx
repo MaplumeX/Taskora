@@ -31,6 +31,13 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useTagsQuery: vi.fn(),
   useTaskSearchQuery: vi.fn(),
   useRevealTask: vi.fn(),
+  // 有效 Tag：测试数据里 Project / Area 不带 Tag，直接用自身 Tag
+  useEffectiveTags: () => ({
+    ofTask: (task: { tags?: { id: string }[] }) => (task.tags ?? []).map((tag) => tag.id),
+    ofProject: (project: { tags?: { id: string }[] }) =>
+      (project.tags ?? []).map((tag) => tag.id),
+    ofFeedItem: (item: { tags?: { id: string }[] }) => (item.tags ?? []).map((tag) => tag.id),
+  }),
 }));
 
 const NOW = '2026-09-01T00:00:00.000Z';
@@ -105,7 +112,7 @@ beforeEach(() => {
         id: 'g1',
         title: 'Errand',
         color: '#3B82F6',
-        tagGroupId: null,
+        parentId: null,
         createdAt: NOW,
         updatedAt: NOW,
       },
@@ -250,6 +257,64 @@ describe('QuickFind', () => {
     expect(screen.getByTestId('path')).toHaveTextContent('/search?q=old%20groceries');
     expect(vi.mocked(useTaskSearchQuery)).not.toHaveBeenCalledWith(expect.anything(), {
       extended: true,
+    });
+  });
+
+  describe('#tag', () => {
+    const chipIds = () =>
+      [...document.querySelectorAll('[data-search-tag]')].map((el) =>
+        el.getAttribute('data-search-tag'),
+      );
+    const lastSearch = () => vi.mocked(useTaskSearchQuery).mock.calls.at(-1);
+
+    it('`#` 进入 Tag 补全，Enter 变成 chip，只列出命中 chip 的结果', async () => {
+      hitsByQuery.milk = [hit('t1', 'Buy milk')];
+      const { input } = renderQuickFind();
+      await user.type(input, '#er');
+      expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
+        'Tags',
+      ]);
+      expect(screen.getByRole('option')).toHaveTextContent('Errand');
+
+      await user.keyboard('{Enter}');
+      expect(chipIds()).toEqual(['g1']);
+      expect(input).toHaveValue('');
+      expect(lastSearch()).toEqual(['', { tagIds: ['g1'] }]);
+
+      await user.type(input, 'milk');
+      expect(lastSearch()).toEqual(['milk', { tagIds: ['g1'] }]);
+      // 有 chip 时没有「列表」「标签」组；Project / Area 没有这个 Tag
+      expect(screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'))).toEqual([
+        'Tasks',
+      ]);
+    });
+
+    it('补全中 Esc 只退出补全，`#xxx` 留作普通文字', async () => {
+      const { input, onOpenChange } = renderQuickFind();
+      await user.type(input, '#zz');
+      expect(screen.getByText('No matching tags')).toBeInTheDocument();
+      await user.keyboard('{Escape}');
+      expect(onOpenChange).not.toHaveBeenCalledWith(false);
+      expect(input).toHaveValue('#zz');
+      expect(lastSearch()).toEqual(['#zz', { tagIds: [] }]);
+      await user.keyboard('{Escape}');
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('`#名字` 唯一对应 Tag 时空格自动转换；开头 Backspace 删掉最后一个 chip', async () => {
+      const { input } = renderQuickFind();
+      await user.type(input, '#errand ');
+      expect(chipIds()).toEqual(['g1']);
+      expect(input).toHaveValue('');
+      await user.keyboard('{Backspace}');
+      expect(chipIds()).toEqual([]);
+    });
+
+    it('继续搜索带上 chip', async () => {
+      const { input } = renderQuickFind();
+      await user.type(input, '#err{Enter}milk');
+      await user.keyboard('{ArrowUp}{Enter}');
+      expect(screen.getByTestId('path')).toHaveTextContent('/search?q=milk&tag=g1');
     });
   });
 });

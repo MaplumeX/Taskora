@@ -212,7 +212,7 @@ integrationDescribe('Change Events (service-level integration)', () => {
     expectSeqsMonotonic(batch);
   });
 
-  it('emits created/updated for their own entities (area, tag, subtask, project, heading, tag-group)', async () => {
+  it('emits created/updated for their own entities (area, tag, subtask, project, heading)', async () => {
     const area = await areas.create(userId, { title: 'Work' });
     const tag = await tags.create(userId, { title: 'T' });
     const project = await projects.create(userId, { title: 'P', areaId: area.id });
@@ -220,9 +220,6 @@ integrationDescribe('Change Events (service-level integration)', () => {
     const subtask = await subtasks.create(userId, task.id, { title: 'Step' });
     const heading = await prisma.projectHeading.create({
       data: { projectId: project.id, title: 'H', userId },
-    });
-    const group = await prisma.tagGroup.create({
-      data: { title: 'G', userId },
     });
     await drain();
 
@@ -238,7 +235,6 @@ integrationDescribe('Change Events (service-level integration)', () => {
     expect(find('subtask', subtask.id)).toMatchObject({ action: 'created' });
     expect(find('subtask', subtask.id)?.data).toMatchObject({ taskId: task.id });
     expect(find('project-heading', heading.id)).toMatchObject({ action: 'created' });
-    expect(find('tag-group', group.id)).toMatchObject({ action: 'created' });
   });
 
   it('cascades project trash as updated events for its tasks', async () => {

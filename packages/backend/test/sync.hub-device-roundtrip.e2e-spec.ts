@@ -93,7 +93,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
       title: '稍后创建的标签',
       color: '#3B82F6',
       position: 'a0',
-      tagGroupId: null,
+      parentId: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -406,6 +406,49 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     expect(await testPrisma.task.count({ where: { userId: USER } })).toBe(601);
     await device.close();
   }, 120_000);
+
+  it('嵌套 Tag：两台设备离线互设父 Tag，hub 合并后断环，两端收敛到同一棵树', async () => {
+    const transport: SyncTransport = {
+      push: (request) => hub.push(USER, request.events, request.deletes),
+      pull: async (request) => await buffer.pull(USER, request.cursor),
+      bootstrap: () => hub.bootstrap(USER),
+    };
+    const a = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'dev-a',
+      transport,
+    });
+    const b = await openEngine({
+      storage: await createNodeSqliteStorage(':memory:'),
+      deviceId: 'dev-b',
+      transport,
+    });
+    const x = await a.create('tag', { title: 'X', color: '#000000', parentId: null });
+    const y = await a.create('tag', { title: 'Y', color: '#000000', parentId: null });
+    await a.sync();
+    await b.sync();
+
+    // 两台设备各自离线改父 Tag，先后推送
+    await a.update('tag', x, { parentId: y });
+    await b.update('tag', y, { parentId: x });
+    await a.sync();
+    await b.sync();
+    await a.sync();
+
+    const stored = await testPrisma.tag.findMany({
+      where: { userId: USER },
+      orderBy: { title: 'asc' },
+    });
+    expect(stored.map((tag) => [tag.id, tag.parentId])).toEqual([
+      [x, y],
+      [y, null],
+    ]);
+    for (const device of [a, b]) {
+      expect((await device.get('tag', x))?.fields.parentId).toBe(y);
+      expect((await device.get('tag', y))?.fields.parentId).toBeNull();
+      await device.close();
+    }
+  });
 
   it('hub 剔除的字段值（未知枚举等）以必胜时钟下发实际值，推送方收敛不分叉', async () => {
     const transport: SyncTransport = {

@@ -224,7 +224,7 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
   });
 
   it('getTasks：视图/搜索/标签过滤与 REST 语义对齐', async () => {
-    const tagId = await engine.create('tag', { title: '购物', color: '#3B82F6', tagGroupId: null });
+    const tagId = await engine.create('tag', { title: '购物', color: '#3B82F6', parentId: null });
     const tagged = await backend.createTask({ title: '买咖啡豆', tagIds: [tagId] });
     await backend.createTask({ title: '写文档' });
     await backend.createTask({
@@ -348,7 +348,7 @@ describe('EngineTaskBackend（V2：Subtask / convert / emptyTrash 全离线）',
   });
 
   it('convert：断网也能转 Project，新 Project 继承字段、Subtask 提升为 Task、原 Task 干净消失', async () => {
-    const tagId = await engine.create('tag', { title: '装修', color: '#3B82F6', tagGroupId: null });
+    const tagId = await engine.create('tag', { title: '装修', color: '#3B82F6', parentId: null });
     const areaId = await engine.create('area', { title: '家', notes: null, tagIds: [] });
     const task = await backend.createTask({
       title: '重新装修',
@@ -688,7 +688,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
   });
 
   it('完成 → 立刻派生下一实例：复制集完整、子任务重置、逾期落 Today；父任务保留规则', async () => {
-    const tagId = await engine.create('tag', { title: '家务', color: '#3B82F6', tagGroupId: null });
+    const tagId = await engine.create('tag', { title: '家务', color: '#3B82F6', parentId: null });
     const task = await backend.createTask({
       title: '浇花',
       notes: '客厅绿植',

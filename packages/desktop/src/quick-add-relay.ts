@@ -9,7 +9,7 @@
  * backend 即 REST 实现，行为与旧路径一致。
  *
  * - 读：quick-add 打开时发 snapshot-request，主窗口从本地副本取 Projects /
- *   Areas / Tags / Tag Groups 回发 snapshot（离线可用）。
+ *   Areas / Tags 回发 snapshot（离线可用）。
  * - 写：submit 携带完整草稿，落库走共用的 createFromQuickAddDraft（与
  *   Android 状态栏浮层同一套转换与校验）；旧载荷 { title } 仍接受。
  * - 回执：result 告知 quick-add 实际落入的位置；失败时另发系统通知——
@@ -23,7 +23,6 @@ import {
   createFromQuickAddDraft,
   getAreas,
   getProjects,
-  getTagGroups,
   getTags,
   i18n,
   toQuickAddDraft,
@@ -94,18 +93,12 @@ async function handleSnapshotRequest(payload: unknown): Promise<void> {
   const requestId = (payload as Partial<QuickAddSnapshotRequest> | null)?.requestId;
   if (typeof requestId !== 'string') return;
   try {
-    const [projects, areas, tags, tagGroups] = await Promise.all([
-      getProjects(),
-      getAreas(),
-      getTags(),
-      getTagGroups(),
-    ]);
+    const [projects, areas, tags] = await Promise.all([getProjects(), getAreas(), getTags()]);
     await emitTo<QuickAddSnapshot>(QUICK_ADD_WINDOW, QUICK_ADD_SNAPSHOT_EVENT, {
       requestId,
       projects,
       areas,
       tags,
-      tagGroups,
     });
   } catch (error) {
     // 不应答：quick-add 超时后照常可用（只能进 Inbox）。

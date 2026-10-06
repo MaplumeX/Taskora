@@ -1,11 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import type {
-  AreaResponseDto,
-  ProjectResponseDto,
-  TagGroupResponseDto,
-  TagResponseDto,
-} from '@taskora/shared';
+import type { AreaResponseDto, ProjectResponseDto, TagResponseDto } from '@taskora/shared';
 import { ProjectStatus } from '@taskora/shared';
 
 const mocks = vi.hoisted(() => ({ invoke: vi.fn() }));
@@ -39,19 +34,15 @@ function project(
 const area = (id: string, title: string, position: string) =>
   ({ id, title, position }) as unknown as AreaResponseDto;
 
-function tag(id: string, title: string, tagGroupId: string | null = null): TagResponseDto {
-  return { id, title, color: '#3B82F6', tagGroupId, createdAt: NOW, updatedAt: NOW };
+function tag(id: string, title: string, parentId: string | null = null): TagResponseDto {
+  return { id, title, color: '#3B82F6', parentId, createdAt: NOW, updatedAt: NOW };
 }
-
-const group = (id: string, title: string) =>
-  ({ id, title, tags: [], createdAt: NOW, updatedAt: NOW }) as unknown as TagGroupResponseDto;
 
 describe('buildQuickAddSnapshot', () => {
   const base = {
     projects: [] as ProjectResponseDto[],
     areas: [] as AreaResponseDto[],
     tags: [] as TagResponseDto[],
-    tagGroups: [] as TagGroupResponseDto[],
     timeZone: 'Asia/Shanghai',
     weekStartsOn: 1 as const,
     t,
@@ -78,16 +69,15 @@ describe('buildQuickAddSnapshot', () => {
     ]);
   });
 
-  it('Tag 按 Group 分组，未分组的放最后', () => {
+  it('Tag 按 Tag 树先序排列，带层级', () => {
     const snapshot = buildQuickAddSnapshot({
       ...base,
-      tags: [tag('t1', 'Urgent'), tag('t2', 'Office', 'g1')],
-      tagGroups: [group('g1', 'Place')],
+      tags: [tag('t1', 'Urgent'), tag('t2', 'Office', 'p'), tag('p', 'Place')],
     });
     expect(snapshot.tags).toEqual([
-      { kind: 'header', title: 'Place' },
-      { kind: 'tag', id: 't2', title: 'Office', color: '#3B82F6' },
-      { kind: 'tag', id: 't1', title: 'Urgent', color: '#3B82F6' },
+      { kind: 'tag', id: 't1', title: 'Urgent', color: '#3B82F6', depth: 0 },
+      { kind: 'tag', id: 'p', title: 'Place', color: '#3B82F6', depth: 0 },
+      { kind: 'tag', id: 't2', title: 'Office', color: '#3B82F6', depth: 1 },
     ]);
   });
 

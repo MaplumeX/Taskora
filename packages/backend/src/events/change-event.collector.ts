@@ -66,7 +66,6 @@ const ENTITY_MODEL: Record<ChangeEntity, PrismaModel> = {
   'project-heading': 'projectHeading',
   area: 'area',
   tag: 'tag',
-  'tag-group': 'tagGroup',
 };
 
 /** Models whose direct writes emit events for the entity itself. */

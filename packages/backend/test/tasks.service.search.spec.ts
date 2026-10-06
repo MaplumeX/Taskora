@@ -1,8 +1,13 @@
+import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { TaskBucket, TaskStatus } from '@taskora/shared';
 
+import { plainToInstance } from 'class-transformer';
+import { validate } from 'class-validator';
+
 import { PrismaService } from '../src/prisma/prisma.service';
+import { TaskSearchQueryDto } from '../src/tasks/dto/tasks.dto';
 import { TasksService } from '../src/tasks/tasks.service';
 
 describe('TasksService — search (q param)', () => {
@@ -134,9 +139,16 @@ describe('TasksService — search (q param)', () => {
       expect(call.where.trashedAt).toBeUndefined();
     });
 
-    it('空白搜索词不查库', async () => {
+    it('空白搜索词且没有 Tag 条件时不查库', async () => {
       await expect(service.search('user-1', '   ')).resolves.toEqual([]);
+      await expect(service.search('user-1', '   ', { tagIds: [] })).resolves.toEqual([]);
       expect(mockPrisma.task.findMany).not.toHaveBeenCalled();
+    });
+
+    it('查询参数 tagIds 逗号分隔，q 可省略', async () => {
+      const dto = plainToInstance(TaskSearchQueryDto, { tagIds: 'a,b' });
+      expect(dto.tagIds).toEqual(['a', 'b']);
+      expect(await validate(dto)).toEqual([]);
     });
   });
 });

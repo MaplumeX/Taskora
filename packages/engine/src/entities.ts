@@ -11,8 +11,7 @@
  * 混排的位次，与任务的 `position` 同处一个键空间，不影响侧边栏顺序。
  */
 
-export type SyncEntity =
-  'task' | 'subtask' | 'project' | 'project-heading' | 'area' | 'tag' | 'tag-group';
+export type SyncEntity = 'task' | 'subtask' | 'project' | 'project-heading' | 'area' | 'tag';
 
 export type SqlColumnType = 'TEXT' | 'INTEGER';
 
@@ -135,15 +134,11 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('title'),
       f('color'),
       f('position'),
-      f('tagGroupId'),
+      // 父 Tag（嵌套 Tag，ADR-0016）；null 为顶层。
+      f('parentId'),
       f('createdAt'),
       f('updatedAt'),
     ],
-  },
-  'tag-group': {
-    name: 'tag-group',
-    table: 'tag_group',
-    fields: [f('title'), f('position'), f('createdAt'), f('updatedAt')],
   },
 };
 
@@ -178,7 +173,8 @@ export const COMPACT_NULL_REFS: Partial<
     { entity: 'project', field: 'areaId' },
   ],
   'project-heading': [{ entity: 'task', field: 'headingId' }],
-  'tag-group': [{ entity: 'tag', field: 'tagGroupId' }],
+  // 父 Tag 被删除时子 Tag 提升为顶层（对齐 hub 的自关联 onDelete: SetNull）。
+  tag: [{ entity: 'tag', field: 'parentId' }],
   // Task.project 是可选关系，Prisma 默认 onDelete: SetNull——hub 删除
   // project 时 DB 自动置 null；副本按同一语义清理（emptyTrash 场景下
   // 下属 task 本就同批删除，此条为防御性对齐）。
@@ -208,7 +204,7 @@ export const REFERENCE_FIELDS: Partial<
     areaId: { entity: 'area' },
   },
   area: { tagIds: { entity: 'tag', array: true } },
-  tag: { tagGroupId: { entity: 'tag-group' } },
+  tag: { parentId: { entity: 'tag' } },
   subtask: { taskId: { entity: 'task' } },
 };
 
@@ -260,7 +256,7 @@ export function schemaDdl(): string[] {
     'CREATE INDEX IF NOT EXISTS task_position ON task (position)',
     'CREATE INDEX IF NOT EXISTS subtask_task ON subtask (taskId)',
     'CREATE INDEX IF NOT EXISTS project_heading_project ON project_heading (projectId)',
-    'CREATE INDEX IF NOT EXISTS tag_group_member ON tag (tagGroupId)',
+    'CREATE INDEX IF NOT EXISTS tag_parent ON tag (parentId)',
     // Compact 登记（ADR-0008）：已被物理删除的实体 id，跨会话持久。
     // 只有 id，没有值与时钟——与 hub 的 CompactedEntity 同构。
     // registered_at：本机登记时刻（毫秒），过期清理用（issue 08）。

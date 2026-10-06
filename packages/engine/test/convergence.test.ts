@@ -634,15 +634,15 @@ describe('Delete Request（ADR-0008：设备发起删除）', () => {
     await b.close();
   });
 
-  it('全实体离线：Area/Project/Tag/TagGroup/Heading 断网 CRUD 后双端收敛', async () => {
+  it('全实体离线：Area/Project/Tag（含父 Tag）/Heading 断网 CRUD 后双端收敛', async () => {
     const h = await makeHarness();
     const a = await h.device('dev-a');
     const b = await h.device('dev-b');
     h.online(a, false);
 
     const areaId = await a.create('area', { title: '工作', notes: null, tagIds: [] });
-    const groupId = await a.create('tag-group', { title: '语境' });
-    const tagId = await a.create('tag', { title: '紧急', color: '#FF0000', tagGroupId: groupId });
+    const parentTagId = await a.create('tag', { title: '语境', color: '#3B82F6', parentId: null });
+    const tagId = await a.create('tag', { title: '紧急', color: '#FF0000', parentId: parentTagId });
     const projectId = await a.create('project', {
       title: '装修',
       notes: '新房',
@@ -667,7 +667,7 @@ describe('Delete Request（ADR-0008：设备发起删除）', () => {
     await a.sync();
     await b.sync();
 
-    for (const entity of ['area', 'project', 'tag', 'tag-group', 'project-heading'] as const) {
+    for (const entity of ['area', 'project', 'tag', 'project-heading'] as const) {
       const rowsA = await a.list(entity);
       const rowsB = await b.list(entity);
       expect(rowsB.map((r) => r.fields.title)).toEqual(rowsA.map((r) => r.fields.title));
@@ -675,8 +675,57 @@ describe('Delete Request（ADR-0008：设备发起删除）', () => {
     }
     expect((await b.get('area', areaId))?.fields.notes).toBe('生活与工作');
     expect((await b.get('tag', tagId))?.fields.color).toBe('#00FF00');
+    expect((await b.get('tag', tagId))?.fields.parentId).toBe(parentTagId);
     expect((await b.get('project-heading', headingId))?.fields.title).toBe('筹备阶段');
     expect((await b.get('project', projectId))?.fields.areaId).toBe(areaId);
+    await a.close();
+    await b.close();
+  });
+
+  it('嵌套 Tag：两台设备离线互设父 Tag，hub 断环后双端收敛到同一棵树', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+    const x = await a.create('tag', { title: 'X', color: '#000000', parentId: null });
+    const y = await a.create('tag', { title: 'Y', color: '#000000', parentId: null });
+    await a.sync();
+    await b.sync();
+
+    h.online(a, false);
+    h.online(b, false);
+    await a.update('tag', x, { parentId: y });
+    await b.update('tag', y, { parentId: x });
+    h.online(a, true);
+    h.online(b, true);
+    await a.sync();
+    await b.sync();
+    await a.sync();
+
+    for (const engine of [a, b]) {
+      expect((await engine.get('tag', x))?.fields.parentId).toBe(y);
+      expect((await engine.get('tag', y))?.fields.parentId).toBeNull();
+    }
+    await a.close();
+    await b.close();
+  });
+
+  it('删除父 Tag：子 Tag 提升为顶层', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+    const parent = await a.create('tag', { title: '工作', color: '#000000', parentId: null });
+    const child = await a.create('tag', { title: '会议', color: '#000000', parentId: parent });
+    await a.sync();
+    await b.sync();
+
+    await a.delete('tag', [parent]);
+    await a.sync();
+    await b.sync();
+
+    for (const engine of [a, b]) {
+      expect(await engine.get('tag', parent)).toBeNull();
+      expect((await engine.get('tag', child))?.fields.parentId).toBeNull();
+    }
     await a.close();
     await b.close();
   });
@@ -831,13 +880,13 @@ describe('Position re-balance（sync 后台摊平超长键）', () => {
     const tagX = await b.create('tag', {
       title: 'X',
       color: '#000000',
-      tagGroupId: null,
+      parentId: null,
       position: 'a0',
     });
     const tagT = await b.create('tag', {
       title: 'T',
       color: '#111111',
-      tagGroupId: null,
+      parentId: null,
       position: 'a1',
     });
     const task = await createTask(b, '带标签', { tagIds: [tagX, tagT] });
@@ -875,13 +924,13 @@ describe('Position re-balance（sync 后台摊平超长键）', () => {
     const tagX = await b.create('tag', {
       title: 'X',
       color: '#000000',
-      tagGroupId: null,
+      parentId: null,
       position: 'a0',
     });
     const tagT = await b.create('tag', {
       title: 'T',
       color: '#111111',
-      tagGroupId: null,
+      parentId: null,
       position: 'a1',
     });
     const task = await createTask(b, '带标签', { tagIds: [tagX, tagT] });
@@ -919,13 +968,13 @@ describe('Position re-balance（sync 后台摊平超长键）', () => {
     const tagX = await b.create('tag', {
       title: 'X',
       color: '#000000',
-      tagGroupId: null,
+      parentId: null,
       position: 'a0',
     });
     const tagT = await b.create('tag', {
       title: 'T',
       color: '#111111',
-      tagGroupId: null,
+      parentId: null,
       position: 'a1',
     });
     const task = await createTask(b, '带标签', { tagIds: [tagX, tagT] });

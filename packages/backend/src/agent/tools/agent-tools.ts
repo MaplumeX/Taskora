@@ -8,7 +8,6 @@ import { TasksService } from '../../tasks/tasks.service';
 import { ProjectsService } from '../../projects/projects.service';
 import { AreasService } from '../../areas/areas.service';
 import { TagsService } from '../../tags/tags.service';
-import { TagGroupsService } from '../../tag-groups/tag-groups.service';
 import { SubtasksService } from '../../subtasks/subtasks.service';
 import { ProjectHeadingsService } from '../../project-headings/project-headings.service';
 import { FeedService } from '../../feed/feed.service';
@@ -124,7 +123,6 @@ export class AgentToolsService {
     private readonly projects: ProjectsService,
     private readonly areas: AreasService,
     private readonly tags: TagsService,
-    private readonly tagGroups: TagGroupsService,
     private readonly subtasks: SubtasksService,
     private readonly projectHeadings: ProjectHeadingsService,
     private readonly feed: FeedService,
@@ -326,17 +324,16 @@ export class AgentToolsService {
       }),
       defineTool({
         name: 'list_tags',
-        label: 'List tags and tag groups',
-        description: 'List all tags (with color) and tag groups of the user.',
+        label: 'List tags',
+        description:
+          'List all tags of the user (with color). Tags nest: parentId is the parent tag (absent for top-level tags). Filtering by a tag also matches its descendants.',
         parameters: Type.Object({}),
         execute: async () => {
-          const [tags, groups] = await Promise.all([
-            this.tags.findAll(userId),
-            this.tagGroups.findAll(userId),
-          ]);
+          const tags = await this.tags.findAll(userId);
           return textResult({
-            tags: tags.map((t) => compact({ id: t.id, title: t.title, color: t.color })),
-            tagGroups: groups.map((g) => compact({ id: g.id, title: g.title })),
+            tags: tags.map((t) =>
+              compact({ id: t.id, title: t.title, color: t.color, parentId: t.parentId }),
+            ),
           });
         },
       }),
@@ -598,19 +595,45 @@ export class AgentToolsService {
         name: 'create_tag',
         label: 'Create tag',
         description:
-          'Create a new tag, optionally with a hex color (e.g. #3B82F6) and a tag group. Use the returned id in task/project tagIds.',
+          'Create a new tag, optionally with a hex color (e.g. #3B82F6) and a parent tag to nest it under. Use the returned id in task/project tagIds.',
         parameters: Type.Object({
           title: Type.String(),
           color: Type.Optional(Type.String()),
-          tagGroupId: Type.Optional(Type.String()),
+          parentId: Type.Optional(Type.String({ description: 'Parent tag id' })),
         }),
         execute: async (_id, params) => {
           const tag = await this.tags.create(userId, {
             title: params.title,
             color: params.color,
-            tagGroupId: params.tagGroupId,
+            parentId: params.parentId,
           });
-          return textResult(compact({ id: tag.id, title: tag.title, color: tag.color }));
+          return textResult(
+            compact({ id: tag.id, title: tag.title, color: tag.color, parentId: tag.parentId }),
+          );
+        },
+      }),
+      defineTool({
+        name: 'update_tag',
+        label: 'Update tag',
+        description:
+          'Rename a tag, change its color, or move it under another tag (parentId; null makes it top-level). A tag cannot be moved inside its own descendants. Reversible: edit again later.',
+        parameters: Type.Object({
+          id: Type.String(),
+          title: Type.Optional(Type.String()),
+          color: Type.Optional(Type.String()),
+          parentId: Type.Optional(
+            Type.Union([Type.String({ description: 'Parent tag id' }), Type.Null()]),
+          ),
+        }),
+        execute: async (_id, params) => {
+          const tag = await this.tags.update(userId, params.id, {
+            title: params.title,
+            color: params.color,
+            parentId: params.parentId,
+          });
+          return textResult(
+            compact({ id: tag.id, title: tag.title, color: tag.color, parentId: tag.parentId }),
+          );
         },
       }),
       defineTool({
@@ -853,9 +876,7 @@ export class AgentToolsService {
           dueDate: Type.Optional(
             Type.Union([Type.String({ description: 'ISO date' }), Type.Null()]),
           ),
-          bucket: Type.Optional(
-            Type.Union([Type.Literal('ANYTIME'), Type.Literal('SCHEDULED')]),
-          ),
+          bucket: Type.Optional(Type.Union([Type.Literal('ANYTIME'), Type.Literal('SCHEDULED')])),
         }),
         execute: async (_id, params) => {
           const project = await this.projects.update(userId, params.id, {

@@ -15,7 +15,7 @@ vi.mock('@tauri-apps/api/event', () => ({
   emitTo: mocks.emitTo,
 }));
 
-import { areaKeys, projectKeys, tagGroupKeys, tagKeys } from '@taskora/api';
+import { areaKeys, projectKeys, tagKeys } from '@taskora/api';
 
 import {
   applyQuickAddSnapshot,
@@ -34,7 +34,6 @@ const snapshot = (requestId: string): QuickAddSnapshot => ({
   projects: [{ id: 'p1' }] as QuickAddSnapshot['projects'],
   areas: [{ id: 'a1' }] as QuickAddSnapshot['areas'],
   tags: [{ id: 't1' }] as QuickAddSnapshot['tags'],
-  tagGroups: [{ id: 'g1' }] as QuickAddSnapshot['tagGroups'],
 });
 
 /** 主窗口应答：对最近一次请求回发快照（可选先回发一个别人的应答）。 */
@@ -81,7 +80,6 @@ describe('quick-add 客户端', () => {
     expect(queryClient.getQueryData(projectKeys.all)).toEqual([{ id: 'p1' }]);
     expect(queryClient.getQueryData(areaKeys.all)).toEqual([{ id: 'a1' }]);
     expect(queryClient.getQueryData(tagKeys.all)).toEqual([{ id: 't1' }]);
-    expect(queryClient.getQueryData(tagGroupKeys.all)).toEqual([{ id: 'g1' }]);
   });
 
   it('提交草稿带 requestId 发给主窗口', async () => {

@@ -71,7 +71,6 @@ const PRISMA_TABLE_NAMES: Record<SyncEntity, string> = {
   'project-heading': 'ProjectHeading',
   area: 'Area',
   tag: 'Tag',
-  'tag-group': 'TagGroup',
 };
 
 /**
@@ -602,10 +601,16 @@ export class SyncHubService implements OnModuleInit {
     // 跨字段不变量（local-first-v3 issue 01）：合并出的组合违反业务规则
     // （别的项目的分组、Someday 带提醒……）时纠正，以必胜时钟下发。
     const headingOwner = await this.loadHeadingOwner(tx, entity, outcome.fields);
+    const tagParents = await this.loadTagParents(tx, userId, entity, outcome);
     applyRepairs(
       entity,
+      id,
       outcome,
-      (headingId) => (headingId === headingOwner?.id ? headingOwner.projectId : undefined),
+      {
+        headingProject: (headingId) =>
+          headingId === headingOwner?.id ? headingOwner.projectId : undefined,
+        tagParent: (tagId) => tagParents.get(tagId),
+      },
       bumpClock,
     );
     if (outcome.appliedFields.length === 0) return null;
@@ -806,6 +811,30 @@ export class SyncHubService implements OnModuleInit {
     return heading && typeof heading.projectId === 'string'
       ? { id: fields.headingId, projectId: heading.projectId }
       : null;
+  }
+
+  /**
+   * 断环探针（嵌套 Tag，ADR-0016）：只有这次合并写了 Tag 的 parentId 才可能
+   * 成环，此时读该用户全部 Tag 的父关系（Tag 数量小，一次读完比逐级查省事）。
+   */
+  private async loadTagParents(
+    tx: unknown,
+    userId: string,
+    entity: SyncEntity,
+    outcome: { appliedFields: string[]; fields: Record<string, unknown> },
+  ): Promise<Map<string, string | null>> {
+    if (
+      entity !== 'tag' ||
+      !outcome.appliedFields.includes('parentId') ||
+      typeof outcome.fields.parentId !== 'string'
+    ) {
+      return new Map();
+    }
+    const rows = (await delegate(tx, 'tag').findMany({
+      where: { userId },
+      select: { id: true, parentId: true },
+    })) as Array<{ id: string; parentId: string | null }>;
+    return new Map(rows.map((row) => [row.id, row.parentId]));
   }
 
   /** 同一实体的跨实例事务锁；行存在时再取 FOR UPDATE，与普通 REST 写互斥。 */

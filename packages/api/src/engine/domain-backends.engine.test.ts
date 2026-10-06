@@ -19,7 +19,6 @@ import {
 import { createEngineProjectBackend } from './project-backend.engine';
 import { createEngineAreaBackend } from './area-backend.engine';
 import { createEngineTagBackend } from './tag-backend.engine';
-import { createEngineTagGroupBackend } from './tag-group-backend.engine';
 import { createEngineProjectHeadingBackend } from './project-heading-backend.engine';
 import { createEngineTaskBackend } from './task-backend.engine';
 
@@ -30,7 +29,6 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
   let projects: ReturnType<typeof createEngineProjectBackend>;
   let areas: ReturnType<typeof createEngineAreaBackend>;
   let tags: ReturnType<typeof createEngineTagBackend>;
-  let tagGroups: ReturnType<typeof createEngineTagGroupBackend>;
   let headings: ReturnType<typeof createEngineProjectHeadingBackend>;
   let tasks: ReturnType<typeof createEngineTaskBackend>;
   let hub: InMemorySyncHub;
@@ -46,7 +44,6 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     projects = createEngineProjectBackend({ engine });
     areas = createEngineAreaBackend({ engine });
     tags = createEngineTagBackend({ engine });
-    tagGroups = createEngineTagGroupBackend({ engine });
     headings = createEngineProjectHeadingBackend({ engine });
     tasks = createEngineTaskBackend({ engine });
   });
@@ -195,41 +192,35 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     expect((await engine.get('project', projectId))?.fields.areaId).toBeNull();
   });
 
-  it('Tag / TagGroup：增删改；删分组后成员 Tag 的 tagGroupId 置空（SetNull 语义）', async () => {
-    const group = await tagGroups.createTagGroup({ title: '语境' });
-    const urgent = await tags.createTag({ title: '紧急', color: '#FF0000', tagGroupId: group.id });
-    expect(urgent.color).toBe('#FF0000');
-    expect((await tagGroups.getTagGroup(group.id)).tags.map((t) => t.title)).toEqual(['紧急']);
+  it('Tag：增删改；可挂父 Tag；删父 Tag 后子 Tag 提升为顶层（SetNull 语义）', async () => {
+    const context = await tags.createTag({ title: '语境' });
+    const urgent = await tags.createTag({ title: '紧急', color: '#FF0000', parentId: context.id });
+    expect(urgent).toMatchObject({ color: '#FF0000', parentId: context.id });
 
     await tags.updateTag(urgent.id, { color: '#00FF00' });
     expect((await tags.getTag(urgent.id)).color).toBe('#00FF00');
+    await tags.updateTag(urgent.id, { parentId: null });
+    expect((await tags.getTag(urgent.id)).parentId).toBeNull();
+    await tags.updateTag(urgent.id, { parentId: context.id });
+    // 不能挂到自己或后代下面；父 Tag 必须存在
+    await expect(tags.updateTag(context.id, { parentId: urgent.id })).rejects.toThrow();
+    await expect(tags.updateTag(context.id, { parentId: context.id })).rejects.toThrow();
+    await expect(tags.createTag({ title: 'x', parentId: 'missing' })).rejects.toThrow();
 
-    await tagGroups.updateTagGroup(group.id, { title: '场景' });
-    expect((await tagGroups.getTagGroup(group.id)).title).toBe('场景');
-
-    await tagGroups.deleteTagGroup(group.id);
-    expect(await engine.get('tag-group', group.id)).toBeNull();
-    expect((await engine.get('tag', urgent.id))?.fields.tagGroupId).toBeNull();
+    await tags.deleteTag(context.id);
+    expect(await engine.get('tag', context.id)).toBeNull();
+    expect((await engine.get('tag', urgent.id))?.fields.parentId).toBeNull();
 
     await tags.deleteTag(urgent.id);
     expect(await engine.get('tag', urgent.id)).toBeNull();
   });
 
-  it('Tag / TagGroup：拖拽重排（都写 Position）', async () => {
+  it('Tag：拖拽重排（写 Position）', async () => {
     const a = await tags.createTag({ title: 'a' });
     const b = await tags.createTag({ title: 'b' });
     const c = await tags.createTag({ title: 'c' });
     await tags.reorderTags([a.id, c.id, b.id]);
     expect((await tags.getTags()).map((tag) => tag.title)).toEqual(['a', 'c', 'b']);
-
-    const g1 = await tagGroups.createTagGroup({ title: 'g1' });
-    const g2 = await tagGroups.createTagGroup({ title: 'g2' });
-    // 新建排最前
-    expect((await tagGroups.getTagGroups()).map((group) => group.title)).toEqual(['g2', 'g1']);
-    await tagGroups.reorderTagGroups([g1.id, g2.id]);
-    const groups = await tagGroups.getTagGroups();
-    expect(groups.map((group) => group.title)).toEqual(['g1', 'g2']);
-    expect(groups[0].position! < groups[1].position!).toBe(true);
   });
 
   it('Area 重排：只给被移动的行分配新 Position，读序只看 Position', async () => {

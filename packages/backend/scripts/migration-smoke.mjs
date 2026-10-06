@@ -148,8 +148,10 @@ for (const scenario of ['v0.7.1', 'v0.7.2', 'P3009', 'empty']) {
     );
     assert.equal(columns.rowCount, 0);
     for (const table of tables) {
+      // 嵌套 Tag（ADR-0016）：Tag Group 已转为同 id 的 Tag
+      const current = table === 'TagGroup' ? 'Tag' : table;
       const rows = (
-        await client.query(`SELECT to_jsonb(t) AS row FROM ${quote(table)} t`)
+        await client.query(`SELECT to_jsonb(t) AS row FROM ${quote(current)} t`)
       ).rows.map((r) => r.row);
       for (const row of rows) assert.notEqual(row.position, null);
       for (const old of before[table] ?? []) {

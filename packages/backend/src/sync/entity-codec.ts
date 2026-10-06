@@ -115,14 +115,6 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     enumFields: {},
     jsonFields: new Set(),
   },
-  'tag-group': {
-    entity: 'tag-group',
-    def: ENTITIES['tag-group'],
-    model: 'tagGroup',
-    dateFields: new Set(['createdAt', 'updatedAt']),
-    enumFields: {},
-    jsonFields: new Set(),
-  },
 };
 
 export function codecFor(entity: SyncEntity): EntityCodec {

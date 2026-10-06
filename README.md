@@ -9,7 +9,7 @@ A Things-inspired task manager built as a pnpm monorepo. NestJS API + Prisma/Pos
 - **Areas → Projects → Tasks → Subtasks** hierarchy for organizing work.
 - **Buckets**: Inbox, Anytime, Scheduled, Someday, Today, Upcoming, Logbook, Trash.
 - **Project headings** to group tasks within a project.
-- **Tags & tag groups** with color and sort order, attachable to tasks, projects, and areas.
+- **Nested tags** with color and sort order, attachable to tasks, projects, and areas; filtering by a parent tag includes its children.
 - **Soft-delete (Trash)** with restore and cascade cleanup.
 - **JWT auth** with access tokens and rotating refresh tokens (bcrypt password hashing).
 - **i18n** with English and 简体中文 locales.
@@ -38,7 +38,7 @@ packages/
 └── shared/        # Cross-package DTOs / enums / types
 ```
 
-Backend modules: `auth`, `users`, `areas`, `projects`, `tasks`, `subtasks`, `tags`, `tag-groups`, `project-headings`, `feed`. All API routes are prefixed with `/api/v1`.
+Backend modules: `auth`, `users`, `areas`, `projects`, `tasks`, `subtasks`, `tags`, `project-headings`, `feed`. All API routes are prefixed with `/api/v1`.
 
 ## Prerequisites
 

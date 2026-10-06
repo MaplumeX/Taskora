@@ -3,7 +3,7 @@
  *
  * 登录后：注册 device id → 打开 Local Replica（Tauri 侧 SQLite 文件）→
  * 注入全部域的 Engine backends（Task/Feed/Subtask + Project + Area +
- * Tag + TagGroup + ProjectHeading，hooks 零改动切到本地副本）→
+ * Tag + ProjectHeading，hooks 零改动切到本地副本）→
  * bootstrap 拉全量快照 → 周期 + 聚焦 + 写后三种时机 flush/pull 收敛。
  * 登出：退回 REST 后端，本地数据保留（副本可丢弃但 Outbox 未推的编辑
  * 属于用户数据，登出不清除数据库文件）。
@@ -23,8 +23,6 @@ import {
   createEngineAreaBackend,
   setTagBackend,
   createEngineTagBackend,
-  setTagGroupBackend,
-  createEngineTagGroupBackend,
   setProjectHeadingBackend,
   createEngineProjectHeadingBackend,
   setSyncStatus,
@@ -113,7 +111,6 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     setProjectBackend(createEngineProjectBackend({ engine }));
     setAreaBackend(createEngineAreaBackend({ engine }));
     setTagBackend(createEngineTagBackend({ engine }));
-    setTagGroupBackend(createEngineTagGroupBackend({ engine }));
     setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine }));
     registerDevice(deviceId).catch(() => undefined); // 注册失败不阻塞本地使用
     // Engine 激活：SSE 只作「触发 engine pull」的提示通道（ADR-0007），
@@ -185,7 +182,6 @@ function resetBackends(): void {
   setProjectBackend(undefined);
   setAreaBackend(undefined);
   setTagBackend(undefined);
-  setTagGroupBackend(undefined);
   setProjectHeadingBackend(undefined);
 }
 

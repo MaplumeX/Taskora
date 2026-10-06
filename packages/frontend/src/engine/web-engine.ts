@@ -26,7 +26,6 @@ import {
   createEngineProjectBackend,
   createEngineProjectHeadingBackend,
   createEngineTagBackend,
-  createEngineTagGroupBackend,
   createEngineTaskBackend,
   createHttpSyncTransport,
   onRemoteChangeEvent,
@@ -37,7 +36,6 @@ import {
   setProjectHeadingBackend,
   setSyncStatus,
   setTagBackend,
-  setTagGroupBackend,
   setTaskBackend,
   useAuthStore,
   type SyncStatus,
@@ -164,7 +162,6 @@ function startSession(queryClient: QueryClient, runtime: WebEngineRuntime, userI
   setProjectBackend(createEngineProjectBackend({ engine: tab }));
   setAreaBackend(createEngineAreaBackend({ engine: tab }));
   setTagBackend(createEngineTagBackend({ engine: tab }));
-  setTagGroupBackend(createEngineTagGroupBackend({ engine: tab }));
   setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine: tab }));
   // SSE 只作「远端有变更」的提示（leader 据此 pull），界面由响应式查询驱动
   setEventStreamCacheSurgery(false);
@@ -367,7 +364,6 @@ function resetBackends(): void {
   setProjectBackend(undefined);
   setAreaBackend(undefined);
   setTagBackend(undefined);
-  setTagGroupBackend(undefined);
   setProjectHeadingBackend(undefined);
 }
 

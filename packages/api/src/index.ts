@@ -50,7 +50,6 @@ export * from './api/areas.api';
 export * from './api/feed.api';
 export * from './api/project-headings.api';
 export * from './api/projects.api';
-export * from './api/tag-groups.api';
 export * from './api/tags.api';
 export * from './api/tasks.api';
 export { setTaskBackend, currentTaskBackend, type TaskBackend } from './api/task-backend';
@@ -87,12 +86,6 @@ export { createEngineAreaBackend } from './engine/area-backend.engine';
 export { setTagBackend, currentTagBackend, type TagBackend } from './api/tag-backend';
 export { createEngineTagBackend } from './engine/tag-backend.engine';
 export {
-  setTagGroupBackend,
-  currentTagGroupBackend,
-  type TagGroupBackend,
-} from './api/tag-group-backend';
-export { createEngineTagGroupBackend } from './engine/tag-group-backend.engine';
-export {
   setProjectHeadingBackend,
   currentProjectHeadingBackend,
   type ProjectHeadingBackend,
@@ -118,7 +111,6 @@ export * from './hooks/useFeed';
 export * from './hooks/useProjectHeadings';
 export * from './hooks/useProjects';
 export * from './hooks/useEffectiveTags';
-export * from './hooks/useTagGroups';
 export * from './hooks/useTags';
 export * from './hooks/useTasks';
 export * from './hooks/useScheduledTasksQuery';
@@ -247,6 +239,8 @@ export {
 export * from './utils/date';
 // 列表顺序（ADR-0007 Position）：UI 与两种后端同一口径。
 export { sortByEffectivePosition } from '@taskora/engine';
+// 嵌套 Tag 的树（ADR-0016）：UI 的选择器、过滤栏与管理页共用。
+export { buildTagTree, type TagTree } from '@taskora/engine';
 
 // Repeat Rule 纯函数（recurring-tasks spec）：规则编辑器的实时预览与
 // 规范化写入共用 @taskora/engine 的同一实现（跨端派生 id 一致的前提）。

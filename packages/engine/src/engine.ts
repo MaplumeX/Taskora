@@ -26,6 +26,7 @@ import { archiveCutoff, DEFAULT_ARCHIVE_AFTER_DAYS } from './archive';
 import {
   COMPACT_REGISTRY_RETENTION_DAYS,
   NUMERIC_HLC_PROTOCOL,
+  TAG_TREE_PROTOCOL,
   SYNC_PROTOCOL_VERSION,
   SyncUpgradeRequiredError,
   type DeleteRequest,
@@ -338,14 +339,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
    */
   const rebalanceIfInflated = async (): Promise<void> => {
     await rebalanceFeedKeys();
-    for (const entity of [
-      'project',
-      'tag',
-      'area',
-      'project-heading',
-      'tag-group',
-      'subtask',
-    ] as SyncEntity[]) {
+    for (const entity of ['project', 'tag', 'area', 'project-heading', 'subtask'] as SyncEntity[]) {
       if ((await replica.countInflatedPositions(entity, MAX_POSITION_LENGTH)) === 0) continue;
       const changes = rebalanceSegments(await replica.positionKeys(entity));
       await replica.updateMany(
@@ -382,6 +376,10 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
       // 按数值裁决后才重推，再走一轮 flush + bootstrap 收敛
       if (hubProtocol >= NUMERIC_HLC_PROTOCOL && (await replica.repairFractionalClocks())) {
         await flush();
+        await applyPull();
+      }
+      // 嵌套 Tag 迁移后的一次性重取（见 consumeTagTreeResync）
+      if (hubProtocol >= TAG_TREE_PROTOCOL && (await replica.consumeTagTreeResync())) {
         await applyPull();
       }
       await rebalanceIfInflated();

@@ -8,7 +8,7 @@
  */
 
 import { mergeFieldWrites, type EntityMergeState, type MergeOutcome } from './merger';
-import { repairEntity, type HeadingProjectProbe } from './invariants';
+import { repairEntity, type RepairProbes } from './invariants';
 import { formatHlc, hlcWallMs } from './hlc';
 import { DELETE_CASCADES, REFERENCE_FIELDS, SYNC_ENTITIES, type SyncEntity } from './entities';
 import { isArchivedTask } from './archive';
@@ -64,6 +64,11 @@ export interface InMemorySyncHubOptions {
   knownEntities?: readonly SyncEntity[];
   /** 分页 bootstrap 的每页行数（缺省 500）。 */
   bootstrapPageSize?: number;
+  /**
+   * 回报的协议版本（缺省为当前版本）：模拟较旧的 hub。返回值随时可变，
+   * 测试可在运行中改它，模拟 hub 升级。
+   */
+  protocolVersion?: () => number;
 }
 
 /** 分页令牌（进程内 hub 直接用 JSON）。 */
@@ -82,6 +87,7 @@ export class InMemorySyncHub {
   private readonly knownEntities: readonly string[];
   private readonly reportServerTime: boolean;
   private readonly bootstrapPageSize: number;
+  private readonly protocolVersion: () => number;
   private readonly users = new Map<string, UserState>();
 
   constructor(options: InMemorySyncHubOptions = {}) {
@@ -91,6 +97,7 @@ export class InMemorySyncHub {
     this.reportServerTime = options.reportServerTime ?? false;
     this.knownEntities = options.knownEntities ?? SYNC_ENTITIES;
     this.bootstrapPageSize = options.bootstrapPageSize ?? 500;
+    this.protocolVersion = options.protocolVersion ?? (() => SYNC_PROTOCOL_VERSION);
   }
 
   // ---------- 设备侧协议面 ----------
@@ -257,7 +264,7 @@ export class InMemorySyncHub {
   transportFor(userId: string): SyncTransport {
     const stamped = <T extends object>(response: T): T => ({
       ...response,
-      protocolVersion: SYNC_PROTOCOL_VERSION,
+      protocolVersion: this.protocolVersion(),
       minProtocolVersion: 0,
       ...(this.reportServerTime ? { serverTime: this.wallClock() } : {}),
     });
@@ -365,10 +372,18 @@ export class InMemorySyncHub {
     // 时纠正，并以必胜时钟下发，所有设备收敛到同一结果。
     applyRepairs(
       event.entity,
+      event.id,
       outcome,
-      (headingId) => {
-        const owner = state.entities.get(`project-heading:${headingId}`)?.fields.projectId;
-        return typeof owner === 'string' ? owner : undefined;
+      {
+        headingProject: (headingId) => {
+          const owner = state.entities.get(`project-heading:${headingId}`)?.fields.projectId;
+          return typeof owner === 'string' ? owner : undefined;
+        },
+        tagParent: (tagId) => {
+          const row = state.entities.get(`tag:${tagId}`);
+          if (!row) return undefined;
+          return typeof row.fields.parentId === 'string' ? row.fields.parentId : null;
+        },
       },
       bumpClock,
     );
@@ -501,12 +516,13 @@ export type ClockBump = () => string;
  */
 export function applyRepairs(
   entity: SyncEntity,
+  id: string,
   outcome: MergeOutcome,
-  probe: HeadingProjectProbe,
+  probes: RepairProbes,
   bumpClock: ClockBump,
 ): string[] {
   if (outcome.appliedFields.length === 0) return [];
-  const fixes = repairEntity(entity, outcome.fields, probe);
+  const fixes = repairEntity(entity, outcome.fields, probes, id);
   const repaired = Object.keys(fixes);
   for (const field of repaired) {
     outcome.fields[field] = fixes[field];

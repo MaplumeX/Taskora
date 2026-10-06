@@ -68,7 +68,7 @@ describe('AreasService', () => {
         id: 'tag-1',
         title: 'Urgent',
         color: '#FF0000',
-        tagGroupId: null,
+        parentId: null,
         createdAt: new Date(),
         updatedAt: new Date(),
       };

@@ -33,6 +33,6 @@ describe('createEngineInvalidator', () => {
     invalidate();
     vi.advanceTimersByTime(20);
     const roots = spy.mock.calls.map(([filters]) => JSON.stringify(filters?.queryKey));
-    expect(roots).toEqual(expect.arrayContaining(['["areas"]', '["tag-groups"]', '["tasks"]']));
+    expect(roots).toEqual(expect.arrayContaining(['["areas"]', '["tags"]', '["tasks"]']));
   });
 });

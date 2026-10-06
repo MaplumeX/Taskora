@@ -20,7 +20,6 @@ model User {
   projects        Project[]
   areas           Area[]
   tags            Tag[]
-  tagGroups       TagGroup[]
   projectHeadings ProjectHeading[]
   refreshTokens   RefreshToken[]
   agentConfig     AgentConfig?
@@ -169,30 +168,14 @@ enum HeadingStatus {
   COMPLETED
 }
 
-model TagGroup {
-  id        String   @id @default(uuid())
-  title     String
-  /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
-  position String?
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tags      Tag[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([userId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
-  fieldClocks Json?
-  /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
-  fieldDigests Json?
-
-}
-
 model Tag {
   id         String       @id @default(uuid())
   title      String
   color      String       @default("#3B82F6")
-  tagGroupId String?
-  tagGroup   TagGroup?    @relation(fields: [tagGroupId], references: [id], onDelete: SetNull)
+  /// 父 Tag（嵌套 Tag，ADR-0016）；null 为顶层。删除父 Tag 时子 Tag 提升为顶层。
+  parentId   String?
+  parent     Tag?         @relation("TagTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children   Tag[]        @relation("TagTree")
   userId     String
   user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
   tasks      TaskTag[]
@@ -202,7 +185,7 @@ model Tag {
   updatedAt  DateTime     @updatedAt
 
   @@index([userId])
-  @@index([tagGroupId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
+  @@index([parentId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
   fieldClocks Json?
   /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
   position String?

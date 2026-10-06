@@ -29,7 +29,7 @@ import {
   type WireRow,
 } from './entities';
 import { compareHlc, HybridClock, isLegacyFractionalHlc } from './hlc';
-import { migrateReplica } from './migrations';
+import { migrateReplica, TAG_TREE_RESYNC_META_KEY } from './migrations';
 import { mergeEntityState, type EntityMergeState, type FieldWrite } from './merger';
 import type { DeleteRequest, HubChange, OutboxEvent, SnapshotEntry } from './protocol';
 import { inTransaction, type SqlStorage } from './storage';
@@ -49,15 +49,7 @@ const BACKFILL_META_KEY = 'archiveBackfill';
 const CLOCK_REPAIR_META_KEY = 'fractionalClockRepair';
 
 /** 修复重推的实体顺序：被引用者在前。 */
-const REPAIR_ORDER: SyncEntity[] = [
-  'tag-group',
-  'tag',
-  'area',
-  'project',
-  'project-heading',
-  'task',
-  'subtask',
-];
+const REPAIR_ORDER: SyncEntity[] = ['tag', 'area', 'project', 'project-heading', 'task', 'subtask'];
 
 export interface ReplicaRow {
   id: string;
@@ -249,6 +241,24 @@ export class LocalReplica {
       if (repaired > 0) await this.metaSet('syncCursor', '0');
       await this.metaSet(CLOCK_REPAIR_META_KEY, '1');
       return repaired > 0;
+    });
+  }
+
+  /**
+   * 嵌套 Tag 迁移（10 → 11）之后的一次性 bootstrap：有标记时清除它并把
+   * 游标归零，随后的 pull 走 bootstrap。只在 hub 已是协议 5 时调用——
+   * 旧 hub 的快照还是 tag-group，重取也收不回父 Tag。返回是否需要重取。
+   */
+  async consumeTagTreeResync(): Promise<boolean> {
+    return this.serialized(async () => {
+      if (!(await this.metaGet(TAG_TREE_RESYNC_META_KEY))) return false;
+      return this.tx(async () => {
+        await this.storage.run('DELETE FROM _engine_meta WHERE key = ?', [
+          TAG_TREE_RESYNC_META_KEY,
+        ]);
+        await this.metaSet('syncCursor', '0');
+        return true;
+      });
     });
   }
 

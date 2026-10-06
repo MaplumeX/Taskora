@@ -125,7 +125,7 @@ export class UsersService {
       throw new NotFoundException('User not found');
     }
 
-    const [tasks, projects, areas, tags, tagGroups, projectHeadings] = await Promise.all([
+    const [tasks, projects, areas, tags, projectHeadings] = await Promise.all([
       this.prisma.task.findMany({
         where: { userId },
         include: { subtasks: true, tags: true },
@@ -139,7 +139,6 @@ export class UsersService {
         include: { tags: true },
       }),
       this.prisma.tag.findMany({ where: { userId } }),
-      this.prisma.tagGroup.findMany({ where: { userId } }),
       this.prisma.projectHeading.findMany({ where: { userId } }),
     ]);
 
@@ -151,7 +150,6 @@ export class UsersService {
       projects,
       areas,
       tags,
-      tagGroups,
       projectHeadings,
     };
   }

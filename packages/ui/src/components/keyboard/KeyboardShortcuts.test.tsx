@@ -52,9 +52,8 @@ vi.mock('@taskora/api', async (importOriginal) => {
     useProjectsQuery: () => ({ data: [] }),
     useAreasQuery: () => ({ data: [] }),
     useTagsQuery: () => ({
-      data: [{ id: 'urgent', title: 'Urgent', color: '#EF4444', tagGroupId: null }],
+      data: [{ id: 'urgent', title: 'Urgent', color: '#EF4444', parentId: null }],
     }),
-    useTagGroupsQuery: () => ({ data: [] }),
     useCreateTag: () => ({ mutate: vi.fn(), isPending: false }),
     useUpdateTask: () => ({ mutate: harness.updateTaskMutate }),
     useUpdateProject: () => ({ mutate: vi.fn() }),

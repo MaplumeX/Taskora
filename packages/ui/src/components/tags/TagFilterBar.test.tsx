@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom';
 
-import { i18n, useTagGroupsQuery, useTagsQuery } from '@taskora/api';
+import { i18n, useTagsQuery } from '@taskora/api';
 import type { TagResponseDto } from '@taskora/shared';
 
 import { TagFilterBar, useTagFilter } from './TagFilterBar';
@@ -11,12 +11,11 @@ import { TagFilterBar, useTagFilter } from './TagFilterBar';
 vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
   useTagsQuery: vi.fn(),
-  useTagGroupsQuery: vi.fn(),
 }));
 
 const NOW = '2026-09-01T00:00:00.000Z';
-function tag(id: string, title: string, tagGroupId: string | null = null): TagResponseDto {
-  return { id, title, color: '#3B82F6', tagGroupId, createdAt: NOW, updatedAt: NOW };
+function tag(id: string, title: string, parentId: string | null = null): TagResponseDto {
+  return { id, title, color: '#3B82F6', parentId, createdAt: NOW, updatedAt: NOW };
 }
 
 interface Item {
@@ -30,6 +29,8 @@ const items: Item[] = [
   { id: 'b', tagIds: ['office'] },
   { id: 'c', tagIds: ['home'] },
   { id: 'd', tagIds: [] },
+  { id: 'e', tagIds: ['place'] },
+  { id: 'f', tagIds: ['desk'] },
 ];
 
 function Page() {
@@ -66,15 +67,18 @@ const user = userEvent.setup();
 beforeEach(() => {
   void i18n.changeLanguage('en');
   vi.mocked(useTagsQuery).mockReturnValue({
-    data: [tag('urgent', 'Urgent'), tag('office', 'Office', 'g'), tag('home', 'Home', 'g')],
-  } as never);
-  vi.mocked(useTagGroupsQuery).mockReturnValue({
-    data: [{ id: 'g', title: 'Place', tags: [], createdAt: NOW, updatedAt: NOW }],
+    data: [
+      tag('place', 'Place'),
+      tag('office', 'Office', 'place'),
+      tag('desk', 'Desk', 'office'),
+      tag('home', 'Home', 'place'),
+      tag('urgent', 'Urgent'),
+    ],
   } as never);
 });
 
 describe('TagFilterBar', () => {
-  it('第一行：全部、Group、未分组 Tag、无标签', () => {
+  it('第一行：全部、顶层 Tag、无标签', () => {
     renderPage();
     const names = screen.getByRole('toolbar').querySelectorAll('button');
     expect([...names].map((b) => b.textContent)).toEqual(['All', 'Place', 'Urgent', 'No tag']);
@@ -86,17 +90,21 @@ describe('TagFilterBar', () => {
     await user.click(chip('Urgent'));
     expect(rows()).toEqual(['a']);
     await user.click(chip('Urgent'));
-    expect(rows()).toEqual(['a', 'b', 'c', 'd']);
+    expect(rows()).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
   });
 
-  it('选 Group 命中组内任一 Tag，第二行可收窄', async () => {
+  it('选父 Tag 命中整棵子树，逐层出现子 Tag 用来收窄；再点退回上一层', async () => {
     renderPage();
     await user.click(chip('Place'));
-    expect(rows()).toEqual(['b', 'c']);
-    await user.click(chip('Home'));
-    expect(rows()).toEqual(['c']);
-    await user.click(chip('Home'));
-    expect(rows()).toEqual(['b', 'c']);
+    expect(rows()).toEqual(['b', 'c', 'e', 'f']);
+    await user.click(chip('Office'));
+    expect(rows()).toEqual(['b', 'f']);
+    await user.click(chip('Desk'));
+    expect(rows()).toEqual(['f']);
+    await user.click(chip('Desk'));
+    expect(rows()).toEqual(['b', 'f']);
+    await user.click(chip('Place'));
+    expect(rows()).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
   });
 
   it('无标签', async () => {
@@ -110,6 +118,6 @@ describe('TagFilterBar', () => {
     await user.click(chip('Urgent'));
     await user.click(chip('leave'));
     await user.click(chip('back'));
-    expect(rows()).toEqual(['a', 'b', 'c', 'd']);
+    expect(rows()).toEqual(['a', 'b', 'c', 'd', 'e', 'f']);
   });
 });
