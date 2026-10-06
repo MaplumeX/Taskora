@@ -159,7 +159,7 @@ export {
 // Preferences (theme / language / week start)
 export { usePreferencesStore, hydrateFromServer } from './stores/preferences.store';
 export { useTheme } from './hooks/useTheme';
-export { applyTheme, applyThemeFromStorage } from './stores/preferences.store';
+export { applyTheme, applyThemeFromStorage, setSystemTheme } from './stores/preferences.store';
 
 // Reminders（reminders spec）：纯调度计算 + 通知薄壳 + 协调器 + 权限 store
 export {

@@ -19,8 +19,12 @@ const LEGACY_THEME_KEY = 'taskora-theme';
 const LEGACY_WEEK_STARTS_KEY = 'taskora-week-starts';
 const LEGACY_LANG_KEY = 'taskora-lang';
 
+// 原生壳提供的系统主题优先于 WebView 的媒体查询；不属于用户偏好，不持久化。
+let systemTheme: 'light' | 'dark' | null = null;
+
 function resolveTheme(mode: ThemeMode): 'light' | 'dark' {
   if (mode !== 'system') return mode;
+  if (systemTheme) return systemTheme;
   return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
@@ -36,6 +40,20 @@ export function applyTheme(mode: ThemeMode) {
  */
 export function applyThemeFromStorage() {
   applyTheme(usePreferencesStore.getState().theme);
+}
+
+/** 更新原生系统主题；null 恢复浏览器媒体查询，手动主题不受影响。 */
+export function setSystemTheme(theme: 'light' | 'dark' | null) {
+  systemTheme = theme;
+  syncSystemTheme();
+}
+
+function syncSystemTheme() {
+  const state = usePreferencesStore.getState();
+  if (state.theme !== 'system') return;
+  applyTheme('system');
+  const resolved = resolveTheme('system');
+  if (state.resolved !== resolved) usePreferencesStore.setState({ resolved });
 }
 
 function initialLanguage(): Language {
@@ -219,13 +237,7 @@ export const usePreferencesStore = create<PreferencesState>()(
 // Module-level matchMedia listener (registered once on module load)
 if (typeof window !== 'undefined') {
   const mql = window.matchMedia('(prefers-color-scheme: dark)');
-  mql.addEventListener('change', () => {
-    const state = usePreferencesStore.getState();
-    if (state.theme === 'system') {
-      applyTheme('system');
-      usePreferencesStore.setState({ resolved: resolveTheme('system') });
-    }
-  });
+  mql.addEventListener('change', syncSystemTheme);
 }
 
 // Standalone hydrate function — calls the store's action without React context

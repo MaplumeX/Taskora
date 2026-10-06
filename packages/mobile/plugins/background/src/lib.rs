@@ -5,6 +5,7 @@
 //!
 //! 系统栏图标明暗：状态栏 / 导航栏透明，底下是 App 自身背景，图标明暗
 //! 需跟随 App 实际主题（含手动指定的亮 / 暗），由 JS 在主题变化时设置。
+//! 系统主题：读取 Android uiMode，配置变化 / 回前台经 `theme` 事件推送。
 //!
 //! 退到后台（android-app issue 08）：
 //! 根页返回手势的收尾动作：把任务移到后台（回桌面），而不是 `app.exit`
@@ -35,6 +36,12 @@ pub struct SafeAreaInsets {
 /// `set_system_bar_appearance` 的参数：App 当前是否为暗色主题。
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SystemBarAppearanceArgs {
+    pub dark: bool,
+}
+
+/// Android 系统的 uiMode；与 App 手动选择的主题独立。
+#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+pub struct SystemTheme {
     pub dark: bool,
 }
 
@@ -88,6 +95,19 @@ impl<R: Runtime> Background<R> {
             Ok(())
         }
     }
+
+    pub fn system_theme(&self) -> Result<SystemTheme, String> {
+        #[cfg(mobile)]
+        {
+            self.handle
+                .run_mobile_plugin::<SystemTheme>("systemTheme", ())
+                .map_err(|e| e.to_string())
+        }
+        #[cfg(desktop)]
+        {
+            Err("System theme is only available on Android".into())
+        }
+    }
 }
 
 pub trait BackgroundExt<R: Runtime> {
@@ -111,6 +131,11 @@ async fn safe_area_insets<R: Runtime>(app: tauri::AppHandle<R>) -> Result<SafeAr
 }
 
 #[tauri::command]
+async fn system_theme<R: Runtime>(app: tauri::AppHandle<R>) -> Result<SystemTheme, String> {
+    app.background().system_theme()
+}
+
+#[tauri::command]
 async fn set_system_bar_appearance<R: Runtime>(
     app: tauri::AppHandle<R>,
     dark: bool,
@@ -123,6 +148,7 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
         .invoke_handler(tauri::generate_handler![
             move_to_back,
             safe_area_insets,
+            system_theme,
             set_system_bar_appearance
         ])
         .setup(|app, _api| {

@@ -9,6 +9,7 @@ import { App } from './App';
 import { installKeyboardInset } from './keyboard-inset';
 import { installSafeAreaInsets } from './safe-area-insets';
 import { installSystemBarAppearance } from './system-bar-appearance';
+import { installSystemTheme } from './system-theme';
 import './index.css';
 
 /**
@@ -81,6 +82,8 @@ async function mount() {
   void installSafeAreaInsets();
   // 系统栏图标明暗跟随 App 主题（edge-to-edge 下系统栏透明）。
   installSystemBarAppearance();
+  // WebView 的媒体查询可能停留在启动主题，原生负责系统切换 / 回前台同步。
+  await installSystemTheme();
 
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
