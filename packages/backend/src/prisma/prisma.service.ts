@@ -73,6 +73,9 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get subtask() {
     return this.extended.subtask;
   }
+  get attachment() {
+    return this.extended.attachment;
+  }
   get agentConfig() {
     return this.extended.agentConfig;
   }

@@ -106,7 +106,7 @@ export function useTaskQuery(id: string) {
   return useReplicaQuery({
     queryKey: taskKeys.detail(id),
     queryFn: () => getTask(id),
-    dependsOn: [{ entity: 'task', ids: [id] }, 'subtask', 'tag'],
+    dependsOn: [{ entity: 'task', ids: [id] }, 'subtask', 'attachment', 'tag'],
     enabled: !!id,
   });
 }

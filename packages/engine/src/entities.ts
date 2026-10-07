@@ -11,7 +11,8 @@
  * 混排的位次，与任务的 `position` 同处一个键空间，不影响侧边栏顺序。
  */
 
-export type SyncEntity = 'task' | 'subtask' | 'project' | 'project-heading' | 'area' | 'tag';
+export type SyncEntity =
+  'task' | 'subtask' | 'project' | 'project-heading' | 'area' | 'tag' | 'attachment';
 
 export type SqlColumnType = 'TEXT' | 'INTEGER';
 
@@ -140,19 +141,49 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('updatedAt'),
     ],
   },
+  // Attachment（ADR-0019）：只是元数据，文件内容是按 blobHash 寻址的 Blob，
+  // 不走 Change Event。mimeType / size / blobHash 创建后不再改写。
+  attachment: {
+    name: 'attachment',
+    table: 'attachment',
+    fields: [
+      f('name'),
+      f('mimeType'),
+      f('size', { sql: 'INTEGER' }),
+      f('blobHash'),
+      f('position'),
+      f('taskId'),
+      f('createdAt'),
+      f('updatedAt'),
+    ],
+  },
 };
 
 export const SYNC_ENTITIES: SyncEntity[] = Object.keys(ENTITIES) as SyncEntity[];
 
 /**
- * 删除级联（ADR-0008）：删除 Task 时级联删除其 Subtask（对齐 hub 侧
- * onDelete: Cascade）。设备侧与 hub 侧适用同一条规则，孤儿 Subtask
- * 不残留在任何副本。
+ * 只存在于父 Task 内的子实体（Subtask、Attachment）：没有 userId 列，归属
+ * 经 `taskId` 指向的父 Task 认领；父 Task 不存在时整事件丢弃（孤儿防御）；
+ * 随父 Task 级联删除、随归档任务一起裁剪。
+ */
+export const TASK_CHILD_ENTITIES: readonly SyncEntity[] = ['subtask', 'attachment'];
+
+export function isTaskChildEntity(entity: SyncEntity): boolean {
+  return TASK_CHILD_ENTITIES.includes(entity);
+}
+
+/**
+ * 删除级联（ADR-0008）：删除 Task 时级联删除其 Subtask 与 Attachment
+ * （对齐 hub 侧 onDelete: Cascade）。设备侧与 hub 侧适用同一条规则，
+ * 孤儿子实体不残留在任何副本。
  */
 export const DELETE_CASCADES: Partial<
   Record<SyncEntity, Array<{ entity: SyncEntity; foreignKey: string }>>
 > = {
-  task: [{ entity: 'subtask', foreignKey: 'taskId' }],
+  task: [
+    { entity: 'subtask', foreignKey: 'taskId' },
+    { entity: 'attachment', foreignKey: 'taskId' },
+  ],
   // Project 物理删除时级联其 ProjectHeading（对齐 Prisma onDelete:
   // Cascade）。hub 侧 DB 级联不产生事件，副本靠本表在收到 project
   // Compact Event 时本地级联，否则孤儿 heading 永久残留副本。
@@ -187,8 +218,8 @@ export const COMPACT_NULL_REFS: Partial<
  * 设备离线期间的写可能引用此后被物理删除（compact）的实体：hub 直接
  * 物化会触发 FK violation，整个 push 批次反复失败（毒丸）。合并后按本
  * 表清洗 applied 字段：数组引用剔除失效 id、标量引用置 null（对齐
- * compact 的 SetNull 语义）；Subtask.taskId 失效则整事件丢弃（孤儿
- * 防御）。两端 hub（NestJS SyncHubService / InMemorySyncHub）共用。
+ * compact 的 SetNull 语义）；Task 子实体（Subtask / Attachment）的 taskId
+ * 失效则整事件丢弃（孤儿防御）。两端 hub（NestJS SyncHubService / InMemorySyncHub）共用。
  */
 export const REFERENCE_FIELDS: Partial<
   Record<SyncEntity, Record<string, { entity: SyncEntity; array?: boolean }>>
@@ -206,6 +237,7 @@ export const REFERENCE_FIELDS: Partial<
   area: { tagIds: { entity: 'tag', array: true } },
   tag: { parentId: { entity: 'tag' } },
   subtask: { taskId: { entity: 'task' } },
+  attachment: { taskId: { entity: 'task' } },
 };
 
 export function entityDef(entity: SyncEntity): EntityDef {
@@ -255,6 +287,7 @@ export function schemaDdl(): string[] {
     'CREATE INDEX IF NOT EXISTS task_area ON task (areaId)',
     'CREATE INDEX IF NOT EXISTS task_position ON task (position)',
     'CREATE INDEX IF NOT EXISTS subtask_task ON subtask (taskId)',
+    'CREATE INDEX IF NOT EXISTS attachment_task ON attachment (taskId)',
     'CREATE INDEX IF NOT EXISTS project_heading_project ON project_heading (projectId)',
     'CREATE INDEX IF NOT EXISTS tag_parent ON tag (parentId)',
     // Compact 登记（ADR-0008）：已被物理删除的实体 id，跨会话持久。

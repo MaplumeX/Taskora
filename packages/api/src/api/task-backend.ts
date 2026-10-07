@@ -9,12 +9,15 @@
  */
 
 import type {
+  AttachmentResponseDto,
+  CreateAttachmentDto,
   CreateSubtaskDto,
   CreateTaskDto,
   FeedView,
   SubtaskResponseDto,
   TaskResponseDto,
   TaskSearchHit,
+  UpdateAttachmentDto,
   UpdateSubtaskDto,
   UpdateTaskDto,
 } from '@taskora/shared';
@@ -63,6 +66,14 @@ export interface TaskBackend {
   cancelSubtask(id: string): Promise<SubtaskResponseDto>;
   uncancelSubtask(id: string): Promise<SubtaskResponseDto>;
   reorderSubtasks(taskId: string, orderedIds: string[]): Promise<void>;
+  /**
+   * 附件元数据（ADR-0019）。只写元数据：Blob 由调用方先放进 Blob 通道
+   * （上传队列 / 直接上传）。mimeType / size / blobHash 创建后不可改。
+   */
+  createAttachment(taskId: string, data: CreateAttachmentDto): Promise<AttachmentResponseDto>;
+  updateAttachment(id: string, data: UpdateAttachmentDto): Promise<AttachmentResponseDto>;
+  deleteAttachment(id: string): Promise<void>;
+  reorderAttachments(taskId: string, orderedIds: string[]): Promise<void>;
   /** 清空 Trash：物理删除（Engine 实现走 Delete Request，ADR-0008）。 */
   emptyTrash(): Promise<{ deletedTasks: number; deletedProjects: number }>;
 }

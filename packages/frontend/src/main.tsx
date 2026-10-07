@@ -11,6 +11,7 @@ import {
   configureTokenStore,
   createLocalTokenStore,
   hydrateAuthSnapshot,
+  initBlobUploads,
   initEventStream,
   readLegacyAuthSnapshot,
   setAppVersion,
@@ -52,6 +53,9 @@ const queryClient = new QueryClient({
 // Event Stream singleton: connects after login, disconnects on logout,
 // applies Change Events straight onto the query cache.
 initEventStream(queryClient);
+
+// 附件（ADR-0019）：登录后续传上次没传完的文件。
+initBlobUploads();
 
 // Local-first Engine（local-first-v3 issue 05）：登录后实体读写切到 OPFS
 // 里的本地副本，多标签页由 leader 独占副本；浏览器不支持时保持 REST。

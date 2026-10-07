@@ -1,3 +1,4 @@
+mod attachment_open;
 mod launch_at_login;
 mod quick_add_shortcut;
 mod reminder_notification;
@@ -191,6 +192,7 @@ pub fn run() {
             sqlite::sql_run,
             sqlite::sql_use_db,
             open_notification_settings,
+            attachment_open::attachment_open,
             reminder_notification::show_reminder,
             launch_at_login::launch_at_login_get,
             launch_at_login::launch_at_login_set,

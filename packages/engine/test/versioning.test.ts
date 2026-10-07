@@ -288,6 +288,48 @@ describe('副本 schema 版本', () => {
     await engine.close();
   });
 
+  it('11 → 12 之后：连上协议 6 的 hub 才做一次 bootstrap，取回旧版跳过的附件', async () => {
+    let protocol = 5;
+    const hub = new InMemorySyncHub({ protocolVersion: () => protocol });
+    // 新版设备已经建了任务与附件
+    const writer = await open(await createNodeSqliteStorage(':memory:'), hub.transportFor(USER));
+    const taskId = await writer.create('task', { title: '带附件', status: 'ACTIVE' });
+    const attachmentId = await writer.create('attachment', {
+      taskId,
+      name: 'a.pdf',
+      mimeType: 'application/pdf',
+      size: 3,
+      blobHash: 'a'.repeat(64),
+    });
+    await writer.sync();
+
+    // 旧版设备：没有 attachment 表，游标已越过这些变更（attachment 被跳过）
+    const storage = await createNodeSqliteStorage(':memory:');
+    for (const statement of schemaDdl()) await storage.exec(statement);
+    await storage.exec('DROP TABLE attachment');
+    await storage.run("INSERT INTO _engine_meta (key, value) VALUES ('syncCursor', ?)", [
+      String(hub.currentSeq(USER)),
+    ]);
+    await storage.exec('PRAGMA user_version = 11');
+    const engine = await open(storage, hub.transportFor(USER));
+    expect(await readSchemaVersion(storage)).toBe(REPLICA_SCHEMA_VERSION);
+    const flag = () => storage.all("SELECT value FROM _engine_meta WHERE key = 'attachmentResync'");
+
+    await engine.sync();
+    expect(await flag()).toHaveLength(1); // 旧 hub：标记留着
+    expect(await engine.get('attachment', attachmentId)).toBeNull();
+    protocol = 6; // hub 升级
+    await engine.sync();
+    expect(await flag()).toHaveLength(0);
+    expect((await engine.get('attachment', attachmentId))?.fields).toMatchObject({
+      taskId,
+      name: 'a.pdf',
+      size: 3,
+    });
+    await writer.close();
+    await engine.close();
+  });
+
   it('已是最新版本：重开不再迁移', async () => {
     const storage = await createNodeSqliteStorage(':memory:');
     await migrateReplica(storage);

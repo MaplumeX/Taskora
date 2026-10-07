@@ -54,8 +54,14 @@ async function mount() {
   // Event Stream 单例（登录后连接、登出断开）。前台期间它既是 UI 缓存的
   // 提示通道，也提示 mobile-engine 拉增量（ADR-0007）；后台断开由
   // 浏览器连接超时自然处理，不引入 FCM（spec 明确不做）。
-  const { initEventStream } = await import('@taskora/api');
+  const { initEventStream, initBlobUploads, setAttachmentOpener } = await import('@taskora/api');
   initEventStream(queryClient);
+  // 附件（ADR-0019）：登录后续传上次没传完的文件。
+  initBlobUploads();
+  // Android WebView 不处理 blob: 下载：附件交给 attachments 插件，写入缓存
+  // 目录后由系统里能打开该类型的应用打开（task-attachments issue 06）。
+  const { androidAttachmentOpener } = await import('./android-attachment-opener');
+  setAttachmentOpener(androidAttachmentOpener);
 
   // Local-first Engine（完全体，ADR-0007）：登录后全部实体读写切换到本地
   // 副本（Tauri 侧 SQLite），同步走前台触发模型（启动 / 写后 / 回前台 /

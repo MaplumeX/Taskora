@@ -1,0 +1,5 @@
+"$schema" = "schemas/schema.json"
+
+[default]
+description = "Allows opening an attachment with the system's default app."
+permissions = ["allow-open"]

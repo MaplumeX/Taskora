@@ -22,6 +22,10 @@ _Avoid_: Todo、item
 Task 内的子步骤，仅存在于父 Task 内。
 _Avoid_: Checklist item
 
+**Attachment（附件）**:
+Task 上附带的一个文件，仅存在于父 Task 内（同 Subtask）：随父 Task 进出 Trash、随清空 Trash 一并物理删除，自身没有 Trash；单独移除即物理删除（Delete Request）。是同步实体，只携带元数据（文件名、类型、大小、内容 hash、位次），文件内容在 Blob 里。不可改写内容：替换即移除旧的再添加新的。Repeat Instance / Repeat Project Instance 派生时随 Task 一起复制（指向同一 Blob）。只属于 Task，Project / Area 不设附件；不内嵌于 notes。
+_Avoid_: 文件、file、媒体、图片（图片只是一种附件）
+
 **Later Project（稍后项目）**:
 处于休眠的 Project：未了结、未进回收站，且计划为 Someday，或计划日期晚于账号时区的今天（日期为今天或已过即恢复活跃）。按状态细分为「计划」（未来日期）与「Someday」。侧边栏不显示稍后项目：无区域的汇总为无区域项目列表末尾一个不可排序的「N 个稍后项目」入口（N ≥ 1 才出现），进入 Later Projects 页；有区域的只在区域页的「计划」/「Someday」小节下出现。其内任务不出现在 Anytime / Someday 等汇总视图。纯推导状态，不改写 Project 或 Task 字段。
 _Avoid_: 休眠项目（口语可用）、inactive project、归档
@@ -142,8 +146,12 @@ _Avoid_: 拖入、投放、drop target（泛指落点时可用）
 _Avoid_: 数据库、缓存、ORM、offline cache
 
 **Local Replica（本地副本）**:
-每台设备持有的该用户数据镜像，是 UI 读写的直接对象；不可视为可随时丢弃的缓存。除 Archived Logbook 外是全量的。
+每台设备持有的该用户数据镜像，是 UI 读写的直接对象；不可视为可随时丢弃的缓存。除 Archived Logbook 与 Blob（按需下载）外是全量的。
 _Avoid_: cache、镜像只读副本
+
+**Blob**:
+Attachment 的文件内容，以 sha256 内容寻址、写入后不可变，因此不参与字段级 LWW、永无冲突。不走 Change Event：经独立的上传 / 下载通道在设备与 Sync Hub 之间传输。Local Replica 不预取 Blob，打开或预览附件时才按需下载并缓存在本机；本机缓存可随时丢弃重下。Sync Hub 按用户隔离存储（同用户内同内容只存一份），不再被任何 Attachment 引用的 Blob 由 hub GC 回收。
+_Avoid_: 文件内容写进 Change Event、附件本体（Attachment 指元数据实体）
 
 **Archived Logbook（归档 Logbook）**:
 Local Replica 不保留的旧 Logbook Entry：了结时间早于保留期（缺省 365 天）、不在 Trash、不属于进行中项目的已了结任务及其 Subtask。它们留在 Sync Hub，Logbook 滚到底时按页读取，只读；在 hub 上被修改后会随变更回到副本。归档不是删除：不产生 Compact Event，也不登记。

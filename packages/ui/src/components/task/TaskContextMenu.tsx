@@ -21,6 +21,7 @@ import { ScheduledType } from '@taskora/shared';
 
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { MenuRow } from '@/components/common/MenuRow';
+import { useConvertGuard } from './useConvertGuard';
 import { isTouchContextMenu } from '../../lib/useLongPress';
 import {
   contextMenuTargets,
@@ -78,6 +79,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const deleteTask = useDeleteTask();
   const restoreTask = useRestoreTask();
   const convertToProjectTask = useConvertTaskToProject();
+  const convertGuard = useConvertGuard();
 
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
@@ -152,10 +154,12 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
 
   const handleConvertToProject = () => {
     closeMenu();
-    convertToProjectTask.mutate(task.id, {
-      onSuccess: () => toast.success(t('convertSuccess')),
-      onError: () => toast.error(t('convertFailed')),
-    });
+    void convertGuard.guard(task.id, () =>
+      convertToProjectTask.mutate(task.id, {
+        onSuccess: () => toast.success(t('convertSuccess')),
+        onError: () => toast.error(t('convertFailed')),
+      }),
+    );
   };
 
   const openPicker = (kind: PickerKind) => {
@@ -310,6 +314,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
           )}
         </PopoverContent>
       </Popover>
+      {convertGuard.dialog}
     </div>
   );
 }

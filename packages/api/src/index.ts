@@ -113,6 +113,25 @@ export * from './hooks/useProjects';
 export * from './hooks/useEffectiveTags';
 export * from './hooks/useTags';
 export * from './hooks/useTasks';
+export * from './hooks/useAttachments';
+export {
+  blobChannel,
+  initBlobUploads,
+  setBlobChannel,
+  openAttachment,
+  setAttachmentOpener,
+  downloadInBrowser,
+  isPreviewableImage,
+  type AttachmentOpener,
+} from './attachments/attachment-files';
+export {
+  BlobChannel,
+  BlobUnavailableError,
+  sha256Hex,
+  type BlobActivity,
+  type BlobTransport,
+} from './attachments/blob-channel';
+export { MemoryBlobCache, type BlobCache } from './attachments/blob-cache';
 export * from './hooks/useScheduledTasksQuery';
 export * from './hooks/useRepeatPreviews';
 export * from './hooks/useUsers';

@@ -1,0 +1,20 @@
+[package]
+name = "tauri-plugin-attachments"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.77.2"
+description = "Taskora Android attachments: write an attachment into the app cache and open it with the system's default app via FileProvider (ADR-0019)"
+license = "MIT"
+links = "tauri-plugin-attachments"
+
+# Android 构建产物（tauri_plugin::Builder 会把 tauri-api 复制进
+# android/.tauri）不入包。
+exclude = ["android/build/", "android/.gradle/", "android/.tauri/", "target/"]
+
+[dependencies]
+tauri = { version = "2" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[build-dependencies]
+tauri-plugin = { version = "2", features = ["build"] }

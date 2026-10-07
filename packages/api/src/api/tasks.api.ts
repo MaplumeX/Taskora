@@ -125,3 +125,27 @@ export function reorderSubtasks(
 ) {
   return currentTaskBackend().reorderSubtasks(...args);
 }
+
+export function createAttachment(
+  ...args: Parameters<typeof import('./tasks.api.rest').createAttachment>
+) {
+  return currentTaskBackend().createAttachment(...args);
+}
+
+export function updateAttachment(
+  ...args: Parameters<typeof import('./tasks.api.rest').updateAttachment>
+) {
+  return currentTaskBackend().updateAttachment(...args);
+}
+
+export function deleteAttachment(
+  ...args: Parameters<typeof import('./tasks.api.rest').deleteAttachment>
+) {
+  return currentTaskBackend().deleteAttachment(...args);
+}
+
+export function reorderAttachments(
+  ...args: Parameters<typeof import('./tasks.api.rest').reorderAttachments>
+) {
+  return currentTaskBackend().reorderAttachments(...args);
+}

@@ -97,6 +97,12 @@ async function mount() {
   const { initDesktopEngine } = await import('./engine/desktop-engine');
   initDesktopEngine(queryClient);
 
+  // 附件（ADR-0019）：用系统默认程序打开，而不是 webview 里的下载。
+  const { setAttachmentOpener, initBlobUploads } = await import('@taskora/api');
+  const { tauriAttachmentOpener } = await import('./tauri-attachment-opener');
+  setAttachmentOpener(tauriAttachmentOpener);
+  initBlobUploads();
+
   // Reminders（reminders spec）：注册通知薄壳，UI 提醒区据此获得授权
   // 状态与跳转系统设置能力（web 前端不注册 → 提醒区隐藏）。
   const { setNotificationShell } = await import('@taskora/api');

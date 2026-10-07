@@ -10,3 +10,5 @@ coverage/
 # Android local build artifacts (test keystore + sideload APKs)
 .scratch/*.jks
 /*.apk
+# 本地开发时的附件文件（Blob，BLOB_STORAGE_DIR 缺省目录）
+packages/backend/data/

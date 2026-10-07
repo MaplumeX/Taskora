@@ -8,6 +8,7 @@
 import { ScheduledType, TaskBucket, TaskStatus, type RepeatRule } from '@taskora/shared';
 
 import {
+  deriveAttachmentId,
   deriveRepeatInstanceId,
   deriveSubtaskId,
   nextOccurrenceDate,
@@ -44,6 +45,41 @@ export interface RepeatSubtaskFields {
   settledAt: null;
 }
 
+/** 被复制的附件：元数据原样复制，指向同一 Blob（ADR-0019）。 */
+export interface RepeatParentAttachment extends Positioned {
+  name: string;
+  mimeType: string;
+  size: number;
+  blobHash: string;
+}
+
+export interface RepeatAttachmentFields {
+  id: string;
+  taskId: string;
+  name: string;
+  mimeType: string;
+  size: number;
+  blobHash: string;
+  position: string | null;
+}
+
+/** 附件副本的字段：内容不变（同一 Blob），只换父任务与 id。 */
+export function copyAttachment(
+  attachment: RepeatParentAttachment,
+  id: string,
+  taskId: string,
+): RepeatAttachmentFields {
+  return {
+    id,
+    taskId,
+    name: attachment.name,
+    mimeType: attachment.mimeType,
+    size: attachment.size,
+    blobHash: attachment.blobHash,
+    position: attachment.position ?? null,
+  };
+}
+
 /** 下一个实例的确定性 id（无规则 / 链已终结为 null）。 */
 export function repeatInstanceId(
   parent: Pick<RepeatParent, 'id' | 'scheduledDate' | 'repeatRule'>,
@@ -65,24 +101,29 @@ export function repeatInstanceId(
 /**
  * 完成时派生的实例：复制标题 / 备注 / 标签 / 提醒时刻 / 归属 / 规则，
  * 计划到下一个日期；Subtask 复制并重置为未完成（序号决定确定性 id，
- * 按有效 Position——两端列表同一口径；新实例沿用原 Position）。
+ * 按有效 Position——两端列表同一口径；新实例沿用原 Position）；附件
+ * 同样按序号复制，指向同一 Blob（ADR-0019）。
  *
  * 调用方先经 repeatDerivationTarget 决定跳过 / 用确定性 id / 换新 id，
- * 再用 subtasksFor(实际 id) 生成 Subtask。parent 取结算前的状态。
+ * 再用 subtasksFor / attachmentsFor(实际 id) 生成子实体。parent 取结算
+ * 前的状态。
  */
 export function planRepeatInstance(
   parent: RepeatParent,
   subtasks: readonly RepeatParentSubtask[],
   settledAt: string,
   zones: CalendarZones,
+  attachments: readonly RepeatParentAttachment[] = [],
 ): {
   id: string;
   task: TaskFields;
   subtasksFor: (instanceId: string) => RepeatSubtaskFields[];
+  attachmentsFor: (instanceId: string) => RepeatAttachmentFields[];
 } | null {
   const target = repeatInstanceId(parent, settledAt, zones);
   if (!target) return null;
   const ordered = sortByEffectivePosition(subtasks);
+  const orderedAttachments = sortByEffectivePosition(attachments);
   return {
     id: target.id,
     task: {
@@ -112,6 +153,10 @@ export function planRepeatInstance(
         status: TaskStatus.ACTIVE,
         settledAt: null,
       })),
+    attachmentsFor: (instanceId) =>
+      orderedAttachments.map((attachment, index) =>
+        copyAttachment(attachment, deriveAttachmentId(instanceId, index), instanceId),
+      ),
   };
 }
 

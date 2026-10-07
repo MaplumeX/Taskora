@@ -1,4 +1,5 @@
 import type { TagResponseDto } from './tag.dto';
+import type { AttachmentResponseDto } from './attachment.dto';
 import type { SubtaskResponseDto } from './subtask.dto';
 import type { RepeatRule } from './repeat-rule.dto';
 import { TaskBucket, TaskStatus, ScheduledType } from '../enums/task.enum';
@@ -61,6 +62,8 @@ export interface TaskResponseDto {
   areaId: string | null;
   tags?: TagResponseDto[];
   subtasks?: SubtaskResponseDto[];
+  /** 附件（ADR-0019），按位次排序；只在任务详情里下发。 */
+  attachments?: AttachmentResponseDto[];
   createdAt: string;
   updatedAt: string;
 }

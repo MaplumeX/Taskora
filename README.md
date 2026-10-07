@@ -61,6 +61,8 @@ Backend — `packages/backend/.env`:
 ```env
 DATABASE_URL=postgresql://taskora:taskora@localhost:5432/taskora?schema=public
 JWT_SECRET=your-secret-here
+# Optional: where attachment files are stored, defaults to packages/backend/data/blobs
+BLOB_STORAGE_DIR=./data/blobs
 ```
 
 Frontend — `packages/frontend/.env`:
@@ -202,6 +204,8 @@ This starts:
 - `frontend` on port 7646 (nginx serves the SPA and reverse-proxies `/api` to the backend)
 
 Compose waits for PostgreSQL's health check before starting the backend. If `VITE_API_URL` changes, rebuild the frontend image with `--build` because Vite embeds this value at build time.
+
+Task attachment files live in the `blobs` volume (the database only stores attachment metadata). Back up and migrate the `pgdata` and `blobs` volumes together.
 
 ### Building images manually
 

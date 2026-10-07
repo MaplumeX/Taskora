@@ -23,13 +23,15 @@ import {
   entityDef,
   entityTableDdl,
   isSyncEntity,
+  isTaskChildEntity,
   SYNC_ENTITIES,
+  TASK_CHILD_ENTITIES,
   type FieldDef,
   type SyncEntity,
   type WireRow,
 } from './entities';
 import { compareHlc, HybridClock, isLegacyFractionalHlc } from './hlc';
-import { migrateReplica, TAG_TREE_RESYNC_META_KEY } from './migrations';
+import { migrateReplica } from './migrations';
 import { mergeEntityState, type EntityMergeState, type FieldWrite } from './merger';
 import type { DeleteRequest, HubChange, OutboxEvent, SnapshotEntry } from './protocol';
 import { inTransaction, type SqlStorage } from './storage';
@@ -42,14 +44,22 @@ function stageTable(entity: SyncEntity): string {
 /** 一次归档裁剪事务最多删除的任务数（事务短、SQL 参数个数有界）。 */
 const PRUNE_CHUNK = 500;
 
-/** 待补齐 Subtask 的回到副本的归档任务（_engine_meta 键）。 */
+/** 待补齐子实体（Subtask / Attachment）的回到副本的归档任务（_engine_meta 键）。 */
 const BACKFILL_META_KEY = 'archiveBackfill';
 
 /** 小数墙钟时间戳的一次性修复已完成（_engine_meta 键，见 repairFractionalClocks）。 */
 const CLOCK_REPAIR_META_KEY = 'fractionalClockRepair';
 
 /** 修复重推的实体顺序：被引用者在前。 */
-const REPAIR_ORDER: SyncEntity[] = ['tag', 'area', 'project', 'project-heading', 'task', 'subtask'];
+const REPAIR_ORDER: SyncEntity[] = [
+  'tag',
+  'area',
+  'project',
+  'project-heading',
+  'task',
+  'subtask',
+  'attachment',
+];
 
 export interface ReplicaRow {
   id: string;
@@ -252,17 +262,16 @@ export class LocalReplica {
   }
 
   /**
-   * 嵌套 Tag 迁移（10 → 11）之后的一次性 bootstrap：有标记时清除它并把
-   * 游标归零，随后的 pull 走 bootstrap。只在 hub 已是协议 5 时调用——
-   * 旧 hub 的快照还是 tag-group，重取也收不回父 Tag。返回是否需要重取。
+   * 副本迁移之后的一次性 bootstrap：迁移留下的标记（key）存在时清除它并
+   * 把游标归零，随后的 pull 走 bootstrap。只在 hub 已实现对应协议时调用——
+   * 嵌套 Tag（10 → 11）要协议 5，旧 hub 的快照还是 tag-group；Attachment
+   * （11 → 12）要协议 6，旧 hub 没有附件可取。返回是否需要重取。
    */
-  async consumeTagTreeResync(): Promise<boolean> {
+  async consumeResync(key: string): Promise<boolean> {
     return this.serialized(async () => {
-      if (!(await this.metaGet(TAG_TREE_RESYNC_META_KEY))) return false;
+      if (!(await this.metaGet(key))) return false;
       return this.tx(async () => {
-        await this.storage.run('DELETE FROM _engine_meta WHERE key = ?', [
-          TAG_TREE_RESYNC_META_KEY,
-        ]);
+        await this.storage.run('DELETE FROM _engine_meta WHERE key = ?', [key]);
         await this.metaSet('syncCursor', '0');
         return true;
       });
@@ -778,7 +787,7 @@ export class LocalReplica {
       const affected = new ChangedRows();
       await this.tx(async () => {
         const revived = new Set<string>();
-        const subtaskParents = new Set<string>();
+        const childParents = new Set<string>();
         for (const change of changes) {
           // 更新版本 hub 下发的、本端没有表的实体类型：跳过（协议规则见
           // ADR-0007「协议版本」——必须理解的新实体由 hub 提高最低版本）。
@@ -798,8 +807,8 @@ export class LocalReplica {
               ) {
                 revived.add(change.id);
               }
-              if (change.entity === 'subtask' && typeof taskId === 'string') {
-                subtaskParents.add(taskId);
+              if (isTaskChildEntity(change.entity) && typeof taskId === 'string') {
+                childParents.add(taskId);
               }
             }
           } else {
@@ -811,8 +820,8 @@ export class LocalReplica {
             }
           }
         }
-        if (subtaskParents.size > 0) {
-          const parents = [...subtaskParents];
+        if (childParents.size > 0) {
+          const parents = [...childParents];
           const present = await this.storage.all<{ id: string }>(
             `SELECT id FROM task WHERE id IN (${parents.map(() => '?').join(', ')})`,
             parents,
@@ -1045,9 +1054,9 @@ export class LocalReplica {
 
   /**
    * 裁掉归档任务（规则见 archive.ts 的 isArchivedTask，这里是同一规则的
-   * SQL）及其 Subtask：只删本地行，不登记 compact、不进 Outbox——hub 上
-   * 它们照常存在，Logbook 按页从 hub 读取。任务或其 Subtask 仍有待推送
-   * 的写时留下（回放与推送需要本地行）。返回裁掉的任务数。
+   * SQL）及其子实体（Subtask / Attachment）：只删本地行，不登记 compact、
+   * 不进 Outbox——hub 上它们照常存在，Logbook 按页从 hub 读取。任务或其
+   * 子实体仍有待推送的写时留下（回放与推送需要本地行）。返回裁掉的任务数。
    */
   async pruneArchive(cutoff: string): Promise<number> {
     const settled = SETTLED_TASK_STATUSES.map(() => '?').join(', ');
@@ -1061,27 +1070,39 @@ export class LocalReplica {
              WHERE status IN (${settled}) AND settledAt < ? AND trashedAt IS NULL
                AND (projectId IS NULL OR projectId IN (SELECT id FROM project WHERE status = ?))
                AND id NOT IN (SELECT entity_id FROM _outbox WHERE entity = 'task')
-               AND id NOT IN (
-                 SELECT taskId FROM subtask WHERE taskId IS NOT NULL
-                   AND id IN (SELECT entity_id FROM _outbox WHERE entity = 'subtask')
-               )
+               ${TASK_CHILD_ENTITIES.map(
+                 (child) => `AND id NOT IN (
+                 SELECT taskId FROM ${entityDef(child).table} WHERE taskId IS NOT NULL
+                   AND id IN (SELECT entity_id FROM _outbox WHERE entity = '${child}')
+               )`,
+               ).join('\n')}
              LIMIT ?`,
             [...SETTLED_TASK_STATUSES, cutoff, ProjectStatus.COMPLETED, PRUNE_CHUNK],
           );
           const taskIds = tasks.map((row) => row.id);
-          if (taskIds.length === 0) return { taskIds, subtaskIds: [] as string[] };
+          const children: Array<{ entity: SyncEntity; ids: string[] }> = [];
+          if (taskIds.length === 0) return { taskIds, children };
           const placeholders = taskIds.map(() => '?').join(', ');
-          const subtasks = await this.storage.all<{ id: string }>(
-            `SELECT id FROM subtask WHERE taskId IN (${placeholders})`,
-            taskIds,
-          );
-          await this.storage.run(`DELETE FROM subtask WHERE taskId IN (${placeholders})`, taskIds);
+          for (const child of TASK_CHILD_ENTITIES) {
+            const table = entityDef(child).table;
+            const rows = await this.storage.all<{ id: string }>(
+              `SELECT id FROM ${table} WHERE taskId IN (${placeholders})`,
+              taskIds,
+            );
+            await this.storage.run(
+              `DELETE FROM ${table} WHERE taskId IN (${placeholders})`,
+              taskIds,
+            );
+            children.push({ entity: child, ids: rows.map((row) => row.id) });
+          }
           await this.storage.run(`DELETE FROM task WHERE id IN (${placeholders})`, taskIds);
-          return { taskIds, subtaskIds: subtasks.map((row) => row.id) };
+          return { taskIds, children };
         }),
       );
       if (pruned.taskIds.length > 0) affected.rows('task', pruned.taskIds);
-      if (pruned.subtaskIds.length > 0) affected.rows('subtask', pruned.subtaskIds);
+      for (const child of pruned.children) {
+        if (child.ids.length > 0) affected.rows(child.entity, child.ids);
+      }
       total += pruned.taskIds.length;
       if (pruned.taskIds.length < PRUNE_CHUNK) break;
     }

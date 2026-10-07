@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <!--
+            附件交给其他应用打开（ADR-0019）：只共享缓存目录下的
+            attachments/，按次授予读权限（FLAG_GRANT_READ_URI_PERMISSION），
+            不导出。authority 带上 applicationId，与 AttachmentsPlugin 一致。
+        -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.attachments"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/taskora_attachment_paths" />
+        </provider>
+    </application>
+
+    <!-- Android 11+ 的包可见性：查询能 ACTION_VIEW 的应用（选择器 / 无应用提示）。 -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="*/*" />
+        </intent>
+    </queries>
+</manifest>

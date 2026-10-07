@@ -17,7 +17,7 @@
  * - 数据迁移（改值而非加列）同样写成一步，拿到的是事务内的 storage。
  */
 
-import { ENTITIES, schemaDdl } from './entities';
+import { ENTITIES, entityTableDdl, schemaDdl } from './entities';
 import { DEFAULT_TAG_COLOR } from './domain/tags';
 import { synthPosition } from './position';
 import { inTransaction, type SqlStorage } from './storage';
@@ -34,6 +34,12 @@ const SORT_ORDER_ERA_TABLES = [...ENTITY_TABLES, 'tag_group'];
 
 /** 副本迁移完成、等待在协议 5 的 hub 上做一次 bootstrap（_engine_meta 键）。 */
 export const TAG_TREE_RESYNC_META_KEY = 'tagTreeResync';
+
+/**
+ * 副本加了 attachment 表、等待在协议 6 的 hub 上做一次 bootstrap
+ * （_engine_meta 键）：旧版本跳过了 hub 下发的 attachment 变更。
+ */
+export const ATTACHMENT_RESYNC_META_KEY = 'attachmentResync';
 
 async function tableExists(storage: SqlStorage, table: string): Promise<boolean> {
   const rows = await storage.all<{ name: string }>(
@@ -199,6 +205,19 @@ async function nestTagGroups(storage: SqlStorage): Promise<void> {
 }
 
 /**
+ * 11 → 12：attachment 表与索引（ADR-0019）。旧版本收到 attachment 变更时
+ * 按「不认识的实体」跳过，迁移后记下「需要一次 bootstrap」把它们取回。
+ */
+async function addAttachments(storage: SqlStorage): Promise<void> {
+  await storage.exec(entityTableDdl('attachment'));
+  await storage.exec('CREATE INDEX IF NOT EXISTS attachment_task ON attachment (taskId)');
+  await storage.run(
+    'INSERT INTO _engine_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    [ATTACHMENT_RESYNC_META_KEY, '1'],
+  );
+}
+
+/**
  * 迁移步骤：下标 i 把副本从版本 i 升到 i + 1。
  * 只追加；已发布的步骤不可修改。
  */
@@ -237,6 +256,8 @@ export const REPLICA_MIGRATIONS: readonly ReplicaMigration[] = [
   },
   // 10 → 11：Tag Group 转为父 Tag（嵌套 Tag，ADR-0016）。
   nestTagGroups,
+  // 11 → 12：增加 attachment 表（Task 附件，ADR-0019）。
+  addAttachments,
 ];
 
 /** 当前代码的副本 schema 版本。 */

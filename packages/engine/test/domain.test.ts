@@ -11,7 +11,9 @@ import {
   buildRepeatPreviews,
   buildTagTree,
   countProjectTasks,
+  deriveAttachmentId,
   deriveRepeatInstanceId,
+  deriveSubtaskId,
   effectiveProjectTagIds,
   effectiveTaskTagIds,
   feedIncludesProjects,
@@ -444,6 +446,48 @@ describe('任务写入规则', () => {
     expect(plan.subtasksFor(plan.id).map((s) => s.title)).toEqual(['a-new', 'a-old', 'b']);
     expect(plan.subtasksFor(plan.id).map((s) => s.position)).toEqual(['a0', 'a1', 'a2']);
     expect(planRepeatInstance({ ...parent, repeatRule: null }, [], 'x', UTC)).toBeNull();
+  });
+
+  it('重复实例：附件按 Position 复制，指向同一 Blob，id 按序号确定', () => {
+    const parent = {
+      id: 'task-1',
+      title: '月报',
+      notes: null,
+      scheduledDate: '2026-09-24',
+      repeatRule: { unit: 'month', interval: 1, anchor: 'scheduled' } as const,
+      reminderTime: null,
+      projectId: null,
+      headingId: null,
+      areaId: null,
+      tagIds: [],
+    };
+    const attachments = [
+      {
+        name: '数据.xlsx',
+        mimeType: 'application/vnd.ms-excel',
+        size: 9,
+        blobHash: 'b',
+        position: 'a1',
+      },
+      { name: '模板.docx', mimeType: 'application/msword', size: 7, blobHash: 'a', position: 'a0' },
+    ];
+    const plan = planRepeatInstance(parent, [], '2026-09-24T08:00:00.000Z', UTC, attachments)!;
+    const copies = plan.attachmentsFor(plan.id);
+    expect(
+      copies.map(({ name, blobHash, taskId, position }) => [name, blobHash, taskId, position]),
+    ).toEqual([
+      ['模板.docx', 'a', plan.id, 'a0'],
+      ['数据.xlsx', 'b', plan.id, 'a1'],
+    ]);
+    expect(copies.map((copy) => copy.id)).toEqual([
+      deriveAttachmentId(plan.id, 0),
+      deriveAttachmentId(plan.id, 1),
+    ]);
+    // 与 Subtask 不同命名空间：同序号不撞 id
+    expect(deriveAttachmentId(plan.id, 0)).not.toBe(deriveSubtaskId(plan.id, 0));
+    expect(
+      planRepeatInstance(parent, [], '2026-09-24T08:00:00.000Z', UTC)!.attachmentsFor('x'),
+    ).toEqual([]);
   });
 
   it('跳过本次：计划日推进、截止日同步平移；各不可跳过条件', () => {

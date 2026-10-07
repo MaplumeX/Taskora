@@ -6,6 +6,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  deriveRepeatCopyId,
   deriveRepeatProjectId,
   planProjectComplete,
   planProjectRepeatSkip,
@@ -112,6 +113,26 @@ describe('重复项目派生', () => {
         { id: 's1', title: 'step', taskId: 'done', position: 'a0' },
         { id: 's2', title: 'gone', taskId: 'trashed', position: 'a0' },
       ],
+      attachments: [
+        {
+          id: 'f1',
+          taskId: 'done',
+          name: 'plan.pdf',
+          mimeType: 'application/pdf',
+          size: 3,
+          blobHash: 'h',
+          position: 'a0',
+        },
+        {
+          id: 'f2',
+          taskId: 'trashed',
+          name: 'gone.pdf',
+          mimeType: 'application/pdf',
+          size: 3,
+          blobHash: 'g',
+          position: 'a0',
+        },
+      ],
     });
 
     expect(copy.headings).toEqual([
@@ -145,6 +166,18 @@ describe('重复项目派生', () => {
         position: 'a0',
         status: 'ACTIVE',
         settledAt: null,
+      },
+    ]);
+    // 附件随任务复制（Trash 中任务的不复制），指向同一 Blob
+    expect(copy.attachments).toEqual([
+      {
+        id: deriveRepeatCopyId('next', 'attachment', 'f1'),
+        taskId: done.id,
+        name: 'plan.pdf',
+        mimeType: 'application/pdf',
+        size: 3,
+        blobHash: 'h',
+        position: 'a0',
       },
     ]);
   });

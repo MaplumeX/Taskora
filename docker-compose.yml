@@ -25,6 +25,10 @@ services:
       AGENT_ENCRYPTION_KEY: ${AGENT_ENCRYPTION_KEY:?AGENT_ENCRYPTION_KEY is required in .env}
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 3000
+      # 附件文件内容（Blob，ADR-0019）；备份时与数据库一起备份
+      BLOB_STORAGE_DIR: /data/blobs
+    volumes:
+      - blobs:/data/blobs
     depends_on:
       postgres:
         condition: service_healthy
@@ -55,3 +59,4 @@ services:
 
 volumes:
   pgdata:
+  blobs:

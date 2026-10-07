@@ -31,6 +31,7 @@ import { TaskNotesBadge } from './TaskNotesBadge';
 import { TaskReminderBadge } from './TaskReminderBadge';
 import { TaskRepeatBadge } from './TaskRepeatBadge';
 import { TaskSubtasksBadge } from './TaskSubtasksBadge';
+import { TaskAttachmentsBadge } from './TaskAttachmentsBadge';
 import { TaskTagCapsules } from './TaskTagCapsules';
 import { TaskRowExpanded } from './TaskRowExpanded';
 import { TaskPlacement } from './TaskPlacement';
@@ -399,6 +400,10 @@ export function TaskItem({
                       <>
                         <TaskNotesBadge notes={current.notes} className="shrink-0" />
                         <TaskSubtasksBadge subtasks={current.subtasks} className="shrink-0" />
+                        <TaskAttachmentsBadge
+                          attachments={current.attachments}
+                          className="shrink-0"
+                        />
                       </>
                     )}
                   </div>

@@ -22,6 +22,7 @@ import {
   REFERENCE_FIELDS,
   VIRTUAL_DEVICE_ID,
   isSyncEntity,
+  isTaskChildEntity,
   type FieldWrite,
   type DeleteRequest,
   type OutboxEvent,
@@ -60,9 +61,6 @@ import {
   type SnapshotToken,
 } from './snapshot-pages';
 
-/** 无 userId 列的实体（Subtask 经父 Task 认领归属）。 */
-const NO_USER_ID_ENTITIES = new Set<SyncEntity>(['subtask']);
-
 /** Prisma 模型对应的 PostgreSQL 表名；仅用于事务内 SELECT ... FOR UPDATE。 */
 const PRISMA_TABLE_NAMES: Record<SyncEntity, string> = {
   task: 'Task',
@@ -71,6 +69,7 @@ const PRISMA_TABLE_NAMES: Record<SyncEntity, string> = {
   'project-heading': 'ProjectHeading',
   area: 'Area',
   tag: 'Tag',
+  attachment: 'Attachment',
 };
 
 /**
@@ -405,8 +404,8 @@ export class SyncHubService implements OnModuleInit {
 
   /**
    * 处理 Delete Request：校验实体归属后物理删除，登记 CompactedEntity
-   * 并广播 Compact Event（每用户单调 seq）。Task 级联删除其 Subtask
-   * （与 hub GC 同惯例）。越权（不属于该用户）的 id 被拒绝——不删除、
+   * 并广播 Compact Event（每用户单调 seq）。Task 级联删除其 Subtask 与
+   * Attachment（与 hub GC 同惯例）。越权（不属于该用户）的 id 被拒绝——不删除、
    * 不广播。幂等：重复请求（实体已不存在）为 no-op。
    */
   private async applyDeleteRequest(userId: string, request: DeleteRequest): Promise<void> {
@@ -431,23 +430,24 @@ export class SyncHubService implements OnModuleInit {
     const codec = codecFor(entity);
     for (const id of [...ids].sort()) await this.lockEntity(tx, userId, entity, id);
 
-    // 归属校验（story 6）：只删属于该用户的行（Subtask 经父 Task 认领）
+    // 归属校验（story 6）：只删属于该用户的行（Task 子实体经父 Task 认领）
+    const childOfTask = isTaskChildEntity(codec.entity);
     const rows = (await delegate(tx, codec.model).findMany({
       where: { id: { in: ids } },
       select: {
         id: true,
-        ...(codec.entity === 'subtask' ? { task: { select: { userId: true } } } : { userId: true }),
+        ...(childOfTask ? { task: { select: { userId: true } } } : { userId: true }),
       },
     })) as Array<{ id: string } & Record<string, unknown>>;
     const owned = rows
       .filter((row) =>
-        codec.entity === 'subtask'
+        childOfTask
           ? (row.task as { userId: string } | null)?.userId === userId
           : row.userId === userId,
       )
       .map((row) => row.id);
 
-    // 级联子实体（DELETE_CASCADES：Task → Subtask、Project →
+    // 级联子实体（DELETE_CASCADES：Task → Subtask / Attachment、Project →
     // ProjectHeading）：登记 + 物理删除同事务，按实体分组广播
     const cascaded: Array<{ entity: SyncEntity; ids: string[] }> = [];
     for (const rule of DELETE_CASCADES[entity] ?? []) {
@@ -491,7 +491,7 @@ export class SyncHubService implements OnModuleInit {
   }
 
   /**
-   * 行归属校验：已存在的行是否属于该用户（Subtask 无 userId 列，经
+   * 行归属校验：已存在的行是否属于该用户（Task 子实体无 userId 列，经
    * 父 Task 认领）。字段写与 Delete Request 适用同一规则（story 6）。
    */
   private async ownsRow(
@@ -500,7 +500,7 @@ export class SyncHubService implements OnModuleInit {
     entity: SyncEntity,
     row: PrismaRow,
   ): Promise<boolean> {
-    if (entity === 'subtask') {
+    if (isTaskChildEntity(entity)) {
       const parent = await loadRow(client, codecFor('task'), row.taskId as string);
       return (parent as { userId?: string } | null)?.userId === userId;
     }
@@ -550,7 +550,7 @@ export class SyncHubService implements OnModuleInit {
     await this.lockEntity(tx, userId, entity, id);
     const row = await loadRow(tx, codec, id);
     // 归属校验（story 6 对偶，字段写与 Delete Request 同口径）：行存在
-    // 但属于其他用户（Subtask 经父 Task 认领）时静默丢弃。
+    // 但属于其他用户（Task 子实体经父 Task 认领）时静默丢弃。
     if (row && !(await this.ownsRow(tx, userId, entity, row))) return null;
     // Compact 永久获胜：已 compact 的实体不重建。推送方显然还持有这行
     // （如重启前的旧版本复用了已死的确定性 id），重发 Compact Event
@@ -597,7 +597,7 @@ export class SyncHubService implements OnModuleInit {
       (target, refId) => referenceStatuses.get(`${target}:${refId}`) ?? 'pending',
       bumpClock,
     );
-    if (!handled) return null; // 孤儿 Subtask：整事件丢弃
+    if (!handled) return null; // 孤儿子实体：整事件丢弃
     // 跨字段不变量（local-first-v3 issue 01）：合并出的组合违反业务规则
     // （别的项目的分组、Someday 带提醒……）时纠正，以必胜时钟下发。
     const headingOwner = await this.loadHeadingOwner(tx, entity, outcome.fields);
@@ -636,8 +636,8 @@ export class SyncHubService implements OnModuleInit {
 
     if (row) {
       await delegate(tx, codec.model).update({ where: { id }, data });
-    } else if (NO_USER_ID_ENTITIES.has(entity)) {
-      // Subtask 无 userId 列：归属经父 Task 认领。
+    } else if (isTaskChildEntity(entity)) {
+      // Task 子实体无 userId 列：归属经父 Task 认领。
       const taskId = outcome.fields.taskId;
       if (typeof taskId !== 'string') return null;
       const parent = await loadRow(tx, codecFor('task'), taskId);

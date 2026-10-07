@@ -16,6 +16,7 @@ export {
   deriveRepeatProjectId,
   deriveRepeatCopyId,
   deriveSubtaskId,
+  deriveAttachmentId,
 } from './repeat';
 export {
   BASE_62_DIGITS,
@@ -48,6 +49,8 @@ export {
   DELETE_CASCADES,
   COMPACT_NULL_REFS,
   REFERENCE_FIELDS,
+  TASK_CHILD_ENTITIES,
+  isTaskChildEntity,
   type EntityDef,
   type FieldDef,
   type SyncEntity,
@@ -82,6 +85,7 @@ export {
   type EngineOptions,
 } from './engine';
 export {
+  ATTACHMENT_PROTOCOL,
   COMPACT_REGISTRY_RETENTION_DAYS,
   SYNC_CLIENT_HEADER,
   SYNC_LOG_RETENTION_DAYS,

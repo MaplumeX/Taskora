@@ -78,6 +78,7 @@ describe('SyncHubService（合并器集成）', () => {
       projectHeading: emptyDelegate(),
       area: emptyDelegate(),
       tag: emptyDelegate(),
+      attachment: emptyDelegate(),
       compactedEntity: {
         findUnique: vi.fn().mockResolvedValue(null),
         findMany: vi.fn().mockResolvedValue([]),
@@ -346,12 +347,13 @@ describe('SyncHubService（合并器集成）', () => {
   });
 
   describe('Delete Request（ADR-0008：设备发起删除）', () => {
-    it('归属校验通过：物理删除 + 级联删除 Subtask + 登记 + 广播', async () => {
+    it('归属校验通过：物理删除 + 级联删除 Subtask / Attachment + 登记 + 广播', async () => {
       mockPrisma.task.findMany.mockResolvedValue([
         { id: 'task-1', userId: USER },
         { id: 'task-2', userId: USER },
       ]);
       mockPrisma.subtask.findMany.mockResolvedValue([{ id: 'sub-1' }, { id: 'sub-2' }]);
+      mockPrisma.attachment.findMany.mockResolvedValue([{ id: 'att-1' }]);
       mockPrisma.task.deleteMany.mockResolvedValue({ count: 2 });
       mockPrisma.subtask.deleteMany.mockResolvedValue({ count: 2 });
 
@@ -365,6 +367,9 @@ describe('SyncHubService（合并器集成）', () => {
       // 级联：Subtask 先于父 Task 删除
       expect(mockPrisma.subtask.deleteMany).toHaveBeenCalledWith({
         where: { id: { in: ['sub-1', 'sub-2'] } },
+      });
+      expect(mockPrisma.attachment.deleteMany).toHaveBeenCalledWith({
+        where: { id: { in: ['att-1'] } },
       });
       expect(mockPrisma.task.deleteMany).toHaveBeenCalledWith({
         where: { id: { in: ['task-1', 'task-2'] } },
@@ -383,6 +388,9 @@ describe('SyncHubService（合并器集成）', () => {
       expect(cursor).toBeGreaterThan(cursorBefore);
       expect(changes).toContainEqual(
         expect.objectContaining({ kind: 'compact', entity: 'subtask', ids: ['sub-1', 'sub-2'] }),
+      );
+      expect(changes).toContainEqual(
+        expect.objectContaining({ kind: 'compact', entity: 'attachment', ids: ['att-1'] }),
       );
     });
 

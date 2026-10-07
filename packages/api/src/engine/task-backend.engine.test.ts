@@ -342,6 +342,35 @@ describe('EngineTaskBackend（V2：Subtask / convert / emptyTrash 全离线）',
     expect((await backend.getTask(task.id)).subtasks?.map((s) => s.id)).toEqual([s2.id]);
   });
 
+  it('Attachment 元数据全部本地：create（追加末尾、客户端 id 幂等）/ 改名 / 重排 / 删除', async () => {
+    const task = await backend.createTask({ title: '报销' });
+    const file = (name: string) => ({
+      name,
+      mimeType: 'application/pdf',
+      size: 12,
+      blobHash: 'a'.repeat(64),
+    });
+    const a1 = await backend.createAttachment(task.id, {
+      ...file('a.pdf'),
+      id: crypto.randomUUID(),
+    });
+    const a2 = await backend.createAttachment(task.id, file('b.pdf'));
+    expect(a1.position! < a2.position!).toBe(true);
+    expect((await backend.createAttachment(task.id, { ...file('a.pdf'), id: a1.id })).id).toBe(
+      a1.id,
+    );
+    expect((await backend.getTask(task.id)).attachments?.map((a) => a.name)).toEqual([
+      'a.pdf',
+      'b.pdf',
+    ]);
+
+    expect((await backend.updateAttachment(a1.id, { name: '发票.pdf' })).name).toBe('发票.pdf');
+    await backend.reorderAttachments(task.id, [a2.id, a1.id]);
+    expect((await backend.getTask(task.id)).attachments?.map((a) => a.id)).toEqual([a2.id, a1.id]);
+    await backend.deleteAttachment(a2.id);
+    expect((await backend.getTask(task.id)).attachments?.map((a) => a.name)).toEqual(['发票.pdf']);
+  });
+
   it('createSubtask：afterId 插入到其后、后续顺延；客户端 id 被采用且重复创建幂等', async () => {
     const task = await backend.createTask({ title: '父任务' });
     const s1 = await backend.createSubtask(task.id, { title: '一' });
@@ -952,6 +981,12 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     });
     await backendA.createSubtask(task.id, { title: '子任务一' });
     await backendA.createSubtask(task.id, { title: '子任务二' });
+    await backendA.createAttachment(task.id, {
+      name: '模板.docx',
+      mimeType: 'application/msword',
+      size: 5,
+      blobHash: 'b'.repeat(64),
+    });
     await a.sync();
     await b.sync(); // B 拉到任务与规则后离线
 
@@ -979,6 +1014,11 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     const subtasksB = (await b.list('subtask')).filter((s) => s.fields.taskId === instanceB.id);
     expect(subtasksA.map((s) => s.id).sort()).toEqual(subtasksB.map((s) => s.id).sort());
     expect(subtasksA).toHaveLength(2);
+    // 附件同样确定性派生、指向同一 Blob（ADR-0019）
+    const attachmentsA = await a.list('attachment', { where: { taskId: instanceA.id } });
+    const attachmentsB = await b.list('attachment', { where: { taskId: instanceB.id } });
+    expect(attachmentsA.map((row) => row.id)).toEqual(attachmentsB.map((row) => row.id));
+    expect(attachmentsA.map((row) => row.fields.blobHash)).toEqual(['b'.repeat(64)]);
     await a.close();
     await b.close();
   });

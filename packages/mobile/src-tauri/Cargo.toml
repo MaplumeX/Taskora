@@ -26,6 +26,8 @@ tauri-plugin-background = { path = "../plugins/background" }
 # Reminder 投递（ADR-0014）：仓库内本地插件，持久化计划 + 精确闹钟 +
 # 开机恢复，替代 tauri-plugin-notification 的定时通知。
 tauri-plugin-reminders = { path = "../plugins/reminders" }
+# 附件用系统程序打开（ADR-0019）：写入缓存目录，FileProvider + ACTION_VIEW。
+tauri-plugin-attachments = { path = "../plugins/attachments" }
 
 # 通知设置页跳转（Reminders spec）：经 tao 初始化的 ndk-context 拿
 # Application Context，JNI 发 APP_NOTIFICATION_SETTINGS intent。

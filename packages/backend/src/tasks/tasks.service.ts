@@ -45,7 +45,7 @@ import { parseRepeatRule, settledToCompletedAt, withRepeatRuleDto } from './task
 
 /** 派生路径需要的 Task 行形状（含标签关系与子任务）。 */
 type TaskRowWithChildren = Prisma.TaskGetPayload<{
-  include: { tags: true; subtasks: true };
+  include: { tags: true; subtasks: true; attachments: true };
 }>;
 
 const WITH_TAGS = { tags: { include: { tag: true } } } as const;
@@ -99,6 +99,7 @@ export class TasksService {
       parent.subtasks,
       settledAt,
       await userCalendarZones(this.prisma, userId),
+      parent.attachments,
     );
     if (!plan) return;
     const linked = await batch.tx.task.findFirst({
@@ -136,6 +137,9 @@ export class TasksService {
     });
     for (const { id, ...subtask } of plan.subtasksFor(instanceId)) {
       await batch.write('subtask', id, subtask);
+    }
+    for (const { id, ...attachment } of plan.attachmentsFor(instanceId)) {
+      await batch.write('attachment', id, attachment);
     }
   }
 
@@ -344,17 +348,19 @@ export class TasksService {
       where: { id, userId },
       include: {
         subtasks: true,
+        attachments: true,
         tags: { include: { tag: true } },
       },
     });
     if (!task) {
       throw new NotFoundException('Task not found');
     }
-    const { tags: taskTags, subtasks, ...rest } = task;
+    const { tags: taskTags, subtasks, attachments, ...rest } = task;
     return settledToCompletedAt({
       ...withRepeatRuleDto(rest),
       tags: taskTags.map((tt) => tt.tag),
       subtasks: sortByPosition(subtasks).map(settledToCompletedAt),
+      attachments: sortByPosition(attachments),
     });
   }
 
@@ -452,6 +458,7 @@ export class TasksService {
       include: {
         tags: true,
         subtasks: true,
+        attachments: true,
       },
     });
     if (!existing) {
@@ -462,9 +469,10 @@ export class TasksService {
     const plan = planTaskComplete(existing.status, settledAt);
     if (!plan) {
       // 已完成（双击 / 重试）：不改写了结时间，不二次派生
-      const { tags, subtasks, ...row } = existing;
+      const { tags, subtasks, attachments, ...row } = existing;
       void tags;
       void subtasks;
+      void attachments;
       return settledToCompletedAt(withRepeatRuleDto(row));
     }
     return this.hub.writeAsHub(userId, async (batch) => {

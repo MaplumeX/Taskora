@@ -30,12 +30,20 @@ import type { SyncEntity } from './entities';
  * 5：嵌套 Tag（ADR-0016）：实体 tag-group 退役，Tag 的 tagGroupId 改为
  *    parentId。hub 最低协议同步升到 5：协议 4 的客户端还会写 tag-group
  *    与 tagGroupId，这些写会被永久拒在 Outbox 里。
+ * 6：新实体 attachment（Task 附件，ADR-0019）与 Blob 通道。最低协议不变：
+ *    旧客户端跳过 attachment 变更，升级后迁移触发一次 bootstrap 取回。
  */
-export const SYNC_PROTOCOL_VERSION = 5;
+export const SYNC_PROTOCOL_VERSION = 6;
+
+/**
+ * hub 认识 attachment 的协议版本：副本迁移后第一次连上这样的 hub 时走
+ * 一次 bootstrap（见 LocalReplica.consumeResync）。
+ */
+export const ATTACHMENT_PROTOCOL = 6;
 
 /**
  * hub 完成 Tag Group → 父 Tag 迁移的协议版本：副本迁移后第一次连上这样
- * 的 hub 时走一次 bootstrap（见 LocalReplica.consumeTagTreeResync）。
+ * 的 hub 时走一次 bootstrap（见 LocalReplica.consumeResync）。
  */
 export const TAG_TREE_PROTOCOL = 5;
 

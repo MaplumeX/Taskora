@@ -279,9 +279,11 @@ export class ProjectsService {
       position: positionBetween(projects[at]?.position ?? null, projects[at + 1]?.position ?? null),
     });
 
-    const [headings, subtasks] = await Promise.all([
+    const taskIds = { in: tasks.map((task) => task.id) };
+    const [headings, subtasks, attachments] = await Promise.all([
       batch.tx.projectHeading.findMany({ where: { projectId: parent.id } }),
-      batch.tx.subtask.findMany({ where: { taskId: { in: tasks.map((task) => task.id) } } }),
+      batch.tx.subtask.findMany({ where: { taskId: taskIds } }),
+      batch.tx.attachment.findMany({ where: { taskId: taskIds } }),
     ]);
     const copy = plan.copyFor(instanceId, {
       headings,
@@ -291,12 +293,16 @@ export class ProjectsService {
         tagIds: task.tags.map((tt) => tt.tagId),
       })),
       subtasks,
+      attachments,
     });
     for (const { id, ...heading } of copy.headings) {
       await batch.write('project-heading', id, heading);
     }
     for (const { id, ...task } of copy.tasks) await batch.write('task', id, toWireFields(task));
     for (const { id, ...subtask } of copy.subtasks) await batch.write('subtask', id, subtask);
+    for (const { id, ...attachment } of copy.attachments) {
+      await batch.write('attachment', id, attachment);
+    }
   }
 
   async uncomplete(userId: string, id: string) {

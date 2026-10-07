@@ -10,6 +10,7 @@ import type { SyncEntity } from '@taskora/engine';
 export const INVALIDATION_BY_ENTITY: Record<SyncEntity, string[][]> = {
   task: [['tasks'], ['task'], ['feed'], ['projects'], ['project']],
   subtask: [['tasks'], ['task']],
+  attachment: [['task']],
   project: [['projects'], ['project'], ['feed']],
   'project-heading': [['project-headings']],
   area: [['areas'], ['area'], ['feed']],

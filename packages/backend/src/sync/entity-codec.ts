@@ -8,6 +8,7 @@
 
 import {
   formatHlc,
+  isTaskChildEntity,
   type EntityDef,
   type FieldClocks,
   type SyncEntity,
@@ -37,6 +38,8 @@ export interface EntityCodec {
   enumFields: Record<string, Set<string>>;
   /** wire 字段中「对象 ↔ TEXT JSON 列」的字段（如 repeatRule）。 */
   jsonFields: Set<string>;
+  /** wire 字段中的整数列（如 Attachment.size）；非整数剔除。 */
+  intFields?: Set<string>;
   /** tagIds 物化关系（无则 tagIds 不存在）。 */
   tagRelation?: { model: string; fk: string; relation: string };
 }
@@ -115,6 +118,15 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     enumFields: {},
     jsonFields: new Set(),
   },
+  attachment: {
+    entity: 'attachment',
+    def: ENTITIES.attachment,
+    model: 'attachment',
+    dateFields: new Set(['createdAt', 'updatedAt']),
+    enumFields: {},
+    jsonFields: new Set(),
+    intFields: new Set(['size']),
+  },
 };
 
 export function codecFor(entity: SyncEntity): EntityCodec {
@@ -162,8 +174,9 @@ export async function loadAllRows(
   codec: EntityCodec,
   userId: string,
 ): Promise<PrismaRow[]> {
-  // Subtask 没有 userId 列：经父 Task 过滤（ADR-0005 同样的路由思路）。
-  const where = codec.entity === 'subtask' ? { task: { userId } } : { userId };
+  // Task 子实体（Subtask / Attachment）没有 userId 列：经父 Task 过滤
+  // （ADR-0005 同样的路由思路）。
+  const where = isTaskChildEntity(codec.entity) ? { task: { userId } } : { userId };
   return delegate(prisma, codec.model).findMany({ where, include: includeFor(codec) });
 }
 
@@ -345,6 +358,14 @@ export function toPrismaData(
         data[fieldName] = null;
       } else if (typeof value === 'object' && !Array.isArray(value)) {
         data[fieldName] = JSON.stringify(value);
+      } else {
+        rejected.push(fieldName);
+      }
+      continue;
+    }
+    if (codec.intFields?.has(fieldName)) {
+      if (value === null || (Number.isSafeInteger(value) && (value as number) >= 0)) {
+        data[fieldName] = value;
       } else {
         rejected.push(fieldName);
       }
