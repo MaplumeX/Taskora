@@ -96,6 +96,7 @@ vi.mock('@/components/task/TaskItem', async () => {
       task,
       projectTitle,
       areaTitle,
+      hidePlacement = false,
       selectionState = 'idle',
       onRowClick,
       newInToday = false,
@@ -103,6 +104,7 @@ vi.mock('@/components/task/TaskItem', async () => {
       task: TaskFeedItem;
       projectTitle?: string;
       areaTitle?: string;
+      hidePlacement?: boolean;
       selectionState?: string;
       onRowClick?: () => void;
       newInToday?: boolean;
@@ -115,6 +117,7 @@ vi.mock('@/components/task/TaskItem', async () => {
           'data-mock-task-id': task.id,
           'data-selection-state': selectionState,
           'data-new-in-today': newInToday ? '' : undefined,
+          'data-hide-placement': String(hidePlacement),
           role: 'button',
           tabIndex: 0,
           onClick: (e: React.MouseEvent) => {
@@ -456,6 +459,50 @@ describe('GroupedFeedListView — 组头渲染', () => {
 
     expect(document.querySelector('[data-project-row="p-due"]')).not.toBeNull();
     expect(document.querySelector('[data-group-header="p-due"]')).toBeNull();
+  });
+});
+
+describe('GroupedFeedListView — 展开归属入口', () => {
+  it.each(['today', 'anytime', 'someday'] as const)(
+    '%s 分组视图向项目和区域任务传递隐藏入口标记',
+    (view) => {
+      harness.projects = [project('p1')];
+      harness.areas = [area('a1')];
+      renderView(
+        [taskItem('in-project', { projectId: 'p1' }), taskItem('in-area', { areaId: 'a1' })],
+        view,
+      );
+      for (const id of ['in-project', 'in-area']) {
+        expect(document.querySelector(`[data-mock-task-id="${id}"]`)).toHaveAttribute(
+          'data-hide-placement',
+          'true',
+        );
+      }
+    },
+  );
+
+  it('分组开关切换时更新入口标记，新到区同样遵循当前视图设置', () => {
+    harness.projects = [project('p1')];
+    const items = [taskItem('fresh-task', { projectId: 'p1' })];
+    const content = (grouping: boolean) => (
+      <MemoryRouter>
+        <GroupedFeedListView
+          items={items}
+          grouping={grouping}
+          freshKeys={new Set(['task:fresh-task'])}
+        />
+      </MemoryRouter>
+    );
+    const { rerender } = render(content(true));
+    expect(document.querySelector('[data-mock-task-id="fresh-task"]')).toHaveAttribute(
+      'data-hide-placement',
+      'true',
+    );
+    rerender(content(false));
+    expect(document.querySelector('[data-mock-task-id="fresh-task"]')).toHaveAttribute(
+      'data-hide-placement',
+      'false',
+    );
   });
 });
 

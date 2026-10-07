@@ -12,6 +12,7 @@ interface SortableFeedRowProps {
   placeholder: boolean;
   projectTitle?: string;
   areaTitle?: string;
+  hidePlacement?: boolean;
   selectionState: SelectionState;
   onToggleComplete?: () => void;
   onRowClick?: () => void;
@@ -28,6 +29,7 @@ export function SortableFeedRow({
   placeholder,
   projectTitle,
   areaTitle,
+  hidePlacement,
   selectionState,
   onToggleComplete,
   onRowClick,
@@ -65,6 +67,7 @@ export function SortableFeedRow({
             item={item}
             projectTitle={projectTitle}
             areaTitle={areaTitle}
+            hidePlacement={hidePlacement}
             selectionState="idle"
             showScheduledBadge={showScheduledBadge}
             newInToday={newInToday}
@@ -75,6 +78,7 @@ export function SortableFeedRow({
           item={item}
           projectTitle={projectTitle}
           areaTitle={areaTitle}
+          hidePlacement={hidePlacement}
           selectionState={selectionState}
           onToggleComplete={onToggleComplete}
           onRowClick={onRowClick}
