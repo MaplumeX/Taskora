@@ -33,6 +33,7 @@ import { cn } from '@/lib/utils';
 import {
   dndListProps,
   dragOverlayClass,
+  dragOverlayWrapperClass,
   dropAnimation,
   flipId,
   useFlipList,
@@ -325,7 +326,7 @@ export default function Tags() {
               <p className="py-1 pl-9 text-xs text-muted-foreground/60">{t('tag:empty')}</p>
             )}
           </div>
-          <DragOverlay dropAnimation={dropAnimation}>
+          <DragOverlay className={dragOverlayWrapperClass} dropAnimation={dropAnimation}>
             {draggedTag ? (
               <div
                 className={cn(dragOverlayClass, 'bg-card')}

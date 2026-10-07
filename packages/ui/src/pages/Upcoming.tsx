@@ -12,18 +12,13 @@ import {
   useUpdateTask,
   useReorderFeed,
   useMultiSelectStore,
+  useSelectionStore,
 } from '@taskora/api';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  DndContext,
   DragOverlay,
-  MeasuringStrategy,
-  MouseSensor,
-  TouchSensor,
   pointerWithin,
-  useSensor,
-  useSensors,
   type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
@@ -44,6 +39,7 @@ import {
 } from '@/components/feed/upcomingDragLayout';
 import { SortableFeedRow } from '@/components/feed/SortableFeedRow';
 import { RepeatPreviewRow } from '@/components/task/RepeatPreviewRow';
+import { DragCountBadge } from '@/components/common/DragCountBadge';
 import {
   selectionStateOf,
   useCompleteTask,
@@ -54,10 +50,15 @@ import { buildUpcomingLayout, type UpcomingDay } from '@taskora/api';
 import { toast } from 'sonner';
 import { PageHeading } from '@/components/layout/PageHeading';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
+import { useDndSurface } from '../lib/appDnd';
+import type { SidebarDropPayload } from '@/components/layout/sidebarDrop';
 import {
   dndListProps,
+  dragGroupOf,
   dragOverlayClass,
-  dropAnimation,
+  dragOverlayWrapperClass,
+  expandDragGroup,
+  useCollapseAfterDragStart,
   useFlipList,
   useHeldValue,
 } from '../lib/dnd';
@@ -67,6 +68,15 @@ interface ScheduleDrag {
   originGroup: string;
   items: FeedItem[];
   startItems: FeedItem[];
+  /** 多项拖拽：整组任务的原所在组（按显示顺序，含被拖任务）；单项拖拽为 null。 */
+  group: Array<{ item: TaskFeedItem; groupId: string }> | null;
+  /** 组内其余行是否已收起（拖拽开始那次提交之后才收起）。 */
+  collapsed: boolean;
+}
+
+/** 本页的拖拽源与落点（共享拖拽上下文里按 id 前缀认领，ADR 0018）。 */
+function isUpcomingKey(key: string) {
+  return key.startsWith('task:') || key.startsWith('header:') || key.startsWith('container:');
 }
 
 function scheduleSignature(items: FeedItem[]) {
@@ -103,10 +113,6 @@ export default function Upcoming() {
   const reorderFeed = useReorderFeed();
   const { selectedIds, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
   const multiSelectActive = useMultiSelectStore((s) => s.active);
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
-  );
 
   const projectMap = useMemo(
     () => Object.fromEntries(projects.map((p) => [p.id, p.title])),
@@ -121,6 +127,21 @@ export default function Upcoming() {
   );
   const groups = useMemo(() => upcomingGroups(layout, items), [layout, items]);
   const flip = useFlipList<HTMLDivElement>(groups);
+
+  // 多项拖拽：拖拽开始那次提交之后再收起组内其余行，浮层才贴着手。
+  useCollapseAfterDragStart(!!drag && !drag.collapsed, () => {
+    const current = dragRef.current;
+    if (!current || current.collapsed) return;
+    const companions = new Set(
+      (current.group ?? []).flatMap(({ item }) => (item.id === current.origin.id ? [] : [item.id])),
+    );
+    flip.capture();
+    updateDrag({
+      ...current,
+      collapsed: true,
+      items: current.items.filter((entry) => entry.type !== 'task' || !companions.has(entry.id)),
+    });
+  });
 
   const collisionDetection = useCallback<CollisionDetection>(
     (args) => {
@@ -218,10 +239,30 @@ export default function Upcoming() {
       focused?.closest('[data-sortable-task-id]')?.getAttribute('data-sortable-task-id') === item.id
     )
       focused.blur();
-    handleBlankClick();
+    // 显示顺序的任务及其所在组。
+    const shownTasks = groups.flatMap((group) =>
+      group.items.flatMap((entry) =>
+        entry.type === 'task' ? [{ item: entry, groupId: group.id }] : [],
+      ),
+    );
+    const groupIds = dragGroupOf(
+      item.id,
+      shownTasks.map((entry) => entry.item.id),
+      useSelectionStore.getState().selectedIds,
+    );
+    // 多项拖拽保留多选（松手后整组仍选中）；单项拖拽照旧清掉选中。
+    if (!groupIds) handleBlankClick();
+    const group = groupIds ? shownTasks.filter((entry) => groupIds.includes(entry.item.id)) : null;
     lastTargetRef.current = null;
     dragMotionRef.current = null;
-    updateDrag({ origin: item, originGroup, items, startItems: items });
+    updateDrag({
+      origin: item,
+      originGroup,
+      items,
+      startItems: items,
+      group,
+      collapsed: !group,
+    });
   };
 
   const applyTarget = (current: ScheduleDrag, target: UpcomingDragTarget | null): FeedItem[] => {
@@ -252,6 +293,26 @@ export default function Upcoming() {
   const handleDragOver = ({ active, over }: DragOverEvent) => {
     if (!over) return;
     const overKey = String(over.id);
+    if (!isUpcomingKey(overKey)) {
+      // 指针在列表外的落点上（侧边栏）：空位回到原处，不暗示改期。
+      lastTargetRef.current = null;
+      const current = dragRef.current;
+      if (!current) return;
+      const companions = new Set(
+        current.collapsed
+          ? (current.group ?? []).flatMap(({ item }) =>
+              item.id === current.origin.id ? [] : [item.id],
+            )
+          : [],
+      );
+      const origin = current.startItems.filter(
+        (entry) => entry.type !== 'task' || !companions.has(entry.id),
+      );
+      if (origin.map(feedKey).join('|') === current.items.map(feedKey).join('|')) return;
+      flip.capture();
+      updateDrag({ ...current, items: origin });
+      return;
+    }
     if (lastTargetRef.current?.overKey !== overKey) {
       lastTargetRef.current = { overKey, edge: 'before' };
     }
@@ -272,21 +333,38 @@ export default function Upcoming() {
               : 'before',
         }
       : null;
-    const finalItems = current ? applyTarget(current, target) : null;
+    const droppedItems = current ? applyTarget(current, target) : null;
     lastTargetRef.current = null;
     dragMotionRef.current = null;
     flip.capture();
     updateDrag(null);
-    if (!current || !finalItems || active.id !== feedKey(current.origin)) return;
-    const item = finalItems.find((item) => feedKey(item) === feedKey(current.origin));
-    const originalDate = current.origin.scheduledDate;
-    if (!item?.scheduledDate || !originalDate) return;
-    const dateChanged = toDateKey(item.scheduledDate) !== toDateKey(originalDate);
+    if (!current || !droppedItems || active.id !== feedKey(current.origin)) return;
+    const item = droppedItems.find((item) => feedKey(item) === feedKey(current.origin));
+    if (!item?.scheduledDate || !current.origin.scheduledDate) return;
+    const finalItems = current.group
+      ? withScheduleDragGroup(droppedItems, item as TaskFeedItem, current.group)
+      : droppedItems;
+    // 改了日期的任务（多项拖拽时组内每一项各自比较）。
+    const startDates = new Map(
+      current.startItems.map((entry) => [feedKey(entry), entry.scheduledDate]),
+    );
+    const dated = (current.group?.map(({ item }) => item) ?? [current.origin]).flatMap((task) => {
+      const placed = finalItems.find((entry) => feedKey(entry) === feedKey(task));
+      const startDate = startDates.get(feedKey(task));
+      return placed?.scheduledDate &&
+        startDate &&
+        toDateKey(placed.scheduledDate) !== toDateKey(startDate)
+        ? [{ id: task.id, scheduledDate: toDateKey(placed.scheduledDate) }]
+        : [];
+    });
     const orderChanged =
       finalItems.map(feedKey).join('|') !== current.startItems.map(feedKey).join('|');
-    if (!dateChanged && !orderChanged) return;
+    if (dated.length === 0 && !orderChanged) return;
     holdItems(finalItems);
+    let failed = false;
     const onError = () => {
+      if (failed) return;
+      failed = true;
       holdItems(filteredItems);
       toast.error(t('common:operationFailed'));
     };
@@ -297,17 +375,21 @@ export default function Upcoming() {
           { onError },
         );
     };
-    if (dateChanged) {
+    // 日期都写完再写顺序（Position 按新日期所在的组排）。
+    let pending = dated.length;
+    for (const { id, scheduledDate } of dated) {
       updateTask.mutate(
+        { id, data: { scheduledType: ScheduledType.DATE, scheduledDate } },
         {
-          id: item.id,
-          data: { scheduledType: ScheduledType.DATE, scheduledDate: toDateKey(item.scheduledDate) },
+          onError,
+          onSuccess: () => {
+            pending -= 1;
+            if (pending === 0 && !failed) reorder();
+          },
         },
-        { onError, onSuccess: reorder },
       );
-    } else {
-      reorder();
     }
+    if (dated.length === 0) reorder();
   };
 
   const handleDragCancel = () => {
@@ -316,6 +398,25 @@ export default function Upcoming() {
     flip.capture();
     updateDrag(null);
   };
+
+  /** 拖到侧边栏的载荷：被拖任务，多选时为整组（按显示顺序，拖拽开始时的原样）。 */
+  const sidebarPayload = (activeKey: string): SidebarDropPayload | null => {
+    const current = dragRef.current;
+    if (!current || activeKey !== feedKey(current.origin)) return null;
+    return { kind: 'tasks', tasks: current.group?.map(({ item }) => item) ?? [current.origin] };
+  };
+
+  // 共享拖拽上下文里的一个 surface（ADR 0018）。
+  const surface = useDndSurface({
+    owns: isUpcomingKey,
+    collisionDetection,
+    sidebarPayload,
+    onDragStart: handleDragStart,
+    onDragMove: handleDragMove,
+    onDragOver: handleDragOver,
+    onDragEnd: handleDragEnd,
+    onDragCancel: handleDragCancel,
+  });
 
   // 注册可遍历行（按渲染顺序：本周每天，之后各月）。
   const rows = useMemo(
@@ -431,16 +532,7 @@ export default function Upcoming() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={collisionDetection}
-          measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragMove={handleDragMove}
-          onDragEnd={handleDragEnd}
-          onDragCancel={handleDragCancel}
-        >
+        <>
           <div ref={flip.rootRef} {...dndListProps} className="flex flex-col gap-5">
             {layout.week.map(renderDay)}
             {layout.later.map((month, index) => {
@@ -472,15 +564,44 @@ export default function Upcoming() {
               );
             })}
           </div>
-          <DragOverlay dropAnimation={dropAnimation}>
+          {surface.overlayActive && (
+          <DragOverlay className={dragOverlayWrapperClass} dropAnimation={surface.dropAnimation}>
             {activeTask && (
-              <div className={`${dragOverlayClass} bg-card`} aria-hidden="true" {...{ inert: '' }}>
+              <div
+                className={`${dragOverlayClass} relative bg-card`}
+                aria-hidden="true"
+                {...{ inert: '' }}
+              >
                 {renderItem(activeTask, overlayShowsDate, true)}
+                <DragCountBadge count={drag?.group?.length ?? 0} />
               </div>
             )}
           </DragOverlay>
-        </DndContext>
+          )}
+        </>
       )}
     </div>
   );
+}
+
+/**
+ * 多项拖拽松手：整组按原显示顺序落在被拖任务的位置，随它进入落点的分组。
+ * 原本就在该组的任务保留自己的日期（月份分组内日期各不相同），其余改为
+ * 被拖任务落定的日期。
+ */
+function withScheduleDragGroup(
+  items: FeedItem[],
+  moved: TaskFeedItem,
+  group: Array<{ item: TaskFeedItem; groupId: string }>,
+): FeedItem[] {
+  const groups = upcomingGroups(buildUpcomingLayout(items, new Date()), items);
+  const finalGroupId = groups.find((entry) =>
+    entry.items.some((item) => feedKey(item) === feedKey(moved)),
+  )?.id;
+  const placed = group.map(({ item, groupId }): FeedItem => {
+    if (item.id === moved.id) return moved;
+    if (groupId === finalGroupId || item.scheduledDate === moved.scheduledDate) return item;
+    return { ...item, scheduledType: ScheduledType.DATE, scheduledDate: moved.scheduledDate };
+  });
+  return expandDragGroup(items, feedKey(moved), placed, feedKey);
 }

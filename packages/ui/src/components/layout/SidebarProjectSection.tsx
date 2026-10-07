@@ -2,27 +2,17 @@ import * as React from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
-  DndContext,
   DragOverlay,
-  MeasuringStrategy,
-  MouseSensor,
-  TouchSensor,
   closestCenter,
   pointerWithin,
   useDroppable,
-  useSensor,
-  useSensors,
   type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
   type DragOverEvent,
   type DragStartEvent,
 } from '@dnd-kit/core';
-import {
-  SortableContext,
-  arrayMove,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
+import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
 import { NavLink } from 'react-router-dom';
 
@@ -34,10 +24,11 @@ import { SortableAreaRow } from '@/components/layout/SortableAreaRow';
 import { ProjectItem } from '@/components/project/ProjectItem';
 import { useLaterProjectKind, useReorderProjects, useUpdateProject } from '@taskora/api';
 import { useReorderAreas } from '@taskora/api';
+import { SIDEBAR_AUTO_SCROLL, useDndSurface } from '../../lib/appDnd';
 import {
   dndListProps,
   dragOverlayClass,
-  dropAnimation,
+  dragOverlayWrapperClass,
   flipId,
   noopSortingStrategy,
   useFlipList,
@@ -70,28 +61,29 @@ interface Props {
   /** 全部未进回收站的项目；已完成与稍后项目在此过滤，但参与排序持久化。 */
   projects: ProjectResponseDto[];
   areas: AreaResponseDto[];
+  /** 项目与区域行作为 Sidebar Drop 落点（仅桌面侧边栏；手机「更多」页不接收）。 */
+  dropTargets?: boolean;
 }
 
 interface ProjectContainerProps {
   projectIds: string[];
   projectMap: Map<string, ProjectResponseDto>;
   activeProjectId: string | null;
+  dropTargets: boolean;
 }
 
 function StandaloneProjectContainer({
   projectIds,
   projectMap,
   activeProjectId,
+  dropTargets,
 }: ProjectContainerProps) {
   const { setNodeRef } = useDroppable({
     id: projectContainerDndId(STANDALONE_PROJECT_CONTAINER),
   });
 
   return (
-    <SortableContext
-      items={projectIds.map(projectDndId)}
-      strategy={noopSortingStrategy}
-    >
+    <SortableContext items={projectIds.map(projectDndId)} strategy={noopSortingStrategy}>
       <div
         ref={setNodeRef}
         data-project-container={STANDALONE_PROJECT_CONTAINER}
@@ -105,6 +97,7 @@ function StandaloneProjectContainer({
               key={id}
               project={project}
               placeholder={id === activeProjectId}
+              dropTarget={dropTargets}
             />
           );
         })}
@@ -121,10 +114,7 @@ function ProjectSectionHeading() {
   const { t } = useTranslation();
   const { setNodeRef } = useDroppable({ id: STANDALONE_HEADING_DND_ID });
   return (
-    <div
-      ref={setNodeRef}
-      className="px-2 pb-1 text-meta font-semibold text-muted-foreground"
-    >
+    <div ref={setNodeRef} className="px-2 pb-1 text-meta font-semibold text-muted-foreground">
       {t('nav:projects')}
     </div>
   );
@@ -151,7 +141,11 @@ function LaterProjectsEntry({ count }: { count: number }) {
  * 侧边栏合并后的统一「项目」section。
  * 项目拖拽使用本地布局预览；区域拖拽继续使用独立的 area-only 排序路径。
  */
-export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
+export function SidebarProjectSection({
+  projects: allProjects,
+  areas,
+  dropTargets = false,
+}: Props) {
   const { t } = useTranslation();
   const kindOf = useLaterProjectKind();
   // 侧边栏只放活跃项目：已完成与稍后项目（Someday / 未来日期）都不显示。
@@ -165,8 +159,7 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
   const laterCount = React.useMemo(() => {
     const areaIds = new Set(areas.map((area) => area.id));
     return allProjects.filter(
-      (project) =>
-        !(project.areaId && areaIds.has(project.areaId)) && kindOf(project) !== null,
+      (project) => !(project.areaId && areaIds.has(project.areaId)) && kindOf(project) !== null,
     ).length;
   }, [allProjects, areas, kindOf]);
   const serverLayout = React.useMemo(
@@ -174,8 +167,7 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
     [projects, areas],
   );
   const [layout, setLayout] = React.useState(serverLayout);
-  const [activeProject, setActiveProject] =
-    React.useState<ProjectResponseDto | null>(null);
+  const [activeProject, setActiveProject] = React.useState<ProjectResponseDto | null>(null);
   const layoutRef = React.useRef(layout);
   const serverLayoutRef = React.useRef(serverLayout);
   const dragStartLayoutRef = React.useRef<SidebarProjectLayout | null>(null);
@@ -195,30 +187,18 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
   const reorderProjects = useReorderProjects();
   const reorderAreas = useReorderAreas();
   const updateProject = useUpdateProject();
-  // 本组件同时用于桌面侧边栏与手机「更多」抽屉：触摸需按住 300ms 再移动
-  // 才进入拖拽，避免抽屉内滚动列表时误触。
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
-  );
 
   const flip = useFlipList<HTMLDivElement>(layout);
   // 区域拖拽走标准让位排序；松手后先按本地顺序渲染，等乐观更新追上。
   const [orderedAreas, holdAreaOrder] = useHeldOrder(areas, areaKey);
 
-  const updateRenderedLayout = React.useCallback(
-    (next: SidebarProjectLayout) => {
-      layoutRef.current = next;
-      setLayout(next);
-    },
-    [],
-  );
+  const updateRenderedLayout = React.useCallback((next: SidebarProjectLayout) => {
+    layoutRef.current = next;
+    setLayout(next);
+  }, []);
 
   React.useEffect(() => {
-    if (
-      activeProjectIdRef.current !== null ||
-      persistenceActiveRef.current
-    ) {
+    if (activeProjectIdRef.current !== null || persistenceActiveRef.current) {
       pendingServerLayoutRef.current = serverLayout;
       return;
     }
@@ -235,8 +215,7 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
   };
 
   const restoreProjectDrag = () => {
-    const restored =
-      pendingServerLayoutRef.current ?? dragStartLayoutRef.current;
+    const restored = pendingServerLayoutRef.current ?? dragStartLayoutRef.current;
     cleanupProjectDrag();
     if (restored) updateRenderedLayout(restored);
   };
@@ -254,10 +233,7 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
     }
 
     const rollbackLayout = cloneSidebarProjectLayout(serverLayoutRef.current);
-    const orderedIds = mergeVisibleProjectOrder(
-      allProjects,
-      serializeProjectOrder(next, areas),
-    );
+    const orderedIds = mergeVisibleProjectOrder(allProjects, serializeProjectOrder(next, areas));
     persistenceActiveRef.current = true;
     updateRenderedLayout(next);
 
@@ -286,10 +262,7 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
       {
         id: activeProjectId,
         data: {
-          areaId:
-            targetContainerId === STANDALONE_PROJECT_CONTAINER
-              ? null
-              : targetContainerId,
+          areaId: targetContainerId === STANDALONE_PROJECT_CONTAINER ? null : targetContainerId,
         },
       },
       {
@@ -329,13 +302,9 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
 
     const collision =
       collisions.find(({ id }) => String(id).startsWith(PROJECT_DND_PREFIX)) ??
-      collisions.find(({ id }) =>
-        String(id).startsWith(PROJECT_CONTAINER_DND_PREFIX),
-      ) ??
+      collisions.find(({ id }) => String(id).startsWith(PROJECT_CONTAINER_DND_PREFIX)) ??
       collisions.find(
-        ({ id }) =>
-          String(id).startsWith(AREA_DND_PREFIX) ||
-          id === STANDALONE_HEADING_DND_ID,
+        ({ id }) => String(id).startsWith(AREA_DND_PREFIX) || id === STANDALONE_HEADING_DND_ID,
       );
     if (!collision) return [];
 
@@ -344,10 +313,7 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
     if (overKey.startsWith(PROJECT_DND_PREFIX)) {
       const rect = args.droppableRects.get(collision.id);
       if (rect) {
-        edge =
-          args.pointerCoordinates.y >= rect.top + rect.height / 2
-            ? 'after'
-            : 'before';
+        edge = args.pointerCoordinates.y >= rect.top + rect.height / 2 ? 'after' : 'before';
       }
     }
     lastProjectTargetRef.current = { overKey, edge };
@@ -375,11 +341,7 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
 
     const target = lastProjectTargetRef.current;
     if (!target) return;
-    const placement = resolveProjectPlacement(
-      layoutRef.current,
-      target.overKey,
-      target.edge,
-    );
+    const placement = resolveProjectPlacement(layoutRef.current, target.overKey, target.edge);
     if (!placement) return;
     const next = moveProjectToPlacement(layoutRef.current, activeId, placement);
     if (!next) return;
@@ -427,8 +389,7 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
           restoreProjectDrag();
           return;
         }
-        finalLayout =
-          moveProjectToPlacement(finalLayout, activeId, placement) ?? finalLayout;
+        finalLayout = moveProjectToPlacement(finalLayout, activeId, placement) ?? finalLayout;
       }
 
       if (sidebarProjectLayoutsEqual(snapshot, finalLayout)) {
@@ -459,63 +420,54 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
     if (activeProjectIdRef.current !== null) restoreProjectDrag();
   };
 
+  // 侧边栏的项目 / 区域排序是共享拖拽上下文里的一个 surface（ADR 0018）。
+  const surface = useDndSurface({
+    owns: isSidebarSortKey,
+    collisionDetection,
+    autoScroll: SIDEBAR_AUTO_SCROLL,
+    onDragStart: handleDragStart,
+    onDragMove: handleDragMove,
+    onDragOver: handleDragOver,
+    onDragEnd: handleDragEnd,
+    onDragCancel: handleDragCancel,
+  });
+
   const activeProjectId = activeProject?.id ?? null;
 
   return (
     <div ref={flip.rootRef} {...dndListProps} className="flex flex-col">
-      <DndContext
-        sensors={sensors}
-        collisionDetection={collisionDetection}
-        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-        autoScroll={{
-          // 侧边栏内容在 Radix ScrollArea 里滚动。dnd-kit 默认 autoScroll
-          // （20% 边缘区 + 5ms 间隔 + 10 加速度）在列表可滚动时会把指针
-          // 进入底部边缘区的拖拽变成 ~2000px/s 的失控狂滚：占位符扫过
-          // 整列、drop 落到相邻区域或列表末尾，观感上就是「拖不动/乱跳」。
-          // 收窄边缘区并放缓滚动，保留「贴边轻滚」的定位手感。
-          threshold: { x: 0.2, y: 0.06 },
-          acceleration: 4,
-          interval: 20,
-        }}
-        onDragStart={handleDragStart}
-        onDragMove={handleDragMove}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-        onDragCancel={handleDragCancel}
-      >
-        <ProjectSectionHeading />
-        <div className="flex flex-col gap-px">
-          <StandaloneProjectContainer
-            projectIds={
-              layout.containers[STANDALONE_PROJECT_CONTAINER] ?? []
-            }
-            projectMap={projectMap}
-            activeProjectId={activeProjectId}
-          />
-          {laterCount > 0 && <LaterProjectsEntry count={laterCount} />}
-          <SortableContext
-            items={orderedAreas.map((area) => areaDndId(area.id))}
-            strategy={verticalListSortingStrategy}
-          >
-            {orderedAreas.map((area) => {
-              const areaProjects = (layout.containers[area.id] ?? []).flatMap(
-                (id) => {
-                  const project = projectMap.get(id);
-                  return project ? [project] : [];
-                },
-              );
-              return (
-                <SortableAreaRow
-                  key={area.id}
-                  area={area}
-                  projects={areaProjects}
-                  activeProjectId={activeProjectId}
-                />
-              );
-            })}
-          </SortableContext>
-        </div>
-        <DragOverlay dropAnimation={dropAnimation}>
+      <ProjectSectionHeading />
+      <div className="flex flex-col gap-px">
+        <StandaloneProjectContainer
+          projectIds={layout.containers[STANDALONE_PROJECT_CONTAINER] ?? []}
+          projectMap={projectMap}
+          activeProjectId={activeProjectId}
+          dropTargets={dropTargets}
+        />
+        {laterCount > 0 && <LaterProjectsEntry count={laterCount} />}
+        <SortableContext
+          items={orderedAreas.map((area) => areaDndId(area.id))}
+          strategy={verticalListSortingStrategy}
+        >
+          {orderedAreas.map((area) => {
+            const areaProjects = (layout.containers[area.id] ?? []).flatMap((id) => {
+              const project = projectMap.get(id);
+              return project ? [project] : [];
+            });
+            return (
+              <SortableAreaRow
+                key={area.id}
+                area={area}
+                projects={areaProjects}
+                activeProjectId={activeProjectId}
+                dropTargets={dropTargets}
+              />
+            );
+          })}
+        </SortableContext>
+      </div>
+      {surface.overlayActive && (
+        <DragOverlay className={dragOverlayWrapperClass} dropAnimation={surface.dropAnimation}>
           {activeProject ? (
             <div
               className={cn(dragOverlayClass, 'bg-sidebar')}
@@ -526,8 +478,17 @@ export function SidebarProjectSection({ projects: allProjects, areas }: Props) {
             </div>
           ) : null}
         </DragOverlay>
-      </DndContext>
+      )}
     </div>
+  );
+}
+
+function isSidebarSortKey(id: string) {
+  return (
+    id.startsWith(PROJECT_DND_PREFIX) ||
+    id.startsWith(AREA_DND_PREFIX) ||
+    id.startsWith(PROJECT_CONTAINER_DND_PREFIX) ||
+    id === STANDALONE_HEADING_DND_ID
   );
 }
 

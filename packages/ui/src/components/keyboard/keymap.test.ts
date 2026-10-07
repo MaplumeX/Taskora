@@ -194,8 +194,17 @@ describe('resolveAction — 通用', () => {
     },
   );
 
-  it.each(['mac', 'windows', 'web'] as const)('%s: 带修饰的 ↑/↓ 不误触移动', (platform) => {
-    expect(resolveAction(key('ArrowUp', { shiftKey: true }), platform)).toBeNull();
+  it.each(['mac', 'windows', 'web'] as const)('%s: ⇧↑/⇧↓ 扩展多选', (platform) => {
+    expect(resolveAction(key('ArrowUp', { shiftKey: true }), platform)).toEqual({
+      type: 'extendUp',
+    });
+    expect(resolveAction(key('ArrowDown', { shiftKey: true }), platform)).toEqual({
+      type: 'extendDown',
+    });
+  });
+
+  it.each(['mac', 'windows', 'web'] as const)('%s: 带其他修饰的 ↑/↓ 不误触移动', (platform) => {
+    expect(resolveAction(key('ArrowUp', { ctrlKey: true, shiftKey: true }), platform)).toBeNull();
     expect(resolveAction(key('ArrowDown', { ctrlKey: true }), platform)).toBeNull();
     expect(resolveAction(key('ArrowDown', { metaKey: true }), platform)).toBeNull();
   });

@@ -26,6 +26,7 @@ import {
 } from '@taskora/shared';
 
 import Upcoming from './Upcoming';
+import { AppDndProvider } from '../lib/appDnd';
 
 interface DndHandlers {
   collisionDetection: CollisionDetection;
@@ -45,12 +46,14 @@ const harness = vi.hoisted(() => ({
   draggable: new Map<string, { draggable: boolean; droppable: boolean }>(),
   pointerIds: [] as string[],
   useGeometry: false,
+  sidebarDrop: vi.fn(),
 }));
 
 vi.mock('@dnd-kit/core', async (importOriginal) => ({
   ...(await importOriginal()),
   DndContext: (props: DndHandlers & { children: ReactNode }) => {
-    harness.dnd = props;
+    // React 生成组件栈（如 act 警告）时会无参调用祖先组件，忽略那次调用。
+    if (props) harness.dnd = props;
     return <div>{props.children}</div>;
   },
   DragOverlay: ({ children }: { children: ReactNode }) => (
@@ -162,6 +165,12 @@ function renderUpcoming(items: FeedItem[]) {
     <MemoryRouter>
       <Upcoming />
     </MemoryRouter>,
+    // 列表登记在应用壳的共享拖拽上下文里（ADR 0018）。
+    {
+      wrapper: ({ children }) => (
+        <AppDndProvider onSidebarDrop={harness.sidebarDrop}>{children}</AppDndProvider>
+      ),
+    },
   );
 }
 
@@ -391,6 +400,47 @@ describe('Upcoming — 复用分组列表拖动来改计划日期', () => {
       </MemoryRouter>,
     );
     expect(taskOrder()).toEqual(['task-2', 'task-1']);
+  });
+
+  it('多项拖拽：选中的任务一起改到落点日期，日期都写完再保存顺序', () => {
+    renderUpcoming([
+      task('task-1', '2026-10-07'),
+      task('task-2', '2026-10-08'),
+      task('task-3', '2026-10-09'),
+    ]);
+    useSelectionStore.getState().setSelection(['task-1', 'task-2']);
+    start();
+    // 组内其余行收起，只有被拖行留空位
+    expect(screen.queryByTestId('row-task-2')).not.toBeInTheDocument();
+    over('date:2026-10-10');
+    end('date:2026-10-10');
+
+    expect(harness.update.mock.calls.map(([vars]) => vars)).toEqual([
+      { id: 'task-1', data: { scheduledType: ScheduledType.DATE, scheduledDate: '2026-10-10' } },
+      { id: 'task-2', data: { scheduledType: ScheduledType.DATE, scheduledDate: '2026-10-10' } },
+    ]);
+    expect(taskGroup('task-2')).toBe('date:2026-10-10');
+    act(() => harness.update.mock.calls[0][1].onSuccess());
+    expect(harness.reorder).not.toHaveBeenCalled();
+    act(() => harness.update.mock.calls[1][1].onSuccess());
+    expect(harness.reorder).toHaveBeenCalledWith(
+      [
+        { type: 'task', id: 'task-3' },
+        { type: 'task', id: 'task-1' },
+        { type: 'task', id: 'task-2' },
+      ],
+      expect.anything(),
+    );
+    expect(useSelectionStore.getState().selectedIds).toEqual(['task-1', 'task-2']);
+  });
+
+  it('多项拖拽从第 3 个选中行拖起：其余选中行收起', () => {
+    renderUpcoming(
+      ['task-1', 'task-2', 'task-3', 'task-4', 'task-5'].map((id) => task(id, '2026-10-07')),
+    );
+    useSelectionStore.getState().setSelection(['task-1', 'task-2', 'task-3']);
+    start('task-3');
+    expect(taskOrder()).toEqual(['task-3', 'task-4', 'task-5']);
   });
 
   it('跨组落到具体行前后，按月份标题改期；日期写入成功后再保存顺序', () => {
@@ -808,3 +858,37 @@ function pointAt(target: string, edge: 'before' | 'after' = 'before') {
     droppableRects: new Map(candidates.map((id) => [id, { top: 0, height: 40 }])),
   } as unknown as Parameters<CollisionDetection>[0]);
 }
+
+describe('Upcoming — Sidebar Drop', () => {
+  it('悬停侧边栏时占位回到原日期，松手交给侧边栏落点、不改期也不重排', () => {
+    renderUpcoming([task('task-1', '2026-10-07'), task('task-2', '2026-10-08')]);
+    start();
+    over('date:2026-10-09');
+    expect(taskGroup()).toBe('date:2026-10-09');
+
+    over('sidebar-drop:someday');
+    expect(taskGroup()).toBe('date:2026-10-07');
+
+    end('sidebar-drop:someday');
+    expect(harness.sidebarDrop).toHaveBeenCalledWith(
+      { kind: 'tasks', tasks: [expect.objectContaining({ id: 'task-1' })] },
+      { kind: 'someday' },
+    );
+    expect(harness.update).not.toHaveBeenCalled();
+    expect(harness.reorder).not.toHaveBeenCalled();
+    expect(taskGroup()).toBe('date:2026-10-07');
+  });
+
+  it('多项拖拽整组交给侧边栏落点（按显示顺序）', () => {
+    renderUpcoming([task('task-1', '2026-10-07'), task('task-2', '2026-10-08')]);
+    useSelectionStore.setState({ selectedIds: ['task-2', 'task-1'] });
+    start('task-2');
+    end('sidebar-drop:trash', 'task-2');
+
+    const [payload, target] = harness.sidebarDrop.mock.calls[0];
+    expect(target).toEqual({ kind: 'trash' });
+    expect(payload.tasks.map((t: { id: string }) => t.id)).toEqual(['task-1', 'task-2']);
+    expect(taskGroup('task-1')).toBe('date:2026-10-07');
+    expect(harness.update).not.toHaveBeenCalled();
+  });
+});

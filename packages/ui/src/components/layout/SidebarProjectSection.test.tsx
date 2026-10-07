@@ -48,7 +48,8 @@ vi.mock('@dnd-kit/core', async () => {
   return {
     ...actual,
     DndContext: (props: DndHandlers & { children: React.ReactNode }) => {
-      harness.dndProps = props;
+      // React 生成组件栈（如 act 警告）时会无参调用祖先组件，忽略那次调用。
+      if (props) harness.dndProps = props;
       return ReactModule.createElement('div', { 'data-testid': 'dnd-context' }, props.children);
     },
     DragOverlay: ({ children }: { children: React.ReactNode }) =>
@@ -121,6 +122,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
 }));
 
 import { SidebarProjectSection } from './SidebarProjectSection';
+import { AppDndProvider } from '../../lib/appDnd';
 
 function area(id: string): AreaResponseDto {
   return {
@@ -172,6 +174,8 @@ function renderSection(
     >
       <SidebarProjectSection projects={currentProjects} areas={currentAreas} />
     </MemoryRouter>,
+    // 侧边栏排序登记在应用壳的共享拖拽上下文里（ADR 0018）。
+    { wrapper: AppDndProvider },
   );
 }
 
@@ -578,6 +582,8 @@ describe('SidebarProjectSection persistence and area isolation', () => {
 
   it('tames auto-scroll so edge drags do not run away', () => {
     renderSection();
+    // 共享拖拽上下文：侧边栏的拖拽开始后才换用侧边栏的自动滚动参数。
+    startProjectDrag('a1');
 
     // dnd-kit 默认（20% 边缘区 + interval 5ms + acceleration 10）在侧边栏
     // ScrollArea 里会把底部边缘区的拖拽变成 ~2000px/s 的失控狂滚，

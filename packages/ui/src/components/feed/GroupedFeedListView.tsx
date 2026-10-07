@@ -2,15 +2,9 @@ import * as React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   closestCenter,
-  DndContext,
   DragOverlay,
-  MeasuringStrategy,
-  MouseSensor,
   pointerWithin,
-  TouchSensor,
   useDroppable,
-  useSensor,
-  useSensors,
   type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
@@ -28,18 +22,24 @@ import type {
 } from '@taskora/shared';
 
 import { cn } from '@/lib/utils';
+import { useDndSurface } from '../../lib/appDnd';
+import type { SidebarDropPayload } from '@/components/layout/sidebarDrop';
 import {
   dndListProps,
+  dragGroupOf,
   dragOverlayClass,
-  dropAnimation,
+  dragOverlayWrapperClass,
+  expandDragGroup,
   flipId,
   noopSortingStrategy,
   useFlipList,
+  useCollapseAfterDragStart,
   useHeldValue,
 } from '../../lib/dnd';
 import { FeedItemRow } from './FeedItemRow';
 import { SortableFeedRow } from './SortableFeedRow';
 import { EmptyState } from '@/components/common/EmptyState';
+import { DragCountBadge } from '@/components/common/DragCountBadge';
 import { ProjectGroupHeaderRow } from './ProjectGroupHeaderRow';
 import { AreaGroupHeaderRow } from './AreaGroupHeaderRow';
 import {
@@ -54,6 +54,7 @@ import {
   useProjectsQuery,
   useReorderFeed,
   useSelectionScope,
+  useSelectionStore,
   useTaskRowSelection,
   useUncompleteTask,
   useUpdateTask,
@@ -295,6 +296,13 @@ function isRowKey(key: string) {
   return key.startsWith(TASK_DND_PREFIX) || key.startsWith(PROJECT_ROW_DND_PREFIX);
 }
 
+/** 本列表的拖拽源与落点（共享拖拽上下文里按 id 前缀认领，ADR 0018）。 */
+function isFeedKey(key: string) {
+  return (
+    isRowKey(key) || key.startsWith(CONTAINER_DND_PREFIX) || key.startsWith(HEADER_DND_PREFIX)
+  );
+}
+
 /** 组头行的放置目标（投向组头 = 落在该组末尾）。
  *  同时承载组间间隔：mt-6 开新的一块，首个组头（first）无额外间距。 */
 function GroupHeaderDropZone({
@@ -420,24 +428,46 @@ export function GroupedFeedListView({
   const [drag, setDrag] = React.useState<{
     origin: { item: FeedItem; container: ContainerId };
     items: FeedItem[];
+    /** 未预览任何落点时的行（拖拽开始时的原样；收起组内其余行后同样去掉它们）。 */
+    startItems: FeedItem[];
+    /** 拖拽中保留的组（即使已空）：被拖行与多项拖拽组内各行的原组。 */
+    retain: ReadonlySet<string> | undefined;
+    /** 多项拖拽：整组任务（拖拽开始时的原样，按显示顺序，含被拖任务）。 */
+    group: TaskFeedItem[] | null;
+    /** 组内其余行是否已收起（拖拽开始那次提交之后才收起）。 */
+    collapsed: boolean;
   } | null>(null);
   const dragRef = React.useRef(drag);
   const lastTargetRef = React.useRef<FeedDragTarget | null>(null);
 
   const viewItems = drag?.items ?? shownItems;
-  const retainGroupIds = React.useMemo(
-    () =>
-      drag && drag.origin.container !== UNGROUPED && drag.origin.container !== FRESH
-        ? new Set([drag.origin.container])
-        : undefined,
-    [drag],
-  );
+  const retainGroupIds = drag?.retain;
   const layout = React.useMemo(
     () => derive(viewItems, retainGroupIds),
     // derive 只依赖 projects / areas / grouping / freshKeys
     [viewItems, retainGroupIds, projects, areas, grouping, freshKeys],
   );
   const flip = useFlipList<HTMLDivElement>(layout);
+
+  // 多项拖拽：拖拽开始那次提交之后再收起组内其余行，浮层才贴着手。
+  useCollapseAfterDragStart(!!drag && !drag.collapsed, () => {
+    const current = dragRef.current;
+    if (!current || current.collapsed) return;
+    const companions = new Set(
+      (current.group ?? []).flatMap((task) =>
+        task.id === current.origin.item.id ? [] : [task.id],
+      ),
+    );
+    flip.capture();
+    const withoutCompanions = (list: FeedItem[]) =>
+      list.filter((row) => row.type !== 'task' || !companions.has(row.id));
+    updateDrag({
+      ...current,
+      collapsed: true,
+      items: withoutCompanions(current.items),
+      startItems: withoutCompanions(current.startItems),
+    });
+  });
 
   // 注册当前可见行（ADR-0004）：组头行携带 groupHeader 元数据供「下方新建」
   // 预填父级与 Alt+↑/↓ 组边界钳制；所有行始终可见。
@@ -494,22 +524,12 @@ export function GroupedFeedListView({
     [viewItems],
   );
 
-  // 鼠标：移动 5px 激活；触摸：按住 300ms 再移动才激活，避免与列表滚动冲突。
-  // 不挂 KeyboardSensor：组头不可拖拽，行内 Enter/Space 属于全局键位。
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
-  );
-
   const collisionDetection = React.useCallback<CollisionDetection>((args) => {
     const activeKey = String(args.active.id);
     if (!isRowKey(activeKey)) return [];
-    const compatible = args.droppableContainers.filter((container) => {
-      const id = String(container.id);
-      return (
-        isRowKey(id) || id.startsWith(CONTAINER_DND_PREFIX) || id.startsWith(HEADER_DND_PREFIX)
-      );
-    });
+    const compatible = args.droppableContainers.filter((container) =>
+      isFeedKey(String(container.id)),
+    );
     const collisions = args.pointerCoordinates
       ? pointerWithin({ ...args, droppableContainers: compatible })
       : closestCenter({ ...args, droppableContainers: compatible });
@@ -535,10 +555,6 @@ export function GroupedFeedListView({
     return [collision];
   }, []);
 
-  if (items.length === 0 && !drag) {
-    return <EmptyState hint={emptyHint ?? t('task:empty')} />;
-  }
-
   const handleToggle = (item: TaskFeedItem) => {
     if (item.status === 'COMPLETED') uncompleteTask.mutate(item.id);
     else {
@@ -562,23 +578,47 @@ export function GroupedFeedListView({
     const focused = document.activeElement as HTMLElement | null;
     const sortableTask = focused?.closest<HTMLElement>('[data-sortable-task-id]');
     if (sortableTask?.dataset.sortableTaskId === item.id) focused?.blur();
-    handleBlankClick();
 
+    const groupIds =
+      item.type === 'task'
+        ? dragGroupOf(
+            item.id,
+            feedOrderOf(layout).flatMap((row) => (row.type === 'task' ? [row.id] : [])),
+            useSelectionStore.getState().selectedIds,
+          )
+        : null;
+    // 多项拖拽保留多选（松手后整组仍选中）；单项拖拽照旧清掉选中。
+    if (!groupIds) handleBlankClick();
+    // 按显示顺序（groupIds）取，而非 feed 数组顺序：分组时未分组区排在各组之前。
+    const taskById = new Map(
+      viewItems.flatMap((row) => (row.type === 'task' ? [[row.id, row] as const] : [])),
+    );
+    const group = groupIds?.flatMap((id) => taskById.get(id) ?? []) ?? null;
+    // 组内原组都保留（即使拖拽中已空），收起其余行时组头不消失。
+    const containers = taskContainersOf(layout);
+    const retain = new Set(
+      [container, ...(groupIds ?? []).map((id) => containers.get(id))].filter(
+        (id): id is string => id !== undefined && id !== UNGROUPED && id !== FRESH,
+      ),
+    );
     lastTargetRef.current = null;
-    updateDrag({ origin: { item, container }, items: viewItems });
+    updateDrag({
+      origin: { item, container },
+      items: viewItems,
+      startItems: viewItems,
+      retain: retain.size > 0 ? retain : undefined,
+      group,
+      collapsed: !group,
+    });
   };
 
   /** 把当前碰撞目标应用到拖拽副本上；返回应用后的 feed 项。 */
   const applyTarget = (target: FeedDragTarget | null) => {
     const current = dragRef.current;
     if (!current || !target) return current?.items ?? null;
-    const retain =
-      current.origin.container !== UNGROUPED && current.origin.container !== FRESH
-        ? new Set([current.origin.container])
-        : undefined;
     const next = moveFeedItemToTarget(
       current.items,
-      derive(current.items, retain),
+      derive(current.items, current.retain),
       current.origin,
       target,
     );
@@ -597,6 +637,16 @@ export function GroupedFeedListView({
   const handleDragOver = ({ active, over }: DragOverEvent) => {
     if (!over) return;
     const overKey = String(over.id);
+    if (!isFeedKey(overKey)) {
+      // 指针在列表外的落点上（侧边栏）：空位回到原处，不暗示列表内重排。
+      lastTargetRef.current = null;
+      const current = dragRef.current;
+      if (current && current.items !== current.startItems) {
+        flip.capture();
+        updateDrag({ ...current, items: current.startItems });
+      }
+      return;
+    }
     if (lastTargetRef.current?.overKey !== overKey) {
       lastTargetRef.current = { overKey, edge: 'before' };
     }
@@ -621,44 +671,84 @@ export function GroupedFeedListView({
         }
       : null;
     // 松手 = 落在最后一次预览处（拖出列表外也保留最后的有效预览）。
-    const finalItems = applyTarget(target);
+    const droppedItems = applyTarget(target);
     lastTargetRef.current = null;
     updateDrag(null);
-    if (!current || !finalItems || String(active.id) !== feedItemDndId(current.origin.item)) {
+    if (!current || !droppedItems || String(active.id) !== feedItemDndId(current.origin.item)) {
       return;
     }
 
     const moved = current.origin.item;
     const before = derive(items);
+    const finalItems = current.group
+      ? withFeedDragGroup(
+          droppedItems,
+          derive(droppedItems),
+          moved.id,
+          current.group,
+          taskContainersOf(before),
+        )
+      : droppedItems;
+    if (!finalItems) return;
     const after = derive(finalItems);
     const beforeOrder = feedOrderOf(before);
     const afterOrder = feedOrderOf(after);
     const orderChanged = feedOrderKey(afterOrder) !== feedOrderKey(beforeOrder);
-    let data: UpdateTaskDto | null = null;
+    // 跨组的任务（多项拖拽时组内每一项各自比较）改归属。
+    const reassignments: Array<{ id: string; data: UpdateTaskDto }> = [];
     if (moved.type === 'task') {
-      const fromContainer = taskContainersOf(before).get(moved.id);
-      const toContainer = taskContainersOf(after).get(moved.id);
-      if (fromContainer === undefined || toContainer === undefined) return;
-      if (toContainer !== fromContainer) {
-        data = reassignmentDto(toContainer, parentMapsFromLayout(after));
+      const fromContainers = taskContainersOf(before);
+      const toContainers = taskContainersOf(after);
+      const maps = parentMapsFromLayout(after);
+      for (const id of current.group?.map((task) => task.id) ?? [moved.id]) {
+        const fromContainer = fromContainers.get(id);
+        const toContainer = toContainers.get(id);
+        if (fromContainer === undefined || toContainer === undefined) return;
+        if (toContainer === fromContainer) continue;
+        const data = reassignmentDto(toContainer, maps);
         if (!data) return;
+        reassignments.push({ id, data });
       }
     }
-    if (!orderChanged && !data) return;
+    if (!orderChanged && reassignments.length === 0) return;
 
     holdItems(finalItems);
     // 跨组 = 改归属（headingId 由数据层随 projectId 变化自动清除）；顺序按
     // 显示顺序写回：任务写 Position，独立项目行写 Feed Position。跨组时
     // 即使显示顺序没变也要写：分组时组内任务总排在顶部区之后、与其位次
     // 无关，进入顶部区后才按真实位次排（repositionFeed 已在序则不写）。
-    if (data) updateTask.mutate({ id: moved.id, data });
-    if (orderChanged || data) reorderFeed.mutate(afterOrder);
+    for (const { id, data } of reassignments) updateTask.mutate({ id, data });
+    if (orderChanged || reassignments.length > 0) reorderFeed.mutate(afterOrder);
   };
 
   const handleDragCancel = () => {
     lastTargetRef.current = null;
     updateDrag(null);
   };
+
+  /** 拖到侧边栏的载荷：被拖任务（多选时整组，拖拽开始时的原样）或独立项目行。 */
+  const sidebarPayload = (activeKey: string): SidebarDropPayload | null => {
+    const current = dragRef.current;
+    const item = current?.origin.item ?? rowMap.get(activeKey);
+    if (!item || feedItemDndId(item) !== activeKey) return null;
+    if (item.type === 'project') return { kind: 'project', project: item };
+    return { kind: 'tasks', tasks: current?.group ?? [item] };
+  };
+
+  const surface = useDndSurface({
+    owns: isFeedKey,
+    collisionDetection,
+    sidebarPayload,
+    onDragStart: handleDragStart,
+    onDragMove: handleDragMove,
+    onDragOver: handleDragOver,
+    onDragEnd: handleDragEnd,
+    onDragCancel: handleDragCancel,
+  });
+
+  if (items.length === 0 && !drag) {
+    return <EmptyState hint={emptyHint ?? t('task:empty')} />;
+  }
 
   const activeItem = drag?.origin.item ?? null;
   // 跨组预览会改写归属字段，浮层跟随当前预览中的那一行。
@@ -747,17 +837,6 @@ export function GroupedFeedListView({
       className="relative flex flex-col"
       onClick={handleBlankClick}
     >
-      <DndContext
-        sensors={sensors}
-        collisionDetection={collisionDetection}
-        // 实时预览每次重排都会改变行位置，碰撞检测须用最新的测量结果。
-        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-        onDragStart={handleDragStart}
-        onDragMove={handleDragMove}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-        onDragCancel={handleDragCancel}
-      >
         {/* 顶部未分组区：未分组任务与独立项目行按合并 feed 顺序交错。
             拖拽期间即使为空也保留投放面（移出项目 = 拖到此处），但浮在
             列表上方，不额外占位（浮动投放面渲染在列表末尾，见下）。 */}
@@ -805,9 +884,14 @@ export function GroupedFeedListView({
             :first-child（否则 mt-6 生效，拖拽一开始整列下移 24px）。 */}
         {topRows.length === 0 && activeItem && <UngroupedDropZone floating />}
 
-        <DragOverlay dropAnimation={dropAnimation}>
+        {surface.overlayActive && (
+        <DragOverlay className={dragOverlayWrapperClass} dropAnimation={surface.dropAnimation}>
           {overlayItem ? (
-            <div className={cn(dragOverlayClass, 'bg-card')} aria-hidden="true" {...{ inert: '' }}>
+            <div
+              className={cn(dragOverlayClass, 'relative bg-card')}
+              aria-hidden="true"
+              {...{ inert: '' }}
+            >
               <FeedItemRow
                 item={overlayItem}
                 {...rowLabels(overlayItem, rowContainerOf(layout, overlayItem))}
@@ -816,12 +900,37 @@ export function GroupedFeedListView({
                 showScheduledBadge={showScheduledBadge}
                 newInToday={rowContainerOf(layout, overlayItem) === FRESH}
               />
+              <DragCountBadge count={drag?.group?.length ?? 0} />
             </div>
           ) : null}
         </DragOverlay>
-      </DndContext>
+        )}
     </div>
   );
+}
+
+/**
+ * 多项拖拽松手：整组按原显示顺序落在被拖任务的位置。组内其余任务随它进入
+ * 落点所在组：原本就在该组的保留原字段，其余按该组改写归属。
+ */
+function withFeedDragGroup(
+  items: FeedItem[],
+  layout: GroupedFeedLayout,
+  activeId: string,
+  group: TaskFeedItem[],
+  startContainers: ReadonlyMap<string, ContainerId>,
+): FeedItem[] | null {
+  const container = taskContainersOf(layout).get(activeId);
+  const moved = items.find((item) => item.type === 'task' && item.id === activeId);
+  if (container === undefined || !moved) return null;
+  const data = reassignmentDto(container, parentMapsFromLayout(layout));
+  if (!data) return null;
+  const placed = group.map((task): FeedItem => {
+    if (task.id === activeId) return moved;
+    if (startContainers.get(task.id) === container) return task;
+    return { ...task, projectId: data.projectId ?? null, areaId: data.areaId ?? null };
+  });
+  return expandDragGroup(items, feedItemDndId(moved), placed, feedItemDndId);
 }
 
 /** 跨组落点 → 归属变更 DTO（headingId 由数据层随 projectId 变化清除）。 */

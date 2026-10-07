@@ -5,13 +5,15 @@ import { ProjectStatus } from '@taskora/shared';
 import type { ProjectResponseDto } from '@taskora/shared';
 
 import { cn } from '@/lib/utils';
-import { sidebarRowClass } from '@/components/layout/sidebarRowClass';
+import { sidebarDropOverClass, sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import { ProjectContextMenu } from '@/components/project/ProjectContextMenu';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
 import { useProjectCompletion } from '@/components/project/useProjectCompletion';
 
 interface Props {
   project: ProjectResponseDto;
+  /** 被拖条目悬停在此行上且可放下（Sidebar Drop）。 */
+  dropOver?: boolean;
 }
 
 /**
@@ -19,7 +21,7 @@ interface Props {
  * 当前项目高亮。列表页（区域页 / Later Projects 页）改用 `ProjectFeedRow`，
  * 该组件只服务侧边栏。
  */
-export function ProjectItem({ project }: Props) {
+export function ProjectItem({ project, dropOver = false }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const isCurrent = useMatch(`/projects/${project.id}`) !== null;
@@ -46,7 +48,10 @@ export function ProjectItem({ project }: Props) {
         }}
         className={sidebarRowClass(
           isCurrent,
-          'w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
+          cn(
+            'w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
+            dropOver && sidebarDropOverClass,
+          ),
         )}
       >
         <ProjectProgressRing

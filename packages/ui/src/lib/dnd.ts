@@ -29,6 +29,13 @@ export const dndListProps = { 'data-dnd-list': '' };
  */
 export const dragOverlayClass = 'pointer-events-none w-full overflow-hidden rounded-md shadow-row-lift';
 
+/**
+ * 浮层外壳（dnd-kit 的 fixed 定位 div，始终在指针正下方）不接收指针，
+ * 否则它挡住指针下方的元素：浮层渲染在哪里会影响下方是否出现 hover。
+ * 用法：<DragOverlay className={dragOverlayWrapperClass}>。
+ */
+export const dragOverlayWrapperClass = 'pointer-events-none';
+
 /** 松手时浮层飞回空位的动画（与 FLIP 位移同一时长与曲线）。 */
 export const dropAnimation: DropAnimation = {
   duration: 200,
@@ -177,4 +184,58 @@ function identity(id: string) {
 
 function joinIds(ids: string[]) {
   return ids.join('\u0000');
+}
+
+/**
+ * 多项拖拽（对齐 Things 3 Mac）：被拖任务在 Selection 多选中时，返回一起拖动的
+ * 整组任务 id（按 orderedIds 的显示顺序，含被拖任务）；否则 null（单项拖拽）。
+ * 只算本列表内的选中任务。拖拽中组内其余行收起（见 useCollapseAfterDragStart），
+ * 只有被拖行跟手与预览落点；松手后整组按原显示顺序落在被拖行的位置（见
+ * expandDragGroup）。
+ */
+export function dragGroupOf(
+  activeId: string,
+  orderedIds: readonly string[],
+  selectedIds: readonly string[],
+): string[] | null {
+  if (!selectedIds.includes(activeId)) return null;
+  const selected = new Set(selectedIds);
+  const group = orderedIds.filter((id) => selected.has(id));
+  return group.length > 1 ? group : null;
+}
+
+/**
+ * 多项拖拽松手：id 为 activeId 的那项替换为整组（group 按显示顺序，含被拖项）；
+ * 组内其余项若还在 items 中，先从原位置取走。
+ */
+export function expandDragGroup<T>(
+  items: T[],
+  activeId: string,
+  group: T[],
+  getId: (item: T) => string,
+): T[] {
+  const others = new Set(group.map(getId).filter((id) => id !== activeId));
+  const rest = items.filter((item) => !others.has(getId(item)));
+  const index = rest.findIndex((item) => getId(item) === activeId);
+  if (index < 0) return items;
+  return [...rest.slice(0, index), ...group, ...rest.slice(index + 1)];
+}
+
+/**
+ * 多项拖拽收起组内其余行的时机：拖拽开始那次提交之后的 effect。
+ *
+ * DragOverlay（无浮层时则是被拖行自身的跟手位移）以拖拽开始时测得的被拖行
+ * 位置为基准，dnd-kit 在拖拽开始那次提交的 layout effect 里测量。若收起与
+ * 拖拽开始同一次提交，被拖行上方的选中行先消失、被拖行上移，测得的基准随之
+ * 偏移，浮层就不再贴着手。requestAnimationFrame 也不可靠：拖拽在原生
+ * mousemove 里启动，React 不同步提交，回调可能先于那次提交执行。
+ *
+ * pending 在拖拽开始那次提交中变为 true；collapse 负责收起并让 pending 复位。
+ */
+export function useCollapseAfterDragStart(pending: boolean, collapse: () => void): void {
+  const collapseRef = React.useRef(collapse);
+  collapseRef.current = collapse;
+  React.useEffect(() => {
+    if (pending) collapseRef.current();
+  }, [pending]);
 }

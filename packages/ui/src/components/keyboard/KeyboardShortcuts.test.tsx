@@ -231,6 +231,28 @@ describe('KeyboardShortcuts — 导航与选择', () => {
     }
   });
 
+  it('⇧↓/⇧↑ 从锚点扩展、收缩连续多选', () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press('ArrowDown', { shiftKey: true });
+    press('ArrowDown', { shiftKey: true });
+    expect(useSelectionStore.getState().selectedIds).toEqual(['t1', 't2', 't3']);
+    press('ArrowUp', { shiftKey: true });
+    expect(useSelectionStore.getState().selectedIds).toEqual(['t1', 't2']);
+    expect(screen.getByTestId('row-t3')).not.toHaveAttribute('aria-selected');
+    // 普通 ↓ 从光标（t2）出发回到单选
+    press('ArrowDown');
+    expect(useSelectionStore.getState().selectedIds).toEqual(['t3']);
+  });
+
+  it('多选后 ⌘K 批量完成选中的行', () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press('ArrowDown', { shiftKey: true });
+    press('k', { metaKey: true });
+    expect(harness.completeMutate.mock.calls.map(([id]) => id)).toEqual(['t1', 't2']);
+  });
+
   it('⌘2 导航到 Today 之外的 Bucket（/inbox）', () => {
     renderAt('/today', tasks);
     press('1', { metaKey: true });

@@ -8,6 +8,7 @@ import { Search } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import {
+  extendSelectionTo,
   flattenSelectionRows,
   useAssistantUiStore,
   useKeybindingsStore,
@@ -274,6 +275,22 @@ export function KeyboardShortcuts({ platform }: Props) {
           useSelectionStore.getState().setSelection([row.id]);
           useUiInteractionStore.getState().setExpandedId(null);
           focusSelectionRow(row.id);
+          return;
+        }
+        case 'extendUp':
+        case 'extendDown': {
+          // 光标朝该方向移到下一个任务行（多选只含任务行），选中锚点到光标的范围。
+          if (taskRows.length === 0) return;
+          const delta = action.type === 'extendUp' ? -1 : 1;
+          const current = selection.selectedIds.at(-1);
+          let index = current ? rows.findIndex((r) => r.id === current) : -1;
+          if (index === -1) index = delta > 0 ? -1 : rows.length;
+          let next = index + delta;
+          while (next >= 0 && next < rows.length && rows[next].kind !== 'task') next += delta;
+          if (next < 0 || next >= rows.length) return;
+          useUiInteractionStore.getState().setExpandedId(null);
+          extendSelectionTo(rows[next].id);
+          focusSelectionRow(rows[next].id);
           return;
         }
         case 'selectAll': {

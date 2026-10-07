@@ -110,6 +110,8 @@
   "shortcut_moveDown": "Select next item",
   "shortcut_moveFirst": "Select first item",
   "shortcut_moveLast": "Select last item",
+  "shortcut_extendUp": "Extend selection up",
+  "shortcut_extendDown": "Extend selection down",
   "shortcut_selectAll": "Select all",
   "shortcut_newTask": "New task",
   "shortcut_newTaskBelow": "New task below selection",

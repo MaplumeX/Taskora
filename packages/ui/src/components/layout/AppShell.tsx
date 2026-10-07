@@ -7,6 +7,7 @@ import { MobileFab } from '@/components/layout/MobileFab';
 import { MultiSelectToolbar } from '@/components/task/MultiSelectToolbar';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { SyncIndicator } from './SyncIndicator';
+import { SidebarDropProvider } from './SidebarDropProvider';
 import { AssistantPanel, useSidebarYieldsToPanel } from '@/components/agent/AssistantPanel';
 import { useNavigationRequestListener, useTaskRevealListener } from '@taskora/api';
 
@@ -20,24 +21,27 @@ export function AppShell() {
   // h-[calc(100dvh-var(--kb-inset,0px))]：Android 键盘避让（mobile 壳的
   // visualViewport 驱动，其余端未设置 → 0px，等价 h-dvh）。
   // 手机端主列顶部让出状态栏（edge-to-edge 下内容铺到系统栏后面）。
+  // 侧边栏与内容区共用一个拖拽上下文（ADR 0018）：任务 / 项目行可拖到侧边栏。
   return (
-    <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] w-full">
-      {/* 桌面侧边栏（手机端隐藏）：右缘可拖动调宽 / 拖到折叠 */}
-      <ResizableSidebar />
-      <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] min-w-0 flex-1 flex-col max-md:pt-[var(--safe-area-top)]">
-        <MobileTopBar />
-        <MainContent />
-        <ContentBottomBar />
+    <SidebarDropProvider>
+      <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] w-full">
+        {/* 桌面侧边栏（手机端隐藏）：右缘可拖动调宽 / 拖到折叠 */}
+        <ResizableSidebar />
+        <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] min-w-0 flex-1 flex-col max-md:pt-[var(--safe-area-top)]">
+          <MobileTopBar />
+          <MainContent />
+          <ContentBottomBar />
+        </div>
+        {/* 桌面右侧助手面板：始终与内容并排，不浮在内容上 */}
+        <AssistantPanel />
+        <MobileFab />
+        {/* 触控多选模式（左滑任务行进入）的底部工具栏，模式中替代 FAB。 */}
+        <MultiSelectToolbar />
+        <SettingsModal />
+        <KeyboardShortcuts />
+        {/* 同步指示器（V2）：仅在离线 / 需要升级时出现在角落，不拦操作 */}
+        <SyncIndicator />
       </div>
-      {/* 桌面右侧助手面板：始终与内容并排，不浮在内容上 */}
-      <AssistantPanel />
-      <MobileFab />
-      {/* 触控多选模式（左滑任务行进入）的底部工具栏，模式中替代 FAB。 */}
-      <MultiSelectToolbar />
-      <SettingsModal />
-      <KeyboardShortcuts />
-      {/* 同步指示器（V2）：仅在离线 / 需要升级时出现在角落，不拦操作 */}
-      <SyncIndicator />
-    </div>
+    </SidebarDropProvider>
   );
 }

@@ -1,4 +1,6 @@
 import {
+  extendSelectionTo,
+  toggleRowSelection,
   useCalendarDay,
   useMultiSelectStore,
   useSelectionStore,
@@ -18,6 +20,7 @@ import type { TaskResponseDto } from '@taskora/shared';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useSwipeToSelect } from '../../lib/useSwipeToSelect';
+import { isAppleOS } from '../keyboard/keymap';
 import { NewInTodayDot } from './NewInTodayDot';
 import { TaskCheckbox } from './TaskCheckbox';
 import { TaskContextMenu } from './TaskContextMenu';
@@ -37,6 +40,13 @@ import { MultiSelectEnabledContext } from './multiSelectContext';
 /** 展开 / 收起详情的时长，与 tokens.css 的 --dur-expand 一致。 */
 const EXPAND_MS = 200;
 import type { SelectionState } from '@taskora/api';
+
+/** 多选点击：⌘（Apple 系）/ Ctrl（其他）切换单行，⇧ 选中连续范围。 */
+function multiSelectClickOf(e: React.MouseEvent): 'toggle' | 'range' | null {
+  if (e.shiftKey) return 'range';
+  if (isAppleOS() ? e.metaKey : e.ctrlKey) return 'toggle';
+  return null;
+}
 
 interface Props {
   task: TaskResponseDto;
@@ -274,9 +284,21 @@ export function TaskItem({
                 style={
                   swipe.offset !== 0 ? { transform: `translateX(${swipe.offset}px)` } : undefined
                 }
+                onMouseDown={(e) => {
+                  // ⇧+点击是范围多选，不让浏览器顺带框选文字。
+                  if (onRowClick && !expanded && e.shiftKey) e.preventDefault();
+                }}
                 onClick={(e) => {
                   if (!onRowClick) return;
                   e.stopPropagation();
+                  const multi = expanded ? null : multiSelectClickOf(e);
+                  if (multi) {
+                    // 键盘 Selection 的多选（对齐 Things 3 Mac）：只改选中，不展开。
+                    useUiInteractionStore.getState().setExpandedId(null);
+                    if (multi === 'range') extendSelectionTo(task.id);
+                    else toggleRowSelection(task.id);
+                    return;
+                  }
                   onRowClick();
                 }}
                 role={onRowClick ? 'button' : undefined}

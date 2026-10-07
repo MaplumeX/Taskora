@@ -3,15 +3,7 @@ import * as React from 'react';
 import { useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import {
-  DndContext,
-  MouseSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-  type DragEndEvent,
-} from '@dnd-kit/core';
+import { DragOverlay, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -48,7 +40,14 @@ import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { AreaMoreMenu } from '@/components/area/AreaMoreMenu';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
 import { toast } from 'sonner';
-import { dndListProps, useHeldOrder } from '../lib/dnd';
+import {
+  dndListProps,
+  dragOverlayClass,
+  dragOverlayWrapperClass,
+  useHeldOrder,
+} from '../lib/dnd';
+import { useDndSurface } from '../lib/appDnd';
+import { cn } from '@/lib/utils';
 
 function SortableProjectRow({
   project,
@@ -66,8 +65,9 @@ function SortableProjectRow({
       style={{
         transform: CSS.Translate.toString(transform),
         transition,
-        zIndex: isDragging ? 10 : undefined,
       }}
+      // 被拖行由 DragOverlay 跟手（才能拖到侧边栏），原行留作不可见的空位。
+      className={cn(isDragging && 'invisible')}
       {...attributes}
       {...listeners}
     >
@@ -132,21 +132,35 @@ export default function AreaDetail() {
   const updateArea = useUpdateArea();
   const { selectedIds, expandedId } = useTaskRowSelection();
 
-  // 鼠标：移动 5px 激活；触摸：按住 300ms 再移动才激活，避免与列表滚动冲突。
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
-  );
+  const [activeProjectId, setActiveProjectId] = React.useState<string | null>(null);
+  const projectIds = useMemo(() => new Set(orderedProjects.map((p) => p.id)), [orderedProjects]);
 
   const handleProjectDragEnd = (e: DragEndEvent) => {
     const { active, over } = e;
+    setActiveProjectId(null);
     if (!over || active.id === over.id) return;
     const ids = orderedProjects.map((p) => p.id);
-    const reordered = arrayMove(ids, ids.indexOf(active.id as string), ids.indexOf(over.id as string));
+    const oldIndex = ids.indexOf(active.id as string);
+    const newIndex = ids.indexOf(over.id as string);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const reordered = arrayMove(ids, oldIndex, newIndex);
     holdProjectOrder(reordered);
     // 以全量顺序为底写回，其他区域 / 隐藏项目原位不动。
     reorderProjects.mutate(mergeVisibleProjectOrder(allProjects, reordered));
   };
+
+  // 活跃项目行的排序是共享拖拽上下文里的一个 surface（ADR 0018），可拖到侧边栏。
+  const projectSurface = useDndSurface({
+    owns: (dndId) => projectIds.has(dndId),
+    sidebarPayload: (dndId) => {
+      const project = orderedProjects.find((p) => p.id === dndId);
+      return project ? { kind: 'project', project } : null;
+    },
+    onDragStart: ({ active }: DragStartEvent) => setActiveProjectId(String(active.id)),
+    onDragEnd: handleProjectDragEnd,
+    onDragCancel: () => setActiveProjectId(null),
+  });
+  const activeProject = orderedProjects.find((p) => p.id === activeProjectId);
 
   // 注册项目段可遍历行（Project 行仅作遍历停留点，⌘K/⌫ 对其无效）。
   // 键盘遍历顺序与页面一致：活跃项目（0）→ 任务（1）→ 稍后项目（2）。
@@ -193,7 +207,7 @@ export default function AreaDetail() {
       {filtering && visible.length === 0 && <EmptyState hint={t('tag:filterEmpty')} />}
 
       {orderedProjects.length > 0 && (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleProjectDragEnd}>
+        <>
           <SortableContext items={orderedProjects.map((p) => p.id)} strategy={verticalListSortingStrategy}>
             <div {...dndListProps} className="flex flex-col">
               {orderedProjects.map((p) => (
@@ -205,7 +219,16 @@ export default function AreaDetail() {
               ))}
             </div>
           </SortableContext>
-        </DndContext>
+          {projectSurface.overlayActive && (
+            <DragOverlay className={dragOverlayWrapperClass} dropAnimation={projectSurface.dropAnimation}>
+              {activeProject ? (
+                <div className={cn(dragOverlayClass, 'bg-card')} aria-hidden="true" {...{ inert: '' }}>
+                  <ProjectFeedRow item={activeProject} selectionState="idle" />
+                </div>
+              ) : null}
+            </DragOverlay>
+          )}
+        </>
       )}
 
       {isLoading ? null : isError ? (

@@ -10,8 +10,11 @@ import { useLogout } from '@taskora/api';
 import { SidebarBottomBar } from '@/components/layout/SidebarBottomBar';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
 import { mainNav, trashNav, type NavItem } from '@/components/layout/navItems';
-import { sidebarRowClass } from '@/components/layout/sidebarRowClass';
+import { sidebarDropOverClass, sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import { useBucketCounts } from '@/components/layout/useBucketCounts';
+import type { SidebarDropTarget } from '@/components/layout/sidebarDrop';
+import { useSidebarDropArea, useSidebarDropTarget } from '../../lib/appDnd';
+import { dndListProps } from '../../lib/dnd';
 import { NewInTodayDot } from '@/components/task/NewInTodayDot';
 import { useHasNewInToday } from '@taskora/api';
 
@@ -44,6 +47,15 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+/** 可作为 Sidebar Drop 落点的导航行；助手、Upcoming、Calendar、Anytime、Tags 不是落点。 */
+const DROP_TARGET_BY_ROUTE: Record<string, SidebarDropTarget> = {
+  '/inbox': { kind: 'inbox' },
+  '/today': { kind: 'today' },
+  '/someday': { kind: 'someday' },
+  '/logbook': { kind: 'logbook' },
+  '/trash': { kind: 'trash' },
+};
+
 const NavRow = ({
   item,
   count,
@@ -55,11 +67,15 @@ const NavRow = ({
   hasNew?: boolean;
 }) => {
   const { t } = useTranslation();
+  const drop = useSidebarDropTarget(DROP_TARGET_BY_ROUTE[item.to] ?? null);
   const Icon = item.icon;
   return (
     <NavLink
+      ref={drop.setNodeRef}
       to={item.to}
-      className={({ isActive }) => sidebarRowClass(isActive)}
+      className={({ isActive }) =>
+        sidebarRowClass(isActive, drop.isOver ? sidebarDropOverClass : undefined)
+      }
     >
       <Icon className={cn('h-4 w-4 shrink-0', item.colorClass)} />
       <span className="truncate">{t(item.labelKey)}</span>
@@ -99,6 +115,7 @@ export function Sidebar() {
   const { data: allProjects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const { inboxCount, todayCount } = useBucketCounts();
+  const dropArea = useSidebarDropArea();
   const hasNewInToday = useHasNewInToday();
   const countByRoute: Record<string, number> = {
     '/inbox': inboxCount,
@@ -106,7 +123,7 @@ export function Sidebar() {
   };
 
   return (
-    <aside className="flex h-screen w-full flex-col bg-sidebar">
+    <aside ref={dropArea.setAreaRef} className="flex h-screen w-full flex-col bg-sidebar">
       <div className="px-2 pb-2 pt-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -147,37 +164,41 @@ export function Sidebar() {
       </div>
 
       <ScrollArea className="flex-1 px-2">
-        {/* 助手：顶部独立分组 */}
-        <div className="flex flex-col gap-px">
-          {SIDEBAR_ASSISTANT_NAV.map((item) => (
-            <NavRow key={item.to} item={item} />
-          ))}
-        </div>
+        {/* 拖拽中侧边栏不响应指针（同可拖拽列表，见 styles/tokens.css）：不接收
+            被拖条目的行没有任何反应，可接收的行只显示落点高亮。 */}
+        <div ref={dropArea.setContentRef} {...dndListProps}>
+          {/* 助手：顶部独立分组 */}
+          <div className="flex flex-col gap-px">
+            {SIDEBAR_ASSISTANT_NAV.map((item) => (
+              <NavRow key={item.to} item={item} />
+            ))}
+          </div>
 
-        <div className="mt-4 flex flex-col gap-px">
-          {SIDEBAR_MAIN_NAV.map((item) => (
-            <NavRow
-              key={item.to}
-              item={item}
-              count={countByRoute[item.to]}
-              hasNew={item.to === '/today' && hasNewInToday}
-            />
-          ))}
-        </div>
+          <div className="mt-4 flex flex-col gap-px">
+            {SIDEBAR_MAIN_NAV.map((item) => (
+              <NavRow
+                key={item.to}
+                item={item}
+                count={countByRoute[item.to]}
+                hasNew={item.to === '/today' && hasNewInToday}
+              />
+            ))}
+          </div>
 
-        {/* 日志 / 废纸篓 */}
-        <div className="mt-4 flex flex-col gap-px">
-          {SIDEBAR_UTILITIES_NAV.map((item) => (
-            <NavRow key={item.to} item={item} />
-          ))}
-        </div>
+          {/* 日志 / 废纸篓 */}
+          <div className="mt-4 flex flex-col gap-px">
+            {SIDEBAR_UTILITIES_NAV.map((item) => (
+              <NavRow key={item.to} item={item} />
+            ))}
+          </div>
 
-        <div className="mt-4 flex flex-col">
-          <SidebarProjectSection projects={allProjects} areas={areas} />
-        </div>
+          <div className="mt-4 flex flex-col">
+            <SidebarProjectSection projects={allProjects} areas={areas} dropTargets />
+          </div>
 
-        <div className="mb-3 mt-4 flex flex-col gap-px">
-          <NavRow item={TAGS_NAV} />
+          <div className="mb-3 mt-4 flex flex-col gap-px">
+            <NavRow item={TAGS_NAV} />
+          </div>
         </div>
       </ScrollArea>
 

@@ -1,16 +1,9 @@
 import * as React from 'react';
 import {
   closestCenter,
-  DndContext,
   DragOverlay,
-  KeyboardSensor,
-  MeasuringStrategy,
-  MouseSensor,
-  TouchSensor,
   pointerWithin,
   useDroppable,
-  useSensor,
-  useSensors,
   type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
@@ -37,20 +30,26 @@ import { toast } from 'sonner';
 import { TaskItem } from '@/components/task/TaskItem';
 import { EmptyState } from '@/components/common/EmptyState';
 import { cn } from '@/lib/utils';
-import { useCompleteTask, useUncompleteTask } from '@taskora/api';
+import { useCompleteTask, useSelectionStore, useUncompleteTask } from '@taskora/api';
 import { useSelectionScope } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
 import { useReorderProjectHeadingLayout } from '@taskora/api';
+import { keyboardDragData, useDndSurface } from '../../lib/appDnd';
+import type { SidebarDropPayload } from '@/components/layout/sidebarDrop';
 import {
   dndListProps,
+  dragGroupOf,
   dragOverlayClass,
-  dropAnimation,
+  dragOverlayWrapperClass,
+  expandDragGroup,
   flipId,
   noLayoutAnimation,
   noopSortingStrategy,
+  useCollapseAfterDragStart,
   useFlipList,
 } from '../../lib/dnd';
 import { ProjectHeadingRow } from './ProjectHeadingRow';
+import { DragCountBadge } from '@/components/common/DragCountBadge';
 
 const UNGROUPED = 'ungrouped';
 export type ContainerId = typeof UNGROUPED | string;
@@ -145,6 +144,49 @@ function cloneLayout(layout: LayoutState): LayoutState {
     containers: Object.fromEntries(
       Object.entries(layout.containers).map(([id, ids]) => [id, [...ids]]),
     ),
+  };
+}
+
+/** 本列表的拖拽源与落点（共享拖拽上下文里按 id 前缀认领，ADR 0018）。 */
+function isLayoutKey(key: string) {
+  return key.startsWith('task:') || key.startsWith('container:') || key.startsWith('heading:');
+}
+
+/** 布局中任务的显示顺序：无 Heading 区，其后各 Heading 下的任务。 */
+function orderedTaskIds(layout: LayoutState): string[] {
+  return [
+    ...(layout.containers[UNGROUPED] ?? []),
+    ...layout.headingIds.flatMap((id) => layout.containers[id] ?? []),
+  ];
+}
+
+/** 从布局中去掉这些任务。 */
+function withoutTasks(layout: LayoutState, ids: ReadonlySet<string>): LayoutState {
+  return {
+    ...layout,
+    containers: Object.fromEntries(
+      Object.entries(layout.containers).map(([id, tasks]) => [
+        id,
+        tasks.filter((task) => !ids.has(task)),
+      ]),
+    ),
+  };
+}
+
+/**
+ * 多项拖拽松手：组内其余任务从原 Heading 取走，整组按原显示顺序落在被拖任务的
+ * 位置（随它进入目标 Heading）。
+ */
+function withDragGroup(layout: LayoutState, activeId: string, group: string[]): LayoutState {
+  const rest = withoutTasks(layout, new Set(group.filter((id) => id !== activeId)));
+  const container = findTaskContainer(rest, activeId);
+  if (!container) return layout;
+  return {
+    ...rest,
+    containers: {
+      ...rest.containers,
+      [container]: expandDragGroup(rest.containers[container], activeId, group, (id) => id),
+    },
   };
 }
 
@@ -262,6 +304,8 @@ function applyLayoutDrag(
 interface SortableTaskProps {
   task: TaskResponseDto;
   placeholder: boolean;
+  /** 过滤视图（如 Tag 过滤）关闭拖拽：只显示部分任务时无法正确落位。 */
+  dragDisabled: boolean;
   selected: boolean;
   expanded: boolean;
   onRowClick: () => void;
@@ -271,6 +315,7 @@ interface SortableTaskProps {
 function SortableTask({
   task,
   placeholder,
+  dragDisabled,
   selected,
   expanded,
   onRowClick,
@@ -283,7 +328,7 @@ function SortableTask({
     animateLayoutChanges: noLayoutAnimation,
     // 展开态下行内是可编辑卡片，整行 listeners 会把框选文字的鼠标移动识别为拖拽，
     // 因此展开时不可拖（仍作为放置目标）。
-    disabled: { draggable: expanded, droppable: false },
+    disabled: { draggable: expanded || dragDisabled, droppable: false },
   });
   // dnd-kit KeyboardSensor 默认把 Enter/Space 当作「开始拖拽」的启动键，
   // 而行焦点按 Enter=展开 / Space=下方新建是全局键位（ADR-0004）。
@@ -331,6 +376,7 @@ interface TaskContainerProps {
   taskIds: string[];
   taskMap: Map<string, TaskResponseDto>;
   activeTaskId: string | null;
+  dragDisabled: boolean;
   selectedIds: string[];
   expandedId: string | null;
   onRowClick: (id: string) => void;
@@ -342,6 +388,7 @@ function TaskContainer({
   taskIds,
   taskMap,
   activeTaskId,
+  dragDisabled,
   selectedIds,
   expandedId,
   onRowClick,
@@ -359,6 +406,7 @@ function TaskContainer({
               key={id}
               task={task}
               placeholder={activeTaskId === id}
+              dragDisabled={dragDisabled}
               selected={selectedIds.includes(id)}
               expanded={expandedId === id}
               onRowClick={() => onRowClick(id)}
@@ -383,6 +431,9 @@ function SortableHeadingBlock({
 }: SortableHeadingBlockProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: headingId(heading.id),
+    disabled: taskContainerProps.dragDisabled,
+    // Heading 只经拖拽手柄拖动，手柄上可用键盘拖拽（无全局键位冲突）。
+    data: keyboardDragData,
   });
   return (
     <section
@@ -418,6 +469,11 @@ export function ProjectTaskLayout({
   const serverLayout = React.useMemo(() => normalizeLayout(tasks, headings), [tasks, headings]);
   const [layout, setLayout] = React.useState(serverLayout);
   const [activeTask, setActiveTask] = React.useState<TaskResponseDto | null>(null);
+  /** 多项拖拽的整组任务 id（单项拖拽为 null）。 */
+  const [dragGroup, setDragGroup] = React.useState<string[] | null>(null);
+  const dragGroupRef = React.useRef<string[] | null>(null);
+  /** 多项拖拽组内其余任务待收起（拖拽开始那次提交之后才收起）。 */
+  const [collapsePending, setCollapsePending] = React.useState(false);
   const layoutRef = React.useRef(layout);
   const serverLayoutRef = React.useRef(serverLayout);
   const activeTaskIdRef = React.useRef<string | null>(null);
@@ -480,22 +536,23 @@ export function ProjectTaskLayout({
     }
     return sortableKeyboardCoordinates(event, args);
   }, []);
-  // 鼠标：移动 5px 激活；触摸：按住 300ms 再移动才激活，避免与列表滚动冲突
-  // （滚动期间移动超过容差即取消，不会误触拖拽）。
-  const dragSensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: keyboardCoordinates }),
-  );
-  const noSensors = useSensors();
-  const sensors = visibleTaskIds ? noSensors : dragSensors;
-
   const flip = useFlipList<HTMLDivElement>(layout);
 
   const updateRenderedLayout = React.useCallback((next: LayoutState) => {
     layoutRef.current = next;
     setLayout(next);
   }, []);
+
+  // 多项拖拽：拖拽开始那次提交之后再收起组内其余任务，浮层才贴着手。
+  useCollapseAfterDragStart(collapsePending, () => {
+    setCollapsePending(false);
+    const activeId = activeTaskIdRef.current;
+    const group = dragGroupRef.current;
+    if (!activeId || !group) return;
+    flip.capture();
+    const companions = new Set(group.filter((id) => id !== activeId));
+    updateRenderedLayout(withoutTasks(layoutRef.current, companions));
+  });
 
   React.useEffect(() => {
     if (activeTaskIdRef.current !== null) {
@@ -532,7 +589,10 @@ export function ProjectTaskLayout({
     pendingServerLayoutRef.current = null;
     keyboardTaskEdgeRef.current = 'before';
     lastTaskTargetRef.current = null;
+    dragGroupRef.current = null;
     setActiveTask(null);
+    setDragGroup(null);
+    setCollapsePending(false);
   };
 
   const restoreTaskDrag = () => {
@@ -595,14 +655,29 @@ export function ProjectTaskLayout({
     const focused = document.activeElement as HTMLElement | null;
     const sortableTask = focused?.closest<HTMLElement>('[data-sortable-task-id]');
     if (sortableTask?.dataset.sortableTaskId === activeId) focused?.blur();
-    handleBlankClick();
+    const group = dragGroupOf(
+      activeId,
+      orderedTaskIds(layoutRef.current),
+      useSelectionStore.getState().selectedIds,
+    );
+    // 多项拖拽保留多选（松手后整组仍选中）；单项拖拽照旧清掉选中。
+    if (!group) handleBlankClick();
 
     dragStartLayoutRef.current = cloneLayout(layoutRef.current);
     pendingServerLayoutRef.current = null;
     activeTaskIdRef.current = activeId;
     keyboardTaskEdgeRef.current = 'before';
     lastTaskTargetRef.current = null;
+    dragGroupRef.current = group;
     setActiveTask(task);
+    setDragGroup(group);
+    setCollapsePending(!!group);
+  };
+
+  /** 松手时的最终布局：多项拖拽把整组放回被拖任务的位置。 */
+  const withGroup = (next: LayoutState, activeId: string) => {
+    const group = dragGroupRef.current;
+    return group ? withDragGroup(next, activeId, group) : next;
   };
 
   const previewTaskTarget = (activeKey: string) => {
@@ -622,6 +697,21 @@ export function ProjectTaskLayout({
   const handleDragOver = ({ active, over }: DragOverEvent) => {
     if (!over) return;
     const overKey = String(over.id);
+    if (!isLayoutKey(overKey)) {
+      // 指针在列表外的落点上（侧边栏）：空位回到原处，不暗示列表内重排。
+      lastTaskTargetRef.current = null;
+      const snapshot = dragStartLayoutRef.current;
+      const activeId = activeTaskIdRef.current;
+      if (!snapshot || !activeId) return;
+      const group = dragGroupRef.current;
+      const origin = group
+        ? withoutTasks(snapshot, new Set(group.filter((id) => id !== activeId)))
+        : snapshot;
+      if (layoutsEqual(origin, layoutRef.current)) return;
+      flip.capture();
+      updateRenderedLayout(origin);
+      return;
+    }
     if (lastTaskTargetRef.current?.overKey !== overKey) {
       lastTaskTargetRef.current = { overKey, edge: keyboardTaskEdgeRef.current };
     }
@@ -644,7 +734,7 @@ export function ProjectTaskLayout({
         return;
       }
       if (!over) {
-        const finalLayout = layoutRef.current;
+        const finalLayout = withGroup(layoutRef.current, activeId);
         if (layoutsEqual(snapshot, finalLayout)) {
           restoreTaskDrag();
           return;
@@ -665,8 +755,10 @@ export function ProjectTaskLayout({
         return;
       }
 
-      const finalLayout =
-        moveTaskToPlacement(layoutRef.current, activeId, placement) ?? layoutRef.current;
+      const finalLayout = withGroup(
+        moveTaskToPlacement(layoutRef.current, activeId, placement) ?? layoutRef.current,
+        activeId,
+      );
       if (!layoutsEqual(finalLayout, layoutRef.current)) updateRenderedLayout(finalLayout);
       const changed = !layoutsEqual(snapshot, finalLayout);
       if (!changed) {
@@ -687,9 +779,31 @@ export function ProjectTaskLayout({
     if (activeTaskIdRef.current !== null) restoreTaskDrag();
   };
 
+  /** 拖到侧边栏的载荷：被拖任务，多选时为整组（按显示顺序）。 */
+  const sidebarPayload = (activeKey: string): SidebarDropPayload | null => {
+    if (!activeKey.startsWith('task:')) return null;
+    const ids = dragGroupRef.current ?? [activeKey.slice('task:'.length)];
+    const tasks = ids.flatMap((id) => taskMap.get(id) ?? []);
+    return tasks.length > 0 ? { kind: 'tasks', tasks } : null;
+  };
+
+  // 共享拖拽上下文里的一个 surface（ADR 0018）。
+  const surface = useDndSurface({
+    owns: isLayoutKey,
+    collisionDetection,
+    keyboardCoordinates,
+    sidebarPayload,
+    onDragStart: handleDragStart,
+    onDragMove: handleDragMove,
+    onDragOver: handleDragOver,
+    onDragEnd: handleDragEnd,
+    onDragCancel: handleDragCancel,
+  });
+
   const commonContainerProps = {
     taskMap,
     activeTaskId: activeTask?.id ?? null,
+    dragDisabled: !!visibleTaskIds,
     selectedIds,
     expandedId,
     onRowClick: handleRowClick,
@@ -709,17 +823,7 @@ export function ProjectTaskLayout({
       {!hasContent || filteredEmpty ? (
         <EmptyState hint={filteredEmpty ? (filteredEmptyHint ?? emptyHint) : emptyHint} />
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={collisionDetection}
-          // 实时预览每次重排都会改变行位置，碰撞检测须用最新的测量结果。
-          measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-          onDragStart={handleDragStart}
-          onDragMove={handleDragMove}
-          onDragOver={handleDragOver}
-          onDragEnd={handleDragEnd}
-          onDragCancel={handleDragCancel}
-        >
+        <>
           <TaskContainer
             {...commonContainerProps}
             id={UNGROUPED}
@@ -742,10 +846,11 @@ export function ProjectTaskLayout({
               );
             })}
           </SortableContext>
-          <DragOverlay dropAnimation={dropAnimation}>
+          {surface.overlayActive && (
+          <DragOverlay className={dragOverlayWrapperClass} dropAnimation={surface.dropAnimation}>
             {activeTask ? (
               <div
-                className={cn(dragOverlayClass, 'bg-card')}
+                className={cn(dragOverlayClass, 'relative bg-card')}
                 aria-hidden="true"
                 {...{ inert: '' }}
               >
@@ -754,10 +859,12 @@ export function ProjectTaskLayout({
                   selectionState="idle"
                   onToggleComplete={() => undefined}
                 />
+                <DragCountBadge count={dragGroup?.length ?? 0} />
               </div>
             ) : null}
           </DragOverlay>
-        </DndContext>
+          )}
+        </>
       )}
     </div>
   );
