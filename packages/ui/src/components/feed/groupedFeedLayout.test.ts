@@ -133,6 +133,7 @@ interface DeriveOpts {
   areas?: AreaResponseDto[];
   groupingEnabled?: boolean;
   retainGroupIds?: ReadonlySet<string>;
+  freshKeys?: ReadonlySet<string>;
 }
 
 function derive(items: FeedItem[], opts: DeriveOpts = {}): GroupedFeedLayout {
@@ -142,6 +143,7 @@ function derive(items: FeedItem[], opts: DeriveOpts = {}): GroupedFeedLayout {
     areas: opts.areas ?? [],
     groupingEnabled: opts.groupingEnabled ?? true,
     retainGroupIds: opts.retainGroupIds,
+    freshKeys: opts.freshKeys,
   });
 }
 
@@ -464,5 +466,52 @@ describe('grouped feed layout — taskOrder（视图任务序）', () => {
     );
 
     expect(layout.taskOrder).toEqual(['loose', 'in-p1', 'direct']);
+  });
+});
+
+describe('grouped feed layout — New in Today（新到区置顶）', () => {
+  it('lifts fresh tasks and standalone project rows to the top, out of their groups', () => {
+    const layout = derive(
+      [
+        taskItem('loose'),
+        taskItem('old', { projectId: 'p1' }),
+        taskItem('new', { projectId: 'p1' }),
+        projectItem('p2'),
+      ],
+      {
+        projects: [project('p1'), project('p2')],
+        freshKeys: new Set(['task:new', 'project:p2']),
+      },
+    );
+
+    expect(blockSummary(layout)).toEqual([
+      'task:new',
+      'projectRow:p2',
+      'task:loose',
+      'projectHeader:p1',
+      'task:old',
+    ]);
+    const fresh = layout.blocks.filter((b) => 'fresh' in b && b.fresh);
+    expect(fresh).toHaveLength(2);
+    expect(layout.taskOrder).toEqual(['new', 'loose', 'old']);
+  });
+
+  it('keeps a fresh project as its group header when it still has grouped tasks', () => {
+    const layout = derive([projectItem('p1'), taskItem('t', { projectId: 'p1' })], {
+      projects: [project('p1')],
+      freshKeys: new Set(['project:p1']),
+    });
+
+    expect(blockSummary(layout)).toEqual(['projectHeader:p1', 'task:t']);
+  });
+
+  it('puts fresh items first in the flat (ungrouped) layout', () => {
+    const layout = derive([taskItem('a'), taskItem('b'), taskItem('c')], {
+      groupingEnabled: false,
+      freshKeys: new Set(['task:c']),
+    });
+
+    expect(blockSummary(layout)).toEqual(['task:c', 'task:a', 'task:b']);
+    expect(layout.taskOrder).toEqual(['c', 'a', 'b']);
   });
 });

@@ -18,6 +18,7 @@ import type { TaskResponseDto } from '@taskora/shared';
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import { useSwipeToSelect } from '../../lib/useSwipeToSelect';
+import { NewInTodayDot } from './NewInTodayDot';
 import { TaskCheckbox } from './TaskCheckbox';
 import { TaskContextMenu } from './TaskContextMenu';
 import { TaskDateBadge } from './TaskDateBadge';
@@ -48,6 +49,8 @@ interface Props {
   settledDateBadge?: React.ReactNode;
   /** Logbook 场景：已了结标题保留删除线但不置灰（正常前景色）。 */
   plainSettledTitle?: boolean;
+  /** New in Today 新到条目：行首左侧黄点。 */
+  newInToday?: boolean;
 }
 
 export function TaskItem({
@@ -60,6 +63,7 @@ export function TaskItem({
   showScheduledBadge = true,
   settledDateBadge,
   plainSettledTitle = false,
+  newInToday = false,
 }: Props) {
   useCalendarDay();
   const { t } = useTranslation();
@@ -242,7 +246,7 @@ export function TaskItem({
               data-selection-row={task.id}
               tabIndex={onRowClick ? (selectionState !== 'idle' ? 0 : -1) : undefined}
               className={cn(
-                'flex min-w-0 items-center gap-2.5 rounded-md px-2 py-1 transition-colors',
+                'relative flex min-w-0 items-center gap-2.5 rounded-md px-2 py-1 transition-colors',
                 // 无归属任务保持单行紧凑高度；有归属时由标题行 + 归属小字行
                 // 自然撑高（参考 Things 3 的两段式任务行）。
                 !tag && 'h-8 max-md:h-11',
@@ -266,6 +270,7 @@ export function TaskItem({
               }}
               role={onRowClick ? 'button' : undefined}
             >
+              {newInToday && !expanded && !settled && <NewInTodayDot />}
               {/* 复选框放入 20px 固定槽位，与项目行/组头的进度环（20px）同宽，
             保证混合列表中任务与项目的标题起始位置对齐。 */}
               <span className="flex h-5 w-5 shrink-0 items-center justify-center">

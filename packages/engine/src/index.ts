@@ -1,4 +1,12 @@
-export { HybridClock, compareHlc, formatHlc, hlcWallMs, parseHlc, type HlcParts } from './hlc';
+export {
+  HybridClock,
+  compareHlc,
+  formatHlc,
+  hlcIsoTime,
+  hlcWallMs,
+  parseHlc,
+  type HlcParts,
+} from './hlc';
 export {
   normalizeRepeatRule,
   canonicalRepeatRule,

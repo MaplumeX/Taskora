@@ -6,6 +6,7 @@ import { deviceTimeZone, isValidTimeZone, type UserPreferences } from '@taskora/
 import { i18n } from '@/i18n/config';
 import {
   isValidLanguage,
+  laterDateKey,
   normalizePreferences,
   type Language,
   type ThemeMode,
@@ -70,11 +71,15 @@ interface PreferencesState {
   weekStartsOn: WeekStartsOn;
   /** 时间视图按项目/领域分组（Grouped View）全局开关，默认开启。 */
   bucketGrouping: boolean;
+  /** 最近一次查看 Today 的日期（New in Today 的基线，见 UserPreferences）。 */
+  todayReviewedOn: string | null;
   resolved: 'light' | 'dark';
   setTheme: (m: ThemeMode) => void;
   setLanguage: (l: Language) => void;
   setWeekStartsOn: (v: WeekStartsOn) => void;
   setBucketGrouping: (v: boolean) => void;
+  /** 记下已看过 Today（只进不退）；返回是否推进了基线。 */
+  markTodayReviewed: (dateKey: string) => boolean;
   cycle: () => void;
   hydrateFromServer: (prefs: UserPreferences | null) => void;
 }
@@ -137,6 +142,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       language: initialLanguage(),
       weekStartsOn: 1,
       bucketGrouping: true,
+      todayReviewedOn: null,
       resolved: resolveTheme('system'),
       setTheme: (m) => {
         applyTheme(m);
@@ -148,6 +154,12 @@ export const usePreferencesStore = create<PreferencesState>()(
       },
       setWeekStartsOn: (v) => set({ weekStartsOn: v }),
       setBucketGrouping: (v) => set({ bucketGrouping: v }),
+      markTodayReviewed: (dateKey) => {
+        const current = get().todayReviewedOn;
+        if (laterDateKey(current, dateKey) === current) return false;
+        set({ todayReviewedOn: dateKey });
+        return true;
+      },
       cycle: () => {
         const order: ThemeMode[] = ['light', 'dark', 'system'];
         const current = order.indexOf(get().theme);
@@ -160,16 +172,15 @@ export const usePreferencesStore = create<PreferencesState>()(
         // against the same whitelists used for localStorage rehydration.
         // Missing fields fall back to the current local values so partial
         // server payloads never clobber local preferences.
-        const { theme, language, weekStartsOn, bucketGrouping, timeZone } = normalizePreferences(
-          prefs,
-          {
+        const { theme, language, weekStartsOn, bucketGrouping, timeZone, todayReviewedOn } =
+          normalizePreferences(prefs, {
             timeZone: get().timeZone,
             theme: get().theme,
             language: get().language,
             weekStartsOn: get().weekStartsOn,
             bucketGrouping: get().bucketGrouping,
-          },
-        );
+            todayReviewedOn: get().todayReviewedOn,
+          });
         applyTheme(theme);
         applyLanguageSideEffect(language);
         const legacyZone = isValidTimeZone(prefs.legacyDateTimeZone)
@@ -182,6 +193,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           language,
           weekStartsOn,
           bucketGrouping,
+          todayReviewedOn,
           timeZone,
           legacyDateTimeZone: legacyZone,
           resolved: resolveTheme(theme),
@@ -197,21 +209,21 @@ export const usePreferencesStore = create<PreferencesState>()(
         language: state.language,
         weekStartsOn: state.weekStartsOn,
         bucketGrouping: state.bucketGrouping,
+        todayReviewedOn: state.todayReviewedOn,
       }),
       merge: (persisted, current) => {
         // When the unified key is absent (first load after upgrade), fall back
         // to the legacy keys so existing users migrate transparently.
         const raw = persisted ?? readLegacyState();
-        const { theme, language, weekStartsOn, bucketGrouping, timeZone } = normalizePreferences(
-          raw,
-          {
+        const { theme, language, weekStartsOn, bucketGrouping, timeZone, todayReviewedOn } =
+          normalizePreferences(raw, {
             timeZone: current.timeZone,
             theme: current.theme,
             language: current.language,
             weekStartsOn: current.weekStartsOn,
             bucketGrouping: current.bucketGrouping,
-          },
-        );
+            todayReviewedOn: current.todayReviewedOn,
+          });
         return {
           ...current,
           timeZone,
@@ -222,6 +234,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           language,
           weekStartsOn,
           bucketGrouping,
+          todayReviewedOn,
           resolved: resolveTheme(theme),
         };
       },

@@ -82,6 +82,14 @@ export class UsersService {
     // Legacy ISO dates must not move when the user changes the account zone.
     const legacyDateTimeZone = current.legacyDateTimeZone ?? accountTimeZone(current);
     const merged = { ...current, ...dto, ...(dto.timeZone ? { legacyDateTimeZone } : {}) };
+    // New in Today 的已看日期只进不退：迟到的旧设备写入不回拨。
+    if (
+      typeof current.todayReviewedOn === 'string' &&
+      dto.todayReviewedOn !== undefined &&
+      dto.todayReviewedOn < current.todayReviewedOn
+    ) {
+      merged.todayReviewedOn = current.todayReviewedOn;
+    }
 
     return this.prisma.user.update({
       where: { id: userId },

@@ -12,6 +12,8 @@ import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection
 import { mainNav, trashNav, type NavItem } from '@/components/layout/navItems';
 import { sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import { useBucketCounts } from '@/components/layout/useBucketCounts';
+import { NewInTodayDot } from '@/components/task/NewInTodayDot';
+import { useHasNewInToday } from '@taskora/api';
 
 /** 侧边栏主导航（日志移至与废纸篓同一分组） */
 const SIDEBAR_MAIN_NAV = mainNav.filter((item) => item.to !== '/logbook');
@@ -42,7 +44,16 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const NavRow = ({ item, count }: { item: NavItem; count?: number }) => {
+const NavRow = ({
+  item,
+  count,
+  hasNew = false,
+}: {
+  item: NavItem;
+  count?: number;
+  /** Today 有尚未看过的新到条目：计数旁带黄点（New in Today）。 */
+  hasNew?: boolean;
+}) => {
   const { t } = useTranslation();
   const Icon = item.icon;
   return (
@@ -52,8 +63,18 @@ const NavRow = ({ item, count }: { item: NavItem; count?: number }) => {
     >
       <Icon className={cn('h-4 w-4 shrink-0', item.colorClass)} />
       <span className="truncate">{t(item.labelKey)}</span>
+      {hasNew && (
+        <span className="relative ml-auto h-1.5 w-1.5 shrink-0">
+          <NewInTodayDot className="left-1/2" />
+        </span>
+      )}
       {count !== undefined && count > 0 && (
-        <span className="ml-auto pl-1 text-meta font-normal tabular-nums text-muted-foreground">
+        <span
+          className={cn(
+            'pl-1 text-meta font-normal tabular-nums text-muted-foreground',
+            !hasNew && 'ml-auto',
+          )}
+        >
           {count > 99 ? '99+' : count}
         </span>
       )}
@@ -78,6 +99,7 @@ export function Sidebar() {
   const { data: allProjects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const { inboxCount, todayCount } = useBucketCounts();
+  const hasNewInToday = useHasNewInToday();
   const countByRoute: Record<string, number> = {
     '/inbox': inboxCount,
     '/today': todayCount,
@@ -134,7 +156,12 @@ export function Sidebar() {
 
         <div className="mt-4 flex flex-col gap-px">
           {SIDEBAR_MAIN_NAV.map((item) => (
-            <NavRow key={item.to} item={item} count={countByRoute[item.to]} />
+            <NavRow
+              key={item.to}
+              item={item}
+              count={countByRoute[item.to]}
+              hasNew={item.to === '/today' && hasNewInToday}
+            />
           ))}
         </div>
 

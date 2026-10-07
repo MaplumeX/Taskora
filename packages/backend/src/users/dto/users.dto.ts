@@ -5,6 +5,7 @@ import {
   IsOptional,
   IsString,
   IsUrl,
+  Matches,
   MaxLength,
   MinLength,
   ValidateIf,
@@ -59,6 +60,10 @@ export class UpdatePreferencesDto implements IUpdatePreferencesDto {
   @IsOptional()
   @IsBoolean()
   bucketGrouping?: boolean;
+
+  @IsOptional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
+  todayReviewedOn?: string;
 }
 
 export class DeleteAccountDto implements IDeleteAccountDto {
