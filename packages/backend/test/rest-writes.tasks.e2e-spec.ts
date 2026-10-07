@@ -65,7 +65,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
 
   // ---------- create ----------
 
-  it('create：全部领域字段落库，与日志同事务；排在字节序最前的 Position 之前', async () => {
+  it('create：全部领域字段落库，与日志同事务；排在字节序最后的 Position 之后', async () => {
     await seedTag('tag-a');
     await seedTag('tag-b');
     // 大小写混排：Postgres 默认排序规则会把 'a0a' 排在 'a0B' 前，字节序相反
@@ -87,7 +87,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
       bucket: TaskBucket.INBOX,
       scheduledType: ScheduledType.NONE,
       status: TaskStatus.ACTIVE,
-      position: positionBetween(null, 'a0B'),
+      position: positionBetween('a0a', null),
     });
     expect(row.tags.map((tt) => tt.tagId).sort()).toEqual(['tag-a', 'tag-b']);
     expect(dto.tags.map((tag) => tag.id).sort()).toEqual(['tag-a', 'tag-b']);

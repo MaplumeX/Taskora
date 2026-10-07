@@ -31,7 +31,7 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     setTaskBackend(backend);
   });
 
-  it('createTask：默认进 Inbox（无归属），带日期则落 SCHEDULED，新任务排最前', async () => {
+  it('createTask：默认进 Inbox（无归属），带日期则落 SCHEDULED，新任务追加到末尾', async () => {
     const first = await backend.createTask({ title: '第一条' });
     await backend.createTask({ title: '第二条' });
     expect(first.bucket).toBe(TaskBucket.INBOX);
@@ -45,9 +45,25 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     });
     expect(scheduled.bucket).toBe(TaskBucket.SCHEDULED);
 
-    // 新任务排最前（与 REST 时代 newest-first 观感一致）
+    await backend.createTask({ title: '第三条' });
+
+    // 新任务按创建顺序追加，计划任务不会出现在 Inbox。
     const inbox = await backend.getFeed('inbox');
-    expect(inbox.map((item) => item.title)).toEqual(['第二条', '第一条']);
+    expect(inbox.map((item) => item.title)).toEqual(['第一条', '第二条', '第三条']);
+  });
+
+  it('createTask：手动排序后，新任务仍追加在当前末尾，不改动原有任务位次', async () => {
+    const a = await backend.createTask({ title: 'A' });
+    const b = await backend.createTask({ title: 'B' });
+    await backend.reorderTasks([b.id, a.id]);
+    const before = await engine.list('task');
+
+    await backend.createTask({ title: 'C' });
+
+    expect((await backend.getFeed('inbox')).map((item) => item.title)).toEqual(['B', 'A', 'C']);
+    for (const row of before) {
+      expect((await engine.get('task', row.id))?.fields.position).toBe(row.fields.position);
+    }
   });
 
   it('Today feed 带出计划日期的写入时刻（New in Today），其他视图不带', async () => {
@@ -144,23 +160,23 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     const b = await backend.createTask({ title: 'B' });
     const c = await backend.createTask({ title: 'C' });
     await engine.sync();
-    // 新任务插在最前：当前顺序 C、B、A
-    expect((await backend.getFeed('inbox')).map((i) => i.title)).toEqual(['C', 'B', 'A']);
+    // 新任务追加到末尾：当前顺序 A、B、C
+    expect((await backend.getFeed('inbox')).map((i) => i.title)).toEqual(['A', 'B', 'C']);
     const positionOf = async (id: string) => (await engine.get('task', id))?.fields.position;
-    const [beforeB, beforeC] = [await positionOf(b.id), await positionOf(c.id)];
+    const [beforeA, beforeB] = [await positionOf(a.id), await positionOf(b.id)];
 
     let notifications = 0;
     const off = engine.onChange(() => {
       notifications += 1;
     });
-    // 把 A 拖到最前
-    await backend.reorderTasks([a.id, c.id, b.id]);
+    // 把 C 拖到最前
+    await backend.reorderTasks([c.id, a.id, b.id]);
     off();
-    expect((await backend.getFeed('inbox')).map((i) => i.title)).toEqual(['A', 'C', 'B']);
+    expect((await backend.getFeed('inbox')).map((i) => i.title)).toEqual(['C', 'A', 'B']);
 
-    // 只有 A 换了 Position；B、C 原样，Outbox 只多一条
+    // 只有 C 换了 Position；A、B 原样，Outbox 只多一条
+    expect(await positionOf(a.id)).toBe(beforeA);
     expect(await positionOf(b.id)).toBe(beforeB);
-    expect(await positionOf(c.id)).toBe(beforeC);
     expect(await engine.pendingCount()).toBe(1);
     expect(notifications).toBe(1);
   });
@@ -252,10 +268,10 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
       scheduledDate: '2026-01-05',
     });
 
-    // 新任务插最前（newest-first），看牙医为 SCHEDULED 不在 inbox
+    // 新任务追加到末尾，看牙医为 SCHEDULED 不在 Inbox。
     expect((await backend.getTasks({ view: 'inbox' })).map((t) => t.title)).toEqual([
-      '写文档',
       '买咖啡豆',
+      '写文档',
     ]);
     expect((await backend.getTasks({ tagId })).map((t) => t.title)).toEqual(['买咖啡豆']);
     expect((await backend.getTasks({ q: '咖啡' })).map((t) => t.title)).toEqual(['买咖啡豆']);

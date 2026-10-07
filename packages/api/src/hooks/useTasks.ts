@@ -253,10 +253,9 @@ export function useCreateTask() {
         createdAt: now,
         updatedAt: now,
       };
-      // 乐观插入置顶：与两种后端的列表语义一致（新任务 Position 排最前），避免回填真实值后任务
-      // 从底部跳到顶部的视觉抖动。
+      // 乐观追加到末尾，与两种后端的 Position 顺序一致，避免保存后位置跳动。
       queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) =>
-        old ? [tempTask, ...old] : old,
+        old ? [...old, tempTask] : old,
       );
       return { snapshot, tempId };
     },
@@ -268,14 +267,14 @@ export function useCreateTask() {
     onSuccess: (task, _data, ctx) => {
       // Replace temp item with server-returned real value. 幂等：并发缓存
       // 更新（SSE 缓存手术 / 桌面 engine 写后失效引发的 refetch）可能
-      // 已把真实行写入列表，temp 行已被冲掉——此时再首插会产生同 id
+      // 已把真实行写入列表，temp 行已被冲掉——此时再追加会产生同 id
       // 重复条目（React duplicate key），新建行在去重调和时被卸载重建，
       // 自动聚焦的标题输入框随之丢焦。过滤两个 id 后只插入一次。
       const tempId = ctx?.tempId;
       queryClient.setQueriesData<TaskResponseDto[]>({ queryKey: taskKeys.all }, (old) => {
         if (!old) return old;
         const deduped = old.filter((t) => t.id !== tempId && t.id !== task.id);
-        return [task, ...deduped];
+        return [...deduped, task];
       });
     },
     onSettled: () => {

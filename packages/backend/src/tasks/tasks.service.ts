@@ -156,11 +156,11 @@ export class TasksService {
     const fields = planTaskCreate(dto, await userCalendarZones(this.prisma, userId));
     const id = randomUUID();
     return this.hub.writeAsHub(userId, async (batch) => {
-      // 新任务排最前（与设备 Engine 后端同一口径）
-      const { first } = await edgePositions(batch.tx, 'Task', userId);
+      // 新任务追加到末尾（与设备 Engine 后端同一口径）
+      const { last } = await edgePositions(batch.tx, 'Task', userId);
       await batch.write('task', id, {
         ...toWireFields(fields),
-        position: positionBetween(null, first),
+        position: positionBetween(last, null),
       });
       return this.listDto(batch.tx, id);
     });
