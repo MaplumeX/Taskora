@@ -1,7 +1,6 @@
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Plus, Settings, FolderPlus, Layers } from 'lucide-react';
-import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
@@ -11,37 +10,17 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useCreateProject } from '@taskora/api';
-import { useCreateArea } from '@taskora/api';
-import { useUiInteractionStore } from '@taskora/api';
+import { useCreateListActions, useUiInteractionStore } from '@taskora/api';
 
 export function SidebarBottomBar() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const createProject = useCreateProject();
-  const createArea = useCreateArea();
-  const setPendingAutoEditId = useUiInteractionStore((s) => s.setPendingAutoEditId);
+  const { handleNewProject, handleNewArea, newProjectPending, newAreaPending } =
+    useCreateListActions({
+      navigateToProject: (id) => navigate(`/projects/${id}`),
+      navigateToArea: (id) => navigate(`/areas/${id}`),
+    });
   const openSettings = useUiInteractionStore((s) => s.openSettings);
-
-  const handleNewProject = () => {
-    createProject.mutate({ title: '' }, {
-      onSuccess: (p) => {
-        setPendingAutoEditId(p.id);
-        navigate(`/projects/${p.id}`);
-      },
-      onError: () => toast.error(t('common:createFailed')),
-    });
-  };
-
-  const handleNewArea = () => {
-    createArea.mutate({ title: '' }, {
-      onSuccess: (a) => {
-        setPendingAutoEditId(a.id);
-        navigate(`/areas/${a.id}`);
-      },
-      onError: () => toast.error(t('common:createFailed')),
-    });
-  };
 
   return (
     <div className="flex items-center justify-between gap-1 px-2 pb-3 pt-2">
@@ -65,14 +44,14 @@ export function SidebarBottomBar() {
           onCloseAutoFocus={(event) => event.preventDefault()}
         >
           <DropdownMenuItem
-            disabled={createProject.isPending}
-            onClick={handleNewProject}
+            disabled={newProjectPending}
+            onClick={() => handleNewProject()}
           >
             <FolderPlus className="h-4 w-4" />
             {t('common:newProject')}
           </DropdownMenuItem>
           <DropdownMenuItem
-            disabled={createArea.isPending}
+            disabled={newAreaPending}
             onClick={handleNewArea}
           >
             <Layers className="h-4 w-4" />
