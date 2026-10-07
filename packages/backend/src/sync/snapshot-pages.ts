@@ -10,7 +10,7 @@
 
 import { BadRequestException } from '@nestjs/common';
 import { SETTLED_TASK_STATUSES, ProjectStatus, TaskStatus } from '@taskora/shared';
-import type { SyncEntity } from '@taskora/engine';
+import { isTaskChildEntity, type SyncEntity } from '@taskora/engine';
 
 /** 一页快照最多的实体行数。 */
 export const BOOTSTRAP_PAGE_SIZE = 500;
@@ -20,7 +20,8 @@ export const COMPACTED_PAGE_SIZE = 5000;
 
 /**
  * 阶段顺序：先是结构（标签、区域、项目），再是未了结任务，最后是已了结
- * 任务与 Subtask——新设备逐页渲染时，首屏需要的数据最先到。
+ * 任务与 Task 子实体（Subtask、Attachment）——新设备逐页渲染时，首屏
+ * 需要的数据最先到。
  */
 export const SNAPSHOT_PHASES: ReadonlyArray<{
   entity: SyncEntity;
@@ -33,6 +34,7 @@ export const SNAPSHOT_PHASES: ReadonlyArray<{
   { entity: 'task', where: { status: TaskStatus.ACTIVE } },
   { entity: 'task', where: { status: { not: TaskStatus.ACTIVE } } },
   { entity: 'subtask' },
+  { entity: 'attachment' },
 ];
 
 export interface SnapshotToken {
@@ -90,14 +92,14 @@ export function archivedTaskWhere(cutoff: Date): Record<string, unknown> {
   };
 }
 
-/** 某用户在快照里的行：归属 + 省略归档任务（及其 Subtask）。 */
+/** 某用户在快照里的行：归属 + 省略归档任务（及其子实体）。 */
 export function snapshotOwnerWhere(
   entity: SyncEntity,
   userId: string,
   cutoff: Date | null,
 ): Record<string, unknown> {
   const tasks = cutoff ? { userId, NOT: archivedTaskWhere(cutoff) } : { userId };
-  if (entity === 'subtask') return { task: tasks };
+  if (isTaskChildEntity(entity)) return { task: tasks };
   if (entity === 'task') return tasks;
   return { userId };
 }

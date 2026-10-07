@@ -25,6 +25,7 @@ import type { SyncEntity, WireRow } from './entities';
 import { archiveCutoff, DEFAULT_ARCHIVE_AFTER_DAYS } from './archive';
 import {
   COMPACT_REGISTRY_RETENTION_DAYS,
+  ATTACHMENT_PROTOCOL,
   NUMERIC_HLC_PROTOCOL,
   TAG_TREE_PROTOCOL,
   SYNC_PROTOCOL_VERSION,
@@ -34,6 +35,7 @@ import {
   type OutboxEvent,
   type SyncTransport,
 } from './protocol';
+import { ATTACHMENT_RESYNC_META_KEY, TAG_TREE_RESYNC_META_KEY } from './migrations';
 import type { SqlStorage } from './storage';
 import { watchQuery, type LiveQuery, type QueryObserver, type QueryWatch } from './live-query';
 
@@ -339,7 +341,14 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
    */
   const rebalanceIfInflated = async (): Promise<void> => {
     await rebalanceFeedKeys();
-    for (const entity of ['project', 'tag', 'area', 'project-heading', 'subtask'] as SyncEntity[]) {
+    for (const entity of [
+      'project',
+      'tag',
+      'area',
+      'project-heading',
+      'subtask',
+      'attachment',
+    ] as SyncEntity[]) {
       if ((await replica.countInflatedPositions(entity, MAX_POSITION_LENGTH)) === 0) continue;
       const changes = rebalanceSegments(await replica.positionKeys(entity));
       await replica.updateMany(
@@ -378,8 +387,17 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
         await flush();
         await applyPull();
       }
-      // 嵌套 Tag 迁移后的一次性重取（见 consumeTagTreeResync）
-      if (hubProtocol >= TAG_TREE_PROTOCOL && (await replica.consumeTagTreeResync())) {
+      // 副本迁移后的一次性重取（见 consumeResync）：嵌套 Tag、Attachment
+      if (
+        hubProtocol >= TAG_TREE_PROTOCOL &&
+        (await replica.consumeResync(TAG_TREE_RESYNC_META_KEY))
+      ) {
+        await applyPull();
+      }
+      if (
+        hubProtocol >= ATTACHMENT_PROTOCOL &&
+        (await replica.consumeResync(ATTACHMENT_RESYNC_META_KEY))
+      ) {
         await applyPull();
       }
       await rebalanceIfInflated();

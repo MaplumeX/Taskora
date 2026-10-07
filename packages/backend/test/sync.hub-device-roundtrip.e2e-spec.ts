@@ -407,6 +407,65 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     await device.close();
   }, 120_000);
 
+  it('Attachment：经父 Task 认领落库、到达另一台设备；删除 Task 级联登记并广播 Compact', async () => {
+    const transport: SyncTransport = {
+      push: (request) => hub.push(USER, request.events, request.deletes),
+      pull: async (request) => await buffer.pull(USER, request.cursor),
+      bootstrap: () => hub.bootstrap(USER),
+    };
+    const open = async (deviceId: string) =>
+      openEngine({ storage: await createNodeSqliteStorage(':memory:'), deviceId, transport });
+    const a = await open('dev-a');
+    const b = await open('dev-b');
+
+    const taskId = await a.create('task', { title: '带附件', bucket: 'INBOX', status: 'ACTIVE' });
+    const attachmentId = await a.create('attachment', {
+      taskId,
+      name: '合同.pdf',
+      mimeType: 'application/pdf',
+      size: 2048,
+      blobHash: 'c'.repeat(64),
+    });
+    // 非整数 size 被 hub 剔除、以必胜时钟下发列默认值，不卡住 push
+    const bad = await a.create('attachment', {
+      taskId,
+      name: 'bad.bin',
+      size: 'big',
+      blobHash: 'd'.repeat(64),
+    });
+    await a.sync();
+    expect(await a.pendingCount()).toBe(0);
+    const row = await testPrisma.attachment.findUnique({ where: { id: attachmentId } });
+    expect(row).toMatchObject({ taskId, name: '合同.pdf', size: 2048 });
+    expect((await testPrisma.attachment.findUnique({ where: { id: bad } }))?.size).toBe(0);
+    await a.sync();
+    expect((await a.get('attachment', bad))?.fields.size).toBe(0);
+
+    await b.sync();
+    expect((await b.get('attachment', attachmentId))?.fields).toMatchObject({
+      taskId,
+      name: '合同.pdf',
+      size: 2048,
+      blobHash: 'c'.repeat(64),
+    });
+    // bootstrap 也带上附件
+    const snapshot = await hub.bootstrapPage(USER, {});
+    expect(snapshot.snapshot.some((entry) => entry.entity === 'attachment')).toBe(true);
+
+    await a.delete('task', [taskId]);
+    await a.sync();
+    await b.sync();
+    expect(await testPrisma.attachment.count({ where: { taskId } })).toBe(0);
+    expect(
+      await testPrisma.compactedEntity.count({
+        where: { userId: USER, entity: 'attachment', entityId: { in: [attachmentId, bad] } },
+      }),
+    ).toBe(2);
+    expect(await b.get('attachment', attachmentId)).toBeNull();
+    await a.close();
+    await b.close();
+  });
+
   it('嵌套 Tag：两台设备离线互设父 Tag，hub 合并后断环，两端收敛到同一棵树', async () => {
     const transport: SyncTransport = {
       push: (request) => hub.push(USER, request.events, request.deletes),

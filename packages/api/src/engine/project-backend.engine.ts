@@ -35,7 +35,7 @@ import type {
 } from '@taskora/shared';
 
 import type { ProjectBackend } from '../api/project-backend';
-import { positionedRows, projectRowToDto, tagIndexFor } from './mappers';
+import { attachmentSources, positionedRows, projectRowToDto, tagIndexFor } from './mappers';
 
 function zones(): CalendarZones {
   return { timeZone: currentTimeZone(), legacyDateTimeZone: currentLegacyDateTimeZone() };
@@ -134,9 +134,11 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
       position: positionAfter(projects, parent.id),
     });
 
-    const [headings, subtasks] = await Promise.all([
+    const taskIds = { in: tasks.map((row) => row.id) };
+    const [headings, subtasks, attachments] = await Promise.all([
       engine.list('project-heading', { where: { projectId: parent.id } }),
-      engine.list('subtask', { where: { taskId: { in: tasks.map((row) => row.id) } } }),
+      engine.list('subtask', { where: { taskId: taskIds } }),
+      engine.list('attachment', { where: { taskId: taskIds } }),
     ]);
     const copy = plan.copyFor(instanceId, {
       headings: positionedRows(headings).map((heading, index) => ({
@@ -167,10 +169,14 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
         title: (subtasks[index].fields.title as string) ?? '',
         taskId: (subtasks[index].fields.taskId as string) ?? '',
       })),
+      attachments: attachmentSources(attachments),
     });
     for (const heading of copy.headings) await engine.create('project-heading', { ...heading });
     for (const task of copy.tasks) await engine.create('task', { ...task });
     for (const subtask of copy.subtasks) await engine.create('subtask', { ...subtask });
+    for (const attachment of copy.attachments) {
+      await engine.create('attachment', { ...attachment });
+    }
   }
 
   return {

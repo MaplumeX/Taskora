@@ -10,6 +10,7 @@ import { describe, expect } from 'vitest';
 import type { HubChange } from '@taskora/engine';
 
 import { AreasService } from '../src/areas/areas.service';
+import { AttachmentsService } from '../src/attachments/attachments.service';
 import { FeedService } from '../src/feed/feed.service';
 import { ProjectHeadingsService } from '../src/project-headings/project-headings.service';
 import { ProjectsService } from '../src/projects/projects.service';
@@ -43,6 +44,7 @@ export async function createHarness(timeZone = 'UTC') {
     hub,
     tasks: new TasksService(prisma, hub),
     subtasks: new SubtasksService(prisma, hub),
+    attachments: new AttachmentsService(prisma, hub),
     projects: new ProjectsService(prisma, hub),
     headings: new ProjectHeadingsService(prisma, hub),
     areas: new AreasService(prisma, hub),

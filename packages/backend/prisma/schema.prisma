@@ -231,7 +231,8 @@ model Task {
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  subtasks Subtask[]
+  subtasks    Subtask[]
+  attachments Attachment[]
 
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id])
@@ -275,6 +276,29 @@ model Subtask {
   /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
   fieldDigests Json?
 
+}
+
+/// Task 附件的元数据（ADR-0019）。文件内容是按 blobHash（sha256）寻址的
+/// Blob，存在 BlobStore 里，不在数据库中。mimeType / size / blobHash 创建后不再改写。
+model Attachment {
+  id        String   @id @default(uuid())
+  name      String
+  mimeType  String   @default("application/octet-stream")
+  size      Int      @default(0)
+  blobHash  String
+  /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
+  position  String?
+  taskId    String
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
+  fieldClocks  Json?
+  /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
+  fieldDigests Json?
+
+  @@index([taskId])
+  @@index([blobHash])
 }
 
 model ProjectHeading {

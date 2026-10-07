@@ -52,6 +52,7 @@ import { RepeatRuleField } from './fields/RepeatRuleField';
 import { MultiTagsField } from './fields/TagsField';
 import { MovePicker } from './fields/MovePicker';
 import { useSkipOccurrence } from './useSkipOccurrence';
+import { useConvertGuard } from './useConvertGuard';
 
 type PickerKind = 'scheduled' | 'move' | 'due' | 'tags' | 'repeat';
 
@@ -95,6 +96,7 @@ export function MultiSelectToolbar() {
   const cancelTask = useCancelTask();
   const uncancelTask = useUncancelTask();
   const convertToProject = useConvertTaskToProject();
+  const convertGuard = useConvertGuard();
   const skipOccurrence = useSkipOccurrence(single, active);
 
   const [picker, setPicker] = React.useState<PickerKind | null>(null);
@@ -165,11 +167,14 @@ export function MultiSelectToolbar() {
 
   const handleConvertToProject = () => {
     if (!single) return;
-    convertToProject.mutate(single.id, {
-      onSuccess: () => toast.success(t('task:convertSuccess')),
-      onError: () => toast.error(t('task:convertFailed')),
+    const id = single.id;
+    void convertGuard.guard(id, () => {
+      convertToProject.mutate(id, {
+        onSuccess: () => toast.success(t('task:convertSuccess')),
+        onError: () => toast.error(t('task:convertFailed')),
+      });
+      exit();
     });
-    exit();
   };
 
   // 勾选多项时字段卡片不预选任何值（各任务取值不一）。
@@ -318,6 +323,7 @@ export function MultiSelectToolbar() {
         )}
         {picker === 'repeat' && single && <RepeatRuleField current={single} onPatch={patchAll} />}
       </FieldPickerDialog>
+      {convertGuard.dialog}
     </div>
   );
 }

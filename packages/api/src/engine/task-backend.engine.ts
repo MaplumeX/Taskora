@@ -61,6 +61,8 @@ import {
   ProjectBucket,
 } from '@taskora/shared';
 import type {
+  AttachmentResponseDto,
+  CreateAttachmentDto,
   CreateSubtaskDto,
   CreateTaskDto,
   FeedItem,
@@ -73,6 +75,7 @@ import type {
   TaskFeedItem,
   TaskResponseDto,
   TaskSearchHit,
+  UpdateAttachmentDto,
   UpdateSubtaskDto,
   UpdateTaskDto,
 } from '@taskora/shared';
@@ -80,6 +83,8 @@ import type {
 import type { TaskBackend, TaskQuery, TaskSearchOptions } from '../api/task-backend';
 import {
   SETTLED_TASK_STATUSES as SETTLED_STATUSES,
+  attachmentRowToDto,
+  attachmentSources,
   positionedRows,
   projectRowToDto,
   subtaskRowToDto,
@@ -149,6 +154,15 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     const rows = await engine.list('subtask', { where: { taskId } });
     return rows.map((row) => subtaskRowToDto(row));
   }
+  async function attachmentsOf(taskId: string): Promise<AttachmentResponseDto[]> {
+    const rows = await engine.list('attachment', { where: { taskId } });
+    return rows.map((row) => attachmentRowToDto(row));
+  }
+  async function attachmentDto(id: string): Promise<AttachmentResponseDto> {
+    const row = await engine.get('attachment', id);
+    if (!row) throw new Error(`Attachment not found: ${id}`);
+    return attachmentRowToDto(row);
+  }
   async function taskDto(id: string): Promise<TaskResponseDto> {
     const row = await engine.get('task', id);
     if (!row) throw new Error(`Task not found: ${id}`);
@@ -176,6 +190,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
   ): Promise<string | null> {
     const f = parent.fields;
     const subtasks = await engine.list('subtask', { where: { taskId: parentId } });
+    const attachments = await engine.list('attachment', { where: { taskId: parentId } });
     const plan = planRepeatInstance(
       {
         id: parentId,
@@ -195,6 +210,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       })),
       settledAt,
       zones(),
+      attachmentSources(attachments),
     );
     if (!plan) return null;
     const linked = await engine.list('task', {
@@ -227,6 +243,9 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     });
     for (const subtask of plan.subtasksFor(instanceId)) {
       await engine.create('subtask', { ...subtask });
+    }
+    for (const attachment of plan.attachmentsFor(instanceId)) {
+      await engine.create('attachment', { ...attachment });
     }
     return instanceId;
   }
@@ -309,6 +328,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     async getTask(id: string): Promise<TaskResponseDto> {
       const dto = await taskDto(id);
       dto.subtasks = await subtasksOf(id);
+      dto.attachments = await attachmentsOf(id);
       return dto;
     },
 
@@ -587,6 +607,55 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       const rows = await engine.list('subtask', { where: { taskId } });
       await engine.updateMany(
         'subtask',
+        planReorder(positionedRows(rows), orderedIds).map(({ id, patch }) => ({
+          id,
+          patch: { ...patch },
+        })),
+      );
+    },
+
+    // ---------- Attachment 元数据（ADR-0019，全部本地，进 Outbox） ----------
+
+    async createAttachment(
+      taskId: string,
+      data: CreateAttachmentDto,
+    ): Promise<AttachmentResponseDto> {
+      const task = await engine.get('task', taskId);
+      if (!task) throw new Error(`Task not found: ${taskId}`);
+      if (data.id) {
+        const existing = await engine.get('attachment', data.id);
+        if (existing) return attachmentRowToDto(existing);
+      }
+      const id = await engine.create('attachment', {
+        ...(data.id ? { id: data.id } : {}),
+        taskId,
+        name: data.name,
+        mimeType: data.mimeType,
+        size: data.size,
+        blobHash: data.blobHash,
+        position: positionAtEnd(
+          positionedRows(await engine.list('attachment', { where: { taskId } })),
+        ),
+      });
+      return attachmentDto(id);
+    },
+
+    async updateAttachment(id: string, data: UpdateAttachmentDto): Promise<AttachmentResponseDto> {
+      const existing = await engine.get('attachment', id);
+      if (!existing) throw new Error(`Attachment not found: ${id}`);
+      // 只有文件名可改：内容（mimeType / size / blobHash）不可变
+      if (data.name !== undefined) await engine.update('attachment', id, { name: data.name });
+      return attachmentDto(id);
+    },
+
+    async deleteAttachment(id: string): Promise<void> {
+      await engine.delete('attachment', [id]);
+    },
+
+    async reorderAttachments(taskId: string, orderedIds: string[]): Promise<void> {
+      const rows = await engine.list('attachment', { where: { taskId } });
+      await engine.updateMany(
+        'attachment',
         planReorder(positionedRows(rows), orderedIds).map(({ id, patch }) => ({
           id,
           patch: { ...patch },

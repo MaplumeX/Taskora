@@ -1,14 +1,18 @@
 import type {
+  AttachmentResponseDto,
+  CreateAttachmentDto,
   CreateSubtaskDto,
   CreateTaskDto,
   FeedItem,
   FeedOrderItem,
   FeedView,
   ProjectResponseDto,
+  ReorderAttachmentsDto,
   ReorderSubtasksDto,
   SubtaskResponseDto,
   TaskResponseDto,
   TaskSearchHit,
+  UpdateAttachmentDto,
   UpdateSubtaskDto,
   UpdateTaskDto,
 } from '@taskora/shared';
@@ -154,6 +158,31 @@ export function uncancelSubtask(id: string): Promise<SubtaskResponseDto> {
 export function reorderSubtasks(taskId: string, orderedIds: string[]): Promise<void> {
   const body: ReorderSubtasksDto = { orderedIds };
   return apiClient.post(`/tasks/${taskId}/subtasks/reorder`, body).then(() => undefined);
+}
+
+export function createAttachment(
+  taskId: string,
+  data: CreateAttachmentDto,
+): Promise<AttachmentResponseDto> {
+  return apiClient
+    .post<AttachmentResponseDto>(`/tasks/${taskId}/attachments`, data)
+    .then((res) => res.data);
+}
+
+export function updateAttachment(
+  id: string,
+  data: UpdateAttachmentDto,
+): Promise<AttachmentResponseDto> {
+  return apiClient.patch<AttachmentResponseDto>(`/attachments/${id}`, data).then((res) => res.data);
+}
+
+export function deleteAttachment(id: string): Promise<void> {
+  return apiClient.delete(`/attachments/${id}`).then(() => undefined);
+}
+
+export function reorderAttachments(taskId: string, orderedIds: string[]): Promise<void> {
+  const body: ReorderAttachmentsDto = { orderedIds };
+  return apiClient.post(`/tasks/${taskId}/attachments/reorder`, body).then(() => undefined);
 }
 
 export function emptyTrash(): Promise<{ deletedTasks: number; deletedProjects: number }> {

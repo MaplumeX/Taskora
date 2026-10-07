@@ -230,6 +230,7 @@ describe('Logbook 归档', () => {
     const doneProject = await a.create('project', { title: '已完成', status: 'COMPLETED' });
     const archived = await task(a, '归档', settled());
     await a.create('subtask', { title: '归档的子任务', taskId: archived, status: 'COMPLETED' });
+    await a.create('attachment', { taskId: archived, name: '归档的附件.pdf', size: 1 });
     await task(a, '近期了结', settled({ settledAt: RECENT }));
     await task(a, '进行中项目里的旧任务', settled({ projectId: activeProject }));
     await task(a, '已完成项目里的旧任务', settled({ projectId: doneProject }));
@@ -244,6 +245,7 @@ describe('Logbook 归档', () => {
     await b.sync();
     expect(await taskTitles(b)).toEqual(kept);
     expect(await b.list('subtask')).toHaveLength(0);
+    expect(await b.list('attachment')).toHaveLength(0);
 
     // 同一规则：保留全部历史的设备改用 1 年保留期后裁到同样的集合
     const c = await device(hub, 'C', { archiveAfterDays: null });
@@ -253,6 +255,7 @@ describe('Logbook 归档', () => {
     await pruning.sync();
     await pruning.maintain();
     expect(await taskTitles(pruning)).toEqual(kept);
+    expect(await pruning.list('attachment')).toHaveLength(0);
     await a.close();
     await b.close();
     await c.close();
@@ -270,21 +273,30 @@ describe('Logbook 归档', () => {
     expect(await b.get('task', synced)).toBeNull();
     const pending = await task(b, '本机刚了结的旧任务', settled());
     const withSubtaskEdit = await task(b, '子任务有待推送写', settled());
+    const withAttachmentEdit = await task(b, '附件有待推送写', settled());
     await b.flush();
     await b.create('subtask', { title: '离线加的', taskId: withSubtaskEdit, status: 'ACTIVE' });
+    await b.create('attachment', { taskId: withAttachmentEdit, name: '离线加的.pdf', size: 1 });
     await b.update('task', pending, { notes: '离线改' });
     const changes: EngineChange[] = [];
     b.onChange((change) => changes.push(change));
     await b.maintain();
-    expect(await taskTitles(b)).toEqual(['子任务有待推送写', '本机刚了结的旧任务']);
+    expect(await taskTitles(b)).toEqual([
+      '子任务有待推送写',
+      '本机刚了结的旧任务',
+      '附件有待推送写',
+    ]);
     expect(changes).toEqual([]);
-    expect(await b.pendingCount()).toBe(2);
+    expect(await b.pendingCount()).toBe(3);
 
     await b.flush();
     await b.maintain();
     expect(await b.list('task')).toHaveLength(0);
     expect(await b.list('subtask')).toHaveLength(0);
-    expect(changes.at(-1)?.ids?.task?.sort()).toEqual([pending, withSubtaskEdit].sort());
+    expect(await b.list('attachment')).toHaveLength(0);
+    expect(changes.at(-1)?.ids?.task?.sort()).toEqual(
+      [pending, withSubtaskEdit, withAttachmentEdit].sort(),
+    );
     expect(await b.isCompacted('task', pending)).toBe(false);
     expect(await b.pendingCount()).toBe(0);
     // hub 上照常存在
@@ -299,6 +311,7 @@ describe('Logbook 归档', () => {
     const archived = await task(a, '旧任务', settled({ createdAt: OLD }));
     await a.create('subtask', { title: '步骤 1', taskId: archived, status: 'COMPLETED' });
     await a.create('subtask', { title: '步骤 2', taskId: archived, status: 'COMPLETED' });
+    await a.create('attachment', { taskId: archived, name: '附件.pdf', size: 1 });
     const other = await task(a, '另一个旧任务', settled({ createdAt: OLD }));
     const otherSubtask = await a.create('subtask', {
       title: '另一个的步骤',
@@ -319,6 +332,8 @@ describe('Logbook 归档', () => {
     expect((await b.get('task', archived))?.fields.status).toBe('ACTIVE');
     const subtasks = await b.list('subtask', { where: { taskId: archived } });
     expect(subtasks.map((row) => row.fields.title).sort()).toEqual(['步骤 1', '步骤 2']);
+    const attachments = await b.list('attachment', { where: { taskId: archived } });
+    expect(attachments.map((row) => row.fields.name)).toEqual(['附件.pdf']);
     expect((await b.get('task', other))?.fields.title).toBe('另一个旧任务');
 
     // 仍是归档状态的那个在下一次维护时再被裁掉

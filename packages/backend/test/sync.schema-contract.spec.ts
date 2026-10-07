@@ -3,6 +3,9 @@ import { describe, expect, it } from 'vitest';
 import { Prisma } from '@prisma/client';
 import { ENTITIES, SYNC_ENTITIES, schemaDdl } from '@taskora/engine';
 
+import { PrismaService } from '../src/prisma/prisma.service';
+import { codecFor } from '../src/sync/entity-codec';
+
 /**
  * 契约测试：Engine SQL schema ↔ Prisma schema（ADR-0007 明确要求）。
  *
@@ -18,6 +21,7 @@ const PRISMA_MODEL_NAMES: Record<string, string> = {
   'project-heading': 'ProjectHeading',
   area: 'Area',
   tag: 'Tag',
+  attachment: 'Attachment',
 };
 
 type PrismaMapping =
@@ -46,6 +50,14 @@ describe('Engine SQL schema ↔ Prisma schema 契约', () => {
     for (const entity of SYNC_ENTITIES) {
       const modelName = PRISMA_MODEL_NAMES[entity];
       expect(models.has(modelName), `${entity} → ${modelName}`).toBe(true);
+    }
+  });
+
+  it('PrismaService 为每个同步实体暴露模型委托（hub 经它读写）', () => {
+    for (const entity of SYNC_ENTITIES) {
+      const model = codecFor(entity).model;
+      const getter = Object.getOwnPropertyDescriptor(PrismaService.prototype, model)?.get;
+      expect(getter, `PrismaService.${model}`).toBeDefined();
     }
   });
 
@@ -105,6 +117,7 @@ describe('Engine SQL schema ↔ Prisma schema 契约', () => {
       ProjectHeading: new Set(['userId', 'fieldClocks', 'fieldDigests']),
       Area: new Set(['userId', 'fieldClocks', 'fieldDigests']),
       Tag: new Set(['userId', 'fieldClocks', 'fieldDigests']),
+      Attachment: new Set(['fieldClocks', 'fieldDigests']),
     };
 
     for (const [entity, modelName] of Object.entries(PRISMA_MODEL_NAMES)) {

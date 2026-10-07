@@ -17,6 +17,7 @@ import {
 } from '@taskora/shared';
 import type {
   AreaResponseDto,
+  AttachmentResponseDto,
   ProjectHeadingResponseDto,
   ProjectResponseDto,
   RepeatRule,
@@ -106,6 +107,37 @@ export function subtaskRowToDto(row: ReplicaRow): SubtaskResponseDto {
     createdAt: (f.createdAt as string) ?? new Date().toISOString(),
     updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),
   };
+}
+
+export function attachmentRowToDto(row: ReplicaRow): AttachmentResponseDto {
+  const f = row.fields;
+  return {
+    id: row.id,
+    taskId: (f.taskId as string) ?? '',
+    name: (f.name as string) ?? '',
+    mimeType: (f.mimeType as string | null) ?? 'application/octet-stream',
+    size: typeof f.size === 'number' ? f.size : 0,
+    blobHash: (f.blobHash as string) ?? '',
+    position: typeof f.position === 'string' ? f.position : null,
+    createdAt: (f.createdAt as string) ?? new Date().toISOString(),
+    updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),
+  };
+}
+
+/** 附件行 → 重复派生的复制来源（元数据原样，指向同一 Blob）。 */
+export function attachmentSources(rows: readonly ReplicaRow[]) {
+  return rows.map((row) => {
+    const dto = attachmentRowToDto(row);
+    return {
+      id: dto.id,
+      taskId: dto.taskId,
+      name: dto.name,
+      mimeType: dto.mimeType,
+      size: dto.size,
+      blobHash: dto.blobHash,
+      position: dto.position ?? null,
+    };
+  });
 }
 
 export function projectRowToDto(

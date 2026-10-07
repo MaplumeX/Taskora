@@ -61,6 +61,8 @@ pnpm install
 ```env
 DATABASE_URL=postgresql://taskora:taskora@localhost:5432/taskora?schema=public
 JWT_SECRET=your-secret-here
+# 可选：附件文件的存放目录，缺省为 packages/backend/data/blobs
+BLOB_STORAGE_DIR=./data/blobs
 ```
 
 前端 —— `packages/frontend/.env`：
@@ -202,6 +204,8 @@ docker compose up -d --build
 - `frontend`：端口 7646（nginx 托管 SPA，并将 `/api` 反向代理到后端）
 
 Compose 会等待 PostgreSQL 健康检查通过后再启动后端。修改 `VITE_API_URL` 后，需要使用 `--build` 重新构建前端镜像。
+
+任务附件的文件内容存在 `blobs` 卷里（数据库只存附件的元数据）。备份与迁移时，`pgdata` 和 `blobs` 两个卷要一起处理。
 
 ### 手动构建镜像
 

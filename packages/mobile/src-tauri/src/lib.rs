@@ -101,6 +101,8 @@ pub fn run() {
         // 进程（对齐标准 Android 语义；onBackButtonPress 注册即接管默认返回，
         // 收尾动作由壳层显式选择）。
         .plugin(tauri_plugin_background::init())
+        // 附件（ADR-0019）：交给系统里能打开该类型的应用（FileProvider）。
+        .plugin(tauri_plugin_attachments::init())
         .setup(|app| {
             // Local Replica 目录注册（ADR-0007）。Builder 的 setup 与
             // invoke_handler 都是「替换」语义，全部命令集中在下方唯一的

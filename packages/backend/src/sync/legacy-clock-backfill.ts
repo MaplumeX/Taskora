@@ -24,6 +24,7 @@ const TABLE_NAMES: Record<string, string> = {
   'project-heading': 'ProjectHeading',
   area: 'Area',
   tag: 'Tag',
+  attachment: 'Attachment',
 };
 
 const BATCH_SIZE = 500;

@@ -303,6 +303,14 @@ export function deriveSubtaskId(parentInstanceId: string, ordinal: number): stri
 }
 
 /**
+ * 派生 Attachment id = hash(parentInstanceId, 附件序号)（ADR-0019）。
+ * 与 Subtask 同一口径：并发派生的两台设备对同一父实例产出同一组附件。
+ */
+export function deriveAttachmentId(parentInstanceId: string, ordinal: number): string {
+  return stableHash('attachment', parentInstanceId, String(ordinal));
+}
+
+/**
  * 重复项目实例 id = hash(parentProjectId, canonicalRule, occurrenceDate)
  * （recurring-projects spec）。与任务实例同一口径，另起命名空间。
  */
@@ -321,7 +329,7 @@ export function deriveRepeatProjectId(
  */
 export function deriveRepeatCopyId(
   instanceProjectId: string,
-  kind: 'project-heading' | 'task' | 'subtask',
+  kind: 'project-heading' | 'task' | 'subtask' | 'attachment',
   sourceId: string,
 ): string {
   return stableHash('repeat-copy', instanceProjectId, kind, sourceId);

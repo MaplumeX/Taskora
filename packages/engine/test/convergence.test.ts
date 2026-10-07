@@ -1529,3 +1529,84 @@ describe('跨字段不变量：并发编辑合并后确定性修复（local-firs
     expect(remote).toEqual([]);
   });
 });
+
+describe('Attachment（ADR-0019：Task 附件元数据）', () => {
+  const blob = (seed: string) => seed.repeat(64).slice(0, 64);
+  const attach = (engine: Engine, taskId: string, name: string) =>
+    engine.create('attachment', {
+      taskId,
+      name,
+      mimeType: 'application/pdf',
+      size: 1024,
+      blobHash: blob(name[0]),
+    });
+
+  it('附件元数据随同步到达其他设备；size 为整数', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+    const taskId = await createTask(a, '报销');
+    const id = await attach(a, taskId, 'invoice.pdf');
+    await a.sync();
+    await b.sync();
+    expect((await b.get('attachment', id))?.fields).toMatchObject({
+      taskId,
+      name: 'invoice.pdf',
+      mimeType: 'application/pdf',
+      size: 1024,
+      blobHash: blob('i'),
+    });
+    await a.update('attachment', id, { name: '发票.pdf' });
+    await a.sync();
+    await b.sync();
+    expect((await b.get('attachment', id))?.fields.name).toBe('发票.pdf');
+    await a.close();
+    await b.close();
+  });
+
+  it('删除 Task 级联删除附件（两端）；单独移除附件走 Delete Request', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+    const kept = await createTask(a, '留下');
+    const removed = await attach(a, kept, 'old.pdf');
+    const remaining = await attach(a, kept, 'new.pdf');
+    const doomed = await createTask(a, '要删的');
+    const cascaded = await attach(a, doomed, 'x.pdf');
+    await a.sync();
+    await b.sync();
+
+    await a.delete('attachment', [removed]);
+    await a.delete('task', [doomed]);
+    expect(await a.get('attachment', cascaded)).toBeNull();
+    await a.sync();
+    await b.sync();
+
+    expect(await b.get('attachment', removed)).toBeNull();
+    expect(await b.get('attachment', cascaded)).toBeNull();
+    expect(await b.get('attachment', remaining)).not.toBeNull();
+    expect(h.hub.entityState(USER, 'attachment', cascaded)).toBeNull();
+    expect(await b.isCompacted('attachment', cascaded)).toBe(true);
+    await a.close();
+    await b.close();
+  });
+
+  it('迟到的附件 create 对已 compact 父 Task 被丢弃（无孤儿残留）', async () => {
+    const h = await makeHarness();
+    const a = await h.device('dev-a');
+    const b = await h.device('dev-b');
+    const taskId = await createTask(a, '父任务');
+    await a.sync();
+    await b.sync();
+    await a.delete('task', [taskId]);
+    await a.sync();
+
+    const id = await attach(b, taskId, 'late.pdf');
+    await b.sync();
+    await b.sync();
+    expect(h.hub.entityState(USER, 'attachment', id)).toBeNull();
+    expect(await b.get('attachment', id)).toBeNull();
+    await a.close();
+    await b.close();
+  });
+});

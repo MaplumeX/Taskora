@@ -18,7 +18,13 @@ import { resolveProjectBucket, resolveTaskBucket } from './bucket';
 import { dateKeyOf, daysBetweenKeys, shiftDateKey, type CalendarZones } from './calendar';
 import { sortByEffectivePosition, type Positioned } from './order';
 import type { ProjectFields, ProjectPatch } from './projects';
-import { planRepeatSkip, type RepeatSkipBlock } from './repeat-instance';
+import {
+  copyAttachment,
+  planRepeatSkip,
+  type RepeatAttachmentFields,
+  type RepeatParentAttachment,
+  type RepeatSkipBlock,
+} from './repeat-instance';
 import type { TaskFields, TaskPatch } from './tasks';
 
 export interface RepeatProjectParent {
@@ -77,10 +83,15 @@ export interface RepeatProjectSubtaskFields {
   settledAt: null;
 }
 
+export interface RepeatProjectAttachment extends RepeatParentAttachment {
+  taskId: string;
+}
+
 export interface RepeatProjectCopy {
   headings: RepeatHeadingFields[];
   tasks: Array<TaskFields & { id: string; position: string | null }>;
   subtasks: RepeatProjectSubtaskFields[];
+  attachments: RepeatAttachmentFields[];
 }
 
 /** 下一个项目实例的确定性 id 与出现日（无规则 / 链已终结为 null）。 */
@@ -118,6 +129,7 @@ const shifted = (value: unknown, days: number, zones: CalendarZones): string | n
  *   任务——只复制链的源头，下一轮重新起链）。重置为 ACTIVE，日期平移，
  *   repeatSourceId 清空，分组映射到副本。
  * - Subtask：随任务复制，重置为未完成。
+ * - 附件：随任务复制，指向同一 Blob（ADR-0019）。
  *
  * 子实体 id 由 copyFor(实际项目 id) 按来源 id 派生：调用方先经
  * repeatDerivationTarget 决定跳过 / 用确定性 id / 换新 id。
@@ -135,6 +147,7 @@ export function planRepeatProjectInstance(
       headings: ReadonlyArray<RepeatProjectHeading & { id: string }>;
       tasks: ReadonlyArray<RepeatProjectTask & { id: string }>;
       subtasks: ReadonlyArray<RepeatProjectSubtask & { id: string }>;
+      attachments?: ReadonlyArray<RepeatProjectAttachment & { id: string }>;
     },
   ) => RepeatProjectCopy;
 } | null {
@@ -220,7 +233,17 @@ export function planRepeatProjectInstance(
         settledAt: null,
       }));
 
-      return { headings, tasks, subtasks };
+      const attachments = sortByEffectivePosition(
+        (children.attachments ?? []).filter((attachment) => taskIds.has(attachment.taskId)),
+      ).map((attachment) =>
+        copyAttachment(
+          attachment,
+          deriveRepeatCopyId(instanceId, 'attachment', attachment.id),
+          taskIds.get(attachment.taskId)!,
+        ),
+      );
+
+      return { headings, tasks, subtasks, attachments };
     },
   };
 }

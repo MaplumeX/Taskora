@@ -10,7 +10,13 @@
 import { mergeFieldWrites, type EntityMergeState, type MergeOutcome } from './merger';
 import { repairEntity, type RepairProbes } from './invariants';
 import { formatHlc, hlcWallMs } from './hlc';
-import { DELETE_CASCADES, REFERENCE_FIELDS, SYNC_ENTITIES, type SyncEntity } from './entities';
+import {
+  DELETE_CASCADES,
+  isTaskChildEntity,
+  REFERENCE_FIELDS,
+  SYNC_ENTITIES,
+  type SyncEntity,
+} from './entities';
 import { isArchivedTask } from './archive';
 import type {
   BootstrapRequest,
@@ -203,7 +209,7 @@ export class InMemorySyncHub {
         after = id;
         const row = state.entities.get(`${entity}:${id}`)!;
         if (entity === 'task' && archived(id)) continue;
-        if (entity === 'subtask' && archived(row.fields.taskId)) continue;
+        if (isTaskChildEntity(entity) && archived(row.fields.taskId)) continue;
         snapshot.push({ entity, id, fields: row.fields, clocks: row.clocks });
       }
       if (snapshot.length < this.bootstrapPageSize) {
@@ -335,10 +341,11 @@ export class InMemorySyncHub {
       return;
     }
     const current = state.entities.get(key) ?? null;
-    // 孤儿 Subtask 防御：父 Task 不存在（含已被 compact）时丢弃，与
-    // NestJS hub 的越权拒绝路径同规则。局部更新不带 taskId，看现有行的。
+    // 孤儿子实体防御（Subtask / Attachment）：父 Task 不存在（含已被
+    // compact）时丢弃，与 NestJS hub 的越权拒绝路径同规则。局部更新不带
+    // taskId，看现有行的。
     const parentId = event.fields.taskId?.value ?? current?.fields.taskId;
-    if (event.entity === 'subtask' && !state.entities.has(`task:${parentId}`)) {
+    if (isTaskChildEntity(event.entity) && !state.entities.has(`task:${parentId}`)) {
       return;
     }
     const outcome = mergeFieldWrites(current, event.fields);
@@ -574,13 +581,13 @@ export function scrubReferences(
     }
 
     if (value == null) {
-      // Subtask.taskId 不可为 null（孤儿防御）：丢弃整事件
-      if (entity === 'subtask' && field === 'taskId') return false;
+      // 子实体的 taskId 不可为 null（孤儿防御）：丢弃整事件
+      if (isTaskChildEntity(entity) && field === 'taskId') return false;
       continue;
     }
     if (typeof value !== 'string') continue;
     if (probe(ref.entity, value) !== 'dead') continue;
-    if (entity === 'subtask' && field === 'taskId') return false;
+    if (isTaskChildEntity(entity) && field === 'taskId') return false;
     applyScrub(field, null, current, outcome, bumpClock);
   }
   return true;
