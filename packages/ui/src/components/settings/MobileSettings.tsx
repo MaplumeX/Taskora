@@ -67,7 +67,7 @@ function PageFallback() {
   );
 }
 
-/** 设置首页：账户卡片 + 分类分组列表，每行显示当前值。 */
+/** 设置首页：账号卡片 + 分类分组列表，每行显示当前值。 */
 function SettingsRoot({ open }: { open: (tab: SettingsTab) => void }) {
   const { t } = useTranslation(['settings', 'theme', 'common']);
   const user = useAuthStore((s) => s.user);

@@ -212,7 +212,7 @@ describe('TaskRowExpanded — icon button hints', () => {
     // 三个字段图标按钮（日期/到期/标签）hover 后应浮出 hint 文案。
     // Hint 为真实 400ms 延迟（非 fake timers），逐个 hover/unhover
     // 在 CI 慢环境下可能超过默认 5s，这里放宽单测超时。
-    const labelPatterns: RegExp[] = [/^(Date|日期)$/, /^(Due|到期)$/, /^(Tags|标签)$/];
+    const labelPatterns: RegExp[] = [/^(Scheduled date|计划日期)$/, /^(Deadline|截止日期)$/, /^(Tags|标签)$/];
     for (const pattern of labelPatterns) {
       const btn = screen.getByRole('button', { name: pattern });
       await user.hover(btn);
@@ -239,7 +239,7 @@ describe('TaskRowExpanded — 今天 chip 图标色', () => {
 
     await user.click(screen.getByText('My task'));
 
-    const chip = screen.getByRole('button', { name: /^(Date|日期)$/ });
+    const chip = screen.getByRole('button', { name: /^(Scheduled date|计划日期)$/ });
     const star = chip.querySelector('svg');
     expect(star).toBeTruthy();
     expect(star!.classList.contains('fill-today')).toBe(true);

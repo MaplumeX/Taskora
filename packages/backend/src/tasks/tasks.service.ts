@@ -82,7 +82,7 @@ export class TasksService {
     settledAt: string,
   ): Promise<void> {
     const repeatRule = parseRepeatRule(parent.repeatRule);
-    if (!repeatRule) return; // 非重复任务：不必查账户时区
+    if (!repeatRule) return; // 非重复任务：不必查账号时区
     const plan = planRepeatInstance(
       {
         id: parent.id,

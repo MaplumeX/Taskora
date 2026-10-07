@@ -34,7 +34,7 @@ describe('laterProjectKind', () => {
     expect(laterProjectKind(base, today)).toBeNull();
   });
 
-  it('已完成或在回收站的项目不是稍后项目', () => {
+  it('已完成或在废纸篓的项目不是稍后项目', () => {
     const someday = { ...base, scheduledType: ScheduledType.SOMEDAY };
     expect(laterProjectKind({ ...someday, status: ProjectStatus.COMPLETED }, today)).toBeNull();
     expect(laterProjectKind({ ...someday, trashedAt: '2026-09-27T00:00:00.000Z' }, today)).toBeNull();

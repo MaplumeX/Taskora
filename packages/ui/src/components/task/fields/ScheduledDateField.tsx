@@ -5,7 +5,6 @@ import {
   usePreferencesStore,
   startOfToday,
   startOfTomorrow,
-  isOverdue,
   isToday,
   isTomorrow,
   useReminderPermissionStore,
@@ -63,7 +62,7 @@ export function ScheduledDateField({
       : undefined;
   // 参考 Things 3：计划日期已过按「今天」对待——卡片选中今天，数据层
   // 日期不改写；只有在卡片里写提醒时才把计划日期一并落为今天。
-  const pastDate = storedDate !== undefined && isOverdue(storedDate);
+  const pastDate = storedDate !== undefined && storedDate < startOfToday();
   const selectedDate = pastDate ? startOfToday() : storedDate;
 
   const locale = getCalendarLocale(i18n.language);

@@ -149,7 +149,7 @@ describe('展开任务的归属入口', () => {
     expect(trigger.closest('.bg-card')).toBeNull();
     expect(trigger.closest('.shadow-row-lift')).toBeNull();
     expect(card).not.toHaveTextContent('Report');
-    expect(screen.getByRole('button', { name: 'Date' }).parentElement).toHaveClass('ml-auto');
+    expect(screen.getByRole('button', { name: 'Scheduled date' }).parentElement).toHaveClass('ml-auto');
   });
 
   it.each([
@@ -163,7 +163,7 @@ describe('展开任务的归属入口', () => {
   ])('在直接所属页面 $route 隐藏右下角归属', async ({ current, route }) => {
     await setup(current, route);
     expect(screen.queryByRole('button', { name: /Located in/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Date' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Scheduled date' })).toBeInTheDocument();
   });
 
   it.each([
@@ -207,7 +207,7 @@ describe('展开任务的归属入口', () => {
     expect(screen.queryByRole('button', { name: /Located in/ })).not.toBeInTheDocument();
     // 不留原归属入口的空白占位。
     expect(document.querySelector('[data-task-card]')!.nextElementSibling).toBeNull();
-    expect(screen.getByRole('button', { name: 'Date' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Scheduled date' })).toBeInTheDocument();
     setGrouping(false);
     expect(placement(title)).toBeInTheDocument();
   });

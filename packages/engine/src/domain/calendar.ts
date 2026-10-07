@@ -6,7 +6,7 @@
 
 import { calendarDateKey, instantDateKey } from '@taskora/shared';
 
-/** 账户时区：timeZone 定义「今天」，legacyDateTimeZone 解读旧的非零点时刻。 */
+/** 账号时区：timeZone 定义「今天」，legacyDateTimeZone 解读旧的非零点时刻。 */
 export interface CalendarZones {
   timeZone: string;
   legacyDateTimeZone: string;

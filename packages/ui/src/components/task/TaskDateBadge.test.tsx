@@ -39,7 +39,7 @@ describe('TaskDateBadge / TaskTodayBadge — When 的「今天」语义（参考
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('逾期日期不渲染日期 chip——When 永不逾期，不显示红色过期日期', () => {
+  it('已过的计划日期不渲染日期 chip——When 永不逾期，不显示红色过期日期', () => {
     const { container } = render(<TaskDateBadge scheduledDate={localDateIso(-3)} />);
     expect(container).toBeEmptyDOMElement();
   });

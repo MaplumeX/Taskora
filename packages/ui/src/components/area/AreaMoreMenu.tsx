@@ -23,7 +23,7 @@ export function AreaMoreMenu({ area }: AreaMoreMenuProps) {
   return <AreaMenu area={area} />;
 }
 
-/** 分组标题的右键入口：复用详情页的 Area 操作，不显示更多按钮。 */
+/** 分组头的右键入口：复用详情页的 Area 操作，不显示更多按钮。 */
 export function AreaContextMenu({
   area,
   children,

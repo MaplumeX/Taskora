@@ -184,10 +184,10 @@ describe('QuickAddCard', () => {
     const { onSubmit, title } = renderCard();
     await user.type(title, 'Call mom');
     await user.keyboard('{Control>}t{/Control}');
-    expect(screen.getByRole('button', { name: 'Date' })).toHaveTextContent('Today');
+    expect(screen.getByRole('button', { name: 'Scheduled date' })).toHaveTextContent('Today');
 
     await user.keyboard('{Control>}o{/Control}');
-    expect(screen.getByRole('button', { name: 'Date' })).toHaveTextContent('Someday');
+    expect(screen.getByRole('button', { name: 'Scheduled date' })).toHaveTextContent('Someday');
     await user.keyboard('{Control>}{Enter}{/Control}');
     expect(onSubmit).toHaveBeenCalledWith(
       { title: 'Call mom', when: { type: 'someday' } },

@@ -11,7 +11,7 @@ interface Props {
   selectionState?: SelectionState;
 }
 
-/** Area 分组标题保留图标、标题导航与右键菜单，与 Project 的图标槽位对齐。 */
+/** Area 分组头保留图标、标题导航与右键菜单，与 Project 的图标槽位对齐。 */
 export function AreaGroupHeaderRow({ area, selectionState = 'idle' }: Props) {
   const { t } = useTranslation();
 

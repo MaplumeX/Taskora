@@ -13,7 +13,7 @@ export interface LaterProjectFields {
 }
 
 /**
- * Later Project（稍后项目）判定的唯一来源（见 CONTEXT.md）：未了结、未进回收站，
+ * Later Project（稍后项目）判定的唯一来源（见 CONTEXT.md）：未了结、未进废纸篓，
  * 且为 Someday，或计划日期晚于账号时区的今天。日期为今天或已过即恢复活跃。
  *
  * `todayKey` 由调用方按账号时区给出；`legacyTimeZone` 用于解码旧的非零点时间戳。

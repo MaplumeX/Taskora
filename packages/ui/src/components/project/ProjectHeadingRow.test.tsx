@@ -59,7 +59,7 @@ describe('ProjectHeadingRow', () => {
 
     await user.click(screen.getByRole('button', { name: 'Build' }));
     const input = screen.getByRole('textbox', {
-      name: /New heading|新标题/,
+      name: /New heading|新项目分组标题/,
     });
     await user.clear(input);
     await user.type(input, 'Release');
@@ -76,7 +76,7 @@ describe('ProjectHeadingRow', () => {
     render(<ProjectHeadingRow heading={{ ...heading, title: '' }} />);
 
     const input = screen.getByRole('textbox', {
-      name: /New heading|新标题/,
+      name: /New heading|新项目分组标题/,
     });
     await waitFor(() => expect(input).toHaveFocus());
     expect(useUiInteractionStore.getState().pendingAutoEditId).toBeNull();
@@ -88,12 +88,12 @@ describe('ProjectHeadingRow', () => {
 
     await user.click(
       screen.getByRole('button', {
-        name: /Heading actions|标题操作/,
+        name: /Heading actions|项目分组标题操作/,
       }),
     );
     await user.click(
       await screen.findByRole('menuitem', {
-        name: /Delete heading|删除标题/,
+        name: /Delete heading|删除项目分组标题/,
       }),
     );
 
@@ -107,7 +107,7 @@ describe('ProjectHeadingRow', () => {
 
     await user.click(
       screen.getByRole('button', {
-        name: /Delete heading|删除标题/,
+        name: /Delete heading|删除项目分组标题/,
       }),
     );
     expect(mutationMocks.remove).toHaveBeenCalledWith(
@@ -125,7 +125,7 @@ describe('ProjectHeadingRow', () => {
 
     await user.click(
       screen.getByRole('button', {
-        name: /Heading actions|标题操作/,
+        name: /Heading actions|项目分组标题操作/,
       }),
     );
     await user.click(
@@ -149,7 +149,7 @@ describe('ProjectHeadingRow', () => {
 
     await user.click(
       screen.getByRole('button', {
-        name: /Heading actions|标题操作/,
+        name: /Heading actions|项目分组标题操作/,
       }),
     );
     await user.click(
@@ -178,7 +178,7 @@ describe('ProjectHeadingRow', () => {
   it('hides the drag handle for an archived heading', () => {
     render(<ProjectHeadingRow heading={archivedHeading} />);
     expect(
-      screen.queryByRole('button', { name: /Drag heading|拖动标题/ }),
+      screen.queryByRole('button', { name: /Drag heading|拖动项目分组标题/ }),
     ).not.toBeInTheDocument();
   });
 
@@ -187,7 +187,7 @@ describe('ProjectHeadingRow', () => {
     render(<ProjectHeadingRow heading={archivedHeading} />);
 
     await user.click(
-      screen.getByRole('button', { name: /Heading actions|标题操作/ }),
+      screen.getByRole('button', { name: /Heading actions|项目分组标题操作/ }),
     );
 
     expect(
@@ -203,7 +203,7 @@ describe('ProjectHeadingRow', () => {
     render(<ProjectHeadingRow heading={archivedHeading} />);
 
     await user.click(
-      screen.getByRole('button', { name: /Heading actions|标题操作/ }),
+      screen.getByRole('button', { name: /Heading actions|项目分组标题操作/ }),
     );
     await user.click(
       await screen.findByRole('menuitem', { name: /Unarchive|取消归档/ }),
