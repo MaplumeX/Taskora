@@ -136,6 +136,7 @@ export {
   useSelectionStore,
   flattenSelectionRows,
   toggleRowSelection,
+  contextMenuTargets,
   extendSelectionTo,
   type SelectionRow,
   type SelectionRowKind,

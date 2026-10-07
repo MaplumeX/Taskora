@@ -23,12 +23,15 @@ import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover'
 import { MenuRow } from '@/components/common/MenuRow';
 import { isTouchContextMenu } from '../../lib/useLongPress';
 import {
+  contextMenuTargets,
+  flattenSelectionRows,
   getClientKind,
   useCancelTask,
   useCompleteTask,
   useConvertTaskToProject,
   useDeleteTask,
   useRestoreTask,
+  useSelectionStore,
   useUncancelTask,
   useUncompleteTask,
   useUpdateTask,
@@ -36,7 +39,7 @@ import {
 import { ScheduledDateField } from './fields/ScheduledDateField';
 import { DueDateField } from './fields/DueDateField';
 import { RepeatRuleField } from './fields/RepeatRuleField';
-import { TagsField } from './fields/TagsField';
+import { MultiTagsField, TagsField } from './fields/TagsField';
 import { MovePicker } from './fields/MovePicker';
 import { useSkipOccurrence } from './useSkipOccurrence';
 
@@ -48,6 +51,20 @@ interface Props {
 }
 
 type PickerKind = 'scheduled' | 'repeat' | 'due' | 'tags' | 'move' | null;
+
+/** 各列表经 useSelectionScope 登记的行（完成 / 取消态、自身 Tag），与键盘批量动作同源。 */
+function selectionRowsById() {
+  return new Map(flattenSelectionRows(useSelectionStore.getState()).map((row) => [row.id, row]));
+}
+
+/** 整组是否全部已完成 / 全部已取消。 */
+function statusOfGroup(ids: string[]) {
+  const rows = selectionRowsById();
+  return {
+    completed: ids.every((id) => rows.get(id)?.completed),
+    cancelled: ids.every((id) => rows.get(id)?.cancelled),
+  };
+}
 
 export function TaskContextMenu({ task, current, children, variant = 'default' }: Props) {
   const { t } = useTranslation('task');
@@ -64,43 +81,52 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
 
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
+  // 右键在多选之中时作用于整组（打开菜单时取快照），否则为 null、只作用于本行。
+  const [group, setGroup] = React.useState<string[] | null>(null);
 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const firstItemRef = React.useRef<HTMLButtonElement>(null);
   const virtualAnchorRef = React.useRef<{ getBoundingClientRect: () => ClientRect } | null>(null);
 
-  const completed = current.status === 'COMPLETED';
-  const cancelled = current.status === 'CANCELLED';
+  // 整组：全部已完成 / 已取消时为撤销，否则只作用于尚未完成 / 取消的项（同触控多选工具栏）。
+  const groupStatus = group ? statusOfGroup(group) : null;
+  const completed = groupStatus ? groupStatus.completed : current.status === 'COMPLETED';
+  const cancelled = groupStatus ? groupStatus.cancelled : current.status === 'CANCELLED';
   const isDate = (current.scheduledType ?? ScheduledType.NONE) === ScheduledType.DATE;
 
   // 跳过本次：链已到头（until）时禁用。
   const skipOccurrence = useSkipOccurrence(current, menuOpen);
-  const canOfferSkip = variant === 'default' && skipOccurrence.available;
+  const canOfferSkip = !group && variant === 'default' && skipOccurrence.available;
   const skipTarget = skipOccurrence.target;
 
-  const patch = (data: UpdateTaskDto) =>
-    updateTask.mutate(
-      { id: task.id, data },
-      {
-        onError: () => toast.error(tc('saveFailed')),
-      },
-    );
+  const targets = group ?? [task.id];
+  // 整组时字段卡片不预选任何值（各任务取值不一）。
+  const fieldCurrent = group ? {} : current;
+  const onError = () => toast.error(tc('saveFailed'));
+
+  const patch = (data: UpdateTaskDto) => {
+    for (const id of targets) updateTask.mutate({ id, data }, { onError });
+  };
 
   const closeMenu = () => setMenuOpen(false);
 
   const handleToggleComplete = () => {
     closeMenu();
-    (completed ? uncompleteTask : completeTask).mutate(task.id, {
-      onError: () => toast.error(tc('saveFailed')),
-    });
+    const rows = selectionRowsById();
+    for (const id of targets) {
+      if (completed) uncompleteTask.mutate(id, { onError });
+      else if (!group || !rows.get(id)?.completed) completeTask.mutate(id, { onError });
+    }
   };
 
   // 取消与完成对称：终态可直接改写（ADR 0006），随当前状态切换文案。
   const handleToggleCancel = () => {
     closeMenu();
-    (cancelled ? uncancelTask : cancelTask).mutate(task.id, {
-      onError: () => toast.error(tc('saveFailed')),
-    });
+    const rows = selectionRowsById();
+    for (const id of targets) {
+      if (cancelled) uncancelTask.mutate(id, { onError });
+      else if (!group || !rows.get(id)?.cancelled) cancelTask.mutate(id, { onError });
+    }
   };
 
   const handleSkip = () => {
@@ -110,16 +136,18 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
 
   const handleDelete = () => {
     closeMenu();
-    deleteTask.mutate(task.id, {
-      onError: () => toast.error(t('deleteFailed')),
-    });
+    for (const id of targets) {
+      deleteTask.mutate(id, { onError: () => toast.error(t('deleteFailed')) });
+    }
+    if (group) useSelectionStore.getState().clearSelection();
   };
 
   const handleRestore = () => {
     closeMenu();
-    restoreTask.mutate(task.id, {
-      onError: () => toast.error(tc('restoreFailed')),
-    });
+    for (const id of targets) {
+      restoreTask.mutate(id, { onError: () => toast.error(tc('restoreFailed')) });
+    }
+    if (group) useSelectionStore.getState().clearSelection();
   };
 
   const handleConvertToProject = () => {
@@ -160,6 +188,8 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
     // 触屏长按派发的 contextmenu 不开菜单：长按只负责拖动（对齐 Things 3），
     // 操作走左滑多选工具栏（Trash 行同样如此，工具栏提供「放回」）。
     if (isTouchContextMenu(e)) return;
+    const ids = contextMenuTargets(task.id);
+    setGroup(ids.length > 1 ? ids : null);
     openMenuAt(e.clientX, e.clientY);
   };
 
@@ -179,6 +209,11 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
       <Popover open={menuOpen} onOpenChange={setMenuOpen}>
         <PopoverAnchor virtualRef={virtualAnchorRef} />
         <PopoverContent align="start" className="w-44 p-1" onClick={(e) => e.stopPropagation()}>
+          {group && (
+            <div className="px-2 pb-1 pt-0.5 text-xs text-muted-foreground">
+              {t('multiSelectCount', { count: group.length })}
+            </div>
+          )}
           <MenuRow
             ref={firstItemRef}
             icon={completed ? Circle : Check}
@@ -194,7 +229,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
             {t('scheduledDate')}
           </MenuRow>
           {/* 重复规则是独立入口：仅 DATE 型任务显示（规则需要计划日期作锚点）。 */}
-          {isDate && (
+          {!group && isDate && (
             <MenuRow icon={Repeat} onClick={() => openPicker('repeat')}>
               {t('repeat')}
             </MenuRow>
@@ -219,7 +254,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
           <MenuRow icon={FolderTree} onClick={() => openPicker('move')}>
             {t('move')}
           </MenuRow>
-          {variant === 'default' && (
+          {!group && variant === 'default' && (
             <>
               <div className="-mx-1 my-1 h-px bg-muted" />
               <MenuRow icon={FolderInput} onClick={handleConvertToProject}>
@@ -244,20 +279,29 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
         <PopoverContent align="start" onClick={(e) => e.stopPropagation()}>
           {activePicker === 'scheduled' && (
             <ScheduledDateField
-              current={current}
+              current={fieldCurrent}
               onPatch={patch}
               onClose={() => setActivePicker(null)}
-              showReminder={getClientKind() !== 'web'}
+              showReminder={!group && getClientKind() !== 'web'}
             />
           )}
           {activePicker === 'repeat' && <RepeatRuleField current={current} onPatch={patch} />}
           {activePicker === 'due' && (
-            <DueDateField current={current} onPatch={patch} onClose={() => setActivePicker(null)} />
+            <DueDateField
+              current={fieldCurrent}
+              onPatch={patch}
+              onClose={() => setActivePicker(null)}
+            />
           )}
-          {activePicker === 'tags' && <TagsField current={current} onPatch={patch} />}
+          {activePicker === 'tags' &&
+            (group ? (
+              <GroupTagsField ids={group} />
+            ) : (
+              <TagsField current={current} onPatch={patch} />
+            ))}
           {activePicker === 'move' && (
             <MovePicker
-              current={current}
+              current={fieldCurrent}
               onSelect={(data) => {
                 patch(data);
                 setActivePicker(null);
@@ -267,5 +311,26 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
         </PopoverContent>
       </Popover>
     </div>
+  );
+}
+
+/** 整组批量打标（三态）：各任务在自己原有的标签上增减；订阅登记行，打标后三态随之刷新。 */
+function GroupTagsField({ ids }: { ids: string[] }) {
+  const { t: tc } = useTranslation('common');
+  const updateTask = useUpdateTask();
+  useSelectionStore((s) => s.scopes);
+  const rows = selectionRowsById();
+  return (
+    <MultiTagsField
+      items={ids.map((id) => ({ id, tagIds: rows.get(id)?.tagIds ?? [] }))}
+      onChanges={(changes) => {
+        for (const { id, tagIds } of changes) {
+          updateTask.mutate(
+            { id, data: { tagIds } },
+            { onError: () => toast.error(tc('saveFailed')) },
+          );
+        }
+      }}
+    />
   );
 }

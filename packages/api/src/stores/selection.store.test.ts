@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  contextMenuTargets,
   extendSelectionTo,
   flattenSelectionRows,
   toggleRowSelection,
@@ -92,5 +93,31 @@ describe('多选：⌘/Ctrl+点击、⇧+点击', () => {
   it('没有选中时 ⇧点击退化为单选', () => {
     extendSelectionTo('c');
     expect(ids()).toEqual(['c']);
+  });
+});
+
+describe('右键菜单作用对象', () => {
+  const ids = () => useSelectionStore.getState().selectedIds;
+
+  beforeEach(() => {
+    useSelectionStore.getState().registerScope('list', [row('a'), row('b'), row('c')]);
+  });
+
+  it('右键多选之中的行：作用于整组，多选不变', () => {
+    useSelectionStore.getState().setSelection(['c', 'a']);
+    expect(contextMenuTargets('a')).toEqual(['c', 'a']);
+    expect(ids()).toEqual(['c', 'a']);
+  });
+
+  it('右键多选之外的行：只作用于它，多选改为只选中它', () => {
+    useSelectionStore.getState().setSelection(['a', 'b']);
+    expect(contextMenuTargets('c')).toEqual(['c']);
+    expect(ids()).toEqual(['c']);
+  });
+
+  it('单选时右键其它行：只作用于它，不改动选中', () => {
+    useSelectionStore.getState().setSelection(['a']);
+    expect(contextMenuTargets('b')).toEqual(['b']);
+    expect(ids()).toEqual(['a']);
   });
 });

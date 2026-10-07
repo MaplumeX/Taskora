@@ -138,3 +138,16 @@ export function extendSelectionTo(id: string): void {
   }
   state.setSelection([...ids, id], anchor);
 }
+
+/**
+ * 右键菜单的作用对象：右键的行在多选（≥ 2 个任务行）之中 → 整组（按选中顺序）；
+ * 否则只作用于该行，且若当前是多选，多选改为只选中该行（菜单与高亮一致）。
+ */
+export function contextMenuTargets(id: string): string[] {
+  const state = useSelectionStore.getState();
+  const tasks = taskRowIds(flattenSelectionRows(state));
+  const selected = state.selectedIds.filter((s) => tasks.has(s));
+  if (selected.length >= 2 && selected.includes(id)) return selected;
+  if (state.selectedIds.length >= 2) state.setSelection([id]);
+  return [id];
+}

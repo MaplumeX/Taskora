@@ -7,6 +7,8 @@ import React from 'react';
 import type { TaskResponseDto } from '@taskora/shared';
 import { TaskStatus, TaskBucket, ScheduledType } from '@taskora/shared';
 
+import { useSelectionStore } from '@taskora/api';
+
 import { TaskItem } from './TaskItem';
 
 vi.mock('@taskora/api', async (importOriginal) => ({
@@ -14,11 +16,11 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   taskKeys: { detail: (id: string) => ['task', id] },
   useTaskQuery: () => ({ data: null }),
   useUpdateTask: () => ({ mutate: updateMock, isPending: false }),
-  useCompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
+  useCompleteTask: () => ({ mutate: completeMock, isPending: false }),
   useUncompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
   useCancelTask: () => ({ mutate: vi.fn(), isPending: false }),
   useUncancelTask: () => ({ mutate: vi.fn(), isPending: false }),
-  useDeleteTask: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteTask: () => ({ mutate: deleteMock, isPending: false }),
   useRestoreTask: () => ({ mutate: vi.fn(), isPending: false }),
   useConvertTaskToProject: () => ({ mutate: vi.fn(), isPending: false }),
   useSkipTask: () => ({ mutate: skipMock, isPending: false }),
@@ -33,6 +35,8 @@ vi.mock('@taskora/api', async (importOriginal) => ({
 
 const updateMock = vi.hoisted(() => vi.fn());
 const skipMock = vi.hoisted(() => vi.fn());
+const completeMock = vi.hoisted(() => vi.fn());
+const deleteMock = vi.hoisted(() => vi.fn());
 
 const baseTask: TaskResponseDto = {
   id: 'task-1',
@@ -195,5 +199,65 @@ describe('TaskContextMenu — 跳过本次', () => {
     expect(item).toHaveAttribute('aria-disabled', 'true');
     await user.click(item);
     expect(skipMock).not.toHaveBeenCalled();
+  });
+});
+
+describe('TaskContextMenu — 多选整组', () => {
+  const task2: TaskResponseDto = { ...baseTask, id: 'task-2', title: 'Other task' };
+  const task3: TaskResponseDto = { ...baseTask, id: 'task-3', title: 'Third task' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useSelectionStore.setState({ scopes: {}, scopeOrder: [], scopeRank: {}, selectedIds: [] });
+    useSelectionStore.getState().registerScope('list', [
+      { id: 'task-1', kind: 'task', completed: false },
+      { id: 'task-2', kind: 'task', completed: true },
+      { id: 'task-3', kind: 'task', completed: false },
+    ]);
+    useSelectionStore.getState().setSelection(['task-1', 'task-2']);
+    withQueryClient(
+      <>
+        {[baseTask, task2, task3].map((task) => (
+          <TaskItem key={task.id} task={task} onToggleComplete={() => {}} onRowClick={() => {}} />
+        ))}
+      </>,
+    );
+  });
+
+  it('右键选中行：菜单显示件数，完成只作用于组内未完成项', async () => {
+    const user = userEvent.setup();
+    fireEvent.contextMenu(screen.getByText('Other task'));
+    expect(await screen.findByText(/2 selected|已选择 2 项/)).toBeInTheDocument();
+    // 只作用于单个任务的动作不出现
+    expect(screen.queryByRole('button', { name: /^(Convert to Project|转换为项目)/ })).toBeNull();
+    await user.click(screen.getByRole('button', { name: /^(Mark Complete|标记完成)$/ }));
+    expect(completeMock).toHaveBeenCalledTimes(1);
+    expect(completeMock).toHaveBeenCalledWith('task-1', expect.anything());
+  });
+
+  it('整组移动与删除', async () => {
+    const user = userEvent.setup();
+    fireEvent.contextMenu(screen.getByText('My task'));
+    await user.click(await screen.findByRole('button', { name: /^(Move|移动)/ }));
+    await user.click(screen.getByRole('option', { name: /Project Alpha/ }));
+    for (const id of ['task-1', 'task-2']) {
+      expect(updateMock).toHaveBeenCalledWith(
+        { id, data: { projectId: 'project-1', areaId: null } },
+        expect.anything(),
+      );
+    }
+
+    fireEvent.contextMenu(screen.getByText('My task'));
+    await user.click(await screen.findByRole('button', { name: /^(Delete|删除)/ }));
+    expect(deleteMock.mock.calls.map(([id]) => id)).toEqual(['task-1', 'task-2']);
+    expect(useSelectionStore.getState().selectedIds).toEqual([]);
+  });
+
+  it('右键多选之外的行：只作用于它，多选改为只选中它', async () => {
+    const user = userEvent.setup();
+    fireEvent.contextMenu(screen.getByText('Third task'));
+    await user.click(await screen.findByRole('button', { name: /^(Delete|删除)/ }));
+    expect(deleteMock.mock.calls.map(([id]) => id)).toEqual(['task-3']);
+    expect(useSelectionStore.getState().selectedIds).toEqual(['task-3']);
   });
 });
