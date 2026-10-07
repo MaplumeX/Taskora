@@ -4,7 +4,8 @@ import { toast } from 'sonner';
 
 import type { CreateTaskDto } from '@taskora/shared';
 
-import { useCreateProject, useProjectsQuery } from '@/hooks/useProjects';
+import { useProjectsQuery } from '@/hooks/useProjects';
+import { useCreateListActions } from '@/hooks/useCreateListActions';
 import { useCreateTask } from '@/hooks/useTasks';
 import { useCreateProjectHeading } from '@/hooks/useProjectHeadings';
 import { useUiInteractionStore } from '@/stores/uiInteraction.store';
@@ -13,7 +14,7 @@ import { useAreasQuery } from '@/hooks/useAreas';
 
 /** Views where the "add task" action must not appear. */
 /** 不显示「添加任务」的视图（agent 有自己的聊天输入框，底部动作不适用） */
-const HIDE_ADD_TASK_VIEWS = ['upcoming', 'calendar', 'logbook', 'trash', 'agent', 'home'];
+const HIDE_ADD_TASK_VIEWS = ['upcoming', 'calendar', 'logbook', 'trash', 'agent'];
 
 /** Route context supplied by the host navigation shell. */
 export interface BottomActionsRouteContext {
@@ -25,6 +26,10 @@ export interface BottomActionsRouteContext {
   createTaskContext: Omit<Partial<CreateTaskDto>, 'title'>;
   /** Navigate to a freshly created project's detail view. */
   navigateToProject?: (projectId: string) => void;
+  /** Navigate to a freshly created area's detail view. */
+  navigateToArea?: (areaId: string) => void;
+  /** Navigate to the inbox (home 视图新建的任务落在收件箱). */
+  navigateToInbox?: () => void;
 }
 
 /**
@@ -36,11 +41,15 @@ export interface BottomActionsRouteContext {
 export function useContentBottomActions(route: BottomActionsRouteContext) {
   const { t } = useTranslation();
   const createTask = useCreateTask();
-  const createProject = useCreateProject();
   const createHeading = useCreateProjectHeading();
   const ctx = route.createTaskContext;
   const setExpandedId = useUiInteractionStore((s) => s.setExpandedId);
   const setPendingAutoEditId = useUiInteractionStore((s) => s.setPendingAutoEditId);
+  const { handleNewProject, handleNewArea, newProjectPending, newAreaPending } =
+    useCreateListActions({
+      navigateToProject: route.navigateToProject,
+      navigateToArea: route.navigateToArea,
+    });
   const { data: areas } = useAreasQuery();
   const { data: projects } = useProjectsQuery();
 
@@ -48,10 +57,13 @@ export function useContentBottomActions(route: BottomActionsRouteContext) {
   const routeId = route.routeId;
   const showAddTask = !HIDE_ADD_TASK_VIEWS.includes(view);
 
-  // 仅在当前 area 存在时才显示添加项目按钮
+  // 首页（手机端列表总览，对应 Things 的主屏）可新建任务（落收件箱）、
+  // 不归属区域的项目与区域；area 详情页仅在当前 area 存在时才显示添加项目
+  const isHome = view === 'home';
   const isAreaDetail = view === 'areas' && !!routeId;
   const areaExists = areas?.some((a) => a.id === routeId) ?? false;
-  const showAddProject = isAreaDetail && areaExists;
+  const showAddProject = isHome || (isAreaDetail && areaExists);
+  const showAddArea = isHome;
   const isProjectDetail = view === 'projects' && !!routeId;
   const projectExists = projects?.some((project) => project.id === routeId) ?? false;
   const showAddHeading = isProjectDetail && projectExists;
@@ -64,24 +76,16 @@ export function useContentBottomActions(route: BottomActionsRouteContext) {
         // 新建后自动展开，同时把 Selection 移到新行（与展开路径一致），
         // 否则后续 ⌫/⌘K 等动作仍作用于旧行，且旧行残留选中/焦点观感。
         useSelectionStore.getState().setSelection([created.id]);
+        if (isHome) route.navigateToInbox?.();
       },
       onError: () => toast.error(t('common:createFailed')),
     });
-  }, [ctx, createTask, setExpandedId, t]);
+  }, [ctx, createTask, setExpandedId, isHome, route, t]);
 
   const handleAddProject = useCallback(() => {
-    if (!routeId) return;
-    createProject.mutate(
-      { title: '', areaId: routeId },
-      {
-        onSuccess: (p) => {
-          setPendingAutoEditId(p.id);
-          route.navigateToProject?.(p.id);
-        },
-        onError: () => toast.error(t('common:createFailed')),
-      },
-    );
-  }, [routeId, createProject, setPendingAutoEditId, route, t]);
+    if (isHome) handleNewProject();
+    else if (isAreaDetail && routeId) handleNewProject(routeId);
+  }, [isHome, isAreaDetail, routeId, handleNewProject]);
 
   const handleAddHeading = useCallback(() => {
     if (!routeId) return;
@@ -102,11 +106,14 @@ export function useContentBottomActions(route: BottomActionsRouteContext) {
     showAddTask,
     showAddProject,
     showAddHeading,
+    showAddArea,
     handleAddTask,
     handleAddProject,
     handleAddHeading,
+    handleAddArea: handleNewArea,
     addTaskPending: createTask.isPending,
-    addProjectPending: createProject.isPending,
+    addProjectPending: newProjectPending,
+    addAreaPending: newAreaPending,
     addHeadingPending: createHeading.isPending,
   };
 }

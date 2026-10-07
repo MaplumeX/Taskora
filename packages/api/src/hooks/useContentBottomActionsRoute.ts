@@ -27,5 +27,7 @@ export function useContentBottomActionsForRoute() {
     routeId,
     createTaskContext,
     navigateToProject: (projectId) => navigate(`/projects/${projectId}`),
+    navigateToArea: (areaId) => navigate(`/areas/${areaId}`),
+    navigateToInbox: () => navigate('/inbox'),
   });
 }
