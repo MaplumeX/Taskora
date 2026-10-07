@@ -2,15 +2,9 @@ import * as React from 'react';
 import { useTranslation } from 'react-i18next';
 import {
   closestCenter,
-  DndContext,
   DragOverlay,
-  MeasuringStrategy,
-  MouseSensor,
   pointerWithin,
-  TouchSensor,
   useDroppable,
-  useSensor,
-  useSensors,
   type CollisionDetection,
   type DragEndEvent,
   type DragMoveEvent,
@@ -28,11 +22,12 @@ import type {
 } from '@taskora/shared';
 
 import { cn } from '@/lib/utils';
+import { useDndSurface } from '../../lib/appDnd';
+import type { SidebarDropPayload } from '@/components/layout/sidebarDrop';
 import {
   dndListProps,
   dragGroupOf,
   dragOverlayClass,
-  dropAnimation,
   expandDragGroup,
   flipId,
   noopSortingStrategy,
@@ -264,6 +259,13 @@ function isRowKey(key: string) {
   return key.startsWith(TASK_DND_PREFIX) || key.startsWith(PROJECT_ROW_DND_PREFIX);
 }
 
+/** 本列表的拖拽源与落点（共享拖拽上下文里按 id 前缀认领，ADR 0018）。 */
+function isFeedKey(key: string) {
+  return (
+    isRowKey(key) || key.startsWith(CONTAINER_DND_PREFIX) || key.startsWith(HEADER_DND_PREFIX)
+  );
+}
+
 /** 组头行的放置目标（投向组头 = 落在该组末尾）。
  *  同时承载组间间隔：mt-6 开新的一块，首个组头（first）无额外间距。 */
 function GroupHeaderDropZone({
@@ -384,6 +386,8 @@ export function GroupedFeedListView({
   const [drag, setDrag] = React.useState<{
     origin: { item: FeedItem; container: ContainerId };
     items: FeedItem[];
+    /** 未预览任何落点时的行（拖拽开始时的原样；收起组内其余行后同样去掉它们）。 */
+    startItems: FeedItem[];
     /** 拖拽中保留的组（即使已空）：被拖行与多项拖拽组内各行的原组。 */
     retain: ReadonlySet<string> | undefined;
     /** 多项拖拽：整组任务（拖拽开始时的原样，按显示顺序，含被拖任务）。 */
@@ -413,10 +417,13 @@ export function GroupedFeedListView({
       ),
     );
     flip.capture();
+    const withoutCompanions = (list: FeedItem[]) =>
+      list.filter((row) => row.type !== 'task' || !companions.has(row.id));
     updateDrag({
       ...current,
       collapsed: true,
-      items: current.items.filter((row) => row.type !== 'task' || !companions.has(row.id)),
+      items: withoutCompanions(current.items),
+      startItems: withoutCompanions(current.startItems),
     });
   });
 
@@ -475,22 +482,12 @@ export function GroupedFeedListView({
     [viewItems],
   );
 
-  // 鼠标：移动 5px 激活；触摸：按住 300ms 再移动才激活，避免与列表滚动冲突。
-  // 不挂 KeyboardSensor：组头不可拖拽，行内 Enter/Space 属于全局键位。
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
-  );
-
   const collisionDetection = React.useCallback<CollisionDetection>((args) => {
     const activeKey = String(args.active.id);
     if (!isRowKey(activeKey)) return [];
-    const compatible = args.droppableContainers.filter((container) => {
-      const id = String(container.id);
-      return (
-        isRowKey(id) || id.startsWith(CONTAINER_DND_PREFIX) || id.startsWith(HEADER_DND_PREFIX)
-      );
-    });
+    const compatible = args.droppableContainers.filter((container) =>
+      isFeedKey(String(container.id)),
+    );
     const collisions = args.pointerCoordinates
       ? pointerWithin({ ...args, droppableContainers: compatible })
       : closestCenter({ ...args, droppableContainers: compatible });
@@ -515,10 +512,6 @@ export function GroupedFeedListView({
     lastTargetRef.current = { overKey, edge };
     return [collision];
   }, []);
-
-  if (items.length === 0 && !drag) {
-    return <EmptyState hint={emptyHint ?? t('task:empty')} />;
-  }
 
   const handleToggle = (item: TaskFeedItem) => {
     if (item.status === 'COMPLETED') uncompleteTask.mutate(item.id);
@@ -571,6 +564,7 @@ export function GroupedFeedListView({
     updateDrag({
       origin: { item, container },
       items: viewItems,
+      startItems: viewItems,
       retain: retain.size > 0 ? retain : undefined,
       group,
       collapsed: !group,
@@ -602,6 +596,16 @@ export function GroupedFeedListView({
   const handleDragOver = ({ active, over }: DragOverEvent) => {
     if (!over) return;
     const overKey = String(over.id);
+    if (!isFeedKey(overKey)) {
+      // 指针在列表外的落点上（侧边栏）：空位回到原处，不暗示列表内重排。
+      lastTargetRef.current = null;
+      const current = dragRef.current;
+      if (current && current.items !== current.startItems) {
+        flip.capture();
+        updateDrag({ ...current, items: current.startItems });
+      }
+      return;
+    }
     if (lastTargetRef.current?.overKey !== overKey) {
       lastTargetRef.current = { overKey, edge: 'before' };
     }
@@ -680,6 +684,30 @@ export function GroupedFeedListView({
     lastTargetRef.current = null;
     updateDrag(null);
   };
+
+  /** 拖到侧边栏的载荷：被拖任务（多选时整组，拖拽开始时的原样）或独立项目行。 */
+  const sidebarPayload = (activeKey: string): SidebarDropPayload | null => {
+    const current = dragRef.current;
+    const item = current?.origin.item ?? rowMap.get(activeKey);
+    if (!item || feedItemDndId(item) !== activeKey) return null;
+    if (item.type === 'project') return { kind: 'project', project: item };
+    return { kind: 'tasks', tasks: current?.group ?? [item] };
+  };
+
+  const surface = useDndSurface({
+    owns: isFeedKey,
+    collisionDetection,
+    sidebarPayload,
+    onDragStart: handleDragStart,
+    onDragMove: handleDragMove,
+    onDragOver: handleDragOver,
+    onDragEnd: handleDragEnd,
+    onDragCancel: handleDragCancel,
+  });
+
+  if (items.length === 0 && !drag) {
+    return <EmptyState hint={emptyHint ?? t('task:empty')} />;
+  }
 
   const activeItem = drag?.origin.item ?? null;
   // 跨组预览会改写归属字段，浮层跟随当前预览中的那一行。
@@ -769,17 +797,6 @@ export function GroupedFeedListView({
       className="relative flex flex-col"
       onClick={handleBlankClick}
     >
-      <DndContext
-        sensors={sensors}
-        collisionDetection={collisionDetection}
-        // 实时预览每次重排都会改变行位置，碰撞检测须用最新的测量结果。
-        measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-        onDragStart={handleDragStart}
-        onDragMove={handleDragMove}
-        onDragOver={handleDragOver}
-        onDragEnd={handleDragEnd}
-        onDragCancel={handleDragCancel}
-      >
         {/* 顶部未分组区：未分组任务与独立项目行按合并 feed 顺序交错。
             拖拽期间即使为空也保留投放面（移出项目 = 拖到此处），但浮在
             列表上方，不额外占位（浮动投放面渲染在列表末尾，见下）。 */}
@@ -819,7 +836,8 @@ export function GroupedFeedListView({
             :first-child（否则 mt-6 生效，拖拽一开始整列下移 24px）。 */}
         {topRows.length === 0 && activeItem && <UngroupedDropZone floating />}
 
-        <DragOverlay dropAnimation={dropAnimation}>
+        {surface.overlayActive && (
+        <DragOverlay dropAnimation={surface.dropAnimation}>
           {overlayItem ? (
             <div
               className={cn(dragOverlayClass, 'relative bg-card')}
@@ -839,7 +857,7 @@ export function GroupedFeedListView({
             </div>
           ) : null}
         </DragOverlay>
-      </DndContext>
+        )}
     </div>
   );
 }

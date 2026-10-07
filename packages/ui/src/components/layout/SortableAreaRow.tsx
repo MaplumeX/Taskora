@@ -10,6 +10,7 @@ interface Props {
   area: AreaResponseDto;
   projects: ProjectResponseDto[];
   activeProjectId: string | null;
+  dropTargets: boolean;
 }
 
 /**
@@ -22,6 +23,7 @@ export function SortableAreaRow({
   area,
   projects,
   activeProjectId,
+  dropTargets,
 }: Props) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: areaDndId(area.id) });
@@ -42,6 +44,7 @@ export function SortableAreaRow({
         area={area}
         projects={projects}
         activeProjectId={activeProjectId}
+        dropTargets={dropTargets}
       />
     </div>
   );

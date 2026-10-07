@@ -33,6 +33,7 @@ const harness = vi.hoisted(() => ({
   keyboardCoordinateGetter: null as
     | null
     | ((event: KeyboardEvent, args: unknown) => unknown),
+  sidebarDrop: vi.fn(),
 }));
 
 vi.mock('@dnd-kit/core', async () => {
@@ -41,7 +42,8 @@ vi.mock('@dnd-kit/core', async () => {
   return {
     ...actual,
     DndContext: (props: DndHandlers & { children: React.ReactNode }) => {
-      harness.dndProps = props;
+      // React 生成组件栈（如 act 警告）时会无参调用祖先组件，忽略那次调用。
+      if (props) harness.dndProps = props;
       return ReactModule.createElement('div', { 'data-testid': 'dnd-context' }, props.children);
     },
     DragOverlay: ({ children }: { children: React.ReactNode }) =>
@@ -177,6 +179,11 @@ import {
   type LayoutState,
 } from './ProjectTaskLayout';
 import { useSelectionStore } from '@taskora/api';
+import { AppDndProvider } from '../../lib/appDnd';
+
+function DndShell({ children }: { children: React.ReactNode }) {
+  return <AppDndProvider onSidebarDrop={harness.sidebarDrop}>{children}</AppDndProvider>;
+}
 
 const heading: ProjectHeadingResponseDto = {
   id: 'heading-1',
@@ -427,6 +434,7 @@ describe('ProjectTaskLayout drag sessions', () => {
     harness.pointerCollisionIds = [];
     harness.closestCollisionIds = [];
     harness.keyboardCoordinateGetter = null;
+    harness.sidebarDrop.mockReset();
     harness.saveMutate.mockReset();
     harness.completeMutate.mockReset();
     harness.uncompleteMutate.mockReset();
@@ -444,6 +452,8 @@ describe('ProjectTaskLayout drag sessions', () => {
         headings={[heading, secondHeading]}
         emptyHint="Empty"
       />,
+      // 列表登记在应用壳的共享拖拽上下文里（ADR 0018）。
+      { wrapper: DndShell },
     );
   }
 
@@ -1010,6 +1020,76 @@ describe('ProjectTaskLayout drag sessions', () => {
     expect(containers.length).toBeGreaterThan(0);
     containers.forEach((container) => {
       expect(container).not.toHaveClass('bg-muted/60');
+    });
+  });
+
+  describe('Sidebar Drop', () => {
+    function containerTaskIds(containerId: string) {
+      return Array.from(
+        document.querySelectorAll<HTMLElement>(
+          `[data-task-container="${containerId}"] [data-sortable-task-id]`,
+        ),
+      ).map((node) => node.dataset.sortableTaskId);
+    }
+
+    it('puts the placeholder back while over the sidebar and hands the task over on drop', () => {
+      renderLayout();
+      startTaskDrag('task-u1');
+      dragOver('task:task-u1', 'task:task-b');
+      expect(containerTaskIds('heading-1')).toEqual(['task-a', 'task-u1', 'task-b']);
+
+      dragOver('task:task-u1', 'sidebar-drop:today');
+      expect(containerTaskIds('ungrouped')).toEqual(['task-u1', 'task-u2']);
+      expect(containerTaskIds('heading-1')).toEqual(['task-a', 'task-b']);
+
+      act(() => {
+        handlers().onDragEnd?.({
+          active: { id: 'task:task-u1' },
+          over: { id: 'sidebar-drop:today' },
+        });
+      });
+
+      expect(harness.saveMutate).not.toHaveBeenCalled();
+      expect(harness.sidebarDrop).toHaveBeenCalledWith(
+        { kind: 'tasks', tasks: [expect.objectContaining({ id: 'task-u1' })] },
+        { kind: 'today' },
+      );
+      expect(screen.queryByTestId('task-placeholder-task-u1')).not.toBeInTheDocument();
+    });
+
+    it('hands the whole selection over and restores the collapsed rows', () => {
+      renderLayout();
+      useSelectionStore.getState().setSelection(['task-u2', 'task-b']);
+      startTaskDrag('task-b');
+      expect(document.querySelector('[data-mock-task-id="task-u2"]')).toBeNull();
+
+      act(() => {
+        handlers().onDragEnd?.({
+          active: { id: 'task:task-b' },
+          over: { id: 'sidebar-drop:area:area-1' },
+        });
+      });
+
+      const [payload, target] = harness.sidebarDrop.mock.calls[0];
+      expect(target).toEqual({ kind: 'area', areaId: 'area-1' });
+      expect(payload.tasks.map((t: { id: string }) => t.id)).toEqual(['task-u2', 'task-b']);
+      expect(containerTaskIds('ungrouped')).toEqual(['task-u1', 'task-u2']);
+      expect(harness.saveMutate).not.toHaveBeenCalled();
+    });
+
+    it('heading drags never reach the sidebar', () => {
+      renderLayout();
+      act(() => {
+        handlers().onDragStart?.({ active: { id: 'heading:heading-1' } });
+      });
+      act(() => {
+        handlers().onDragEnd?.({
+          active: { id: 'heading:heading-1' },
+          over: { id: 'sidebar-drop:trash' },
+        });
+      });
+      expect(harness.sidebarDrop).not.toHaveBeenCalled();
+      expect(harness.saveMutate).not.toHaveBeenCalled();
     });
   });
 });

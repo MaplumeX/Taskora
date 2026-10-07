@@ -1,15 +1,6 @@
 import * as React from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  DndContext,
-  MouseSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-  type DragEndEvent,
-  type DragStartEvent,
-} from '@dnd-kit/core';
+import { DragOverlay, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
 import {
   SortableContext,
   verticalListSortingStrategy,
@@ -23,14 +14,18 @@ import type { TaskResponseDto } from '@taskora/shared';
 import { TaskItem } from './TaskItem';
 import { selectionStateOf, useSelectionStore, type SelectionState } from '@taskora/api';
 import { EmptyState } from '@/components/common/EmptyState';
+import { cn } from '@/lib/utils';
 import { DragCountBadge } from '@/components/common/DragCountBadge';
 import {
   dndListProps,
   dragGroupOf,
+  dragOverlayClass,
   expandDragGroup,
   useCollapseAfterDragStart,
   useHeldOrder,
 } from '../../lib/dnd';
+import { useDndSurface } from '../../lib/appDnd';
+import type { SidebarDropPayload } from '@/components/layout/sidebarDrop';
 
 interface ProjectLookup {
   [projectId: string]: string;
@@ -64,8 +59,6 @@ interface SortableTaskItemProps {
   selectionState: SelectionState;
   onToggleComplete: () => void;
   onRowClick?: () => void;
-  /** 多项拖拽时一起拖动的任务数（被拖行上显示件数徽标）。 */
-  dragCount?: number;
 }
 
 function SortableTaskItem({
@@ -75,7 +68,6 @@ function SortableTaskItem({
   selectionState,
   onToggleComplete,
   onRowClick,
-  dragCount = 0,
 }: SortableTaskItemProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     // 展开态下行内是可编辑卡片，整行 listeners 会把框选文字的鼠标移动识别为拖拽，
@@ -93,7 +85,7 @@ function SortableTaskItem({
         transition,
         zIndex: isDragging ? 10 : undefined,
       }}
-      className="relative"
+      className={cn('relative', isDragging && 'invisible')}
       {...attributes}
       {...listeners}
     >
@@ -105,7 +97,6 @@ function SortableTaskItem({
         onToggleComplete={onToggleComplete}
         onRowClick={onRowClick}
       />
-      {isDragging && <DragCountBadge count={dragCount} />}
     </div>
   );
 }
@@ -143,16 +134,68 @@ onReorder,
     setDrag((current) => (current ? { ...current, collapsed: true } : current)),
   );
 
-  // 鼠标：移动 5px 激活；触摸：按住 300ms 再移动才激活，避免与列表滚动
-  // 冲突（PointerSensor 会在触摸滑动 5px 时误触拖拽）。
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
-  );
+  const [activeId, setActiveId] = React.useState<string | null>(null);
+  const draggable = sortable && !!onReorder;
+  const ownIds = React.useMemo(() => new Set(heldTasks.map((t) => t.id)), [heldTasks]);
+
+  const handleDragStart = ({ active }: DragStartEvent) => {
+    const id = String(active.id);
+    setActiveId(id);
+    const group = dragGroupOf(
+      id,
+      heldTasks.map((t) => t.id),
+      useSelectionStore.getState().selectedIds,
+    );
+    if (group) setDrag({ activeId: id, group, collapsed: false });
+  };
+
+  const handleDragEnd = (e: DragEndEvent) => {
+    const { active, over } = e;
+    setDrag(null);
+    setActiveId(null);
+    if (!over || !onReorder) return;
+    const ids = topTasks.map((t) => t.id);
+    const oldIndex = ids.indexOf(active.id as string);
+    const newIndex = ids.indexOf(over.id as string);
+    if (oldIndex < 0 || newIndex < 0) return;
+    let reordered = arrayMove(ids, oldIndex, newIndex);
+    // 多项拖拽：整组按原显示顺序落在被拖任务的位置。
+    if (drag) reordered = expandDragGroup(reordered, drag.activeId, drag.group, taskIdOf);
+    if (reordered.join('|') === heldTasks.map((t) => t.id).join('|')) return;
+    holdOrder(reordered);
+    onReorder(reordered);
+  };
+
+  const handleDragCancel = () => {
+    setDrag(null);
+    setActiveId(null);
+  };
+
+  /** 拖到侧边栏的载荷：被拖任务，多选时为整组（按显示顺序）。 */
+  const sidebarPayload = (id: string): SidebarDropPayload | null => {
+    const ids = heldTasks.map((t) => t.id);
+    const group = dragGroupOf(id, ids, useSelectionStore.getState().selectedIds) ?? [id];
+    const tasks = heldTasks.filter((t) => group.includes(t.id));
+    return tasks.length > 0 ? { kind: 'tasks', tasks } : null;
+  };
+
+  // 共享拖拽上下文里的一个 surface（ADR 0018）；不可排序时不认领任何拖拽。
+  const surface = useDndSurface({
+    owns: (id) => draggable && ownIds.has(id),
+    sidebarPayload,
+    onDragStart: handleDragStart,
+    onDragEnd: handleDragEnd,
+    onDragCancel: handleDragCancel,
+  });
 
   if (topTasks.length === 0) {
     return hideEmptyState ? null : <EmptyState hint={emptyHint ?? t('task:empty')} />;
   }
+
+  const titlesOf = (task: TaskResponseDto) => ({
+    projectTitle: !hideOwnership && task.projectId ? projects[task.projectId] : undefined,
+    areaTitle: !hideOwnership && task.areaId ? areas[task.areaId] : undefined,
+  });
 
   const renderItems = () =>
     topTasks.map((task) => {
@@ -163,68 +206,49 @@ onReorder,
       );
       const itemProps = {
         task,
-        projectTitle: !hideOwnership && task.projectId ? projects[task.projectId] : undefined,
-        areaTitle: !hideOwnership && task.areaId ? areas[task.areaId] : undefined,
+        ...titlesOf(task),
         selectionState,
         onToggleComplete: () => onToggleComplete(task),
         onRowClick: onRowClick ? () => onRowClick(task.id) : undefined,
       };
 
-      if (sortable && onReorder) {
-        return (
-          <SortableTaskItem
-            key={task.id}
-            {...itemProps}
-            dragCount={drag?.activeId === task.id ? drag.group.length : 0}
-          />
-        );
-      }
+      if (draggable) return <SortableTaskItem key={task.id} {...itemProps} />;
       return <TaskItem key={task.id} {...itemProps} />;
     });
 
-  if (!sortable || !onReorder) {
+  if (!draggable) {
     return <div className="flex flex-col">{renderItems()}</div>;
   }
 
-  const handleDragStart = ({ active }: DragStartEvent) => {
-    const activeId = String(active.id);
-    const group = dragGroupOf(
-      activeId,
-      heldTasks.map((t) => t.id),
-      useSelectionStore.getState().selectedIds,
-    );
-    if (group) setDrag({ activeId, group, collapsed: false });
-  };
-
-  const handleDragEnd = (e: DragEndEvent) => {
-    const { active, over } = e;
-    setDrag(null);
-    if (!over) return;
-    const ids = topTasks.map((t) => t.id);
-    const oldIndex = ids.indexOf(active.id as string);
-    const newIndex = ids.indexOf(over.id as string);
-    let reordered = arrayMove(ids, oldIndex, newIndex);
-    // 多项拖拽：整组按原显示顺序落在被拖任务的位置。
-    if (drag) reordered = expandDragGroup(reordered, drag.activeId, drag.group, taskIdOf);
-    if (reordered.join('|') === heldTasks.map((t) => t.id).join('|')) return;
-    holdOrder(reordered);
-    onReorder(reordered);
-  };
-
+  // 被拖行由 DragOverlay 跟手（才能越过内容区拖到侧边栏），原行留作不可见的空位。
+  const activeTask = activeId ? heldTasks.find((t) => t.id === activeId) : undefined;
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={closestCenter}
-      onDragStart={handleDragStart}
-      onDragEnd={handleDragEnd}
-      onDragCancel={() => setDrag(null)}
-    >
+    <>
       <SortableContext items={topTasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
         <div {...dndListProps} className="flex flex-col">
           {renderItems()}
         </div>
       </SortableContext>
-    </DndContext>
+      {surface.overlayActive && (
+        <DragOverlay dropAnimation={surface.dropAnimation}>
+          {activeTask ? (
+            <div
+              className={cn(dragOverlayClass, 'relative bg-card')}
+              aria-hidden="true"
+              {...{ inert: '' }}
+            >
+              <TaskItem
+                task={activeTask}
+                {...titlesOf(activeTask)}
+                selectionState="idle"
+                onToggleComplete={() => undefined}
+              />
+              <DragCountBadge count={drag?.group.length ?? 0} />
+            </div>
+          ) : null}
+        </DragOverlay>
+      )}
+    </>
   );
 }
 

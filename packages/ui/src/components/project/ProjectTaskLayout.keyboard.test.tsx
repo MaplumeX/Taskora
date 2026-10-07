@@ -72,6 +72,7 @@ vi.mock('@/components/task/TaskItem', async () => {
 });
 
 import { ProjectTaskLayout } from './ProjectTaskLayout';
+import { AppDndProvider } from '../../lib/appDnd';
 import { useSelectionStore, useUiInteractionStore } from '@taskora/api';
 
 const heading: ProjectHeadingResponseDto = {
@@ -124,12 +125,14 @@ describe('SortableTask — keyboard drag conflict regression', () => {
     });
     return render(
       <QueryClientProvider client={client}>
-        <ProjectTaskLayout
-          projectId="project-1"
-          tasks={[task('task-1'), task('task-2')]}
-          headings={[heading]}
-          emptyHint="Empty"
-        />
+        <AppDndProvider>
+          <ProjectTaskLayout
+            projectId="project-1"
+            tasks={[task('task-1'), task('task-2')]}
+            headings={[heading]}
+            emptyHint="Empty"
+          />
+        </AppDndProvider>
       </QueryClientProvider>,
     );
   }

@@ -120,12 +120,16 @@ _Avoid_: 把 Cancelled 当作 COMPLETED 的子集、把终态与删除混淆
 ### 界面交互
 
 **Selection**:
-仅存在于键盘交互域：键盘导航下当前被高亮、并作为键盘动作（完成、删除、新建于下方等）作用对象的 Task / Project / Project Heading；区别于 focus（DOM 焦点）与完成态。可多选（对齐 Things 3 Mac）：⌘A 全选，⌘/Ctrl+点击切换单行，⇧+点击 / ⇧↑↓ 选中锚点到光标的连续范围；多选只含 Task。拖动多选中的一行即多项拖拽：其余选中行收起（被拖条目始终贴着手），松手后整组按原顺序落在落点，并一起改归属 / Heading / 计划日期。右键多选中的一行，菜单作用于整组；右键多选之外的行则改为只选中该行。触控交互没有 Selection：点击 = 打开详情，勾选用专用 checkbox，长按只负责拖动排序，批量或行级操作走 Multi-Select Mode。
+仅存在于键盘交互域：键盘导航下当前被高亮、并作为键盘动作（完成、删除、新建于下方等）作用对象的 Task / Project / Project Heading；区别于 focus（DOM 焦点）与完成态。可多选（对齐 Things 3 Mac）：⌘A 全选，⌘/Ctrl+点击切换单行，⇧+点击 / ⇧↑↓ 选中锚点到光标的连续范围；多选只含 Task。拖动多选中的一行即多项拖拽：其余选中行收起（被拖条目始终贴着手），松手后整组按原顺序落在落点，并一起改归属 / Heading / 计划日期；也可整组拖到侧边栏（Sidebar Drop）。右键多选中的一行，菜单作用于整组；右键多选之外的行则改为只选中该行。触控交互没有 Selection：点击 = 打开详情，勾选用专用 checkbox，长按只负责拖动排序，批量或行级操作走 Multi-Select Mode。
 _Avoid_: 高亮、hover、焦点
 
 **Multi-Select Mode（多选模式）**:
 触控交互中显式进入 / 退出的模式（对齐 Things 3 iPhone）：左滑 Task 行进入并勾选该行，模式中点击行 = 切换勾选，底部工具栏对勾选集合批量执行计划、移动、删除，其余动作（完成、取消、截止日期等）收在「更多」里。动作执行完、点「完成」、切换页面或系统返回即退出。与键盘 Selection 互不相通：进入时清空 Selection、收起展开行。Trash 中同样左滑进入，工具栏「删除」换成「放回」。
 _Avoid_: Selection（键盘专属）、编辑模式、批量选择
+
+**Sidebar Drop（拖到侧边栏）**:
+桌面 / Web 指针交互中把 Task（含 Selection 多选整组）或 Project 行拖放到侧边栏行上的动作（对齐 Things 3 Mac），是对应既有动作的快捷方式，不引入新语义：Inbox / 区域 / 项目 = 移动，Today = 计划为今天，Someday = 计划为 Someday，Logbook = 完成，Trash = 删除。Project 不接收 Inbox 与项目落点。Upcoming、Calendar、Anytime、稍后项目入口不是落点（Anytime 在本模型中不是可写入的状态）。已符合目标的条目落下即跳过；落下后停留在当前页、清空 Selection。触控交互没有 Sidebar Drop。
+_Avoid_: 拖入、投放、drop target（泛指落点时可用）
 
 ### 引擎与同步（local-first）
 

@@ -17,14 +17,8 @@ import {
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  DndContext,
   DragOverlay,
-  MeasuringStrategy,
-  MouseSensor,
-  TouchSensor,
   pointerWithin,
-  useSensor,
-  useSensors,
   type CollisionDetection,
   type DragEndEvent,
   type DragOverEvent,
@@ -56,11 +50,12 @@ import { buildUpcomingLayout, type UpcomingDay } from '@taskora/api';
 import { toast } from 'sonner';
 import { PageHeading } from '@/components/layout/PageHeading';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
+import { useDndSurface } from '../lib/appDnd';
+import type { SidebarDropPayload } from '@/components/layout/sidebarDrop';
 import {
   dndListProps,
   dragGroupOf,
   dragOverlayClass,
-  dropAnimation,
   expandDragGroup,
   useCollapseAfterDragStart,
   useFlipList,
@@ -76,6 +71,11 @@ interface ScheduleDrag {
   group: Array<{ item: TaskFeedItem; groupId: string }> | null;
   /** 组内其余行是否已收起（拖拽开始那次提交之后才收起）。 */
   collapsed: boolean;
+}
+
+/** 本页的拖拽源与落点（共享拖拽上下文里按 id 前缀认领，ADR 0018）。 */
+function isUpcomingKey(key: string) {
+  return key.startsWith('task:') || key.startsWith('header:') || key.startsWith('container:');
 }
 
 function scheduleSignature(items: FeedItem[]) {
@@ -112,10 +112,6 @@ export default function Upcoming() {
   const reorderFeed = useReorderFeed();
   const { selectedIds, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
   const multiSelectActive = useMultiSelectStore((s) => s.active);
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
-  );
 
   const projectMap = useMemo(
     () => Object.fromEntries(projects.map((p) => [p.id, p.title])),
@@ -296,6 +292,26 @@ export default function Upcoming() {
   const handleDragOver = ({ active, over }: DragOverEvent) => {
     if (!over) return;
     const overKey = String(over.id);
+    if (!isUpcomingKey(overKey)) {
+      // 指针在列表外的落点上（侧边栏）：空位回到原处，不暗示改期。
+      lastTargetRef.current = null;
+      const current = dragRef.current;
+      if (!current) return;
+      const companions = new Set(
+        current.collapsed
+          ? (current.group ?? []).flatMap(({ item }) =>
+              item.id === current.origin.id ? [] : [item.id],
+            )
+          : [],
+      );
+      const origin = current.startItems.filter(
+        (entry) => entry.type !== 'task' || !companions.has(entry.id),
+      );
+      if (origin.map(feedKey).join('|') === current.items.map(feedKey).join('|')) return;
+      flip.capture();
+      updateDrag({ ...current, items: origin });
+      return;
+    }
     if (lastTargetRef.current?.overKey !== overKey) {
       lastTargetRef.current = { overKey, edge: 'before' };
     }
@@ -381,6 +397,25 @@ export default function Upcoming() {
     flip.capture();
     updateDrag(null);
   };
+
+  /** 拖到侧边栏的载荷：被拖任务，多选时为整组（按显示顺序，拖拽开始时的原样）。 */
+  const sidebarPayload = (activeKey: string): SidebarDropPayload | null => {
+    const current = dragRef.current;
+    if (!current || activeKey !== feedKey(current.origin)) return null;
+    return { kind: 'tasks', tasks: current.group?.map(({ item }) => item) ?? [current.origin] };
+  };
+
+  // 共享拖拽上下文里的一个 surface（ADR 0018）。
+  const surface = useDndSurface({
+    owns: isUpcomingKey,
+    collisionDetection,
+    sidebarPayload,
+    onDragStart: handleDragStart,
+    onDragMove: handleDragMove,
+    onDragOver: handleDragOver,
+    onDragEnd: handleDragEnd,
+    onDragCancel: handleDragCancel,
+  });
 
   // 注册可遍历行（按渲染顺序：本周每天，之后各月）。
   const rows = useMemo(
@@ -496,16 +531,7 @@ export default function Upcoming() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        <DndContext
-          sensors={sensors}
-          collisionDetection={collisionDetection}
-          measuring={{ droppable: { strategy: MeasuringStrategy.Always } }}
-          onDragStart={handleDragStart}
-          onDragOver={handleDragOver}
-          onDragMove={handleDragMove}
-          onDragEnd={handleDragEnd}
-          onDragCancel={handleDragCancel}
-        >
+        <>
           <div ref={flip.rootRef} {...dndListProps} className="flex flex-col gap-5">
             {layout.week.map(renderDay)}
             {layout.later.map((month, index) => {
@@ -537,7 +563,8 @@ export default function Upcoming() {
               );
             })}
           </div>
-          <DragOverlay dropAnimation={dropAnimation}>
+          {surface.overlayActive && (
+          <DragOverlay dropAnimation={surface.dropAnimation}>
             {activeTask && (
               <div
                 className={`${dragOverlayClass} relative bg-card`}
@@ -549,7 +576,8 @@ export default function Upcoming() {
               </div>
             )}
           </DragOverlay>
-        </DndContext>
+          )}
+        </>
       )}
     </div>
   );

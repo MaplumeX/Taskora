@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { useSortable } from '@dnd-kit/sortable';
 
 import type { ProjectResponseDto } from '@taskora/shared';
@@ -5,10 +6,13 @@ import type { ProjectResponseDto } from '@taskora/shared';
 import { ProjectItem } from '@/components/project/ProjectItem';
 import { projectDndId } from '@/components/layout/sidebarProjectLayout';
 import { flipId, noLayoutAnimation } from '../../lib/dnd';
+import { useSidebarDropTarget } from '../../lib/appDnd';
 
 interface Props {
   project: ProjectResponseDto;
   placeholder?: boolean;
+  /** 作为 Sidebar Drop 落点（任务拖到项目上 = 移入该项目）。 */
+  dropTarget?: boolean;
 }
 
 /**
@@ -21,15 +25,25 @@ interface Props {
  *   dnd-kit 的排序位移（见 lib/dnd.ts）。被拖项目在列表里保留为不可见
  *   的真实行，空位高度与行高一致。
  */
-export function SortableProjectItem({ project, placeholder = false }: Props) {
+export function SortableProjectItem({ project, placeholder = false, dropTarget = false }: Props) {
   const { attributes, listeners, setNodeRef } = useSortable({
     id: projectDndId(project.id),
     animateLayoutChanges: noLayoutAnimation,
   });
+  const drop = useSidebarDropTarget(
+    dropTarget ? { kind: 'project', projectId: project.id } : null,
+  );
+  const setRefs = React.useCallback(
+    (node: HTMLElement | null) => {
+      setNodeRef(node);
+      drop.setNodeRef(node);
+    },
+    [setNodeRef, drop.setNodeRef],
+  );
 
   return (
     <div
-      ref={setNodeRef}
+      ref={setRefs}
       data-sortable-project-id={project.id}
       {...flipId(projectDndId(project.id))}
       {...attributes}
@@ -44,7 +58,7 @@ export function SortableProjectItem({ project, placeholder = false }: Props) {
           <ProjectItem project={project} />
         </div>
       ) : (
-        <ProjectItem project={project} />
+        <ProjectItem project={project} dropOver={drop.isOver} />
       )}
     </div>
   );

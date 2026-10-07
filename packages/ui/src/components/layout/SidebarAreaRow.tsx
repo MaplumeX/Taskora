@@ -8,18 +8,21 @@ import { SortableContext } from '@dnd-kit/sortable';
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 
 import { cn } from '@/lib/utils';
-import { sidebarRowClass } from '@/components/layout/sidebarRowClass';
+import { sidebarDropOverClass, sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import { SortableProjectItem } from '@/components/layout/SortableProjectItem';
 import {
   projectContainerDndId,
   projectDndId,
 } from '@/components/layout/sidebarProjectLayout';
 import { flipId, noopSortingStrategy } from '../../lib/dnd';
+import { useSidebarDropTarget } from '../../lib/appDnd';
 
 interface Props {
   area: AreaResponseDto;
   projects: ProjectResponseDto[];
   activeProjectId: string | null;
+  /** 区域行与其项目行作为 Sidebar Drop 落点（收起的区域行本身仍是落点）。 */
+  dropTargets: boolean;
 }
 
 /**
@@ -30,12 +33,14 @@ export function SidebarAreaRow({
   area,
   projects,
   activeProjectId,
+  dropTargets,
 }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = React.useState(true);
   const { setNodeRef: setProjectContainerRef } = useDroppable({
     id: projectContainerDndId(area.id),
   });
+  const drop = useSidebarDropTarget(dropTargets ? { kind: 'area', areaId: area.id } : null);
   const label = area.title || t('area:newItemPlaceholder');
   const collapsedPlaceholder =
     !open && activeProjectId !== null && projects[0]?.id === activeProjectId;
@@ -45,16 +50,24 @@ export function SidebarAreaRow({
       key={project.id}
       project={project}
       placeholder={project.id === activeProjectId}
+      dropTarget={dropTargets}
     />
   );
 
   return (
     <div className="mt-2 flex flex-col gap-px">
-      <div {...flipId(`area-row:${area.id}`)} className="group/area relative flex items-center">
+      <div
+        ref={drop.setNodeRef}
+        {...flipId(`area-row:${area.id}`)}
+        className="group/area relative flex items-center"
+      >
         <NavLink
           to={`/areas/${area.id}`}
           className={({ isActive }) =>
-            sidebarRowClass(isActive, 'flex-1 font-semibold')
+            sidebarRowClass(
+              isActive,
+              cn('flex-1 font-semibold', drop.isOver && sidebarDropOverClass),
+            )
           }
         >
           <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />

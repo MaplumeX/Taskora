@@ -19,6 +19,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { QuickFind } from '@/components/search/QuickFind';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
+import { AppDndProvider } from '../lib/appDnd';
 import { mainNav, type NavItem } from '@/components/layout/navItems';
 import { useBucketCounts } from '@/components/layout/useBucketCounts';
 import { useIsDesktop } from '../lib/use-media-query';
@@ -141,8 +142,11 @@ export default function Home() {
         </HomeGroup>
       ))}
 
-      {/* 区域 / 项目：与桌面侧边栏同一组件（含长按拖拽排序） */}
-      <SidebarProjectSection projects={allProjects} areas={areas} />
+      {/* 区域 / 项目：与桌面侧边栏同一组件（含长按拖拽排序）。隐藏的桌面侧边栏
+          同样挂着这些项目 / 区域，拖拽 id 相同，因此用独立的拖拽上下文隔开。 */}
+      <AppDndProvider>
+        <SidebarProjectSection projects={allProjects} areas={areas} />
+      </AppDndProvider>
 
       <HomeGroup>
         <HomeRow

@@ -7,7 +7,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const harness = vi.hoisted(() => ({
   projects: [] as ProjectResponseDto[],
-  onDragEnd: null as ((event: unknown) => void) | null,
+  dnd: null as {
+    onDragStart: (event: unknown) => void;
+    onDragEnd: (event: unknown) => void;
+  } | null,
+  sidebarDrop: vi.fn(),
   reorderProjectsMutate: vi.fn(),
   taskListViewProps: null as Record<string, unknown> | null,
 }));
@@ -17,8 +21,13 @@ vi.mock('@dnd-kit/core', async () => {
   const actual = await vi.importActual<typeof import('@dnd-kit/core')>('@dnd-kit/core');
   return {
     ...actual,
-    DndContext: (props: { onDragEnd: (event: unknown) => void; children: React.ReactNode }) => {
-      harness.onDragEnd = props.onDragEnd;
+    DndContext: (props: {
+      onDragStart: (event: unknown) => void;
+      onDragEnd: (event: unknown) => void;
+      children: React.ReactNode;
+    }) => {
+      // React 生成组件栈（如 act 警告）时会无参调用祖先组件，忽略那次调用。
+      if (props) harness.dnd = props;
       return ReactModule.createElement(ReactModule.Fragment, null, props.children);
     },
   };
@@ -61,6 +70,7 @@ const effectiveTags = {
 };
 
 import AreaDetail from './AreaDetail';
+import { AppDndProvider } from '../lib/appDnd';
 
 function project(
   id: string,
@@ -100,6 +110,12 @@ function renderArea() {
         <Route path="/areas/:id" element={<AreaDetail />} />
       </Routes>
     </MemoryRouter>,
+    // 列表登记在应用壳的共享拖拽上下文里（ADR 0018）。
+    {
+      wrapper: ({ children }) => (
+        <AppDndProvider onSidebarDrop={harness.sidebarDrop}>{children}</AppDndProvider>
+      ),
+    },
   );
 }
 
@@ -110,7 +126,8 @@ function renderedIds() {
 }
 
 beforeEach(() => {
-  harness.onDragEnd = null;
+  harness.dnd = null;
+  harness.sidebarDrop.mockReset();
   harness.reorderProjectsMutate.mockReset();
   harness.taskListViewProps = null;
   harness.projects = [
@@ -145,8 +162,22 @@ describe('AreaDetail later projects', () => {
 
   it('活跃项目拖拽排序以全量顺序写回，稍后与其他区域项目原位不动', () => {
     renderArea();
-    act(() => harness.onDragEnd?.({ active: { id: 'a2' }, over: { id: 'a1' } }));
+    act(() => harness.dnd?.onDragStart({ active: { id: 'a2' } }));
+    act(() => harness.dnd?.onDragEnd({ active: { id: 'a2' }, over: { id: 'a1' } }));
     expect(harness.reorderProjectsMutate).toHaveBeenCalledWith(['x', 'a2', 'as', 'a1', 'af']);
+  });
+
+  it('活跃项目行可拖到侧边栏，不改动区域内顺序', () => {
+    renderArea();
+    act(() => harness.dnd?.onDragStart({ active: { id: 'a2' } }));
+    act(() =>
+      harness.dnd?.onDragEnd({ active: { id: 'a2' }, over: { id: 'sidebar-drop:someday' } }),
+    );
+    expect(harness.sidebarDrop).toHaveBeenCalledWith(
+      { kind: 'project', project: expect.objectContaining({ id: 'a2' }) },
+      { kind: 'someday' },
+    );
+    expect(harness.reorderProjectsMutate).not.toHaveBeenCalled();
   });
 });
 

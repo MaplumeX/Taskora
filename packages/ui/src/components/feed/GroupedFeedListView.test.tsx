@@ -44,6 +44,7 @@ const harness = vi.hoisted(() => ({
   areas: [] as AreaResponseDto[],
   pointerCollisionIds: [] as string[],
   closestCollisionIds: [] as string[],
+  sidebarDrop: vi.fn(),
 }));
 
 vi.mock('@dnd-kit/core', async () => {
@@ -52,7 +53,8 @@ vi.mock('@dnd-kit/core', async () => {
   return {
     ...actual,
     DndContext: (props: DndHandlers & { children: React.ReactNode }) => {
-      harness.dndProps = props;
+      // React 生成组件栈（如 act 警告）时会无参调用祖先组件，忽略那次调用。
+      if (props) harness.dndProps = props;
       return ReactModule.createElement('div', { 'data-testid': 'dnd-context' }, props.children);
     },
     DragOverlay: ({ children }: { children: React.ReactNode }) =>
@@ -186,6 +188,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
 });
 
 import { GroupedFeedListView } from './GroupedFeedListView';
+import { AppDndProvider } from '../../lib/appDnd';
 import {
   flattenSelectionRows,
   formatDateLabel,
@@ -287,8 +290,17 @@ function area(id: string): AreaResponseDto {
   };
 }
 
+/** 列表登记在应用壳的共享拖拽上下文里（ADR 0018）。 */
+function DndShell({ children }: { children: React.ReactNode }) {
+  return <AppDndProvider onSidebarDrop={harness.sidebarDrop}>{children}</AppDndProvider>;
+}
+
+function renderDnd(ui: React.ReactElement) {
+  return render(ui, { wrapper: DndShell });
+}
+
 function renderView(items: FeedItem[], view: 'today' | 'anytime' | 'someday' = 'today') {
-  return render(
+  return renderDnd(
     <MemoryRouter initialEntries={[`/${view}`]}>
       <Routes>
         <Route
@@ -355,6 +367,7 @@ beforeEach(() => {
   harness.areas = [];
   harness.pointerCollisionIds = [];
   harness.closestCollisionIds = [];
+  harness.sidebarDrop.mockReset();
   harness.completeTaskMutate.mockReset();
   harness.uncompleteTaskMutate.mockReset();
   harness.reorderFeedMutate.mockReset();
@@ -718,7 +731,7 @@ describe('GroupedFeedListView — 拖拽语义', () => {
     expect(zone).toHaveClass('absolute', 'bottom-full');
     expect(zone.children).toHaveLength(0);
     // 也不能排在首个组头之前：否则组头失去 :first-child，mt-6 生效整列下移。
-    expect(screen.getByTestId('dnd-context').firstElementChild).toHaveAttribute(
+    expect(document.querySelector('[data-dnd-list]')?.firstElementChild).toHaveAttribute(
       'data-group-header-dropzone',
       'p1',
     );
@@ -771,7 +784,7 @@ describe('GroupedFeedListView — 拖拽语义', () => {
 
   it('flat mode (grouping off) keeps the same drag reorder without reassignment', () => {
     harness.projects = [project('p1')];
-    render(
+    renderDnd(
       <MemoryRouter>
         <GroupedFeedListView
           items={[taskItem('loose'), taskItem('a1', { projectId: 'p1' }), taskItem('a2', { projectId: 'p1' })]}
@@ -865,5 +878,94 @@ describe('GroupedFeedListView — 拖拽语义', () => {
 
     expect(harness.updateTaskMutate).not.toHaveBeenCalled();
     expect(harness.reorderFeedMutate).not.toHaveBeenCalled();
+  });
+  describe('Sidebar Drop', () => {
+    it('hands the dragged task to the sidebar target and does not reorder the list', () => {
+      setupTwoProjects();
+
+      act(() => {
+        handlers().onDragStart?.({ active: { id: 'task:a1' } });
+      });
+      // 先在列表里预览一次跨组移动，再移到侧边栏：空位回到原处。
+      act(() => {
+        handlers().onDragOver?.({ active: { id: 'task:a1' }, over: { id: 'task:b1' } });
+      });
+      expect(containerOrder('p2')).toEqual(['a1', 'b1']);
+      act(() => {
+        handlers().onDragOver?.({
+          active: { id: 'task:a1' },
+          over: { id: 'sidebar-drop:project:p9' },
+        });
+      });
+      expect(containerOrder('p1')).toEqual(['a1', 'a2']);
+      expect(containerOrder('p2')).toEqual(['b1']);
+
+      act(() => {
+        handlers().onDragEnd?.({
+          active: { id: 'task:a1' },
+          over: { id: 'sidebar-drop:project:p9' },
+        });
+      });
+
+      expect(harness.sidebarDrop).toHaveBeenCalledTimes(1);
+      const [payload, target] = harness.sidebarDrop.mock.calls[0];
+      expect(target).toEqual({ kind: 'project', projectId: 'p9' });
+      expect(payload.kind).toBe('tasks');
+      expect(payload.tasks.map((task: { id: string }) => task.id)).toEqual(['a1']);
+      expect(payload.tasks[0].projectId).toBe('p1');
+      expect(harness.updateTaskMutate).not.toHaveBeenCalled();
+      expect(harness.reorderFeedMutate).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('task-placeholder-a1')).not.toBeInTheDocument();
+    });
+
+    it('hands the whole selection over in display order', () => {
+      setupTwoProjects();
+      useSelectionStore.getState().setSelection(['b1', 'loose', 'a2']);
+
+      act(() => {
+        handlers().onDragStart?.({ active: { id: 'task:a2' } });
+      });
+      act(() => {
+        handlers().onDragEnd?.({ active: { id: 'task:a2' }, over: { id: 'sidebar-drop:logbook' } });
+      });
+
+      const [payload, target] = harness.sidebarDrop.mock.calls[0];
+      expect(target).toEqual({ kind: 'logbook' });
+      expect(payload.tasks.map((task: { id: string }) => task.id)).toEqual(['loose', 'a2', 'b1']);
+      // 收起的组员复原，列表未被改动。
+      expect(containerOrder('ungrouped')).toEqual(['loose']);
+      expect(harness.reorderFeedMutate).not.toHaveBeenCalled();
+    });
+
+    it('hands a standalone project row over as a project', () => {
+      harness.projects = [project('pr')];
+      renderView([taskItem('loose'), projectItem('pr')]);
+
+      act(() => {
+        handlers().onDragStart?.({ active: { id: 'project:pr' } });
+      });
+      act(() => {
+        handlers().onDragEnd?.({ active: { id: 'project:pr' }, over: { id: 'sidebar-drop:today' } });
+      });
+
+      const [payload, target] = harness.sidebarDrop.mock.calls[0];
+      expect(target).toEqual({ kind: 'today' });
+      expect(payload).toMatchObject({ kind: 'project', project: { id: 'pr' } });
+    });
+
+    it('releasing over the sidebar but not on a target does nothing', () => {
+      setupTwoProjects();
+
+      act(() => {
+        handlers().onDragStart?.({ active: { id: 'task:a1' } });
+      });
+      act(() => {
+        handlers().onDragEnd?.({ active: { id: 'task:a1' }, over: { id: 'sidebar-drop:region' } });
+      });
+
+      expect(harness.sidebarDrop).not.toHaveBeenCalled();
+      expect(harness.updateTaskMutate).not.toHaveBeenCalled();
+      expect(harness.reorderFeedMutate).not.toHaveBeenCalled();
+    });
   });
 });
