@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type {
   AreaResponseDto,
@@ -186,6 +187,8 @@ vi.mock('@taskora/api', async (importOriginal) => {
     useUncompleteProject: () => ({ mutate: harness.uncompleteProjectMutate }),
     useProjectsQuery: () => ({ data: harness.projects }),
     useAreasQuery: () => ({ data: harness.areas }),
+    useUpdateArea: () => ({ mutate: vi.fn() }),
+    useDeleteArea: () => ({ mutate: vi.fn() }),
     // useTaskRowSelection / useSelectionScope 依赖真实 store，保持真实实现。
     useTaskRowSelection: actual.useTaskRowSelection,
   };
@@ -194,7 +197,9 @@ vi.mock('@taskora/api', async (importOriginal) => {
 import { GroupedFeedListView } from './GroupedFeedListView';
 import {
   flattenSelectionRows,
-  formatDateLabel,
+  formatDeadlineCountdown,
+  parseCalendarDate,
+  todayDateKey,
   useSelectionStore,
   useUiInteractionStore,
 } from '@taskora/api';
@@ -379,51 +384,97 @@ beforeEach(() => {
 });
 
 describe('GroupedFeedListView — 组头渲染', () => {
-  it('renders project headers with title and date badge; area headers with title', () => {
-    // 未来日期：> 今天才走灰色日期 chip（≤ 今天按「今天」语义显示黄星）。
-    harness.projects = [
-      project('p1', {
-        taskTotalCount: 3,
-        taskCompletedCount: 1,
-        scheduledDate: '2999-08-01T00:00:00.000Z',
-      }),
-    ];
-    harness.areas = [area('a1')];
-    renderView([
-      taskItem('direct', { areaId: 'a1' }),
-      taskItem('in-p1', { projectId: 'p1' }),
-    ]);
+  it.each(['today', 'anytime', 'someday'] as const)(
+    '%s renders Project and Area headings with icons and neutral navigation titles',
+    (view) => {
+      harness.projects = [{
+        ...project('p1', {
+          taskTotalCount: 3,
+          taskCompletedCount: 1,
+          scheduledDate: '2999-08-01T00:00:00.000Z',
+        }),
+        scheduledType: ScheduledType.DATE,
+        dueDate: '2999-08-10T00:00:00.000Z',
+        repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+      }];
+      harness.areas = [area('a1')];
+      renderView([
+        taskItem('direct', { areaId: 'a1' }),
+        taskItem('in-p1', { projectId: 'p1' }),
+      ], view);
 
-    const projectHeader = headerOf('p1');
-    expect(projectHeader).toHaveTextContent('p1');
-    expect(projectHeader).toHaveTextContent(
-      formatDateLabel(new Date('2999-08-01T00:00:00.000Z')),
-    );
+      for (const [id, to] of [['p1', '/projects/p1'], ['a1', '/areas/a1']]) {
+        const heading = screen.getByRole('heading', { level: 2, name: id });
+        expect(heading).toBe(headerOf(id));
+        expect(within(heading).getByRole('link', { name: id }).textContent).toBe(id);
+        expect(heading).toHaveClass('border-b');
+        expect(heading).not.toHaveAttribute('role', 'button');
+        expect(heading.className).not.toMatch(/hover:bg-|rounded-/);
+        // 图标 / 进度环保留；截止徽标独立于标题链接，箭头不参与标题名称。
+        expect(heading.querySelector('svg')).not.toBeNull();
+        if (id === 'p1') {
+          expect(within(heading).getByRole('checkbox')).toHaveAttribute('aria-checked', 'false');
+        } else {
+          expect(within(heading).queryByRole('checkbox')).not.toBeInTheDocument();
+          expect(heading.querySelector('.lucide-layers')).not.toBeNull();
+        }
+        const link = within(heading).getByRole('link', { name: id });
+        expect(link).toHaveAttribute('href', to);
+        expect(link).toHaveClass('text-body', 'font-semibold', 'text-foreground', 'hover:text-primary', 'no-underline');
+        expect(link).not.toHaveClass('hover:underline', 'text-primary');
+        expect(link.className).not.toMatch(/hover:bg-/);
+        const arrow = link.querySelector('.lucide-chevron-right');
+        expect(arrow).toHaveAttribute('aria-hidden', 'true');
+        expect(arrow).toHaveClass('opacity-0', 'group-hover/header-link:opacity-100');
+      }
+    },
+  );
 
-    const areaHeader = headerOf('a1');
-    expect(areaHeader).toHaveTextContent('a1');
+  it.each([
+    ['future', '2999-08-10', 'text-muted-foreground'],
+    ['today', null, 'text-deadline'],
+    ['overdue', '2000-01-01', 'text-deadline'],
+  ])('keeps the %s Project deadline flag and countdown outside the hover link', (_state, date, color) => {
+    const dueDate = date ?? todayDateKey();
+    harness.projects = [{ ...project('p1'), dueDate }];
+    renderView([taskItem('in-project', { projectId: 'p1' })]);
+    const heading = headerOf('p1');
+    const badge = within(heading).getByText(formatDeadlineCountdown(parseCalendarDate(dueDate)));
+    const link = within(heading).getByRole('link', { name: 'p1' });
+
+    expect(badge).toBeVisible();
+    expect(badge).toHaveClass(color);
+    expect(badge.querySelector('.lucide-flag')).not.toBeNull();
+    expect(link).not.toContainElement(badge);
+    expect(badge.parentElement).toHaveClass('ml-auto', 'shrink-0', 'whitespace-nowrap');
   });
 
-  it('renders headers as underlined section titles without any collapse chevron or task count', () => {
-    harness.projects = [project('p1', { taskTotalCount: 3, taskCompletedCount: 1 })];
+  it('does not show a deadline badge for a Project without a deadline or for an Area', () => {
+    harness.projects = [project('p1')];
     harness.areas = [area('a1')];
     renderView([
-      taskItem('direct', { areaId: 'a1' }),
-      taskItem('in-p1', { projectId: 'p1' }),
+      taskItem('in-project', { projectId: 'p1' }),
+      taskItem('in-area', { areaId: 'a1' }),
+    ]);
+    for (const id of ['p1', 'a1']) {
+      expect(headerOf(id).querySelector('.lucide-flag')).toBeNull();
+    }
+  });
+
+  it('uses localized placeholders for unnamed parents without hiding their headings', () => {
+    harness.projects = [{ ...project('p1'), title: '' }];
+    harness.areas = [{ ...area('a1'), title: '' }];
+    renderView([
+      taskItem('in-project', { projectId: 'p1' }),
+      taskItem('in-area', { areaId: 'a1' }),
     ]);
 
-    const projectHeader = headerOf('p1');
-    expect(projectHeader.className).toContain('border-b');
-    // 无 chevron（行内唯一按钮是进度环）；无任务计数文案。
-    expect(projectHeader).not.toHaveTextContent('1/3');
-    expect(
-      screen.queryByRole('button', { name: /collapse|expand/i }),
-    ).not.toBeInTheDocument();
-
-    const areaHeader = headerOf('a1');
-    expect(areaHeader.className).toContain('border-b');
-    // 领域组头：仅图标 + 标题，无计数数字。
-    expect(areaHeader.textContent?.trim()).toBe('a1');
+    for (const id of ['p1', 'a1']) {
+      const heading = headerOf(id);
+      const link = within(heading).getByRole('link');
+      expect(link.textContent?.trim()).not.toBe('');
+      expect(link).toHaveClass('text-muted-foreground');
+    }
   });
 
   it('groups in-area project tasks flatly under the project header (no area nesting)', () => {
@@ -515,58 +566,100 @@ describe('GroupedFeedListView — 导航与行注册', () => {
     expect(rowIds).toEqual(['p1', 'a1']);
   });
 
-  it('navigates to the project detail on header body click', () => {
+  it('navigates to the project detail on title click', () => {
     harness.projects = [project('p1')];
     renderView([taskItem('a1', { projectId: 'p1' })]);
 
-    fireEvent.click(headerOf('p1'));
+    fireEvent.click(within(headerOf('p1')).getByRole('link'));
     expect(screen.getByTestId('project-detail')).toBeInTheDocument();
   });
 
-  it('navigates to the area detail on area header click', () => {
+  it('navigates to the area detail on title click', () => {
     harness.areas = [area('a1')];
     renderView([taskItem('direct', { areaId: 'a1' })]);
 
-    fireEvent.click(headerOf('a1'));
+    fireEvent.click(within(headerOf('a1')).getByRole('link'));
     expect(screen.getByTestId('area-detail')).toBeInTheDocument();
   });
 
-  it('navigates to the project detail on Enter from the focused header row', () => {
+  it.each(['project', 'area'] as const)(
+    'navigates to the %s detail on Enter from the focused title link',
+    async (kind) => {
+      const user = userEvent.setup();
+      harness.projects = [project('p1')];
+      harness.areas = [area('a1')];
+      renderView([
+        taskItem('in-project', { projectId: 'p1' }),
+        taskItem('in-area', { areaId: 'a1' }),
+      ]);
+
+      const id = kind === 'project' ? 'p1' : 'a1';
+      const link = within(headerOf(id)).getByRole('link');
+      link.focus();
+      await user.keyboard('{Enter}');
+
+      expect(screen.getByTestId(`${kind}-detail`)).toBeInTheDocument();
+    },
+  );
+
+  it('keeps Selection and creation context on title links, without selecting the whole heading', () => {
     harness.projects = [project('p1')];
-    renderView([taskItem('a1', { projectId: 'p1' })]);
-
-    const header = headerOf('p1');
-    header.focus();
-    fireEvent.keyDown(header, { key: 'Enter' });
-
-    expect(screen.getByTestId('project-detail')).toBeInTheDocument();
-  });
-
-  it('navigates to the area detail on Enter from the focused area header row', () => {
     harness.areas = [area('a1')];
-    renderView([taskItem('direct', { areaId: 'a1' })]);
+    renderView([
+      taskItem('in-project', { projectId: 'p1' }),
+      taskItem('in-area', { areaId: 'a1' }),
+    ]);
 
-    const header = headerOf('a1');
-    header.focus();
-    fireEvent.keyDown(header, { key: 'Enter' });
+    const rows = flattenSelectionRows(useSelectionStore.getState());
+    expect(rows.find((row) => row.id === 'p1')?.groupHeader).toEqual({
+      createContext: { projectId: 'p1' },
+    });
+    expect(rows.find((row) => row.id === 'a1')?.groupHeader).toEqual({
+      createContext: { areaId: 'a1' },
+    });
+    for (const id of ['p1', 'a1']) {
+      const heading = headerOf(id);
+      const link = within(heading).getByRole('link');
+      expect(link).toHaveAttribute('data-selection-row', id);
+      expect(link).toHaveAttribute('tabindex', '-1');
 
-    expect(screen.getByTestId('area-detail')).toBeInTheDocument();
+      act(() => useSelectionStore.getState().setSelection([id]));
+      expect(link).toHaveAttribute('tabindex', '0');
+      expect(link).toHaveClass('bg-selection');
+      expect(heading).not.toHaveClass('bg-selection');
+
+      act(() => useSelectionStore.getState().clearSelection());
+      expect(link).toHaveAttribute('tabindex', '-1');
+      expect(link).not.toHaveClass('bg-selection');
+    }
   });
 
-  it('toggles the project complete state from the header progress ring', () => {
+  it('leaves Space available for the global new-task-below action instead of opening the parent', async () => {
+    const user = userEvent.setup();
+    harness.projects = [project('p1')];
+    renderView([taskItem('in-project', { projectId: 'p1' })]);
+    const link = within(headerOf('p1')).getByRole('link');
+    link.focus();
+    await user.keyboard(' ');
+
+    expect(link).toHaveFocus();
+    expect(screen.queryByTestId('project-detail')).not.toBeInTheDocument();
+    expect(harness.completeProjectMutate).not.toHaveBeenCalled();
+  });
+
+  it('completes a project through its progress ring without opening its detail', () => {
     harness.projects = [project('p1', { taskTotalCount: 2, taskCompletedCount: 2 })];
-    renderView([taskItem('a1', { projectId: 'p1' })]);
+    renderView([taskItem('in-project', { projectId: 'p1' })]);
+    fireEvent.click(within(headerOf('p1')).getByRole('checkbox'));
 
-    fireEvent.click(screen.getByRole('checkbox', { name: /mark complete/i }));
     expect(harness.completeProjectMutate).toHaveBeenCalledWith('p1', expect.anything());
-    expect(harness.uncompleteProjectMutate).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('project-detail')).not.toBeInTheDocument();
   });
 
-  it('asks how to settle the remaining tasks before completing a project that still has open tasks', () => {
+  it('confirms how to settle remaining tasks when completing from the header progress ring', () => {
     harness.projects = [project('p1', { taskTotalCount: 2, taskCompletedCount: 1 })];
-    renderView([taskItem('a1', { projectId: 'p1' })]);
-
-    fireEvent.click(screen.getByRole('checkbox', { name: /mark complete/i }));
+    renderView([taskItem('in-project', { projectId: 'p1' })]);
+    fireEvent.click(within(headerOf('p1')).getByRole('checkbox'));
     expect(harness.completeProjectMutate).not.toHaveBeenCalled();
 
     fireEvent.click(screen.getByRole('button', { name: /mark all as canceled/i }));
@@ -574,6 +667,25 @@ describe('GroupedFeedListView — 导航与行注册', () => {
       { id: 'p1', settleRemaining: 'cancelled' },
       expect.anything(),
     );
+  });
+
+  it('opens the Area context menu from its title without navigating', async () => {
+    harness.areas = [area('a1')];
+    renderView([taskItem('in-area', { areaId: 'a1' })]);
+    fireEvent.contextMenu(within(headerOf('a1')).getByRole('link'));
+    expect(await screen.findByRole('button', { name: 'Tags' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    expect(screen.queryByTestId('area-detail')).not.toBeInTheDocument();
+  });
+
+  it('does not make the blank heading space a navigation or completion button', () => {
+    harness.projects = [project('p1', { taskTotalCount: 2, taskCompletedCount: 1 })];
+    renderView([taskItem('in-project', { projectId: 'p1' })]);
+    fireEvent.click(headerOf('p1'));
+
+    expect(screen.queryByTestId('project-detail')).not.toBeInTheDocument();
+    expect(harness.completeProjectMutate).not.toHaveBeenCalled();
+    expect(harness.uncompleteProjectMutate).not.toHaveBeenCalled();
   });
 });
 

@@ -225,6 +225,9 @@ export function KeyboardShortcuts({ platform }: Props) {
 
       const selection = useSelectionStore.getState();
       const rows = flattenSelectionRows(selection);
+      // Group Header 仍登记父级上下文，但不参与列表焦点移动。
+      // 只跳过分组标题，独立 Project 行与项目内部 Heading 仍可导航。
+      const navigationRows = rows.filter((r) => !r.groupHeader);
       const taskRows = rows.filter((r) => r.kind === 'task');
       const view = viewOf(pathname);
       const rowById = new Map(rows.map((r) => [r.id, r]));
@@ -240,29 +243,29 @@ export function KeyboardShortcuts({ platform }: Props) {
         }
         case 'moveUp':
         case 'moveDown': {
-          if (rows.length === 0) return;
+          if (navigationRows.length === 0) return;
           const delta = action.type === 'moveUp' ? -1 : 1;
           const current = selection.selectedIds.at(-1);
-          let index = current ? rows.findIndex((r) => r.id === current) : -1;
-          if (index === -1) index = delta > 0 ? -1 : rows.length;
-          index = Math.max(0, Math.min(rows.length - 1, index + delta));
-          useSelectionStore.getState().setSelection([rows[index].id]);
+          let index = current ? navigationRows.findIndex((r) => r.id === current) : -1;
+          if (index === -1) index = delta > 0 ? -1 : navigationRows.length;
+          index = Math.max(0, Math.min(navigationRows.length - 1, index + delta));
+          useSelectionStore.getState().setSelection([navigationRows[index].id]);
           useUiInteractionStore.getState().setExpandedId(null);
-          focusSelectionRow(rows[index].id);
+          focusSelectionRow(navigationRows[index].id);
           return;
         }
         case 'moveFirst':
         case 'moveLast': {
-          if (rows.length === 0) return;
+          if (navigationRows.length === 0) return;
           // Grouped View 组边界钳制（story 24）：选中行在组内时，
           // Alt+↑/↓ 只在同组行（groupHeaderId 相同）内跳首末，
           // 任务不会经键盘离开所在组。未分组行（无 groupHeaderId）
           // 彼此同组 —— 非分组页面所有行都未分组，行为与之前一致。
           const currentId = selection.selectedIds.at(-1);
           const currentRow = currentId ? rowById.get(currentId) : undefined;
-          let pool = rows;
+          let pool = navigationRows;
           if (currentRow) {
-            const clamped = rows.filter(
+            const clamped = navigationRows.filter(
               (r) => r.groupHeaderId === currentRow.groupHeaderId,
             );
             if (clamped.length > 0) pool = clamped;
@@ -284,7 +287,7 @@ export function KeyboardShortcuts({ platform }: Props) {
             .map((id) => rowById.get(id))
             .filter((r): r is SelectionRow => !!r && r.kind === 'task');
           if (targets.length === 0) return;
-          const neighbor = neighborAfter(rows, selection.selectedIds);
+          const neighbor = neighborAfter(navigationRows, selection.selectedIds);
           const isLogbook = view === 'logbook';
           for (const row of targets) {
             // Logbook 中 ⌘K 撤销了结（story 26）：已完成的撤销完成，
@@ -307,7 +310,7 @@ export function KeyboardShortcuts({ platform }: Props) {
             .map((id) => rowById.get(id))
             .filter((r): r is SelectionRow => !!r && r.kind === 'task');
           if (targets.length === 0) return;
-          const neighbor = neighborAfter(rows, selection.selectedIds);
+          const neighbor = neighborAfter(navigationRows, selection.selectedIds);
           const isLogbook = view === 'logbook';
           for (const row of targets) {
             if (isLogbook) {
@@ -326,7 +329,7 @@ export function KeyboardShortcuts({ platform }: Props) {
             .map((id) => rowById.get(id))
             .filter((r): r is SelectionRow => !!r && r.kind === 'task');
           if (targets.length === 0) return;
-          const neighbor = neighborAfter(rows, selection.selectedIds);
+          const neighbor = neighborAfter(navigationRows, selection.selectedIds);
           // Trash 页遵循现有交互约定：⌫ 恢复（story 27）。
           if (view === 'trash') {
             for (const row of targets) restoreTask.mutate(row.id);

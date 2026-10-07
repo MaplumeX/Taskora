@@ -310,7 +310,7 @@ function GroupHeaderDropZone({
       ref={setNodeRef}
       data-group-header-dropzone={parentId}
       {...flipId(headerDndId(parentId))}
-      className="mt-6 rounded-lg first:mt-0"
+      className="mt-6 first:mt-0"
     >
       {children}
     </div>
