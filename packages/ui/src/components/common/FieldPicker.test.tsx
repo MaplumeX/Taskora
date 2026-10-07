@@ -66,6 +66,24 @@ describe('FieldPicker', () => {
   });
 
   describe('wide screens', () => {
+    it('allows a compact, end-aligned action popover', async () => {
+      restoreMedia = mockDesktop(true);
+      const user = userEvent.setup();
+      render(
+        <FieldPicker
+          label="Placement"
+          trigger={<button type="button">open</button>}
+          popoverAlign="end"
+          popoverClassName="w-36"
+        >
+          <button type="button">Go to</button>
+        </FieldPicker>,
+      );
+      await user.click(screen.getByRole('button', { name: 'open' }));
+      expect(screen.getByRole('dialog')).toHaveAttribute('data-align', 'end');
+      expect(screen.getByRole('dialog')).toHaveClass('w-36');
+    });
+
     it('opens an anchored popover instead of a dialog', async () => {
       restoreMedia = mockDesktop(true);
       const user = userEvent.setup();

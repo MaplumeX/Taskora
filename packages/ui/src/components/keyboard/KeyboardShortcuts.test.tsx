@@ -1,5 +1,6 @@
 import * as React from 'react';
-import { act, render, screen } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { TaskResponseDto } from '@taskora/shared';
 import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
@@ -74,6 +75,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
 });
 
 import { KeyboardShortcuts } from './KeyboardShortcuts';
+import { GroupHeaderRowShell } from '../feed/GroupHeaderRowShell';
 import { useSelectionStore } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
 import { useKeybindingsStore } from '@taskora/api';
@@ -437,6 +439,7 @@ describe('KeyboardShortcuts — 展开与新建', () => {
 function GroupedListPage() {
   const rows = React.useMemo<SelectionRow[]>(
     () => [
+      { id: 'standalone', kind: 'project' },
       { id: 'loose', kind: 'task' },
       {
         id: 'p1',
@@ -453,6 +456,13 @@ function GroupedListPage() {
         groupHeader: { createContext: { projectId: 'p2' } },
       },
       { id: 'b1', kind: 'task', groupHeaderId: 'p2' },
+      {
+        id: 'area-1',
+        kind: 'area',
+        groupHeaderId: 'area-1',
+        groupHeader: { createContext: { areaId: 'area-1' } },
+      },
+      { id: 'c1', kind: 'task', groupHeaderId: 'area-1' },
     ],
     [],
   );
@@ -460,15 +470,27 @@ function GroupedListPage() {
   const selectedIds = useSelectionStore((s) => s.selectedIds);
   return (
     <div>
-      {rows.map((row) => (
-        <div
-          key={row.id}
-          data-testid={`row-${row.id}`}
-          aria-selected={selectedIds.includes(row.id) || undefined}
-        >
-          {row.id}
-        </div>
-      ))}
+      {rows.map((row) =>
+        row.groupHeader ? (
+          <GroupHeaderRowShell
+            key={row.id}
+            parentId={row.id}
+            title={row.id}
+            to={`/projects/${row.id}`}
+            selectionState={selectedIds.includes(row.id) ? 'selected' : 'idle'}
+          />
+        ) : (
+          <div
+            key={row.id}
+            data-testid={`row-${row.id}`}
+            data-selection-row={row.id}
+            tabIndex={selectedIds.includes(row.id) ? 0 : -1}
+            aria-selected={selectedIds.includes(row.id) || undefined}
+          >
+            {row.id}
+          </div>
+        ),
+      )}
     </div>
   );
 }
@@ -480,6 +502,7 @@ function renderGrouped(path = '/today') {
       <Routes>
         <Route path="/today" element={<GroupedListPage />} />
         <Route path="/anytime" element={<GroupedListPage />} />
+        <Route path="/projects/:id" element={<div data-testid="project-detail" />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -492,6 +515,69 @@ function select(id: string) {
 }
 
 describe('KeyboardShortcuts — Grouped View 组头行为', () => {
+  beforeEach(async () => {
+    // 新建任务会延后两帧释放旧焦点；先排空上个用例的回调，避免跨测试抢焦点。
+    await act(async () => {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+    });
+  });
+
+  it.each([
+    ['ArrowDown', ['standalone', 'loose', 'a1', 'a2', 'b1', 'c1']],
+    ['ArrowUp', ['c1', 'b1', 'a2', 'a1', 'loose', 'standalone']],
+  ] as const)('%s 逐行移动焦点时跳过 Project / Area 分组标题，但保留独立 Project 行', async (key, ids) => {
+    renderGrouped();
+    for (const id of ids) {
+      press(key);
+      expect(useSelectionStore.getState().selectedIds).toEqual([id]);
+      await waitFor(() => expect(screen.getByTestId(`row-${id}`)).toHaveFocus());
+      for (const headerId of ['p1', 'p2', 'area-1']) {
+        expect(screen.getByRole('link', { name: headerId })).not.toHaveFocus();
+      }
+    }
+    press(key);
+    expect(useSelectionStore.getState().selectedIds).toEqual([ids.at(-1)]);
+  });
+
+  it.each([
+    ['k', { metaKey: true }],
+    ['k', { metaKey: true, altKey: true }],
+    ['Backspace', {}],
+  ] as const)('完成／取消／删除后自动移动焦点也跳过组头（%s %j）', async (key, mods) => {
+    renderGrouped();
+    select('a2');
+    press(key, mods);
+    expect(useSelectionStore.getState().selectedIds).toEqual(['b1']);
+    await waitFor(() => expect(screen.getByTestId('row-b1')).toHaveFocus());
+  });
+
+  it('聚焦标题链接后 Enter 原生导航，不被全局展开动作拦截', async () => {
+    const user = userEvent.setup();
+    renderGrouped();
+    select('p1');
+    screen.getByRole('link', { name: 'p1' }).focus();
+
+    await user.keyboard('{Enter}');
+
+    expect(screen.getByTestId('project-detail')).toBeInTheDocument();
+    expect(useUiInteractionStore.getState().expandedId).toBeNull();
+  });
+
+  it('聚焦标题链接后 Space 仍通过全局键位在该父级内新建任务', async () => {
+    const user = userEvent.setup();
+    renderGrouped();
+    select('p1');
+    screen.getByRole('link', { name: 'p1' }).focus();
+
+    await user.keyboard(' ');
+
+    expect(harness.createMutate).toHaveBeenCalledWith(
+      expect.objectContaining({ title: '', projectId: 'p1' }),
+    );
+    expect(screen.queryByTestId('project-detail')).not.toBeInTheDocument();
+    expect(harness.reorderMutate).not.toHaveBeenCalled();
+  });
+
   it('Alt+↓ 在组边界钳制：跳到组内末行而非跨组', () => {
     renderGrouped('/today');
     select('a1');
@@ -501,14 +587,14 @@ describe('KeyboardShortcuts — Grouped View 组头行为', () => {
     expect(useSelectionStore.getState().selectedIds).toEqual(['a2']);
   });
 
-  it('Alt+↑ 在组边界钳制：跳到组块首行（组头）而非顶部浮动区', () => {
+  it('Alt+↑ 在组边界钳制：跳到组内首个任务而非组头或顶部浮动区', async () => {
     renderGrouped('/today');
     select('a2');
 
     press('ArrowUp', { altKey: true });
 
-    // 组块的首个可见行是组头本身；未越出组边界进入浮动区。
-    expect(useSelectionStore.getState().selectedIds).toEqual(['p1']);
+    expect(useSelectionStore.getState().selectedIds).toEqual(['a1']);
+    await waitFor(() => expect(screen.getByTestId('row-a1')).toHaveFocus());
   });
 
   it('未分组行 Alt+↓ 只在未分组区内跳转', () => {

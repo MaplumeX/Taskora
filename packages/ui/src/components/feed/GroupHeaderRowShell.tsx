@@ -1,48 +1,71 @@
-import { cn } from '@/lib/utils';
+import { useId, type ReactNode } from 'react';
+import { ChevronRight } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import type { SelectionState } from '@taskora/api';
 
+import { cn } from '@/lib/utils';
+
 interface Props {
-  /** 组头代表的父级 id（项目/领域 id），同时是 Selection 行 id。 */
+  /** 组头代表的父级 id（Project / Area id），同时是 Selection 行 id。 */
   parentId: string;
   selectionState?: SelectionState;
-  /** 点击行体（及行上 Enter）打开父级详情页。 */
-  onOpen: () => void;
-  children: React.ReactNode;
+  to: string;
+  title: string;
+  icon?: ReactNode;
+  /** 标题右侧的常驻元信息，不参与标题链接的 hover。 */
+  trailing?: ReactNode;
+  placeholder?: boolean;
 }
 
 /**
- * Group Header（分组头）行脚手架：小节标题形态（文字加重 + 下横线 +
- * 组间大间隔），无折叠按钮。点击/Enter 打开详情。项目与领域组头共用；
- * 组头不可拖拽（组间顺序由侧边栏持有）。
+ * Things 式 Group Header：图标 / 进度环 + 黑色加粗标题，淡色分隔线。
+ * 标题悬停变蓝并显示右箭头，不加文字下划线或整行背景。
+ * 导航链接承接键盘 Selection；图标独立，允许项目进度环保留完成操作。
+ * 组间留白与拖拽投放面由外层 GroupHeaderDropZone 承载。
  */
-export function GroupHeaderRowShell({ parentId, selectionState = 'idle', onOpen, children }: Props) {
+export function GroupHeaderRowShell({
+  parentId,
+  selectionState = 'idle',
+  to,
+  title,
+  icon,
+  trailing,
+  placeholder = false,
+}: Props) {
+  const titleId = useId();
   return (
-    <div
+    <h2
       data-group-header={parentId}
-      data-selection-row={parentId}
-      role="button"
-      tabIndex={selectionState !== 'idle' ? 0 : -1}
-      aria-selected={selectionState !== 'idle' || undefined}
-      className={cn(
-        // Things 3 小节标题：半粗体 + 下方 1px 细线；圆角只在上方，保证细线笔直到两端。
-        'group flex h-9 cursor-pointer items-center gap-2.5 rounded-t-md border-b border-border px-2 pt-1 hover:bg-accent/60 max-md:h-11',
-        'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
-        selectionState !== 'idle' && 'bg-selection focus-visible:ring-0 hover:bg-selection',
-      )}
-      onClick={(e) => {
-        e.stopPropagation();
-        onOpen();
-      }}
-      onKeyDown={(e) => {
-        // 忽略来自嵌套按钮（进度环）的按键。
-        if (e.target !== e.currentTarget) return;
-        // 只处理 Enter：Space 留给全局键位「下方新建」（在该父级内建任务）。
-        if (e.key !== 'Enter') return;
-        e.preventDefault();
-        onOpen();
-      }}
+      aria-labelledby={titleId}
+      className="flex min-w-0 items-center gap-2.5 border-b border-border px-2"
     >
-      {children}
-    </div>
+      {icon}
+      <Link
+        to={to}
+        data-selection-row={parentId}
+        tabIndex={selectionState !== 'idle' ? 0 : -1}
+        className={cn(
+          'group/header-link flex min-h-9 min-w-0 items-center gap-1 text-body font-semibold text-foreground no-underline hover:text-primary focus-visible:text-primary max-md:min-h-11',
+          'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
+          placeholder && 'text-muted-foreground',
+          selectionState !== 'idle' && 'bg-selection',
+        )}
+        onClick={(event) => event.stopPropagation()}
+        onKeyDown={(event) => {
+          // Enter 保留链接的原生导航，避免全局「展开任务」拦截默认行为。
+          // Space 继续冒泡给全局「下方新建」。
+          if (event.key === 'Enter') event.stopPropagation();
+        }}
+      >
+        <span id={titleId} className="truncate">
+          {title}
+        </span>
+        <ChevronRight
+          aria-hidden="true"
+          className="h-3.5 w-3.5 shrink-0 opacity-0 group-hover/header-link:opacity-100 group-focus-visible/header-link:opacity-100"
+        />
+      </Link>
+      {trailing && <span className="ml-auto shrink-0 whitespace-nowrap">{trailing}</span>}
+    </h2>
   );
 }

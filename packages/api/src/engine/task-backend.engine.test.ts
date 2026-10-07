@@ -50,6 +50,25 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     expect(inbox.map((item) => item.title)).toEqual(['第二条', '第一条']);
   });
 
+  it('Today feed 带出计划日期的写入时刻（New in Today），其他视图不带', async () => {
+    const before = Date.now();
+    const task = await backend.createTask({
+      title: '过去排的',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2026-01-01',
+    });
+    const [item] = await backend.getFeed('today');
+    expect(item.id).toBe(task.id);
+    const setAt = Date.parse(item.scheduledSetAt ?? '');
+    expect(setAt).toBeGreaterThanOrEqual(before - 1);
+    expect(setAt).toBeLessThanOrEqual(Date.now() + 1);
+
+    await backend.updateTask(task.id, { scheduledType: ScheduledType.NONE });
+    const [inbox] = await backend.getFeed('inbox');
+    expect(inbox.id).toBe(task.id);
+    expect(inbox).not.toHaveProperty('scheduledSetAt');
+  });
+
   it('完成 → Today 视图消失；取消与恢复语义（Settled At，ADR 0006）', async () => {
     const task = await backend.createTask({
       title: '今天的任务',

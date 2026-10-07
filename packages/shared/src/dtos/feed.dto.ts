@@ -28,6 +28,12 @@ export interface FeedItemBase {
   trashedAt: string | null;
   /** 列表位次（fractional indexing 字符串，ADR-0007）；web 与桌面端共用的排序键。 */
   position?: string | null;
+  /**
+   * 计划日期最后一次被写入的时刻（ISO，取该字段的 HLC 墙钟）。只有 Today
+   * feed 携带，用于区分「随日期到来进入 Today」与「当天才排到今天」
+   * （New in Today）；未知（无时钟的旧数据）为 null。
+   */
+  scheduledSetAt?: string | null;
   createdAt: string;
   updatedAt: string;
   tags: TagResponseDto[];

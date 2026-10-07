@@ -108,6 +108,11 @@ export function MarkdownNotesEditor({
     };
   }, [editor]);
 
+  // 收紧 Typography 的段落外边距：prose-sm 默认上下各 1.14em（14px 字号下约
+  // 16px，段落间距接近行距的 5 倍），在备注里像空了一大行。用 `prose-p:my-1`
+  // 降到 4px，段落间仍比段内行距略宽，但读起来是正常的正文段落。这里必须用
+  // utility 覆盖：Typography 的 prose 规则在 components 层，写进 tokens.css 的
+  // @layer base 里会被压过。
   return (
     <EditorContent
       editor={editor}
@@ -129,7 +134,7 @@ export function MarkdownNotesEditor({
           e.stopPropagation();
         }
       }}
-      className="prose prose-sm dark:prose-invert notes-prose min-h-[60px] resize-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
+      className="prose prose-sm dark:prose-invert notes-prose prose-p:my-1 min-h-[60px] resize-none border-0 bg-transparent px-0 shadow-none focus-visible:ring-0"
     />
   );
 }

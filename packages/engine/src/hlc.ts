@@ -36,6 +36,16 @@ export function hlcWallMs(stamp: string): number {
   return Number(stamp.split(':', 1)[0]);
 }
 
+/**
+ * 字段被写入的时刻（ISO）：时间戳的墙钟读数。缺失或无法解析为 null。
+ * 用于「字段何时被写」的推导（如 New in Today 的 scheduledSetAt）。
+ */
+export function hlcIsoTime(stamp: unknown): string | null {
+  if (typeof stamp !== 'string') return null;
+  const wallMs = hlcWallMs(stamp);
+  return Number.isFinite(wallMs) ? new Date(wallMs).toISOString() : null;
+}
+
 /** 定宽整数墙钟的时间戳：字典序即数值序。 */
 function isCanonical(stamp: string): boolean {
   return stamp.charCodeAt(WALL_WIDTH) === 58 /* ':' */ && stamp.lastIndexOf('.', WALL_WIDTH) === -1;

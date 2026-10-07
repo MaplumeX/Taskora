@@ -12,10 +12,13 @@ interface SortableFeedRowProps {
   placeholder: boolean;
   projectTitle?: string;
   areaTitle?: string;
+  hidePlacement?: boolean;
   selectionState: SelectionState;
   onToggleComplete?: () => void;
   onRowClick?: () => void;
   showScheduledBadge?: boolean;
+  /** New in Today 新到条目：行首左侧黄点。 */
+  newInToday?: boolean;
 }
 
 /** 可拖拽的 feed 行：任务行，或顶部未分组区的独立项目行。 */
@@ -26,10 +29,12 @@ export function SortableFeedRow({
   placeholder,
   projectTitle,
   areaTitle,
+  hidePlacement,
   selectionState,
   onToggleComplete,
   onRowClick,
   showScheduledBadge,
+  newInToday,
 }: SortableFeedRowProps) {
   // 实时预览：布局随指针重排、位移由 FLIP 动画承担（见 lib/dnd.ts）。
   const { attributes, listeners, setNodeRef } = useSortable({
@@ -62,8 +67,10 @@ export function SortableFeedRow({
             item={item}
             projectTitle={projectTitle}
             areaTitle={areaTitle}
+            hidePlacement={hidePlacement}
             selectionState="idle"
             showScheduledBadge={showScheduledBadge}
+            newInToday={newInToday}
           />
         </div>
       ) : (
@@ -71,10 +78,12 @@ export function SortableFeedRow({
           item={item}
           projectTitle={projectTitle}
           areaTitle={areaTitle}
+          hidePlacement={hidePlacement}
           selectionState={selectionState}
           onToggleComplete={onToggleComplete}
           onRowClick={onRowClick}
           showScheduledBadge={showScheduledBadge}
+          newInToday={newInToday}
         />
       )}
     </div>

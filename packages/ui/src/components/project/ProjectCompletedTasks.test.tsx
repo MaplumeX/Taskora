@@ -1,4 +1,5 @@
 import React from 'react';
+import { MemoryRouter } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -16,6 +17,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
     useTasksQuery: (...args: unknown[]) => queryMocks.useTasksQuery(...args),
   useUncompleteTask: () => queryMocks.useUncompleteTask(),
   useTaskQuery: () => ({ data: null }),
+  useProjectQuery: () => ({ data: undefined }),
   useUpdateTask: () => ({ mutate: vi.fn(), isPending: false }),
   useCompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteTask: () => ({ mutate: vi.fn(), isPending: false }),
@@ -96,7 +98,9 @@ function withQueryClient(ui: React.ReactElement) {
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
   return render(
-    <QueryClientProvider client={client}>{ui}</QueryClientProvider>,
+    <QueryClientProvider client={client}>
+      <MemoryRouter>{ui}</MemoryRouter>
+    </QueryClientProvider>,
   );
 }
 

@@ -12,6 +12,7 @@ import {
 import { Hint } from '@/components/ui/hint';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useIsDesktop } from '../../lib/use-media-query';
+import { cn } from '@/lib/utils';
 
 interface Props {
   /** 字段名：窄屏卡片标题；宽屏作为 trigger 的 hover 提示（tooltip 为真时）。 */
@@ -25,6 +26,9 @@ interface Props {
   /** 受控打开（如快捷键直接打开选择器）；不传则自管。 */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** 宽屏浮层的对齐和尺寸；窄屏仍使用统一的模态卡片。 */
+  popoverAlign?: 'start' | 'center' | 'end';
+  popoverClassName?: string;
   children: React.ReactNode | ((close: () => void) => React.ReactNode);
 }
 
@@ -44,6 +48,8 @@ export function FieldPicker({
   shortcut,
   open: controlledOpen,
   onOpenChange,
+  popoverAlign = 'start',
+  popoverClassName,
   children,
 }: Props) {
   const isDesktop = useIsDesktop();
@@ -67,7 +73,7 @@ export function FieldPicker({
         ) : (
           popoverTrigger
         )}
-        <PopoverContent align="start" className="p-1.5">
+        <PopoverContent align={popoverAlign} className={cn('p-1.5', popoverClassName)}>
           {body}
         </PopoverContent>
       </Popover>

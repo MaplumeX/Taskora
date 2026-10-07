@@ -18,6 +18,11 @@ export interface UserPreferences {
   legacyDateTimeZone?: string;
   /** 时间视图（今天/随时/将来）是否按项目/领域分组任务（Grouped View）；默认 true。 */
   bucketGrouping: boolean;
+  /**
+   * 账号时区下最近一次查看 Today 的日期（YYYY-MM-DD）。计划日期晚于它的
+   * Today 条目为「新到」（New in Today）；只进不退，跨端取较晚者。
+   */
+  todayReviewedOn?: string;
 }
 
 export interface UpdatePreferencesDto {
@@ -26,6 +31,7 @@ export interface UpdatePreferencesDto {
   weekStartsOn?: 0 | 1;
   timeZone?: string;
   bucketGrouping?: boolean;
+  todayReviewedOn?: string;
 }
 
 export interface DeleteAccountDto {

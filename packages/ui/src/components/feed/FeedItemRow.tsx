@@ -10,12 +10,16 @@ interface Props {
   item: FeedItem;
   projectTitle?: string;
   areaTitle?: string;
+  /** 分组视图不显示展开任务的外侧归属入口。 */
+  hidePlacement?: boolean;
   selectionState?: SelectionState;
   onToggleComplete?: () => void;
   onRowClick?: () => void;
   showScheduledBadge?: boolean;
   /** Logbook 场景：显示行内了却日期 */
   showSettledDate?: boolean;
+  /** New in Today 新到条目：行首左侧黄点。 */
+  newInToday?: boolean;
 }
 
 function isTaskFeedItem(item: FeedItem): item is TaskFeedItem {
@@ -26,11 +30,13 @@ export function FeedItemRow({
   item,
   projectTitle,
   areaTitle,
+  hidePlacement,
   selectionState = 'idle',
   onToggleComplete,
   onRowClick,
   showScheduledBadge,
   showSettledDate = false,
+  newInToday = false,
 }: Props) {
   if (!isTaskFeedItem(item)) {
     return (
@@ -38,6 +44,7 @@ export function FeedItemRow({
         item={item}
         showScheduledBadge={showScheduledBadge}
         selectionState={selectionState}
+        newInToday={newInToday}
         plainSettledTitle={showSettledDate}
         settledDateBadge={
           showSettledDate && item.completedAt ? (
@@ -62,10 +69,12 @@ export function FeedItemRow({
       task={task}
       projectTitle={projectTitle}
       areaTitle={areaTitle}
+      hidePlacement={hidePlacement}
       selectionState={selectionState}
       onToggleComplete={onToggleComplete ?? (() => {})}
       onRowClick={onRowClick}
       showScheduledBadge={showScheduledBadge}
+      newInToday={newInToday}
       plainSettledTitle={showSettledDate}
       settledDateBadge={
         showSettledDate && item.completedAt ? (

@@ -38,6 +38,7 @@ import {
   repeatDerivationTarget,
   RepeatSkipBlockedError,
   feedSortKey,
+  hlcIsoTime,
   repositionFeed,
   repositionMinimal,
   hasSearchCriteria,
@@ -314,18 +315,22 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     async getFeed(view: FeedView): Promise<FeedItem[]> {
       const index = await tagIndex();
       const context = calendar();
-      const viewTasks = await engine.list('task', { where: viewPrefilter(view) });
+      // Today 带出计划日期的写入时刻（scheduledSetAt），供 New in Today 推导。
+      const clockOf = view === 'today' ? 'scheduledDate' : undefined;
+      const scheduledSetAt = (row: ReplicaRow) =>
+        clockOf ? { scheduledSetAt: hlcIsoTime(row.clock) } : {};
+      const viewTasks = await engine.list('task', { where: viewPrefilter(view), clockOf });
       const inActiveProject = notInLaterProject(await laterProjectIdsFor(view));
       const taskItems: TaskFeedItem[] = viewTasks
         .filter((row) => inActiveProject(row) && taskMatchesView(queryFieldsOf(row), view, context))
         .map((row) => {
           const dto = taskRowToDto(row, index);
-          return { ...dto, type: 'task' as const, tags: dto.tags ?? [] };
+          return { ...dto, type: 'task' as const, tags: dto.tags ?? [], ...scheduledSetAt(row) };
         });
 
       let projectItems: FeedItem[] = [];
       if (feedIncludesProjects(view)) {
-        const projectRows = (await engine.list('project')).filter((row) =>
+        const projectRows = (await engine.list('project', { clockOf })).filter((row) =>
           projectMatchesView(queryFieldsOf(row), view, context),
         );
         const projectIds = projectRows.map((row) => row.id);
@@ -337,7 +342,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         );
         projectItems = projectRows.map((row) => {
           const { total, completed } = counts.get(row.id)!;
-          return projectRowToFeedItem(row, index, total, completed);
+          return { ...projectRowToFeedItem(row, index, total, completed), ...scheduledSetAt(row) };
         });
       }
       return sortFeedItems([...taskItems, ...projectItems], view);
