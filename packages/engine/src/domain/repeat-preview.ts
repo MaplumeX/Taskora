@@ -38,7 +38,7 @@ export interface RepeatPreview {
  * （含已了结）——既是来源，也用于判定「下一次已派生」。
  *
  * 不投影：未了结以外 / Trash / 非 DATE / 无规则；anchor=completion（下一次
- * 取决于实际完成日，无法预告）；下一次不晚于今天（逾期来源的下一次可能
+ * 取决于实际完成日，无法预告）；下一次不晚于今天（计划日期已过的来源任务，其下一次可能
  * 仍在过去，过去格子里的预告会被误读）；链已终结（until）；下一次已派生
  * ——按 repeatSourceId，或（repeatSourceId 之前的存量实例）按确定性 id。
  */

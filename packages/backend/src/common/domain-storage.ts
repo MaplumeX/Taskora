@@ -50,7 +50,7 @@ export async function edgePositions(
   return { first: await edge('ASC'), last: await edge('DESC') };
 }
 
-/** 视图判定的上下文：只有 Today / Upcoming 需要查账户时区。 */
+/** 视图判定的上下文：只有 Today / Upcoming 需要查账号时区。 */
 export async function calendarContextFor(
   prisma: PrismaService,
   userId: string,

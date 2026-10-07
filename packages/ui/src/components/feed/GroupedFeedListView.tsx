@@ -67,7 +67,7 @@ interface Props {
   /** 视图本身已表达日期语境时传 false（如 Today），省略行首日期 chip。 */
   showScheduledBadge?: boolean;
   /**
-   * 是否按项目/领域分组（默认 true）。关闭时为平铺列表：全部任务在
+   * 是否按项目/区域分组（默认 true）。关闭时为平铺列表：全部任务在
    * 未分组区、与独立项目行按 feed 顺序交错，拖拽只重排、不改归属。
    */
   grouping?: boolean;
@@ -386,7 +386,7 @@ type GroupChunk =
   | { type: 'tasks'; containerId: ContainerId; taskIds: string[] };
 
 /**
- * Grouped View（分组视图）列表：今天/随时/将来三个时间视图按项目/领域
+ * Grouped View（分组视图）列表：今天/随时/将来三个时间视图按项目/区域
  * 聚类展示任务。分组为纯渲染层推导（deriveGroupedFeedLayout），扁平单层、
  * 不可折叠；组内拖拽重排写回全局 Position，跨组拖拽改任务归属，组头不
  * 可拖拽（组间顺序由侧边栏持有）。顶部未分组区的独立项目行可与任务一起
@@ -772,7 +772,7 @@ export function GroupedFeedListView({
     }
   }
 
-  // 孤儿任务在未分组区保留项目/领域标题标签；组内任务的归属已由组头
+  // 孤儿任务在未分组区保留项目/区域标题标签；组内任务的归属已由组头
   // 表达，不再重复标签。列表行与拖拽浮层共用，保证拖起来的就是那一行。
   const rowLabels = (item: FeedItem, containerId: ContainerId | undefined) => {
     const ungrouped = containerId === UNGROUPED || containerId === FRESH;

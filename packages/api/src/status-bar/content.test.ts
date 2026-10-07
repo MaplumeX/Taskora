@@ -22,7 +22,7 @@ const YESTERDAY = localIso(2026, 9, 24);
 const BEFORE = localIso(2026, 9, 20);
 
 describe('sortStatusBarTasks', () => {
-  it('按日期升序（逾期在前），同日按 Position，null 兜底最后', () => {
+  it('按日期升序（计划日期已过的在前），同日按 Position，null 兜底最后', () => {
     const sorted = sortStatusBarTasks([
       task('今天-b', TODAY, 'a2'),
       task('无日期', null),
@@ -35,7 +35,7 @@ describe('sortStatusBarTasks', () => {
 });
 
 describe('taskLine', () => {
-  it('逾期带 M/d 前缀；今天与非逾期不带', () => {
+  it('计划日期已过时带 M/d 前缀；今天与无日期时不带', () => {
     expect(taskLine(task('写报告', YESTERDAY), NOW)).toBe('9/24 · 写报告');
     expect(taskLine(task('写报告', TODAY), NOW)).toBe('写报告');
     expect(taskLine(task('写报告', null), NOW)).toBe('写报告');
@@ -43,7 +43,7 @@ describe('taskLine', () => {
 });
 
 describe('carouselTitle', () => {
-  const tasks = [task('逾期', YESTERDAY), task('今天一', TODAY, 'a1'), task('今天二', TODAY, 'a2')];
+  const tasks = [task('计划日期已过', YESTERDAY), task('今天一', TODAY, 'a1'), task('今天二', TODAY, 'a2')];
 
   it('空列表返回空串', () => {
     expect(carouselTitle([], 0, NOW)).toBe('');
@@ -54,9 +54,9 @@ describe('carouselTitle', () => {
   });
 
   it('多条带 (i/N) 位置指示，游标越界取模', () => {
-    expect(carouselTitle(tasks, 0, NOW)).toBe('9/24 · 逾期 (1/3)');
+    expect(carouselTitle(tasks, 0, NOW)).toBe('9/24 · 计划日期已过 (1/3)');
     expect(carouselTitle(tasks, 2, NOW)).toBe('今天二 (3/3)');
-    expect(carouselTitle(tasks, 3, NOW)).toBe('9/24 · 逾期 (1/3)');
+    expect(carouselTitle(tasks, 3, NOW)).toBe('9/24 · 计划日期已过 (1/3)');
     expect(carouselTitle(tasks, -1, NOW)).toBe('今天二 (3/3)');
   });
 });

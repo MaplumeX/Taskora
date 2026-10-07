@@ -8,7 +8,7 @@ interface Props {
 
 /**
  * 「今天」徽标——参考 Things 3 的黄色星星:
- * When ≤ 今天（含逾期）的任务在非语境视图（Anytime/项目内等）以黄星标记，
+ * When ≤ 今天（含计划日期已过的任务）的任务在非语境视图（Anytime/项目内等）以黄星标记，
  * 表达「该任务已进入今天」而非「已逾期」——When 是计划开始日，永不逾期，
  * 红色警示语义只属于 Deadline（见 TaskDueDateBadge）。
  */

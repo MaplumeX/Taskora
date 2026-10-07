@@ -6,8 +6,8 @@ Things 风格的任务管理器（Web + 桌面端），围绕 Areas / Projects /
 
 ### 任务组织
 
-**Area**:
-用户生活/工作的顶级领域，Projects 与 Tasks 可归属其下。
+**Area（区域）**:
+用户生活/工作中的顶级组织单位，Projects 与 Tasks 可归属其下。
 _Avoid_: 领域、分类、category
 
 **Project**:
@@ -23,12 +23,12 @@ Task 内的子步骤，仅存在于父 Task 内。
 _Avoid_: Checklist item
 
 **Later Project（稍后项目）**:
-处于休眠的 Project：未了结、未进回收站，且计划为 Someday，或计划日期晚于账号时区的今天（日期为今天或已过即恢复活跃）。按状态细分为「计划」（未来日期）与「Someday」。侧边栏不显示稍后项目：无区域的汇总为无区域项目列表末尾一个不可排序的「N 个稍后项目」入口（N ≥ 1 才出现），进入 Later Projects 页；有区域的只在区域页的「计划」/「Someday」小节下出现。其内任务不出现在 Anytime / Someday 等汇总视图。纯推导状态，不改写 Project 或 Task 字段。
+处于休眠的 Project：未了结、未进废纸篓，且计划为 Someday，或计划日期晚于账号时区的今天（日期为今天或已过即恢复活跃）。按状态细分为「计划」（未来日期）与「将来」（Someday）。侧边栏不显示稍后项目：无区域的汇总为无区域项目列表末尾一个不可排序的「N 个稍后项目」入口（N ≥ 1 才出现），进入 Later Projects 页；有区域的只在区域页的「计划」/「将来」小节下出现。其内任务不出现在 Anytime / Someday 等汇总视图。纯推导状态，不改写 Project 或 Task 字段。
 _Avoid_: 休眠项目（口语可用）、inactive project、归档
 
-**Project Heading**:
+**Project Heading（项目分组标题）**:
 Project 内的静态分组标题，用于组织 Project 内的 Tasks。
-_Avoid_: Section
+_Avoid_: 项目标题（易与项目名称混淆）、Section、Group Header
 
 **Tag**:
 可带颜色与排序、可附加在 Task/Project/Area 上的标签。Tag 可以嵌套（`parentId`，层数不限），父 Tag 本身也是普通 Tag，可以打标。按 Tag 过滤时命中它的整棵子树（不展开祖先）。删除父 Tag 时子 Tag 提升为顶层（ADR 0016）。
@@ -63,7 +63,7 @@ Task 或 Project 上的一个结构化规则字段（单位 × 间隔 × 周模�
 _Avoid_: 循环、周期任务、RRULE、模板（无独立模板实体）
 
 **Repeat Instance（重复实例）**:
-带 Repeat Rule 的 Task 完成时由客户端按规则派生出的下一个 Task，携带相同规则使链得以延续。是普通 Task 而非特殊实体；未来日期落 Upcoming，逾期落 Today。派生后即独立：重开（撤销完成 / 撤销取消）来源任务不删除它；实例以 repeatSourceId 记录来源，来源已有未进 Trash 的实例时再次完成不重复派生。
+带 Repeat Rule 的 Task 完成时由客户端按规则派生出的下一个 Task，携带相同规则使链得以延续。是普通 Task 而非特殊实体；未来日期落 Upcoming，计划日期已到或已过落 Today。派生后即独立：重开（撤销完成 / 撤销取消）来源任务不删除它；实例以 repeatSourceId 记录来源，来源已有未进 Trash 的实例时再次完成不重复派生。
 _Avoid_: 副本、克隆（实例是正式任务，不是复制品）
 
 **Repeat Project Instance（重复项目实例）**:
@@ -75,7 +75,7 @@ _Avoid_: 项目模板、项目副本（实例是正式项目）
 _Avoid_: 系列、模板实例（链是结果不是投影）
 
 **Skip Occurrence（跳过本次）**:
-把一个重复任务的计划日期原地推进到链的下一个出现日的动作：锚点为计划日期时取第一个晚于原计划日且不早于今天的出现日（逾期多轮则跳过全部错过的），锚点为完成日期时以今天为锚推进一次；已有截止日期同步平移，Subtask 全部置回未完成。不新建实例、不进 Logbook、链不分叉。链已到头（until）或该任务已有派生实例时不可用。
+把一个重复任务的计划日期原地推进到链的下一个出现日的动作：锚点为计划日期时取第一个晚于原计划日且不早于今天的出现日（错过多轮计划日期则跳过全部错过的），锚点为完成日期时以今天为锚推进一次；已有截止日期同步平移，Subtask 全部置回未完成。不新建实例、不进 Logbook、链不分叉。链已到头（until）或该任务已有派生实例时不可用。
 _Avoid_: 推迟、延期（那是普通改期）
 
 **Repeat Preview（下次预告）**:
@@ -84,7 +84,22 @@ _Avoid_: 幽灵任务、虚拟实例（预告不是实例）
 
 **Bucket**:
 按状态/时间过滤出的任务视图：Inbox、Anytime、Scheduled、Someday、Today、Upcoming、Logbook、Trash。不是存储位置。
-_Avoid_: 列表、filter、缓存
+_Avoid_: 收纳桶、列表、filter、缓存
+
+**Upcoming（计划）**:
+按未来计划日期组织 Task / Project 的任务视图，与表示已安排计划的 Scheduled 不同。
+_Avoid_: 即将
+
+**Scheduled（已计划）**:
+Task / Project 设置了具体日期或 Someday 的 Bucket；Upcoming（计划）是按未来日期展示的视图，两者不是同义词。
+
+**Anytime（随时）**:
+可随时着手的任务视图。
+_Avoid_: 任意时间
+
+**Someday（将来）**:
+暂不指定具体计划日期的计划类型及其任务视图；Later Project（稍后项目）还包含未来日期项目。
+_Avoid_: 稍后（不可用来指 Someday）
 
 **Inbox**:
 「尚未整理」的 Bucket：无归属（Project / Area）、无计划（计划类型为 NONE）的未了结任务。任何整理动作都会让任务离开 Inbox：获得归属转入 Anytime，获得计划转入 Scheduled。移入 Inbox 时同时清除归属与计划（计划日期、提醒、重复规则随之清除），截止日期保留（参考 Things 3）。不是 Project，也不是存储位置。
@@ -110,16 +125,29 @@ _Avoid_: 已完成列表（Logbook 不只含完成任务）
 任务被主动放弃的终态：留痕、可逆，记录于 Logbook。与 Completed（做完的了结）、Trashed（软删除暂存）三者互斥。取消已完成的任务会直接改写终态（不必先重开）。取消父 Task 不改动其 Subtasks。
 _Avoid_: 取消 = 删除、abandoned、丢弃
 
-**Settled / Settled At**:
+**Settled / Settled At（已了结 / 了结时间）**:
 任务进入终态（Completed 或 Cancelled）这一事实的统称；了结时间记录何时发生，不区分是哪种了结（由 status 表达）。Logbook Entry 按了结时间分组。
-_Avoid_: completedAt 泛指取消任务的时间、完成时间（取消任务并未"完成"）
+_Avoid_: 已完成泛指完成与取消的集合、完成时间（取消任务并未"完成"）
 
 **Task Terminal State**:
 任务的两种了结状态：Completed（做完）与 Cancelled（放弃）。皆留痕、可逆，记录于 Logbook；与 Trash（软删除）正交。取消父 Task 不改动其 Subtasks。
 _Avoid_: 把 Cancelled 当作 COMPLETED 的子集、把终态与删除混淆
 
-**Trash**:
-软删除的暂存处，可放回；清空后不可恢复。放回只撤销删除：回到删除前的位置与状态（已了结的回到 Logbook），进 Trash 时清掉的提醒不恢复。在 Trash 中改计划 / 截止日期、归属、标签、重复规则即隐式放回（项目连同随它进 Trash 的任务）；改状态、标题、备注、子任务不放回。
+**Trash（废纸篓）**:
+软删除的暂存处，可放回；倾倒后不可恢复。放回只撤销删除：回到删除前的位置与状态（已了结的回到 Logbook），进 Trash 时清掉的提醒不恢复。在 Trash 中改计划 / 截止日期、归属、标签、重复规则即隐式放回（项目连同随它进 Trash 的任务）；改状态、标题、备注、子任务不放回。
+_Avoid_: 回收站
+
+**Put Back（放回）**:
+撤销 Task / Project 的软删除，返回删除前的位置与状态；不是重开任务。
+_Avoid_: 恢复（用于此动作时）
+
+**Empty Trash（倾倒废纸篓）**:
+永久删除废纸篓中所有 Task / Project 的动作，不可恢复。
+_Avoid_: 清空废纸篓
+
+**Account（账号）**:
+用户登录并在各设备上访问同一份任务数据的身份，账号偏好跨设备统一。
+_Avoid_: 账户、帐号
 
 ### 界面交互
 
@@ -184,7 +212,7 @@ _Avoid_: 消息队列（MQ 意义上的）
 _Avoid_: offset、分页游标
 
 **Compact Event（压缩变更）**:
-Hub 的 GC 物理删除实体后下发给设备的变更类型：指令设备从 Local Replica 中移除一批实体，区别于携带实体内容的 Change Event。在清空 Trash / 级联清理 / Delete Request 后产生；设备写入 hub 上已不存在的实体时，hub 也回以 Compact Event 让它收敛。
+Hub 的 GC 物理删除实体后下发给设备的变更类型：指令设备从 Local Replica 中移除一批实体，区别于携带实体内容的 Change Event。在倾倒废纸篓 / 级联清理 / Delete Request 后产生；设备写入 hub 上已不存在的实体时，hub 也回以 Compact Event 让它收敛。
 _Avoid_: 硬删除广播、tombstone（我们用软删除，无墓碑）
 
 **Delete Request（删除请求）**:
@@ -201,10 +229,10 @@ _Avoid_: WebSocket、订阅、频道
 用户可见的对话式助手功能名（文案中称「助手 / Assistant」）。工程上由 Agent 模块实现。
 _Avoid_: Copilot、聊天机器人
 
-**Conversation**:
-用户与 Assistant 的一段持久化对话，含完整消息历史；用户可创建多个并切换。多会话列表中的每一条就是一个 Conversation。
-_Avoid_: Session（与 pi-agent-core 的 `sessionId`——仅作 provider 缓存用途——冲突）、Chat
+**Conversation（对话）**:
+用户与 Assistant 的一段持久化对话，含完整消息历史；用户可创建多个并切换。对话列表中的每一条就是一个 Conversation。
+_Avoid_: 会话（认证场景称「登录会话」）、Session（与 pi-agent-core 的 `sessionId`——仅作 provider 缓存用途——冲突）、Chat
 
 **Destructive Operation**:
-不可逆或影响全局结构的工具操作（删除、清空 Trash、改动 Area/Project 结构），执行前必须经用户批准卡片放行。
+不可逆或影响全局结构的工具操作（删除、倾倒废纸篓、改动 Area/Project 结构），执行前必须经用户批准卡片放行。
 _Avoid_: 危险操作

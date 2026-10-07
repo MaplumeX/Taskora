@@ -35,7 +35,7 @@ export function MobileBackButton({ className }: { className?: string }) {
 
 /**
  * 手机端顶部导航条：左返回、右搜索。首页自带快速查找、助手页自带
- * 会话切换头（内含返回），两者不渲染本条，避免双重顶条。
+ * 对话切换头（内含返回），两者不渲染本条，避免双重顶条。
  */
 export function MobileTopBar() {
   const { t } = useTranslation();

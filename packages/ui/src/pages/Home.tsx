@@ -169,7 +169,7 @@ export default function Home() {
         />
       </HomeGroup>
 
-      {/* 设置（登出在 设置 › 账户 内） */}
+      {/* 设置（登出在 设置 › 账号 内） */}
       <div className="border-t pt-3">
         <Button
           variant="ghost"

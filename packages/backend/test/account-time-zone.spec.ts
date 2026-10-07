@@ -6,7 +6,7 @@ import { taskMatchesView, type ListView } from '@taskora/engine';
 import { renderSystemPrompt } from '../src/agent/runtime/agent-model';
 
 describe('Account time zone', () => {
-  it('Today/Upcoming 按账户时区判定（domain 规则，REST 与设备共用），与助手当前日期一致', () => {
+  it('Today/Upcoming 按账号时区判定（domain 规则，REST 与设备共用），与助手当前日期一致', () => {
     const now = new Date('2026-09-23T17:00Z');
     const dated = (scheduledDate: Date) => ({
       status: 'ACTIVE',

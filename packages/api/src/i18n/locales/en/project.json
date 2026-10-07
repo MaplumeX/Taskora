@@ -21,7 +21,7 @@
   "convertSuccess": "Converted to project",
   "convertFailed": "Failed to convert to project",
   "notePlaceholder": "Note…",
-  "completed": "Completed",
+  "settled": "Settled",
   "archive": "Archive",
   "unarchive": "Unarchive",
   "archiveHeading": "Archive heading",

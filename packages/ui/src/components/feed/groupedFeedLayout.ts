@@ -11,7 +11,7 @@ import { ProjectStatus } from '@taskora/shared';
  * Grouped View（分组视图）渲染块推导：纯函数、纯渲染层，不改数据模型
  * （镜像 sidebarProjectLayout.ts 的惯例：plain functions + vitest）。
  *
- * 输入：平铺 feed 项 + 项目列表 + 领域列表 + 分组开关。
+ * 输入：平铺 feed 项 + 项目列表 + 区域列表 + 分组开关。
  * 输出：渲染块序列（New in Today 新到条目最先，未分组任务与独立项目行
  * 其次，随后是按侧边栏
  * 全局视觉顺序排列的扁平单层 Area/Project 组）与视图任务全量顺序
@@ -22,7 +22,7 @@ import { ProjectStatus } from '@taskora/shared';
 export interface GroupedFeedTaskBlock {
   kind: 'task';
   item: TaskFeedItem;
-  /** 所属 Group Header 的 id（项目/领域 id）；未分组任务为 null。 */
+  /** 所属 Group Header 的 id（项目/区域 id）；未分组任务为 null。 */
   groupHeaderId: string | null;
   /** New in Today 新到条目：置顶于新到区，不进分组（groupHeaderId 为 null）。 */
   fresh?: boolean;
@@ -155,7 +155,7 @@ export function deriveGroupedFeedLayout(input: GroupedFeedLayoutInput): GroupedF
   const areaById = new Map(areas.map((a) => [a.id, a]));
 
   // 成员归属：直接父级优先 projectId，其次 areaId；父级缺失/已了结/已丢弃
-  // 的任务视为孤儿，回落未分组（行上保留项目/领域标题标签）。
+  // 的任务视为孤儿，回落未分组（行上保留项目/区域标题标签）。
   const groupTasks = new Map<string, TaskFeedItem[]>(); // parentId -> 视图内任务（feed 顺序）
   const ungroupedTasks = new Set<string>();
 

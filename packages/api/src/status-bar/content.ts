@@ -15,8 +15,8 @@ export interface StatusBarTaskInput {
   position: string | null;
 }
 
-/** 逾期 = 计划日期的日历日早于今天（账号时区口径，与 Today 视图同源）。 */
-function isOverdueDate(scheduledDate: string | null, now: Date): boolean {
+/** 计划日期已过：日历日早于今天；计划日期不产生逾期状态。 */
+function isPastScheduledDate(scheduledDate: string | null, now: Date): boolean {
   if (!scheduledDate) return false;
   try {
     return toDateKey(scheduledDate) < todayDateKey(now);
@@ -25,7 +25,7 @@ function isOverdueDate(scheduledDate: string | null, now: Date): boolean {
   }
 }
 
-/** Today 口径任务按展示顺序排序：日期升序（逾期在前）、同日按 Position。 */
+/** Today 口径任务按展示顺序排序：日期升序（计划日期已过的在前）、同日按 Position。 */
 export function sortStatusBarTasks(tasks: StatusBarTaskInput[]): StatusBarTaskInput[] {
   return [...tasks].sort((a, b) => {
     const da = a.scheduledDate ? toDateKey(a.scheduledDate) : '';
@@ -41,9 +41,9 @@ export function sortStatusBarTasks(tasks: StatusBarTaskInput[]): StatusBarTaskIn
   });
 }
 
-/** 单条任务的标题文本：逾期带 M/d 前缀。 */
+/** 单条任务的标题文本：计划日期已过时带 M/d 前缀。 */
 export function taskLine(task: StatusBarTaskInput, now: Date): string {
-  if (!isOverdueDate(task.scheduledDate, now)) return task.title;
+  if (!isPastScheduledDate(task.scheduledDate, now)) return task.title;
   const date = parseCalendarDate(task.scheduledDate!);
   return `${date.getMonth() + 1}/${date.getDate()} · ${task.title}`;
 }

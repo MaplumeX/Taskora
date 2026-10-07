@@ -87,7 +87,7 @@ import {
   taskRowToDto,
 } from './mappers';
 
-/** 账户时区（用户偏好）：日历日期的解读与「今天」。 */
+/** 账号时区（用户偏好）：日历日期的解读与「今天」。 */
 function zones(): CalendarZones {
   return { timeZone: currentTimeZone(), legacyDateTimeZone: currentLegacyDateTimeZone() };
 }

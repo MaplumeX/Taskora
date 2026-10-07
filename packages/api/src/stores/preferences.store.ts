@@ -69,7 +69,7 @@ interface PreferencesState {
   theme: ThemeMode;
   language: Language;
   weekStartsOn: WeekStartsOn;
-  /** 时间视图按项目/领域分组（Grouped View）全局开关，默认开启。 */
+  /** 时间视图按项目/区域分组（Grouped View）全局开关，默认开启。 */
   bucketGrouping: boolean;
   /** 最近一次查看 Today 的日期（New in Today 的基线，见 UserPreferences）。 */
   todayReviewedOn: string | null;

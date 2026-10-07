@@ -13,7 +13,7 @@ interface Props {
   selectionState?: SelectionState;
 }
 
-/** Project 分组标题保留进度环、完成操作与截止徽标，标题负责导航；右键菜单不变。 */
+/** Project 分组头保留进度环、完成操作与截止徽标，标题负责导航；右键菜单不变。 */
 export function ProjectGroupHeaderRow({ project, selectionState = 'idle' }: Props) {
   const { t } = useTranslation();
   const completion = useProjectCompletion();

@@ -19,7 +19,7 @@ interface Props {
   projectId: string;
 }
 
-export function ProjectCompletedTasks({ projectId }: Props) {
+export function ProjectSettledTasks({ projectId }: Props) {
   const { t } = useTranslation('project');
   const { data: mixedTasks = [], isLoading, isError } = useTasksQuery({
     projectId,
@@ -39,7 +39,7 @@ export function ProjectCompletedTasks({ projectId }: Props) {
   const { selectedId, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
 
   // Keep the list order (Position) — do NOT re-sort
-  // by completedAt. This preserves the pre-archive structural distribution.
+  // by settlement time (the API field is still completedAt). This preserves the pre-archive structural distribution.
   // 口径：已了结（完成 + 取消），与 taskCompletedCount 统计一致（ADR 0006）。
   const settledTasks = useMemo(
     () =>
@@ -117,7 +117,7 @@ export function ProjectCompletedTasks({ projectId }: Props) {
         <ChevronRight
           className={cn('size-4 transition-transform', expanded && 'rotate-90')}
         />
-        <span>{t('completed')}</span>
+        <span>{t('settled')}</span>
         <span className="text-xs">{totalCount}</span>
       </button>
 

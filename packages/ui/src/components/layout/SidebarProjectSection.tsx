@@ -58,7 +58,7 @@ import {
 } from '@/components/layout/sidebarProjectLayout';
 
 interface Props {
-  /** 全部未进回收站的项目；已完成与稍后项目在此过滤，但参与排序持久化。 */
+  /** 全部未进废纸篓的项目；已完成与稍后项目在此过滤，但参与排序持久化。 */
   projects: ProjectResponseDto[];
   areas: AreaResponseDto[];
   /** 项目与区域行作为 Sidebar Drop 落点（仅桌面侧边栏；手机「更多」页不接收）。 */

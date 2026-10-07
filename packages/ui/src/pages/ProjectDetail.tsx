@@ -8,7 +8,7 @@ import { useEffectiveTags, useTasksQuery } from '@taskora/api';
 import { useProjectHeadingsQuery } from '@taskora/api';
 import { ProjectTaskLayout } from '@/components/project/ProjectTaskLayout';
 import { ProjectMetaRow } from '@/components/project/ProjectMetaRow';
-import { ProjectCompletedTasks } from '@/components/project/ProjectCompletedTasks';
+import { ProjectSettledTasks } from '@/components/project/ProjectSettledTasks';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
 import { ProjectMoreMenu } from '@/components/project/ProjectContextMenu';
@@ -128,7 +128,7 @@ export default function ProjectDetail() {
         />
       )}
 
-      <ProjectCompletedTasks projectId={id ?? ''} />
+      <ProjectSettledTasks projectId={id ?? ''} />
       {completion.dialog}
     </div>
   );

@@ -13,7 +13,7 @@ export const ASSISTANT_PANEL_MIN_WIDTH = 320;
 interface AssistantUiState {
   /**
    * 用户最后选中的 Conversation；可能已被删除或尚未出现在列表里，
-   * 实际展示的会话由 useActiveConversation 回落推导。
+   * 实际展示的对话由 useActiveConversation 回落推导。
    */
   activeConversationId: string | null;
   setActiveConversationId: (id: string | null) => void;

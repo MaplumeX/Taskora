@@ -95,7 +95,7 @@ function project(
 }
 
 export const VIEW_CONTRACT = {
-  /** 账户在上海：UTC 9-23 17:00 已是当地 9-24 凌晨——「今天」不能按 UTC 算。 */
+  /** 账号在上海：UTC 9-23 17:00 已是当地 9-24 凌晨——「今天」不能按 UTC 算。 */
   zones: { timeZone: 'Asia/Shanghai', legacyDateTimeZone: 'Asia/Shanghai' },
   now: '2026-09-23T17:00:00.000Z',
   /** 嵌套 Tag（ADR-0016）：tag-0 是 tag-1、tag-2 的父 Tag。父 Tag 排在前面（外键顺序）。 */
