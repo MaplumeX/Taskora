@@ -4,6 +4,8 @@ import * as React from 'react';
 export const COMPLETE_HOLD_MS = 600;
 /** 停留结束后行收起 + 淡出的时长（与 TaskItem 的 transition 时长一致）。 */
 export const COMPLETE_EXIT_MS = 200;
+/** 提交后多久仍未被写入接管的预览视为失效，撤回。 */
+export const PREVIEW_RELEASE_MS = 1000;
 
 function prefersReducedMotion() {
   return (
@@ -21,12 +23,20 @@ function prefersReducedMotion() {
  * - 收起阶段不再响应点击（行即将离开）。
  * - reduced-motion 下不停留、不收起，立即提交。
  * - 组件卸载不取消计时：用户已勾选，切走视图也应完成。
+ * - preview：勾上即调用 show（如项目进度饼提前计入），撤销时 clear；提交后
+ *   {@link PREVIEW_RELEASE_MS} 再 clear 兜底（写入已接管时为空操作）。
  */
-export function useCompletionRhythm(settled: boolean, onToggleComplete: () => void) {
+export function useCompletionRhythm(
+  settled: boolean,
+  onToggleComplete: () => void,
+  preview?: { show: () => void; clear: () => void },
+) {
   const [phase, setPhase] = React.useState<'idle' | 'holding' | 'exiting'>('idle');
   const holdTimer = React.useRef<number>();
   const commitRef = React.useRef(onToggleComplete);
   commitRef.current = onToggleComplete;
+  const previewRef = React.useRef(preview);
+  previewRef.current = preview;
 
   const toggle = () => {
     if (settled) {
@@ -36,6 +46,7 @@ export function useCompletionRhythm(settled: boolean, onToggleComplete: () => vo
     if (phase === 'exiting') return;
     if (phase === 'holding') {
       window.clearTimeout(holdTimer.current);
+      previewRef.current?.clear();
       setPhase('idle');
       return;
     }
@@ -44,9 +55,14 @@ export function useCompletionRhythm(settled: boolean, onToggleComplete: () => vo
       return;
     }
     setPhase('holding');
+    previewRef.current?.show();
     holdTimer.current = window.setTimeout(() => {
       setPhase('exiting');
-      window.setTimeout(() => commitRef.current(), COMPLETE_EXIT_MS);
+      window.setTimeout(() => {
+        commitRef.current();
+        const release = previewRef.current?.clear;
+        if (release) window.setTimeout(release, PREVIEW_RELEASE_MS);
+      }, COMPLETE_EXIT_MS);
     }, COMPLETE_HOLD_MS);
   };
 
