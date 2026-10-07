@@ -186,6 +186,57 @@ describe('TaskItem — 左滑多选', () => {
   });
 });
 
+describe('TaskItem — 鼠标多选（Ctrl/⌘+点击、⇧+点击）', () => {
+  const row = (id: string) => ({ id, kind: 'task' as const });
+
+  function renderRows(onRowClick = vi.fn()) {
+    useSelectionStore.getState().registerScope('list', [row('t1'), row('t2'), row('t3')]);
+    renderWithProviders(
+      <>
+        {['t1', 't2', 't3'].map((id) => (
+          <TaskItem
+            key={id}
+            task={{ ...baseTask, id, title: id }}
+            onToggleComplete={() => {}}
+            onRowClick={onRowClick}
+          />
+        ))}
+      </>,
+    );
+    return onRowClick;
+  }
+
+  beforeEach(() => {
+    useSelectionStore.getState().clearSelection();
+  });
+
+  it('Ctrl+点击（非 Apple 系）切换单行，不展开', () => {
+    const onRowClick = renderRows();
+    useSelectionStore.getState().setSelection(['t1']);
+
+    fireEvent.click(screen.getByText('t3'), { ctrlKey: true });
+    expect(useSelectionStore.getState().selectedIds).toEqual(['t1', 't3']);
+    fireEvent.click(screen.getByText('t1'), { ctrlKey: true });
+    expect(useSelectionStore.getState().selectedIds).toEqual(['t3']);
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+
+  it('⇧+点击选中连续范围', () => {
+    const onRowClick = renderRows();
+    useSelectionStore.getState().setSelection(['t1']);
+
+    fireEvent.click(screen.getByText('t3'), { shiftKey: true });
+    expect(useSelectionStore.getState().selectedIds).toEqual(['t1', 't2', 't3']);
+    expect(onRowClick).not.toHaveBeenCalled();
+  });
+
+  it('不带修饰键的点击仍走行点击', () => {
+    const onRowClick = renderRows();
+    fireEvent.click(screen.getByText('t2'));
+    expect(onRowClick).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('MultiSelectToolbar', () => {
   it('不在多选模式时不渲染', () => {
     renderWithProviders(<MultiSelectToolbar />);

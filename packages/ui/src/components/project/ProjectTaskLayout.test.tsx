@@ -176,6 +176,7 @@ import {
   serializeLayout,
   type LayoutState,
 } from './ProjectTaskLayout';
+import { useSelectionStore } from '@taskora/api';
 
 const heading: ProjectHeadingResponseDto = {
   id: 'heading-1',
@@ -432,6 +433,7 @@ describe('ProjectTaskLayout drag sessions', () => {
     harness.blankClick.mockReset();
     harness.blurTask.mockReset();
     harness.toastError.mockReset();
+    useSelectionStore.getState().clearSelection();
   });
 
   function renderLayout(currentTasks = tasks) {
@@ -483,6 +485,68 @@ describe('ProjectTaskLayout drag sessions', () => {
     });
     expect(collisions).toEqual([]);
   }
+
+  it('多项拖拽：选中的任务收起，松手后整组随被拖任务进入目标 Heading', () => {
+    renderLayout();
+    useSelectionStore.getState().setSelection(['task-u1', 'task-u2']);
+    startTaskDrag('task-u2');
+    expect(document.querySelector('[data-mock-task-id="task-u1"]')).toBeNull();
+    dragOver('task:task-u2', 'task:task-b');
+
+    act(() => {
+      handlers().onDragEnd?.({
+        active: { id: 'task:task-u2' },
+        over: { id: 'task:task-b' },
+      });
+    });
+
+    expect(harness.saveMutate).toHaveBeenCalledTimes(1);
+    expect(harness.saveMutate).toHaveBeenCalledWith(
+      {
+        projectId: 'project-1',
+        ungroupedTaskIds: [],
+        groups: [
+          { headingId: 'heading-1', taskIds: ['task-a', 'task-u1', 'task-u2', 'task-b'] },
+          { headingId: 'heading-2', taskIds: [] },
+        ],
+      },
+      expect.any(Object),
+    );
+    // 多选保留，不走单项拖拽的清空。
+    expect(harness.blankClick).not.toHaveBeenCalled();
+  });
+
+  it('多项拖拽取消后收起的任务复原', () => {
+    renderLayout();
+    useSelectionStore.getState().setSelection(['task-u1', 'task-u2']);
+    startTaskDrag('task-u1');
+    expect(document.querySelector('[data-mock-task-id="task-u2"]')).toBeNull();
+    act(() => {
+      handlers().onDragCancel?.();
+    });
+    expect(document.querySelector('[data-mock-task-id="task-u2"]')).not.toBeNull();
+    expect(harness.saveMutate).not.toHaveBeenCalled();
+  });
+
+  it('多项拖拽：落回被拖任务自身时，整组聚到它的位置', () => {
+    renderLayout();
+    useSelectionStore.getState().setSelection(['task-u1', 'task-a']);
+    startTaskDrag('task-a');
+    act(() => {
+      handlers().onDragEnd?.({ active: { id: 'task:task-a' }, over: { id: 'task:task-a' } });
+    });
+    expect(harness.saveMutate).toHaveBeenCalledWith(
+      {
+        projectId: 'project-1',
+        ungroupedTaskIds: ['task-u2'],
+        groups: [
+          { headingId: 'heading-1', taskIds: ['task-u1', 'task-a', 'task-b'] },
+          { headingId: 'heading-2', taskIds: [] },
+        ],
+      },
+      expect.any(Object),
+    );
+  });
 
   it('previews locally and persists one complete layout on a changed drop', () => {
     renderLayout();

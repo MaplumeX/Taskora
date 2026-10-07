@@ -37,20 +37,24 @@ import { toast } from 'sonner';
 import { TaskItem } from '@/components/task/TaskItem';
 import { EmptyState } from '@/components/common/EmptyState';
 import { cn } from '@/lib/utils';
-import { useCompleteTask, useUncompleteTask } from '@taskora/api';
+import { useCompleteTask, useSelectionStore, useUncompleteTask } from '@taskora/api';
 import { useSelectionScope } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
 import { useReorderProjectHeadingLayout } from '@taskora/api';
 import {
   dndListProps,
+  dragGroupOf,
   dragOverlayClass,
   dropAnimation,
+  expandDragGroup,
   flipId,
   noLayoutAnimation,
   noopSortingStrategy,
+  useCollapseAfterDragStart,
   useFlipList,
 } from '../../lib/dnd';
 import { ProjectHeadingRow } from './ProjectHeadingRow';
+import { DragCountBadge } from '@/components/common/DragCountBadge';
 
 const UNGROUPED = 'ungrouped';
 export type ContainerId = typeof UNGROUPED | string;
@@ -145,6 +149,44 @@ function cloneLayout(layout: LayoutState): LayoutState {
     containers: Object.fromEntries(
       Object.entries(layout.containers).map(([id, ids]) => [id, [...ids]]),
     ),
+  };
+}
+
+/** 布局中任务的显示顺序：无 Heading 区，其后各 Heading 下的任务。 */
+function orderedTaskIds(layout: LayoutState): string[] {
+  return [
+    ...(layout.containers[UNGROUPED] ?? []),
+    ...layout.headingIds.flatMap((id) => layout.containers[id] ?? []),
+  ];
+}
+
+/** 从布局中去掉这些任务。 */
+function withoutTasks(layout: LayoutState, ids: ReadonlySet<string>): LayoutState {
+  return {
+    ...layout,
+    containers: Object.fromEntries(
+      Object.entries(layout.containers).map(([id, tasks]) => [
+        id,
+        tasks.filter((task) => !ids.has(task)),
+      ]),
+    ),
+  };
+}
+
+/**
+ * 多项拖拽松手：组内其余任务从原 Heading 取走，整组按原显示顺序落在被拖任务的
+ * 位置（随它进入目标 Heading）。
+ */
+function withDragGroup(layout: LayoutState, activeId: string, group: string[]): LayoutState {
+  const rest = withoutTasks(layout, new Set(group.filter((id) => id !== activeId)));
+  const container = findTaskContainer(rest, activeId);
+  if (!container) return layout;
+  return {
+    ...rest,
+    containers: {
+      ...rest.containers,
+      [container]: expandDragGroup(rest.containers[container], activeId, group, (id) => id),
+    },
   };
 }
 
@@ -418,6 +460,11 @@ export function ProjectTaskLayout({
   const serverLayout = React.useMemo(() => normalizeLayout(tasks, headings), [tasks, headings]);
   const [layout, setLayout] = React.useState(serverLayout);
   const [activeTask, setActiveTask] = React.useState<TaskResponseDto | null>(null);
+  /** 多项拖拽的整组任务 id（单项拖拽为 null）。 */
+  const [dragGroup, setDragGroup] = React.useState<string[] | null>(null);
+  const dragGroupRef = React.useRef<string[] | null>(null);
+  /** 多项拖拽组内其余任务待收起（拖拽开始那次提交之后才收起）。 */
+  const [collapsePending, setCollapsePending] = React.useState(false);
   const layoutRef = React.useRef(layout);
   const serverLayoutRef = React.useRef(serverLayout);
   const activeTaskIdRef = React.useRef<string | null>(null);
@@ -497,6 +544,17 @@ export function ProjectTaskLayout({
     setLayout(next);
   }, []);
 
+  // 多项拖拽：拖拽开始那次提交之后再收起组内其余任务，浮层才贴着手。
+  useCollapseAfterDragStart(collapsePending, () => {
+    setCollapsePending(false);
+    const activeId = activeTaskIdRef.current;
+    const group = dragGroupRef.current;
+    if (!activeId || !group) return;
+    flip.capture();
+    const companions = new Set(group.filter((id) => id !== activeId));
+    updateRenderedLayout(withoutTasks(layoutRef.current, companions));
+  });
+
   React.useEffect(() => {
     if (activeTaskIdRef.current !== null) {
       pendingServerLayoutRef.current = serverLayout;
@@ -532,7 +590,10 @@ export function ProjectTaskLayout({
     pendingServerLayoutRef.current = null;
     keyboardTaskEdgeRef.current = 'before';
     lastTaskTargetRef.current = null;
+    dragGroupRef.current = null;
     setActiveTask(null);
+    setDragGroup(null);
+    setCollapsePending(false);
   };
 
   const restoreTaskDrag = () => {
@@ -595,14 +656,29 @@ export function ProjectTaskLayout({
     const focused = document.activeElement as HTMLElement | null;
     const sortableTask = focused?.closest<HTMLElement>('[data-sortable-task-id]');
     if (sortableTask?.dataset.sortableTaskId === activeId) focused?.blur();
-    handleBlankClick();
+    const group = dragGroupOf(
+      activeId,
+      orderedTaskIds(layoutRef.current),
+      useSelectionStore.getState().selectedIds,
+    );
+    // 多项拖拽保留多选（松手后整组仍选中）；单项拖拽照旧清掉选中。
+    if (!group) handleBlankClick();
 
     dragStartLayoutRef.current = cloneLayout(layoutRef.current);
     pendingServerLayoutRef.current = null;
     activeTaskIdRef.current = activeId;
     keyboardTaskEdgeRef.current = 'before';
     lastTaskTargetRef.current = null;
+    dragGroupRef.current = group;
     setActiveTask(task);
+    setDragGroup(group);
+    setCollapsePending(!!group);
+  };
+
+  /** 松手时的最终布局：多项拖拽把整组放回被拖任务的位置。 */
+  const withGroup = (next: LayoutState, activeId: string) => {
+    const group = dragGroupRef.current;
+    return group ? withDragGroup(next, activeId, group) : next;
   };
 
   const previewTaskTarget = (activeKey: string) => {
@@ -644,7 +720,7 @@ export function ProjectTaskLayout({
         return;
       }
       if (!over) {
-        const finalLayout = layoutRef.current;
+        const finalLayout = withGroup(layoutRef.current, activeId);
         if (layoutsEqual(snapshot, finalLayout)) {
           restoreTaskDrag();
           return;
@@ -665,8 +741,10 @@ export function ProjectTaskLayout({
         return;
       }
 
-      const finalLayout =
-        moveTaskToPlacement(layoutRef.current, activeId, placement) ?? layoutRef.current;
+      const finalLayout = withGroup(
+        moveTaskToPlacement(layoutRef.current, activeId, placement) ?? layoutRef.current,
+        activeId,
+      );
       if (!layoutsEqual(finalLayout, layoutRef.current)) updateRenderedLayout(finalLayout);
       const changed = !layoutsEqual(snapshot, finalLayout);
       if (!changed) {
@@ -745,7 +823,7 @@ export function ProjectTaskLayout({
           <DragOverlay dropAnimation={dropAnimation}>
             {activeTask ? (
               <div
-                className={cn(dragOverlayClass, 'bg-card')}
+                className={cn(dragOverlayClass, 'relative bg-card')}
                 aria-hidden="true"
                 {...{ inert: '' }}
               >
@@ -754,6 +832,7 @@ export function ProjectTaskLayout({
                   selectionState="idle"
                   onToggleComplete={() => undefined}
                 />
+                <DragCountBadge count={dragGroup?.length ?? 0} />
               </div>
             ) : null}
           </DragOverlay>

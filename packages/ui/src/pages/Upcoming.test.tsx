@@ -393,6 +393,47 @@ describe('Upcoming — 复用分组列表拖动来改计划日期', () => {
     expect(taskOrder()).toEqual(['task-2', 'task-1']);
   });
 
+  it('多项拖拽：选中的任务一起改到落点日期，日期都写完再保存顺序', () => {
+    renderUpcoming([
+      task('task-1', '2026-10-07'),
+      task('task-2', '2026-10-08'),
+      task('task-3', '2026-10-09'),
+    ]);
+    useSelectionStore.getState().setSelection(['task-1', 'task-2']);
+    start();
+    // 组内其余行收起，只有被拖行留空位
+    expect(screen.queryByTestId('row-task-2')).not.toBeInTheDocument();
+    over('date:2026-10-10');
+    end('date:2026-10-10');
+
+    expect(harness.update.mock.calls.map(([vars]) => vars)).toEqual([
+      { id: 'task-1', data: { scheduledType: ScheduledType.DATE, scheduledDate: '2026-10-10' } },
+      { id: 'task-2', data: { scheduledType: ScheduledType.DATE, scheduledDate: '2026-10-10' } },
+    ]);
+    expect(taskGroup('task-2')).toBe('date:2026-10-10');
+    act(() => harness.update.mock.calls[0][1].onSuccess());
+    expect(harness.reorder).not.toHaveBeenCalled();
+    act(() => harness.update.mock.calls[1][1].onSuccess());
+    expect(harness.reorder).toHaveBeenCalledWith(
+      [
+        { type: 'task', id: 'task-3' },
+        { type: 'task', id: 'task-1' },
+        { type: 'task', id: 'task-2' },
+      ],
+      expect.anything(),
+    );
+    expect(useSelectionStore.getState().selectedIds).toEqual(['task-1', 'task-2']);
+  });
+
+  it('多项拖拽从第 3 个选中行拖起：其余选中行收起', () => {
+    renderUpcoming(
+      ['task-1', 'task-2', 'task-3', 'task-4', 'task-5'].map((id) => task(id, '2026-10-07')),
+    );
+    useSelectionStore.getState().setSelection(['task-1', 'task-2', 'task-3']);
+    start('task-3');
+    expect(taskOrder()).toEqual(['task-3', 'task-4', 'task-5']);
+  });
+
   it('跨组落到具体行前后，按月份标题改期；日期写入成功后再保存顺序', () => {
     renderUpcoming([
       task('task-1', '2026-10-07'),

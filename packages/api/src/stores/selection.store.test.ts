@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { flattenSelectionRows, useSelectionStore } from './selection.store';
+import {
+  extendSelectionTo,
+  flattenSelectionRows,
+  toggleRowSelection,
+  useSelectionStore,
+} from './selection.store';
 
 const row = (id: string) => ({ id, kind: 'task' as const, completed: false });
 
@@ -31,5 +36,61 @@ describe('flattenSelectionRows', () => {
     registerScope('a', [row('a')], 3);
     unregisterScope('a');
     expect(useSelectionStore.getState().scopeRank).toEqual({});
+  });
+});
+
+describe('多选：⌘/Ctrl+点击、⇧+点击', () => {
+  const heading = (id: string) => ({ id, kind: 'heading' as const });
+  const ids = () => useSelectionStore.getState().selectedIds;
+
+  beforeEach(() => {
+    useSelectionStore.setState({ anchorId: null });
+    useSelectionStore
+      .getState()
+      .registerScope('list', [row('a'), row('b'), heading('h'), row('c'), row('d')]);
+  });
+
+  it('⌘点击切换单行，被点的行成为光标', () => {
+    useSelectionStore.getState().setSelection(['a']);
+    toggleRowSelection('c');
+    expect(ids()).toEqual(['a', 'c']);
+    toggleRowSelection('a');
+    expect(ids()).toEqual(['c']);
+    toggleRowSelection('c');
+    expect(ids()).toEqual([]);
+  });
+
+  it('⌘点击丢弃原选中的非任务行', () => {
+    useSelectionStore.getState().setSelection(['h']);
+    toggleRowSelection('c');
+    expect(ids()).toEqual(['c']);
+  });
+
+  it('⇧点击选中锚点到该行的连续任务行（跳过 Heading），光标排在末项', () => {
+    useSelectionStore.getState().setSelection(['a']);
+    extendSelectionTo('d');
+    expect(ids()).toEqual(['a', 'b', 'c', 'd']);
+    // 锚点不变：再往回点收缩范围
+    extendSelectionTo('b');
+    expect(ids()).toEqual(['a', 'b']);
+  });
+
+  it('⇧点击向上扩展时，光标仍是末项', () => {
+    useSelectionStore.getState().setSelection(['d']);
+    extendSelectionTo('b');
+    expect(ids()).toEqual(['d', 'c', 'b']);
+    expect(useSelectionStore.getState().anchorId).toBe('d');
+  });
+
+  it('以 ⌘点击的行为新锚点', () => {
+    useSelectionStore.getState().setSelection(['a']);
+    toggleRowSelection('c');
+    extendSelectionTo('d');
+    expect(ids()).toEqual(['c', 'd']);
+  });
+
+  it('没有选中时 ⇧点击退化为单选', () => {
+    extendSelectionTo('c');
+    expect(ids()).toEqual(['c']);
   });
 });

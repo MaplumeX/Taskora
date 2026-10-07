@@ -20,6 +20,9 @@ export type KeyAction =
   | { type: 'moveDown' }
   | { type: 'moveFirst' }
   | { type: 'moveLast' }
+  /** ⇧↑ / ⇧↓：从锚点扩展（或收缩）连续多选。 */
+  | { type: 'extendUp' }
+  | { type: 'extendDown' }
   | { type: 'selectAll' }
   /** ⌘K/Ctrl+K：完成选中；Logbook 中撤销完成。 */
   | { type: 'complete' }
@@ -112,6 +115,8 @@ export type ShortcutId =
   | 'moveDown'
   | 'moveFirst'
   | 'moveLast'
+  | 'extendUp'
+  | 'extendDown'
   | 'selectAll'
   | 'newTask'
   | 'newTaskBelow'
@@ -233,6 +238,20 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     group: 'selection',
     action: { type: 'moveLast' },
     defaults: samePerPlatform('Alt+ArrowDown'),
+  },
+  {
+    id: 'extendUp',
+    scope: 'app',
+    group: 'selection',
+    action: { type: 'extendUp' },
+    defaults: samePerPlatform('Shift+ArrowUp'),
+  },
+  {
+    id: 'extendDown',
+    scope: 'app',
+    group: 'selection',
+    action: { type: 'extendDown' },
+    defaults: samePerPlatform('Shift+ArrowDown'),
   },
   {
     id: 'selectAll',

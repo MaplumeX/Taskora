@@ -62,16 +62,16 @@ export function useTaskRowSelection() {
       if (expandedId === id) {
         // expanded → selected（折叠）
         setExpandedId(null);
-      } else if (selectedId === id) {
+      } else if (selectedId === id && selectedIds.length === 1) {
         // selected → expanded
         setExpandedId(id);
       } else {
-        // idle / 他行 → 选中他行
+        // idle / 他行 / 多选中的一行 → 只选中该行
         setSelection([id]);
         setExpandedId(null);
       }
     },
-    [selectedId, expandedId, setSelection, setExpandedId],
+    [selectedId, selectedIds.length, expandedId, setSelection, setExpandedId],
   );
 
   const handleBlankClick = useCallback(() => {

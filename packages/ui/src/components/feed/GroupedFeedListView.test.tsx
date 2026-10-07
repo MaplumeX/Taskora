@@ -598,6 +598,95 @@ describe('GroupedFeedListView — 拖拽语义', () => {
     });
   });
 
+  it('多项拖拽：选中的任务一起落到被拖任务处，跨组的各自改归属', () => {
+    setupTwoProjects();
+    useSelectionStore.getState().setSelection(['loose', 'a2']);
+
+    act(() => {
+      handlers().onDragStart?.({ active: { id: 'task:a2' } });
+    });
+    // 组内其余行收起（拖拽开始那次提交之后，见 useCollapseAfterDragStart）；多选保留。
+    expect(document.querySelector('[data-sortable-task-id="loose"]')).toBeNull();
+    expect(useSelectionStore.getState().selectedIds).toEqual(['loose', 'a2']);
+    act(() => {
+      handlers().onDragEnd?.({ active: { id: 'task:a2' }, over: { id: 'task:b1' } });
+    });
+
+    expect(harness.updateTaskMutate).toHaveBeenCalledTimes(2);
+    expect(harness.updateTaskMutate).toHaveBeenCalledWith({
+      id: 'loose',
+      data: { projectId: 'p2', areaId: null },
+    });
+    expect(harness.updateTaskMutate).toHaveBeenCalledWith({
+      id: 'a2',
+      data: { projectId: 'p2', areaId: null },
+    });
+    // 整组按原显示顺序（loose 在前）插到 b1 之前。
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('a1', 'loose', 'a2', 'b1'));
+    expect(useSelectionStore.getState().selectedIds).toEqual(['loose', 'a2']);
+  });
+
+  it('多项拖拽：整组按显示顺序落位，而非 feed 数组顺序', () => {
+    harness.projects = [project('p1')];
+    // feed 数组里 a1 在前，但显示时未分组的 loose 排在 p1 组之前。
+    renderView([taskItem('a1', { projectId: 'p1' }), taskItem('loose'), taskItem('a2', { projectId: 'p1' })]);
+    useSelectionStore.getState().setSelection(['loose', 'a1']);
+
+    dragEnd('task:a1', 'task:a2', 'task:a2');
+
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('a2', 'loose', 'a1'));
+  });
+
+  it('拖动未选中的行只拖它自己，并清掉多选', () => {
+    setupTwoProjects();
+    useSelectionStore.getState().setSelection(['loose', 'a2']);
+
+    dragEnd('task:a1', 'task:b1');
+
+    expect(harness.updateTaskMutate).toHaveBeenCalledTimes(1);
+    expect(harness.updateTaskMutate).toHaveBeenCalledWith({
+      id: 'a1',
+      data: { projectId: 'p2', areaId: null },
+    });
+    expect(useSelectionStore.getState().selectedIds).toEqual([]);
+  });
+
+  it('多项拖拽取消时收起的行复原', () => {
+    setupTwoProjects();
+    useSelectionStore.getState().setSelection(['a1', 'a2']);
+
+    act(() => {
+      handlers().onDragStart?.({ active: { id: 'task:a1' } });
+    });
+    expect(document.querySelector('[data-sortable-task-id="a2"]')).toBeNull();
+    act(() => {
+      handlers().onDragCancel?.();
+    });
+    expect(document.querySelector('[data-sortable-task-id="a2"]')).not.toBeNull();
+    expect(harness.reorderFeedMutate).not.toHaveBeenCalled();
+  });
+
+  it('多项拖拽从第 3 个选中行拖起：上方选中行收起，原地松手不改动', () => {
+    harness.projects = [project('p1')];
+    renderView(['a1', 'a2', 'a3', 'a4', 'a5'].map((id) => taskItem(id, { projectId: 'p1' })));
+    useSelectionStore.getState().setSelection(['a1', 'a2', 'a3']);
+    const order = () =>
+      Array.from(
+        document.querySelectorAll<HTMLElement>('[data-task-container="p1"] [data-sortable-task-id]'),
+      ).map((node) => node.dataset.sortableTaskId);
+
+    act(() => {
+      handlers().onDragStart?.({ active: { id: 'task:a3' } });
+    });
+    expect(order()).toEqual(['a3', 'a4', 'a5']);
+
+    act(() => {
+      handlers().onDragEnd?.({ active: { id: 'task:a3' }, over: null });
+    });
+    expect(harness.reorderFeedMutate).not.toHaveBeenCalled();
+    expect(harness.updateTaskMutate).not.toHaveBeenCalled();
+  });
+
   it('a no-op drop fires no mutations', () => {
     setupTwoProjects();
 

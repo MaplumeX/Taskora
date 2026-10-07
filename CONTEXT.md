@@ -120,7 +120,7 @@ _Avoid_: 把 Cancelled 当作 COMPLETED 的子集、把终态与删除混淆
 ### 界面交互
 
 **Selection**:
-仅存在于键盘交互域：键盘导航下当前被高亮、并作为键盘动作（完成、删除、新建于下方等）作用对象的 Task / Project / Project Heading；区别于 focus（DOM 焦点）与完成态。触控交互没有 Selection：点击 = 打开详情，勾选用专用 checkbox，长按只负责拖动排序，批量或行级操作走 Multi-Select Mode。
+仅存在于键盘交互域：键盘导航下当前被高亮、并作为键盘动作（完成、删除、新建于下方等）作用对象的 Task / Project / Project Heading；区别于 focus（DOM 焦点）与完成态。可多选（对齐 Things 3 Mac）：⌘A 全选，⌘/Ctrl+点击切换单行，⇧+点击 / ⇧↑↓ 选中锚点到光标的连续范围；多选只含 Task。拖动多选中的一行即多项拖拽：其余选中行收起（被拖条目始终贴着手），松手后整组按原顺序落在落点，并一起改归属 / Heading / 计划日期。触控交互没有 Selection：点击 = 打开详情，勾选用专用 checkbox，长按只负责拖动排序，批量或行级操作走 Multi-Select Mode。
 _Avoid_: 高亮、hover、焦点
 
 **Multi-Select Mode（多选模式）**:

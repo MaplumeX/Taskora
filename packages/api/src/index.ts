@@ -135,6 +135,8 @@ export { useSyncStatusStore, setSyncStatus, type SyncStatus } from './stores/syn
 export {
   useSelectionStore,
   flattenSelectionRows,
+  toggleRowSelection,
+  extendSelectionTo,
   type SelectionRow,
   type SelectionRowKind,
   type SelectionRowGroupHeader,

@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act, render } from '@testing-library/react';
 import * as React from 'react';
 
-import { applyOrder, useHeldOrder } from './dnd';
+import { applyOrder, useCollapseAfterDragStart, useHeldOrder } from './dnd';
 
 interface Row {
   id: string;
@@ -69,5 +69,39 @@ describe('useHeldOrder', () => {
       vi.advanceTimersByTime(2000);
     });
     expect(getByTestId('list').textContent).toBe('a,b');
+  });
+});
+
+describe('useCollapseAfterDragStart', () => {
+  it('拖拽开始那次提交的 layout effect 里仍是收起前的布局，之后才收起', () => {
+    // Probe 模拟 dnd-kit：在拖拽开始那次提交的 layout effect 里测被拖行起点。
+    const measured: number[] = [];
+    function Probe({ active }: { active: boolean }) {
+      React.useLayoutEffect(() => {
+        if (active) measured.push(document.querySelectorAll('[data-row]').length);
+      }, [active]);
+      return null;
+    }
+    let start = () => {};
+    function List() {
+      const [drag, setDrag] = React.useState<{ collapsed: boolean } | null>(null);
+      start = () => setDrag({ collapsed: false });
+      useCollapseAfterDragStart(!!drag && !drag.collapsed, () => setDrag({ collapsed: true }));
+      const rows = drag?.collapsed ? ['c'] : ['a', 'b', 'c'];
+      return (
+        <>
+          {rows.map((id) => (
+            <div key={id} data-row />
+          ))}
+          <Probe active={!!drag} />
+        </>
+      );
+    }
+
+    render(<List />);
+    act(() => start());
+
+    expect(measured).toEqual([3]);
+    expect(document.querySelectorAll('[data-row]')).toHaveLength(1);
   });
 });

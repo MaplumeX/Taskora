@@ -110,6 +110,8 @@
   "shortcut_moveDown": "选中下一项",
   "shortcut_moveFirst": "选中首项",
   "shortcut_moveLast": "选中末项",
+  "shortcut_extendUp": "向上扩展选择",
+  "shortcut_extendDown": "向下扩展选择",
   "shortcut_selectAll": "全选",
   "shortcut_newTask": "新任务",
   "shortcut_newTaskBelow": "在选中项下方新建",
