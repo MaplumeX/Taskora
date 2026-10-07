@@ -2,10 +2,13 @@
  * 按钮 hint 提示：hover（或键盘聚焦）时在按钮上方浮出小气泡，
  * 展示操作文案，可选附带平台对应快捷键（Things 风格）。
  *
- * 快捷键文案与 keymap registry 同源（shortcutLabel），不在调用处硬编码。
+ * 快捷键文案与 keymap registry 同源（shortcutLabel，含用户自定义键位），
+ * 不在调用处硬编码。
  */
 
 import * as React from 'react';
+
+import { useKeybindingsStore } from '@taskora/api';
 
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -26,8 +29,9 @@ interface HintProps {
 }
 
 export function Hint({ label, action, shortcut, side = 'top', platform, children }: HintProps) {
+  const overrides = useKeybindingsStore((s) => s.overrides);
   const resolvedShortcut =
-    shortcut ?? (action ? shortcutLabel(action, platform ?? detectKeyPlatform()) : null);
+    shortcut ?? (action ? shortcutLabel(action, platform ?? detectKeyPlatform(), overrides) : null);
 
   return (
     <TooltipProvider delayDuration={400} skipDelayDuration={300}>

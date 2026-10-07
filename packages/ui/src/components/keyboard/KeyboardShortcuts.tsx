@@ -10,6 +10,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   flattenSelectionRows,
   useAssistantUiStore,
+  useKeybindingsStore,
   useSelectionStore,
   type SelectionRow,
 } from '@taskora/api';
@@ -138,8 +139,11 @@ export function KeyboardShortcuts({ platform }: Props) {
     const resolvedPlatform = platform ?? detectKeyPlatform();
 
     const on_keydown = (e: KeyboardEvent) => {
+      // 用户自定义键位（设置 → 快捷键）在事件时读取，改绑即时生效。
+      const overrides = useKeybindingsStore.getState().overrides;
+      const action = resolveAction(e, resolvedPlatform, overrides);
       // 助手面板开关（⌘J）：面板输入框里也要能收起面板，先于编辑态让路处理。
-      if (resolveAction(e, resolvedPlatform)?.type === 'toggleAssistantPanel') {
+      if (action?.type === 'toggleAssistantPanel') {
         if (isEditableTarget(e.target) && !isInAssistantPanel(e.target)) return;
         // 面板只在桌面宽度出现（与 useIsDesktop 同阈值）。
         if (hasOpenOverlay() || !window.matchMedia('(min-width: 768px)').matches) return;
@@ -165,7 +169,6 @@ export function KeyboardShortcuts({ platform }: Props) {
       // 输入法在隐藏输入框里组字：按键全归输入法，上屏后由 sink 唤起 Quick Find。
       if (isTypeToFindSink(e.target) && (e.isComposing || e.keyCode === 229)) return;
 
-      const action = resolveAction(e, resolvedPlatform);
       if (!action) return;
 
       // 打字唤起 Quick Find：只在「没有行被选中」时（有 Selection 时单键属于

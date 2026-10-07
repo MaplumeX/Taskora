@@ -1,12 +1,13 @@
 ## Default Permission
 
-Allows moving the app task to the background (back to home) instead of exiting the process, and reading / subscribing to the system bar safe-area insets, and matching the system bar icon appearance to the app theme.
+Allows moving the app task to the background (back to home) instead of exiting the process, reading / subscribing to system theme and system bar safe-area insets, and matching the system bar icon appearance to the app theme.
 
 #### This default permission set includes the following:
 
 - `allow-move-to-back`
 - `allow-safe-area-insets`
 - `allow-set-system-bar-appearance`
+- `allow-system-theme`
 - `allow-register-listener`
 - `allow-remove-listener`
 
@@ -145,6 +146,32 @@ Enables the set_system_bar_appearance command without any pre-configured scope.
 <td>
 
 Denies the set_system_bar_appearance command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`background:allow-system-theme`
+
+</td>
+<td>
+
+Enables the system_theme command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`background:deny-system-theme`
+
+</td>
+<td>
+
+Denies the system_theme command without any pre-configured scope.
 
 </td>
 </tr>

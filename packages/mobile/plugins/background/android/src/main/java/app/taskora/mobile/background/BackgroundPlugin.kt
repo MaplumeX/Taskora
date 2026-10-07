@@ -1,6 +1,7 @@
 package app.taskora.mobile.background
 
 import android.app.Activity
+import android.content.res.Configuration
 import android.webkit.WebView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -18,7 +19,7 @@ class SystemBarAppearanceArgs {
 }
 
 /**
- * Activity 级窗口控制：根页返回退到后台 + 系统栏安全区 + 系统栏图标明暗。
+ * Activity 级窗口控制：根页返回退到后台 + 系统栏安全区 + 图标明暗 + 系统主题。
  *
  * 退到后台：`activity.moveTaskToBack(true)` 把整个任务放到后台，WebView 与
  * 界面状态保留，从最近任务 / 桌面图标回来是原地恢复（标准 Android 的「返回
@@ -34,6 +35,7 @@ class SystemBarAppearanceArgs {
  *
  * 系统栏图标明暗：状态栏透明，底下是 App 自身背景；图标明暗随 App 实际
  * 主题（含手动指定的亮 / 暗，与系统 DayNight 无关）由 JS 设置。
+ * 系统主题：uiMode 查询 + 配置变化 / 回前台事件，供 JS 的「跟随系统」解析。
  */
 @TauriPlugin
 class BackgroundPlugin(private val activity: Activity) : Plugin(activity) {
@@ -68,6 +70,28 @@ class BackgroundPlugin(private val activity: Activity) : Plugin(activity) {
     @Command
     fun safeAreaInsets(invoke: Invoke) {
         invoke.resolve(insets.toJs())
+    }
+
+    // 不读取 Activity 的主题属性：WebView 的 prefers-color-scheme 可能保持
+    // 启动值。uiMode 直接反映系统的夜间模式，配置变化和恢复都重新推送。
+    private fun systemTheme(config: Configuration) = JSObject().apply {
+        put("dark", (config.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES)
+    }
+
+    @Command
+    fun systemTheme(invoke: Invoke) {
+        invoke.resolve(systemTheme(activity.resources.configuration))
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        trigger("theme", systemTheme(newConfig))
+    }
+
+    override fun onResume() {
+        super.onResume()
+        trigger("theme", systemTheme(activity.resources.configuration))
     }
 
     @Command

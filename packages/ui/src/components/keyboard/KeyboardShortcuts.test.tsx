@@ -76,6 +76,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
 import { KeyboardShortcuts } from './KeyboardShortcuts';
 import { useSelectionStore } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
+import { useKeybindingsStore } from '@taskora/api';
 import { useAssistantUiStore } from '@taskora/api';
 import { mockDesktop } from '@/test/media';
 import { useSelectionScope } from '@taskora/api';
@@ -197,6 +198,7 @@ beforeEach(() => {
   useSelectionStore.getState().clearSelection();
   useUiInteractionStore.setState({ expandedId: null, searchOpen: false, searchSeed: null });
   window.localStorage.clear();
+  useKeybindingsStore.setState({ overrides: {} });
 });
 
 describe('KeyboardShortcuts — 导航与选择', () => {
@@ -524,6 +526,15 @@ describe('KeyboardShortcuts — 搜索与让路', () => {
   it('⌘F 打开搜索（uiInteraction.searchOpen）', () => {
     renderAt('/today', tasks);
     press('f', { metaKey: true });
+    expect(useUiInteractionStore.getState().searchOpen).toBe(true);
+  });
+
+  it('设置中改绑后按新键位派发，原键位失效', () => {
+    useKeybindingsStore.setState({ overrides: { search: ['Meta+P'] } });
+    renderAt('/today', tasks);
+    press('f', { metaKey: true });
+    expect(useUiInteractionStore.getState().searchOpen).toBe(false);
+    press('p', { metaKey: true });
     expect(useUiInteractionStore.getState().searchOpen).toBe(true);
   });
 
