@@ -7,6 +7,7 @@ import {
   parseCalendarDate,
   startOfTomorrow,
   useTaskQuery,
+  useTaskSettlePreview,
   useUpdateTask,
   useUiInteractionStore,
 } from '@taskora/api';
@@ -184,11 +185,15 @@ export function TaskItem({
     }
   };
 
+  const settlePreview = useTaskSettlePreview();
   const {
     pendingComplete,
     exiting,
     toggle: handleToggle,
-  } = useCompletionRhythm(settled, onToggleComplete);
+  } = useCompletionRhythm(settled, onToggleComplete, {
+    show: () => settlePreview.show(task.id),
+    clear: () => settlePreview.clear(task.id),
+  });
 
   const tag = projectTitle ?? areaTitle;
 

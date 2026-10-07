@@ -4,7 +4,13 @@ import { type ReactNode, createElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
-import type { FeedItem, SubtaskResponseDto, TaskResponseDto } from '@taskora/shared';
+import type {
+  FeedItem,
+  ProjectFeedItem,
+  ProjectResponseDto,
+  SubtaskResponseDto,
+  TaskResponseDto,
+} from '@taskora/shared';
 
 // Mock the tasks API module
 vi.mock('@/api/tasks.api', () => ({
@@ -51,6 +57,7 @@ import {
   useDeleteTask,
   useReorderSubtasks,
   useReorderTasks,
+  useTaskSettlePreview,
   useUncancelTask,
   useUncompleteTask,
   useUpdateTask,
@@ -586,5 +593,152 @@ describe('Subtask 插入与重排（optimistic）', () => {
     reject(new Error('boom'));
     await waitFor(() => expect(result.current.isError).toBe(true));
     expect(ids(queryClient)).toEqual(['a', 'b']);
+  });
+});
+
+describe('项目进度计数随任务了结乐观更新（ADR 0006：完成 + 取消）', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const projectTask = { ...baseTask, projectId: 'p1' };
+  const project = { id: 'p1', taskTotalCount: 3, taskCompletedCount: 1 } as ProjectResponseDto;
+  const feedProject = {
+    ...baseTask,
+    id: 'p1',
+    type: 'project',
+    taskTotalCount: 3,
+    taskCompletedCount: 1,
+  } as unknown as FeedItem;
+
+  function seed(queryClient: QueryClient, task: TaskResponseDto) {
+    queryClient.setQueryData(taskKeys.list({ projectId: 'p1' }), [task]);
+    queryClient.setQueryData(['projects'], [project]);
+    queryClient.setQueryData(['project', 'p1'], project);
+    queryClient.setQueryData(['feed', 'anytime'], [feedProject]);
+  }
+
+  function completedCounts(queryClient: QueryClient) {
+    return [
+      queryClient.getQueryData<ProjectResponseDto[]>(['projects'])?.[0].taskCompletedCount,
+      queryClient.getQueryData<ProjectResponseDto>(['project', 'p1'])?.taskCompletedCount,
+      (queryClient.getQueryData<FeedItem[]>(['feed', 'anytime'])?.[0] as ProjectFeedItem)
+        .taskCompletedCount,
+    ];
+  }
+
+  it('complete：所属项目的已了结数即时 +1（列表、详情、feed 项目行）', async () => {
+    vi.mocked(completeTask).mockReturnValue(new Promise(() => undefined));
+    const { wrapper, queryClient } = createWrapper();
+    seed(queryClient, projectTask);
+    const { result } = renderHook(() => useCompleteTask(), { wrapper });
+
+    result.current.mutate('task-1');
+
+    await waitFor(() => expect(completedCounts(queryClient)).toEqual([2, 2, 2]));
+  });
+
+  it('cancel 已完成的任务：仍属已了结，计数不变', async () => {
+    vi.mocked(cancelTask).mockReturnValue(new Promise(() => undefined));
+    const { wrapper, queryClient } = createWrapper();
+    seed(queryClient, { ...projectTask, status: TaskStatus.COMPLETED });
+    const { result } = renderHook(() => useCancelTask(), { wrapper });
+
+    result.current.mutate('task-1');
+
+    await waitFor(() => {
+      const list = queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ projectId: 'p1' }));
+      expect(list?.[0].status).toBe(TaskStatus.CANCELLED);
+    });
+    expect(completedCounts(queryClient)).toEqual([1, 1, 1]);
+  });
+
+  it('uncancel：已了结数即时 -1', async () => {
+    vi.mocked(uncancelTask).mockReturnValue(new Promise(() => undefined));
+    const { wrapper, queryClient } = createWrapper();
+    seed(queryClient, { ...projectTask, status: TaskStatus.CANCELLED });
+    const { result } = renderHook(() => useUncancelTask(), { wrapper });
+
+    result.current.mutate('task-1');
+
+    await waitFor(() => expect(completedCounts(queryClient)).toEqual([0, 0, 0]));
+  });
+
+  it('Trash 中的任务不计入进度，计数不变', async () => {
+    vi.mocked(completeTask).mockReturnValue(new Promise(() => undefined));
+    const { wrapper, queryClient } = createWrapper();
+    seed(queryClient, { ...projectTask, trashedAt: '2024-01-02T00:00:00.000Z' });
+    const { result } = renderHook(() => useCompleteTask(), { wrapper });
+
+    result.current.mutate('task-1');
+
+    await waitFor(() => {
+      const list = queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ projectId: 'p1' }));
+      expect(list?.[0].status).toBe(TaskStatus.COMPLETED);
+    });
+    expect(completedCounts(queryClient)).toEqual([1, 1, 1]);
+  });
+
+  it('写入失败回滚项目计数', async () => {
+    vi.mocked(completeTask).mockRejectedValue(new Error('network'));
+    const { wrapper, queryClient } = createWrapper();
+    seed(queryClient, projectTask);
+    const { result } = renderHook(() => useCompleteTask(), { wrapper });
+
+    await expect(result.current.mutateAsync('task-1')).rejects.toThrow('network');
+    expect(completedCounts(queryClient)).toEqual([1, 1, 1]);
+  });
+});
+
+describe('useTaskSettlePreview（勾上停留期间预先计入项目进度）', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const projectTask = { ...baseTask, projectId: 'p1' };
+  const project = { id: 'p1', taskTotalCount: 3, taskCompletedCount: 1 } as ProjectResponseDto;
+  const completedCount = (queryClient: QueryClient) =>
+    queryClient.getQueryData<ProjectResponseDto[]>(['projects'])?.[0].taskCompletedCount;
+
+  function setup() {
+    const { wrapper, queryClient } = createWrapper();
+    queryClient.setQueryData(taskKeys.list({ projectId: 'p1' }), [projectTask]);
+    queryClient.setQueryData(['projects'], [project]);
+    const preview = renderHook(() => useTaskSettlePreview(), { wrapper }).result.current;
+    const complete = renderHook(() => useCompleteTask(), { wrapper }).result;
+    return { queryClient, preview, complete };
+  }
+
+  it('show 即时 +1，重复 show 幂等，clear 撤回', () => {
+    const { queryClient, preview } = setup();
+
+    preview.show('task-1');
+    preview.show('task-1');
+    expect(completedCount(queryClient)).toBe(2);
+
+    preview.clear('task-1');
+    preview.clear('task-1');
+    expect(completedCount(queryClient)).toBe(1);
+  });
+
+  it('提交完成时接管预览，不重复计数；之后的 clear 为空操作', async () => {
+    vi.mocked(completeTask).mockReturnValue(new Promise(() => undefined));
+    const { queryClient, preview, complete } = setup();
+
+    preview.show('task-1');
+    complete.current.mutate('task-1');
+    await waitFor(() => {
+      const list = queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ projectId: 'p1' }));
+      expect(list?.[0].status).toBe(TaskStatus.COMPLETED);
+    });
+    preview.clear('task-1');
+
+    expect(completedCount(queryClient)).toBe(2);
+  });
+
+  it('提交失败时连同预览一起撤回', async () => {
+    vi.mocked(completeTask).mockRejectedValue(new Error('network'));
+    const { queryClient, preview, complete } = setup();
+
+    preview.show('task-1');
+    await expect(complete.current.mutateAsync('task-1')).rejects.toThrow('network');
+
+    expect(completedCount(queryClient)).toBe(1);
   });
 });

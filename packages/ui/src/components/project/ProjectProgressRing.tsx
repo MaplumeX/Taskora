@@ -83,8 +83,9 @@ export function ProjectProgressPie({
         strokeWidth="1.5"
         className="text-primary"
       />
-      {/* 进度饼（进行中且有进度时；满饼时仍无勾，勾只属于已完成） */}
-      {!isChecked && !isCancelled && ratio > 0 && (
+      {/* 进度饼（进行中时；满饼时仍无勾，勾只属于已完成）。
+          进度为 0 时也保持挂载（offset = 周长，不可见），使 0 → 有进度同样能过渡。 */}
+      {!isChecked && !isCancelled && (
         <circle
           cx="10"
           cy="10"
@@ -92,9 +93,9 @@ export function ProjectProgressPie({
           fill="none"
           stroke="currentColor"
           strokeWidth={PIE_RADIUS * 2}
-          className="text-primary"
+          className="text-primary transition-[stroke-dashoffset] duration-slow ease-spring"
           strokeDasharray={PIE_CIRCUMFERENCE}
-          strokeDashoffset={offset}
+          style={{ strokeDashoffset: offset }}
           transform="rotate(-90 10 10)"
         />
       )}

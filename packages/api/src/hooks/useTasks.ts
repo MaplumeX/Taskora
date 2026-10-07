@@ -1,3 +1,4 @@
+import { useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import type { QueryCacheFacade } from '../engine/live-queries';
@@ -8,6 +9,7 @@ import type {
   CreateTaskDto,
   FeedItem,
   FeedOrderItem,
+  ProjectResponseDto,
   SubtaskResponseDto,
   TaskResponseDto,
   UpdateSubtaskDto,
@@ -165,6 +167,115 @@ function patchTaskInLists(
         ? ({ ...updater(item as unknown as TaskResponseDto), type: 'task' } as FeedItem)
         : item,
     ),
+  );
+}
+
+/**
+ * 了结 / 恢复任务时一并乐观修补所属项目的进度计数（完成 + 取消 / 非 Trash
+ * 总数，ADR 0006）：进度饼在勾选当下就开始过渡，不等写后重查。
+ */
+const TASK_STATUS_ROOTS = [...TASK_LIST_ROOTS, 'projects', 'project'];
+
+function isSettledStatus(status: unknown): boolean {
+  return status === TaskStatus.COMPLETED || status === TaskStatus.CANCELLED;
+}
+
+type CountedTask = Pick<TaskResponseDto, 'projectId' | 'status' | 'trashedAt'>;
+
+function findCachedTask(queryClient: QueryCacheFacade, taskId: string): CountedTask | undefined {
+  const detail = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(taskId));
+  if (detail) return detail;
+  for (const root of TASK_LIST_ROOTS) {
+    for (const [, list] of queryClient.getQueriesData<(ListItem & Partial<CountedTask>)[]>({
+      queryKey: [root],
+    })) {
+      const found = list?.find((item) => isTaskRow(item) && item.id === taskId);
+      if (found && found.projectId !== undefined) return found as CountedTask;
+    }
+  }
+  return undefined;
+}
+
+function bumpProjectProgress(queryClient: QueryCacheFacade, projectId: string, delta: number) {
+  const bump = <T extends { taskTotalCount: number; taskCompletedCount: number }>(project: T): T => ({
+    ...project,
+    taskCompletedCount: Math.min(
+      project.taskTotalCount,
+      Math.max(0, project.taskCompletedCount + delta),
+    ),
+  });
+  queryClient.setQueriesData<ProjectResponseDto[]>({ queryKey: ['projects'] }, (old) =>
+    old?.map((project) => (project.id === projectId ? bump(project) : project)),
+  );
+  queryClient.setQueryData<ProjectResponseDto>(['project', projectId], (old) =>
+    old ? bump(old) : old,
+  );
+  queryClient.setQueriesData<FeedItem[]>({ queryKey: ['feed'] }, (old) =>
+    old?.map((item) => (item.type === 'project' && item.id === projectId ? bump(item) : item)),
+  );
+}
+
+/** 按缓存里的旧状态求所属项目与计数增量；不计入进度（无项目 / 在 Trash）时为 null。 */
+function progressDelta(queryClient: QueryCacheFacade, taskId: string, nextStatus: TaskStatus) {
+  const task = findCachedTask(queryClient, taskId);
+  if (!task?.projectId || task.trashedAt) return null;
+  const delta = Number(isSettledStatus(nextStatus)) - Number(isSettledStatus(task.status));
+  return delta === 0 ? null : { projectId: task.projectId, delta };
+}
+
+/**
+ * 完成预览：任务行勾上后先停留再提交（useCompletionRhythm），停留期间已把
+ * 这一项计入项目进度，提交时由 useCompleteTask 接管，不再重复计数。
+ * 键为任务 id，值为计入的项目 id。
+ */
+const settlePreviews = new Map<string, string>();
+
+/** 须在改写任务状态之前调用；返回是否接管了完成预览（失败回滚时要一并撤回）。 */
+function patchProjectProgress(
+  queryClient: QueryCacheFacade,
+  taskId: string,
+  nextStatus: TaskStatus,
+): boolean {
+  const previewedProject = settlePreviews.get(taskId);
+  settlePreviews.delete(taskId);
+  const change = progressDelta(queryClient, taskId, nextStatus);
+  if (previewedProject !== undefined && isSettledStatus(nextStatus)) {
+    // 预览已计入；预览后任务若换了项目，按新项目补齐
+    if (change && change.projectId !== previewedProject) {
+      bumpProjectProgress(queryClient, previewedProject, -1);
+      bumpProjectProgress(queryClient, change.projectId, change.delta);
+    }
+    return true;
+  }
+  if (previewedProject !== undefined) bumpProjectProgress(queryClient, previewedProject, -1);
+  if (change) bumpProjectProgress(queryClient, change.projectId, change.delta);
+  return false;
+}
+
+/**
+ * 任务完成预览（useCompletionRhythm 的停留阶段）：show 立即把任务计入所属
+ * 项目进度，clear 撤回（撤销勾选，或提交后未被 useCompleteTask 接管时兜底）。
+ * 均幂等。
+ */
+export function useTaskSettlePreview() {
+  const queryClient = useQueryCache();
+  return useMemo(
+    () => ({
+      show(taskId: string) {
+        if (settlePreviews.has(taskId)) return;
+        const change = progressDelta(queryClient, taskId, TaskStatus.COMPLETED);
+        if (!change) return;
+        settlePreviews.set(taskId, change.projectId);
+        bumpProjectProgress(queryClient, change.projectId, change.delta);
+      },
+      clear(taskId: string) {
+        const projectId = settlePreviews.get(taskId);
+        if (projectId === undefined) return;
+        settlePreviews.delete(taskId);
+        bumpProjectProgress(queryClient, projectId, -1);
+      },
+    }),
+    [queryClient],
   );
 }
 
@@ -352,9 +463,10 @@ export function useCompleteTask() {
   return useMutation({
     mutationFn: (id: string) => completeTask(id),
     onMutate: async (id) => {
-      await cancelTaskLists(queryClient);
-      const snapshot = snapshotTaskLists(queryClient);
+      await cancelRoots(queryClient, TASK_STATUS_ROOTS);
+      const snapshot = snapshotRoots(queryClient, TASK_STATUS_ROOTS);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
+      const previewed = patchProjectProgress(queryClient, id, TaskStatus.COMPLETED);
       const now = new Date().toISOString();
       patchTaskInLists(queryClient, id, (task) => ({
           ...task,
@@ -364,7 +476,7 @@ export function useCompleteTask() {
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, status: TaskStatus.COMPLETED, completedAt: now } : old,
       );
-      return { snapshot, detailSnapshot, id };
+      return { snapshot, detailSnapshot, id, previewed };
     },
     onError: (_err, _id, ctx) => {
       if (ctx?.snapshot) {
@@ -373,6 +485,9 @@ export function useCompleteTask() {
       if (ctx?.detailSnapshot !== undefined) {
         queryClient.setQueryData(taskKeys.detail(ctx.id), ctx.detailSnapshot);
       }
+      // 快照里已含停留阶段预览计入的进度，须另行撤回
+      const projectId = ctx?.previewed ? findCachedTask(queryClient, ctx.id)?.projectId : null;
+      if (projectId) bumpProjectProgress(queryClient, projectId, -1);
     },
     onSettled: (_data, _error, id) => {
       refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
@@ -388,9 +503,10 @@ export function useUncompleteTask() {
   return useMutation({
     mutationFn: (id: string) => uncompleteTask(id),
     onMutate: async (id) => {
-      await cancelTaskLists(queryClient);
-      const snapshot = snapshotTaskLists(queryClient);
+      await cancelRoots(queryClient, TASK_STATUS_ROOTS);
+      const snapshot = snapshotRoots(queryClient, TASK_STATUS_ROOTS);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
+      patchProjectProgress(queryClient, id, TaskStatus.ACTIVE);
       patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           status: TaskStatus.ACTIVE,
@@ -423,9 +539,10 @@ export function useCancelTask() {
   return useMutation({
     mutationFn: (id: string) => cancelTask(id),
     onMutate: async (id) => {
-      await cancelTaskLists(queryClient);
-      const snapshot = snapshotTaskLists(queryClient);
+      await cancelRoots(queryClient, TASK_STATUS_ROOTS);
+      const snapshot = snapshotRoots(queryClient, TASK_STATUS_ROOTS);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
+      patchProjectProgress(queryClient, id, TaskStatus.CANCELLED);
       const now = new Date().toISOString();
       patchTaskInLists(queryClient, id, (task) => ({
           ...task,
@@ -459,9 +576,10 @@ export function useUncancelTask() {
   return useMutation({
     mutationFn: (id: string) => uncancelTask(id),
     onMutate: async (id) => {
-      await cancelTaskLists(queryClient);
-      const snapshot = snapshotTaskLists(queryClient);
+      await cancelRoots(queryClient, TASK_STATUS_ROOTS);
+      const snapshot = snapshotRoots(queryClient, TASK_STATUS_ROOTS);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
+      patchProjectProgress(queryClient, id, TaskStatus.ACTIVE);
       patchTaskInLists(queryClient, id, (task) => ({
           ...task,
           status: TaskStatus.ACTIVE,
