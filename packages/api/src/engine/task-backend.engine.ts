@@ -351,11 +351,11 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     // ---------- 写（全部本地，进 Outbox） ----------
 
     async createTask(data: CreateTaskDto): Promise<TaskResponseDto> {
-      // 新任务插在最前（newest-first）：只需要当前首行的位次
-      const existing = await engine.list('task', { limit: 1 });
+      // 新任务追加到末尾，沿用现有任务的 Position 顺序。
+      const existing = await engine.list('task');
       const id = await engine.create('task', {
         ...planTaskCreate(data, zones()),
-        position: positionAfter(existing, null),
+        position: positionAtEnd(positionedRows(existing)),
       });
       return taskDto(id);
     },
