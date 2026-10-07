@@ -92,7 +92,6 @@ async function mount() {
         <App />
         {/* 顶部 toast 让出状态栏：sonner 默认偏移（手机 16px / 平板 24px）+ 安全区。 */}
         <Toaster
-          richColors
           position="top-center"
           offset={{ top: 'calc(24px + var(--safe-area-top))' }}
           mobileOffset={{ top: 'calc(16px + var(--safe-area-top))' }}
