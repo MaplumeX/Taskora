@@ -10,6 +10,110 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > Android 小节，端专属改动标注 `(desktop)` / `(android)`。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.7.6] - 2026-10-07
+
+### Added
+
+- **engine/api/backend/shared/ui**: 嵌套 Tag 取代 Tag Group，Quick Find 支持 `#tag` (#158) —
+  Tag 新增 `parentId`，层级不限、父 Tag 自己也能打标，Tag Group 实体、`Tag.tagGroupId`
+  与 `/tag-groups` 接口整体退役（ADR 0016 取代 ADR 0015 的「Tag Group stays a container」
+  一节）。过滤语义随之升级为**子树命中**：条目命中 Tag T 当且仅当它的有效 Tag 里有 T 或 T 的
+  任一后代（不向上展开），`tagId` 查询、列表过滤栏、Tag 详情页与 Quick Find 的 `#tag` 一律走
+  这条规则，纯函数落在 engine 的 `buildTagTree` / `tagHit`，读时容忍环与悬空 `parentId`，hub
+  的 SQL 粗筛先把子树展开成 id 列表再走 `IN (...)`。UI 上 Tag Picker 无搜索词时按树缩进显示、
+  有搜索词时扁平结果并在行尾标出父路径；列表过滤栏逐层展开子 Tag，再点一次已选中的 Tag 退上一层；
+  Tag 详情页按子树命中，可点击的父路径放在标题前、过滤栏只列直接子 Tag；Tags 管理页改为树形大纲，
+  上下拖决定位置、左右拖决定层级（被拖 Tag 的子树随之收起移动，拖不进自己的后代），「新建子 Tag」
+  「移到…」「删除」桌面端走右键菜单、触控端左滑弹出 Action Sheet，折叠状态只存本机。Quick Find
+  词首输入 `#` 进入 Tag 补全，`Enter` / `Tab` / 点击把高亮项变成 chip 并删掉输入框里的 `#xxx`
+  （同名唯一时输入空格也转换，光标在开头按 `Backspace` 删最后一个 chip，IME 组字期间不触发），
+  多个 chip 取 AND 且各自按子树命中，「区域与项目」「任务」结果随之收窄，「继续搜索」把 chip 写进
+  `/search?q=&tag=`。这是一次不兼容的 wire 变化：`SYNC_PROTOCOL_VERSION` 4 → 5，`tag-group`
+  实体退役、`tagGroupId` 改名 `parentId`、实体索引 `tag_group_member` 改 `tag_parent`，协议 4
+  客户端直接收到 426 并提示升级；hub Prisma 迁移把每个 Tag Group 按原 id、标题与位次转成顶层 Tag、
+  成员 `parentId = tagGroupId` 并改写 `fieldClocks` 键，本地副本用同一套规则逐字转换、改写 Outbox
+  里的 `tag-group` 写，另记一次性 bootstrap 标记兜住设备先于 hub 升级的情况，保证两端逐字一致。
+  成环在写入时拒绝（REST 400，UI 不允许拖进后代）、hub 合并后由 `repairEntity` 的祖先探针断开、
+  读取时 `buildTagTree` 兜底。助手工具、Quick Add relay 协议与 Android 状态栏快照一并跟进。
+
+- **api/ui/desktop**: 键位可自定义，设置页新增快捷键面板 (#161) — `keymap.ts` 从散落的判断改为
+  声明式注册表 `SHORTCUTS`（每个动作带各平台默认键位），`resolveAction` 把事件归一成 chord 后先查
+  用户覆盖再查默认，`shortcutLabel` 读同一张表，重绑后按钮提示同步更新。设置新增「快捷键」面板列出
+  全部动作，点击某个绑定即录制下一个 chord（Esc 取消），与已有动作冲突时把该 chord 从原动作移走并
+  提示；Quick Add 卡片的键位是同一注册表的独立 scope，只在 scope 内查冲突。覆盖只存本机
+  （localStorage `taskora-keybindings`）且不跨端同步——chord 含平台修饰键，换平台无意义。系统级
+  Quick Add 热键是例外，仍由 Rust 持有、存在应用数据目录的 `quick-add-shortcut.json`，重绑时先注册
+  新热键再注销旧热键，被别的应用抢占也不至于两个都没有；编辑器 ⌘Enter、卡片内 Enter / Esc 与
+  type-to-find 不可重绑，面板里单列为固定快捷键。落实 ADR 0017。
+
+- **ui**: Upcoming 拖动改期 (#163) — Upcoming feed 的行可以拖到别的日期分组、月份分组或分组标题上
+  重新排期：拖动期间实时预览占位、松手才写入，只提交计划字段；同组内拖动只改顺序、保留原具体日期，
+  跨月份落到具体某天按天改期，落到月份标题取该月第一天，跨年月份用目标年份的第一天。空分组仍保留
+  放置区，重复预告不注册为可拖动任务；多项拖拽把整组选中的任务一起改到落点日期，日期都写完再保存
+  顺序。展开中的编辑卡片与多选模式下禁用拖动。
+
+- **engine/api/backend/shared/ui**: Today 的「新到」标记 (#164) — Today 中「上次看过 Today 之后
+  再随日期到来」才进入的 Task / 独立项目行自成一区、行首带黄点（参考 Things 3）：计划日期晚于账号
+  偏好 `todayReviewedOn`，且排期写入时刻（`scheduledSetAt` 的 HLC 墙钟，按账号时区）早于该计划日期
+  ——当天才手动排到今天、或排到已过日期的不算，写入时刻未知的旧数据只按基线判断。进入 Today 即把
+  已看日期推进到今天（本次访问内黄点保留，离开后消失），已看日期只进不退并经账号偏好跨端同步，从未
+  看过 Today 时一律不标新到；纯推导，不改写 Task / Project 字段。区内的行只可区内重排，侧边栏与
+  手机首页的 Today 入口在有新到时带黄点。
+
+- **ui**: 展开任务卡片的归属入口 (#166) — 展开的任务卡片在背景与阴影之外、右下方单起一行显示直接
+  所属的 Project / Area（参考 Things 的低调文字入口；有 Project 显示 Project，否则显示直接 Area，
+  Bucket 不算归属，无归属不显示），点击可「前往项目 / 前往区域」或打开既有 MovePicker「更改项目 /
+  更改区域」。已在该 Project / Area 页面、或当前视图正按 Project / Area 分组时隐藏且不留空位；长
+  名称截断，完整名称给在提示与无障碍名称里，桌面用右对齐紧凑 Popover、窄屏用 FieldPickerDialog。
+
+- **api/ui**: 桌面多选、多项拖拽与拖到侧边栏 (#168) — 对齐 Things 3 Mac：Selection 新增
+  `anchorId`，⌘/Ctrl+点击切换并以该行作新锚点，⇧+点击与 ⇧↑/↓（`extendUp` / `extendDown`，可在
+  设置改绑）从锚点连续扩展，多选只含任务行。多选状态下拖动其中一行即整组随动，浮层右侧
+  `DragCountBadge` 显示件数；整组拖动要等在拖拽开始那次提交之后的 effect 里收起其余选中行，浮层才
+  以测得的被拖行位置为基准，否则收起会先把基准顶偏、浮层脱手。右键菜单同样作用于整组：菜单顶部显示
+  件数，动作一次应用到全部选中行（标签在各任务原有标签上增减），重复、跳过本次、转换为项目仍只在单
+  行菜单出现。同一批改动带来 **Sidebar Drop**：Task 行（多选时整组）与 Project 行可直接拖到侧边栏
+  落点——Inbox（清归属与计划、保留截止日期）、Today / Someday（改计划）、Logbook（完成，重复任务
+  照常派生）、Trash（删除）、区域 / 项目（移动，项目落在无 Heading 部分末尾），可接收的行悬停高亮、
+  不接收的行不动，松手停留在当前页面、Selection 清空，已在目标处的条目跳过，Project 不接收 Inbox /
+  项目。落点规划抽成纯函数，执行复用右键菜单 / 选择器同一批 mutation（含剩余任务询问与提醒规则），
+  不另写一套；拖到侧边栏时源列表的占位回到原位、不暗示组内重排，侧边栏滚动区在拖拽接近上下缘时自动
+  滚动。架构上把各个列表（`TaskList`、`ProjectTaskLayout`、`GroupedFeedListView`、`Upcoming`、
+  区域详情、搜索）与侧边栏项目 / 区域排序收进应用级单一 `DndContext`（`AppDndProvider`，ADR 0018），
+  各 surface 按 id 前缀认领自己的事件，原有的浮层跟手、实时预览、让位与 FLIP 约定不变；触控端与
+  Multi-Select Mode 不受影响。
+
+### Changed
+
+- **api/mobile**: 跟随系统主题改用原生 Android uiMode (android) (#162) — edge-to-edge 下状态栏 /
+  导航栏透明，图标明暗按原生 DayNight 判断，App 内手动指定亮 / 暗主题时会出现深底深图标。改为壳侧
+  监听 UI 模式变化、经 background 插件把主题推给 WebView（先订阅再读快照，读取期间收到的事件不被
+  旧快照覆盖），`preferences.store` 里系统主题优先于 WebView 媒体查询且不持久化，手动主题不受影响；
+  主窗口再监听 `<html>` 的 `class` 变化回写，两向保持一致。
+
+- **ui**: 收紧备注编辑器的段落间距 (#165) — `prose-sm` 的段落外边距上下各约 16px，段间距接近行距
+  的 5 倍，备注里像空了一大行；用 `prose-p:my-1` 降到 4px，段落间仍比段内行距略宽。必须用 utility
+  覆盖——prose 规则在 components 层，写进 `tokens.css` 的 `@layer base` 会被压过。
+
+- **ui**: 分组标题改回 Things 风格 (#167) — 分组视图（Today / Anytime / Someday）里的 Project /
+  Area 组头此前被做成蓝色纯文字链接、丢了进度环与图标，现改回任务上方的标题：保留 Project 进度环与
+  Area 图标，标题用正文字阶半粗体、默认前景色，hover（或键盘聚焦）才变蓝并露出右侧 `>`，无文字
+  下划线、无整行 hover 背景，保留淡色分隔线与组间留白，长标题截断且箭头不推动文字。Project 标题行
+  右侧常驻原有截止日期徽标（未到期灰、到期 / 逾期红），点击进度环完成项目仍走剩余任务询问；Area 组头
+  新增复用详情页操作的右键菜单（Tags / Delete）。键盘 ↑/↓ 移动 Selection 与 DOM 焦点时跳过 Project /
+  Area 组头，Alt+↑/↓ 在组内跳到首 / 末任务，完成 / 取消 / 删除后的自动选邻居也跳过组头；组头仍作为
+  拖拽投放面与「下方新建」的上下文，独立 Project 行、项目内部 Project Heading 与平铺视图不受影响。
+
+### Fixed
+
+- **ui**: 展开的任务行不再作为拖拽源 (#159) — 可排序行容器的拖拽与展开的编辑卡片冲突，在卡片里
+  拖选文字会触发整行拖动。展开后不再注册拖拽（分组视图、项目页与任务列表），文字选择恢复正常。
+
+- **desktop/ui**: 托盘菜单与 Quick Add 透明窗口的伪影 (#160) — 透明窗口会把超出边界的投影裁成
+  矩形灰底，托盘菜单去掉投影、只留边框区分，窗口贴合内容；Quick Add 窗口宽 600px，低于 md 断点走
+  窄屏的居中 Dialog，遮罩在透明窗口里同样会铺成整块灰底，`Dialog` 补上 `data-dialog-overlay`
+  标记、在该窗口里置为透明。
+
 ## [0.7.5] - 2026-10-05
 
 ### Added
