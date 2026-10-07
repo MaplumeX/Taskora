@@ -702,6 +702,7 @@ export function GroupedFeedListView({
         item={item}
         placeholder={activeItem !== null && feedItemDndId(activeItem) === dndId}
         {...rowLabels(item, containerId)}
+        hidePlacement={grouping}
         selectionState={selectionStateOf(selectedIds, expandedId, item.id)}
         showScheduledBadge={showScheduledBadge}
         newInToday={containerId === FRESH}
@@ -810,6 +811,7 @@ export function GroupedFeedListView({
               <FeedItemRow
                 item={overlayItem}
                 {...rowLabels(overlayItem, rowContainerOf(layout, overlayItem))}
+                hidePlacement={grouping}
                 selectionState="idle"
                 showScheduledBadge={showScheduledBadge}
                 newInToday={rowContainerOf(layout, overlayItem) === FRESH}

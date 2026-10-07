@@ -10,6 +10,8 @@ interface Props {
   item: FeedItem;
   projectTitle?: string;
   areaTitle?: string;
+  /** 分组视图不显示展开任务的外侧归属入口。 */
+  hidePlacement?: boolean;
   selectionState?: SelectionState;
   onToggleComplete?: () => void;
   onRowClick?: () => void;
@@ -28,6 +30,7 @@ export function FeedItemRow({
   item,
   projectTitle,
   areaTitle,
+  hidePlacement,
   selectionState = 'idle',
   onToggleComplete,
   onRowClick,
@@ -66,6 +69,7 @@ export function FeedItemRow({
       task={task}
       projectTitle={projectTitle}
       areaTitle={areaTitle}
+      hidePlacement={hidePlacement}
       selectionState={selectionState}
       onToggleComplete={onToggleComplete ?? (() => {})}
       onRowClick={onRowClick}
