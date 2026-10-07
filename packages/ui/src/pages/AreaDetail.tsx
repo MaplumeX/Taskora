@@ -40,7 +40,12 @@ import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { AreaMoreMenu } from '@/components/area/AreaMoreMenu';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
 import { toast } from 'sonner';
-import { dndListProps, dragOverlayClass, useHeldOrder } from '../lib/dnd';
+import {
+  dndListProps,
+  dragOverlayClass,
+  dragOverlayWrapperClass,
+  useHeldOrder,
+} from '../lib/dnd';
 import { useDndSurface } from '../lib/appDnd';
 import { cn } from '@/lib/utils';
 
@@ -215,7 +220,7 @@ export default function AreaDetail() {
             </div>
           </SortableContext>
           {projectSurface.overlayActive && (
-            <DragOverlay dropAnimation={projectSurface.dropAnimation}>
+            <DragOverlay className={dragOverlayWrapperClass} dropAnimation={projectSurface.dropAnimation}>
               {activeProject ? (
                 <div className={cn(dragOverlayClass, 'bg-card')} aria-hidden="true" {...{ inert: '' }}>
                   <ProjectFeedRow item={activeProject} selectionState="idle" />

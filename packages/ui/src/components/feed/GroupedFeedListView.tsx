@@ -28,6 +28,7 @@ import {
   dndListProps,
   dragGroupOf,
   dragOverlayClass,
+  dragOverlayWrapperClass,
   expandDragGroup,
   flipId,
   noopSortingStrategy,
@@ -837,7 +838,7 @@ export function GroupedFeedListView({
         {topRows.length === 0 && activeItem && <UngroupedDropZone floating />}
 
         {surface.overlayActive && (
-        <DragOverlay dropAnimation={surface.dropAnimation}>
+        <DragOverlay className={dragOverlayWrapperClass} dropAnimation={surface.dropAnimation}>
           {overlayItem ? (
             <div
               className={cn(dragOverlayClass, 'relative bg-card')}

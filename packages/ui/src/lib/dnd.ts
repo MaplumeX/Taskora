@@ -29,6 +29,13 @@ export const dndListProps = { 'data-dnd-list': '' };
  */
 export const dragOverlayClass = 'pointer-events-none w-full overflow-hidden rounded-md shadow-row-lift';
 
+/**
+ * 浮层外壳（dnd-kit 的 fixed 定位 div，始终在指针正下方）不接收指针，
+ * 否则它挡住指针下方的元素：浮层渲染在哪里会影响下方是否出现 hover。
+ * 用法：<DragOverlay className={dragOverlayWrapperClass}>。
+ */
+export const dragOverlayWrapperClass = 'pointer-events-none';
+
 /** 松手时浮层飞回空位的动画（与 FLIP 位移同一时长与曲线）。 */
 export const dropAnimation: DropAnimation = {
   duration: 200,

@@ -56,6 +56,7 @@ import {
   dndListProps,
   dragGroupOf,
   dragOverlayClass,
+  dragOverlayWrapperClass,
   expandDragGroup,
   useCollapseAfterDragStart,
   useFlipList,
@@ -564,7 +565,7 @@ export default function Upcoming() {
             })}
           </div>
           {surface.overlayActive && (
-          <DragOverlay dropAnimation={surface.dropAnimation}>
+          <DragOverlay className={dragOverlayWrapperClass} dropAnimation={surface.dropAnimation}>
             {activeTask && (
               <div
                 className={`${dragOverlayClass} relative bg-card`}

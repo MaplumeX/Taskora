@@ -28,6 +28,7 @@ import { SIDEBAR_AUTO_SCROLL, useDndSurface } from '../../lib/appDnd';
 import {
   dndListProps,
   dragOverlayClass,
+  dragOverlayWrapperClass,
   flipId,
   noopSortingStrategy,
   useFlipList,
@@ -466,7 +467,7 @@ export function SidebarProjectSection({
         </SortableContext>
       </div>
       {surface.overlayActive && (
-        <DragOverlay dropAnimation={surface.dropAnimation}>
+        <DragOverlay className={dragOverlayWrapperClass} dropAnimation={surface.dropAnimation}>
           {activeProject ? (
             <div
               className={cn(dragOverlayClass, 'bg-sidebar')}

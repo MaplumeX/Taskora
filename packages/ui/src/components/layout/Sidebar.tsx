@@ -14,6 +14,7 @@ import { sidebarDropOverClass, sidebarRowClass } from '@/components/layout/sideb
 import { useBucketCounts } from '@/components/layout/useBucketCounts';
 import type { SidebarDropTarget } from '@/components/layout/sidebarDrop';
 import { useSidebarDropArea, useSidebarDropTarget } from '../../lib/appDnd';
+import { dndListProps } from '../../lib/dnd';
 
 /** 侧边栏主导航（日志移至与废纸篓同一分组） */
 const SIDEBAR_MAIN_NAV = mainNav.filter((item) => item.to !== '/logbook');
@@ -61,7 +62,9 @@ const NavRow = ({ item, count }: { item: NavItem; count?: number }) => {
     <NavLink
       ref={drop.setNodeRef}
       to={item.to}
-      className={({ isActive }) => sidebarRowClass(isActive, drop.isOver ? sidebarDropOverClass : undefined)}
+      className={({ isActive }) =>
+        sidebarRowClass(isActive, drop.isOver ? sidebarDropOverClass : undefined)
+      }
     >
       <Icon className={cn('h-4 w-4 shrink-0', item.colorClass)} />
       <span className="truncate">{t(item.labelKey)}</span>
@@ -139,7 +142,9 @@ export function Sidebar() {
       </div>
 
       <ScrollArea className="flex-1 px-2">
-        <div ref={dropArea.setContentRef}>
+        {/* 拖拽中侧边栏不响应指针（同可拖拽列表，见 styles/tokens.css）：不接收
+            被拖条目的行没有任何反应，可接收的行只显示落点高亮。 */}
+        <div ref={dropArea.setContentRef} {...dndListProps}>
           {/* 助手：顶部独立分组 */}
           <div className="flex flex-col gap-px">
             {SIDEBAR_ASSISTANT_NAV.map((item) => (

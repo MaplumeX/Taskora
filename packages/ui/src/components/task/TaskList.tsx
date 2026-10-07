@@ -20,6 +20,7 @@ import {
   dndListProps,
   dragGroupOf,
   dragOverlayClass,
+  dragOverlayWrapperClass,
   expandDragGroup,
   useCollapseAfterDragStart,
   useHeldOrder,
@@ -230,7 +231,7 @@ onReorder,
         </div>
       </SortableContext>
       {surface.overlayActive && (
-        <DragOverlay dropAnimation={surface.dropAnimation}>
+        <DragOverlay className={dragOverlayWrapperClass} dropAnimation={surface.dropAnimation}>
           {activeTask ? (
             <div
               className={cn(dragOverlayClass, 'relative bg-card')}
