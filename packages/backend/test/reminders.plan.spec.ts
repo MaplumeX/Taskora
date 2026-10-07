@@ -99,7 +99,7 @@ describe('RemindersService.plan — hub 按共享规则计算完整提醒计划'
     };
   }
 
-  it('账户时区换算触发时刻，附文案，返回计算前的 cursor', async () => {
+  it('账号时区换算触发时刻，附文案，返回计算前的 cursor', async () => {
     const findMany = vi.fn().mockResolvedValue([
       taskRow({
         id: 't1',

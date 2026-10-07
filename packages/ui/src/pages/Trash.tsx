@@ -32,7 +32,7 @@ import { PageHeading } from '@/components/layout/PageHeading';
 
 /**
  * Trash（对齐 Things 3）：条目与其他视图同样呈现、同样可编辑；独有的只有
- * 菜单「放回」与「清空废纸篓」。改状态留在 Trash，改日期 / 归属 / 标签等
+ * 菜单「放回」与「倾倒废纸篓」。改状态留在 Trash，改日期 / 归属 / 标签等
  * 即放回（数据层规则，spec: trash-things3）。
  */
 export default function Trash() {

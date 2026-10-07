@@ -325,35 +325,44 @@ describe('useUpdateTask (optimistic)', () => {
 describe('useCreateTask (optimistic)', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('optimistically prepends temp item to list, replaces with real on success', async () => {
+  it('optimistically appends temp item to list, replaces with real on success', async () => {
     const realTask: TaskResponseDto = {
       ...baseTask,
       id: 'task-real',
       title: 'New Task',
     };
-    vi.mocked(createTask).mockResolvedValue(realTask);
+    let resolveCreate: (task: TaskResponseDto) => void = () => {};
+    vi.mocked(createTask).mockImplementation(
+      () =>
+        new Promise<TaskResponseDto>((resolve) => {
+          resolveCreate = resolve;
+        }),
+    );
     const { wrapper, queryClient } = createWrapper();
-    queryClient.setQueryData(taskKeys.list({ view: 'today' }), []);
+    queryClient.setQueryData(taskKeys.list({ view: 'today' }), [baseTask]);
 
     const { result } = renderHook(() => useCreateTask(), { wrapper });
 
     result.current.mutate({ title: 'New Task' });
 
-    // Immediately has a temp item
+    // The temp item appears after the existing task while creation is pending.
     await waitFor(() => {
       const listData = queryClient.getQueryData<TaskResponseDto[]>(
         taskKeys.list({ view: 'today' }),
       );
-      expect(listData).toHaveLength(1);
-      expect(listData?.[0].title).toBe('New Task');
+      expect(listData).toHaveLength(2);
+      expect(listData?.[0]).toEqual(baseTask);
+      expect(listData?.[1].title).toBe('New Task');
+      expect(listData?.[1].id).not.toBe(realTask.id);
     });
 
     // After success, temp is replaced with real
+    resolveCreate(realTask);
     await waitFor(() => {
       const listData = queryClient.getQueryData<TaskResponseDto[]>(
         taskKeys.list({ view: 'today' }),
       );
-      expect(listData?.[0].id).toBe('task-real');
+      expect(listData).toEqual([baseTask, realTask]);
     });
   });
 
@@ -372,7 +381,7 @@ describe('useCreateTask (optimistic)', () => {
 
   it('does not duplicate when a concurrent cache update already flushed the temp row', async () => {
     // 桌面 engine 写后失效 / SSE 缓存手术：mutation 在途时，
-    // 并发 refetch 可能已把 temp 行冲成真实行。onSuccess 若仍盲目前插，
+    // 并发 refetch 可能已把 temp 行冲成真实行。onSuccess 若仍盲目追加，
     // 会产生同 id 重复条目（React duplicate key → 展开行卸载重建 →
     // 新建任务的标题输入框丢焦）。回归：幂等去重，只保留一行。
     const realTask: TaskResponseDto = {
@@ -401,7 +410,7 @@ describe('useCreateTask (optimistic)', () => {
     });
 
     // 模拟并发缓存更新：temp 被冲掉，列表已含真实行
-    queryClient.setQueryData(taskKeys.list({ view: 'today' }), [realTask, baseTask]);
+    queryClient.setQueryData(taskKeys.list({ view: 'today' }), [baseTask, realTask]);
 
     // mutationFn 返回真实行（onSuccess 接手）
     resolveCreate(realTask);
@@ -413,6 +422,7 @@ describe('useCreateTask (optimistic)', () => {
       expect(listData).toHaveLength(2);
       expect(listData?.filter((t) => t.id === 'task-real')).toHaveLength(1);
       expect(listData?.filter((t) => t.id === baseTask.id)).toHaveLength(1);
+      expect(listData).toEqual([baseTask, realTask]);
     });
   });
 });

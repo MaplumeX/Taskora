@@ -199,16 +199,19 @@ integrationDescribe('Change Events (service-level integration)', () => {
     const t3 = await tasks.create(userId, { title: 'r3' });
     await drain();
 
-    // 新建置顶：现序 t3 t2 t1。目标 t3 t1 t2 只需移动一行（t1 或 t2）
+    // 新建追加到末尾：现序 t1 t2 t3。目标 t3 t1 t2 只需移动 t3。
     await tasks.reorder(userId, [t3.id, t1.id, t2.id]);
     const single = await drainWhere((e) => e.entity === 'task' && e.action === 'updated');
     expect(single).toHaveLength(1);
-    expect([t1.id, t2.id]).toContain(single[0].id);
+    expect(single[0].id).toBe(t3.id);
+    expect((await tasks.findAll(userId, {})).map((task) => task.id)).toEqual([t3.id, t1.id, t2.id]);
 
-    // 整体倒序：保留最长有序子序列，其余逐行移动
-    await tasks.reorder(userId, [t1.id, t2.id, t3.id]);
+    // 将当前顺序整体倒序：保留最长有序子序列，其余两行移动。
+    await tasks.reorder(userId, [t2.id, t1.id, t3.id]);
     const batch = await drainWhere((e) => e.entity === 'task' && e.action === 'updated');
-    expect(batch.length).toBeGreaterThan(0);
+    expect(batch).toHaveLength(2);
+    expect(new Set(batch.map((event) => event.id)).size).toBe(2);
+    expect((await tasks.findAll(userId, {})).map((task) => task.id)).toEqual([t2.id, t1.id, t3.id]);
     expectSeqsMonotonic(batch);
   });
 

@@ -10,7 +10,7 @@ import { HeadingStatus, ScheduledType, TaskBucket, TaskStatus } from '@taskora/s
 
 import { useProjectUiPrefsStore } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
-import { ProjectCompletedTasks } from './ProjectCompletedTasks';
+import { ProjectSettledTasks } from './ProjectSettledTasks';
 
 vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -155,7 +155,7 @@ function makeHeading(overrides: Partial<ProjectHeadingResponseDto> = {}): Projec
 
 /* ------------- tests ------------- */
 
-describe('ProjectCompletedTasks', () => {
+describe('ProjectSettledTasks', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     // reset persisted prefs store + uiInteraction store
@@ -166,21 +166,21 @@ describe('ProjectCompletedTasks', () => {
     mockHeadingMutations();
   });
 
-  it('renders nothing when there are no completed tasks', () => {
+  it('renders nothing when there are no settled tasks', () => {
     mockQuery([]);
     mockUncomplete();
     const { container } = withQueryClient(
-      <ProjectCompletedTasks projectId="project-1" />,
+      <ProjectSettledTasks projectId="project-1" />,
     );
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders toggle bar with count when there are completed tasks', () => {
+  it('renders toggle bar with count when there are settled tasks', () => {
     mockQuery([makeTask({ id: 't1' }), makeTask({ id: 't2' })]);
     mockUncomplete();
-    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+    withQueryClient(<ProjectSettledTasks projectId="project-1" />);
 
-    expect(screen.getByText(/Completed|已完成/)).toBeInTheDocument();
+    expect(screen.getByText(/Settled|已了结/)).toBeInTheDocument();
     expect(screen.getByText('2')).toBeInTheDocument();
   });
 
@@ -188,7 +188,7 @@ describe('ProjectCompletedTasks', () => {
     const user = userEvent.setup();
     mockQuery([makeTask({ id: 't1', title: 'Task A' })]);
     mockUncomplete();
-    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+    withQueryClient(<ProjectSettledTasks projectId="project-1" />);
 
     // collapsed by default — task not visible
     expect(screen.queryByText('Task A')).not.toBeInTheDocument();
@@ -210,7 +210,7 @@ describe('ProjectCompletedTasks', () => {
     const user = userEvent.setup();
     mockQuery([makeTask({ id: 't1', title: 'Task A' })]);
     mockUncomplete();
-    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+    withQueryClient(<ProjectSettledTasks projectId="project-1" />);
 
     await user.click(screen.getByRole('button', { expanded: false }));
 
@@ -223,7 +223,7 @@ describe('ProjectCompletedTasks', () => {
     const user = userEvent.setup();
     mockQuery([makeTask({ id: 't1', title: 'Task A' })]);
     const { mutate } = mockUncomplete();
-    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+    withQueryClient(<ProjectSettledTasks projectId="project-1" />);
 
     // expand
     await user.click(screen.getByRole('button', { expanded: false }));
@@ -239,7 +239,7 @@ describe('ProjectCompletedTasks', () => {
     const user = userEvent.setup();
     mockQuery([makeTask({ id: 't1', title: 'Task A' })]);
     mockUncomplete();
-    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+    withQueryClient(<ProjectSettledTasks projectId="project-1" />);
 
     await user.click(screen.getByRole('button', { expanded: false }));
 
@@ -252,7 +252,7 @@ describe('ProjectCompletedTasks', () => {
     mockQuery([], { isLoading: true });
     mockUncomplete();
     const { container } = withQueryClient(
-      <ProjectCompletedTasks projectId="project-1" />,
+      <ProjectSettledTasks projectId="project-1" />,
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -261,22 +261,26 @@ describe('ProjectCompletedTasks', () => {
     mockQuery([], { isError: true });
     mockUncomplete();
     const { container } = withQueryClient(
-      <ProjectCompletedTasks projectId="project-1" />,
+      <ProjectSettledTasks projectId="project-1" />,
     );
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('filters out non-COMPLETED and trashed tasks', () => {
+  it('includes completed and cancelled tasks under Settled, excluding active and trashed tasks', async () => {
     mockQuery([
       makeTask({ id: 't1', title: 'Completed' }),
       makeTask({ id: 't2', title: 'Active', status: TaskStatus.ACTIVE }),
       makeTask({ id: 't3', title: 'Trashed', trashedAt: '2025-08-09T00:00:00.000Z' }),
+      makeTask({ id: 't4', title: 'Cancelled', status: TaskStatus.CANCELLED }),
     ]);
     mockUncomplete();
-    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+    withQueryClient(<ProjectSettledTasks projectId="project-1" />);
 
-    // count should be 1 (only the COMPLETED, non-trashed task)
-    expect(screen.getByText('1')).toBeInTheDocument();
+    expect(screen.getByText(/Settled|已了结/)).toBeInTheDocument();
+    expect(screen.getByText('2')).toBeInTheDocument();
+    await userEvent.setup().click(screen.getByRole('button', { expanded: false }));
+    expect(screen.getByText('Completed')).toBeInTheDocument();
+    expect(screen.getByText('Cancelled')).toBeInTheDocument();
     expect(screen.queryByText('Active')).not.toBeInTheDocument();
     expect(screen.queryByText('Trashed')).not.toBeInTheDocument();
   });
@@ -298,7 +302,7 @@ describe('ProjectCompletedTasks', () => {
       }),
     ]);
     mockUncomplete();
-    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+    withQueryClient(<ProjectSettledTasks projectId="project-1" />);
 
     await user.click(screen.getByRole('button', { expanded: false }));
 
@@ -323,7 +327,7 @@ describe('ProjectCompletedTasks', () => {
       // grouped under h-2 (empty of tasks, heading still shows)
     ]);
     mockUncomplete();
-    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+    withQueryClient(<ProjectSettledTasks projectId="project-1" />);
 
     // count = 3 tasks + 2 archived headings = 5
     expect(screen.getByText('5')).toBeInTheDocument();
@@ -350,13 +354,13 @@ describe('ProjectCompletedTasks', () => {
     expect(grouped1.compareDocumentPosition(sprint2)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
-  it('displays archived heading even when it has no completed tasks', async () => {
+  it('displays archived heading even when it has no settled tasks', async () => {
     const user = userEvent.setup();
     const archivedHeading = makeHeading({ id: 'h-empty', title: 'Empty archive' });
     mockHeadings([archivedHeading]);
     mockQuery([]);
     mockUncomplete();
-    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+    withQueryClient(<ProjectSettledTasks projectId="project-1" />);
 
     // count = 0 tasks + 1 archived heading = 1
     expect(screen.getByText('1')).toBeInTheDocument();
@@ -373,13 +377,13 @@ describe('ProjectCompletedTasks', () => {
     mockQuery([makeTask({ id: 't-1', title: 'Task', headingId: 'h-1' })]);
     const { unarchiveMutate } = mockHeadingMutations();
     mockUncomplete();
-    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+    withQueryClient(<ProjectSettledTasks projectId="project-1" />);
 
     await user.click(screen.getByRole('button', { expanded: false }));
 
     // open the archived heading's dropdown menu (now via ProjectHeadingRow)
     await user.click(
-      screen.getByRole('button', { name: /Heading actions|标题操作/ }),
+      screen.getByRole('button', { name: /Heading actions|项目分组标题操作/ }),
     );
 
     // click unarchive menu item
@@ -396,11 +400,11 @@ describe('ProjectCompletedTasks', () => {
     );
   });
 
-  it('renders nothing when there are no completed tasks and no archived headings', () => {
+  it('renders nothing when there are no settled tasks and no archived headings', () => {
     mockQuery([]);
     mockUncomplete();
     const { container } = withQueryClient(
-      <ProjectCompletedTasks projectId="project-1" />,
+      <ProjectSettledTasks projectId="project-1" />,
     );
     expect(container).toBeEmptyDOMElement();
   });
@@ -411,7 +415,7 @@ describe('ProjectCompletedTasks', () => {
     const user = userEvent.setup();
     mockQuery([makeTask({ id: 't1', title: 'Editable task' })]);
     mockUncomplete();
-    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+    withQueryClient(<ProjectSettledTasks projectId="project-1" />);
 
     await user.click(screen.getByRole('button', { expanded: false }));
 
@@ -434,7 +438,7 @@ describe('ProjectCompletedTasks', () => {
     mockQuery([makeTask({ id: 't-1', title: 'Task', headingId: 'h-1' })]);
     mockHeadingMutations();
     mockUncomplete();
-    withQueryClient(<ProjectCompletedTasks projectId="project-1" />);
+    withQueryClient(<ProjectSettledTasks projectId="project-1" />);
 
     await user.click(screen.getByRole('button', { expanded: false }));
 

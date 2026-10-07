@@ -26,7 +26,7 @@ export type TranslateFn = (key: string, options?: Record<string, unknown>) => st
 export interface StatusBarControllerOptions {
   shell: StatusBarShell;
   t: TranslateFn;
-  /** Today 口径未完成任务（计划日期 ≤ 今天，含逾期）。 */
+  /** Today 口径未完成任务（计划日期 ≤ 今天，含计划日期已过的任务）。 */
   listTodayTasks(): Promise<StatusBarTaskInput[]>;
   /**
    * 快速添加落库（共用的 createFromQuickAddDraft：校验引用、缺省进 Inbox）。

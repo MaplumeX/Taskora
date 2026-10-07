@@ -150,7 +150,7 @@ export default function SettingsAccount() {
   );
 
   if (mobileNav) {
-    // 窄屏：分组单元格；登出与删除账户为底部红字行
+    // 窄屏：分组单元格；登出与删除账号为底部红字行
     return (
       <SettingsPage>
         <form onSubmit={handleProfileSubmit}>
@@ -320,7 +320,7 @@ export default function SettingsAccount() {
 
       <Separator className="my-8" />
 
-      {/* 账户删除区 */}
+      {/* 账号删除区 */}
       <div className="flex flex-col gap-4">
         <h2 className="text-sm font-medium text-destructive">{t('settings:deleteAccount')}</h2>
         <p className="text-sm text-muted-foreground">{t('settings:deleteAccountDescription')}</p>

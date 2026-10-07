@@ -141,7 +141,7 @@ function startOfIsoWeek(date: Date): Date {
  * 下一次出现日期。
  *
  * - anchor=scheduled：从 scheduledDate 推进（固定节奏：房租/例会不漂移），
- *   逾期结果保留计算值（落 Today 由视图口径表达）；
+ *   已过的计划日期保留计算值（落 Today 由视图口径表达）；
  * - anchor=completion：从 settledAt（了结时刻的账号时区日）推进（间隔型：
  *   换床单/备份从实际完成时算起）；settledAt 缺失时退回 scheduledDate；
  * - 结果超过 until（不含当天）→ null：链终止，不派生实例；
@@ -201,7 +201,7 @@ export function nextOccurrenceDate(
  *
  * - anchor=scheduled：从 scheduledDate 沿链反复推进，取第一个晚于原计划日
  *   且不早于今天（账号时区）的出现日——计划在今天或未来时即严格下一次，
- *   已逾期多轮时跳过全部错过的；
+ *   已错过多轮计划日期时跳过全部错过的；
  * - anchor=completion：以今天为锚推进一次（等同「今天完成」时的下一次）；
  * - 链在此之前终结（until）→ null：无可跳到的日期。
  */

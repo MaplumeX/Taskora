@@ -122,7 +122,7 @@ async function mount() {
       <QueryClientProvider client={queryClient}>
         {/* 原生窗口装饰：App 直接铺满视口（h-dvh），与 web 端一致。 */}
         <App />
-        <Toaster richColors position="top-center" />
+        <Toaster position="top-center" />
       </QueryClientProvider>
     </React.StrictMode>,
   );

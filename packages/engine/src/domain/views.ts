@@ -34,7 +34,7 @@ export interface TaskViewFields extends ViewFields {
   bucket: unknown;
 }
 
-/** 只有 Today / Upcoming 依赖「今天」：其余视图不必查账户时区。 */
+/** 只有 Today / Upcoming 依赖「今天」：其余视图不必查账号时区。 */
 export function viewNeedsCalendar(view: string | undefined): boolean {
   return view === 'today' || view === 'upcoming';
 }

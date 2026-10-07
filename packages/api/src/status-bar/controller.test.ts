@@ -139,13 +139,13 @@ describe('createStatusBarController', () => {
 
   it('开启并登录：发布首条任务标题（多条带位置指示）', async () => {
     const h = installHarness({
-      tasks: [task('今天一', TODAY, 'a1'), task('逾期', YESTERDAY), task('今天二', TODAY, 'a2')],
+      tasks: [task('今天一', TODAY, 'a1'), task('计划日期已过', YESTERDAY), task('今天二', TODAY, 'a2')],
     });
     h.controller.syncSession(true);
     expect(await h.controller.setEnabled(true)).toBe(true);
     await flush();
-    // 逾期排最前
-    expect(h.shell.posted.at(-1)).toEqual({ title: '9/24 · 逾期 (1/3)' });
+    // 计划日期已过排最前
+    expect(h.shell.posted.at(-1)).toEqual({ title: '9/24 · 计划日期已过 (1/3)' });
   });
 
   it('开启等待原生发布成功后才保存已开启状态', async () => {

@@ -12,12 +12,15 @@ const baseActions = {
   showAddTask: true,
   showAddProject: false,
   showAddHeading: false,
+  showAddArea: false,
   handleAddTask: vi.fn(),
   handleAddProject: vi.fn(),
   handleAddHeading: vi.fn(),
+  handleAddArea: vi.fn(),
   addTaskPending: false,
   addProjectPending: false,
   addHeadingPending: false,
+  addAreaPending: false,
 };
 
 import { useContentBottomActionsForRoute } from '@taskora/api';
@@ -66,5 +69,19 @@ describe('MobileFab', () => {
     await userEvent.click(screen.getByRole('button'));
     const items = await screen.findAllByRole('menuitem');
     expect(items).toHaveLength(2);
+  });
+
+  it('home: menu offers new task, project and area', async () => {
+    mockHook.mockReturnValue({
+      ...baseActions,
+      showAddProject: true,
+      showAddArea: true,
+    } as never);
+    renderFab();
+    await userEvent.click(screen.getByRole('button'));
+    const items = await screen.findAllByRole('menuitem');
+    expect(items).toHaveLength(3);
+    await userEvent.click(screen.getByRole('menuitem', { name: /area|区域/i }));
+    expect(baseActions.handleAddArea).toHaveBeenCalled();
   });
 });

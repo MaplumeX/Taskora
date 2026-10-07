@@ -10,7 +10,7 @@ interface Props {
  * Task 行上的计划日期 chip——参考 Things 3:
  * 圆角灰底胶囊 + 短绝对日期（"Sep 2"），无图标，放在复选框与标题之间；
  * 相对日期（Today/Tomorrow/星期几）只留给分组标题（Upcoming）。
- * 仅用于未来日期；≤ 今天（含逾期）由 TaskTodayBadge 黄星表达——
+ * 仅用于未来日期；≤ 今天（含计划日期已过的任务）由 TaskTodayBadge 黄星表达——
  * When 是计划开始日、永不逾期，红色警示只属于 Deadline。
  */
 export function TaskDateBadge({ scheduledDate, className }: Props) {

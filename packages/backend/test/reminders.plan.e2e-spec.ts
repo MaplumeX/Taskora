@@ -74,7 +74,7 @@ e2eDescribe('GET /reminders/plan (e2e)', () => {
     return fetch(`${baseUrl}/reminders/plan`, { headers: { Authorization: `Bearer ${token}` } });
   }
 
-  it('后台凭据读到按账户时区换算、带文案的完整计划', async () => {
+  it('后台凭据读到按账号时区换算、带文案的完整计划', async () => {
     const project = await prisma.project.create({ data: { userId, title: '发布' } });
     await prisma.task.create({
       data: {

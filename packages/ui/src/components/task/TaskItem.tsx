@@ -110,7 +110,7 @@ export function TaskItem({
     const id = window.setTimeout(() => setDetailsMounted(false), EXPAND_MS);
     return () => window.clearTimeout(id);
   }, [expanded]);
-  // When ≤ 今天（含逾期）视为「今天」语义：非语境视图显示黄星（参考
+  // When ≤ 今天（含计划日期已过的任务）视为「今天」语义：非语境视图显示黄星（参考
   // Things 3 的 Anytime 黄星），语境视图（Today/Upcoming）由列表本身
   // 表达语境、行上不再标记。When 永不逾期，红色只属于 Deadline。
   const scheduledOnOrBeforeToday = current.scheduledDate

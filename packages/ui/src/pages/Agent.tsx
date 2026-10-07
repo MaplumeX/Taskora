@@ -30,7 +30,7 @@ export default function AgentPage() {
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      {/* 极简 header：（手机端返回）+ 会话抽屉入口 + 当前标题 + 新建 */}
+      {/* 极简 header：（手机端返回）+ 对话抽屉入口 + 当前标题 + 新建 */}
       <header className="flex h-12 shrink-0 items-center gap-1 border-b border-border px-2 md:px-3">
         <MobileBackButton className="-ml-1" />
         <Button
@@ -79,7 +79,7 @@ export default function AgentPage() {
         )}
       </div>
 
-      {/* 会话抽屉：按需召唤，切换后自动关闭 */}
+      {/* 对话抽屉：按需召唤，切换后自动关闭 */}
       <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
         <DrawerContent>
           <DrawerTitle>{t('agent:conversations')}</DrawerTitle>

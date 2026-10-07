@@ -92,7 +92,7 @@ import {
   taskRowToDto,
 } from './mappers';
 
-/** 账户时区（用户偏好）：日历日期的解读与「今天」。 */
+/** 账号时区（用户偏好）：日历日期的解读与「今天」。 */
 function zones(): CalendarZones {
   return { timeZone: currentTimeZone(), legacyDateTimeZone: currentLegacyDateTimeZone() };
 }
@@ -371,11 +371,11 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     // ---------- 写（全部本地，进 Outbox） ----------
 
     async createTask(data: CreateTaskDto): Promise<TaskResponseDto> {
-      // 新任务插在最前（newest-first）：只需要当前首行的位次
-      const existing = await engine.list('task', { limit: 1 });
+      // 新任务追加到末尾，沿用现有任务的 Position 顺序。
+      const existing = await engine.list('task');
       const id = await engine.create('task', {
         ...planTaskCreate(data, zones()),
-        position: positionAfter(existing, null),
+        position: positionAtEnd(positionedRows(existing)),
       });
       return taskDto(id);
     },

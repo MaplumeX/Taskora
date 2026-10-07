@@ -105,7 +105,7 @@ function TimeZonePicker({
 /**
  * 「通用」设置页。
  *
- * - 「在时间视图中按项目/领域分组任务」：全平台可见，随用户偏好跨设备同步
+ * - 「在时间视图中按项目/区域分组任务」：全平台可见，随用户偏好跨设备同步
  *   （与主题/语言同一管线）。
  * - 「登录时自动启动」：仅桌面端（Tauri）渲染，经壳层 launch_at_login
  *   命令读写（见 invokeShell）。
@@ -304,7 +304,7 @@ export default function SettingsGeneral() {
         <p className="text-sm text-muted-foreground">{t('settings:timeZoneHint')}</p>
       </div>
 
-      {/* 在时间视图中按项目/领域分组任务 */}
+      {/* 在时间视图中按项目/区域分组任务 */}
       <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between gap-4">
           <Label htmlFor="bucket-grouping">{t('settings:groupTasksByParent')}</Label>

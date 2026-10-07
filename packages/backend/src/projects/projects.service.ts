@@ -223,7 +223,7 @@ export class ProjectsService {
     completedAt: string,
   ): Promise<void> {
     const repeatRule = parseRepeatRule(parent.repeatRule);
-    if (!repeatRule) return; // 非重复项目：不必查账户时区
+    if (!repeatRule) return; // 非重复项目：不必查账号时区
     const plan = planRepeatProjectInstance(
       {
         id: parent.id,
