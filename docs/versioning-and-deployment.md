@@ -78,6 +78,8 @@ CI 按 tag 自动接管：`v*` 同时触发 `release.yml`（推双镜像）、
 - **构建**：`android-release.yml` 在 `v*` tag 触发，release keystore 经 secrets 注入；签名密钥不轮换（轮换会迫使所有用户卸载重装、丢失本地 Local Replica）。
 - **版本号**：沿用 monorepo 单轨版本号；Android `versionCode` 由 Tauri 从 version 派生（`major*1000000+minor*1000+patch`），随版本单调递增，无需手动维护。
 - **无自动更新**：与桌面端一致，用户手动下载新 APK 覆盖安装（依赖同一签名密钥）。
+- **构建回归**：PR / main CI 除 Rust 检查外，生成真实 Tauri Android 工程并构建 arm64 未签名 release APK，覆盖插件 Manifest 合并、Kotlin 编译及打包，不使用发布密钥。
+- **缺失 APK 的补发**：若某版本只有 Android 构建失败，先将同版本的最小修复通过 PR / CI 合入 `main`，再执行 `gh workflow run android-release.yml --ref main -f release_tag=vX.Y.Z`。仅允许 `main` 上版本一致、旧 tag 为当前提交祖先且现有 Release 没有 APK 时运行；不移动 tag、不覆盖已有 APK、不重发桌面或镜像。附件 `Taskora-vX.Y.Z-android-build.json` 记录 tag 提交、实际构建提交和 Actions 链接，明确补发 APK 的源码出处。已有 APK 或版本已经升级时走正常新版本发布，不使用此入口替换。
 
 ## 三、分支策略
 
