@@ -8,6 +8,14 @@ import type { AreaResponseDto, UpdateAreaDto } from '@taskora/shared';
 
 import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { MenuRow } from '@/components/common/MenuRow';
 import { useDeleteArea, useUpdateArea } from '@taskora/api';
 import { TagsField } from '@/components/task/fields/TagsField';
@@ -45,11 +53,13 @@ function AreaMenu({
 }) {
   const { t } = useTranslation('task');
   const { t: tc } = useTranslation('common');
+  const { t: ta } = useTranslation('area');
   const navigate = useNavigate();
   const updateArea = useUpdateArea();
   const deleteArea = useDeleteArea();
 
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [confirmOpen, setConfirmOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
 
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -72,9 +82,10 @@ function AreaMenu({
   };
 
   const handleDelete = () => {
-    closeMenu();
+    if (deleteArea.isPending) return;
     deleteArea.mutate(area.id, {
       onSuccess: () => {
+        setConfirmOpen(false);
         if (!contextMenu) navigate('/today');
       },
       onError: () => toast.error(tc('deleteFailed')),
@@ -121,7 +132,14 @@ function AreaMenu({
             {t('tags')}
           </MenuRow>
           <div className="-mx-1 my-1 h-px bg-muted" />
-          <MenuRow icon={Trash2} destructive onClick={handleDelete}>
+          <MenuRow
+            icon={Trash2}
+            destructive
+            onClick={() => {
+              closeMenu();
+              setConfirmOpen(true);
+            }}
+          >
             {tc('delete')}
           </MenuRow>
         </PopoverContent>
@@ -133,6 +151,29 @@ function AreaMenu({
           {activePicker === 'tags' && <TagsField current={area} onPatch={handlePatch} />}
         </PopoverContent>
       </Popover>
+
+      <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <DialogContent onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>
+              {ta('deleteConfirmTitle', { name: area.title || ta('newItemPlaceholder') })}
+            </DialogTitle>
+            <DialogDescription>{ta('deleteConfirmDescription')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              disabled={deleteArea.isPending}
+              onClick={() => setConfirmOpen(false)}
+            >
+              {tc('cancel')}
+            </Button>
+            <Button variant="destructive" disabled={deleteArea.isPending} onClick={handleDelete}>
+              {tc('delete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

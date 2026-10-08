@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, within } from '@testing-library/react';
+import { toast } from 'sonner';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -12,6 +13,7 @@ import { AreaMoreMenu } from '../area/AreaMoreMenu';
 const mutations = vi.hoisted(() => ({
   complete: vi.fn(),
   deleteArea: vi.fn(),
+  deleteAreaPending: false,
   updateArea: vi.fn(),
 }));
 vi.mock('@taskora/api', async (importOriginal) => ({
@@ -22,7 +24,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useRestoreProject: () => ({ mutate: vi.fn() }),
   useUpdateProject: () => ({ mutate: vi.fn() }),
   useSkipProject: () => ({ mutate: vi.fn() }),
-  useDeleteArea: () => ({ mutate: mutations.deleteArea }),
+  useDeleteArea: () => ({ mutate: mutations.deleteArea, isPending: mutations.deleteAreaPending }),
   useUpdateArea: () => ({ mutate: mutations.updateArea }),
   useTagsQuery: () => ({
     data: [{ id: 'tag-1', title: 'Important', color: null, parentId: null }],
@@ -70,7 +72,10 @@ function renderHeader(content: React.ReactNode) {
   );
 }
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.resetAllMocks();
+  mutations.deleteAreaPending = false;
+});
 
 describe('Group Header context menus', () => {
   it('opens the real Project menu from the title and completes after confirming remaining tasks', async () => {
@@ -98,13 +103,22 @@ describe('Group Header context menus', () => {
     expect(screen.queryByTestId('area-detail')).not.toBeInTheDocument();
   });
 
-  it('deletes an Area from its header without forcing a navigation to Today', async () => {
+  it('confirms deletion of an Area from its header without forcing a navigation to Today', async () => {
     mutations.deleteArea.mockImplementation((_id, options) => options.onSuccess?.());
     renderHeader(<AreaGroupHeaderRow area={area} />);
     fireEvent.contextMenu(screen.getByRole('heading', { name: area.title }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    expect(mutations.deleteArea).not.toHaveBeenCalled();
+    const dialog = await screen.findByRole('dialog', { name: 'Delete area "Family"?' });
+    expect(dialog).toHaveAccessibleDescription(
+      'This permanently deletes the area and cannot be undone. Its projects and tasks will be kept, but will no longer belong to this area.',
+    );
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(mutations.deleteArea).toHaveBeenCalledTimes(1);
     expect(mutations.deleteArea).toHaveBeenCalledWith(area.id, expect.anything());
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByTestId('today')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('area-detail')).not.toBeInTheDocument();
   });
 
   it('preserves the Area detail more-menu entry and its post-delete navigation', async () => {
@@ -112,8 +126,83 @@ describe('Group Header context menus', () => {
     renderHeader(<AreaMoreMenu area={area} />);
     fireEvent.click(screen.getByRole('button', { name: 'More' }));
     fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    expect(mutations.deleteArea).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('today')).not.toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog', { name: 'Delete area "Family"?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(mutations.deleteArea).toHaveBeenCalledTimes(1);
     expect(mutations.deleteArea).toHaveBeenCalledWith(area.id, expect.anything());
     expect(screen.getByTestId('today')).toBeInTheDocument();
+  });
+
+  it.each(['detail', 'header'] as const)(
+    'does not delete from the Area %s when confirmation is canceled',
+    async (entry) => {
+      renderHeader(entry === 'detail' ? <AreaMoreMenu area={area} /> : <AreaGroupHeaderRow area={area} />);
+      const openMenu = () => {
+        if (entry === 'detail') fireEvent.click(screen.getByRole('button', { name: 'More' }));
+        else fireEvent.contextMenu(screen.getByRole('heading', { name: area.title }));
+      };
+      openMenu();
+      fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+      const dialog = await screen.findByRole('dialog');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(mutations.deleteArea).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('today')).not.toBeInTheDocument();
+
+      // Reopening the action must ask for confirmation again.
+      openMenu();
+      fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+      expect(await screen.findByRole('dialog')).toBeInTheDocument();
+      expect(mutations.deleteArea).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(['Escape', 'Close'])(
+    'does not delete when the confirmation is dismissed with %s',
+    async (dismiss) => {
+      renderHeader(<AreaMoreMenu area={area} />);
+      fireEvent.click(screen.getByRole('button', { name: 'More' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+      const dialog = await screen.findByRole('dialog');
+      if (dismiss === 'Escape') fireEvent.keyDown(dialog, { key: 'Escape' });
+      else fireEvent.click(within(dialog).getByRole('button', { name: 'Close' }));
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      expect(mutations.deleteArea).not.toHaveBeenCalled();
+      expect(screen.queryByTestId('today')).not.toBeInTheDocument();
+    },
+  );
+
+  it('disables the destructive confirmation while an Area deletion is pending', async () => {
+    mutations.deleteAreaPending = true;
+    renderHeader(<AreaMoreMenu area={area} />);
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog');
+    const confirm = within(dialog).getByRole('button', { name: 'Delete' });
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(mutations.deleteArea).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed Area deletion without navigating and allows a retry', async () => {
+    const errorToast = vi.spyOn(toast, 'error').mockImplementation(() => 'error-toast');
+    mutations.deleteArea.mockImplementationOnce((_id, options) => options.onError?.());
+    renderHeader(<AreaMoreMenu area={area} />);
+    fireEvent.click(screen.getByRole('button', { name: 'More' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(errorToast).toHaveBeenCalledWith('Failed to delete');
+    expect(dialog).toBeInTheDocument();
+    expect(screen.queryByTestId('today')).not.toBeInTheDocument();
+
+    mutations.deleteArea.mockImplementationOnce((_id, options) => options.onSuccess?.());
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    expect(mutations.deleteArea).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId('today')).toBeInTheDocument();
+    errorToast.mockRestore();
   });
 
   it('keeps the title link and progress checkbox as separate interactive controls', () => {

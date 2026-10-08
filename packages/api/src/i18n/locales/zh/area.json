@@ -5,5 +5,7 @@
   "titlePlaceholder": "区域名称",
   "defaultTitle": "区域",
   "created": "区域已创建",
+  "deleteConfirmTitle": "确认删除区域「{{name}}」？",
+  "deleteConfirmDescription": "区域将被永久删除，无法撤销。其中的项目和任务会保留，但不再归属该区域。",
   "newItemPlaceholder": "新建区域"
 }
