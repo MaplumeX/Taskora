@@ -7,7 +7,7 @@ Things 风格的任务管理器（Web + 桌面端），围绕 Areas / Projects /
 ### 任务组织
 
 **Area（区域）**:
-用户生活/工作中的顶级组织单位，Projects 与 Tasks 可归属其下。
+用户生活/工作中的顶级组织单位，Projects 与 Tasks 可归属其下。删除 Area 时 Area 本身物理删除（不进 Trash），其下的 Projects（连同其中的 Tasks）与直接归属的 Tasks 一并进 Trash；放回后不再归属任何 Area。
 _Avoid_: 领域、分类、category
 
 **Project**:

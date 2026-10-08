@@ -6,6 +6,6 @@
   "defaultTitle": "Area",
   "created": "Area created",
   "deleteConfirmTitle": "Delete area \"{{name}}\"?",
-  "deleteConfirmDescription": "This permanently deletes the area and cannot be undone. Its projects and tasks will be kept, but will no longer belong to this area.",
+  "deleteConfirmDescription": "This permanently deletes the area and cannot be undone. Its projects and tasks will be moved to the Trash.",
   "newItemPlaceholder": "New Area"
 }

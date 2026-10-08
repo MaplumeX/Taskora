@@ -28,6 +28,7 @@ import {
   positionAtEnd,
   positionAtStart,
   planProjectRestore,
+  planAreaDelete,
   planProjectTrash,
   planRepeatInstance,
   planRepeatSkip,
@@ -577,6 +578,28 @@ describe('级联规则', () => {
       { id: 'b', trashedAt: '2026-09-01T00:00:00.000Z' },
     ]);
     expect(restore.tasks).toEqual([{ id: 'a', patch: { trashedAt: null } }]);
+  });
+
+  it('删除区域：其下项目与任务进 Trash；已在 Trash 的项目及其任务不动', () => {
+    const earlier = '2026-09-01T00:00:00.000Z';
+    const plan = planAreaDelete(
+      now,
+      [
+        { id: 'p1', trashedAt: null },
+        { id: 'p2', trashedAt: earlier },
+      ],
+      [
+        { id: 'direct', projectId: null, trashedAt: null },
+        { id: 'direct-trashed', projectId: null, trashedAt: earlier },
+        { id: 'in-p1', projectId: 'p1', trashedAt: null },
+        { id: 'in-p2', projectId: 'p2', trashedAt: null },
+      ],
+    );
+    expect(plan.projects).toEqual([{ id: 'p1', patch: { trashedAt: now } }]);
+    expect(plan.tasks).toEqual([
+      { id: 'direct', patch: { trashedAt: now, reminderTime: null } },
+      { id: 'in-p1', patch: { trashedAt: now, reminderTime: null } },
+    ]);
   });
 
   it('清空 Trash：Trash 里的任务与项目，及 Trash 项目下的全部任务', () => {
