@@ -131,8 +131,12 @@ export function AppDndProvider({
   onSidebarDrop,
 }: {
   children: React.ReactNode;
-  /** 在可接收的侧边栏行上松手。 */
-  onSidebarDrop?: (payload: SidebarDropPayload, target: SidebarDropTarget) => void;
+  /** 在可接收的侧边栏行上松手；anchor 为该行的节点（落点后弹出卡片的锚点）。 */
+  onSidebarDrop?: (
+    payload: SidebarDropPayload,
+    target: SidebarDropTarget,
+    anchor: HTMLElement | null,
+  ) => void;
 }) {
   const surfacesRef = React.useRef(new Map<string, React.MutableRefObject<DndSurface>>());
   const activeRef = React.useRef<ActiveDrag | null>(null);
@@ -253,8 +257,10 @@ export function AppDndProvider({
     // 先取载荷（含多选整组），再让列表复位（会清掉它的拖拽状态）。
     const payload = surface.sidebarPayload?.(active.id) ?? null;
     const target = parseSidebarDropId(overId);
+    const data = event.over?.data?.current as SidebarDropData | undefined;
+    const anchor = data?.anchor.current ?? null;
     surface.onDragCancel?.();
-    if (payload && target) onSidebarDropRef.current?.(payload, target);
+    if (payload && target) onSidebarDropRef.current?.(payload, target, anchor);
   };
 
   const handleDragCancel = () => {
@@ -311,13 +317,26 @@ export function useDndSurface(surface: DndSurface) {
   } satisfies { overlayActive: boolean; dropAnimation: DropAnimation | null };
 }
 
+interface SidebarDropData {
+  anchor: React.MutableRefObject<HTMLElement | null>;
+}
+
 /** 侧边栏的一行作为 Sidebar Drop 落点；isOver 时该行可接收被拖条目。 */
 export function useSidebarDropTarget(target: SidebarDropTarget | null) {
   const fallbackId = React.useId();
-  const { setNodeRef, isOver } = useDroppable({
+  const anchor = React.useRef<HTMLElement | null>(null);
+  const { setNodeRef: setDroppableRef, isOver } = useDroppable({
     id: target ? sidebarDropId(target) : `not-a-drop-target:${fallbackId}`,
     disabled: !target,
+    data: { anchor } satisfies SidebarDropData,
   });
+  const setNodeRef = React.useCallback(
+    (node: HTMLElement | null) => {
+      anchor.current = node;
+      setDroppableRef(node);
+    },
+    [setDroppableRef],
+  );
   return { setNodeRef, isOver: !!target && isOver };
 }
 

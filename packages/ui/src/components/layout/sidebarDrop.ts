@@ -13,6 +13,8 @@ import { currentMoveTargetId, moveTargetDto } from '@/components/task/fields/mov
 export type SidebarDropTarget =
   | { kind: 'inbox' }
   | { kind: 'today' }
+  | { kind: 'upcoming' }
+  | { kind: 'anytime' }
   | { kind: 'someday' }
   | { kind: 'logbook' }
   | { kind: 'trash' }
@@ -55,7 +57,10 @@ export type SidebarDropAction =
   | { type: 'moveProjectToArea'; id: string; areaId: string }
   /** 完成项目（有未了结任务时沿用剩余任务询问）。 */
   | { type: 'completeProject'; id: string }
-  | { type: 'deleteProject'; id: string };
+  | { type: 'deleteProject'; id: string }
+  /** 条目不动，在落点行上弹出计划日期卡片，由用户选定日期。 */
+  | { type: 'pickTaskSchedule'; ids: string[] }
+  | { type: 'pickProjectSchedule'; id: string };
 
 const PREFIX = 'sidebar-drop:';
 
@@ -65,6 +70,8 @@ export const SIDEBAR_DROP_REGION_ID = `${PREFIX}region`;
 const SIMPLE_KINDS = new Set<SidebarDropTargetKind>([
   'inbox',
   'today',
+  'upcoming',
+  'anytime',
   'someday',
   'logbook',
   'trash',
@@ -117,6 +124,9 @@ function todayDto(today: string) {
 
 const SOMEDAY_DTO = { scheduledType: ScheduledType.SOMEDAY };
 
+/** 无计划（同计划卡片「清除」）；提醒与重复规则由数据层随之清除。 */
+const NO_SCHEDULE_DTO = { scheduledType: ScheduledType.NONE, scheduledDate: null };
+
 function planTask(task: DropTask, target: SidebarDropTarget, today: string): SidebarDropAction[] {
   const update = (data: UpdateTaskDto): SidebarDropAction[] => [
     { type: 'updateTask', id: task.id, data },
@@ -135,8 +145,15 @@ function planTask(task: DropTask, target: SidebarDropTarget, today: string): Sid
         : update({ projectId: target.projectId, areaId: null });
     case 'today':
       return scheduledOn(task, today) ? [] : update(todayDto(today));
+    case 'anytime':
+      // 无计划、且已离开 Inbox（有归属，或无归属时选择了 Anytime）即已在 Anytime。
+      return task.scheduledType === ScheduledType.NONE && task.bucket === TaskBucket.ANYTIME
+        ? []
+        : update({ ...NO_SCHEDULE_DTO, bucket: TaskBucket.ANYTIME });
     case 'someday':
       return task.scheduledType === ScheduledType.SOMEDAY ? [] : update(SOMEDAY_DTO);
+    case 'upcoming':
+      return [];
     case 'logbook':
       return task.status === TaskStatus.ACTIVE ? [{ type: 'completeTask', id: task.id }] : [];
     case 'trash':
@@ -159,6 +176,12 @@ function planProject(
       return scheduledOn(project, today)
         ? []
         : [{ type: 'updateProject', id, data: todayDto(today) }];
+    case 'upcoming':
+      return [{ type: 'pickProjectSchedule', id }];
+    case 'anytime':
+      return project.scheduledType === ScheduledType.NONE
+        ? []
+        : [{ type: 'updateProject', id, data: NO_SCHEDULE_DTO }];
     case 'someday':
       return project.scheduledType === ScheduledType.SOMEDAY
         ? []
@@ -184,6 +207,10 @@ export function planSidebarDrop(
 ): SidebarDropAction[] | null {
   if (!sidebarDropAccepts(payload.kind, target.kind)) return null;
   if (payload.kind === 'project') return planProject(payload.project, target, today);
+  // 计划：整组共用一张计划日期卡片。
+  if (target.kind === 'upcoming') {
+    return [{ type: 'pickTaskSchedule', ids: payload.tasks.map((task) => task.id) }];
+  }
   return payload.tasks.flatMap((task) => planTask(task, target, today));
 }
 

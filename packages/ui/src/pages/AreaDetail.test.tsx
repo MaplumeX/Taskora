@@ -176,6 +176,7 @@ describe('AreaDetail later projects', () => {
     expect(harness.sidebarDrop).toHaveBeenCalledWith(
       { kind: 'project', project: expect.objectContaining({ id: 'a2' }) },
       { kind: 'someday' },
+      null,
     );
     expect(harness.reorderProjectsMutate).not.toHaveBeenCalled();
   });

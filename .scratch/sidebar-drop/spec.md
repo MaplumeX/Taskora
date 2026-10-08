@@ -20,6 +20,8 @@ Task（单个或多选整组，逐项执行）：
 |---|---|
 | Inbox | 移动 → Inbox：清除归属与计划（计划日期、提醒、重复规则随之清除），截止日期保留 |
 | Today | 计划改为今天（同计划卡片选「今天」：提醒 HH:mm 保留，截止日期不变） |
+| Upcoming | 条目不动，在 Upcoming 行旁弹出计划日期卡片；选定后写入（多选整组共用一张卡片、不预选） |
+| Anytime | 清除计划（同计划卡片「清除」）；无归属的 Inbox 任务转入 Anytime；已在 Anytime 的跳过 |
 | Someday | 计划改为 Someday（重复规则按现有规则清除，截止日期保留） |
 | Logbook | 完成（重复任务照常派生 Repeat Instance） |
 | Trash | 删除 |
@@ -32,12 +34,14 @@ Project 行（单个）：
 |---|---|
 | 区域 | 归属改为该区域，排在区域内项目末尾 |
 | Today | 项目计划日期改为今天 |
+| Upcoming | 项目不动，弹出计划日期卡片 |
+| Anytime | 清除项目计划 |
 | Someday | 项目计划改为 Someday（成为 Later Project，离开侧边栏） |
 | Logbook | 完成项目；有未了结任务时沿用「剩余任务完成 / 取消」询问；重复项目照常派生下一轮 |
 | Trash | 删除项目（任务随之进 Trash） |
 | Inbox / 项目 | 不接收 |
 
-不是落点：助手、Upcoming、Calendar、Anytime、「N 个稍后项目」入口、Tags；侧边栏没有「无区域」落点。
+不是落点：助手、Calendar、回顾、「N 个稍后项目」入口、Tags；侧边栏没有「无区域」落点。
 
 ## User Stories
 
@@ -94,7 +98,7 @@ Project 行（单个）：
 - Touch / Android.
 - Project Headings as drag sources. Dragging projects onto other projects or onto Inbox.
 - Logbook / Trash lists as drag sources (reopen / put-back semantics).
-- Upcoming, Calendar and Anytime as drop targets. A "no area" drop target.
+- Calendar as a drop target. A "no area" drop target.
 - Spring-loaded expansion of collapsed areas.
 - Toast or undo after a drop. Navigating to the target.
 - Tags as drop targets.

@@ -43,7 +43,7 @@ vi.mock('@dnd-kit/core', async (importOriginal) => {
 });
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => undefined },
 }));
 
@@ -112,7 +112,7 @@ function Location() {
   return <div data-testid="location">{useLocation().pathname}</div>;
 }
 
-function dropOn(payload: SidebarDropPayload, target: string) {
+function dropOn(payload: SidebarDropPayload, target: string, anchor: HTMLElement | null = null) {
   render(
     <MemoryRouter initialEntries={['/today']}>
       <SidebarDropProvider>
@@ -122,7 +122,12 @@ function dropOn(payload: SidebarDropPayload, target: string) {
     </MemoryRouter>,
   );
   act(() => harness.dnd?.onDragStart({ active: { id: 'drag:x' } }));
-  act(() => harness.dnd?.onDragEnd({ active: { id: 'drag:x' }, over: { id: target } }));
+  act(() =>
+    harness.dnd?.onDragEnd({
+      active: { id: 'drag:x' },
+      over: { id: target, data: { current: { anchor: { current: anchor } } } },
+    }),
+  );
 }
 
 beforeEach(() => {
@@ -190,6 +195,40 @@ describe('SidebarDropProvider — tasks', () => {
     expect(harness.deleteTask.mock.calls.map(([id]) => id)).toEqual(['t1', 't2']);
   });
 
+  it('opens the When card on Upcoming without moving the tasks, then schedules the group', () => {
+    const anchor = document.body.appendChild(document.createElement('a'));
+    dropOn({ kind: 'tasks', tasks: [task('t1'), task('t2')] }, 'sidebar-drop:upcoming', anchor);
+
+    expect(harness.updateTask).not.toHaveBeenCalled();
+    expect(useSelectionStore.getState().selectedIds).toEqual([]);
+    act(() => screen.getByText('common:tomorrow').click());
+
+    expect(harness.updateTask.mock.calls.map(([args]) => args.id)).toEqual(['t1', 't2']);
+    expect(harness.updateTask.mock.calls[0][0].data).toMatchObject({
+      scheduledType: ScheduledType.DATE,
+    });
+    expect(screen.queryByText('common:tomorrow')).not.toBeInTheDocument();
+  });
+
+  it('clears the schedule on Anytime', () => {
+    dropOn(
+      { kind: 'tasks', tasks: [task('t1', { scheduledType: ScheduledType.SOMEDAY })] },
+      'sidebar-drop:anytime',
+    );
+
+    expect(harness.updateTask).toHaveBeenCalledWith(
+      {
+        id: 't1',
+        data: {
+          scheduledType: ScheduledType.NONE,
+          scheduledDate: null,
+          bucket: TaskBucket.ANYTIME,
+        },
+      },
+      expect.anything(),
+    );
+  });
+
   it('schedules for today, skipping tasks already there', () => {
     dropOn(
       {
@@ -246,6 +285,19 @@ describe('SidebarDropProvider — project', () => {
 
     expect(harness.completeProject).not.toHaveBeenCalled();
     expect(screen.getByText('completeRemainingTitle')).toBeInTheDocument();
+  });
+
+  it('opens the When card on Upcoming and schedules the project', () => {
+    harness.projects = [project('p1')];
+    const anchor = document.body.appendChild(document.createElement('a'));
+    dropOn({ kind: 'project', project: harness.projects[0] }, 'sidebar-drop:upcoming', anchor);
+
+    expect(harness.updateProject).not.toHaveBeenCalled();
+    act(() => screen.getByText('task:somedayLabel').click());
+    expect(harness.updateProject).toHaveBeenCalledWith(
+      { id: 'p1', data: { scheduledType: ScheduledType.SOMEDAY } },
+      expect.anything(),
+    );
   });
 
   it('deletes the project on Trash', () => {
