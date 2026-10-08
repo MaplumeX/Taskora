@@ -513,11 +513,29 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
       NotFoundException,
     );
 
+    // 删除区域：其下项目与任务进 Trash，已在 Trash 的不动
+    const earlier = new Date('2026-01-01T00:00:00.000Z');
     await seedTask('t-in-area', { areaId: first.id, bucket: 'ANYTIME' });
+    await seedTask('t-trashed', { areaId: first.id, bucket: 'ANYTIME', trashedAt: earlier });
+    await seedProject('p-in-area', { areaId: first.id });
+    await seedTask('t-in-project', { projectId: 'p-in-area', bucket: 'ANYTIME' });
+    await seedTask('t-elsewhere', { bucket: 'INBOX' });
     await h.areas.remove(USER, first.id);
     expect(await testPrisma.area.findUnique({ where: { id: first.id } })).toBeNull();
+    const inArea = await testPrisma.task.findUniqueOrThrow({ where: { id: 't-in-area' } });
+    expect(inArea.areaId).toBeNull();
+    expect(inArea.trashedAt).not.toBeNull();
+    const project = await testPrisma.project.findUniqueOrThrow({ where: { id: 'p-in-area' } });
+    expect(project.areaId).toBeNull();
+    expect(project.trashedAt).toEqual(inArea.trashedAt);
     expect(
-      (await testPrisma.task.findUniqueOrThrow({ where: { id: 't-in-area' } })).areaId,
+      (await testPrisma.task.findUniqueOrThrow({ where: { id: 't-in-project' } })).trashedAt,
+    ).toEqual(inArea.trashedAt);
+    expect(
+      (await testPrisma.task.findUniqueOrThrow({ where: { id: 't-trashed' } })).trashedAt,
+    ).toEqual(earlier);
+    expect(
+      (await testPrisma.task.findUniqueOrThrow({ where: { id: 't-elsewhere' } })).trashedAt,
     ).toBeNull();
     expect(await compactedIdsInLog('area')).toEqual([first.id]);
     await expect(h.areas.remove(USER, first.id)).rejects.toBeInstanceOf(NotFoundException);

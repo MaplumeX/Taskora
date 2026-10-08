@@ -95,9 +95,11 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
         tabIndex={selected ? 0 : -1}
         className={cn(
           // Project Heading（Things 3）：蓝色小节标题 + 下方 1px 细线。
-          'group flex h-9 items-center gap-1.5 rounded-t-md border-b border-border pt-1 max-md:h-11',
+          // 细线用 ::after 独立绘制并左右内缩，不占用行的边框，选中背景才能保持四角圆角。
+          'group relative flex h-9 items-center gap-1.5 rounded-md pt-1 max-md:h-11',
+          "after:pointer-events-none after:absolute after:inset-x-1 after:bottom-0 after:h-px after:bg-border after:content-['']",
           'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
-          selected && 'bg-selection focus-visible:ring-0',
+          selected && 'bg-selection after:opacity-0 focus-visible:ring-0',
         )}
       >
         {!archived && (

@@ -182,6 +182,48 @@ describe('AreaDetail later projects', () => {
   });
 });
 
+describe('AreaDetail 稍后项目拖拽', () => {
+  beforeEach(() => {
+    harness.projects.push(project('as2', 'a', 5, ScheduledType.SOMEDAY));
+  });
+
+  it('Someday 项目可拖拽排序，以全量顺序写回', () => {
+    renderArea();
+    act(() => harness.dnd?.onDragStart({ active: { id: 'as2' } }));
+    act(() => harness.dnd?.onDragEnd({ active: { id: 'as2' }, over: { id: 'as' } }));
+    expect(harness.reorderProjectsMutate).toHaveBeenCalledWith(['x', 'a1', 'as2', 'a2', 'af', 'as']);
+    expect(renderedIds()).toEqual(['a1', 'a2', 'af', 'as2', 'as']);
+  });
+
+  it('Someday 项目可拖到侧边栏', () => {
+    renderArea();
+    act(() => harness.dnd?.onDragStart({ active: { id: 'as' } }));
+    act(() =>
+      harness.dnd?.onDragEnd({ active: { id: 'as' }, over: { id: 'sidebar-drop:area:b' } }),
+    );
+    expect(harness.sidebarDrop).toHaveBeenCalledWith(
+      { kind: 'project', project: expect.objectContaining({ id: 'as' }) },
+      { kind: 'area', areaId: 'b' },
+    );
+    expect(harness.reorderProjectsMutate).not.toHaveBeenCalled();
+  });
+
+  it('计划项目可拖到侧边栏，但不在节内排序', () => {
+    renderArea();
+    act(() => harness.dnd?.onDragStart({ active: { id: 'af' } }));
+    act(() =>
+      harness.dnd?.onDragEnd({ active: { id: 'af' }, over: { id: 'sidebar-drop:today' } }),
+    );
+    expect(harness.sidebarDrop).toHaveBeenCalledWith(
+      { kind: 'project', project: expect.objectContaining({ id: 'af' }) },
+      { kind: 'today' },
+    );
+    act(() => harness.dnd?.onDragStart({ active: { id: 'af' } }));
+    act(() => harness.dnd?.onDragEnd({ active: { id: 'af' }, over: { id: 'as' } }));
+    expect(harness.reorderProjectsMutate).not.toHaveBeenCalled();
+  });
+});
+
 describe('AreaDetail 空状态', () => {
   it('区域为空时不显示空提示与占位', () => {
     harness.projects = [];

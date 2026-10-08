@@ -160,7 +160,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     expect((await projects.getProjects()).map((p) => p.title)).toEqual(['C', 'A', 'B']);
   });
 
-  it('Area：增删改 + 重排；物理删除清理 Task/Project 的 areaId 引用（SetNull 语义）', async () => {
+  it('Area：增删改 + 重排；删除时其下项目与任务进 Trash，areaId 引用按 SetNull 清理', async () => {
     const area = await areas.createArea({ title: '工作' });
     const moved = await areas.createArea({ title: '生活' });
     expect((await areas.getAreas()).map((a) => a.title)).toEqual(['工作', '生活']);
@@ -186,10 +186,34 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
       trashedAt: null,
       settledAt: null,
     });
+    const projectTaskId = await engine.create('task', {
+      title: 'PT',
+      status: 'ACTIVE',
+      bucket: 'ANYTIME',
+      projectId,
+      trashedAt: null,
+      settledAt: null,
+    });
+    const otherTaskId = await engine.create('task', {
+      title: 'O',
+      status: 'ACTIVE',
+      bucket: 'ANYTIME',
+      areaId: moved.id,
+      trashedAt: null,
+      settledAt: null,
+    });
     await areas.deleteArea(area.id);
     expect(await engine.get('area', area.id)).toBeNull();
-    expect((await engine.get('task', taskId))?.fields.areaId).toBeNull();
-    expect((await engine.get('project', projectId))?.fields.areaId).toBeNull();
+    const task = await engine.get('task', taskId);
+    expect(task?.fields.areaId).toBeNull();
+    expect(task?.fields.trashedAt).not.toBeNull();
+    const project = await engine.get('project', projectId);
+    expect(project?.fields.areaId).toBeNull();
+    expect(project?.fields.trashedAt).toBe(task?.fields.trashedAt);
+    expect((await engine.get('task', projectTaskId))?.fields.trashedAt).toBe(
+      task?.fields.trashedAt,
+    );
+    expect((await engine.get('task', otherTaskId))?.fields.trashedAt).toBeNull();
   });
 
   it('Tag：增删改；可挂父 Tag；删父 Tag 后子 Tag 提升为顶层（SetNull 语义）', async () => {
