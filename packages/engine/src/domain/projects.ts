@@ -9,6 +9,7 @@ import {
   type CreateProjectDto,
   type ProjectBucket,
   type RepeatRule,
+  type ReviewInterval,
   type SettleRemainingTasks,
   type UpdateProjectDto,
 } from '@taskora/shared';
@@ -16,6 +17,12 @@ import {
 import { normalizeRepeatRule } from '../repeat';
 import { resolveProjectBucket } from './bucket';
 import { dateKeyOf, instantMs, type CalendarZones } from './calendar';
+import {
+  planReviewSchedule,
+  planReviewUpdate,
+  type ReviewContext,
+  type ReviewUpdateBase,
+} from './review';
 import { taskTrashPatch, type TaskPatch } from './tasks';
 
 export interface ProjectFields {
@@ -28,6 +35,12 @@ export interface ProjectFields {
   repeatRule: RepeatRule | null;
   /** 派生来源：派生出本项目的重复项目 id；非派生为 null。 */
   repeatSourceId: string | null;
+  /** 回顾间隔（Review Interval）。 */
+  reviewInterval: ReviewInterval | null;
+  /** 下次回顾日（日期键）。 */
+  nextReviewDate: string | null;
+  /** 上次回顾日（日期键）；null 为从未回顾。 */
+  lastReviewedOn: string | null;
   bucket: ProjectBucket;
   status: ProjectStatus;
   completedAt: string | null;
@@ -38,7 +51,11 @@ export interface ProjectFields {
 
 export type ProjectPatch = Partial<ProjectFields>;
 
-export function planProjectCreate(input: CreateProjectDto, zones: CalendarZones): ProjectFields {
+export function planProjectCreate(
+  input: CreateProjectDto,
+  zones: CalendarZones,
+  review: ReviewContext,
+): ProjectFields {
   const scheduledType = input.scheduledType ?? ScheduledType.NONE;
   return {
     title: input.title,
@@ -49,6 +66,7 @@ export function planProjectCreate(input: CreateProjectDto, zones: CalendarZones)
     dueDate: dateKeyOf(input.dueDate, zones),
     repeatRule: null,
     repeatSourceId: null,
+    ...planReviewSchedule(review, 'project', input, zones),
     bucket: resolveProjectBucket(scheduledType),
     status: ProjectStatus.ACTIVE,
     completedAt: null,
@@ -58,7 +76,7 @@ export function planProjectCreate(input: CreateProjectDto, zones: CalendarZones)
   };
 }
 
-export interface ProjectUpdateBase {
+export interface ProjectUpdateBase extends ReviewUpdateBase {
   scheduledType: unknown;
   scheduledDate: unknown;
   bucket: unknown;
@@ -66,12 +84,14 @@ export interface ProjectUpdateBase {
 
 /**
  * 编辑项目：计划规则同任务（无提醒）——离开 DATE 清除重复规则，DATE 下
- * 规则写入前规范化、非法对象忽略；Bucket 只由计划类型决定。
+ * 规则写入前规范化、非法对象忽略；Bucket 只由计划类型决定。回顾设置见
+ * planReviewUpdate。
  */
 export function planProjectUpdate(
   existing: ProjectUpdateBase,
   input: UpdateProjectDto,
   zones: CalendarZones,
+  review: ReviewContext,
 ): ProjectPatch {
   const patch: ProjectPatch = {};
   const scheduledType = (input.scheduledType ?? existing.scheduledType) as ScheduledType;
@@ -101,6 +121,7 @@ export function planProjectUpdate(
   }
   if (input.areaId !== undefined) patch.areaId = input.areaId;
   if (input.tagIds !== undefined) patch.tagIds = input.tagIds;
+  Object.assign(patch, planReviewUpdate(existing, input, 'project', review, zones));
   return patch;
 }
 

@@ -16,6 +16,7 @@ import settingsZh from './locales/zh/settings.json';
 import agentZh from './locales/zh/agent.json';
 import statusbarZh from './locales/zh/statusbar.json';
 import trayZh from './locales/zh/tray.json';
+import reviewZh from './locales/zh/review.json';
 
 import commonEn from './locales/en/common.json';
 import navEn from './locales/en/nav.json';
@@ -31,6 +32,7 @@ import settingsEn from './locales/en/settings.json';
 import agentEn from './locales/en/agent.json';
 import statusbarEn from './locales/en/statusbar.json';
 import trayEn from './locales/en/tray.json';
+import reviewEn from './locales/en/review.json';
 
 export const defaultNS = 'common';
 export const namespaces = [
@@ -48,6 +50,7 @@ export const namespaces = [
   'agent',
   'statusbar',
   'tray',
+  'review',
 ] as const;
 
 void i18n
@@ -70,6 +73,7 @@ void i18n
         agent: agentZh,
         statusbar: statusbarZh,
         tray: trayZh,
+        review: reviewZh,
       },
       en: {
         common: commonEn,
@@ -86,6 +90,7 @@ void i18n
         agent: agentEn,
         statusbar: statusbarEn,
         tray: trayEn,
+        review: reviewEn,
       },
     },
     supportedLngs: ['zh', 'en'],

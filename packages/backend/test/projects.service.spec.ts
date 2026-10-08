@@ -45,6 +45,7 @@ describe('ProjectsService', () => {
           userId,
           position: 'a0',
           repeatRule: null,
+          reviewInterval: null,
           tags: [],
         },
         {
@@ -54,6 +55,7 @@ describe('ProjectsService', () => {
           userId,
           position: 'a1',
           repeatRule: null,
+          reviewInterval: null,
           tags: [],
         },
       ];
@@ -93,6 +95,7 @@ describe('ProjectsService', () => {
         notes: null,
         userId,
         repeatRule: null,
+        reviewInterval: null,
         tags: [],
         taskTotalCount: 5,
         taskCompletedCount: 2,

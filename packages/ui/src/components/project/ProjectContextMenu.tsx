@@ -32,6 +32,9 @@ import { DueDateField } from '@/components/task/fields/DueDateField';
 import { RepeatRuleField } from '@/components/task/fields/RepeatRuleField';
 import { TagsField } from '@/components/task/fields/TagsField';
 
+import { ReviewMenuRow, ReviewPicker } from '@/components/review/ReviewSchedule';
+import { useInReviewMode } from '@/components/review/reviewMode';
+
 import { useProjectCompletion } from './useProjectCompletion';
 import { useSkipProjectOccurrence } from './useSkipProjectOccurrence';
 
@@ -42,7 +45,7 @@ export interface ProjectMenuProps {
   onDeleted?: () => void;
 }
 
-type PickerKind = 'scheduled' | 'repeat' | 'due' | 'tags' | null;
+type PickerKind = 'scheduled' | 'repeat' | 'due' | 'tags' | 'review' | null;
 
 export function ProjectMenuPanel({
   project,
@@ -52,10 +55,13 @@ export function ProjectMenuPanel({
   onClose,
   openPicker,
   onToggleComplete,
+  showReview,
   firstItemRef,
 }: ProjectMenuProps & {
   onClose: () => void;
   openPicker: (kind: Exclude<PickerKind, null>) => void;
+  /** 提供回顾一行（只有项目页的「…」菜单提供）。 */
+  showReview?: boolean;
   /** 完成 / 取消完成（含剩余任务询问，见 useProjectCompletion；对话框由外层渲染）。 */
   onToggleComplete: (project: ProjectResponseDto) => void;
   firstItemRef?: React.RefObject<HTMLButtonElement>;
@@ -132,6 +138,9 @@ export function ProjectMenuPanel({
       <MenuRow icon={Tag} onClick={() => openPicker('tags')}>
         {t('tags')}
       </MenuRow>
+      {showReview && variant === 'default' && (
+        <ReviewMenuRow onClick={() => openPicker('review')} />
+      )}
       <div className="-mx-1 my-1 h-px bg-muted" />
       <MenuRow
         icon={variant === 'trash' ? RotateCcw : Trash2}
@@ -176,6 +185,9 @@ function PickerContent({
   }
   if (kind === 'due') {
     return <DueDateField current={current} onPatch={patch} onClose={onClose} />;
+  }
+  if (kind === 'review') {
+    return <ReviewPicker target={{ kind: 'project', ...current }} />;
   }
   return <TagsField current={current} onPatch={patch} />;
 }
@@ -289,8 +301,12 @@ export function ProjectContextMenu({
 export function ProjectMoreMenu({ project, current, variant = 'default' }: ProjectMenuProps) {
   const { t: tc } = useTranslation('common');
   const navigate = useNavigate();
+  const inReview = useInReviewMode();
 
-  const onDeleted = () => navigate('/today');
+  // 回顾中删除：回顾会话自动进入下一个，不跳走
+  const onDeleted = () => {
+    if (!inReview) navigate('/today');
+  };
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
 
@@ -331,6 +347,7 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
             onClose={closeMenu}
             openPicker={openPicker}
             onToggleComplete={completion.toggle}
+            showReview
           />
         </PopoverContent>
       </Popover>

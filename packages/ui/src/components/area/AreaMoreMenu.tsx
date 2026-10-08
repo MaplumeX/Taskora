@@ -19,13 +19,15 @@ import {
 import { MenuRow } from '@/components/common/MenuRow';
 import { useDeleteArea, useUpdateArea } from '@taskora/api';
 import { TagsField } from '@/components/task/fields/TagsField';
+import { ReviewMenuRow, ReviewPicker } from '@/components/review/ReviewSchedule';
+import { useInReviewMode } from '@/components/review/reviewMode';
 import { isTouchContextMenu } from '../../lib/useLongPress';
 
 export interface AreaMoreMenuProps {
   area: AreaResponseDto;
 }
 
-type PickerKind = 'tags' | null;
+type PickerKind = 'tags' | 'review' | null;
 
 export function AreaMoreMenu({ area }: AreaMoreMenuProps) {
   return <AreaMenu area={area} />;
@@ -55,6 +57,7 @@ function AreaMenu({
   const { t: tc } = useTranslation('common');
   const { t: ta } = useTranslation('area');
   const navigate = useNavigate();
+  const inReview = useInReviewMode();
   const updateArea = useUpdateArea();
   const deleteArea = useDeleteArea();
 
@@ -86,7 +89,8 @@ function AreaMenu({
     deleteArea.mutate(area.id, {
       onSuccess: () => {
         setConfirmOpen(false);
-        if (!contextMenu) navigate('/today');
+        // 回顾中删除：回顾会话自动进入下一个，不跳走
+        if (!contextMenu && !inReview) navigate('/today');
       },
       onError: () => toast.error(tc('deleteFailed')),
     });
@@ -131,6 +135,9 @@ function AreaMenu({
           <MenuRow icon={Tag} onClick={() => openPicker('tags')}>
             {t('tags')}
           </MenuRow>
+          {!contextMenu && (
+            <ReviewMenuRow onClick={() => openPicker('review')} />
+          )}
           <div className="-mx-1 my-1 h-px bg-muted" />
           <MenuRow
             icon={Trash2}
@@ -149,6 +156,7 @@ function AreaMenu({
         <PopoverAnchor virtualRef={containerRef} />
         <PopoverContent align="end" onClick={(e) => e.stopPropagation()}>
           {activePicker === 'tags' && <TagsField current={area} onPatch={handlePatch} />}
+          {activePicker === 'review' && <ReviewPicker target={{ kind: 'area', ...area }} />}
         </PopoverContent>
       </Popover>
 

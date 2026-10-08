@@ -141,5 +141,10 @@
   "shortcutFixedQuickAddEscape": "Quick Add: discard draft and close",
   "shortcutGlobalNeedsModifier": "System-wide shortcuts must include Ctrl, Alt or ⌘",
   "shortcutGlobalRegisterFailed": "Couldn't set this shortcut. Another app may be using it.",
-  "shortcutTakenByGlobal": "This shortcut is used by “Open Quick Add”"
+  "shortcutTakenByGlobal": "This shortcut is used by “Open Quick Add”",
+  "shortcutGroup_review": "Review",
+  "shortcut_reviewMarkNext": "Mark reviewed and go to next",
+  "shortcut_reviewSkip": "Go to next",
+  "shortcut_reviewPrevious": "Go to previous",
+  "shortcut_reviewPostpone": "Postpone"
 }

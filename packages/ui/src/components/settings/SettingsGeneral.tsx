@@ -2,8 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { REVIEW_DEFAULT_KINDS, type ReviewDefaultKind, type ReviewInterval } from '@taskora/shared';
+
+import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
+import { ReviewIntervalEditor, useReviewIntervalLabel } from '@/components/review/ReviewFields';
 import ReminderReliabilitySection from './ReminderReliabilitySection';
 import {
   SettingsGroup,
@@ -102,6 +107,26 @@ function TimeZonePicker({
   );
 }
 
+/** 窄屏某一档默认回顾间隔的选项页：读 store 的当前值，改动即时生效。 */
+function DefaultReviewIntervalPage({
+  kind,
+  onChange,
+}: {
+  kind: ReviewDefaultKind;
+  onChange: (kind: ReviewDefaultKind, next: ReviewInterval) => void;
+}) {
+  const value = usePreferencesStore((s) => s.defaultReviewIntervals[kind]);
+  return (
+    <SettingsPage>
+      <SettingsGroup>
+        <div className="p-2">
+          <ReviewIntervalEditor value={value} onChange={(next) => onChange(kind, next)} />
+        </div>
+      </SettingsGroup>
+    </SettingsPage>
+  );
+}
+
 /**
  * 「通用」设置页。
  *
@@ -111,7 +136,7 @@ function TimeZonePicker({
  *   命令读写（见 invokeShell）。
  */
 export default function SettingsGeneral() {
-  const { t } = useTranslation(['settings', 'common']);
+  const { t } = useTranslation(['settings', 'common', 'review']);
   const mobileNav = useSettingsNav();
   const desktop = isDesktopRuntime();
   // null = 初始加载中（开关禁用）；boolean = 系统登录项当前状态。
@@ -150,6 +175,8 @@ export default function SettingsGeneral() {
 
   const bucketGrouping = usePreferencesStore((s) => s.bucketGrouping);
   const setBucketGrouping = usePreferencesStore((s) => s.setBucketGrouping);
+  const defaultReviewIntervals = usePreferencesStore((s) => s.defaultReviewIntervals);
+  const reviewIntervalLabel = useReviewIntervalLabel();
   const updatePreferences = useUpdatePreferences();
 
   // 状态栏常驻通知（Android）：控制器在 mobile init 时注册；初始值同步读取。
@@ -223,6 +250,21 @@ export default function SettingsGeneral() {
     );
   };
 
+  const handleDefaultReviewIntervalChange = (kind: ReviewDefaultKind, next: ReviewInterval) => {
+    const prev = usePreferencesStore.getState().defaultReviewIntervals;
+    const intervals = { ...prev, [kind]: next };
+    usePreferencesStore.getState().setDefaultReviewIntervals(intervals);
+    updatePreferences.mutate(
+      { defaultReviewIntervals: intervals },
+      {
+        onError: () => {
+          usePreferencesStore.getState().setDefaultReviewIntervals(prev);
+          toast.error(t('common:saveFailed'));
+        },
+      },
+    );
+  };
+
   if (mobileNav) {
     // 窄屏：列表单元格（时区推入搜索选项页，开关放行内，说明作分组脚注）
     return (
@@ -260,6 +302,30 @@ export default function SettingsGeneral() {
               />
             }
           />
+        </SettingsGroup>
+
+        <SettingsGroup
+          header={t('review:defaultInterval')}
+          footer={t('review:defaultIntervalHint')}
+        >
+          {REVIEW_DEFAULT_KINDS.map((kind) => (
+            <SettingsRow
+              key={kind}
+              label={t(`review:defaultFor_${kind}`)}
+              value={reviewIntervalLabel(defaultReviewIntervals[kind])}
+              onClick={() =>
+                mobileNav.push({
+                  title: t(`review:defaultFor_${kind}`),
+                  render: () => (
+                    <DefaultReviewIntervalPage
+                      kind={kind}
+                      onChange={handleDefaultReviewIntervalChange}
+                    />
+                  ),
+                })
+              }
+            />
+          ))}
         </SettingsGroup>
 
         {statusBar && statusBarEnabled !== null && (
@@ -315,6 +381,30 @@ export default function SettingsGeneral() {
           />
         </div>
         <p className="text-sm text-muted-foreground">{t('settings:groupTasksByParentHint')}</p>
+      </div>
+
+      {/* 默认回顾间隔（Review）：项目 / 区域两档，只决定新建时写入的间隔 */}
+      <div className="flex flex-col gap-2">
+        <Label>{t('review:defaultInterval')}</Label>
+        {REVIEW_DEFAULT_KINDS.map((kind) => (
+          <div key={kind} className="flex items-center justify-between gap-4">
+            <span className="text-sm">{t(`review:defaultFor_${kind}`)}</span>
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm">
+                  {reviewIntervalLabel(defaultReviewIntervals[kind])}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" className="w-64 p-1">
+                <ReviewIntervalEditor
+                  value={defaultReviewIntervals[kind]}
+                  onChange={(next) => handleDefaultReviewIntervalChange(kind, next)}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
+        ))}
+        <p className="text-sm text-muted-foreground">{t('review:defaultIntervalHint')}</p>
       </div>
 
       {/* 状态栏快速添加（仅 Android） */}

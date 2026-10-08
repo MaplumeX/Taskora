@@ -50,6 +50,12 @@ export class AreasController {
     return this.areasService.update(req.user.id, id, dto);
   }
 
+  /** 标记已回顾（Mark Reviewed）。 */
+  @Post(':id/review')
+  markReviewed(@Request() req: { user: { id: string } }, @Param('id') id: string) {
+    return this.areasService.markReviewed(req.user.id, id);
+  }
+
   @Delete(':id')
   remove(@Request() req: { user: { id: string } }, @Param('id') id: string) {
     return this.areasService.remove(req.user.id, id);

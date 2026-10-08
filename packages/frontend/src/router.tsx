@@ -23,6 +23,7 @@ const Calendar = lazyWithRetry(() => import('@taskora/ui/pages/Calendar'));
 const Home = lazyWithRetry(() => import('@taskora/ui/pages/Home'));
 const Inbox = lazyWithRetry(() => import('@taskora/ui/pages/Inbox'));
 const Logbook = lazyWithRetry(() => import('@taskora/ui/pages/Logbook'));
+const Review = lazyWithRetry(() => import('@taskora/ui/pages/Review'));
 const Login = lazyWithRetry(() => import('@/pages/Login'));
 const ProjectDetail = lazyWithRetry(() => import('@taskora/ui/pages/ProjectDetail'));
 const Register = lazyWithRetry(() => import('@/pages/Register'));
@@ -67,6 +68,7 @@ export const router = createBrowserRouter([
           { path: '/anytime', element: <Anytime /> },
           { path: '/someday', element: <Someday /> },
           { path: '/later-projects', element: <LaterProjects /> },
+          { path: '/review/*', element: <Review /> },
           { path: '/logbook', element: <Logbook /> },
           { path: '/projects/:id', element: <ProjectDetail /> },
           { path: '/areas/:id', element: <AreaDetail /> },

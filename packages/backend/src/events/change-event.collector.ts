@@ -4,6 +4,7 @@ import type { ChangeAction, ChangeEntity } from '@taskora/shared';
 
 import { ChangeEventHub } from './change-event-hub.service';
 import { settledToCompletedAt, withRepeatRuleDto } from '../tasks/task-dto.mapper';
+import { withReviewDto } from '../common/review-dto';
 
 /**
  * Collects write descriptors from the Prisma extension and publishes Change
@@ -429,8 +430,11 @@ export class ChangeEventCollector {
         settledAt: Date | null;
       });
     } else if (entity === 'project') {
-      // Project 的 repeatRule 同为 TEXT JSON 列（recurring-projects spec）
-      data = { ...withRepeatRuleDto(row as { repeatRule: string | null }), tags };
+      // Project 的 repeatRule / reviewInterval 同为 TEXT JSON 列
+      const projectRow = row as { repeatRule: string | null; reviewInterval: string | null };
+      data = { ...withReviewDto(withRepeatRuleDto(projectRow)), tags };
+    } else if (entity === 'area') {
+      data = { ...withReviewDto(row as { reviewInterval: string | null }), tags };
     } else if (entity === 'subtask') {
       data = settledToCompletedAt(row as { settledAt: Date | null });
     } else if (withTags) {

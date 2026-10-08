@@ -6,6 +6,7 @@ import type {
   TaskFeedItem,
 } from '@taskora/shared';
 import { ProjectStatus } from '@taskora/shared';
+import { flatParentOrder as sharedFlatParentOrder } from '@taskora/api';
 
 /**
  * Grouped View（分组视图）渲染块推导：纯函数、纯渲染层，不改数据模型
@@ -92,42 +93,14 @@ function canHostGroup(project: ProjectResponseDto | undefined): project is Proje
   return !!project && project.status !== ProjectStatus.COMPLETED && project.trashedAt === null;
 }
 
-/**
- * 侧边栏全局视觉顺序的扁平父级序列：区域按自身 Position；项目（含区域
- * 内项目）按项目间相对 Position 定位；区域放在第一个排在它之后的项目
- * 之前（区域内项目序列已按 Position，自然跟随其后）。
- */
+/** 侧边栏全局视觉顺序的扁平父级序列（规则见 engine 的 flatParentOrder）。 */
 export function flatParentOrder(
   projects: ProjectResponseDto[],
   areas: AreaResponseDto[],
 ): Array<
   { kind: 'project'; project: ProjectResponseDto } | { kind: 'area'; area: AreaResponseDto }
 > {
-  const areaById = new Map(areas.map((a) => [a.id, a]));
-  const ordered: Array<
-    { kind: 'project'; project: ProjectResponseDto } | { kind: 'area'; area: AreaResponseDto }
-  > = [];
-  for (const project of projects) {
-    const area = project.areaId ? areaById.get(project.areaId) : undefined;
-    if (!area) {
-      ordered.push({ kind: 'project', project });
-      continue;
-    }
-    const areaIndex = ordered.findIndex((e) => e.kind === 'area' && e.area.id === area.id);
-    if (areaIndex === -1) {
-      // 该区域尚未出现：先占位区域，项目自然跟随其后。
-      ordered.push({ kind: 'area', area });
-    }
-    ordered.push({ kind: 'project', project });
-  }
-  // 无任何项目锚定的区域（含无项目/项目已隐去的区域）追加到末尾，
-  // 彼此间保持侧边栏位次。
-  for (const area of areas) {
-    if (!ordered.some((e) => e.kind === 'area' && e.area.id === area.id)) {
-      ordered.push({ kind: 'area', area });
-    }
-  }
-  return ordered;
+  return sharedFlatParentOrder(projects, areas);
 }
 
 export function deriveGroupedFeedLayout(input: GroupedFeedLayoutInput): GroupedFeedLayout {

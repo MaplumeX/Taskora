@@ -11,6 +11,7 @@ import type {
   CompleteProjectDto,
   CreateProjectDto,
   ProjectResponseDto,
+  ReviewQueue,
   UpdateProjectDto,
 } from '@taskora/shared';
 
@@ -35,6 +36,13 @@ export interface ProjectBackend {
   skipProject(id: string): Promise<ProjectResponseDto>;
   uncompleteProject(id: string): Promise<ProjectResponseDto>;
   reorderProjects(orderedIds: string[]): Promise<void>;
+  /** 标记已回顾（Mark Reviewed）：下次回顾日改为今天加回顾间隔。 */
+  markProjectReviewed(id: string): Promise<ProjectResponseDto>;
+  /**
+   * 回顾队列：待回顾的 Project 与 Area（Review）。待回顾数即队列长度；
+   * 附带下一次回顾日与当天数量，供空状态显示。
+   */
+  getReviewQueue(): Promise<ReviewQueue>;
 }
 
 let backend: ProjectBackend = rest as ProjectBackend;

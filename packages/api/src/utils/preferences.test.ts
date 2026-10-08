@@ -8,6 +8,9 @@ const defaults = {
   weekStartsOn: 1,
   bucketGrouping: true,
 } as const;
+const WEEKLY = { unit: 'week', count: 1 } as const;
+const MONTHLY = { unit: 'month', count: 1 } as const;
+const INITIAL_INTERVALS = { project: WEEKLY, area: MONTHLY };
 
 describe('normalizePreferences', () => {
   it('validates account time zones and keeps the existing zone for missing/invalid values', () => {
@@ -31,6 +34,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 0,
       bucketGrouping: false,
       todayReviewedOn: null,
+      defaultReviewIntervals: INITIAL_INTERVALS,
     });
   });
 
@@ -55,6 +59,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 1,
       bucketGrouping: true,
       todayReviewedOn: null,
+      defaultReviewIntervals: INITIAL_INTERVALS,
     });
   });
 
@@ -67,6 +72,7 @@ describe('normalizePreferences', () => {
         weekStartsOn: 1,
         bucketGrouping: true,
         todayReviewedOn: null,
+        defaultReviewIntervals: INITIAL_INTERVALS,
       });
     }
   });
@@ -79,6 +85,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 1,
       bucketGrouping: true,
       todayReviewedOn: null,
+      defaultReviewIntervals: INITIAL_INTERVALS,
     });
     expect(normalizePreferences({ language: 'zh' }, defaults)).toEqual({
       timeZone: 'UTC',
@@ -87,6 +94,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 1,
       bucketGrouping: true,
       todayReviewedOn: null,
+      defaultReviewIntervals: INITIAL_INTERVALS,
     });
   });
 
@@ -99,6 +107,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 1,
       bucketGrouping: true,
       todayReviewedOn: null,
+      defaultReviewIntervals: INITIAL_INTERVALS,
     });
   });
 
@@ -127,5 +136,43 @@ describe('normalizePreferences', () => {
       normalizePreferences({ bucketGrouping: 'no' }, { ...defaults, bucketGrouping: false })
         .bucketGrouping,
     ).toBe(false);
+  });
+
+  it('normalizes defaultReviewIntervals per tier: invalid tiers fall back to the local value or the initial one', () => {
+    expect(
+      normalizePreferences(
+        {
+          defaultReviewIntervals: {
+            project: { unit: 'week', count: 2 },
+            area: { unit: 'month', count: 3 },
+          },
+        },
+        defaults,
+      ).defaultReviewIntervals,
+    ).toEqual({ project: { unit: 'week', count: 2 }, area: { unit: 'month', count: 3 } });
+    const local = { project: { unit: 'day', count: 3 }, area: { unit: 'year', count: 1 } } as const;
+    for (const dirty of [
+      { unit: 'decade', count: 1 },
+      { unit: 'week', count: 0 },
+      { unit: 'week', count: 1.5 },
+      { unit: 'week', count: '2' },
+      'weekly',
+      null,
+    ]) {
+      // 只有坏掉的那一档回退，其余档照收
+      expect(
+        normalizePreferences({ defaultReviewIntervals: { project: dirty, area: WEEKLY } }, defaults)
+          .defaultReviewIntervals,
+      ).toEqual({ project: WEEKLY, area: WEEKLY });
+      expect(
+        normalizePreferences(
+          { defaultReviewIntervals: { project: WEEKLY, area: dirty } },
+          { ...defaults, defaultReviewIntervals: local },
+        ).defaultReviewIntervals,
+      ).toEqual({ project: WEEKLY, area: local.area });
+      expect(
+        normalizePreferences({ defaultReviewIntervals: dirty }, defaults).defaultReviewIntervals,
+      ).toEqual(INITIAL_INTERVALS);
+    }
   });
 });

@@ -29,3 +29,7 @@ export function deleteArea(id: string): Promise<void> {
 export function reorderAreas(orderedIds: string[]): Promise<void> {
   return currentAreaBackend().reorderAreas(orderedIds);
 }
+
+export function markAreaReviewed(id: string): Promise<AreaResponseDto> {
+  return currentAreaBackend().markAreaReviewed(id);
+}

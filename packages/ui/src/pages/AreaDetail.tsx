@@ -38,6 +38,7 @@ import { TaskListView } from '@/components/task/TaskListView';
 import { EmptyState } from '@/components/common/EmptyState';
 import { InlineTitleEdit } from '@/components/common/InlineTitleEdit';
 import { AreaMoreMenu } from '@/components/area/AreaMoreMenu';
+import { AreaMetaRow } from '@/components/area/AreaMetaRow';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
 import { toast } from 'sonner';
 import {
@@ -202,6 +203,8 @@ export default function AreaDetail() {
         </div>
         {area && <AreaMoreMenu area={area} />}
         </div>
+
+      {area ? <AreaMetaRow area={area} /> : null}
 
       {!isLoading && !isError && <TagFilterBar {...bar} />}
       {filtering && visible.length === 0 && <EmptyState hint={t('tag:filterEmpty')} />}

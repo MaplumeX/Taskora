@@ -38,7 +38,7 @@ export function useCalendarQueryRefresh(): void {
   const cache = useQueryCache();
   useEffect(() => {
     // 「今天」不是副本数据：Engine 模式下没有变更通知，同样要主动重跑
-    for (const root of ['tasks', 'feed', 'projects']) {
+    for (const root of ['tasks', 'feed', 'projects', 'review']) {
       void cache.invalidateQueries({ queryKey: [root] });
     }
     currentStatusBarController()?.scheduleRefresh();

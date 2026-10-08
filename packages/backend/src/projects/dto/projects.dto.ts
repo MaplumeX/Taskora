@@ -10,6 +10,7 @@ import {
 import { Type } from 'class-transformer';
 import { ScheduledType, ProjectBucket, type SettleRemainingTasks } from '@taskora/shared';
 
+import { ReviewIntervalDto } from '../../common/review-interval.dto';
 import { RepeatRuleDto } from '../../tasks/dto/tasks.dto';
 
 export class CreateProjectDto {
@@ -44,6 +45,17 @@ export class CreateProjectDto {
   @IsArray()
   @IsString({ each: true })
   tagIds?: string[];
+
+  /** 回顾间隔（Review Interval）。 */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ReviewIntervalDto)
+  reviewInterval?: ReviewIntervalDto;
+
+  /** 下次回顾日（YYYY-MM-DD）。 */
+  @IsOptional()
+  @IsDateString()
+  nextReviewDate?: string;
 }
 
 export class UpdateProjectDto {
@@ -85,6 +97,17 @@ export class UpdateProjectDto {
   @ValidateNested()
   @Type(() => RepeatRuleDto)
   repeatRule?: RepeatRuleDto | null;
+
+  /** 回顾间隔（Review Interval）。 */
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ReviewIntervalDto)
+  reviewInterval?: ReviewIntervalDto;
+
+  /** 下次回顾日（YYYY-MM-DD）。 */
+  @IsOptional()
+  @IsDateString()
+  nextReviewDate?: string;
 }
 
 /** 完成项目：settleRemaining 给出时一并了结剩余任务（recurring-projects spec）。 */

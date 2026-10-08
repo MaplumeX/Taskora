@@ -30,6 +30,10 @@ interface Props {
   plainSettledTitle?: boolean;
   /** New in Today 新到条目：行首左侧黄点。 */
   newInToday?: boolean;
+  /** 点击行的去向；缺省打开项目页（回顾列表改为进入回顾模式）。 */
+  onOpen?: () => void;
+  /** 行尾附加内容（回顾列表的间隔 / 回顾日与操作）。 */
+  trailing?: React.ReactNode;
 }
 
 export function ProjectFeedRow({
@@ -39,6 +43,8 @@ export function ProjectFeedRow({
   settledDateBadge,
   plainSettledTitle = false,
   newInToday = false,
+  onOpen,
+  trailing,
 }: Props) {
   useCalendarDay();
   const { t } = useTranslation();
@@ -51,6 +57,8 @@ export function ProjectFeedRow({
   const trashed = item.trashedAt !== null;
 
   const projectCast = item as unknown as ProjectResponseDto;
+
+  const open = onOpen ?? (() => navigate(`/projects/${item.id}`));
 
   const handleToggle = () => {
     // 防御：取消的项目暂不可经此撤销（模型不支持），退化为完成切换。
@@ -75,14 +83,14 @@ export function ProjectFeedRow({
         )}
         onClick={(e) => {
           e.stopPropagation();
-          navigate(`/projects/${item.id}`);
+          open();
         }}
         onKeyDown={(e) => {
           // Ignore keys coming from the nested progress ring button.
           if (e.target !== e.currentTarget) return;
           if (e.key !== 'Enter' && e.key !== ' ') return;
           e.preventDefault();
-          navigate(`/projects/${item.id}`);
+          open();
         }}
         role="button"
       >
@@ -125,6 +133,7 @@ export function ProjectFeedRow({
           <TaskRepeatBadge repeatRule={item.repeatRule} className="shrink-0" />
           <TaskTagCapsules tags={item.tags} />
           <TaskDueDateBadge dueDate={item.dueDate} />
+          {trailing}
         </div>
       </div>
       {completion.dialog}

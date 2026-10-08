@@ -113,6 +113,17 @@ Quick Add 从 `Cmd/Ctrl+Space` 改为 `Cmd/Ctrl+Shift+Space`：Windows 上 Ctrl+
 
 字段键位沿用下方 P1 / P2 的规划键位（主应用里尚未实现，Quick Add 先用上），解析在 `keymap.ts` 的 `resolveQuickAddAction`（注册表 `quickAdd` 作用域，可在设置中改绑，只与卡片内键位判冲突）。系统级唤起键位由 `quick_add_shortcut.rs` 注册与持久化，可在设置中改绑，须含 Ctrl / Alt / ⌘。浮窗是独立 webview，不装配主应用的 KeyboardShortcuts。输入法组字中不响应任何卡片快捷键。
 
+### 回顾（Review Mode）
+
+| 动作 | macOS | Windows | Web |
+|---|---|---|---|
+| 标记已回顾并进入下一个 | ⌥⌘R | Ctrl+Alt+R | Alt+Shift+R |
+| 延后（打开延后菜单） | ⌥⌘L | Ctrl+Alt+L | Alt+Shift+L |
+| 下一个（不标记） | ⌥⌘→ | Ctrl+Alt+→ | Alt+Shift+→ |
+| 上一个 | ⌥⌘← | Ctrl+Alt+← | Alt+Shift+← |
+
+只在回顾模式（`/review`）中生效，其他页面按下不拦截。Web 的 Alt+← 是浏览器后退，统一用 Alt+Shift 系；⇧⌘R 预留给重复规则，mac 用 ⌥⌘R。
+
 ## P1（日期 + 侧边栏）
 
 | 动作 | macOS 桌面 | Windows 桌面 | Web |

@@ -7,6 +7,7 @@ import { HeadingStatus, ProjectStatus, ScheduledType, TaskStatus } from '@taskor
 import { resolveProjectBucket } from './bucket';
 import { sortByEffectivePosition, type Positioned } from './order';
 import type { ProjectFields } from './projects';
+import { planReviewSchedule, type ReviewContext } from './review';
 import { taskTrashPatch, type TaskPatch } from './tasks';
 
 /** 分组列表顺序：有效 Position（与其他列表同一口径）。 */
@@ -68,6 +69,7 @@ export function headingUnarchivePatch(): { status: HeadingStatus; completedAt: n
 export function planHeadingToProject(
   headingTitle: string,
   sourceAreaId: string | null,
+  review: ReviewContext,
 ): { project: ProjectFields; taskPatch: (projectId: string) => TaskPatch } {
   return {
     project: {
@@ -78,6 +80,7 @@ export function planHeadingToProject(
       dueDate: null,
       repeatRule: null,
       repeatSourceId: null,
+      ...planReviewSchedule(review, 'project'),
       bucket: resolveProjectBucket(ScheduledType.NONE),
       status: ProjectStatus.ACTIVE,
       completedAt: null,

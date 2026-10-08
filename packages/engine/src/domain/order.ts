@@ -91,3 +91,37 @@ export function planReorder(
     }),
   ).map(({ id, position }) => ({ id, patch: { position } }));
 }
+
+/** 侧边栏扁平父级序列的一项。 */
+export type SidebarParent<P, A> = { kind: 'project'; project: P } | { kind: 'area'; area: A };
+
+/**
+ * 侧边栏全局视觉顺序的扁平父级序列：区域按自身 Position；项目（含区域
+ * 内项目）按项目间相对 Position 定位；区域放在第一个排在它之后的项目
+ * 之前（区域内项目序列已按 Position，自然跟随其后）。两个参数都已按
+ * 侧边栏位次排好（数组顺序即位次）。Move Picker、Quick Find、分组视图与
+ * 回顾队列共用这一份推导。
+ */
+export function flatParentOrder<
+  P extends { areaId?: string | null },
+  A extends { id: string },
+>(projects: readonly P[], areas: readonly A[]): Array<SidebarParent<P, A>> {
+  const areaById = new Map(areas.map((a) => [a.id, a]));
+  const placed = new Set<string>();
+  const ordered: Array<SidebarParent<P, A>> = [];
+  for (const project of projects) {
+    const area = project.areaId ? areaById.get(project.areaId) : undefined;
+    if (area && !placed.has(area.id)) {
+      // 该区域尚未出现：先占位区域，项目自然跟随其后。
+      placed.add(area.id);
+      ordered.push({ kind: 'area', area });
+    }
+    ordered.push({ kind: 'project', project });
+  }
+  // 无任何项目锚定的区域（含无项目/项目已隐去的区域）追加到末尾，
+  // 彼此间保持侧边栏位次。
+  for (const area of areas) {
+    if (!placed.has(area.id)) ordered.push({ kind: 'area', area });
+  }
+  return ordered;
+}

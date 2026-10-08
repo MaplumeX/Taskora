@@ -34,7 +34,14 @@ import {
   useUiInteractionStore,
 } from '@taskora/api';
 import { cn } from '@/lib/utils';
-import { BUCKET_ROUTES, detectKeyPlatform, resolveAction, type KeyPlatform } from './keymap';
+import {
+  BUCKET_ROUTES,
+  detectKeyPlatform,
+  resolveAction,
+  type KeyAction,
+  type KeyPlatform,
+} from './keymap';
+import { runReviewCommand, type ReviewCommand } from '@/components/review/reviewCommands';
 import { KeyboardTagPicker, taggableSelection } from './KeyboardTagPicker';
 import { useDockToPanel } from '@/components/agent/AssistantPanel';
 
@@ -98,6 +105,13 @@ function neighborAfter(rows: SelectionRow[], ids: string[]): SelectionRow | null
   }
   return null;
 }
+
+const REVIEW_COMMANDS: Partial<Record<KeyAction['type'], ReviewCommand>> = {
+  reviewMarkNext: 'markNext',
+  reviewPostpone: 'postpone',
+  reviewSkip: 'next',
+  reviewPrevious: 'previous',
+};
 
 interface Props {
   /** 平台，默认自动检测；测试可注入。 */
@@ -178,6 +192,12 @@ export function KeyboardShortcuts({ platform }: Props) {
         if (!canTypeToFind(pathname)) return;
         e.preventDefault();
         useUiInteractionStore.getState().openSearch(action.seed);
+        return;
+      }
+      // 回顾模式的键位：不在回顾模式时不拦截
+      const reviewCommand = REVIEW_COMMANDS[action.type];
+      if (reviewCommand) {
+        if (runReviewCommand(reviewCommand)) e.preventDefault();
         return;
       }
       e.preventDefault();

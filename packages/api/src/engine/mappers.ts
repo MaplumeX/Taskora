@@ -9,6 +9,7 @@
 import type { Positioned, ReplicaRow } from '@taskora/engine';
 import {
   HeadingStatus,
+  normalizeReviewInterval,
   ProjectBucket,
   ProjectStatus,
   ScheduledType,
@@ -21,6 +22,7 @@ import type {
   ProjectHeadingResponseDto,
   ProjectResponseDto,
   RepeatRule,
+  ReviewInterval,
   SubtaskResponseDto,
   TagResponseDto,
   TaskResponseDto,
@@ -161,6 +163,7 @@ export function projectRowToDto(
     dueDate: (f.dueDate as string | null) ?? null,
     repeatRule: (f.repeatRule as RepeatRule | null) ?? null,
     repeatSourceId: (f.repeatSourceId as string | null) ?? null,
+    ...reviewFieldsOf(f),
     completedAt: (f.completedAt as string | null) ?? null,
     trashedAt: (f.trashedAt as string | null) ?? null,
     tags: tagIds.map((id) => tags.get(id)).filter((t): t is TagResponseDto => t !== undefined),
@@ -179,9 +182,23 @@ export function areaRowToDto(row: ReplicaRow, tags: Map<string, TagResponseDto>)
     title: (f.title as string) ?? '',
     notes: (f.notes as string | null) ?? null,
     position: typeof f.position === 'string' ? f.position : null,
+    ...reviewFieldsOf(f),
     tags: tagIds.map((id) => tags.get(id)).filter((t): t is TagResponseDto => t !== undefined),
     createdAt: (f.createdAt as string) ?? new Date().toISOString(),
     updatedAt: (f.updatedAt as string) ?? new Date().toISOString(),
+  };
+}
+
+/** Project / Area 的回顾字段（间隔 null 为跟随默认，上次回顾日 null 为从未回顾）。 */
+function reviewFieldsOf(f: ReplicaRow['fields']): {
+  reviewInterval: ReviewInterval | null;
+  nextReviewDate: string | null;
+  lastReviewedOn: string | null;
+} {
+  return {
+    reviewInterval: normalizeReviewInterval(f.reviewInterval),
+    nextReviewDate: (f.nextReviewDate as string | null) ?? null,
+    lastReviewedOn: (f.lastReviewedOn as string | null) ?? null,
   };
 }
 

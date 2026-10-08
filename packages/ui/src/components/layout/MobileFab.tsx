@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useLocation } from 'react-router-dom';
 import { FolderPlus, Heading, Layers, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
@@ -10,6 +11,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useContentBottomActionsForRoute, useMultiSelectStore } from '@taskora/api';
+import { cn } from '@/lib/utils';
 
 /**
  * 手机端右下角悬浮添加按钮（对应 Things 的 Magic Plus）。
@@ -39,6 +41,8 @@ export function MobileFab() {
   // 首页的项目为顶层新建（不归属区域），文案与侧边栏「添加」菜单一致
   const addProjectLabel = showAddArea ? t('common:newProject') : t('project:addProject');
   const multiSelecting = useMultiSelectStore((s) => s.active);
+  // 回顾模式底部有回顾工具栏：按钮让到它上方
+  const inReview = useLocation().pathname.startsWith('/review/');
 
   // 多选模式中底部由多选工具栏占据。
   if (multiSelecting) return null;
@@ -71,7 +75,14 @@ export function MobileFab() {
   );
 
   return (
-    <div className="fixed bottom-[calc(1.25rem+var(--safe-area-bottom)+var(--kb-inset,0px))] right-5 z-40 md:hidden">
+    <div
+      className={cn(
+        'fixed right-5 z-40 md:hidden',
+        inReview
+          ? 'bottom-[calc(5rem+var(--safe-area-bottom)+var(--kb-inset,0px))]'
+          : 'bottom-[calc(1.25rem+var(--safe-area-bottom)+var(--kb-inset,0px))]',
+      )}
+    >
       {hasMenu ? (
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>{fab}</DropdownMenuTrigger>

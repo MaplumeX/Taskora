@@ -1,12 +1,15 @@
 import axios from 'axios';
-import { RepeatSkipBlockedError, type RepeatSkipBlock } from '@taskora/engine';
+import { buildReviewQueue, RepeatSkipBlockedError, type RepeatSkipBlock } from '@taskora/engine';
 import type {
   CompleteProjectDto,
   CreateProjectDto,
   ProjectResponseDto,
+  ReviewQueue,
   UpdateProjectDto,
 } from '@taskora/shared';
 
+import { currentLegacyDateTimeZone, currentTimeZone, todayDateKey } from '@/utils/date';
+import { getAreas } from './areas.api.rest';
 import { apiClient } from './client';
 
 /** REST 实现（thin-client，web 端在过渡期维持现状，ADR-0007）。 */
@@ -62,4 +65,17 @@ export function uncompleteProject(id: string): Promise<ProjectResponseDto> {
 
 export function reorderProjects(orderedIds: string[]): Promise<void> {
   return apiClient.post('/projects/reorder', { orderedIds }).then(() => undefined);
+}
+
+export function markProjectReviewed(id: string): Promise<ProjectResponseDto> {
+  return apiClient.post<ProjectResponseDto>(`/projects/${id}/review`).then((res) => res.data);
+}
+
+/** 回顾队列：hub 没有专门的端点，取项目与区域列表后按同一条领域规则推导。 */
+export async function getReviewQueue(): Promise<ReviewQueue> {
+  const [projects, areas] = await Promise.all([getProjects(), getAreas()]);
+  return buildReviewQueue(projects, areas, todayDateKey(), {
+    timeZone: currentTimeZone(),
+    legacyDateTimeZone: currentLegacyDateTimeZone(),
+  });
 }
