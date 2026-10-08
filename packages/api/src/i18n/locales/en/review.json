@@ -1,5 +1,7 @@
 {
   "title": "Review",
+  "start": "Start Review",
+  "queue": "This Review",
   "progress": "{{current}} / {{total}}",
   "markReviewed": "Mark Reviewed",
   "skip": "Skip",
@@ -33,9 +35,11 @@
   "upcoming_one": "Next review on {{date}} — {{count}} item",
   "upcoming_other": "Next review on {{date}} — {{count}} items",
   "noUpcoming": "Nothing is scheduled for review.",
-  "skippedLeft_one": "{{count}} skipped item is still waiting for review.",
-  "skippedLeft_other": "{{count}} skipped items are still waiting for review.",
-  "restart": "Review again",
+  "status_current": "Current",
+  "status_reviewed": "Reviewed",
+  "status_skipped": "Skipped",
+  "status_gone": "Completed or deleted",
+  "status_pending": "Up next",
   "defaultInterval": "Default review interval",
   "defaultIntervalHint": "Used for new projects and areas."
 }

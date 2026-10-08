@@ -1,10 +1,12 @@
 /**
- * 回顾模式（Review Mode，见 CONTEXT.md）的会话逻辑：进入时把回顾队列取成
- * 快照，之后按快照逐个前进。快照只活在本次访问中（组件状态），不持久化、
- * 不同步；重新进入（含刷新）即按当时的待回顾集合重建，从第一个开始。
+ * 回顾模式（Review Mode，见 CONTEXT.md）的会话逻辑。`/review` 是回顾列表
+ * （Review List），从列表进入某个对象即开始一轮回顾：把当时的待回顾队列
+ * 取成快照（进入的对象不在其中时放在最前），之后按快照逐个前进。快照只活
+ * 在本次访问中（组件状态），不持久化、不同步；回到列表即结束本轮，刷新
+ * 则按当时的待回顾集合重建。
  *
- * 当前对象由路由表示（`/review/project/:id`、`/review/area/:id`），走完
- * 快照为 `/review/done`。步进一律替换历史记录：系统返回直接退出回顾模式。
+ * 当前对象由路由表示（`/review/project/:id`、`/review/area/:id`）。步进一律
+ * 替换历史记录：系统返回直接回到列表。
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -17,20 +19,29 @@ import {
 } from '@taskora/shared';
 
 export const REVIEW_ROUTE = '/review';
-export const REVIEW_DONE_ROUTE = `${REVIEW_ROUTE}/done`;
 
 export function reviewPath(item: ReviewQueueItem | null): string {
-  return item ? `${REVIEW_ROUTE}/${item.kind}/${item.id}` : REVIEW_DONE_ROUTE;
+  return item ? `${REVIEW_ROUTE}/${item.kind}/${item.id}` : REVIEW_ROUTE;
 }
 
-/** `/review/*` 的剩余路径 → 当前对象；`done` 或无法识别为 null。 */
+/** `/review/*` 的剩余路径 → 当前对象；列表或无法识别为 null。 */
 export function parseReviewPath(rest: string | undefined): ReviewQueueItem | null {
   const match = /^(project|area)\/([^/]+)$/.exec(rest ?? '');
   return match ? { kind: match[1] as ReviewQueueItem['kind'], id: match[2] } : null;
 }
 
-function sameItem(a: ReviewQueueItem | null, b: ReviewQueueItem): boolean {
+export function sameReviewItem(a: ReviewQueueItem | null, b: ReviewQueueItem): boolean {
   return a !== null && a.kind === b.kind && a.id === b.id;
+}
+
+const itemKey = (item: ReviewQueueItem) => `${item.kind}:${item.id}`;
+
+/** 一轮回顾的快照：待回顾队列；进入的对象不在其中（尚未到期）时放在最前。 */
+export function reviewSnapshot(
+  due: readonly ReviewQueueItem[],
+  entry: ReviewQueueItem,
+): ReviewQueueItem[] {
+  return due.some((item) => sameReviewItem(entry, item)) ? [...due] : [entry, ...due];
 }
 
 /**
@@ -71,49 +82,70 @@ export function previousReviewIndex(
 }
 
 export interface ReviewSessionInput {
-  /** 当前的待回顾队列；加载中为 undefined。快照只取第一次拿到的结果。 */
+  /** 当前的待回顾队列；加载中为 undefined。快照只在进入时取一次。 */
   queueItems: readonly ReviewQueueItem[] | undefined;
   projects: readonly ProjectResponseDto[] | undefined;
   areas: readonly AreaResponseDto[] | undefined;
-  /** 路由上的当前对象；`/review/done` 为 null。 */
+  /** 路由上的当前对象；在列表上为 null。 */
   current: ReviewQueueItem | null;
-  /** 替换式跳转到某个对象（null 为走完）。 */
+  /** 替换式跳转到某个对象；null 为走完本轮。 */
   go: (item: ReviewQueueItem | null) => void;
   /** 标记已回顾（写入在后台进行，不阻塞前进）。 */
   markReviewed: (item: ReviewQueueItem) => void;
 }
 
+/** 快照中一个对象在本轮的状态（回顾栏的队列列表用）。 */
+export type ReviewItemStatus = 'current' | 'reviewed' | 'skipped' | 'gone' | 'pending';
+
 export interface ReviewSession {
-  /** 快照；建立之前为 null（队列加载中）。 */
+  /** 本轮快照；在列表上或队列加载中为 null。 */
   snapshot: readonly ReviewQueueItem[] | null;
-  /** 当前对象在快照中的位置；走完或不在快照里为 -1。 */
+  /** 当前对象在快照中的位置；不在快照里为 -1。 */
   index: number;
   markNext: () => void;
   skip: () => void;
   previous: () => void;
   canGoPrevious: boolean;
-  /** 按当时的待回顾集合重新取快照，从第一个开始。 */
-  restart: () => void;
+  /** 跳到快照中的任一对象。 */
+  jump: (item: ReviewQueueItem) => void;
+  statusOf: (item: ReviewQueueItem) => ReviewItemStatus;
 }
 
 export function useReviewSession(input: ReviewSessionInput): ReviewSession {
   const { queueItems, projects, areas, current, go, markReviewed } = input;
   const [snapshot, setSnapshot] = useState<readonly ReviewQueueItem[] | null>(null);
+  const [reviewed, setReviewed] = useState<ReadonlySet<string>>(new Set());
+  const [visited, setVisited] = useState<ReadonlySet<string>>(new Set());
 
   const gone = useCallback(
     (item: ReviewQueueItem) => reviewItemGone(item, projects, areas),
     [projects, areas],
   );
 
-  // 进入（含刷新）：第一次拿到队列时取快照，从第一个开始
-  useEffect(() => {
-    if (snapshot !== null || queueItems === undefined) return;
-    const taken = [...queueItems];
-    setSnapshot(taken);
-    go(taken[0] ?? null);
-  }, [snapshot, queueItems, go]);
+  const index = snapshot ? snapshot.findIndex((item) => sameReviewItem(current, item)) : -1;
 
-  const index = snapshot ? snapshot.findIndex((item) => sameItem(current, item)) : -1;
+  // 回到列表即结束本轮；进入对象（含刷新、深链）时没有本轮快照或对象不在
+  // 快照里：按当时的待回顾队列开始新一轮
+  useEffect(() => {
+    if (current === null) {
+      if (snapshot !== null) {
+        setSnapshot(null);
+        setReviewed(new Set());
+        setVisited(new Set());
+      }
+      return;
+    }
+    if (queueItems === undefined || index >= 0) return;
+    setSnapshot(reviewSnapshot(queueItems, current));
+    setReviewed(new Set());
+    setVisited(new Set());
+  }, [current, snapshot, queueItems, index]);
+
+  const currentKey = index >= 0 ? itemKey(snapshot![index]) : null;
+  useEffect(() => {
+    if (currentKey === null) return;
+    setVisited((prev) => (prev.has(currentKey) ? prev : new Set(prev).add(currentKey)));
+  }, [currentKey]);
 
   const advance = useCallback(() => {
     if (!snapshot || index < 0) return;
@@ -132,19 +164,28 @@ export function useReviewSession(input: ReviewSessionInput): ReviewSession {
 
   const markNext = useCallback(() => {
     if (!snapshot || index < 0) return;
-    markReviewed(snapshot[index]);
+    const item = snapshot[index];
+    markReviewed(item);
+    setReviewed((prev) => new Set(prev).add(itemKey(item)));
     advance();
   }, [snapshot, index, markReviewed, advance]);
 
-  const previousIndex = snapshot
-    ? previousReviewIndex(snapshot, index < 0 ? snapshot.length : index, gone)
-    : null;
+  const previousIndex =
+    snapshot && index >= 0 ? previousReviewIndex(snapshot, index, gone) : null;
 
   const previous = useCallback(() => {
     if (snapshot && previousIndex !== null) go(snapshot[previousIndex]);
   }, [snapshot, previousIndex, go]);
 
-  const restart = useCallback(() => setSnapshot(null), []);
+  const statusOf = useCallback(
+    (item: ReviewQueueItem): ReviewItemStatus => {
+      if (sameReviewItem(current, item)) return 'current';
+      if (reviewed.has(itemKey(item))) return 'reviewed';
+      if (gone(item)) return 'gone';
+      return visited.has(itemKey(item)) ? 'skipped' : 'pending';
+    },
+    [current, reviewed, visited, gone],
+  );
 
   return {
     snapshot,
@@ -153,6 +194,7 @@ export function useReviewSession(input: ReviewSessionInput): ReviewSession {
     skip: advance,
     previous,
     canGoPrevious: previousIndex !== null,
-    restart,
+    jump: go,
+    statusOf,
   };
 }

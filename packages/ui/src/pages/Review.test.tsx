@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -69,7 +69,6 @@ function renderReview() {
           <Route path="*" element={<p>elsewhere</p>} />
         </Routes>
         <Location />
-        <Link to="/review">enter review</Link>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -81,7 +80,7 @@ describe('Review 页面', () => {
   beforeEach(async () => {
     vi.clearAllMocks();
     await i18n.changeLanguage('en');
-    projects = [project('p1'), project('p2')];
+    projects = [project('p1'), project('p2'), project('p3')];
     areas = [area('a1')];
     queue = {
       items: [
@@ -92,29 +91,41 @@ describe('Review 页面', () => {
     };
   });
 
-  it('进入即从第一个对象开始，显示进度与完整页面', () => {
+  it('进入是回顾列表：只列待回顾的对象，末尾提示下一次回顾日', () => {
     renderReview();
+    expect(path()).toBe('/review');
+    expect(screen.getByText('p1')).toBeInTheDocument();
+    expect(screen.getByText('a1')).toBeInTheDocument();
+    expect(screen.queryByText('p2')).not.toBeInTheDocument();
+    expect(screen.getByText(/2 items/)).toBeInTheDocument();
+  });
+
+  it('开始回顾从第一个待回顾对象开始；标记已回顾写入并前进；走完回到列表', () => {
+    renderReview();
+    fireEvent.click(screen.getByRole('button', { name: /Start Review/ }));
     expect(path()).toBe('/review/project/p1');
     expect(screen.getByText('project page')).toBeInTheDocument();
     expect(screen.getByText('1 / 2')).toBeInTheDocument();
-  });
 
-  it('标记已回顾写入并进入下一个；跳过不写入；走完显示空状态与下一次回顾日', () => {
-    renderReview();
     fireEvent.click(screen.getByRole('button', { name: /Mark Reviewed/ }));
     expect(markProject).toHaveBeenCalledWith('p1', expect.anything());
     expect(path()).toBe('/review/area/a1');
-    expect(screen.getByText('area page')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /Skip/ }));
     expect(markArea).not.toHaveBeenCalled();
-    expect(path()).toBe('/review/done');
-    expect(screen.getByText('Review finished')).toBeInTheDocument();
-    expect(screen.getByText(/2 items/)).toBeInTheDocument();
+    expect(path()).toBe('/review');
+  });
+
+  it('从列表中任一对象开始：快照仍是整个待回顾队列', () => {
+    renderReview();
+    fireEvent.click(screen.getByText('a1'));
+    expect(path()).toBe('/review/area/a1');
+    expect(screen.getByText('2 / 2')).toBeInTheDocument();
   });
 
   it('快捷键经命令通道驱动；上一个回到已标记的对象', () => {
     renderReview();
+    fireEvent.click(screen.getByText('p1'));
     act(() => {
       runReviewCommand('markNext');
     });
@@ -125,32 +136,24 @@ describe('Review 页面', () => {
     expect(path()).toBe('/review/project/p1');
   });
 
-  it('会话中再次进入 Review：按当时的待回顾集合重建快照，从第一个开始', () => {
-    renderReview();
-    fireEvent.click(screen.getByRole('button', { name: /Skip/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Skip/ }));
-    expect(path()).toBe('/review/done');
-    queue = { items: [{ kind: 'area', id: 'a1' }], upcoming: null };
-    mockData();
-    fireEvent.click(screen.getByText('enter review'));
-    expect(path()).toBe('/review/area/a1');
-    expect(screen.getByText('1 / 1')).toBeInTheDocument();
-  });
-
-  it('没有待回顾对象：直接显示空状态', () => {
+  it('没有待回顾对象：空状态，开始回顾不可用', () => {
     queue = { items: [], upcoming: null };
     renderReview();
-    expect(path()).toBe('/review/done');
     expect(screen.getByText('Nothing to review')).toBeInTheDocument();
     expect(screen.getByText('Nothing is scheduled for review.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Start Review/ })).toBeDisabled();
   });
 
-  it('桌面端：退出回到进入回顾前的页面', () => {
+  it('桌面端：本轮队列可展开并跳转；退出回到列表', () => {
     const restore = mockDesktop(true);
     try {
       renderReview();
+      fireEvent.click(screen.getByText('p1'));
+      fireEvent.click(screen.getByRole('button', { name: 'This Review' }));
+      fireEvent.click(screen.getByRole('button', { name: /a1/ }));
+      expect(path()).toBe('/review/area/a1');
       fireEvent.click(screen.getByRole('button', { name: /Exit Review/ }));
-      expect(path()).toBe('/today');
+      expect(path()).toBe('/review');
     } finally {
       restore();
     }

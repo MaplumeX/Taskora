@@ -8,7 +8,13 @@ import {
   type ReviewQueueItem,
 } from '@taskora/shared';
 
-import { parseReviewPath, reviewPath, useReviewSession, type ReviewSessionInput } from './reviewSession';
+import {
+  parseReviewPath,
+  reviewPath,
+  reviewSnapshot,
+  useReviewSession,
+  type ReviewSessionInput,
+} from './reviewSession';
 
 const project = (id: string, overrides: Partial<ProjectResponseDto> = {}) =>
   ({ id, status: ProjectStatus.ACTIVE, trashedAt: null, ...overrides }) as ProjectResponseDto;
@@ -26,7 +32,7 @@ function setup(initial: Partial<ReviewSessionInput> = {}) {
     queueItems: [P1, A1, P2],
     projects: [project('p1'), project('p2')],
     areas: [area('a1')],
-    current: null,
+    current: P1,
     go: (item) => {
       props = { ...props, current: item };
       rerender?.(props);
@@ -52,30 +58,42 @@ function setup(initial: Partial<ReviewSessionInput> = {}) {
 }
 
 describe('回顾路由', () => {
-  it('对象 ↔ 路径', () => {
+  it('对象 ↔ 路径；走完回到列表', () => {
     expect(reviewPath(P1)).toBe('/review/project/p1');
-    expect(reviewPath(null)).toBe('/review/done');
+    expect(reviewPath(null)).toBe('/review');
     expect(parseReviewPath('area/a1')).toEqual(A1);
-    expect(parseReviewPath('done')).toBeNull();
+    expect(parseReviewPath('')).toBeNull();
+  });
+
+  it('快照：待回顾队列；进入的对象尚未到期时放在最前', () => {
+    expect(reviewSnapshot([P1, A1], A1)).toEqual([P1, A1]);
+    expect(reviewSnapshot([P1, A1], P2)).toEqual([P2, P1, A1]);
   });
 });
 
 describe('useReviewSession', () => {
-  it('进入时取快照并从第一个开始；之后变为待回顾的对象不进入本次快照', () => {
-    const s = setup({ current: P2 }); // 刷新时停在别处：仍从第一个开始
-    expect(s.current()).toEqual(P1);
+  it('从列表进入时取快照；之后变为待回顾的对象不进入本轮快照', () => {
+    const s = setup();
     s.update({ queueItems: [P1, A1, P2, { kind: 'project', id: 'late' }] });
     expect(s.hook.result.current.snapshot).toEqual([P1, A1, P2]);
     expect(s.hook.result.current.index).toBe(0);
   });
 
-  it('队列为空：直接进入空状态', () => {
-    const s = setup({ queueItems: [] });
-    expect(s.current()).toBeNull();
-    expect(s.hook.result.current.index).toBe(-1);
+  it('刷新 / 深链停在队列中的对象：从它所在位置继续', () => {
+    const s = setup({ current: P2 });
+    expect(s.current()).toEqual(P2);
+    expect(s.hook.result.current.index).toBe(2);
   });
 
-  it('标记已回顾：写入当前对象并前进；走完进入空状态', () => {
+  it('回到列表即结束本轮；再次进入按当时的待回顾队列重建', () => {
+    const s = setup();
+    s.update({ current: null });
+    expect(s.hook.result.current.snapshot).toBeNull();
+    s.update({ queueItems: [A1], current: A1 });
+    expect(s.hook.result.current.snapshot).toEqual([A1]);
+  });
+
+  it('标记已回顾：写入当前对象并前进；走完回到列表', () => {
     const s = setup();
     act(() => s.hook.result.current.markNext());
     expect(s.markReviewed).toHaveBeenCalledWith(P1);
@@ -93,18 +111,23 @@ describe('useReviewSession', () => {
     expect(s.markReviewed).not.toHaveBeenCalled();
   });
 
-  it('上一个：可回到已标记的对象；空状态的上一个是最后一个', () => {
+  it('上一个：可回到已标记的对象', () => {
     const s = setup();
     expect(s.hook.result.current.canGoPrevious).toBe(false);
     act(() => s.hook.result.current.markNext());
     act(() => s.hook.result.current.previous());
     expect(s.current()).toEqual(P1);
+  });
+
+  it('队列状态：当前 / 已回顾 / 跳过 / 未到；可跳到任一对象', () => {
+    const s = setup();
+    act(() => s.hook.result.current.markNext());
     act(() => s.hook.result.current.skip());
-    act(() => s.hook.result.current.skip());
-    act(() => s.hook.result.current.skip());
-    expect(s.current()).toBeNull();
-    act(() => s.hook.result.current.previous());
-    expect(s.current()).toEqual(P2);
+    const { statusOf, jump } = s.hook.result.current;
+    expect([P1, A1, P2].map(statusOf)).toEqual(['reviewed', 'skipped', 'current']);
+    act(() => jump(A1));
+    expect(s.current()).toEqual(A1);
+    expect(s.hook.result.current.statusOf(P2)).toBe('skipped');
   });
 
   it('当前项目被了结 / 进 Trash、当前区域被删除：自动进入下一个，前后都跳过它', () => {
@@ -113,6 +136,8 @@ describe('useReviewSession', () => {
     expect(s.current()).toEqual(A1);
     expect(s.markReviewed).not.toHaveBeenCalled();
     expect(s.hook.result.current.canGoPrevious).toBe(false);
+    s.update({}); // 效果里的跳转在下一次渲染才反映到返回值上
+    expect(s.hook.result.current.statusOf(P1)).toBe('gone');
 
     s.update({ areas: [] });
     expect(s.current()).toEqual(P2);

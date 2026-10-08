@@ -1,5 +1,7 @@
 {
   "title": "回顾",
+  "start": "开始回顾",
+  "queue": "本轮回顾",
   "progress": "{{current}} / {{total}}",
   "markReviewed": "标记已回顾",
   "skip": "跳过",
@@ -33,9 +35,11 @@
   "upcoming_one": "下次回顾：{{date}}，共 {{count}} 个",
   "upcoming_other": "下次回顾：{{date}}，共 {{count}} 个",
   "noUpcoming": "暂无排定的回顾。",
-  "skippedLeft_one": "还有 {{count}} 个跳过的对象待回顾。",
-  "skippedLeft_other": "还有 {{count}} 个跳过的对象待回顾。",
-  "restart": "重新回顾",
+  "status_current": "当前",
+  "status_reviewed": "已回顾",
+  "status_skipped": "已跳过",
+  "status_gone": "已了结或删除",
+  "status_pending": "待回顾",
   "defaultInterval": "默认回顾间隔",
   "defaultIntervalHint": "新建项目和区域时使用。"
 }
