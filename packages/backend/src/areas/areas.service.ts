@@ -12,7 +12,7 @@ import { withReviewDto } from '../common/review-dto';
 import { sortByPosition } from '../common/position-order';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncHubService } from '../sync/sync-hub.service';
-import { userCalendarZones, userReviewSettings } from '../users/account-time-zone';
+import { userReviewSettings } from '../users/account-time-zone';
 import { CreateAreaDto, UpdateAreaDto } from './dto/areas.dto';
 
 const TAG_INCLUDE = { tags: { include: { tag: true } } } as const;
@@ -73,22 +73,23 @@ export class AreasService {
   }
 
   async update(userId: string, id: string, dto: UpdateAreaDto) {
-    await this.findOne(userId, id);
+    const area = await this.findOne(userId, id);
     // 全量 set 语义：tagIds 传 undefined 不动；传数组则整组替换
     const fields: Record<string, unknown> = {};
     if (dto.title !== undefined) fields.title = dto.title;
     if (dto.notes !== undefined) fields.notes = dto.notes;
     if (dto.tagIds !== undefined) fields.tagIds = dto.tagIds;
-    Object.assign(fields, planReviewUpdate(dto, await userCalendarZones(this.prisma, userId)));
+    const { zones, review } = await userReviewSettings(this.prisma, userId);
+    Object.assign(fields, planReviewUpdate(area, dto, 'area', review, zones));
     return this.write(userId, id, fields);
   }
 
-  /** 标记已回顾：下次回顾日从原日期加回顾间隔（规则见 domain planMarkReviewed）。 */
+  /** 标记已回顾：下次回顾日为今天加回顾间隔（规则见 domain planMarkReviewed）。 */
   async markReviewed(userId: string, id: string) {
     const area = await this.findOne(userId, id);
-    const { zones, review } = await userReviewSettings(this.prisma, userId);
+    const { review } = await userReviewSettings(this.prisma, userId);
     return this.write(userId, id, {
-      ...planMarkReviewed(area, 'area', review, zones),
+      ...planMarkReviewed(area, 'area', review),
     });
   }
 

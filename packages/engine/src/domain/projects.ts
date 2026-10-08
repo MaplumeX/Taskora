@@ -17,7 +17,12 @@ import {
 import { normalizeRepeatRule } from '../repeat';
 import { resolveProjectBucket } from './bucket';
 import { dateKeyOf, instantMs, type CalendarZones } from './calendar';
-import { planReviewSchedule, planReviewUpdate, type ReviewContext } from './review';
+import {
+  planReviewSchedule,
+  planReviewUpdate,
+  type ReviewContext,
+  type ReviewUpdateBase,
+} from './review';
 import { taskTrashPatch, type TaskPatch } from './tasks';
 
 export interface ProjectFields {
@@ -71,7 +76,7 @@ export function planProjectCreate(
   };
 }
 
-export interface ProjectUpdateBase {
+export interface ProjectUpdateBase extends ReviewUpdateBase {
   scheduledType: unknown;
   scheduledDate: unknown;
   bucket: unknown;
@@ -79,12 +84,14 @@ export interface ProjectUpdateBase {
 
 /**
  * 编辑项目：计划规则同任务（无提醒）——离开 DATE 清除重复规则，DATE 下
- * 规则写入前规范化、非法对象忽略；Bucket 只由计划类型决定。
+ * 规则写入前规范化、非法对象忽略；Bucket 只由计划类型决定。回顾设置见
+ * planReviewUpdate。
  */
 export function planProjectUpdate(
   existing: ProjectUpdateBase,
   input: UpdateProjectDto,
   zones: CalendarZones,
+  review: ReviewContext,
 ): ProjectPatch {
   const patch: ProjectPatch = {};
   const scheduledType = (input.scheduledType ?? existing.scheduledType) as ScheduledType;
@@ -114,7 +121,7 @@ export function planProjectUpdate(
   }
   if (input.areaId !== undefined) patch.areaId = input.areaId;
   if (input.tagIds !== undefined) patch.tagIds = input.tagIds;
-  Object.assign(patch, planReviewUpdate(input, zones));
+  Object.assign(patch, planReviewUpdate(existing, input, 'project', review, zones));
   return patch;
 }
 

@@ -217,9 +217,10 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
       if (!existing) throw new Error(`Project not found: ${id}`);
       const f = existing.fields;
       const patch = planProjectUpdate(
-        { scheduledType: f.scheduledType, scheduledDate: f.scheduledDate, bucket: f.bucket },
+        { ...f, scheduledType: f.scheduledType, scheduledDate: f.scheduledDate, bucket: f.bucket },
         data,
         zones(),
+        currentReviewContext(),
       );
       // Trash 中改日期 / 区域 / 标签等即放回，级联同 restoreProject
       if (f.trashedAt != null && projectUpdatePutsBack(data)) {
@@ -365,7 +366,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
       const existing = await engine.get('project', id);
       if (!existing) throw new Error(`Project not found: ${id}`);
       await engine.update('project', id, {
-        ...planMarkReviewed(existing.fields, 'project', currentReviewContext(), zones()),
+        ...planMarkReviewed(existing.fields, 'project', currentReviewContext()),
       });
       return projectDto(id);
     },

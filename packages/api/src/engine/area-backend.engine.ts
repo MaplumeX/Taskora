@@ -69,11 +69,16 @@ export function createEngineAreaBackend(options: EngineAreaBackendOptions): Area
     },
 
     async updateArea(id: string, data: UpdateAreaDto): Promise<AreaResponseDto> {
+      const existing = await engine.get('area', id);
+      if (!existing) throw new Error(`Area not found: ${id}`);
       const patch: Record<string, unknown> = {};
       if (data.title !== undefined) patch.title = data.title;
       if (data.notes !== undefined) patch.notes = data.notes;
       if (data.tagIds !== undefined) patch.tagIds = data.tagIds;
-      Object.assign(patch, planReviewUpdate(data, zones()));
+      Object.assign(
+        patch,
+        planReviewUpdate(existing.fields, data, 'area', currentReviewContext(), zones()),
+      );
       await engine.update('area', id, patch);
       return areaDto(id);
     },
@@ -100,7 +105,7 @@ export function createEngineAreaBackend(options: EngineAreaBackendOptions): Area
       const existing = await engine.get('area', id);
       if (!existing) throw new Error(`Area not found: ${id}`);
       await engine.update('area', id, {
-        ...planMarkReviewed(existing.fields, 'area', currentReviewContext(), zones()),
+        ...planMarkReviewed(existing.fields, 'area', currentReviewContext()),
       });
       return areaDto(id);
     },

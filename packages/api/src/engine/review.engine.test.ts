@@ -1,6 +1,6 @@
 /**
  * Review（回顾）在设备 Engine 后端上的行为：新建对象的排期（按对象类型写入
- * 默认间隔）、标记已回顾（以下次回顾日为锚点）、改间隔、待回顾判定、存量数据、
+ * 默认间隔）、标记已回顾（今天加间隔）、改间隔（没手动改过日期就重算）、待回顾判定、存量数据、
  * 队列排序与空状态信息、重复项目派生、
  * Put Back，以及两台设备并发标记已回顾后收敛。
  */
@@ -112,86 +112,87 @@ describe('Review（Engine 后端）', () => {
     );
   });
 
-  it('标记已回顾：从原下次回顾日加间隔（手动改的日期即新锚点），记下上次回顾日', async () => {
+  it('标记已回顾：下次回顾日为今天加间隔，与原下次回顾日无关，记下上次回顾日', async () => {
     const project = await device.projects.createProject({
       title: 'P',
       reviewInterval: MONTHLY,
       nextReviewDate: '2026-03-01',
     });
     const marked = await device.projects.markProjectReviewed(project.id);
-    expect(marked.nextReviewDate).toBe('2026-04-01');
+    expect(marked.nextReviewDate).toBe('2026-04-10');
     expect(marked.lastReviewedOn).toBe('2026-03-10');
 
-    await device.projects.updateProject(project.id, { nextReviewDate: '2026-03-05' });
-    expect((await device.projects.markProjectReviewed(project.id)).nextReviewDate).toBe(
-      '2026-04-05',
-    );
+    // 拖延很久才回顾也从今天起算
+    const late = await device.projects.createProject({ title: 'L', nextReviewDate: '2026-01-01' });
+    expect((await device.projects.markProjectReviewed(late.id)).nextReviewDate).toBe('2026-03-17');
 
     const area = await device.areas.createArea({ title: 'A', nextReviewDate: '2026-03-08' });
     const areaMarked = await device.areas.markAreaReviewed(area.id);
-    expect(areaMarked.nextReviewDate).toBe('2026-04-08');
+    expect(areaMarked.nextReviewDate).toBe('2026-04-10');
     expect(areaMarked.lastReviewedOn).toBe('2026-03-10');
     expect(areaMarked.reviewInterval).toEqual(MONTHLY);
   });
 
-  it('拖延很久才回顾：反复加间隔直到晚于今天', async () => {
-    const monthly = await device.projects.createProject({
-      title: 'M',
-      reviewInterval: MONTHLY,
-      nextReviewDate: '2026-01-01',
-    });
-    expect((await device.projects.markProjectReviewed(monthly.id)).nextReviewDate).toBe(
-      '2026-04-01',
-    );
-    const weekly = await device.projects.createProject({
-      title: 'W',
-      nextReviewDate: '2026-02-01',
-    });
-    expect((await device.projects.markProjectReviewed(weekly.id)).nextReviewDate).toBe(
-      '2026-03-15',
-    );
-    // 恰好落在今天也不算：再加一次
-    const exact = await device.projects.createProject({
-      title: 'E',
-      nextReviewDate: '2026-03-03',
-    });
-    expect((await device.projects.markProjectReviewed(exact.id)).nextReviewDate).toBe('2026-03-17');
-  });
-
-  it('月末锚点：溢出取目标月最后一天，且逐次从锚点算不漂移', async () => {
-    const project = await device.projects.createProject({
-      title: 'P',
-      reviewInterval: MONTHLY,
-      nextReviewDate: '2026-01-31',
-    });
+  it('月末：溢出取目标月最后一天', async () => {
+    const project = await device.projects.createProject({ title: 'P', reviewInterval: MONTHLY });
     setToday('2026-01-31');
     expect((await device.projects.markProjectReviewed(project.id)).nextReviewDate).toBe(
       '2026-02-28',
     );
-
-    const late = await device.projects.createProject({
-      title: 'L',
-      reviewInterval: MONTHLY,
-      nextReviewDate: '2026-01-31',
-    });
-    setToday('2026-04-02');
-    expect((await device.projects.markProjectReviewed(late.id)).nextReviewDate).toBe('2026-04-30');
   });
 
-  it('修改间隔不改写下次回顾日；可直接编辑下次回顾日', async () => {
+  it('改间隔：下次回顾日没手动改过就从上次回顾日（从未回顾则创建日）按新间隔重算', async () => {
+    // 从未回顾：从创建日 03-10 起算
     const project = await device.projects.createProject({ title: 'P' });
     const changed = await device.projects.updateProject(project.id, { reviewInterval: MONTHLY });
     expect(changed.reviewInterval).toEqual(MONTHLY);
-    expect(changed.nextReviewDate).toBe('2026-03-17');
-    const moved = await device.projects.updateProject(project.id, {
-      nextReviewDate: '2026-06-01',
+    expect(changed.nextReviewDate).toBe('2026-04-10');
+    // 再改一次仍按排期重算
+    const again = await device.projects.updateProject(project.id, {
+      reviewInterval: { unit: 'day', count: 3 },
     });
-    expect(moved.nextReviewDate).toBe('2026-06-01');
+    expect(again.nextReviewDate).toBe('2026-03-13');
+
+    // 回顾过：从上次回顾日起算，可能已到期
+    setToday('2026-03-20');
+    await device.projects.markProjectReviewed(project.id); // 03-23
+    setToday('2026-03-22');
+    const shorter = await device.projects.updateProject(project.id, {
+      reviewInterval: { unit: 'day', count: 1 },
+    });
+    expect(shorter.nextReviewDate).toBe('2026-03-21');
 
     const area = await device.areas.createArea({ title: 'A' });
     const areaChanged = await device.areas.updateArea(area.id, { reviewInterval: WEEKLY });
     expect(areaChanged.reviewInterval).toEqual(WEEKLY);
-    expect(areaChanged.nextReviewDate).toBe('2026-04-10');
+    expect(areaChanged.nextReviewDate).toBe('2026-03-29');
+  });
+
+  it('改间隔：下次回顾日手动改过（编辑或延后）就不动；同时传入日期以传入为准', async () => {
+    const project = await device.projects.createProject({ title: 'P' });
+    await device.projects.updateProject(project.id, { nextReviewDate: '2026-06-01' });
+    const changed = await device.projects.updateProject(project.id, { reviewInterval: MONTHLY });
+    expect(changed.reviewInterval).toEqual(MONTHLY);
+    expect(changed.nextReviewDate).toBe('2026-06-01');
+
+    // 标记已回顾后回到排期，改间隔又会重算
+    const marked = await device.projects.markProjectReviewed(project.id);
+    expect(marked.nextReviewDate).toBe('2026-04-10');
+    expect(
+      (await device.projects.updateProject(project.id, { reviewInterval: WEEKLY })).nextReviewDate,
+    ).toBe('2026-03-17');
+
+    const both = await device.projects.updateProject(project.id, {
+      reviewInterval: MONTHLY,
+      nextReviewDate: '2026-05-05',
+    });
+    expect(both.nextReviewDate).toBe('2026-05-05');
+
+    // 新建时显式给的日期也算手动
+    const area = await device.areas.createArea({ title: 'A', nextReviewDate: '2026-03-12' });
+    expect(
+      (await device.areas.updateArea(area.id, { reviewInterval: WEEKLY })).nextReviewDate,
+    ).toBe('2026-03-12');
   });
 
   it('待回顾判定：含 Later Project，排除已了结与 Trash 中的项目，Area 始终参与', async () => {
@@ -221,7 +222,7 @@ describe('Review（Engine 后端）', () => {
     );
   });
 
-  it('存量数据（两个字段都为空）当作今天待回顾，标记时以今天为锚点并补写默认间隔', async () => {
+  it('存量数据（两个字段都为空）当作今天待回顾，标记时补写默认间隔', async () => {
     const id = await engine.create('project', { title: 'legacy', status: 'ACTIVE' });
     const areaId = await engine.create('area', { title: 'legacy area' });
     const queue = await device.projects.getReviewQueue();

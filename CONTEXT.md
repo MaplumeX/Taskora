@@ -118,7 +118,7 @@ _Avoid_: 未读、通知、新任务（不是新建的任务，而是新进入 T
 _Avoid_: 复盘、周回顾（回顾按对象各自的间隔排期，不是全局周期）、todayReviewedOn（那是 New in Today 的「已看 Today」日期，与回顾无关）
 
 **Review Interval（回顾间隔）**:
-Project / Area 上的「N × 单位（天/周/月/年）」字段，是每次标记已回顾时加到下次回顾日上的量。新建时写入该对象类型的 Default Review Interval，之后属于对象自己；修改间隔不改写下次回顾日。Repeat Project Instance 派生时沿用来源的间隔。为空只出现在存量或不合法数据上，按默认值计算，标记已回顾时补写。
+Project / Area 上的「N × 单位（天/周/月/年）」字段：标记已回顾时下次回顾日为今天加间隔。新建时写入该对象类型的 Default Review Interval，之后属于对象自己。修改间隔时，下次回顾日若仍是排期算出的值（上次回顾日，从未回顾则创建日，加原间隔），就按新间隔从同一起点重算（结果可能已到期）；被手动改过（直接编辑、延后、新建时指定）则不动。Repeat Project Instance 派生时沿用来源的间隔。为空只出现在存量或不合法数据上，按默认值计算，标记已回顾时补写。
 _Avoid_: 回顾周期、review frequency、跟随默认（间隔总是对象自己的值，没有继承）
 
 **Default Review Interval（默认回顾间隔）**:
@@ -126,15 +126,15 @@ _Avoid_: 回顾周期、review frequency、跟随默认（间隔总是对象自�
 _Avoid_: 全局回顾周期
 
 **Next Review Date（下次回顾日）**:
-Project / Area 上下次该回顾的日历日；不晚于账号时区的今天即为「待回顾」。用户可直接编辑（含明天 / 1 周后 / 1 个月后快捷项）。新建（含 Repeat Project Instance 派生）时为当日 + 回顾间隔。
+Project / Area 上下次该回顾的日历日；不晚于账号时区的今天即为「待回顾」。用户可直接编辑（含明天 / 1 周后 / 1 个月后快捷项）。新建（含 Repeat Project Instance 派生）时为当日 + 回顾间隔。「手动改过」不单独存储，由它是否等于排期算出的值推导（见 Review Interval）。
 _Avoid_: 回顾截止日、review due（不逾期、无红色警示）
 
 **Last Reviewed Date（上次回顾日）**:
-Project / Area 上最近一次标记已回顾的日历日，只由标记已回顾写入，用户不可直接编辑；为空即「从未回顾」。只用于显示，不参与排期。新建与 Repeat Project Instance 派生时为空。
+Project / Area 上最近一次标记已回顾的日历日，只由标记已回顾写入，用户不可直接编辑；为空即「从未回顾」。用于显示，并作为修改间隔时重算下次回顾日的起点。新建与 Repeat Project Instance 派生时为空。
 _Avoid_: 上次查看、最后修改时间
 
 **Mark Reviewed（标记已回顾）**:
-完成对一个 Project / Area 的回顾：上次回顾日记为账号时区的今天，下次回顾日以原下次回顾日为锚点加回顾间隔，仍不晚于今天则继续加到晚于今天（11.1 每月 → 12.1；手动改成 11.15 → 12.15；11.1 每月拖到 12.3 才回顾 → 1.1）。只在 Review 里提供（回顾模式的回顾栏与回顾列表），「…」菜单的回顾设置里没有。
+完成对一个 Project / Area 的回顾：上次回顾日记为账号时区的今天，下次回顾日为今天加回顾间隔，与原下次回顾日无关（同 OmniFocus；11.1 每月、12.3 才回顾 → 1.3）。只在 Review 里提供（回顾模式的回顾栏与回顾列表），「…」菜单的回顾设置里没有。
 _Avoid_: 完成回顾（「完成」专指 Task / Project 的了结）
 
 **Postpone Review（延后）**:

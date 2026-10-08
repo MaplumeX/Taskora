@@ -60,8 +60,7 @@ export function normalizeReviewIntervalDefaults(
 
 /** 账号偏好里的默认回顾间隔；缺失或不合法的档取初始值。 */
 export function accountReviewIntervalDefaults(preferences: unknown): ReviewIntervalDefaults {
-  const raw = (preferences as { defaultReviewIntervals?: unknown } | null)
-    ?.defaultReviewIntervals;
+  const raw = (preferences as { defaultReviewIntervals?: unknown } | null)?.defaultReviewIntervals;
   return normalizeReviewIntervalDefaults(raw);
 }
 
@@ -82,24 +81,6 @@ export function addReviewInterval(day: string, interval: ReviewInterval, times =
     case 'year':
       return date.add({ years: count }, { overflow: 'constrain' }).toString();
   }
-}
-
-/**
- * 标记已回顾的下次回顾日：从锚点（原下次回顾日）加间隔，仍不晚于今天就继续
- * 加，直到晚于今天。每一步都从锚点算第 k 个间隔，月末锚点不漂移
- * （1-31 每月 → 2-28、3-31、4-30）。
- */
-export function advanceReviewDate(anchor: string, interval: ReviewInterval, today: string): string {
-  let times = 1;
-  if (interval.unit === 'day' || interval.unit === 'week') {
-    // 定长单位直接算出越过今天所需的次数
-    const step = interval.count * (interval.unit === 'week' ? 7 : 1);
-    const gap = Temporal.PlainDate.from(anchor).until(Temporal.PlainDate.from(today)).days;
-    times = Math.max(1, Math.floor(gap / step) + 1);
-  }
-  let next = addReviewInterval(anchor, interval, times);
-  while (next <= today) next = addReviewInterval(anchor, interval, ++times);
-  return next;
 }
 
 /** 回顾队列中的一个对象。 */

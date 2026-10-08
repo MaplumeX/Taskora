@@ -133,7 +133,13 @@ export class ProjectsService {
 
   async update(userId: string, id: string, dto: UpdateProjectDto) {
     const existing = await this.requireProject(userId, id);
-    const patch = planProjectUpdate(existing, dto, await userCalendarZones(this.prisma, userId));
+    const { zones, review } = await userReviewSettings(this.prisma, userId);
+    const patch = planProjectUpdate(
+      { ...existing, reviewInterval: parseReviewInterval(existing.reviewInterval) },
+      dto,
+      zones,
+      review,
+    );
     // Trash 中改日期 / 区域 / 标签等即放回，级联同 restore
     const restore =
       existing.trashedAt != null && projectUpdatePutsBack(dto)
@@ -316,18 +322,14 @@ export class ProjectsService {
     }
   }
 
-  /** 标记已回顾：下次回顾日从原日期加回顾间隔（规则见 domain planMarkReviewed）。 */
+  /** 标记已回顾：下次回顾日为今天加回顾间隔（规则见 domain planMarkReviewed）。 */
   async markReviewed(userId: string, id: string) {
     const existing = await this.requireProject(userId, id);
-    const { zones, review } = await userReviewSettings(this.prisma, userId);
+    const { review } = await userReviewSettings(this.prisma, userId);
     const patch = planMarkReviewed(
-      {
-        reviewInterval: parseReviewInterval(existing.reviewInterval),
-        nextReviewDate: existing.nextReviewDate,
-      },
+      { reviewInterval: parseReviewInterval(existing.reviewInterval) },
       'project',
       review,
-      zones,
     );
     await this.hub.writeAsHub(userId, async (batch) => {
       await batch.write('project', id, toWireFields(patch));

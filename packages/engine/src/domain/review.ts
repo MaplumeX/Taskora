@@ -5,14 +5,15 @@
  * - 新建时按对象类型（项目 / Area）写入账号的默认回顾间隔；之后间隔属于对象
  *   自己，修改默认值不影响已有对象。间隔为空只出现在存量或不合法数据上，按
  *   默认值计算，标记已回顾时补写。
- * - 下次回顾日是锚点：标记已回顾在它上面加间隔（加到晚于今天）；改间隔不动
- *   它。为空（存量数据）视为今天。
- * - 上次回顾日只由标记已回顾写入，只用于显示。
+ * - 标记已回顾：下次回顾日为今天加间隔（同 OmniFocus），上次回顾日记为今天。
+ * - 改间隔：下次回顾日没被手动改过就按新间隔从上次回顾日（从未回顾则创建日）
+ *   重算；手动改过（直接编辑或延后）则不动。下次回顾日为空（存量数据）视为今天。
+ * - 上次回顾日只由标记已回顾写入。
  */
 
 import {
-  advanceReviewDate,
   addReviewInterval,
+  instantDateKey,
   normalizeReviewInterval,
   ProjectStatus,
   type ReviewDefaultKind,
@@ -45,6 +46,12 @@ export interface ReviewScheduleInput {
   nextReviewDate?: unknown;
 }
 
+/** 改回顾设置时用到的现有字段。 */
+export interface ReviewUpdateBase extends ReviewScheduleInput {
+  lastReviewedOn?: unknown;
+  createdAt?: unknown;
+}
+
 /** 生效的回顾间隔：自身间隔，没有（存量或不合法数据）就用该对象类型的账号默认。 */
 export function effectiveReviewInterval(
   reviewInterval: unknown,
@@ -75,38 +82,66 @@ export function planReviewSchedule(
 }
 
 /**
- * 标记已回顾：以原下次回顾日为锚点加间隔，仍不晚于今天就继续加到晚于今天
- * （11-01 每月 → 12-01；拖到 12-03 才回顾 → 01-01）；上次回顾日记为今天。
- * 间隔为空（存量数据）时同时写入按默认算出的间隔。
+ * 标记已回顾：下次回顾日为今天加间隔，上次回顾日记为今天。间隔为空（存量
+ * 数据）时同时写入按默认算出的间隔。
  */
 export function planMarkReviewed(
   existing: ReviewScheduleInput,
   kind: ReviewDefaultKind,
   context: ReviewContext,
-  zones: CalendarZones = UTC_ZONES,
 ): Partial<ReviewFields> {
   const own = normalizeReviewInterval(existing.reviewInterval);
   const interval = own ?? context.defaults[kind];
-  const anchor = effectiveNextReviewDate(existing.nextReviewDate, context.today, zones);
   return {
     ...(own ? {} : { reviewInterval: interval }),
-    nextReviewDate: advanceReviewDate(anchor, interval, context.today),
+    nextReviewDate: addReviewInterval(context.today, interval),
     lastReviewedOn: context.today,
   };
 }
 
 /**
- * 编辑回顾设置：改间隔只改间隔，不动下次回顾日；下次回顾日可直接改。
+ * 下次回顾日的排期起点：上次回顾日，从未回顾则为创建日（账号时区）；
+ * 都没有为 null。
+ */
+function reviewBaseDate(existing: ReviewUpdateBase, zones: CalendarZones): string | null {
+  const last = dateKeyOf(existing.lastReviewedOn, zones);
+  if (last) return last;
+  if (typeof existing.createdAt !== 'string' && !(existing.createdAt instanceof Date)) return null;
+  try {
+    return instantDateKey(existing.createdAt, zones.timeZone);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 编辑回顾设置：
+ * - 改间隔时，下次回顾日若仍是排期算出的值（起点 + 原间隔，没被手动改过），
+ *   就按新间隔从起点重算（可能已到期）；手动改过则不动。为空视为没改过。
+ * - 下次回顾日可直接改，同时传入时以传入为准。
  * 不合法的间隔 / 日期忽略；上次回顾日不可编辑。
  */
 export function planReviewUpdate(
+  existing: ReviewUpdateBase,
   input: ReviewScheduleInput,
+  kind: ReviewDefaultKind,
+  context: ReviewContext,
   zones: CalendarZones,
 ): Partial<ReviewFields> {
   const patch: Partial<ReviewFields> = {};
   if (input.reviewInterval !== undefined) {
     const interval = normalizeReviewInterval(input.reviewInterval);
-    if (interval) patch.reviewInterval = interval;
+    if (interval) {
+      patch.reviewInterval = interval;
+      const base = reviewBaseDate(existing, zones);
+      const current = dateKeyOf(existing.nextReviewDate, zones);
+      const scheduled =
+        base &&
+        addReviewInterval(base, effectiveReviewInterval(existing.reviewInterval, kind, context));
+      if (base && (current === null || current === scheduled)) {
+        patch.nextReviewDate = addReviewInterval(base, interval);
+      }
+    }
   }
   if (input.nextReviewDate !== undefined) {
     const day = dateKeyOf(input.nextReviewDate, zones);

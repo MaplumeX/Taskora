@@ -1,7 +1,7 @@
 /**
  * Review（回顾）的 hub 写路径（真实 Postgres + 真实 Sync Hub）：新建对象的
- * 回顾排期（跟随默认）、REST 改间隔 / 下次回顾日与标记已回顾（以下次回顾日
- * 为锚点、记上次回顾日）、设备推送的回顾字段，
+ * 回顾排期（跟随默认）、REST 改间隔（没手动改过日期就重算）/ 下次回顾日与
+ * 标记已回顾（今天加间隔、记上次回顾日）、设备推送的回顾字段，
  * 以及结构不合法的 reviewInterval 被剔除并以必胜时钟下发空值。
  */
 import { afterAll, afterEach, beforeEach, expect, it, vi } from 'vitest';
@@ -67,24 +67,32 @@ dbDescribe('Review 写路径（真实 Postgres）', () => {
     });
   });
 
-  it('REST 改间隔不改写下次回顾日；标记已回顾从原下次回顾日加间隔并记上次回顾日', async () => {
+  it('REST 改间隔：没手动改过日期就从创建日 / 上次回顾日重算，改过则不动；标记已回顾为今天加间隔', async () => {
     const project = await h.projects.create(USER, { title: 'P' });
     const changed = await h.projects.update(USER, project.id, {
       reviewInterval: { unit: 'month', count: 1 },
     });
     expect(changed.reviewInterval).toEqual({ unit: 'month', count: 1 });
-    expect(changed.nextReviewDate?.toISOString()).toBe('2026-03-13T00:00:00.000Z');
+    expect(changed.nextReviewDate?.toISOString()).toBe('2026-04-10T00:00:00.000Z');
 
     vi.setSystemTime(new Date('2026-03-31T12:00:00Z'));
     const marked = await h.projects.markReviewed(USER, project.id);
-    expect(marked.nextReviewDate?.toISOString()).toBe('2026-04-13T00:00:00.000Z');
+    expect(marked.nextReviewDate?.toISOString()).toBe('2026-04-30T00:00:00.000Z');
     expect(marked.lastReviewedOn?.toISOString()).toBe('2026-03-31T00:00:00.000Z');
     await expectLoggedAsStored('project', project.id);
+    const weekly = await h.projects.update(USER, project.id, {
+      reviewInterval: { unit: 'week', count: 1 },
+    });
+    expect(weekly.nextReviewDate?.toISOString()).toBe('2026-04-07T00:00:00.000Z');
 
     const area = await h.areas.create(USER, { title: 'A' });
-    await h.areas.update(USER, area.id, { nextReviewDate: '2026-03-20' });
+    await h.areas.update(USER, area.id, { nextReviewDate: '2026-04-20' });
+    const areaChanged = await h.areas.update(USER, area.id, {
+      reviewInterval: { unit: 'day', count: 1 },
+    });
+    expect(areaChanged.nextReviewDate?.toISOString()).toBe('2026-04-20T00:00:00.000Z');
     const areaMarked = await h.areas.markReviewed(USER, area.id);
-    expect(areaMarked.nextReviewDate?.toISOString()).toBe('2026-04-04T00:00:00.000Z');
+    expect(areaMarked.nextReviewDate?.toISOString()).toBe('2026-04-01T00:00:00.000Z');
     expect(areaMarked.lastReviewedOn?.toISOString()).toBe('2026-03-31T00:00:00.000Z');
     await expectLoggedAsStored('area', area.id);
   });
