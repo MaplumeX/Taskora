@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { MoreHorizontal, Tag, Trash2 } from 'lucide-react';
+import { CalendarCheck, MoreHorizontal, Tag, Trash2 } from 'lucide-react';
 
 import type { AreaResponseDto, UpdateAreaDto } from '@taskora/shared';
 
@@ -11,6 +11,8 @@ import { Button } from '@/components/ui/button';
 import { MenuRow } from '@/components/common/MenuRow';
 import { useDeleteArea, useUpdateArea } from '@taskora/api';
 import { TagsField } from '@/components/task/fields/TagsField';
+import { ReviewSettingsDialog } from '@/components/review/ReviewSettingsDialog';
+import { useInReviewMode } from '@/components/review/reviewMode';
 import { isTouchContextMenu } from '../../lib/useLongPress';
 
 export interface AreaMoreMenuProps {
@@ -45,12 +47,15 @@ function AreaMenu({
 }) {
   const { t } = useTranslation('task');
   const { t: tc } = useTranslation('common');
+  const { t: tr } = useTranslation('review');
   const navigate = useNavigate();
+  const inReview = useInReviewMode();
   const updateArea = useUpdateArea();
   const deleteArea = useDeleteArea();
 
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
+  const [reviewSettingsOpen, setReviewSettingsOpen] = React.useState(false);
 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const virtualAnchorRef = React.useRef<{ getBoundingClientRect: () => DOMRect } | null>(null);
@@ -75,7 +80,8 @@ function AreaMenu({
     closeMenu();
     deleteArea.mutate(area.id, {
       onSuccess: () => {
-        if (!contextMenu) navigate('/today');
+        // 回顾中删除：回顾会话自动进入下一个，不跳走
+        if (!contextMenu && !inReview) navigate('/today');
       },
       onError: () => toast.error(tc('deleteFailed')),
     });
@@ -120,6 +126,17 @@ function AreaMenu({
           <MenuRow icon={Tag} onClick={() => openPicker('tags')}>
             {t('tags')}
           </MenuRow>
+          {!contextMenu && (
+            <MenuRow
+              icon={CalendarCheck}
+              onClick={() => {
+                closeMenu();
+                setReviewSettingsOpen(true);
+              }}
+            >
+              {tr('settings')}
+            </MenuRow>
+          )}
           <div className="-mx-1 my-1 h-px bg-muted" />
           <MenuRow icon={Trash2} destructive onClick={handleDelete}>
             {tc('delete')}
@@ -133,6 +150,13 @@ function AreaMenu({
           {activePicker === 'tags' && <TagsField current={area} onPatch={handlePatch} />}
         </PopoverContent>
       </Popover>
+      {!contextMenu && (
+        <ReviewSettingsDialog
+          target={{ kind: 'area', ...area }}
+          open={reviewSettingsOpen}
+          onOpenChange={setReviewSettingsOpen}
+        />
+      )}
     </div>
   );
 }

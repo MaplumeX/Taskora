@@ -1,10 +1,18 @@
 import { randomUUID } from 'node:crypto';
 
 import { Injectable, NotFoundException } from '@nestjs/common';
-import { planReorder, positionAtEnd } from '@taskora/engine';
+import {
+  planMarkReviewed,
+  planReorder,
+  planReviewSchedule,
+  planReviewUpdate,
+  positionAtEnd,
+} from '@taskora/engine';
+import { withReviewDto } from '../common/review-dto';
 import { sortByPosition } from '../common/position-order';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncHubService } from '../sync/sync-hub.service';
+import { userCalendarZones, userReviewSettings } from '../users/account-time-zone';
 import { CreateAreaDto, UpdateAreaDto } from './dto/areas.dto';
 
 const TAG_INCLUDE = { tags: { include: { tag: true } } } as const;
@@ -22,7 +30,7 @@ export class AreasService {
     return this.hub.writeAsHub(userId, async (batch) => {
       await batch.write('area', id, fields);
       const area = await batch.tx.area.findUniqueOrThrow({ where: { id }, include: TAG_INCLUDE });
-      return { ...area, tags: area.tags.map((at) => at.tag) };
+      return { ...withReviewDto(area), tags: area.tags.map((at) => at.tag) };
     });
   }
 
@@ -32,11 +40,13 @@ export class AreasService {
       where: { userId },
       select: { id: true, position: true },
     });
+    const { zones, review } = await userReviewSettings(this.prisma, userId);
     return this.write(userId, randomUUID(), {
       title: dto.title,
       notes: dto.notes ?? null,
       position: positionAtEnd(existing),
       tagIds: dto.tagIds ?? [],
+      ...planReviewSchedule(review, dto, zones),
     });
   }
 
@@ -45,7 +55,10 @@ export class AreasService {
       where: { userId },
       include: TAG_INCLUDE,
     });
-    return sortByPosition(areas).map((a) => ({ ...a, tags: a.tags.map((at) => at.tag) }));
+    return sortByPosition(areas).map((a) => ({
+      ...withReviewDto(a),
+      tags: a.tags.map((at) => at.tag),
+    }));
   }
 
   async findOne(userId: string, id: string) {
@@ -56,7 +69,7 @@ export class AreasService {
     if (!area) {
       throw new NotFoundException('Area not found');
     }
-    return { ...area, tags: area.tags.map((at) => at.tag) };
+    return { ...withReviewDto(area), tags: area.tags.map((at) => at.tag) };
   }
 
   async update(userId: string, id: string, dto: UpdateAreaDto) {
@@ -66,7 +79,15 @@ export class AreasService {
     if (dto.title !== undefined) fields.title = dto.title;
     if (dto.notes !== undefined) fields.notes = dto.notes;
     if (dto.tagIds !== undefined) fields.tagIds = dto.tagIds;
+    Object.assign(fields, planReviewUpdate(dto, await userCalendarZones(this.prisma, userId)));
     return this.write(userId, id, fields);
+  }
+
+  /** 标记已回顾：下次回顾日为今天加回顾间隔（规则见 domain planMarkReviewed）。 */
+  async markReviewed(userId: string, id: string) {
+    const area = await this.findOne(userId, id);
+    const { review } = await userReviewSettings(this.prisma, userId);
+    return this.write(userId, id, { ...planMarkReviewed(area, review) });
   }
 
   async remove(userId: string, id: string) {

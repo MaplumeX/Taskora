@@ -7,11 +7,13 @@
  * issue 04）；排序位次沿 Position（新项目追加末尾）。
  */
 
-import { currentLegacyDateTimeZone, currentTimeZone } from '@/utils/date';
+import { currentLegacyDateTimeZone, currentReviewContext, currentTimeZone } from '@/utils/date';
 import type { CalendarZones, Engine, ReplicaRow } from '@taskora/engine';
 import {
+  buildReviewQueue,
   countProjectTasks,
   normalizeRepeatRule,
+  planMarkReviewed,
   planProjectComplete,
   planProjectCreate,
   planProjectRepeatSkip,
@@ -30,6 +32,7 @@ import type {
   CompleteProjectDto,
   CreateProjectDto,
   ProjectResponseDto,
+  ReviewQueue,
   TagResponseDto,
   UpdateProjectDto,
 } from '@taskora/shared';
@@ -102,11 +105,13 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
         scheduledDate: f.scheduledDate,
         dueDate: f.dueDate,
         repeatRule: normalizeRepeatRule(f.repeatRule),
+        reviewInterval: f.reviewInterval,
         areaId: (f.areaId as string | null) ?? null,
         tagIds: tagIdsOf(parent),
       },
       completedAt,
       zones(),
+      currentReviewContext(),
     );
     if (!plan) return;
     const linked = await engine.list('project', {
@@ -198,7 +203,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
       // 新项目排末尾（Position 追加）
       const existing = await engine.list('project');
       const id = await engine.create('project', {
-        ...planProjectCreate(data, zones()),
+        ...planProjectCreate(data, zones(), currentReviewContext()),
         position: positionAfter(
           existing,
           existing.length > 0 ? existing[existing.length - 1].id : null,
@@ -353,6 +358,39 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
       await engine.updateMany(
         'project',
         changes.map(({ id, position }) => ({ id, patch: { position } })),
+      );
+    },
+
+    async markProjectReviewed(id: string): Promise<ProjectResponseDto> {
+      const existing = await engine.get('project', id);
+      if (!existing) throw new Error(`Project not found: ${id}`);
+      await engine.update('project', id, {
+        ...planMarkReviewed(existing.fields, currentReviewContext()),
+      });
+      return projectDto(id);
+    },
+
+    async getReviewQueue(): Promise<ReviewQueue> {
+      const [projects, areas] = await Promise.all([
+        engine.list('project', { where: { trashedAt: null } }),
+        engine.list('area'),
+      ]);
+      return buildReviewQueue(
+        projects.map((row) => ({
+          id: row.id,
+          areaId: (row.fields.areaId as string | null) ?? null,
+          position: (row.fields.position as string | null) ?? null,
+          status: row.fields.status,
+          trashedAt: row.fields.trashedAt,
+          nextReviewDate: row.fields.nextReviewDate,
+        })),
+        areas.map((row) => ({
+          id: row.id,
+          position: (row.fields.position as string | null) ?? null,
+          nextReviewDate: row.fields.nextReviewDate,
+        })),
+        currentReviewContext().today,
+        zones(),
       );
     },
   };

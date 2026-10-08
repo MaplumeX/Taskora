@@ -113,6 +113,26 @@ _Avoid_: 收件箱项目、默认项目
 Today 中上次看过 Today 之后**随日期到来**才进入的 Task / 独立项目行（参考 Things 3 的黄色 new in Today 圆点）：计划日期晚于「最近一次查看 Today 的日期」（账号偏好 `todayReviewedOn`），且排期发生在计划日期之前（计划日期字段的写入时刻，取其 HLC 墙钟，按账号时区早于该日）。当天才手动排到今天或排到已过日期的不算；写入时刻未知的旧数据只按前一条判断。在 Today 顶部自成一区、行首左侧带黄点，仅可区内重排；侧边栏 / 手机首页的 Today 入口有新到时带黄点。进入 Today 即把已看日期推进到今天（本次访问内黄点保留，离开后消失）；已看日期只进不退，经账号偏好跨端同步。从未看过 Today 时不标新到。纯推导，不改写 Task / Project 字段。
 _Avoid_: 未读、通知、新任务（不是新建的任务，而是新进入 Today 的任务）
 
+**Review（回顾）**:
+定期逐个检查 Project 与 Area 是否仍然有效、是否缺下一步的动作（参考 OmniFocus Review）。参与回顾的是所有 Area，以及未了结、未进 Trash 的 Project（含 Later Project）；Task 不参与。每个对象都必须参与，不可关闭（不想常看就把间隔设长）。
+_Avoid_: 复盘、周回顾（回顾按对象各自的间隔排期，不是全局周期）、todayReviewedOn（那是 New in Today 的「已看 Today」日期，与回顾无关）
+
+**Review Interval（回顾间隔）**:
+Project / Area 上的「N × 单位（天/周/月/年）」字段，决定标记已回顾后多久再回顾。新建对象取账号偏好的默认回顾间隔（初始 1 周）；修改间隔不改写下次回顾日。Repeat Project Instance 派生时沿用来源的间隔。
+_Avoid_: 回顾周期、review frequency
+
+**Next Review Date（下次回顾日）**:
+Project / Area 上下次该回顾的日历日；不晚于账号时区的今天即为「待回顾」。用户可直接编辑。新建（含 Repeat Project Instance 派生）时为当日 + 回顾间隔。
+_Avoid_: 回顾截止日、review due（不逾期、无红色警示）
+
+**Mark Reviewed（标记已回顾）**:
+完成对一个 Project / Area 的回顾：下次回顾日改为账号时区的今天 + 回顾间隔（不按原日期对齐，错过多久都从今天重新计）。
+_Avoid_: 完成回顾（「完成」专指 Task / Project 的了结）
+
+**Review Mode（回顾模式）**:
+从侧边栏 Review 入口（与 Logbook、Trash 同组，带待回顾数）进入的逐个回顾流程：进入时把待回顾的 Project / Area 按下次回顾日、同日按侧边栏顺序排成一份队列快照，一次展示一个对象的完整可编辑页面，配回顾栏（进度、间隔与下次回顾日、标记已回顾、跳过、上一个、退出）。标记已回顾或了结 / 删除当前对象后自动进入下一个；跳过的对象仍待回顾。快照只活在本次访问中，重新进入即按当时的待回顾集合重建；不持久化、不同步。队列空时为空状态，显示下一次回顾日。
+_Avoid_: Review 视图 / Bucket（它不是按状态过滤的视图，而是一个流程）、Review 透视（OmniFocus 词）
+
 **Grouped View（分组视图）**:
 Bucket 视图的一种展示形态：视图内任务按其直接父级（Project，无项目时按 Area）聚类显示，区别于任务平铺的 Flat View。组是纯渲染层推导，不改数据模型。
 _Avoid_: 分节、分类显示

@@ -9,6 +9,7 @@ import {
   type CreateProjectDto,
   type ProjectBucket,
   type RepeatRule,
+  type ReviewInterval,
   type SettleRemainingTasks,
   type UpdateProjectDto,
 } from '@taskora/shared';
@@ -16,6 +17,7 @@ import {
 import { normalizeRepeatRule } from '../repeat';
 import { resolveProjectBucket } from './bucket';
 import { dateKeyOf, instantMs, type CalendarZones } from './calendar';
+import { planReviewSchedule, planReviewUpdate, type ReviewContext } from './review';
 import { taskTrashPatch, type TaskPatch } from './tasks';
 
 export interface ProjectFields {
@@ -28,6 +30,10 @@ export interface ProjectFields {
   repeatRule: RepeatRule | null;
   /** 派生来源：派生出本项目的重复项目 id；非派生为 null。 */
   repeatSourceId: string | null;
+  /** 回顾间隔（Review Interval）。 */
+  reviewInterval: ReviewInterval | null;
+  /** 下次回顾日（日期键）。 */
+  nextReviewDate: string | null;
   bucket: ProjectBucket;
   status: ProjectStatus;
   completedAt: string | null;
@@ -38,7 +44,11 @@ export interface ProjectFields {
 
 export type ProjectPatch = Partial<ProjectFields>;
 
-export function planProjectCreate(input: CreateProjectDto, zones: CalendarZones): ProjectFields {
+export function planProjectCreate(
+  input: CreateProjectDto,
+  zones: CalendarZones,
+  review: ReviewContext,
+): ProjectFields {
   const scheduledType = input.scheduledType ?? ScheduledType.NONE;
   return {
     title: input.title,
@@ -49,6 +59,7 @@ export function planProjectCreate(input: CreateProjectDto, zones: CalendarZones)
     dueDate: dateKeyOf(input.dueDate, zones),
     repeatRule: null,
     repeatSourceId: null,
+    ...planReviewSchedule(review, input, zones),
     bucket: resolveProjectBucket(scheduledType),
     status: ProjectStatus.ACTIVE,
     completedAt: null,
@@ -101,6 +112,7 @@ export function planProjectUpdate(
   }
   if (input.areaId !== undefined) patch.areaId = input.areaId;
   if (input.tagIds !== undefined) patch.tagIds = input.tagIds;
+  Object.assign(patch, planReviewUpdate(input, zones));
   return patch;
 }
 

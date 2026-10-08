@@ -6,7 +6,14 @@
  * 物理删除）。
  */
 
-import { planReorder, positionAtEnd, type Engine } from '@taskora/engine';
+import {
+  planMarkReviewed,
+  planReorder,
+  planReviewSchedule,
+  planReviewUpdate,
+  positionAtEnd,
+  type Engine,
+} from '@taskora/engine';
 import type {
   AreaResponseDto,
   CreateAreaDto,
@@ -14,8 +21,13 @@ import type {
   UpdateAreaDto,
 } from '@taskora/shared';
 
+import { currentLegacyDateTimeZone, currentReviewContext, currentTimeZone } from '@/utils/date';
 import type { AreaBackend } from '../api/area-backend';
 import { areaRowToDto, positionedRows, tagIndexFor } from './mappers';
+
+function zones() {
+  return { timeZone: currentTimeZone(), legacyDateTimeZone: currentLegacyDateTimeZone() };
+}
 
 export interface EngineAreaBackendOptions {
   engine: Engine;
@@ -51,6 +63,7 @@ export function createEngineAreaBackend(options: EngineAreaBackendOptions): Area
         notes: data.notes ?? null,
         position: positionAtEnd(positionedRows(existing)),
         tagIds: data.tagIds ?? [],
+        ...planReviewSchedule(currentReviewContext(), data, zones()),
       });
       return areaDto(id);
     },
@@ -60,6 +73,7 @@ export function createEngineAreaBackend(options: EngineAreaBackendOptions): Area
       if (data.title !== undefined) patch.title = data.title;
       if (data.notes !== undefined) patch.notes = data.notes;
       if (data.tagIds !== undefined) patch.tagIds = data.tagIds;
+      Object.assign(patch, planReviewUpdate(data, zones()));
       await engine.update('area', id, patch);
       return areaDto(id);
     },
@@ -80,6 +94,15 @@ export function createEngineAreaBackend(options: EngineAreaBackendOptions): Area
           patch: { ...patch },
         })),
       );
+    },
+
+    async markAreaReviewed(id: string): Promise<AreaResponseDto> {
+      const existing = await engine.get('area', id);
+      if (!existing) throw new Error(`Area not found: ${id}`);
+      await engine.update('area', id, {
+        ...planMarkReviewed(existing.fields, currentReviewContext()),
+      });
+      return areaDto(id);
     },
   };
 }

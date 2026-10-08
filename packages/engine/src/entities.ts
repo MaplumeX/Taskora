@@ -93,6 +93,9 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('dueDate'),
       f('repeatRule', { json: true }),
       f('repeatSourceId'),
+      // Review（回顾）：回顾间隔（JSON）与下次回顾日（日历日）。
+      f('reviewInterval', { json: true }),
+      f('nextReviewDate'),
       f('completedAt'),
       f('trashedAt'),
       f('position'),
@@ -124,6 +127,8 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('notes'),
       f('position'),
       f('tagIds', { json: true }),
+      f('reviewInterval', { json: true }),
+      f('nextReviewDate'),
       f('createdAt'),
       f('updatedAt'),
     ],

@@ -2,6 +2,7 @@ import type {
   CompleteProjectDto,
   CreateProjectDto,
   ProjectResponseDto,
+  ReviewQueue,
   UpdateProjectDto,
 } from '@taskora/shared';
 
@@ -52,4 +53,12 @@ export function uncompleteProject(id: string): Promise<ProjectResponseDto> {
 
 export function reorderProjects(orderedIds: string[]): Promise<void> {
   return currentProjectBackend().reorderProjects(orderedIds);
+}
+
+export function markProjectReviewed(id: string): Promise<ProjectResponseDto> {
+  return currentProjectBackend().markProjectReviewed(id);
+}
+
+export function getReviewQueue(): Promise<ReviewQueue> {
+  return currentProjectBackend().getReviewQueue();
 }

@@ -43,6 +43,10 @@ export type KeyAction =
   | { type: 'tags' }
   /** ⌘J / Ctrl+J / Alt+J：开关助手面板（`/agent` 页为「收回到面板」）。 */
   | { type: 'toggleAssistantPanel' }
+  /** 回顾模式（Review Mode）：标记已回顾并进入下一个 / 跳过 / 上一个；只在回顾模式下生效。 */
+  | { type: 'reviewMarkNext' }
+  | { type: 'reviewSkip' }
+  | { type: 'reviewPrevious' }
   /**
    * 打字唤起 Quick Find：无修饰（可带 Shift）的单个可打印字符，seed 为该字符；
    * 输入法组合的首键 seed 为空（只打开并聚焦，不带入字符）。
@@ -94,7 +98,7 @@ export type Chord = string;
 
 /** 设置页的分组（与 docs/keyboard-shortcuts.md 的小节一致）。 */
 export type ShortcutGroup =
-  'navigation' | 'selection' | 'create' | 'complete' | 'edit' | 'global' | 'quickAdd';
+  'navigation' | 'selection' | 'create' | 'complete' | 'edit' | 'global' | 'review' | 'quickAdd';
 
 /**
  * 键位作用域：主窗口（KeyboardShortcuts）与 Quick Add 卡片（独立浮窗）各自
@@ -129,6 +133,9 @@ export type ShortcutId =
   | 'expand'
   | 'search'
   | 'toggleAssistantPanel'
+  | 'reviewMarkNext'
+  | 'reviewSkip'
+  | 'reviewPrevious'
   | 'quickAddSubmit'
   | 'quickAddSubmitAndContinue'
   | 'quickAddWhen'
@@ -340,6 +347,37 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     group: 'global',
     action: { type: 'toggleAssistantPanel' },
     defaults: { mac: ['Meta+J'], windows: ['Ctrl+J'], web: ['Alt+J'] },
+  },
+  // 回顾模式（Review Mode）：只在回顾时生效。Web 的 Alt+← 是浏览器后退，
+  // 统一用 Alt+Shift 系。
+  {
+    id: 'reviewMarkNext',
+    scope: 'app',
+    group: 'review',
+    action: { type: 'reviewMarkNext' },
+    defaults: { mac: ['Shift+Meta+R'], windows: ['Ctrl+Alt+R'], web: ['Alt+Shift+R'] },
+  },
+  {
+    id: 'reviewSkip',
+    scope: 'app',
+    group: 'review',
+    action: { type: 'reviewSkip' },
+    defaults: {
+      mac: ['Alt+Meta+ArrowRight'],
+      windows: ['Ctrl+Alt+ArrowRight'],
+      web: ['Alt+Shift+ArrowRight'],
+    },
+  },
+  {
+    id: 'reviewPrevious',
+    scope: 'app',
+    group: 'review',
+    action: { type: 'reviewPrevious' },
+    defaults: {
+      mac: ['Alt+Meta+ArrowLeft'],
+      windows: ['Ctrl+Alt+ArrowLeft'],
+      web: ['Alt+Shift+ArrowLeft'],
+    },
   },
   // Quick Add 卡片（桌面浮窗）：沿用 docs/keyboard-shortcuts.md 的 P1 / P2 键位。
   quickAddDef('quickAddSubmit', 'submit', 'Enter'),
@@ -558,7 +596,15 @@ export function formatChord(chord: Chord, platform: KeyPlatform, appleOS = isApp
 
 /** 按钮上可展示 hint 快捷键的动作。 */
 export type HintableAction =
-  'search' | 'newTask' | 'newProject' | 'newHeading' | 'tags' | 'toggleAssistantPanel';
+  | 'search'
+  | 'newTask'
+  | 'newProject'
+  | 'newHeading'
+  | 'tags'
+  | 'toggleAssistantPanel'
+  | 'reviewMarkNext'
+  | 'reviewSkip'
+  | 'reviewPrevious';
 
 /**
  * 动作 → 当前生效键位（首个）的展示文案；与 resolveAction 同源于

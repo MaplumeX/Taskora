@@ -13,6 +13,7 @@ import {
   Tag,
   Trash2,
   RotateCcw,
+  CalendarCheck,
 } from 'lucide-react';
 
 import { ScheduledType, type ProjectResponseDto, type UpdateProjectDto } from '@taskora/shared';
@@ -31,6 +32,9 @@ import { ScheduledDateField } from '@/components/task/fields/ScheduledDateField'
 import { DueDateField } from '@/components/task/fields/DueDateField';
 import { RepeatRuleField } from '@/components/task/fields/RepeatRuleField';
 import { TagsField } from '@/components/task/fields/TagsField';
+
+import { ReviewSettingsDialog } from '@/components/review/ReviewSettingsDialog';
+import { useInReviewMode } from '@/components/review/reviewMode';
 
 import { useProjectCompletion } from './useProjectCompletion';
 import { useSkipProjectOccurrence } from './useSkipProjectOccurrence';
@@ -52,16 +56,20 @@ export function ProjectMenuPanel({
   onClose,
   openPicker,
   onToggleComplete,
+  onOpenReviewSettings,
   firstItemRef,
 }: ProjectMenuProps & {
   onClose: () => void;
   openPicker: (kind: Exclude<PickerKind, null>) => void;
+  /** 打开回顾设置（只有项目页的「…」菜单提供）。 */
+  onOpenReviewSettings?: () => void;
   /** 完成 / 取消完成（含剩余任务询问，见 useProjectCompletion；对话框由外层渲染）。 */
   onToggleComplete: (project: ProjectResponseDto) => void;
   firstItemRef?: React.RefObject<HTMLButtonElement>;
 }) {
   const { t } = useTranslation('task');
   const { t: tc } = useTranslation('common');
+  const { t: tr } = useTranslation('review');
 
   const deleteProject = useDeleteProject();
   const restoreProject = useRestoreProject();
@@ -132,6 +140,17 @@ export function ProjectMenuPanel({
       <MenuRow icon={Tag} onClick={() => openPicker('tags')}>
         {t('tags')}
       </MenuRow>
+      {onOpenReviewSettings && variant === 'default' && (
+        <MenuRow
+          icon={CalendarCheck}
+          onClick={() => {
+            onClose();
+            onOpenReviewSettings();
+          }}
+        >
+          {tr('settings')}
+        </MenuRow>
+      )}
       <div className="-mx-1 my-1 h-px bg-muted" />
       <MenuRow
         icon={variant === 'trash' ? RotateCcw : Trash2}
@@ -289,9 +308,14 @@ export function ProjectContextMenu({
 export function ProjectMoreMenu({ project, current, variant = 'default' }: ProjectMenuProps) {
   const { t: tc } = useTranslation('common');
   const navigate = useNavigate();
+  const inReview = useInReviewMode();
 
-  const onDeleted = () => navigate('/today');
+  // 回顾中删除：回顾会话自动进入下一个，不跳走
+  const onDeleted = () => {
+    if (!inReview) navigate('/today');
+  };
   const [menuOpen, setMenuOpen] = React.useState(false);
+  const [reviewSettingsOpen, setReviewSettingsOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
 
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -331,6 +355,7 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
             onClose={closeMenu}
             openPicker={openPicker}
             onToggleComplete={completion.toggle}
+            onOpenReviewSettings={() => setReviewSettingsOpen(true)}
           />
         </PopoverContent>
       </Popover>
@@ -347,6 +372,11 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
         </PopoverContent>
       </Popover>
       {completion.dialog}
+      <ReviewSettingsDialog
+        target={{ kind: 'project', ...current }}
+        open={reviewSettingsOpen}
+        onOpenChange={setReviewSettingsOpen}
+      />
     </div>
   );
 }

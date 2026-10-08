@@ -1,3 +1,4 @@
+import { Type } from 'class-transformer';
 import {
   IsBoolean,
   IsTimeZone,
@@ -9,7 +10,9 @@ import {
   MaxLength,
   MinLength,
   ValidateIf,
+  ValidateNested,
 } from 'class-validator';
+import { ReviewIntervalDto } from '../../common/review-interval.dto';
 import type {
   UpdateProfileDto as IUpdateProfileDto,
   UpdatePasswordDto as IUpdatePasswordDto,
@@ -64,6 +67,11 @@ export class UpdatePreferencesDto implements IUpdatePreferencesDto {
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   todayReviewedOn?: string;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ReviewIntervalDto)
+  defaultReviewInterval?: ReviewIntervalDto;
 }
 
 export class DeleteAccountDto implements IDeleteAccountDto {

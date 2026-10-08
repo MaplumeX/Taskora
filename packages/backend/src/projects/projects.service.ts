@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import {
   countProjectTasks,
+  planMarkReviewed,
   planProjectComplete,
   planProjectCreate,
   planProjectRepeatSkip,
@@ -22,7 +23,8 @@ import { SyncHubService, type HubWriteBatch } from '../sync/sync-hub.service';
 import { parseRepeatRule, withRepeatRuleDto } from '../tasks/task-dto.mapper';
 import { sortByPosition } from '../common/position-order';
 import { countedTasksOf, edgePositions, toWireFields } from '../common/domain-storage';
-import { userCalendarZones } from '../users/account-time-zone';
+import { parseReviewInterval, withReviewDto } from '../common/review-dto';
+import { userCalendarZones, userReviewSettings } from '../users/account-time-zone';
 import { CompleteProjectDto, CreateProjectDto, UpdateProjectDto } from './dto/projects.dto';
 
 /** 派生路径需要的 Project 行形状（含标签关系）。 */
@@ -55,11 +57,16 @@ export class ProjectsService {
   }
 
   private async withCounts<
-    T extends { id: string; repeatRule: string | null; tags: Array<{ tag: unknown }> },
+    T extends {
+      id: string;
+      repeatRule: string | null;
+      reviewInterval: string | null;
+      tags: Array<{ tag: unknown }>;
+    },
   >(userId: string, project: T) {
     const { total, completed } = (await this.counts(userId, [project.id])).get(project.id)!;
     return {
-      ...withRepeatRuleDto(project),
+      ...withReviewDto(withRepeatRuleDto(project)),
       tags: project.tags.map((pt) => pt.tag),
       taskTotalCount: total,
       taskCompletedCount: completed,
@@ -67,7 +74,8 @@ export class ProjectsService {
   }
 
   async create(userId: string, dto: CreateProjectDto) {
-    const fields = planProjectCreate(dto, await userCalendarZones(this.prisma, userId));
+    const { zones, review } = await userReviewSettings(this.prisma, userId);
+    const fields = planProjectCreate(dto, zones, review);
     const id = randomUUID();
     const created = await this.hub.writeAsHub(userId, async (batch) => {
       // 新项目排在末尾
@@ -82,7 +90,7 @@ export class ProjectsService {
       });
     });
     return {
-      ...withRepeatRuleDto(created),
+      ...withReviewDto(withRepeatRuleDto(created)),
       tags: created.tags.map((pt) => pt.tag),
       taskTotalCount: 0,
       taskCompletedCount: 0,
@@ -104,7 +112,7 @@ export class ProjectsService {
     return sortByPosition(projects).map((p) => {
       const { total, completed } = counts.get(p.id)!;
       return {
-        ...withRepeatRuleDto(p),
+        ...withReviewDto(withRepeatRuleDto(p)),
         tags: p.tags.map((pt) => pt.tag),
         taskTotalCount: total,
         taskCompletedCount: completed,
@@ -224,6 +232,7 @@ export class ProjectsService {
   ): Promise<void> {
     const repeatRule = parseRepeatRule(parent.repeatRule);
     if (!repeatRule) return; // 非重复项目：不必查账号时区
+    const { zones, review } = await userReviewSettings(this.prisma, userId);
     const plan = planRepeatProjectInstance(
       {
         id: parent.id,
@@ -232,11 +241,13 @@ export class ProjectsService {
         scheduledDate: parent.scheduledDate,
         dueDate: parent.dueDate,
         repeatRule,
+        reviewInterval: parseReviewInterval(parent.reviewInterval),
         areaId: parent.areaId,
         tagIds: parent.tags.map((pt) => pt.tagId),
       },
       completedAt,
-      await userCalendarZones(this.prisma, userId),
+      zones,
+      review,
     );
     if (!plan) return;
     const linked = await batch.tx.project.findFirst({
@@ -303,6 +314,20 @@ export class ProjectsService {
     for (const { id, ...attachment } of copy.attachments) {
       await batch.write('attachment', id, attachment);
     }
+  }
+
+  /** 标记已回顾：下次回顾日为今天加回顾间隔（规则见 domain planMarkReviewed）。 */
+  async markReviewed(userId: string, id: string) {
+    const existing = await this.requireProject(userId, id);
+    const { review } = await userReviewSettings(this.prisma, userId);
+    const patch = planMarkReviewed(
+      { reviewInterval: parseReviewInterval(existing.reviewInterval) },
+      review,
+    );
+    await this.hub.writeAsHub(userId, async (batch) => {
+      await batch.write('project', id, toWireFields(patch));
+    });
+    return this.findOne(userId, id);
   }
 
   async uncomplete(userId: string, id: string) {

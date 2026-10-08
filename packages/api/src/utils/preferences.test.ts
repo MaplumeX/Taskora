@@ -8,6 +8,7 @@ const defaults = {
   weekStartsOn: 1,
   bucketGrouping: true,
 } as const;
+const WEEKLY = { unit: 'week', count: 1 };
 
 describe('normalizePreferences', () => {
   it('validates account time zones and keeps the existing zone for missing/invalid values', () => {
@@ -31,6 +32,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 0,
       bucketGrouping: false,
       todayReviewedOn: null,
+      defaultReviewInterval: WEEKLY,
     });
   });
 
@@ -55,6 +57,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 1,
       bucketGrouping: true,
       todayReviewedOn: null,
+      defaultReviewInterval: WEEKLY,
     });
   });
 
@@ -67,6 +70,7 @@ describe('normalizePreferences', () => {
         weekStartsOn: 1,
         bucketGrouping: true,
         todayReviewedOn: null,
+        defaultReviewInterval: WEEKLY,
       });
     }
   });
@@ -79,6 +83,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 1,
       bucketGrouping: true,
       todayReviewedOn: null,
+      defaultReviewInterval: WEEKLY,
     });
     expect(normalizePreferences({ language: 'zh' }, defaults)).toEqual({
       timeZone: 'UTC',
@@ -87,6 +92,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 1,
       bucketGrouping: true,
       todayReviewedOn: null,
+      defaultReviewInterval: WEEKLY,
     });
   });
 
@@ -99,6 +105,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 1,
       bucketGrouping: true,
       todayReviewedOn: null,
+      defaultReviewInterval: WEEKLY,
     });
   });
 
@@ -127,5 +134,30 @@ describe('normalizePreferences', () => {
       normalizePreferences({ bucketGrouping: 'no' }, { ...defaults, bucketGrouping: false })
         .bucketGrouping,
     ).toBe(false);
+  });
+
+  it('normalizes defaultReviewInterval: valid passes, invalid falls back to the local value or weekly', () => {
+    expect(
+      normalizePreferences({ defaultReviewInterval: { unit: 'month', count: 2 } }, defaults)
+        .defaultReviewInterval,
+    ).toEqual({ unit: 'month', count: 2 });
+    for (const dirty of [
+      { unit: 'decade', count: 1 },
+      { unit: 'week', count: 0 },
+      { unit: 'week', count: 1.5 },
+      { unit: 'week', count: '2' },
+      'weekly',
+      null,
+    ]) {
+      expect(
+        normalizePreferences({ defaultReviewInterval: dirty }, defaults).defaultReviewInterval,
+      ).toEqual(WEEKLY);
+      expect(
+        normalizePreferences(
+          { defaultReviewInterval: dirty },
+          { ...defaults, defaultReviewInterval: { unit: 'day', count: 3 } },
+        ).defaultReviewInterval,
+      ).toEqual({ unit: 'day', count: 3 });
+    }
   });
 });

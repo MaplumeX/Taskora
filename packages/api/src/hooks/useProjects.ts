@@ -168,6 +168,7 @@ export function useCreateProject() {
     },
     onSettled: () => {
       refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['review'] });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
@@ -206,6 +207,7 @@ export function useUpdateProject() {
     onSettled: (_data, _error, { id }) => {
       refreshAfterWrite(queryClient, { queryKey: projectKeys.detail(id) });
       refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['review'] });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
@@ -239,6 +241,7 @@ export function useRestoreProject() {
     onSettled: (_data, _error, id) => {
       refreshAfterWrite(queryClient, { queryKey: projectKeys.detail(id) });
       refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['review'] });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
@@ -288,6 +291,7 @@ export function useCompleteProject() {
         queryKey: projectKeys.detail(completeVariablesId(variables)),
       });
       refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['review'] });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });
       refreshAfterWrite(queryClient, { queryKey: ['tasks'] });
     },
@@ -323,6 +327,7 @@ export function useUncompleteProject() {
     onSettled: (_data, _error, id) => {
       refreshAfterWrite(queryClient, { queryKey: projectKeys.detail(id) });
       refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['review'] });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
@@ -336,6 +341,7 @@ export function useSkipProject() {
     onSettled: (_data, _error, id) => {
       refreshAfterWrite(queryClient, { queryKey: projectKeys.detail(id) });
       refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['review'] });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });
       refreshAfterWrite(queryClient, { queryKey: ['tasks'] });
     },
@@ -364,6 +370,7 @@ export function useReorderProjects() {
     },
     onSettled: () => {
       refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['review'] });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
@@ -386,6 +393,7 @@ export function useDeleteProject() {
     },
     onSettled: () => {
       refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['review'] });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });

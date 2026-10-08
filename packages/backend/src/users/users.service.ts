@@ -81,7 +81,21 @@ export class UsersService {
     const current = (user.preferences ?? {}) as Record<string, unknown>;
     // Legacy ISO dates must not move when the user changes the account zone.
     const legacyDateTimeZone = current.legacyDateTimeZone ?? accountTimeZone(current);
-    const merged = { ...current, ...dto, ...(dto.timeZone ? { legacyDateTimeZone } : {}) };
+    const { defaultReviewInterval, ...rest } = dto;
+    const merged = {
+      ...current,
+      ...rest,
+      ...(dto.timeZone ? { legacyDateTimeZone } : {}),
+      // 规范形的纯对象（DTO 实例不是 Prisma 的 JSON 输入）
+      ...(defaultReviewInterval
+        ? {
+            defaultReviewInterval: {
+              unit: defaultReviewInterval.unit,
+              count: defaultReviewInterval.count,
+            },
+          }
+        : {}),
+    };
     // New in Today 的已看日期只进不退：迟到的旧设备写入不回拨。
     if (
       typeof current.todayReviewedOn === 'string' &&

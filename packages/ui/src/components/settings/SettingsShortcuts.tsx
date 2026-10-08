@@ -36,6 +36,7 @@ const APP_GROUPS: ShortcutGroup[] = [
   'complete',
   'edit',
   'global',
+  'review',
 ];
 
 /** 录制目标：注册表里的动作，或系统级 Quick Add 快捷键。 */

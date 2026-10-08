@@ -41,6 +41,7 @@ describe('AreasService', () => {
         notes: null,
         userId,
         position: 'a0',
+        reviewInterval: null,
         tags: [],
       };
       const personal = {
@@ -49,6 +50,7 @@ describe('AreasService', () => {
         notes: null,
         userId,
         position: 'a1',
+        reviewInterval: null,
         tags: [],
       };
       mockPrisma.area.findMany.mockResolvedValue([personal, work]);
@@ -86,7 +88,14 @@ describe('AreasService', () => {
     it('should return an area by id', async () => {
       const userId = 'user-1';
       const areaId = 'area-1';
-      const expected = { id: areaId, title: 'Work', notes: null, userId, tags: [] };
+      const expected = {
+        id: areaId,
+        title: 'Work',
+        notes: null,
+        userId,
+        reviewInterval: null,
+        tags: [],
+      };
       mockPrisma.area.findFirst.mockResolvedValue(expected);
 
       const result = await service.findOne(userId, areaId);

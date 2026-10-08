@@ -1,3 +1,5 @@
+import type { ReviewInterval } from '../review';
+
 export interface UpdateProfileDto {
   displayName?: string | null;
   avatarUrl?: string | null;
@@ -23,6 +25,8 @@ export interface UserPreferences {
    * Today 条目为「新到」（New in Today）；只进不退，跨端取较晚者。
    */
   todayReviewedOn?: string;
+  /** 新建 Project / Area 的默认回顾间隔（Review Interval）；缺省为每周。 */
+  defaultReviewInterval?: ReviewInterval;
 }
 
 export interface UpdatePreferencesDto {
@@ -32,6 +36,7 @@ export interface UpdatePreferencesDto {
   timeZone?: string;
   bucketGrouping?: boolean;
   todayReviewedOn?: string;
+  defaultReviewInterval?: ReviewInterval;
 }
 
 export interface DeleteAccountDto {

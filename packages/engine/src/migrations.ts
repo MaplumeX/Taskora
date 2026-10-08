@@ -258,6 +258,14 @@ export const REPLICA_MIGRATIONS: readonly ReplicaMigration[] = [
   nestTagGroups,
   // 11 → 12：增加 attachment 表（Task 附件，ADR-0019）。
   addAttachments,
+  // 12 → 13：project / area 增加 reviewInterval / nextReviewDate（Review）。
+  // 存量行留空：空的下次回顾日即今天待回顾，空间隔按账号默认。
+  async (storage) => {
+    for (const table of ['project', 'area']) {
+      await addColumnIfMissing(storage, table, 'reviewInterval', 'TEXT');
+      await addColumnIfMissing(storage, table, 'nextReviewDate', 'TEXT');
+    }
+  },
 ];
 
 /** 当前代码的副本 schema 版本。 */
