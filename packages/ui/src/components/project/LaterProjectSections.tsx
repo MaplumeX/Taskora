@@ -22,8 +22,8 @@ import {
   SortableProjectRow,
 } from '@/components/project/DraggableProjectRow';
 import { groupLaterProjects } from '@/components/project/laterProjectLayout';
-import { dndListProps, dragOverlayClass, dragOverlayWrapperClass, useHeldOrder } from '@/lib/dnd';
-import { useDndSurface } from '@/lib/appDnd';
+import { dndListProps, dragOverlayClass, dragOverlayWrapperClass, useHeldOrder } from '../../lib/dnd';
+import { useDndSurface } from '../../lib/appDnd';
 import { cn } from '@/lib/utils';
 
 // 小节标题沿用侧边栏对应 Bucket 的名称、图标与颜色（计划 = Upcoming，将来 = Someday）。
