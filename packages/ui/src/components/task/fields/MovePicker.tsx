@@ -1,12 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Check, Inbox, Layers, Search } from 'lucide-react';
+import { Inbox, Layers } from 'lucide-react';
 
 import type { UpdateTaskDto } from '@taskora/shared';
 import { useAreasQuery, useLaterProjectKind, useProjectsQuery } from '@taskora/api';
 
 import { ProjectProgressPie } from '@/components/project/ProjectProgressRing';
-import { useListboxNavigation } from '../../../lib/useListboxNavigation';
+import { MovePickerList } from '@/components/common/MovePickerList';
 import { cn } from '@/lib/utils';
 import {
   buildMoveTargets,
@@ -50,81 +50,18 @@ export function MovePicker({ current, onSelect }: Props) {
   );
   const currentId = currentMoveTargetId(current);
 
-  const select = (target: MoveTarget) => {
-    if (target.id === currentId) return;
-    onSelect(moveTargetDto(target));
-  };
-
-  const { listboxId, active, setActiveIndex, optionId, onKeyDown } = useListboxNavigation(
-    targets,
-    select,
-  );
-
-  // 输入变化回到第一项；无搜索词时从当前位置开始
-  useEffect(() => {
-    const index = query.trim() ? 0 : targets.findIndex((target) => target.id === currentId);
-    setActiveIndex(Math.max(index, 0));
-  }, [query]);
-
   return (
-    <div className="flex flex-col gap-1">
-      <div className="flex items-center gap-2 border-b border-border px-2 pb-1.5">
-        <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-        <input
-          type="text"
-          role="combobox"
-          aria-expanded={targets.length > 0}
-          aria-controls={listboxId}
-          aria-activedescendant={targets.length > 0 ? optionId(active) : undefined}
-          aria-autocomplete="list"
-          aria-label={t('task:moveSearchPlaceholder')}
-          placeholder={t('task:moveSearchPlaceholder')}
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          onKeyDown={onKeyDown}
-          className="h-7 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-        />
-      </div>
-      <div
-        id={listboxId}
-        role="listbox"
-        aria-label={t('task:move')}
-        className="flex max-h-72 flex-col gap-0.5 overflow-y-auto"
-      >
-        {targets.length === 0 && (
-          <p className="px-2 py-2 text-meta text-muted-foreground">{t('task:moveNoResults')}</p>
-        )}
-        {targets.map((target, index) => {
-          const selected = target.id === currentId;
-          return (
-            <div
-              key={target.id}
-              id={optionId(index)}
-              role="option"
-              aria-selected={index === active}
-              aria-current={selected || undefined}
-              onMouseMove={() => index !== active && setActiveIndex(index)}
-              // 保持输入框焦点
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => select(target)}
-              className={cn(
-                'flex cursor-default items-center gap-2 rounded-md px-2 py-1.5 text-sm max-md:py-2.5',
-                index === active && 'bg-accent',
-                target.kind === 'project' && target.nested && 'pl-7',
-              )}
-            >
-              <MoveTargetRow target={target} />
-              <Check
-                className={cn(
-                  'ml-auto h-3.5 w-3.5 shrink-0 text-primary',
-                  selected ? 'opacity-100' : 'opacity-0',
-                )}
-              />
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <MovePickerList
+      targets={targets}
+      currentId={currentId}
+      query={query}
+      onQueryChange={setQuery}
+      onSelect={(target) => onSelect(moveTargetDto(target))}
+      searchPlaceholder={t('task:moveSearchPlaceholder')}
+      emptyMessage={t('task:moveNoResults')}
+      renderTarget={(target) => <MoveTargetRow target={target} />}
+      isNested={(target) => target.kind === 'project' && target.nested}
+    />
   );
 }
 

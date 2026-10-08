@@ -1,6 +1,6 @@
 # Feature: Move Picker
 
-Status: implemented (01–03) — awaiting visual acceptance
+Status: implemented (01–03, 06) — awaiting visual acceptance
 
 对照 Things 3 的「Move」popover，把现有的「移动」面板（`MoveField`）重做为一个可搜索、有层级、能用键盘操作的归属选择器，并修正「移入 / 移出 Inbox」的语义。
 
@@ -84,11 +84,18 @@ currentMoveTargetId(task): string | null
 - `TaskContextMenu`：选中后 patch 并关闭。
 - `MultiSelectToolbar`：对勾选集合 `patchAll` 后 `closePicker`（退出多选模式）。
 
+### 4. 项目移动（2026-10-08，issue 06）
+
+- 项目右键菜单、项目详情页「更多」菜单提供与任务相同的「移动」入口（FolderTree 图标）。
+- 任务与项目共用 `MovePickerList`：搜索、当前位置打勾、高亮、键盘导航和行样式一致。
+- 项目目标仅为「无区域」与所有 Area（与侧边栏同序）；搜索仍按前缀优先。
+- 选择后仅写 `{ areaId }`，无区域写 `{ areaId: null }`，随即关闭选择器；选当前位置不写入。
+- 复用 `useUpdateProject`，由既有数据层处理离线同步、错误回滚与 Trash 隐式放回。
+
 ## Out of Scope（第二期）
 
 - 移到 Project Heading：`UpdateTaskDto` 没有 `headingId`，需要走 heading layout reorder，见 issue 04。
 - `⇧⌘M` 快捷键：keymap 目前没有 move 动作，popover 锚点需复用右键菜单的虚拟锚点，见 issue 05。
-- Project 的移动（改所属区域）：不在本期。
 
 ## Testing
 

@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -7,10 +8,17 @@ import React from 'react';
 import type { ProjectResponseDto } from '@taskora/shared';
 import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
 
-import { ProjectContextMenu } from './ProjectContextMenu';
+import { i18n } from '@taskora/api';
+
+import { ProjectContextMenu, ProjectMoreMenu } from './ProjectContextMenu';
 
 vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
+  useAreasQuery: () => ({ data: [
+    { id: 'work', title: 'Work' },
+    { id: 'home', title: 'Home' },
+    { id: 'homework', title: 'Homework' },
+  ] }),
   useUpdateProject: () => ({ mutate: updateMock, isPending: false }),
   useCompleteProject: () => ({ mutate: completeMock, isPending: false }),
   useUncompleteProject: () => ({ mutate: vi.fn(), isPending: false }),
@@ -96,5 +104,84 @@ describe('ProjectContextMenu — 重复项目（recurring-projects）', () => {
       { id: 'project-1', settleRemaining: 'completed' },
       expect.anything(),
     );
+  });
+});
+
+
+describe('项目移动', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    void i18n.changeLanguage('en');
+  });
+
+  async function openMove(project = baseProject) {
+    renderMenu(project);
+    fireEvent.click(await screen.findByRole('button', { name: 'Move' }));
+    return screen.findByRole('combobox');
+  }
+
+  it('右键入口只列无区域与各区域，当前位置打勾并高亮', async () => {
+    await openMove({ ...baseProject, areaId: 'work' });
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'No Area', 'Work', 'Home', 'Homework',
+    ]);
+    const work = screen.getByRole('option', { name: 'Work' });
+    expect(work).toHaveAttribute('aria-current', 'true');
+    expect(work).toHaveAttribute('aria-selected', 'true');
+    fireEvent.click(work);
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it('搜索按前缀优先，键盘选中后仅修改区域并关闭', async () => {
+    const input = await openMove({
+      ...baseProject,
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2030-01-07',
+      repeatRule: { unit: 'week', interval: 1, anchor: 'scheduled' },
+    });
+    fireEvent.change(input, { target: { value: 'work' } });
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      'Work', 'Homework',
+    ]);
+    fireEvent.keyDown(input, { key: 'ArrowDown' });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(updateMock).toHaveBeenCalledWith(
+      { id: 'project-1', data: { areaId: 'homework' } }, expect.anything(),
+    );
+    expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  it('可移为无区域项目', async () => {
+    await openMove({ ...baseProject, areaId: 'work' });
+    fireEvent.click(screen.getByRole('option', { name: 'No Area' }));
+    expect(updateMock).toHaveBeenCalledWith(
+      { id: 'project-1', data: { areaId: null } }, expect.anything(),
+    );
+    expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  it('搜索无结果显示提示，清空搜索恢复当前位置；Esc 关闭', async () => {
+    const input = await openMove({ ...baseProject, areaId: 'work' });
+    fireEvent.change(input, { target: { value: 'zzz' } });
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    expect(screen.getByText('No matching areas')).toBeInTheDocument();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(updateMock).not.toHaveBeenCalled();
+    fireEvent.change(input, { target: { value: '' } });
+    expect(screen.getByRole('option', { name: 'Work' })).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  it('详情页更多菜单使用相同移动选择器', async () => {
+    render(<MemoryRouter><ProjectMoreMenu project={baseProject} current={baseProject} /></MemoryRouter>);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'More' }));
+    await user.click(await screen.findByRole('button', { name: 'Move' }));
+    await user.click(await screen.findByRole('option', { name: 'Home' }));
+    expect(updateMock).toHaveBeenCalledWith(
+      { id: 'project-1', data: { areaId: 'home' } }, expect.anything(),
+    );
+    expect(screen.queryByRole('combobox')).toBeNull();
   });
 });
