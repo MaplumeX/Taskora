@@ -15,7 +15,7 @@ import { ProjectFeedRow } from '@/components/feed/ProjectFeedRow';
 import { groupLaterProjects } from '@/components/project/laterProjectLayout';
 import { cn } from '@/lib/utils';
 
-// 小节标题沿用侧边栏对应 Bucket 的名称、图标与颜色（计划 = Upcoming，将来 = Someday）。
+// 小节标题沿用侧边栏对应 Bucket 的名称、图标与颜色（计划 = Upcoming，某天 = Someday）。
 const navItem = (to: string) => mainNav.find((item) => item.to === to) as NavItem;
 const SCHEDULED_NAV = navItem('/upcoming');
 const SOMEDAY_NAV = navItem('/someday');

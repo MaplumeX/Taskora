@@ -386,7 +386,7 @@ type GroupChunk =
   | { type: 'tasks'; containerId: ContainerId; taskIds: string[] };
 
 /**
- * Grouped View（分组视图）列表：今天/随时/将来三个时间视图按项目/区域
+ * Grouped View（分组视图）列表：今天/随时/某天三个时间视图按项目/区域
  * 聚类展示任务。分组为纯渲染层推导（deriveGroupedFeedLayout），扁平单层、
  * 不可折叠；组内拖拽重排写回全局 Position，跨组拖拽改任务归属，组头不
  * 可拖拽（组间顺序由侧边栏持有）。顶部未分组区的独立项目行可与任务一起

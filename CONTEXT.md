@@ -27,7 +27,7 @@ Task 上附带的一个文件，仅存在于父 Task 内（同 Subtask）：随�
 _Avoid_: 文件、file、媒体、图片（图片只是一种附件）
 
 **Later Project（稍后项目）**:
-处于休眠的 Project：未了结、未进废纸篓，且计划为 Someday，或计划日期晚于账号时区的今天（日期为今天或已过即恢复活跃）。按状态细分为「计划」（未来日期）与「将来」（Someday）。侧边栏不显示稍后项目：无区域的汇总为无区域项目列表末尾一个不可排序的「N 个稍后项目」入口（N ≥ 1 才出现），进入 Later Projects 页；有区域的只在区域页的「计划」/「将来」小节下出现。其内任务不出现在 Anytime / Someday 等汇总视图。纯推导状态，不改写 Project 或 Task 字段。
+处于休眠的 Project：未了结、未进废纸篓，且计划为 Someday，或计划日期晚于账号时区的今天（日期为今天或已过即恢复活跃）。按状态细分为「计划」（未来日期）与「某天」（Someday）。侧边栏不显示稍后项目：无区域的汇总为无区域项目列表末尾一个不可排序的「N 个稍后项目」入口（N ≥ 1 才出现），进入 Later Projects 页；有区域的只在区域页的「计划」/「某天」小节下出现。其内任务不出现在 Anytime / Someday 等汇总视图。纯推导状态，不改写 Project 或 Task 字段。
 _Avoid_: 休眠项目（口语可用）、inactive project、归档
 
 **Project Heading（项目分组标题）**:
@@ -101,7 +101,7 @@ Task / Project 设置了具体日期或 Someday 的 Bucket；Upcoming（计划�
 可随时着手的任务视图。
 _Avoid_: 任意时间
 
-**Someday（将来）**:
+**Someday（某天）**:
 暂不指定具体计划日期的计划类型及其任务视图；Later Project（稍后项目）还包含未来日期项目。
 _Avoid_: 稍后（不可用来指 Someday）
 

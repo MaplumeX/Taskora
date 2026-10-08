@@ -313,14 +313,14 @@ describe('ScheduledDateField — 选定日期后是否关闭', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('将来 / 清除不涉及提醒：即使可设提醒也关闭', async () => {
+  it('某天 / 清除不涉及提醒：即使可设提醒也关闭', async () => {
     const user = userEvent.setup();
     const { onClose } = renderField(
       { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-05' },
       { showReminder: true },
     );
 
-    await user.click(screen.getByRole('button', { name: /^(Someday|将来)$/ }));
+    await user.click(screen.getByRole('button', { name: /^(Someday|某天)$/ }));
     await user.click(screen.getByRole('button', { name: /^(Clear|清除)$/ }));
 
     expect(onClose).toHaveBeenCalledTimes(2);

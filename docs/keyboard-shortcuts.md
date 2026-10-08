@@ -32,7 +32,7 @@
 
 覆盖范围：8 个 Bucket 页（Inbox/Today/Upcoming/Anytime/Someday/Logbook/Trash/Calendar）+ Project/Area/Tag 详情页。遍历时 Heading 行可被选中跳过。
 
-Grouped View（今天/随时/将来按项目/区域分组）补充规则：
+Grouped View（今天/随时/某天按项目/区域分组）补充规则：
 
 - Alt+↑/↓ 在组边界处钳制（组内首/末行，组块首行即组头），任务不会经键盘离开所在组。
 - Group Header 上 Enter 打开项目/区域详情（与项目行一致），Space（下方新建）在该父级内创建任务。分组不可折叠（组头是下横线小节标题，无折叠按钮与对应键位）。
