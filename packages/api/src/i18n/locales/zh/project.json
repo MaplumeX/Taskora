@@ -1,4 +1,7 @@
 {
+  "noArea": "无区域",
+  "moveSearchPlaceholder": "搜索区域…",
+  "moveNoResults": "没有匹配的区域",
   "create": "新建项目",
   "edit": "编辑项目",
   "new": "新项目",

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
   MoreHorizontal,
+  FolderTree,
   Check,
   Circle,
   CalendarClock,
@@ -35,6 +36,7 @@ import { TagsField } from '@/components/task/fields/TagsField';
 import { ReviewMenuRow, ReviewPicker } from '@/components/review/ReviewSchedule';
 import { useInReviewMode } from '@/components/review/reviewMode';
 
+import { ProjectMovePicker } from './ProjectMovePicker';
 import { useProjectCompletion } from './useProjectCompletion';
 import { useSkipProjectOccurrence } from './useSkipProjectOccurrence';
 
@@ -45,7 +47,7 @@ export interface ProjectMenuProps {
   onDeleted?: () => void;
 }
 
-type PickerKind = 'scheduled' | 'repeat' | 'due' | 'tags' | 'review' | null;
+type PickerKind = 'scheduled' | 'repeat' | 'due' | 'tags' | 'move' | 'review' | null;
 
 export function ProjectMenuPanel({
   project,
@@ -138,6 +140,9 @@ export function ProjectMenuPanel({
       <MenuRow icon={Tag} onClick={() => openPicker('tags')}>
         {t('tags')}
       </MenuRow>
+      <MenuRow icon={FolderTree} onClick={() => openPicker('move')}>
+        {t('move')}
+      </MenuRow>
       {showReview && variant === 'default' && (
         <ReviewMenuRow onClick={() => openPicker('review')} />
       )}
@@ -177,6 +182,17 @@ function PickerContent({
   patch: (data: UpdateProjectDto) => void;
   onClose: () => void;
 }) {
+  if (kind === 'move') {
+    return (
+      <ProjectMovePicker
+        current={current}
+        onSelect={(data) => {
+          patch(data);
+          onClose();
+        }}
+      />
+    );
+  }
   if (kind === 'scheduled') {
     return <ScheduledDateField current={current} onPatch={patch} onClose={onClose} />;
   }
@@ -337,6 +353,10 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
         <PopoverContent
           align="end"
           className="w-44 p-1"
+          onCloseAutoFocus={(e) => {
+            // 打开选择器时让它接管焦点，避免焦点回到「更多」后将其关闭。
+            if (activePicker !== null) e.preventDefault();
+          }}
           onClick={(e) => e.stopPropagation()}
         >
           <ProjectMenuPanel
