@@ -14,6 +14,17 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing release missing its APK (e.g. v0.8.0); build the selected main commit'
+        required: true
+        type: string
+
+# 同一版本不能同时补发；不取消正在签名/上传的任务。
+concurrency:
+  group: android-release-${{ inputs.release_tag || github.ref_name }}
+  cancel-in-progress: false
 
 permissions:
   contents: write
@@ -21,8 +32,12 @@ permissions:
 jobs:
   build-android:
     runs-on: ubuntu-latest
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag || github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: pnpm/action-setup@v4
 
@@ -30,6 +45,36 @@ jobs:
         with:
           node-version: 22
           cache: pnpm
+
+      # 补发用 main 上的修复提交，不重写旧 tag；只允许同版本且尚无 APK
+      # 的现有 Release。输入经 env 传入，避免插入 shell 源码。
+      - name: Validate release target
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          node --input-type=module <<'NODE'
+          import assert from 'node:assert/strict';
+          import { readFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const tag = process.env.RELEASE_TAG;
+          assert.match(tag, /^v\d+\.\d+\.\d+(-[\w.]+)?$/);
+          const conf = 'packages/mobile/src-tauri/tauri.conf.json';
+          for (const file of ['package.json', 'packages/mobile/package.json', conf]) {
+            assert.equal(`v${JSON.parse(readFileSync(file, 'utf8')).version}`, tag, `${file} version mismatch`);
+          }
+          const cargo = readFileSync('packages/mobile/src-tauri/Cargo.toml', 'utf8');
+          assert.equal(`v${/^version\s*=\s*"(.+)"$/m.exec(cargo)?.[1]}`, tag, 'Cargo version mismatch');
+          const tagRef = `refs/tags/${tag}`;
+          execFileSync('git', ['merge-base', '--is-ancestor', tagRef, 'HEAD']);
+          if (process.env.GITHUB_EVENT_NAME === 'workflow_dispatch') {
+            assert.equal(process.env.GITHUB_REF, 'refs/heads/main', 'Recovery must run on main');
+            const original = JSON.parse(execFileSync('git', ['show', `${tagRef}:${conf}`], { encoding: 'utf8' }));
+            assert.equal(`v${original.version}`, tag, 'Original tag version mismatch');
+            const release = JSON.parse(execFileSync('gh', ['release', 'view', tag, '--json', 'assets,isDraft'], { encoding: 'utf8' }));
+            assert.equal(release.isDraft, false, 'Recovery requires a published release');
+            assert(!release.assets.some(asset => asset.name.endsWith('.apk')), 'Release already has an APK; refusing replacement');
+          }
+          NODE
 
       - uses: actions/setup-java@v4
         with:
@@ -108,11 +153,30 @@ jobs:
           # release 本体由 desktop-release.yml 的 tauri-action 创建，两个
           # workflow 无顺序保证：先确保 release 存在（已存在则跳过），再上
           # 传附件，避免 Android 先构建完时 upload 报 release not found。
-          gh release create "${{ github.ref_name }}" \
-            --title "Taskora ${{ github.ref_name }}" \
-            --generate-notes \
-            --verify-tag || true
-          # gh release upload 不支持 file#label 重命名（那是 create/edit 的
-          # assets 语法）；复制为友好文件名后上传。
-          cp "$APK" "Taskora-${{ github.ref_name }}.apk"
-          gh release upload "${{ github.ref_name }}" "Taskora-${{ github.ref_name }}.apk" --clobber
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ]; then
+            gh release view "$RELEASE_TAG" >/dev/null 2>&1 || \
+              gh release create "$RELEASE_TAG" \
+                --title "Taskora $RELEASE_TAG" --generate-notes --verify-tag
+          fi
+          # 记录真实构建提交：补发 APK 来自修复提交，而不是未移动的旧 tag。
+          node --input-type=module <<'NODE'
+          import { writeFileSync } from 'node:fs';
+          import { execFileSync } from 'node:child_process';
+          const tag = process.env.RELEASE_TAG;
+          const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
+          writeFileSync(`Taskora-${tag}-android-build.json`, JSON.stringify({
+            releaseTag: tag,
+            tagCommit: git('rev-parse', `refs/tags/${tag}^{commit}`),
+            sourceCommit: git('rev-parse', 'HEAD'),
+            workflowRun: `${process.env.GITHUB_SERVER_URL}/${process.env.GITHUB_REPOSITORY}/actions/runs/${process.env.GITHUB_RUN_ID}`,
+          }, null, 2) + '\n');
+          NODE
+          # 手动补发禁止覆盖已存在 APK（即使构建期间有人上传也会失败）。
+          cp "$APK" "Taskora-${RELEASE_TAG}.apk"
+          UPLOAD_ARGS=()
+          if [ "$GITHUB_EVENT_NAME" != workflow_dispatch ]; then
+            UPLOAD_ARGS+=(--clobber)
+          fi
+          gh release upload "$RELEASE_TAG" "Taskora-${RELEASE_TAG}.apk" \
+            "Taskora-${RELEASE_TAG}-android-build.json" "${UPLOAD_ARGS[@]}"
+          echo "Published Taskora-${RELEASE_TAG}.apk from commit $GITHUB_SHA" >> "$GITHUB_STEP_SUMMARY"

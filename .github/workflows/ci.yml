@@ -104,8 +104,8 @@ jobs:
 
   # mobile Rust 编译检查（Linux）：host 目标验证 sqlite/session 模块；
   # Android 目标交叉编译验证（rusqlite bundled sqlite 需要 NDK clang，
-  # cargo check 不链接但 cc crate 需显式 CC/AR/LINKER）。与
-  # desktop-rust-check 同模式。
+  # cargo check 不链接但 cc crate 需显式 CC/AR/LINKER）。再构建未签名
+  # release APK，覆盖 cargo check 看不到的 Manifest 合并、Kotlin 与打包。
   mobile-rust-check:
     runs-on: ubuntu-22.04
     steps:
@@ -156,3 +156,22 @@ jobs:
       - name: cargo test
         working-directory: packages/mobile/src-tauri
         run: cargo test --locked --lib
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @taskora/shared build
+
+      # 用真实的 Tauri 生成工程合并所有插件，防止 FileProvider 等 Manifest
+      # 冲突仅在打 tag 后暴露。不注入发布密钥、不上传产物，PR 也可运行。
+      - name: Build unsigned Android release APK
+        run: |
+          export NDK_HOME="$ANDROID_HOME/ndk/28.0.13004108"
+          pnpm --filter @taskora/mobile exec tauri android init --ci
+          node scripts/sync-android-icons.mjs
+          pnpm --filter @taskora/mobile exec tauri android build --apk --target aarch64

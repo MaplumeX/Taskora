@@ -7,7 +7,7 @@
             不导出。authority 带上 applicationId，与 AttachmentsPlugin 一致。
         -->
         <provider
-            android:name="androidx.core.content.FileProvider"
+            android:name="app.taskora.mobile.attachments.AttachmentFileProvider"
             android:authorities="${applicationId}.attachments"
             android:exported="false"
             android:grantUriPermissions="true">
