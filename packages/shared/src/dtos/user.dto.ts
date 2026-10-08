@@ -18,7 +18,7 @@ export interface UserPreferences {
   timeZone?: string;
   /** Immutable decoding zone for pre-date-only records; server-managed. */
   legacyDateTimeZone?: string;
-  /** 时间视图（今天/随时/将来）是否按项目/区域分组任务（Grouped View）；默认 true。 */
+  /** 时间视图（今天/随时/某天）是否按项目/区域分组任务（Grouped View）；默认 true。 */
   bucketGrouping: boolean;
   /**
    * 账号时区下最近一次查看 Today 的日期（YYYY-MM-DD）。计划日期晚于它的
