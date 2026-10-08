@@ -196,7 +196,7 @@ _Avoid_: 高亮、hover、焦点
 _Avoid_: Selection（键盘专属）、编辑模式、批量选择
 
 **Sidebar Drop（拖到侧边栏）**:
-桌面 / Web 指针交互中把 Task（含 Selection 多选整组）或 Project 行拖放到侧边栏行上的动作（对齐 Things 3 Mac），是对应既有动作的快捷方式，不引入新语义：Inbox / 区域 / 项目 = 移动，Today = 计划为今天，Someday = 计划为 Someday，Logbook = 完成，Trash = 删除。Project 不接收 Inbox 与项目落点。Upcoming、Calendar、Anytime、稍后项目入口不是落点（Anytime 在本模型中不是可写入的状态）。已符合目标的条目落下即跳过；落下后停留在当前页、清空 Selection。触控交互没有 Sidebar Drop。
+桌面 / Web 指针交互中把 Task（含 Selection 多选整组）或 Project 行拖放到侧边栏行上的动作（对齐 Things 3 Mac），是对应既有动作的快捷方式，不引入新语义：Inbox / 区域 / 项目 = 移动，Today = 计划为今天，Upcoming = 条目不动、在该行旁弹出计划日期卡片（同「计划」选择器），Anytime = 清除计划（无归属的任务一并离开 Inbox），Someday = 计划为 Someday，Logbook = 完成，Trash = 删除。Project 不接收 Inbox 与项目落点。Calendar、回顾、稍后项目入口不是落点。已符合目标的条目落下即跳过；落下后停留在当前页、清空 Selection。触控交互没有 Sidebar Drop。
 _Avoid_: 拖入、投放、drop target（泛指落点时可用）
 
 ### 引擎与同步（local-first）

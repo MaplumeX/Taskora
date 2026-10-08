@@ -1053,6 +1053,7 @@ describe('ProjectTaskLayout drag sessions', () => {
       expect(harness.sidebarDrop).toHaveBeenCalledWith(
         { kind: 'tasks', tasks: [expect.objectContaining({ id: 'task-u1' })] },
         { kind: 'today' },
+        null,
       );
       expect(screen.queryByTestId('task-placeholder-task-u1')).not.toBeInTheDocument();
     });

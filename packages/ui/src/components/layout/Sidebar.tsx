@@ -48,10 +48,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-/** 可作为 Sidebar Drop 落点的导航行；助手、Upcoming、Calendar、Anytime、Tags 不是落点。 */
+/** 可作为 Sidebar Drop 落点的导航行；助手、Calendar、回顾、Tags 不是落点。 */
 const DROP_TARGET_BY_ROUTE: Record<string, SidebarDropTarget> = {
   '/inbox': { kind: 'inbox' },
   '/today': { kind: 'today' },
+  '/upcoming': { kind: 'upcoming' },
+  '/anytime': { kind: 'anytime' },
   '/someday': { kind: 'someday' },
   '/logbook': { kind: 'logbook' },
   '/trash': { kind: 'trash' },

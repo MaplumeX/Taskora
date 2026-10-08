@@ -18,6 +18,12 @@ import {
 
 import { AppDndProvider } from '../../lib/appDnd';
 import { useProjectCompletion } from '@/components/project/useProjectCompletion';
+import type {
+  ScheduledFieldCurrent,
+  ScheduledFieldPatch,
+} from '@/components/task/fields/fieldProps';
+import { ScheduledDateField } from '@/components/task/fields/ScheduledDateField';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import {
   planSidebarDrop,
   projectOrderLastInArea,
@@ -26,11 +32,19 @@ import {
   type SidebarDropTarget,
 } from './sidebarDrop';
 
+/** 落在「计划」上：在该行旁弹出计划日期卡片，选定后写给被拖的条目。 */
+interface SchedulePick {
+  anchor: HTMLElement;
+  current: ScheduledFieldCurrent;
+  apply: (patch: ScheduledFieldPatch) => void;
+}
+
 /**
  * 应用壳的拖拽上下文（ADR 0018）+ Sidebar Drop 的执行：落点规划出的动作
  * 走与右键菜单 / 选择器相同的 mutation（重复任务派生、项目剩余任务询问、
  * 提醒改写等都由既有路径负责）。松手后停留在当前页、清空 Selection，
- * 没有 toast 与撤销。
+ * 没有 toast 与撤销。落在「计划」上条目不动，弹出计划日期卡片（同右键
+ * 菜单的「计划」）。
  */
 export function SidebarDropProvider({ children }: { children: React.ReactNode }) {
   const { t } = useTranslation();
@@ -43,8 +57,13 @@ export function SidebarDropProvider({ children }: { children: React.ReactNode })
   const deleteProject = useDeleteProject();
   const completion = useProjectCompletion();
   const { data: projects = [] } = useProjectsQuery();
+  const [schedulePick, setSchedulePick] = React.useState<SchedulePick | null>(null);
 
-  const handleDrop = (payload: SidebarDropPayload, target: SidebarDropTarget) => {
+  const handleDrop = (
+    payload: SidebarDropPayload,
+    target: SidebarDropTarget,
+    anchor: HTMLElement | null,
+  ) => {
     // 项目以最新数据规划（进度计数用于剩余任务询问）。
     const project =
       payload.kind === 'project'
@@ -102,6 +121,28 @@ export function SidebarDropProvider({ children }: { children: React.ReactNode })
         case 'deleteProject':
           deleteProject.mutate(action.id, { onError: () => toast.error(t('common:deleteFailed')) });
           break;
+        case 'pickTaskSchedule': {
+          if (!anchor) break;
+          const ids = action.ids;
+          // 整组时卡片不预选任何值（各任务取值不一，同右键菜单）。
+          const only = payload.kind === 'tasks' && ids.length === 1 ? payload.tasks[0] : null;
+          setSchedulePick({
+            anchor,
+            current: only ?? {},
+            apply: (data) => {
+              for (const id of ids) updateTask.mutate({ id, data }, { onError });
+            },
+          });
+          break;
+        }
+        case 'pickProjectSchedule':
+          if (!anchor) break;
+          setSchedulePick({
+            anchor,
+            current: project ?? {},
+            apply: (data) => updateProject.mutate({ id: action.id, data }, { onError }),
+          });
+          break;
       }
     }
   };
@@ -110,6 +151,18 @@ export function SidebarDropProvider({ children }: { children: React.ReactNode })
     <AppDndProvider onSidebarDrop={handleDrop}>
       {children}
       {completion.dialog}
+      <Popover open={schedulePick !== null} onOpenChange={(open) => !open && setSchedulePick(null)}>
+        {schedulePick && <PopoverAnchor virtualRef={{ current: schedulePick.anchor }} />}
+        <PopoverContent side="right" align="start">
+          {schedulePick && (
+            <ScheduledDateField
+              current={schedulePick.current}
+              onPatch={schedulePick.apply}
+              onClose={() => setSchedulePick(null)}
+            />
+          )}
+        </PopoverContent>
+      </Popover>
     </AppDndProvider>
   );
 }

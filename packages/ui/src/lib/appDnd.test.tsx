@@ -226,8 +226,12 @@ describe('AppDndProvider — event routing', () => {
     const onSidebarDrop = renderApp([tasks]);
 
     act(() => dnd().onDragStart({ active: { id: 'task:t1' } }));
+    const row = document.createElement('a');
     act(() =>
-      dnd().onDragEnd({ active: { id: 'task:t1' }, over: { id: 'sidebar-drop:project:p1' } }),
+      dnd().onDragEnd({
+        active: { id: 'task:t1' },
+        over: { id: 'sidebar-drop:project:p1', data: { current: { anchor: { current: row } } } },
+      }),
     );
 
     expect(tasks.onDragEnd).not.toHaveBeenCalled();
@@ -235,6 +239,7 @@ describe('AppDndProvider — event routing', () => {
     expect(onSidebarDrop).toHaveBeenCalledWith(
       { kind: 'tasks', tasks: [expect.objectContaining({ id: 't1' })] },
       { kind: 'project', projectId: 'p1' },
+      row,
     );
   });
 

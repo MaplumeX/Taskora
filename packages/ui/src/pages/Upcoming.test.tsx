@@ -873,6 +873,7 @@ describe('Upcoming — Sidebar Drop', () => {
     expect(harness.sidebarDrop).toHaveBeenCalledWith(
       { kind: 'tasks', tasks: [expect.objectContaining({ id: 'task-1' })] },
       { kind: 'someday' },
+      null,
     );
     expect(harness.update).not.toHaveBeenCalled();
     expect(harness.reorder).not.toHaveBeenCalled();
