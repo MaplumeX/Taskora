@@ -29,7 +29,11 @@ const sameInterval = (a: ReviewInterval, b: ReviewInterval) =>
 /** 「每 2 周」式的间隔文案。 */
 export function useReviewIntervalLabel(): (interval: ReviewInterval) => string {
   const { t } = useTranslation('review');
-  return (interval) => t(`every_${interval.unit}`, { count: interval.count });
+  // 1 单独成句（「每周」而不是「每 1 周」）：中文没有单复数形式可借
+  return (interval) =>
+    interval.count === 1
+      ? t(`everySingle_${interval.unit}`)
+      : t(`every_${interval.unit}`, { count: interval.count });
 }
 
 /** 回顾间隔编辑：常用档位 + 自定义「数字 × 单位」。 */
