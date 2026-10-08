@@ -9,7 +9,12 @@
  * 调规则、写副本，以及位次分配。
  */
 
-import { currentLegacyDateTimeZone, currentTimeZone, projectLaterKind } from '@/utils/date';
+import {
+  currentLegacyDateTimeZone,
+  currentReviewContext,
+  currentTimeZone,
+  projectLaterKind,
+} from '@/utils/date';
 import type {
   CalendarContext,
   CalendarZones,
@@ -697,6 +702,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
           settledAt: (row.fields.settledAt as string | null) ?? null,
         })),
         zones(),
+        currentReviewContext(),
       );
 
       // 新 Project 排在末尾（Position 追加）

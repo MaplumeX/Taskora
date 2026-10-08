@@ -24,6 +24,7 @@ import {
 import { HeadingStatus } from '@taskora/shared';
 import type { ProjectHeadingResponseDto } from '@taskora/shared';
 
+import { currentReviewContext } from '@/utils/date';
 import type { ProjectHeadingBackend } from '../api/project-heading-backend';
 import { positionedRows, projectHeadingRowToDto, projectRowToDto, tagRowToDto } from './mappers';
 
@@ -116,6 +117,7 @@ export function createEngineProjectHeadingBackend(
       const plan = planHeadingToProject(
         (heading.fields.title as string) ?? '',
         (source.fields.areaId as string | null) ?? null,
+        currentReviewContext(),
       );
 
       // 新项目排末尾（Position 追加）

@@ -2,6 +2,8 @@ import { useCalendarDay } from './useCalendarDay';
 import { todayDateKey } from '@/utils/date';
 import { useLocation, useParams } from 'react-router-dom';
 
+import { reviewDetailOf } from './reviewRoute';
+
 import { ScheduledType, TaskBucket } from '@taskora/shared';
 
 import type { CreateTaskDto } from '@taskora/shared';
@@ -39,6 +41,9 @@ export function usePageTaskContext(): PageTaskContext {
   if (pathname.startsWith('/areas/') && params.id) {
     return { areaId: params.id };
   }
+
+  const review = reviewDetailOf(pathname);
+  if (review) return review.view === 'projects' ? { projectId: review.id } : { areaId: review.id };
 
   if (pathname.startsWith('/tags/') && params.tagId) {
     return { tagIds: [params.tagId] };

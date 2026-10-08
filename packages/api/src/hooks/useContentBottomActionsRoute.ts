@@ -1,5 +1,6 @@
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
+import { reviewDetailOf } from './reviewRoute';
 import { useContentBottomActions } from './useContentBottomActions';
 import { usePageTaskContext } from './usePageTaskContext';
 
@@ -19,12 +20,13 @@ export function viewOf(pathname: string): string {
 export function useContentBottomActionsForRoute() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const { id: routeId } = useParams<{ id: string }>();
+  const { id } = useParams<{ id: string }>();
   const createTaskContext = usePageTaskContext();
+  const review = reviewDetailOf(pathname);
 
   return useContentBottomActions({
-    view: viewOf(pathname),
-    routeId,
+    view: review?.view ?? viewOf(pathname),
+    routeId: review?.id ?? id,
     createTaskContext,
     navigateToProject: (projectId) => navigate(`/projects/${projectId}`),
     navigateToArea: (areaId) => navigate(`/areas/${areaId}`),

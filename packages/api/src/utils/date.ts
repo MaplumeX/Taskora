@@ -6,6 +6,7 @@ import {
   laterProjectKind,
   type LaterProjectFields,
   type LaterProjectKind,
+  type ReviewIntervalDefaults,
 } from '@taskora/shared';
 import { usePreferencesStore } from '@/stores/preferences.store';
 
@@ -19,6 +20,17 @@ export function currentLegacyDateTimeZone(): string {
 
 export function todayDateKey(now = new Date()): string {
   return instantDateKey(now, currentTimeZone());
+}
+
+/** 回顾排期的上下文：账号时区的今天与账号的默认回顾间隔（Review）。 */
+export function currentReviewContext(now = new Date()): {
+  today: string;
+  defaults: ReviewIntervalDefaults;
+} {
+  return {
+    today: todayDateKey(now),
+    defaults: usePreferencesStore.getState().defaultReviewIntervals,
+  };
 }
 
 /** 账号时区的当前时刻（HH:mm）。 */

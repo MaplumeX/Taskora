@@ -1,4 +1,9 @@
-import { isValidTimeZone } from '@taskora/shared';
+import {
+  DEFAULT_REVIEW_INTERVALS,
+  isValidTimeZone,
+  normalizeReviewIntervalDefaults,
+  type ReviewIntervalDefaults,
+} from '@taskora/shared';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
 export type Language = 'zh' | 'en';
@@ -11,6 +16,7 @@ export interface ValidPreferences {
   weekStartsOn: WeekStartsOn;
   bucketGrouping: boolean;
   todayReviewedOn: string | null;
+  defaultReviewIntervals: ReviewIntervalDefaults;
 }
 
 export interface PreferencesDefaults {
@@ -20,6 +26,7 @@ export interface PreferencesDefaults {
   weekStartsOn: WeekStartsOn;
   bucketGrouping: boolean;
   todayReviewedOn?: string | null;
+  defaultReviewIntervals?: ReviewIntervalDefaults;
 }
 
 const THEME_MODES: readonly ThemeMode[] = ['light', 'dark', 'system'];
@@ -69,7 +76,21 @@ export function normalizePreferences(
   // 已看日期只进不退：取载荷与默认（本地现状）中较晚者，脏值忽略。
   const reviewedRaw = isDateKey(obj.todayReviewedOn) ? obj.todayReviewedOn : null;
   const todayReviewedOn = laterDateKey(reviewedRaw, defaults.todayReviewedOn ?? null);
-  return { theme, language, weekStartsOn, bucketGrouping, timeZone, todayReviewedOn };
+
+  // 默认回顾间隔：逐档规范化，不合法的档回退默认（本地现状或初始值）。
+  const defaultReviewIntervals = normalizeReviewIntervalDefaults(
+    obj.defaultReviewIntervals,
+    defaults.defaultReviewIntervals ?? DEFAULT_REVIEW_INTERVALS,
+  );
+  return {
+    theme,
+    language,
+    weekStartsOn,
+    bucketGrouping,
+    timeZone,
+    todayReviewedOn,
+    defaultReviewIntervals,
+  };
 }
 
 function isDateKey(value: unknown): value is string {

@@ -14,6 +14,8 @@ export interface AreaBackend {
   updateArea(id: string, data: UpdateAreaDto): Promise<AreaResponseDto>;
   deleteArea(id: string): Promise<void>;
   reorderAreas(orderedIds: string[]): Promise<void>;
+  /** 标记已回顾（Mark Reviewed）：下次回顾日改为今天加回顾间隔。 */
+  markAreaReviewed(id: string): Promise<AreaResponseDto>;
 }
 
 let backend: AreaBackend = rest as AreaBackend;

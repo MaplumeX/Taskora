@@ -1,5 +1,6 @@
 import {
   Calendar,
+  CalendarCheck,
   CalendarDays,
   Circle,
   CloudSun,
@@ -35,4 +36,12 @@ export const trashNav: NavItem = {
   labelKey: 'nav:trash',
   icon: Trash2,
   colorClass: 'text-muted-foreground',
+};
+
+/** 回顾（Review）：不属于主导航；侧边栏工具组（Logbook 之前）/ 手机首页 / 回顾模式共用。 */
+export const reviewNav: NavItem = {
+  to: '/review',
+  labelKey: 'nav:review',
+  icon: CalendarCheck,
+  colorClass: 'text-primary',
 };

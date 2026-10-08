@@ -16,11 +16,13 @@ import {
   type CreateTaskDto,
   type RepeatRule,
   type UpdateTaskDto,
+  type ReviewInterval,
 } from '@taskora/shared';
 
 import { normalizeRepeatRule } from '../repeat';
 import { resolveProjectBucket, resolveTaskBucket } from './bucket';
 import { dateKeyOf, type CalendarZones } from './calendar';
+import { planReviewSchedule, type ReviewContext } from './review';
 
 /** Task 的领域字段（wire 形态）。 */
 export interface TaskFields {
@@ -250,6 +252,9 @@ export interface ConvertedProjectFields {
   scheduledType: ScheduledType;
   scheduledDate: string | null;
   dueDate: string | null;
+  reviewInterval: ReviewInterval;
+  nextReviewDate: string;
+  lastReviewedOn: null;
   bucket: ReturnType<typeof resolveProjectBucket>;
   status: ProjectStatus;
   completedAt: string | null;
@@ -270,6 +275,7 @@ export function planConvertTaskToProject(
   parentProjectAreaId: string | null,
   subtasks: readonly ConvertibleSubtask[],
   zones: CalendarZones,
+  review: ReviewContext,
 ): { project: ConvertedProjectFields; promotedTasks: TaskFields[] } {
   const completed = task.status === TaskStatus.COMPLETED;
   const scheduledType = (task.scheduledType as ScheduledType) ?? ScheduledType.NONE;
@@ -280,6 +286,7 @@ export function planConvertTaskToProject(
     scheduledDate:
       scheduledType === ScheduledType.DATE ? dateKeyOf(task.scheduledDate, zones) : null,
     dueDate: dateKeyOf(task.dueDate, zones),
+    ...planReviewSchedule(review, 'project'),
     bucket: resolveProjectBucket(scheduledType),
     status: completed ? ProjectStatus.COMPLETED : ProjectStatus.ACTIVE,
     completedAt: completed ? task.settledAt : null,

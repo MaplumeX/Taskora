@@ -25,7 +25,7 @@
   "reminderOpen": "打开",
   "reminderSettingsFailed": "无法打开该设置页，请在系统设置中手动找到 Taskora 进行设置。",
   "groupTasksByParent": "在时间视图中按项目/区域分组任务",
-  "groupTasksByParentHint": "开启后，「今天」「随时」「将来」中的任务按所属项目或区域聚类显示；关闭则回到平铺列表。",
+  "groupTasksByParentHint": "开启后，「今天」「随时」「某天」中的任务按所属项目或区域聚类显示；关闭则回到平铺列表。",
   "appearance": "外观",
   "account": "账号",
   "data": "数据",
@@ -103,7 +103,7 @@
   "shortcut_navigateToday": "前往今天",
   "shortcut_navigateUpcoming": "前往计划",
   "shortcut_navigateAnytime": "前往随时",
-  "shortcut_navigateSomeday": "前往将来",
+  "shortcut_navigateSomeday": "前往某天",
   "shortcut_navigateLogbook": "前往日志",
   "shortcut_back": "返回上一列表",
   "shortcut_moveUp": "选中上一项",
@@ -133,7 +133,7 @@
   "shortcut_quickAddSubmitAndContinue": "添加并继续",
   "shortcut_quickAddWhen": "设置计划日期",
   "shortcut_quickAddToday": "设为今天",
-  "shortcut_quickAddSomeday": "设为将来",
+  "shortcut_quickAddSomeday": "设为某天",
   "shortcut_quickAddDeadline": "设置截止日期",
   "shortcut_quickAddTags": "设置标签",
   "shortcut_quickAddMove": "选择放在哪里",
@@ -141,5 +141,10 @@
   "shortcutFixedQuickAddEscape": "快速添加：放弃草稿并关闭",
   "shortcutGlobalNeedsModifier": "系统级快捷键需要包含 Ctrl、Alt 或 ⌘",
   "shortcutGlobalRegisterFailed": "无法设置该快捷键，可能已被其他应用占用",
-  "shortcutTakenByGlobal": "该快捷键已被「唤出快速添加」占用"
+  "shortcutTakenByGlobal": "该快捷键已被「唤出快速添加」占用",
+  "shortcutGroup_review": "回顾",
+  "shortcut_reviewMarkNext": "标记已回顾并进入下一个",
+  "shortcut_reviewSkip": "下一个",
+  "shortcut_reviewPrevious": "上一个",
+  "shortcut_reviewPostpone": "延后"
 }

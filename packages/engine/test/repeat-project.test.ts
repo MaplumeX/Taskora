@@ -18,6 +18,13 @@ import {
 
 const UTC = { timeZone: 'UTC', legacyDateTimeZone: 'UTC' };
 const WEEKLY = { unit: 'week', interval: 1, anchor: 'scheduled' } as const;
+const REVIEW = {
+  today: '2026-10-05',
+  defaults: {
+    project: { unit: 'week', count: 1 },
+    area: { unit: 'month', count: 1 },
+  },
+} as const;
 
 const parent = {
   id: 'project-1',
@@ -26,6 +33,7 @@ const parent = {
   scheduledDate: '2026-10-05',
   dueDate: '2026-10-07',
   repeatRule: WEEKLY,
+  reviewInterval: { unit: 'month', count: 1 },
   areaId: 'area-1',
   tagIds: ['tag-1'],
 };
@@ -51,8 +59,8 @@ const task = (id: string, overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('重复项目派生', () => {
-  it('项目：确定性 id、计划到下一次、截止日期平移，复制标题 / 备注 / 标签 / 区域 / 规则', () => {
-    const plan = planRepeatProjectInstance(parent, '2026-10-05T10:00:00.000Z', UTC)!;
+  it('项目：确定性 id、计划到下一次、截止日期平移，复制标题 / 备注 / 标签 / 区域 / 规则 / 回顾间隔', () => {
+    const plan = planRepeatProjectInstance(parent, '2026-10-05T10:00:00.000Z', UTC, REVIEW)!;
     expect(plan.id).toBe(deriveRepeatProjectId('project-1', WEEKLY, '2026-10-12'));
     expect(plan.project).toEqual({
       title: 'Weekly review',
@@ -62,6 +70,10 @@ describe('重复项目派生', () => {
       dueDate: '2026-10-14',
       repeatRule: WEEKLY,
       repeatSourceId: 'project-1',
+      // 沿用来源的回顾间隔，下次回顾日从派生日重新计
+      reviewInterval: { unit: 'month', count: 1 },
+      nextReviewDate: '2026-11-05',
+      lastReviewedOn: null,
       bucket: 'SCHEDULED',
       status: 'ACTIVE',
       completedAt: null,
@@ -72,18 +84,19 @@ describe('重复项目派生', () => {
   });
 
   it('无规则或链已终结（until）不派生', () => {
-    expect(planRepeatProjectInstance({ ...parent, repeatRule: null }, 'x', UTC)).toBeNull();
+    expect(planRepeatProjectInstance({ ...parent, repeatRule: null }, 'x', UTC, REVIEW)).toBeNull();
     expect(
       planRepeatProjectInstance(
         { ...parent, repeatRule: { ...WEEKLY, until: '2026-10-10' } },
         '2026-10-05T10:00:00.000Z',
         UTC,
+        REVIEW,
       ),
     ).toBeNull();
   });
 
   it('副本：Headings / 任务 / Subtask 全部重置为未完成，日期平移，分组映射，排除 Trash 与项目内链的后代', () => {
-    const plan = planRepeatProjectInstance(parent, '2026-10-05T10:00:00.000Z', UTC)!;
+    const plan = planRepeatProjectInstance(parent, '2026-10-05T10:00:00.000Z', UTC, REVIEW)!;
     const copy = plan.copyFor('next', {
       headings: [{ id: 'h1', title: 'Prep', position: 'a0' }],
       tasks: [
@@ -183,7 +196,7 @@ describe('重复项目派生', () => {
   });
 
   it('副本 id 按来源 id 派生：同一来源在两端得到同一 id，与列表中其余行无关', () => {
-    const plan = planRepeatProjectInstance(parent, '2026-10-05T10:00:00.000Z', UTC)!;
+    const plan = planRepeatProjectInstance(parent, '2026-10-05T10:00:00.000Z', UTC, REVIEW)!;
     const a = plan.copyFor('next', { headings: [], tasks: [task('t1')], subtasks: [] });
     const b = plan.copyFor('next', {
       headings: [],

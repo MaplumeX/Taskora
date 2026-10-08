@@ -16,6 +16,7 @@ export {
 export {
   effectivePosition,
   feedSortKey,
+  flatParentOrder,
   planReorder,
   positionAfterRow,
   positionAtEnd,
@@ -23,7 +24,21 @@ export {
   sortByEffectivePosition,
   type FeedPositioned,
   type Positioned,
+  type SidebarParent,
 } from './order';
+export {
+  buildReviewQueue,
+  effectiveNextReviewDate,
+  effectiveReviewInterval,
+  planMarkReviewed,
+  planReviewSchedule,
+  planReviewUpdate,
+  projectTakesPartInReview,
+  type ReviewAreaFields,
+  type ReviewContext,
+  type ReviewFields,
+  type ReviewProjectFields,
+} from './review';
 export {
   countProjectTasks,
   feedIncludesProjects,

@@ -25,6 +25,7 @@ import {
   type RepeatParentAttachment,
   type RepeatSkipBlock,
 } from './repeat-instance';
+import { planReviewSchedule, type ReviewContext } from './review';
 import type { TaskFields, TaskPatch } from './tasks';
 
 export interface RepeatProjectParent {
@@ -35,6 +36,8 @@ export interface RepeatProjectParent {
   dueDate: unknown;
   /** 规范化后的规则（两端各自从存储解析）。 */
   repeatRule: RepeatRule | null;
+  /** 来源的回顾间隔（存储原值，空值按账号默认）。 */
+  reviewInterval: unknown;
   areaId: string | null;
   tagIds: readonly string[];
 }
@@ -121,8 +124,8 @@ const shifted = (value: unknown, days: number, zones: CalendarZones): string | n
  * 完成重复项目时派生的下一轮。parent 取完成前的状态；tasks / subtasks /
  * headings 为来源项目下的全部行（含 Trash 中的任务，这里自行过滤）。
  *
- * - 项目：标题 / 备注 / 标签 / 区域 / 规则复制，计划到出现日，截止日期
- *   平移 delta（出现日 − 来源计划日）。
+ * - 项目：标题 / 备注 / 标签 / 区域 / 规则 / 回顾间隔复制，计划到出现日，
+ *   截止日期平移 delta（出现日 − 来源计划日）；下次回顾日为派生日加间隔。
  * - Headings：全部复制（含已归档），重置为 ACTIVE。
  * - 任务：未进 Trash 的全部复制（不论了结与否：这一轮做完或放弃不代表
  *   下一轮不做），排除项目内重复链的后代（repeatSourceId 指向同项目内
@@ -138,6 +141,7 @@ export function planRepeatProjectInstance(
   parent: RepeatProjectParent,
   completedAt: string,
   zones: CalendarZones,
+  review: ReviewContext,
 ): {
   id: string;
   project: ProjectFields;
@@ -166,6 +170,8 @@ export function planRepeatProjectInstance(
       dueDate: shifted(parent.dueDate, delta, zones),
       repeatRule: parent.repeatRule,
       repeatSourceId: parent.id,
+      // 沿用来源的回顾间隔，排期从派生日（今天）重新计，从未回顾
+      ...planReviewSchedule(review, 'project', { reviewInterval: parent.reviewInterval }),
       bucket: resolveProjectBucket(ScheduledType.DATE),
       status: ProjectStatus.ACTIVE,
       completedAt: null,

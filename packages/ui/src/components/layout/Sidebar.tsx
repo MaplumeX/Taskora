@@ -9,14 +9,14 @@ import { useAuthStore } from '@taskora/api';
 import { useLogout } from '@taskora/api';
 import { SidebarBottomBar } from '@/components/layout/SidebarBottomBar';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
-import { mainNav, trashNav, type NavItem } from '@/components/layout/navItems';
+import { mainNav, reviewNav, trashNav, type NavItem } from '@/components/layout/navItems';
 import { sidebarDropOverClass, sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import { useBucketCounts } from '@/components/layout/useBucketCounts';
 import type { SidebarDropTarget } from '@/components/layout/sidebarDrop';
 import { useSidebarDropArea, useSidebarDropTarget } from '../../lib/appDnd';
 import { dndListProps } from '../../lib/dnd';
 import { NewInTodayDot } from '@/components/task/NewInTodayDot';
-import { useHasNewInToday } from '@taskora/api';
+import { useHasNewInToday, useReviewCount } from '@taskora/api';
 
 /** 侧边栏主导航（日志移至与废纸篓同一分组） */
 const SIDEBAR_MAIN_NAV = mainNav.filter((item) => item.to !== '/logbook');
@@ -30,8 +30,9 @@ const SIDEBAR_ASSISTANT_NAV: NavItem[] = [
   { to: '/agent', labelKey: 'nav:assistant', icon: Bot, colorClass: 'text-primary' },
 ];
 
-/** 日志 + 废纸篓：位于主导航与区域之间的中间分组 */
+/** 回顾 + 日志 + 废纸篓：位于主导航与区域之间的中间分组 */
 const SIDEBAR_UTILITIES_NAV: NavItem[] = [
+  reviewNav,
   { to: '/logbook', labelKey: 'nav:logbook', icon: Notebook, colorClass: 'text-nav-logbook' },
   trashNav,
 ];
@@ -117,9 +118,11 @@ export function Sidebar() {
   const { inboxCount, todayCount } = useBucketCounts();
   const dropArea = useSidebarDropArea();
   const hasNewInToday = useHasNewInToday();
+  const reviewCount = useReviewCount();
   const countByRoute: Record<string, number> = {
     '/inbox': inboxCount,
     '/today': todayCount,
+    '/review': reviewCount,
   };
 
   return (
@@ -185,10 +188,10 @@ export function Sidebar() {
             ))}
           </div>
 
-          {/* 日志 / 废纸篓 */}
+          {/* 回顾 / 日志 / 废纸篓 */}
           <div className="mt-4 flex flex-col gap-px">
             {SIDEBAR_UTILITIES_NAV.map((item) => (
-              <NavRow key={item.to} item={item} />
+              <NavRow key={item.to} item={item} count={countByRoute[item.to]} />
             ))}
           </div>
 

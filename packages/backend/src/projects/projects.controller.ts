@@ -89,6 +89,15 @@ export class ProjectsController {
     return this.projectsService.skip(req.user.id, id);
   }
 
+  /** 标记已回顾（Mark Reviewed）。 */
+  @Post(':id/review')
+  markReviewed(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.projectsService.markReviewed(req.user.id, id);
+  }
+
   @Post(':id/uncomplete')
   uncomplete(
     @Request() req: { user: { id: string } },

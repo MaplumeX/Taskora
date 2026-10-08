@@ -17,6 +17,7 @@ import {
 import { Prisma } from '@prisma/client';
 import {
   HeadingStatus,
+  normalizeReviewInterval,
   ProjectBucket,
   ProjectStatus,
   ScheduledType,
@@ -38,6 +39,11 @@ export interface EntityCodec {
   enumFields: Record<string, Set<string>>;
   /** wire 字段中「对象 ↔ TEXT JSON 列」的字段（如 repeatRule）。 */
   jsonFields: Set<string>;
+  /**
+   * JSON 字段的结构校验（返回规范形，不合法为 null）：不合法的值剔除，
+   * 落库为 null，并以必胜时钟下发空值（如 reviewInterval）。
+   */
+  jsonNormalizers?: Record<string, (value: unknown) => object | null>;
   /** wire 字段中的整数列（如 Attachment.size）；非整数剔除。 */
   intFields?: Set<string>;
   /** tagIds 物化关系（无则 tagIds 不存在）。 */
@@ -80,6 +86,8 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     dateFields: new Set([
       'scheduledDate',
       'dueDate',
+      'nextReviewDate',
+      'lastReviewedOn',
       'completedAt',
       'trashedAt',
       'createdAt',
@@ -90,7 +98,8 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
       bucket: new Set(Object.values(ProjectBucket)),
       scheduledType: new Set(Object.values(ScheduledType)),
     },
-    jsonFields: new Set(['repeatRule']),
+    jsonFields: new Set(['repeatRule', 'reviewInterval']),
+    jsonNormalizers: { reviewInterval: normalizeReviewInterval },
     tagRelation: { model: 'projectTag', fk: 'projectId', relation: 'tags' },
   },
   'project-heading': {
@@ -105,9 +114,10 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     entity: 'area',
     def: ENTITIES.area,
     model: 'area',
-    dateFields: new Set(['createdAt', 'updatedAt']),
+    dateFields: new Set(['nextReviewDate', 'lastReviewedOn', 'createdAt', 'updatedAt']),
     enumFields: {},
-    jsonFields: new Set(),
+    jsonFields: new Set(['reviewInterval']),
+    jsonNormalizers: { reviewInterval: normalizeReviewInterval },
     tagRelation: { model: 'areaTag', fk: 'areaId', relation: 'tags' },
   },
   tag: {
@@ -354,8 +364,14 @@ export function toPrismaData(
     }
     if (codec.jsonFields.has(fieldName)) {
       // 对象字段物化为 JSON 文本列（repeatRule）：null 清除；非对象剔除
+      const normalize = codec.jsonNormalizers?.[fieldName];
       if (value === null) {
         data[fieldName] = null;
+      } else if (normalize) {
+        // 结构不合法：落库为 null，并以必胜时钟下发空值
+        const normalized = normalize(value);
+        data[fieldName] = normalized === null ? null : JSON.stringify(normalized);
+        if (normalized === null) rejected.push(fieldName);
       } else if (typeof value === 'object' && !Array.isArray(value)) {
         data[fieldName] = JSON.stringify(value);
       } else {

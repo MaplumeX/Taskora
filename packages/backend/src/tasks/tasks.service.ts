@@ -33,7 +33,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { SyncHubService, type HubWriteBatch } from '../sync/sync-hub.service';
 import { calendarContextFor, edgePositions, toWireFields } from '../common/domain-storage';
 import { sortByPosition } from '../common/position-order';
-import { userCalendarZones } from '../users/account-time-zone';
+import { userCalendarZones, userReviewSettings } from '../users/account-time-zone';
 import { CreateTaskDto, UpdateTaskDto, TaskQueryDto } from './dto/tasks.dto';
 import {
   buildTaskViewWhere,
@@ -392,7 +392,7 @@ export class TasksService {
   }
 
   async convertToProject(userId: string, id: string) {
-    const zones = await userCalendarZones(this.prisma, userId);
+    const { zones, review } = await userReviewSettings(this.prisma, userId);
     return this.hub.writeAsHub(userId, async (batch) => {
       const existing = await batch.tx.task.findFirst({
         where: { id, userId },
@@ -421,6 +421,7 @@ export class TasksService {
           settledAt: subtask.settledAt?.toISOString() ?? null,
         })),
         zones,
+        review,
       );
 
       // 新项目排在末尾

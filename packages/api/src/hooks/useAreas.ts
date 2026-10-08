@@ -91,6 +91,7 @@ export function useCreateArea() {
     },
     onSettled: () => {
       refreshAfterWrite(queryClient, { queryKey: areaKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['review'] });
     },
   });
 }
@@ -133,6 +134,7 @@ export function useUpdateArea() {
     onSettled: (_data, _error, { id }) => {
       refreshAfterWrite(queryClient, { queryKey: areaKeys.detail(id) });
       refreshAfterWrite(queryClient, { queryKey: areaKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['review'] });
     },
   });
 }
@@ -162,6 +164,7 @@ export function useReorderAreas() {
     },
     onSettled: () => {
       refreshAfterWrite(queryClient, { queryKey: areaKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['review'] });
     },
   });
 }
@@ -188,6 +191,7 @@ export function useDeleteArea() {
     },
     onSettled: () => {
       refreshAfterWrite(queryClient, { queryKey: areaKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['review'] });
     },
   });
 }

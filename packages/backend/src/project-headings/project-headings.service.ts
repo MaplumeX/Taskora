@@ -20,6 +20,7 @@ import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { edgePositions, toWireFields } from '../common/domain-storage';
 import { SyncHubService, type HubWriteBatch } from '../sync/sync-hub.service';
+import { userReviewSettings } from '../users/account-time-zone';
 import {
   CreateProjectHeadingDto,
   ReorderProjectHeadingLayoutDto,
@@ -114,12 +115,13 @@ export class ProjectHeadingsService {
   }
 
   async convertToProject(userId: string, id: string) {
+    const { review } = await userReviewSettings(this.prisma, userId);
     return this.hub.writeAsHub(userId, async (batch) => {
       const heading = await this.requireHeading(batch, userId, id);
 
       // New project is appended after the user's last project in the sidebar.
       const { last } = await edgePositions(batch.tx, 'Project', userId);
-      const plan = planHeadingToProject(heading.title, heading.project.areaId ?? null);
+      const plan = planHeadingToProject(heading.title, heading.project.areaId ?? null, review);
       const projectId = randomUUID();
       await batch.write('project', projectId, {
         ...toWireFields(plan.project),

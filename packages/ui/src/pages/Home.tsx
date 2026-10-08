@@ -13,6 +13,7 @@ import {
 import {
   useAreasQuery,
   useHasNewInToday,
+  useReviewCount,
   useProjectsQuery,
   useUiInteractionStore,
 } from '@taskora/api';
@@ -21,7 +22,7 @@ import { Button } from '@/components/ui/button';
 import { QuickFind } from '@/components/search/QuickFind';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
 import { AppDndProvider } from '../lib/appDnd';
-import { mainNav, type NavItem } from '@/components/layout/navItems';
+import { mainNav, reviewNav, type NavItem } from '@/components/layout/navItems';
 import { useBucketCounts } from '@/components/layout/useBucketCounts';
 import { NewInTodayDot } from '@/components/task/NewInTodayDot';
 import { useIsDesktop } from '../lib/use-media-query';
@@ -31,14 +32,14 @@ import { cn } from '@/lib/utils';
 const NAV_GROUPS: string[][] = [
   ['/inbox'],
   ['/today', '/upcoming', '/calendar', '/anytime', '/someday'],
-  ['/logbook'],
+  ['/review', '/logbook'],
 ];
 
 const ROW_CLASS =
   'flex min-h-[48px] w-full items-center gap-3 rounded-xl px-3 text-left text-[15px] transition-colors active:bg-accent';
 
 function navItemFor(to: string): NavItem {
-  const item = mainNav.find((n) => n.to === to);
+  const item = [...mainNav, reviewNav].find((n) => n.to === to);
   if (!item) throw new Error(`unknown nav item ${to}`);
   return item;
 }
@@ -93,6 +94,7 @@ export default function Home() {
   const openSettings = useUiInteractionStore((s) => s.openSettings);
   const { inboxCount, todayCount } = useBucketCounts();
   const hasNewInToday = useHasNewInToday();
+  const reviewCount = useReviewCount();
   const { data: allProjects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -101,6 +103,7 @@ export default function Home() {
   const countByRoute: Record<string, number> = {
     '/inbox': inboxCount,
     '/today': todayCount,
+    '/review': reviewCount,
   };
 
   return (

@@ -58,6 +58,12 @@ model Area {
 
   /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
   position String?
+  /// Review Interval（回顾间隔）：{ unit, count } 的 JSON 文本；为空即跟随默认。
+  reviewInterval String?
+  /// Next Review Date（下次回顾日）：日历日（UTC 零点编码）；为空视为今天待回顾。
+  nextReviewDate DateTime?
+  /// Last Reviewed Date（上次回顾日）：日历日（UTC 零点编码）；为空即从未回顾。
+  lastReviewedOn DateTime?
 
   @@index([userId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
   fieldClocks Json?
@@ -100,6 +106,12 @@ model Project {
   repeatRule    String?
   /// 派生来源：派生出本项目的重复项目 id。不设外键，只用于派生幂等。
   repeatSourceId String?
+  /// Review Interval（回顾间隔）：{ unit, count } 的 JSON 文本；为空即跟随默认。
+  reviewInterval String?
+  /// Next Review Date（下次回顾日）：日历日（UTC 零点编码）；为空视为今天待回顾。
+  nextReviewDate DateTime?
+  /// Last Reviewed Date（上次回顾日）：日历日（UTC 零点编码）；为空即从未回顾。
+  lastReviewedOn DateTime?
   completedAt   DateTime?
   trashedAt     DateTime?
 

@@ -508,7 +508,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
   });
 
   it('Later Project：稍后项目内的任务不进 Anytime / Someday，有日期的任务照常进 Today / Upcoming', async () => {
-    const someday = await projects.createProject({ title: '将来', scheduledType: ScheduledType.SOMEDAY });
+    const someday = await projects.createProject({ title: '某天', scheduledType: ScheduledType.SOMEDAY });
     const future = await projects.createProject({
       title: '未来',
       scheduledType: ScheduledType.DATE,

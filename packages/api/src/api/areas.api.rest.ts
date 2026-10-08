@@ -26,3 +26,7 @@ export function deleteArea(id: string): Promise<void> {
 export function reorderAreas(orderedIds: string[]): Promise<void> {
   return apiClient.post('/areas/reorder', { orderedIds }).then(() => undefined);
 }
+
+export function markAreaReviewed(id: string): Promise<AreaResponseDto> {
+  return apiClient.post<AreaResponseDto>(`/areas/${id}/review`).then((res) => res.data);
+}
