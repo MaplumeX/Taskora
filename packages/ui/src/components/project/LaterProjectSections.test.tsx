@@ -23,6 +23,12 @@ vi.mock('@/components/feed/ProjectFeedRow', async () => {
   };
 });
 
+vi.mock('@taskora/api', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useProjectsQuery: () => ({ data: [] }),
+  useReorderProjects: () => ({ mutate: vi.fn() }),
+}));
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
   initReactI18next: { type: '3rdParty', init: () => undefined },

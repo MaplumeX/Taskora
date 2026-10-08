@@ -4,13 +4,7 @@ import { useEffect, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DragOverlay, type DragEndEvent, type DragStartEvent } from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  arrayMove,
-  useSortable,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 
 import { ProjectStatus } from '@taskora/shared';
 import type { ProjectResponseDto } from '@taskora/shared';
@@ -27,11 +21,11 @@ import {
   useLaterProjectKind,
   useProjectsQuery,
   useReorderProjects,
-  type SelectionState,
 } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
 import { useTasksQuery } from '@taskora/api';
 import { ProjectFeedRow } from '@/components/feed/ProjectFeedRow';
+import { SortableProjectRow } from '@/components/project/DraggableProjectRow';
 import { LaterProjectSections } from '@/components/project/LaterProjectSections';
 import { mergeVisibleProjectOrder } from '@/components/layout/sidebarProjectLayout';
 import { TaskListView } from '@/components/task/TaskListView';
@@ -48,33 +42,6 @@ import {
 } from '../lib/dnd';
 import { useDndSurface } from '../lib/appDnd';
 import { cn } from '@/lib/utils';
-
-function SortableProjectRow({
-  project,
-  selectionState,
-}: {
-  project: ProjectResponseDto;
-  selectionState: SelectionState;
-}) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: project.id });
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={{
-        transform: CSS.Translate.toString(transform),
-        transition,
-      }}
-      // 被拖行由 DragOverlay 跟手（才能拖到侧边栏），原行留作不可见的空位。
-      className={cn(isDragging && 'invisible')}
-      {...attributes}
-      {...listeners}
-    >
-      <ProjectFeedRow item={project} selectionState={selectionState} />
-    </div>
-  );
-}
 
 export default function AreaDetail() {
   const { t } = useTranslation();
