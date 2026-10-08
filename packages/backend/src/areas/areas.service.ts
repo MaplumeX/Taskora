@@ -46,7 +46,7 @@ export class AreasService {
       notes: dto.notes ?? null,
       position: positionAtEnd(existing),
       tagIds: dto.tagIds ?? [],
-      ...planReviewSchedule(review, dto, zones),
+      ...planReviewSchedule(review, 'area', dto, zones),
     });
   }
 
@@ -83,11 +83,13 @@ export class AreasService {
     return this.write(userId, id, fields);
   }
 
-  /** 标记已回顾：下次回顾日为今天加回顾间隔（规则见 domain planMarkReviewed）。 */
+  /** 标记已回顾：下次回顾日从原日期加回顾间隔（规则见 domain planMarkReviewed）。 */
   async markReviewed(userId: string, id: string) {
     const area = await this.findOne(userId, id);
-    const { review } = await userReviewSettings(this.prisma, userId);
-    return this.write(userId, id, { ...planMarkReviewed(area, review) });
+    const { zones, review } = await userReviewSettings(this.prisma, userId);
+    return this.write(userId, id, {
+      ...planMarkReviewed(area, 'area', review, zones),
+    });
   }
 
   async remove(userId: string, id: string) {

@@ -144,6 +144,7 @@
   "shortcutTakenByGlobal": "This shortcut is used by “Open Quick Add”",
   "shortcutGroup_review": "Review",
   "shortcut_reviewMarkNext": "Mark reviewed and go to next",
-  "shortcut_reviewSkip": "Skip to next",
-  "shortcut_reviewPrevious": "Go to previous"
+  "shortcut_reviewSkip": "Go to next",
+  "shortcut_reviewPrevious": "Go to previous",
+  "shortcut_reviewPostpone": "Postpone"
 }

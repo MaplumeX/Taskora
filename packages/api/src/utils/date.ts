@@ -6,7 +6,7 @@ import {
   laterProjectKind,
   type LaterProjectFields,
   type LaterProjectKind,
-  type ReviewInterval,
+  type ReviewIntervalDefaults,
 } from '@taskora/shared';
 import { usePreferencesStore } from '@/stores/preferences.store';
 
@@ -22,14 +22,14 @@ export function todayDateKey(now = new Date()): string {
   return instantDateKey(now, currentTimeZone());
 }
 
-/** 回顾排期的上下文：账号时区的今天与账号默认回顾间隔（Review）。 */
+/** 回顾排期的上下文：账号时区的今天与账号的默认回顾间隔（Review）。 */
 export function currentReviewContext(now = new Date()): {
   today: string;
-  defaultInterval: ReviewInterval;
+  defaults: ReviewIntervalDefaults;
 } {
   return {
     today: todayDateKey(now),
-    defaultInterval: usePreferencesStore.getState().defaultReviewInterval,
+    defaults: usePreferencesStore.getState().defaultReviewIntervals,
   };
 }
 

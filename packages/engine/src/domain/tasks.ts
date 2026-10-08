@@ -254,6 +254,7 @@ export interface ConvertedProjectFields {
   dueDate: string | null;
   reviewInterval: ReviewInterval;
   nextReviewDate: string;
+  lastReviewedOn: null;
   bucket: ReturnType<typeof resolveProjectBucket>;
   status: ProjectStatus;
   completedAt: string | null;
@@ -285,7 +286,7 @@ export function planConvertTaskToProject(
     scheduledDate:
       scheduledType === ScheduledType.DATE ? dateKeyOf(task.scheduledDate, zones) : null,
     dueDate: dateKeyOf(task.dueDate, zones),
-    ...planReviewSchedule(review),
+    ...planReviewSchedule(review, 'project'),
     bucket: resolveProjectBucket(scheduledType),
     status: completed ? ProjectStatus.COMPLETED : ProjectStatus.ACTIVE,
     completedAt: completed ? task.settledAt : null,

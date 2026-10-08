@@ -21,6 +21,8 @@ import { ProjectFeedRow } from '@/components/feed/ProjectFeedRow';
 import { reviewNav } from '@/components/layout/navItems';
 import { cn } from '@/lib/utils';
 
+import { useLastReviewedLabel } from './ReviewFields';
+
 interface Props {
   queue: ReviewQueue;
   projects: readonly ProjectResponseDto[];
@@ -31,12 +33,14 @@ interface Props {
 
 /**
  * 回顾列表（Review List）：只列待回顾的 Project 与 Area（回顾队列的顺序），
- * 末尾一行提示下一次回顾日；没到期的对象不出现。点任一行从它开始一轮回顾。
+ * 每行带上次回顾日；没到期的对象不出现，下一次回顾日只在列表为空时提示。
+ * 点任一行从它开始一轮回顾。
  */
 export function ReviewList({ queue, projects, areas, onOpen }: Props) {
   const { t } = useTranslation('review');
   const projectById = useMemo(() => new Map(projects.map((p) => [p.id, p])), [projects]);
   const areaById = useMemo(() => new Map(areas.map((a) => [a.id, a])), [areas]);
+  const lastReviewedLabel = useLastReviewedLabel();
 
   if (queue.items.length === 0) {
     const Icon = reviewNav.icon;
@@ -50,33 +54,38 @@ export function ReviewList({ queue, projects, areas, onOpen }: Props) {
   }
 
   return (
-    <div className="flex flex-col gap-3">
-      <div className="flex flex-col">
-        {queue.items.map((item) => {
-          const open = () => onOpen(item);
-          const trailing = <MarkReviewedButton item={item} />;
-          if (item.kind === 'project') {
-            const project = projectById.get(item.id);
-            return project ? (
-              <ProjectFeedRow key={item.id} item={project} onOpen={open} trailing={trailing} />
-            ) : null;
-          }
-          const area = areaById.get(item.id);
-          return area ? (
-            <ReviewAreaRow key={item.id} area={area} onOpen={open} trailing={trailing} />
+    <div className="flex flex-col">
+      {queue.items.map((item) => {
+        const open = () => onOpen(item);
+        const row = item.kind === 'project' ? projectById.get(item.id) : areaById.get(item.id);
+        const trailing = (
+          <>
+            <span className="whitespace-nowrap text-meta text-muted-foreground">
+              {t('lastReviewed', { when: lastReviewedLabel(row?.lastReviewedOn) })}
+            </span>
+            <MarkReviewedButton item={item} />
+          </>
+        );
+        if (item.kind === 'project') {
+          const project = projectById.get(item.id);
+          return project ? (
+            <ProjectFeedRow key={item.id} item={project} onOpen={open} trailing={trailing} />
           ) : null;
-        })}
-      </div>
-      <UpcomingHint queue={queue} className="px-2" />
+        }
+        const area = areaById.get(item.id);
+        return area ? (
+          <ReviewAreaRow key={item.id} area={area} onOpen={open} trailing={trailing} />
+        ) : null;
+      })}
     </div>
   );
 }
 
-/** 下一次回顾日与当天的数量（没到期的对象只以这一行出现）。 */
-function UpcomingHint({ queue, className }: { queue: ReviewQueue; className?: string }) {
+/** 空状态里的下一次回顾日与当天的数量。 */
+function UpcomingHint({ queue }: { queue: ReviewQueue }) {
   const { t } = useTranslation('review');
   return (
-    <p className={cn('text-meta text-muted-foreground', className)}>
+    <p className="text-meta text-muted-foreground">
       {queue.upcoming
         ? t('upcoming', {
             date: formatDateLabel(parseCalendarDate(queue.upcoming.date)),

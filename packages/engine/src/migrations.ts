@@ -266,6 +266,12 @@ export const REPLICA_MIGRATIONS: readonly ReplicaMigration[] = [
       await addColumnIfMissing(storage, table, 'nextReviewDate', 'TEXT');
     }
   },
+  // 13 → 14：project / area 增加 lastReviewedOn（上次回顾日，Review v2）。
+  async (storage) => {
+    for (const table of ['project', 'area']) {
+      await addColumnIfMissing(storage, table, 'lastReviewedOn', 'TEXT');
+    }
+  },
 ];
 
 /** 当前代码的副本 schema 版本。 */

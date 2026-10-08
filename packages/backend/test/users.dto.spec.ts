@@ -50,29 +50,36 @@ describe('UpdateProfileDto validation', () => {
   });
 });
 
-describe('UpdatePreferencesDto defaultReviewInterval validation', () => {
+describe('UpdatePreferencesDto defaultReviewIntervals validation', () => {
   async function validateDto(payload: Record<string, unknown>) {
     const dto = plainToInstance(UpdatePreferencesDto, payload);
     const errors = await validate(dto, { whitelist: true, forbidNonWhitelisted: true });
     return errors.map((e) => e.property);
   }
 
-  it('accepts N × day / week / month / year with N ≥ 1', async () => {
+  const WEEKLY = { unit: 'week', count: 1 };
+  const tiers = (project: unknown, area: unknown) => ({
+    defaultReviewIntervals: { project, area },
+  });
+
+  it('accepts N × day / week / month / year with N ≥ 1 in every tier', async () => {
     for (const unit of ['day', 'week', 'month', 'year']) {
-      expect(await validateDto({ defaultReviewInterval: { unit, count: 2 } })).toEqual([]);
+      const interval = { unit, count: 2 };
+      expect(await validateDto(tiers(interval, interval))).toEqual([]);
     }
   });
 
-  it('rejects unknown units and non-positive or fractional counts', async () => {
+  it('rejects unknown units, non-positive or fractional counts and missing tiers', async () => {
     for (const interval of [
       { unit: 'decade', count: 1 },
       { unit: 'week', count: 0 },
       { unit: 'week', count: 1.5 },
       { unit: 'week' },
       'weekly',
+      undefined,
     ]) {
-      expect(await validateDto({ defaultReviewInterval: interval })).toEqual([
-        'defaultReviewInterval',
+      expect(await validateDto(tiers(WEEKLY, interval))).toEqual([
+        'defaultReviewIntervals',
       ]);
     }
   });

@@ -1,6 +1,6 @@
 import type { ReviewContext } from '@taskora/engine';
 import {
-  accountReviewInterval,
+  accountReviewIntervalDefaults,
   accountTimeZone,
   instantDateKey,
   legacyDateTimeZone,
@@ -30,7 +30,7 @@ export async function userTimeZone(prisma: PrismaService, userId: string): Promi
   return (await userCalendarZones(prisma, userId)).timeZone;
 }
 
-/** 账号时区与回顾排期上下文（账号时区的今天、账号默认回顾间隔）。 */
+/** 账号时区与回顾排期上下文（账号时区的今天、默认回顾间隔）。 */
 export async function userReviewSettings(
   prisma: PrismaService,
   userId: string,
@@ -42,7 +42,7 @@ export async function userReviewSettings(
     zones: { timeZone, legacyDateTimeZone: legacyDateTimeZone(preferences) },
     review: {
       today: instantDateKey(now, timeZone),
-      defaultInterval: accountReviewInterval(preferences),
+      defaults: accountReviewIntervalDefaults(preferences),
     },
   };
 }

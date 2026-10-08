@@ -365,7 +365,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
       const existing = await engine.get('project', id);
       if (!existing) throw new Error(`Project not found: ${id}`);
       await engine.update('project', id, {
-        ...planMarkReviewed(existing.fields, currentReviewContext()),
+        ...planMarkReviewed(existing.fields, 'project', currentReviewContext(), zones()),
       });
       return projectDto(id);
     },

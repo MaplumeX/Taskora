@@ -144,6 +144,7 @@
   "shortcutTakenByGlobal": "该快捷键已被「唤出快速添加」占用",
   "shortcutGroup_review": "回顾",
   "shortcut_reviewMarkNext": "标记已回顾并进入下一个",
-  "shortcut_reviewSkip": "跳过",
-  "shortcut_reviewPrevious": "上一个"
+  "shortcut_reviewSkip": "下一个",
+  "shortcut_reviewPrevious": "上一个",
+  "shortcut_reviewPostpone": "延后"
 }

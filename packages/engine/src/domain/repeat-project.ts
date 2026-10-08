@@ -170,8 +170,8 @@ export function planRepeatProjectInstance(
       dueDate: shifted(parent.dueDate, delta, zones),
       repeatRule: parent.repeatRule,
       repeatSourceId: parent.id,
-      // 沿用来源的回顾间隔，排期从派生日（今天）重新计
-      ...planReviewSchedule(review, { reviewInterval: parent.reviewInterval }),
+      // 沿用来源的回顾间隔，排期从派生日（今天）重新计，从未回顾
+      ...planReviewSchedule(review, 'project', { reviewInterval: parent.reviewInterval }),
       bucket: resolveProjectBucket(ScheduledType.DATE),
       status: ProjectStatus.ACTIVE,
       completedAt: null,

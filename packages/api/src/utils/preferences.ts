@@ -1,8 +1,8 @@
 import {
-  DEFAULT_REVIEW_INTERVAL,
+  DEFAULT_REVIEW_INTERVALS,
   isValidTimeZone,
-  normalizeReviewInterval,
-  type ReviewInterval,
+  normalizeReviewIntervalDefaults,
+  type ReviewIntervalDefaults,
 } from '@taskora/shared';
 
 export type ThemeMode = 'light' | 'dark' | 'system';
@@ -16,7 +16,7 @@ export interface ValidPreferences {
   weekStartsOn: WeekStartsOn;
   bucketGrouping: boolean;
   todayReviewedOn: string | null;
-  defaultReviewInterval: ReviewInterval;
+  defaultReviewIntervals: ReviewIntervalDefaults;
 }
 
 export interface PreferencesDefaults {
@@ -26,7 +26,7 @@ export interface PreferencesDefaults {
   weekStartsOn: WeekStartsOn;
   bucketGrouping: boolean;
   todayReviewedOn?: string | null;
-  defaultReviewInterval?: ReviewInterval;
+  defaultReviewIntervals?: ReviewIntervalDefaults;
 }
 
 const THEME_MODES: readonly ThemeMode[] = ['light', 'dark', 'system'];
@@ -77,11 +77,11 @@ export function normalizePreferences(
   const reviewedRaw = isDateKey(obj.todayReviewedOn) ? obj.todayReviewedOn : null;
   const todayReviewedOn = laterDateKey(reviewedRaw, defaults.todayReviewedOn ?? null);
 
-  // 默认回顾间隔：结构不合法时回退默认（本地现状或每周）。
-  const defaultReviewInterval =
-    normalizeReviewInterval(obj.defaultReviewInterval) ??
-    defaults.defaultReviewInterval ??
-    DEFAULT_REVIEW_INTERVAL;
+  // 默认回顾间隔：逐档规范化，不合法的档回退默认（本地现状或初始值）。
+  const defaultReviewIntervals = normalizeReviewIntervalDefaults(
+    obj.defaultReviewIntervals,
+    defaults.defaultReviewIntervals ?? DEFAULT_REVIEW_INTERVALS,
+  );
   return {
     theme,
     language,
@@ -89,7 +89,7 @@ export function normalizePreferences(
     bucketGrouping,
     timeZone,
     todayReviewedOn,
-    defaultReviewInterval,
+    defaultReviewIntervals,
   };
 }
 

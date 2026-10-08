@@ -45,6 +45,7 @@ export type KeyAction =
   | { type: 'toggleAssistantPanel' }
   /** 回顾模式（Review Mode）：标记已回顾并进入下一个 / 跳过 / 上一个；只在回顾模式下生效。 */
   | { type: 'reviewMarkNext' }
+  | { type: 'reviewPostpone' }
   | { type: 'reviewSkip' }
   | { type: 'reviewPrevious' }
   /**
@@ -134,6 +135,7 @@ export type ShortcutId =
   | 'search'
   | 'toggleAssistantPanel'
   | 'reviewMarkNext'
+  | 'reviewPostpone'
   | 'reviewSkip'
   | 'reviewPrevious'
   | 'quickAddSubmit'
@@ -356,6 +358,14 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     group: 'review',
     action: { type: 'reviewMarkNext' },
     defaults: { mac: ['Alt+Meta+R'], windows: ['Ctrl+Alt+R'], web: ['Alt+Shift+R'] },
+  },
+  // 延后：打开延后菜单（L 取 later）。
+  {
+    id: 'reviewPostpone',
+    scope: 'app',
+    group: 'review',
+    action: { type: 'reviewPostpone' },
+    defaults: { mac: ['Alt+Meta+L'], windows: ['Ctrl+Alt+L'], web: ['Alt+Shift+L'] },
   },
   {
     id: 'reviewSkip',
@@ -603,6 +613,7 @@ export type HintableAction =
   | 'tags'
   | 'toggleAssistantPanel'
   | 'reviewMarkNext'
+  | 'reviewPostpone'
   | 'reviewSkip'
   | 'reviewPrevious';
 

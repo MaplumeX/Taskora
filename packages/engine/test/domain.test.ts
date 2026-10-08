@@ -403,7 +403,13 @@ describe('任务写入规则', () => {
       'area-parent',
       [{ title: 's', status: 'ACTIVE', settledAt: null }],
       UTC,
-      { today: '2026-09-21', defaultInterval: { unit: 'day', count: 3 } },
+      {
+        today: '2026-09-21',
+        defaults: {
+          project: { unit: 'day', count: 3 },
+          area: { unit: 'month', count: 1 },
+        },
+      },
     );
     expect(plan.project).toMatchObject({
       bucket: 'ANYTIME',
@@ -413,6 +419,7 @@ describe('任务写入规则', () => {
       tagIds: ['tag-1'],
       reviewInterval: { unit: 'day', count: 3 },
       nextReviewDate: '2026-09-24',
+      lastReviewedOn: null,
     });
     // 提升的任务属于新项目，不在 Inbox
     expect(plan.promotedTasks[0]).toMatchObject({

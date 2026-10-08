@@ -1,5 +1,10 @@
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
-import { accountTimeZone } from '@taskora/shared';
+import {
+  accountTimeZone,
+  normalizeReviewIntervalDefaults,
+  REVIEW_DEFAULT_KINDS,
+  type ReviewIntervalDefaults,
+} from '@taskora/shared';
 import * as bcrypt from 'bcryptjs';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -81,19 +86,14 @@ export class UsersService {
     const current = (user.preferences ?? {}) as Record<string, unknown>;
     // Legacy ISO dates must not move when the user changes the account zone.
     const legacyDateTimeZone = current.legacyDateTimeZone ?? accountTimeZone(current);
-    const { defaultReviewInterval, ...rest } = dto;
+    const { defaultReviewIntervals, ...rest } = dto;
     const merged = {
       ...current,
       ...rest,
       ...(dto.timeZone ? { legacyDateTimeZone } : {}),
       // 规范形的纯对象（DTO 实例不是 Prisma 的 JSON 输入）
-      ...(defaultReviewInterval
-        ? {
-            defaultReviewInterval: {
-              unit: defaultReviewInterval.unit,
-              count: defaultReviewInterval.count,
-            },
-          }
+      ...(defaultReviewIntervals
+        ? { defaultReviewIntervals: plainReviewIntervalDefaults(defaultReviewIntervals) }
         : {}),
     };
     // New in Today 的已看日期只进不退：迟到的旧设备写入不回拨。
@@ -175,4 +175,15 @@ export class UsersService {
       projectHeadings,
     };
   }
+}
+
+/** 默认回顾间隔 → 规范形的纯对象（DTO 实例不是 Prisma 的 JSON 输入）。 */
+function plainReviewIntervalDefaults(value: ReviewIntervalDefaults) {
+  const normalized = normalizeReviewIntervalDefaults(value);
+  return Object.fromEntries(
+    REVIEW_DEFAULT_KINDS.map((kind) => [
+      kind,
+      { unit: normalized[kind].unit, count: normalized[kind].count },
+    ]),
+  );
 }

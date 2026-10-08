@@ -18,7 +18,13 @@ import {
 
 const UTC = { timeZone: 'UTC', legacyDateTimeZone: 'UTC' };
 const WEEKLY = { unit: 'week', interval: 1, anchor: 'scheduled' } as const;
-const REVIEW = { today: '2026-10-05', defaultInterval: { unit: 'week', count: 1 } } as const;
+const REVIEW = {
+  today: '2026-10-05',
+  defaults: {
+    project: { unit: 'week', count: 1 },
+    area: { unit: 'month', count: 1 },
+  },
+} as const;
 
 const parent = {
   id: 'project-1',
@@ -67,6 +73,7 @@ describe('重复项目派生', () => {
       // 沿用来源的回顾间隔，下次回顾日从派生日重新计
       reviewInterval: { unit: 'month', count: 1 },
       nextReviewDate: '2026-11-05',
+      lastReviewedOn: null,
       bucket: 'SCHEDULED',
       status: 'ACTIVE',
       completedAt: null,

@@ -1,9 +1,10 @@
 /**
  * 回顾模式（Review Mode，见 CONTEXT.md）的会话逻辑。`/review` 是回顾列表
  * （Review List），从列表进入某个对象即开始一轮回顾：把当时的待回顾队列
- * 取成快照（进入的对象不在其中时放在最前），之后按快照逐个前进。快照只活
- * 在本次访问中（组件状态），不持久化、不同步；回到列表即结束本轮，刷新
- * 则按当时的待回顾集合重建。
+ * 取成快照（进入的对象不在其中时放在最前）。标记已回顾 / 延后后去本轮下一个
+ * 未处理的对象（先往后、再从头），全部处理完才结束；上一个 / 下一个只在快照
+ * 里移动。快照只活在本次访问中（组件状态），不持久化、不同步；回到列表即
+ * 结束本轮，刷新则按当时的待回顾集合重建。
  *
  * 当前对象由路由表示（`/review/project/:id`、`/review/area/:id`）。步进一律
  * 替换历史记录：系统返回直接回到列表。
@@ -81,6 +82,23 @@ export function previousReviewIndex(
   return null;
 }
 
+/**
+ * 处理完 from 之后要去的位置：本轮下一个尚未处理（未标记已回顾、未延后、
+ * 未离开回顾）的对象，先往后找，后面都处理过就从头找；没有则 null（本轮
+ * 全部处理完）。用「下一个」越过的对象不算处理过。
+ */
+export function nextPendingIndex(
+  snapshot: readonly ReviewQueueItem[],
+  from: number,
+  processed: (item: ReviewQueueItem) => boolean,
+): number | null {
+  for (let i = from + 1; i < snapshot.length; i += 1) if (!processed(snapshot[i])) return i;
+  for (let i = 0; i < Math.min(from, snapshot.length); i += 1) {
+    if (!processed(snapshot[i])) return i;
+  }
+  return null;
+}
+
 export interface ReviewSessionInput {
   /** 当前的待回顾队列；加载中为 undefined。快照只在进入时取一次。 */
   queueItems: readonly ReviewQueueItem[] | undefined;
@@ -88,14 +106,19 @@ export interface ReviewSessionInput {
   areas: readonly AreaResponseDto[] | undefined;
   /** 路由上的当前对象；在列表上为 null。 */
   current: ReviewQueueItem | null;
-  /** 替换式跳转到某个对象；null 为走完本轮。 */
+  /** 替换式跳转到某个对象；null 为本轮全部处理完。 */
   go: (item: ReviewQueueItem | null) => void;
   /** 标记已回顾（写入在后台进行，不阻塞前进）。 */
   markReviewed: (item: ReviewQueueItem) => void;
+  /** 延后：把下次回顾日改到 date（日期键），不算已回顾；写入同样在后台进行。 */
+  postpone: (item: ReviewQueueItem, date: string) => void;
 }
 
-/** 快照中一个对象在本轮的状态（回顾栏的队列列表用）。 */
-export type ReviewItemStatus = 'current' | 'reviewed' | 'skipped' | 'gone' | 'pending';
+/**
+ * 快照中一个对象在本轮的状态（回顾栏的队列列表用）：已处理（已回顾、已延后、
+ * 已了结或删除）或未处理（含用上一个 / 下一个看过的）。当前对象另由高亮表示。
+ */
+export type ReviewItemStatus = 'processed' | 'pending';
 
 export interface ReviewSession {
   /** 本轮快照；在列表上或队列加载中为 null。 */
@@ -103,8 +126,12 @@ export interface ReviewSession {
   /** 当前对象在快照中的位置；不在快照里为 -1。 */
   index: number;
   markNext: () => void;
-  skip: () => void;
+  /** 延后当前对象到 date，并去下一个未处理的对象。 */
+  postponeNext: (date: string) => void;
+  /** 在快照里移到下一个 / 上一个（不标记、不改日期）；到尾 / 到头时不可用。 */
+  next: () => void;
   previous: () => void;
+  canGoNext: boolean;
   canGoPrevious: boolean;
   /** 跳到快照中的任一对象。 */
   jump: (item: ReviewQueueItem) => void;
@@ -112,10 +139,10 @@ export interface ReviewSession {
 }
 
 export function useReviewSession(input: ReviewSessionInput): ReviewSession {
-  const { queueItems, projects, areas, current, go, markReviewed } = input;
+  const { queueItems, projects, areas, current, go, markReviewed, postpone } = input;
   const [snapshot, setSnapshot] = useState<readonly ReviewQueueItem[] | null>(null);
-  const [reviewed, setReviewed] = useState<ReadonlySet<string>>(new Set());
-  const [visited, setVisited] = useState<ReadonlySet<string>>(new Set());
+  /** 本轮标记已回顾或延后过的对象。 */
+  const [handled, setHandled] = useState<ReadonlySet<string>>(new Set());
 
   const gone = useCallback(
     (item: ReviewQueueItem) => reviewItemGone(item, projects, areas),
@@ -130,30 +157,36 @@ export function useReviewSession(input: ReviewSessionInput): ReviewSession {
     if (current === null) {
       if (snapshot !== null) {
         setSnapshot(null);
-        setReviewed(new Set());
-        setVisited(new Set());
+        setHandled(new Set());
       }
       return;
     }
     if (queueItems === undefined || index >= 0) return;
     setSnapshot(reviewSnapshot(queueItems, current));
-    setReviewed(new Set());
-    setVisited(new Set());
+    setHandled(new Set());
   }, [current, snapshot, queueItems, index]);
 
-  const currentKey = index >= 0 ? itemKey(snapshot![index]) : null;
-  useEffect(() => {
-    if (currentKey === null) return;
-    setVisited((prev) => (prev.has(currentKey) ? prev : new Set(prev).add(currentKey)));
-  }, [currentKey]);
+  const processed = useCallback(
+    (item: ReviewQueueItem) => handled.has(itemKey(item)) || gone(item),
+    [handled, gone],
+  );
 
-  const advance = useCallback(() => {
-    if (!snapshot || index < 0) return;
-    const next = nextReviewIndex(snapshot, index, gone);
-    go(next === null ? null : snapshot[next]);
-  }, [snapshot, index, gone, go]);
+  // 处理完当前对象（just 为刚处理的对象，状态写入尚未生效）：去本轮下一个
+  // 未处理的对象；全部处理完才结束本轮
+  const advance = useCallback(
+    (just?: ReviewQueueItem) => {
+      if (!snapshot || index < 0) return;
+      const next = nextPendingIndex(
+        snapshot,
+        index,
+        (item) => (just !== undefined && sameReviewItem(just, item)) || processed(item),
+      );
+      go(next === null ? null : snapshot[next]);
+    },
+    [snapshot, index, processed, go],
+  );
 
-  // 当前对象被了结、进 Trash 或删除：自动进入下一个（不需要标记已回顾）
+  // 当前对象被了结、进 Trash 或删除：自动去下一个未处理的（不需要标记已回顾）
   const currentGone = index >= 0 && gone(snapshot![index]);
   const advancedFrom = useRef<number | null>(null);
   useEffect(() => {
@@ -166,33 +199,46 @@ export function useReviewSession(input: ReviewSessionInput): ReviewSession {
     if (!snapshot || index < 0) return;
     const item = snapshot[index];
     markReviewed(item);
-    setReviewed((prev) => new Set(prev).add(itemKey(item)));
-    advance();
+    setHandled((prev) => new Set(prev).add(itemKey(item)));
+    advance(item);
   }, [snapshot, index, markReviewed, advance]);
 
-  const previousIndex =
-    snapshot && index >= 0 ? previousReviewIndex(snapshot, index, gone) : null;
+  const postponeNext = useCallback(
+    (date: string) => {
+      if (!snapshot || index < 0) return;
+      const item = snapshot[index];
+      postpone(item, date);
+      setHandled((prev) => new Set(prev).add(itemKey(item)));
+      advance(item);
+    },
+    [snapshot, index, postpone, advance],
+  );
+
+  const previousIndex = snapshot && index >= 0 ? previousReviewIndex(snapshot, index, gone) : null;
+  const nextIndex = snapshot && index >= 0 ? nextReviewIndex(snapshot, index, gone) : null;
 
   const previous = useCallback(() => {
     if (snapshot && previousIndex !== null) go(snapshot[previousIndex]);
   }, [snapshot, previousIndex, go]);
+  const next = useCallback(() => {
+    if (snapshot && nextIndex !== null) go(snapshot[nextIndex]);
+  }, [snapshot, nextIndex, go]);
 
   const statusOf = useCallback(
     (item: ReviewQueueItem): ReviewItemStatus => {
-      if (sameReviewItem(current, item)) return 'current';
-      if (reviewed.has(itemKey(item))) return 'reviewed';
-      if (gone(item)) return 'gone';
-      return visited.has(itemKey(item)) ? 'skipped' : 'pending';
+      return processed(item) ? 'processed' : 'pending';
     },
-    [current, reviewed, visited, gone],
+    [processed],
   );
 
   return {
     snapshot,
     index,
     markNext,
-    skip: advance,
+    postponeNext,
+    next,
     previous,
+    canGoNext: nextIndex !== null,
     canGoPrevious: previousIndex !== null,
     jump: go,
     statusOf,

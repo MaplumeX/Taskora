@@ -34,6 +34,8 @@ export interface ProjectFields {
   reviewInterval: ReviewInterval | null;
   /** 下次回顾日（日期键）。 */
   nextReviewDate: string | null;
+  /** 上次回顾日（日期键）；null 为从未回顾。 */
+  lastReviewedOn: string | null;
   bucket: ProjectBucket;
   status: ProjectStatus;
   completedAt: string | null;
@@ -59,7 +61,7 @@ export function planProjectCreate(
     dueDate: dateKeyOf(input.dueDate, zones),
     repeatRule: null,
     repeatSourceId: null,
-    ...planReviewSchedule(review, input, zones),
+    ...planReviewSchedule(review, 'project', input, zones),
     bucket: resolveProjectBucket(scheduledType),
     status: ProjectStatus.ACTIVE,
     completedAt: null,

@@ -13,7 +13,6 @@ import {
   Tag,
   Trash2,
   RotateCcw,
-  CalendarCheck,
 } from 'lucide-react';
 
 import { ScheduledType, type ProjectResponseDto, type UpdateProjectDto } from '@taskora/shared';
@@ -33,7 +32,7 @@ import { DueDateField } from '@/components/task/fields/DueDateField';
 import { RepeatRuleField } from '@/components/task/fields/RepeatRuleField';
 import { TagsField } from '@/components/task/fields/TagsField';
 
-import { ReviewSettingsDialog } from '@/components/review/ReviewSettingsDialog';
+import { ReviewMenuRow, ReviewPicker } from '@/components/review/ReviewSchedule';
 import { useInReviewMode } from '@/components/review/reviewMode';
 
 import { useProjectCompletion } from './useProjectCompletion';
@@ -46,7 +45,7 @@ export interface ProjectMenuProps {
   onDeleted?: () => void;
 }
 
-type PickerKind = 'scheduled' | 'repeat' | 'due' | 'tags' | null;
+type PickerKind = 'scheduled' | 'repeat' | 'due' | 'tags' | 'review' | null;
 
 export function ProjectMenuPanel({
   project,
@@ -56,20 +55,19 @@ export function ProjectMenuPanel({
   onClose,
   openPicker,
   onToggleComplete,
-  onOpenReviewSettings,
+  showReview,
   firstItemRef,
 }: ProjectMenuProps & {
   onClose: () => void;
   openPicker: (kind: Exclude<PickerKind, null>) => void;
-  /** 打开回顾设置（只有项目页的「…」菜单提供）。 */
-  onOpenReviewSettings?: () => void;
+  /** 提供回顾一行（只有项目页的「…」菜单提供）。 */
+  showReview?: boolean;
   /** 完成 / 取消完成（含剩余任务询问，见 useProjectCompletion；对话框由外层渲染）。 */
   onToggleComplete: (project: ProjectResponseDto) => void;
   firstItemRef?: React.RefObject<HTMLButtonElement>;
 }) {
   const { t } = useTranslation('task');
   const { t: tc } = useTranslation('common');
-  const { t: tr } = useTranslation('review');
 
   const deleteProject = useDeleteProject();
   const restoreProject = useRestoreProject();
@@ -140,16 +138,11 @@ export function ProjectMenuPanel({
       <MenuRow icon={Tag} onClick={() => openPicker('tags')}>
         {t('tags')}
       </MenuRow>
-      {onOpenReviewSettings && variant === 'default' && (
-        <MenuRow
-          icon={CalendarCheck}
-          onClick={() => {
-            onClose();
-            onOpenReviewSettings();
-          }}
-        >
-          {tr('settings')}
-        </MenuRow>
+      {showReview && variant === 'default' && (
+        <ReviewMenuRow
+          target={{ kind: 'project', ...current }}
+          onClick={() => openPicker('review')}
+        />
       )}
       <div className="-mx-1 my-1 h-px bg-muted" />
       <MenuRow
@@ -195,6 +188,9 @@ function PickerContent({
   }
   if (kind === 'due') {
     return <DueDateField current={current} onPatch={patch} onClose={onClose} />;
+  }
+  if (kind === 'review') {
+    return <ReviewPicker target={{ kind: 'project', ...current }} />;
   }
   return <TagsField current={current} onPatch={patch} />;
 }
@@ -315,7 +311,6 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
     if (!inReview) navigate('/today');
   };
   const [menuOpen, setMenuOpen] = React.useState(false);
-  const [reviewSettingsOpen, setReviewSettingsOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
 
   const containerRef = React.useRef<HTMLDivElement>(null);
@@ -344,7 +339,7 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
         </PopoverTrigger>
         <PopoverContent
           align="end"
-          className="w-44 p-1"
+          className="w-56 p-1"
           onClick={(e) => e.stopPropagation()}
         >
           <ProjectMenuPanel
@@ -355,7 +350,7 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
             onClose={closeMenu}
             openPicker={openPicker}
             onToggleComplete={completion.toggle}
-            onOpenReviewSettings={() => setReviewSettingsOpen(true)}
+            showReview
           />
         </PopoverContent>
       </Popover>
@@ -372,11 +367,6 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
         </PopoverContent>
       </Popover>
       {completion.dialog}
-      <ReviewSettingsDialog
-        target={{ kind: 'project', ...current }}
-        open={reviewSettingsOpen}
-        onOpenChange={setReviewSettingsOpen}
-      />
     </div>
   );
 }

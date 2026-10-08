@@ -63,7 +63,7 @@ export function createEngineAreaBackend(options: EngineAreaBackendOptions): Area
         notes: data.notes ?? null,
         position: positionAtEnd(positionedRows(existing)),
         tagIds: data.tagIds ?? [],
-        ...planReviewSchedule(currentReviewContext(), data, zones()),
+        ...planReviewSchedule(currentReviewContext(), 'area', data, zones()),
       });
       return areaDto(id);
     },
@@ -100,7 +100,7 @@ export function createEngineAreaBackend(options: EngineAreaBackendOptions): Area
       const existing = await engine.get('area', id);
       if (!existing) throw new Error(`Area not found: ${id}`);
       await engine.update('area', id, {
-        ...planMarkReviewed(existing.fields, currentReviewContext()),
+        ...planMarkReviewed(existing.fields, 'area', currentReviewContext(), zones()),
       });
       return areaDto(id);
     },

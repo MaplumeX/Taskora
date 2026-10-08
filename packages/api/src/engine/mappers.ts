@@ -189,14 +189,16 @@ export function areaRowToDto(row: ReplicaRow, tags: Map<string, TagResponseDto>)
   };
 }
 
-/** Project / Area 的回顾字段（存量数据为 null）。 */
+/** Project / Area 的回顾字段（间隔 null 为跟随默认，上次回顾日 null 为从未回顾）。 */
 function reviewFieldsOf(f: ReplicaRow['fields']): {
   reviewInterval: ReviewInterval | null;
   nextReviewDate: string | null;
+  lastReviewedOn: string | null;
 } {
   return {
     reviewInterval: normalizeReviewInterval(f.reviewInterval),
     nextReviewDate: (f.nextReviewDate as string | null) ?? null,
+    lastReviewedOn: (f.lastReviewedOn as string | null) ?? null,
   };
 }
 

@@ -14,8 +14,8 @@ export interface DateShortcut {
 
 interface Props {
   items: DateShortcut[];
-  /** 行尾的清除按钮（取代原先单独一行的底部「清除」）。 */
-  clear: { label: string; disabled?: boolean; onClear: () => void };
+  /** 行尾的清除按钮（取代原先单独一行的底部「清除」）；不可清除的日期不给。 */
+  clear?: { label: string; disabled?: boolean; onClear: () => void };
 }
 
 /**
@@ -45,17 +45,19 @@ export function DateShortcutList({ items, clear }: Props) {
           <span className="truncate">{item.label}</span>
         </button>
       ))}
-      <Hint label={clear.label}>
-        <button
-          type="button"
-          aria-label={clear.label}
-          disabled={clear.disabled}
-          onClick={clear.onClear}
-          className="flex h-7 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors duration-fast hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-30 max-md:h-10 max-md:w-10"
-        >
-          <CalendarX2 aria-hidden className="h-3.5 w-3.5 max-md:h-4 max-md:w-4" />
-        </button>
-      </Hint>
+      {clear && (
+        <Hint label={clear.label}>
+          <button
+            type="button"
+            aria-label={clear.label}
+            disabled={clear.disabled}
+            onClick={clear.onClear}
+            className="flex h-7 w-6 shrink-0 items-center justify-center rounded-md text-muted-foreground outline-none transition-colors duration-fast hover:bg-accent hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/60 disabled:pointer-events-none disabled:opacity-30 max-md:h-10 max-md:w-10"
+          >
+            <CalendarX2 aria-hidden className="h-3.5 w-3.5 max-md:h-4 max-md:w-4" />
+          </button>
+        </Hint>
+      )}
     </div>
   );
 }

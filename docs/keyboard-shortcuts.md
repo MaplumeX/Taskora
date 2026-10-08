@@ -118,7 +118,8 @@ Quick Add 从 `Cmd/Ctrl+Space` 改为 `Cmd/Ctrl+Shift+Space`：Windows 上 Ctrl+
 | 动作 | macOS | Windows | Web |
 |---|---|---|---|
 | 标记已回顾并进入下一个 | ⌥⌘R | Ctrl+Alt+R | Alt+Shift+R |
-| 跳过 | ⌥⌘→ | Ctrl+Alt+→ | Alt+Shift+→ |
+| 延后（打开延后菜单） | ⌥⌘L | Ctrl+Alt+L | Alt+Shift+L |
+| 下一个（不标记） | ⌥⌘→ | Ctrl+Alt+→ | Alt+Shift+→ |
 | 上一个 | ⌥⌘← | Ctrl+Alt+← | Alt+Shift+← |
 
 只在回顾模式（`/review`）中生效，其他页面按下不拦截。Web 的 Alt+← 是浏览器后退，统一用 Alt+Shift 系；⇧⌘R 预留给重复规则，mac 用 ⌥⌘R。

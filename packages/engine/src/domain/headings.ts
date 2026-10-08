@@ -80,7 +80,7 @@ export function planHeadingToProject(
       dueDate: null,
       repeatRule: null,
       repeatSourceId: null,
-      ...planReviewSchedule(review),
+      ...planReviewSchedule(review, 'project'),
       bucket: resolveProjectBucket(ScheduledType.NONE),
       status: ProjectStatus.ACTIVE,
       completedAt: null,

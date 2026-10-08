@@ -2,14 +2,27 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Route, Routes, useNavigate, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { CalendarCheck, ChevronDown, ChevronLeft, LogOut, Play, SkipForward } from 'lucide-react';
+import {
+  CalendarCheck,
+  CalendarClock,
+  CalendarSearch,
+  ChevronDown,
+  ChevronLeft,
+  ChevronRight,
+  LogOut,
+  Play,
+} from 'lucide-react';
 
 import {
+  formatShortDate,
+  parseCalendarDate,
   useAreasQuery,
   useMarkAreaReviewed,
   useMarkProjectReviewed,
   useProjectsQuery,
   useReviewQueueQuery,
+  useUpdateArea,
+  useUpdateProject,
 } from '@taskora/api';
 import type { AreaResponseDto, ProjectResponseDto, ReviewQueueItem } from '@taskora/shared';
 
@@ -21,7 +34,8 @@ import { PageHeading } from '@/components/layout/PageHeading';
 import { reviewNav } from '@/components/layout/navItems';
 import { ReviewList } from '@/components/review/ReviewList';
 import { ReviewQueueList } from '@/components/review/ReviewQueueList';
-import { ReviewScheduleChips, type ReviewTarget } from '@/components/review/ReviewSchedule';
+import { NextReviewDateCalendar, useReviewDateShortcuts } from '@/components/review/ReviewFields';
+import { ReviewSettingsButton, type ReviewTarget } from '@/components/review/ReviewSchedule';
 import { ReviewModeContext } from '@/components/review/reviewMode';
 import { registerReviewCommands } from '@/components/review/reviewCommands';
 import {
@@ -52,6 +66,9 @@ export default function Review() {
   const { data: areas } = useAreasQuery();
   const markProject = useMarkProjectReviewed();
   const markArea = useMarkAreaReviewed();
+  const { mutate: updateProject } = useUpdateProject();
+  const { mutate: updateArea } = useUpdateArea();
+  const [postponeOpen, setPostponeOpen] = useState(false);
 
   // 从列表进入时压入一条历史，之后步进都是替换：退出（含系统返回）回到
   // 列表。直接打开某个对象（刷新、深链）时列表不在身后，替换过去。
@@ -90,6 +107,15 @@ export default function Review() {
     },
     [mutateProject, mutateArea, t],
   );
+  const postpone = useCallback(
+    (item: ReviewQueueItem, nextReviewDate: string) => {
+      const onError = () => toast.error(t('common:saveFailed'));
+      const data = { nextReviewDate };
+      if (item.kind === 'project') updateProject({ id: item.id, data }, { onError });
+      else updateArea({ id: item.id, data }, { onError });
+    },
+    [updateProject, updateArea, t],
+  );
 
   const session = useReviewSession({
     queueItems: queue?.items,
@@ -98,6 +124,7 @@ export default function Review() {
     current,
     go,
     markReviewed,
+    postpone,
   });
 
   // 快捷键（KeyboardShortcuts）经命令通道转到最新的会话
@@ -107,7 +134,8 @@ export default function Review() {
     () =>
       registerReviewCommands((command) => {
         if (command === 'markNext') latest.current.markNext();
-        else if (command === 'skip') latest.current.skip();
+        else if (command === 'postpone') setPostponeOpen(true);
+        else if (command === 'next') latest.current.next();
         else latest.current.previous();
       }),
     [],
@@ -119,11 +147,7 @@ export default function Review() {
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between gap-2">
           <PageHeading nav={REVIEW_ROUTE}>{t('title')}</PageHeading>
-          <Button
-            size="sm"
-            disabled={dueCount === 0}
-            onClick={() => queue && open(queue.items[0])}
-          >
+          <Button size="sm" disabled={dueCount === 0} onClick={() => queue && open(queue.items[0])}>
             <Play />
             {t('start')}
           </Button>
@@ -150,6 +174,8 @@ export default function Review() {
           target={target ? { ...target, kind: current.kind } : null}
           projects={projects}
           areas={areas}
+          postponeOpen={postponeOpen}
+          onPostponeOpenChange={setPostponeOpen}
           onExit={exit}
         />
         <Routes>
@@ -173,16 +199,27 @@ interface ReviewBarProps {
   target: ReviewTarget | null;
   projects: readonly ProjectResponseDto[] | undefined;
   areas: readonly AreaResponseDto[] | undefined;
+  /** 延后菜单是否打开（快捷键也能打开它）。 */
+  postponeOpen: boolean;
+  onPostponeOpenChange: (open: boolean) => void;
   onExit: () => void;
 }
 
 /**
- * 回顾栏：进度、间隔与下次回顾日（可编辑）、标记已回顾 / 跳过 / 上一个 /
- * 退出。点进度展开本轮队列（桌面端弹层、手机端左侧抽屉）。桌面端是页面
- * 顶部的一条；手机端顶部放进度与日期，底部工具栏放「上一个 / 跳过 /
- * 标记已回顾」，系统返回回到列表。
+ * 回顾栏：进度、回顾设置（与「…」菜单同一个选择器）、标记已回顾 / 延后 /
+ * 下一个 / 上一个 / 退出。点进度展开本轮队列（桌面端弹层、手机端左侧抽屉）。
+ * 桌面端是页面顶部的一条；手机端顶部放进度与回顾设置，底部工具栏放「上一个 /
+ * 下一个 / 延后 / 标记已回顾」，系统返回回到列表。
  */
-function ReviewBar({ session, target, projects, areas, onExit }: ReviewBarProps) {
+function ReviewBar({
+  session,
+  target,
+  projects,
+  areas,
+  postponeOpen,
+  onPostponeOpenChange,
+  onExit,
+}: ReviewBarProps) {
   const { t } = useTranslation('review');
   const desktop = useIsDesktop();
   const [queueOpen, setQueueOpen] = useState(false);
@@ -212,7 +249,7 @@ function ReviewBar({ session, target, projects, areas, onExit }: ReviewBarProps)
       onPicked={() => setQueueOpen(false)}
     />
   );
-  const chips = inStep ? <ReviewScheduleChips target={target} /> : null;
+  const settingsButton = inStep ? <ReviewSettingsButton target={target} /> : null;
 
   const previousButton = (
     <Button
@@ -225,11 +262,50 @@ function ReviewBar({ session, target, projects, areas, onExit }: ReviewBarProps)
       {t('previous')}
     </Button>
   );
-  const skipButton = (
-    <Button variant="ghost" size={desktop ? 'sm' : 'default'} onClick={session.skip}>
-      <SkipForward />
-      {t('skip')}
+  // 上一个 / 下一个只在本轮列表里移动：不标记、不改日期，到头 / 到尾时禁用
+  const nextButton = (
+    <Button
+      variant="ghost"
+      size={desktop ? 'sm' : 'default'}
+      disabled={!session.canGoNext}
+      onClick={session.next}
+    >
+      {t('next')}
+      <ChevronRight />
     </Button>
+  );
+  const postponeTrigger = (
+    <PopoverTrigger asChild>
+      <Button variant="ghost" size={desktop ? 'sm' : 'default'}>
+        <CalendarClock />
+        {t('postpone')}
+        <ChevronDown className="h-3.5 w-3.5" />
+      </Button>
+    </PopoverTrigger>
+  );
+  // Hint 包住触发按钮（Popover 根节点不是 DOM，不能作 Tooltip 的 asChild）
+  const postponeButton = (
+    <Popover open={postponeOpen} onOpenChange={onPostponeOpenChange}>
+      {desktop ? (
+        <Hint label={t('postpone')} action="reviewPostpone">
+          {postponeTrigger}
+        </Hint>
+      ) : (
+        postponeTrigger
+      )}
+      <PopoverContent
+        align={desktop ? 'end' : 'center'}
+        side={desktop ? 'bottom' : 'top'}
+        className="w-auto p-1"
+      >
+        <PostponeMenu
+          onPick={(date) => {
+            onPostponeOpenChange(false);
+            session.postponeNext(date);
+          }}
+        />
+      </PopoverContent>
+    </Popover>
   );
   const markButton = (
     <Button size={desktop ? 'sm' : 'default'} onClick={session.markNext}>
@@ -243,7 +319,7 @@ function ReviewBar({ session, target, projects, areas, onExit }: ReviewBarProps)
       <>
         <div className="flex flex-col items-start gap-2 rounded-lg bg-muted/50 px-3 py-2">
           {progressButton}
-          {chips}
+          {settingsButton}
         </div>
         <Drawer open={queueOpen} onOpenChange={setQueueOpen}>
           <DrawerContent>
@@ -253,7 +329,8 @@ function ReviewBar({ session, target, projects, areas, onExit }: ReviewBarProps)
         </Drawer>
         <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-2 border-t bg-background px-3 pb-[calc(var(--safe-area-bottom)+0.5rem)] pt-2">
           {previousButton}
-          {inStep && skipButton}
+          {inStep && nextButton}
+          {inStep && postponeButton}
           {inStep && markButton}
         </div>
       </>
@@ -268,16 +345,17 @@ function ReviewBar({ session, target, projects, areas, onExit }: ReviewBarProps)
           {queueList}
         </PopoverContent>
       </Popover>
-      {chips}
+      {settingsButton}
       <div className="ml-auto flex items-center gap-1">
         <Hint label={t('previous')} action="reviewPrevious">
           {previousButton}
         </Hint>
         {inStep && (
-          <Hint label={t('skip')} action="reviewSkip">
-            {skipButton}
+          <Hint label={t('next')} action="reviewSkip">
+            {nextButton}
           </Hint>
         )}
+        {inStep && postponeButton}
         {inStep && (
           <Hint label={t('markReviewed')} action="reviewMarkNext">
             {markButton}
@@ -288,6 +366,43 @@ function ReviewBar({ session, target, projects, areas, onExit }: ReviewBarProps)
           {t('exit')}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * 延后菜单：明天 / 1 周后 / 1 个月后（与下次回顾日的快捷选项同一组），或
+ * 展开日历选日期。选中即把下次回顾日改到该日并进入下一个。
+ */
+function PostponeMenu({ onPick }: { onPick: (date: string) => void }) {
+  const { t } = useTranslation('review');
+  const shortcuts = useReviewDateShortcuts();
+  const [picking, setPicking] = useState(false);
+
+  if (picking) return <NextReviewDateCalendar value={null} onChange={onPick} />;
+
+  const rowClass =
+    'flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm hover:bg-accent max-md:h-11 [&_svg]:h-4 [&_svg]:w-4 [&_svg]:shrink-0';
+  return (
+    <div className="flex min-w-48 flex-col">
+      {shortcuts.map((shortcut) => (
+        <button
+          key={shortcut.key}
+          type="button"
+          className={rowClass}
+          onClick={() => onPick(shortcut.date)}
+        >
+          {shortcut.icon}
+          <span className="flex-1">{shortcut.label}</span>
+          <span className="text-meta text-muted-foreground">
+            {formatShortDate(parseCalendarDate(shortcut.date))}
+          </span>
+        </button>
+      ))}
+      <button type="button" className={rowClass} onClick={() => setPicking(true)}>
+        <CalendarSearch className="text-muted-foreground" />
+        {t('pickDate')}
+      </button>
     </div>
   );
 }

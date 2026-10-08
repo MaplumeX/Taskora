@@ -1,10 +1,10 @@
 /**
  * 回顾模式的键盘命令通道：回顾模式挂载时登记处理函数，KeyboardShortcuts
- * 把「标记已回顾并下一个 / 跳过 / 上一个」转给它。不在回顾模式时没有
- * 处理函数，按键不被拦截。
+ * 把「标记已回顾并下一个 / 延后（打开延后菜单）/ 下一个 / 上一个」转给它。
+ * 不在回顾模式时没有处理函数，按键不被拦截。
  */
 
-export type ReviewCommand = 'markNext' | 'skip' | 'previous';
+export type ReviewCommand = 'markNext' | 'postpone' | 'next' | 'previous';
 
 let handler: ((command: ReviewCommand) => void) | null = null;
 

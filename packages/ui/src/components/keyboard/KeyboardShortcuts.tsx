@@ -108,7 +108,8 @@ function neighborAfter(rows: SelectionRow[], ids: string[]): SelectionRow | null
 
 const REVIEW_COMMANDS: Partial<Record<KeyAction['type'], ReviewCommand>> = {
   reviewMarkNext: 'markNext',
-  reviewSkip: 'skip',
+  reviewPostpone: 'postpone',
+  reviewSkip: 'next',
   reviewPrevious: 'previous',
 };
 

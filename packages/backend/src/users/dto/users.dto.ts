@@ -12,7 +12,7 @@ import {
   ValidateIf,
   ValidateNested,
 } from 'class-validator';
-import { ReviewIntervalDto } from '../../common/review-interval.dto';
+import { ReviewIntervalDefaultsDto } from '../../common/review-interval.dto';
 import type {
   UpdateProfileDto as IUpdateProfileDto,
   UpdatePasswordDto as IUpdatePasswordDto,
@@ -70,8 +70,8 @@ export class UpdatePreferencesDto implements IUpdatePreferencesDto {
 
   @IsOptional()
   @ValidateNested()
-  @Type(() => ReviewIntervalDto)
-  defaultReviewInterval?: ReviewIntervalDto;
+  @Type(() => ReviewIntervalDefaultsDto)
+  defaultReviewIntervals?: ReviewIntervalDefaultsDto;
 }
 
 export class DeleteAccountDto implements IDeleteAccountDto {

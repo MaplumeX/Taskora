@@ -316,13 +316,18 @@ export class ProjectsService {
     }
   }
 
-  /** 标记已回顾：下次回顾日为今天加回顾间隔（规则见 domain planMarkReviewed）。 */
+  /** 标记已回顾：下次回顾日从原日期加回顾间隔（规则见 domain planMarkReviewed）。 */
   async markReviewed(userId: string, id: string) {
     const existing = await this.requireProject(userId, id);
-    const { review } = await userReviewSettings(this.prisma, userId);
+    const { zones, review } = await userReviewSettings(this.prisma, userId);
     const patch = planMarkReviewed(
-      { reviewInterval: parseReviewInterval(existing.reviewInterval) },
+      {
+        reviewInterval: parseReviewInterval(existing.reviewInterval),
+        nextReviewDate: existing.nextReviewDate,
+      },
+      'project',
       review,
+      zones,
     );
     await this.hub.writeAsHub(userId, async (batch) => {
       await batch.write('project', id, toWireFields(patch));
