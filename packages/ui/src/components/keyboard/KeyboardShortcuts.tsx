@@ -523,10 +523,12 @@ function TypeToFindSink({ pathname }: { pathname: string }) {
         pendingByPointer.current = false;
         if (pointerDown || !canTypeToFind(pathname) || hasOpenOverlay()) return;
         const active = document.activeElement;
+        // 行内编辑也位于 Selection 行内，不能因未选中该行而抢走编辑焦点。
+        if (isEditableTarget(active)) return;
         const idle =
           !active ||
           active === document.body ||
-          (byPointer && active !== sink && !isEditableTarget(active)) ||
+          (byPointer && active !== sink) ||
           // 清空 Selection 后焦点残留在旧行上
           (useSelectionStore.getState().selectedIds.length === 0 &&
             !!active.closest('[data-selection-row]'));

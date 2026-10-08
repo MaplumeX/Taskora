@@ -3,7 +3,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { TaskResponseDto } from '@taskora/shared';
-import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { HeadingStatus, ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -23,6 +23,7 @@ const harness = vi.hoisted(() => ({
   reorderMutate: vi.fn(),
   createMutate: vi.fn(),
   updateTaskMutate: vi.fn(),
+  updateHeadingMutate: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -50,6 +51,11 @@ vi.mock('@taskora/api', async (importOriginal) => {
     }),
     useCreateProject: () => ({ mutate: vi.fn(), isPending: false }),
     useCreateProjectHeading: () => ({ mutate: vi.fn(), isPending: false }),
+    useUpdateProjectHeading: () => ({ mutate: harness.updateHeadingMutate }),
+    useDeleteProjectHeading: () => ({ mutate: vi.fn(), isPending: false }),
+    useConvertProjectHeadingToProject: () => ({ mutate: vi.fn(), isPending: false }),
+    useArchiveProjectHeading: () => ({ mutate: vi.fn(), isPending: false }),
+    useUnarchiveProjectHeading: () => ({ mutate: vi.fn(), isPending: false }),
     useProjectsQuery: () => ({ data: [] }),
     useAreasQuery: () => ({ data: [] }),
     useTagsQuery: () => ({
@@ -76,6 +82,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
 
 import { KeyboardShortcuts } from './KeyboardShortcuts';
 import { GroupHeaderRowShell } from '../feed/GroupHeaderRowShell';
+import { ProjectHeadingRow } from '../project/ProjectHeadingRow';
 import { useSelectionStore } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
 import { useKeybindingsStore } from '@taskora/api';
@@ -196,6 +203,7 @@ beforeEach(() => {
   harness.reorderMutate.mockReset();
   harness.createMutate.mockReset();
   harness.updateTaskMutate.mockReset();
+  harness.updateHeadingMutate.mockReset();
   useSelectionStore.getState().setSelection([]);
   useSelectionStore.getState().clearSelection();
   useUiInteractionStore.setState({ expandedId: null, searchOpen: false, searchSeed: null });
@@ -904,6 +912,46 @@ describe('KeyboardShortcuts — 输入法打字唤起（隐藏输入框）', () 
     await settle();
     expect(input).toHaveFocus();
     input.remove();
+  });
+
+  it('项目分组标题编辑时保持焦点，点击编辑框后仍可改名并保存', async () => {
+    const user = userEvent.setup();
+    render(
+      <MemoryRouter initialEntries={['/projects/project-1']}>
+        <KeyboardShortcuts platform="mac" />
+        <div onClick={() => useSelectionStore.getState().clearSelection()}>
+          <ProjectHeadingRow
+            heading={{
+              id: 'heading-1',
+              projectId: 'project-1',
+              title: 'Build',
+              status: HeadingStatus.ACTIVE,
+              completedAt: null,
+              createdAt: '2026-07-31T00:00:00.000Z',
+              updatedAt: '2026-07-31T00:00:00.000Z',
+            }}
+          />
+        </div>
+      </MemoryRouter>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'Build' }));
+    const input = screen.getByRole('textbox', { name: 'project:headingPlaceholder' });
+    await waitFor(() => expect(input).toHaveFocus());
+    await user.click(input);
+    await settle();
+    expect(input).toHaveFocus();
+    expect(harness.updateHeadingMutate).not.toHaveBeenCalled();
+
+    await user.clear(input);
+    await user.type(input, 'Release');
+    expect(input).toHaveValue('Release');
+    expect(useUiInteractionStore.getState().searchOpen).toBe(false);
+    await user.keyboard('{Enter}');
+    expect(harness.updateHeadingMutate).toHaveBeenCalledWith(
+      { id: 'heading-1', data: { title: 'Release' } },
+      expect.objectContaining({ onError: expect.any(Function) }),
+    );
   });
 
   it('助手页不持有焦点', async () => {
