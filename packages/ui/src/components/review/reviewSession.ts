@@ -9,8 +9,8 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 
+import { projectTakesPartInReview } from '@taskora/api';
 import {
-  ProjectStatus,
   type AreaResponseDto,
   type ProjectResponseDto,
   type ReviewQueueItem,
@@ -45,7 +45,7 @@ export function reviewItemGone(
   if (item.kind === 'area') return areas !== undefined && !areas.some((a) => a.id === item.id);
   if (projects === undefined) return false;
   const project = projects.find((p) => p.id === item.id);
-  return !project || project.status !== ProjectStatus.ACTIVE || project.trashedAt != null;
+  return !project || !projectTakesPartInReview(project);
 }
 
 /** 快照中 from 之后第一个仍在回顾里的位置；没有则 null（走完）。 */
@@ -144,6 +144,8 @@ export function useReviewSession(input: ReviewSessionInput): ReviewSession {
     if (snapshot && previousIndex !== null) go(snapshot[previousIndex]);
   }, [snapshot, previousIndex, go]);
 
+  const restart = useCallback(() => setSnapshot(null), []);
+
   return {
     snapshot,
     index,
@@ -151,6 +153,6 @@ export function useReviewSession(input: ReviewSessionInput): ReviewSession {
     skip: advance,
     previous,
     canGoPrevious: previousIndex !== null,
-    restart: () => setSnapshot(null),
+    restart,
   };
 }

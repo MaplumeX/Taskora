@@ -266,7 +266,7 @@ export * from './utils/date';
 // 列表顺序（ADR-0007 Position）：UI 与两种后端同一口径。
 export { sortByEffectivePosition } from '@taskora/engine';
 // 侧边栏同序的扁平父级顺序：Move Picker、Quick Find、分组视图与回顾队列共用。
-export { flatParentOrder } from '@taskora/engine';
+export { flatParentOrder, projectTakesPartInReview } from '@taskora/engine';
 // 嵌套 Tag 的树（ADR-0016）：UI 的选择器、过滤栏与管理页共用。
 export { buildTagTree, type TagTree } from '@taskora/engine';
 

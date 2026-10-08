@@ -348,14 +348,14 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     action: { type: 'toggleAssistantPanel' },
     defaults: { mac: ['Meta+J'], windows: ['Ctrl+J'], web: ['Alt+J'] },
   },
-  // 回顾模式（Review Mode）：只在回顾时生效。Web 的 Alt+← 是浏览器后退，
-  // 统一用 Alt+Shift 系。
+  // 回顾模式（Review Mode）：只在回顾时生效。⇧⌘R 预留给重复规则（且是
+  // 强制刷新），mac 用 ⌥⌘ 系；Web 的 Alt+← 是浏览器后退，统一用 Alt+Shift 系。
   {
     id: 'reviewMarkNext',
     scope: 'app',
     group: 'review',
     action: { type: 'reviewMarkNext' },
-    defaults: { mac: ['Shift+Meta+R'], windows: ['Ctrl+Alt+R'], web: ['Alt+Shift+R'] },
+    defaults: { mac: ['Alt+Meta+R'], windows: ['Ctrl+Alt+R'], web: ['Alt+Shift+R'] },
   },
   {
     id: 'reviewSkip',

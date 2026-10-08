@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
+import { Link, MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -69,6 +69,7 @@ function renderReview() {
           <Route path="*" element={<p>elsewhere</p>} />
         </Routes>
         <Location />
+        <Link to="/review">enter review</Link>
       </MemoryRouter>
     </QueryClientProvider>,
   );
@@ -122,6 +123,18 @@ describe('Review 页面', () => {
       runReviewCommand('previous');
     });
     expect(path()).toBe('/review/project/p1');
+  });
+
+  it('会话中再次进入 Review：按当时的待回顾集合重建快照，从第一个开始', () => {
+    renderReview();
+    fireEvent.click(screen.getByRole('button', { name: /Skip/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Skip/ }));
+    expect(path()).toBe('/review/done');
+    queue = { items: [{ kind: 'area', id: 'a1' }], upcoming: null };
+    mockData();
+    fireEvent.click(screen.getByText('enter review'));
+    expect(path()).toBe('/review/area/a1');
+    expect(screen.getByText('1 / 1')).toBeInTheDocument();
   });
 
   it('没有待回顾对象：直接显示空状态', () => {

@@ -40,7 +40,8 @@ import ProjectDetail from './ProjectDetail';
 export default function Review() {
   const { t } = useTranslation('review');
   const navigate = useNavigate();
-  const current = parseReviewPath(useParams()['*']);
+  const rest = useParams()['*'] ?? '';
+  const current = parseReviewPath(rest);
   const { data: queue } = useReviewQueueQuery();
   const { data: projects } = useProjectsQuery();
   const { data: areas } = useAreasQuery();
@@ -71,6 +72,12 @@ export default function Review() {
     go,
     markReviewed,
   });
+
+  // 会话中再次点 Review 入口（回到 /review）：按当时的待回顾集合重建快照
+  const { snapshot, restart } = session;
+  useEffect(() => {
+    if (rest === '' && snapshot) restart();
+  }, [rest, snapshot, restart]);
 
   // 快捷键（KeyboardShortcuts）经命令通道转到最新的会话
   const latest = useRef(session);
