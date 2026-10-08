@@ -204,6 +204,7 @@ describe('AreaDetail 稍后项目拖拽', () => {
     expect(harness.sidebarDrop).toHaveBeenCalledWith(
       { kind: 'project', project: expect.objectContaining({ id: 'as' }) },
       { kind: 'area', areaId: 'b' },
+      null,
     );
     expect(harness.reorderProjectsMutate).not.toHaveBeenCalled();
   });
@@ -217,6 +218,7 @@ describe('AreaDetail 稍后项目拖拽', () => {
     expect(harness.sidebarDrop).toHaveBeenCalledWith(
       { kind: 'project', project: expect.objectContaining({ id: 'af' }) },
       { kind: 'today' },
+      null,
     );
     act(() => harness.dnd?.onDragStart({ active: { id: 'af' } }));
     act(() => harness.dnd?.onDragEnd({ active: { id: 'af' }, over: { id: 'as' } }));
