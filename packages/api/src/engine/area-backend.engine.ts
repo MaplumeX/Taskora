@@ -3,10 +3,11 @@
  *
  * Area 的增删改/重排全部本地（软引用关系由删除原语按 SetNull 语义
  * 清理）。语义与 AreasService 对齐（新建追加末尾、tagIds 全量 set、
- * 物理删除）。
+ * 物理删除且其下项目与任务进 Trash）。
  */
 
 import {
+  planAreaDelete,
   planMarkReviewed,
   planReorder,
   planReviewSchedule,
@@ -84,7 +85,31 @@ export function createEngineAreaBackend(options: EngineAreaBackendOptions): Area
     },
 
     async deleteArea(id: string): Promise<void> {
-      // 物理删除（Delete Request，ADR-0008）；副本侧对 Task/Project 的
+      // 其下项目与任务先进 Trash（规则见 domain planAreaDelete）
+      const projects = await engine.list('project', { where: { areaId: id } });
+      const [directTasks, projectTasks] = await Promise.all([
+        engine.list('task', { where: { areaId: id } }),
+        engine.list('task', { where: { projectId: { in: projects.map((row) => row.id) } } }),
+      ]);
+      const tasks = new Map([...directTasks, ...projectTasks].map((row) => [row.id, row]));
+      const plan = planAreaDelete(
+        new Date().toISOString(),
+        projects.map((row) => ({ id: row.id, trashedAt: row.fields.trashedAt })),
+        [...tasks.values()].map((row) => ({
+          id: row.id,
+          projectId: row.fields.projectId,
+          trashedAt: row.fields.trashedAt,
+        })),
+      );
+      await engine.updateMany(
+        'project',
+        plan.projects.map(({ id: projectId, patch }) => ({ id: projectId, patch: { ...patch } })),
+      );
+      await engine.updateMany(
+        'task',
+        plan.tasks.map(({ id: taskId, patch }) => ({ id: taskId, patch: { ...patch } })),
+      );
+      // 区域本身物理删除（Delete Request，ADR-0008）；副本侧对 Task/Project 的
       // areaId 引用按 SetNull 语义清理，与 hub 侧 onDelete: SetNull 一致。
       await engine.delete('area', [id]);
     },

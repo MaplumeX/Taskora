@@ -96,6 +96,7 @@ export {
   type TaskUpdateBase,
 } from './tasks';
 export {
+  planAreaDelete,
   planEmptyTrash,
   planProjectComplete,
   planProjectCreate,

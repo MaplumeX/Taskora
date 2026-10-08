@@ -822,7 +822,7 @@ export class AgentToolsService {
         name: 'delete_area',
         label: 'Delete area',
         description:
-          'Permanently delete an area (hard delete, cannot be undone). Projects and tasks lose their area assignment but are kept. Destructive: needs user approval.',
+          'Permanently delete an area (hard delete, cannot be undone). Its projects and tasks are moved to the Trash. Destructive: needs user approval.',
         destructive: true,
         parameters: Type.Object({ id: Type.String() }),
         execute: async (_id, params) => {

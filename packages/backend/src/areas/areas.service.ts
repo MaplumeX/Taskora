@@ -2,12 +2,14 @@ import { randomUUID } from 'node:crypto';
 
 import { Injectable, NotFoundException } from '@nestjs/common';
 import {
+  planAreaDelete,
   planMarkReviewed,
   planReorder,
   planReviewSchedule,
   planReviewUpdate,
   positionAtEnd,
 } from '@taskora/engine';
+import { toWireFields } from '../common/domain-storage';
 import { withReviewDto } from '../common/review-dto';
 import { sortByPosition } from '../common/position-order';
 import { PrismaService } from '../prisma/prisma.service';
@@ -93,9 +95,28 @@ export class AreasService {
     });
   }
 
+  /** 删除区域：其下项目与任务进 Trash，区域本身物理删除（规则见 domain planAreaDelete）。 */
   async remove(userId: string, id: string) {
     const area = await this.findOne(userId, id);
-    await this.hub.writeAsHub(userId, (batch) => batch.delete('area', [id]));
+    const projects = await this.prisma.project.findMany({
+      where: { areaId: id, userId },
+      select: { id: true, trashedAt: true },
+    });
+    const tasks = await this.prisma.task.findMany({
+      where: {
+        userId,
+        OR: [{ areaId: id }, { projectId: { in: projects.map((project) => project.id) } }],
+      },
+      select: { id: true, projectId: true, trashedAt: true },
+    });
+    const plan = planAreaDelete(new Date().toISOString(), projects, tasks);
+    await this.hub.writeAsHub(userId, async (batch) => {
+      for (const project of plan.projects) {
+        await batch.write('project', project.id, toWireFields(project.patch));
+      }
+      for (const task of plan.tasks) await batch.write('task', task.id, toWireFields(task.patch));
+      await batch.delete('area', [id]);
+    });
     return area;
   }
 

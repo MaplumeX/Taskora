@@ -192,6 +192,10 @@ export function useDeleteArea() {
     onSettled: () => {
       refreshAfterWrite(queryClient, { queryKey: areaKeys.all });
       refreshAfterWrite(queryClient, { queryKey: ['review'] });
+      // 其下项目与任务随之进 Trash
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: ['tasks'] });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
     },
   });
 }

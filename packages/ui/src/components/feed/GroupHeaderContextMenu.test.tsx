@@ -111,7 +111,7 @@ describe('Group Header context menus', () => {
     expect(mutations.deleteArea).not.toHaveBeenCalled();
     const dialog = await screen.findByRole('dialog', { name: 'Delete area "Family"?' });
     expect(dialog).toHaveAccessibleDescription(
-      'This permanently deletes the area and cannot be undone. Its projects and tasks will be kept, but will no longer belong to this area.',
+      'This permanently deletes the area and cannot be undone. Its projects and tasks will be moved to the Trash.',
     );
     fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
     expect(mutations.deleteArea).toHaveBeenCalledTimes(1);

@@ -219,6 +219,35 @@ export function planProjectTrash(
 }
 
 /**
+ * 删除区域：区域本身物理删除（Delete Request），其下的项目与任务进 Trash
+ * （可放回，放回后不再归属任何区域）。项目连同其下任务按 planProjectTrash
+ * 级联；直接归属区域的任务单独进 Trash。已经在 Trash 里的不动。
+ */
+export function planAreaDelete(
+  now: string,
+  projects: readonly TrashableTask[],
+  tasks: ReadonlyArray<TrashableTask & { projectId: unknown }>,
+): {
+  projects: Array<{ id: string; patch: ProjectPatch }>;
+  tasks: Array<{ id: string; patch: TaskPatch }>;
+} {
+  const liveProjects = projects.filter((project) => project.trashedAt == null);
+  const liveProjectIds = new Set(liveProjects.map((project) => project.id));
+  return {
+    projects: liveProjects.map((project) => ({ id: project.id, patch: { trashedAt: now } })),
+    tasks: tasks
+      .filter(
+        (task) =>
+          task.trashedAt == null &&
+          // 已在 Trash 的项目下的任务随那个项目，不单独进 Trash
+          (task.projectId == null ||
+            (typeof task.projectId === 'string' && liveProjectIds.has(task.projectId))),
+      )
+      .map((task) => ({ id: task.id, patch: taskTrashPatch(now) })),
+  };
+}
+
+/**
  * 项目恢复：只捡回与项目同一时刻进 Trash 的任务；项目进 Trash 前后
  * 单独删掉的任务保持原状。时间戳按时刻比较（两端存储形态不同）。
  */
