@@ -19,6 +19,9 @@ vi.mock('@tanstack/react-query', async (importOriginal) => ({
 vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
   useUpdateProject: () => ({ mutate: mutationMocks.update }),
+  useUpdateArea: () => ({ mutate: vi.fn() }),
+  useMarkProjectReviewed: () => ({ mutate: vi.fn() }),
+  useMarkAreaReviewed: () => ({ mutate: vi.fn() }),
   useTagsQuery: () => ({
     data: [tagA, tagB].map((t) => ({ ...t })),
   }),
@@ -83,12 +86,38 @@ describe('ProjectMetaRow', () => {
     expect(screen.getByTitle('design')).toBeInTheDocument();
   });
 
-  it('renders nothing when no metadata is set', () => {
-    const { container } = render(<ProjectMetaRow project={{ ...baseProject, tags: [] }} />);
+  it('renders only the next review badge when no other metadata is set', () => {
+    render(<ProjectMetaRow project={{ ...baseProject, tags: [] }} />);
 
-    // 无任何元数据时不渲染按钮。
+    // 参与回顾的项目总有下次回顾日（存量空值视为今天）。
+    const buttons = screen.getAllByRole('button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAccessibleName('Next review');
+    expect(buttons[0]).toHaveTextContent('Today');
+  });
+
+  it('hides the next review badge for projects that do not take part in review', () => {
+    render(<ProjectMetaRow project={{ ...baseProject, tags: [], status: ProjectStatus.COMPLETED }} />);
+
     expect(screen.queryAllByRole('button')).toHaveLength(0);
-    expect(container.querySelector('svg')).toBeNull();
+  });
+
+  it('does not mark a past next review date as deadline-red', () => {
+    const { container } = render(
+      <ProjectMetaRow project={{ ...baseProject, nextReviewDate: '2000-01-01' }} />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Next review' })).toBeInTheDocument();
+    expect(container.querySelector('.text-deadline')).toBeNull();
+  });
+
+  it('opens the review picker from the next review badge', async () => {
+    const user = userEvent.setup();
+    render(<ProjectMetaRow project={{ ...baseProject, tags: [] }} />);
+
+    await user.click(screen.getByRole('button', { name: 'Next review' }));
+
+    expect(await screen.findByText('Review every')).toBeInTheDocument();
   });
 
   it('does not mark an overdue scheduled date as deadline-red（When 永不逾期）', () => {

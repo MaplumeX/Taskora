@@ -11,22 +11,23 @@ import {
   formatDeadlineCountdown,
   isOverdue,
   isToday,
+  projectTakesPartInReview,
   useUpdateProject,
 } from '@taskora/api';
 
-import { FieldPicker } from '@/components/common/FieldPicker';
+import { MetaBadge, MetaPopover, MetaTagDots } from '@/components/common/MetaBadge';
+import { ReviewMetaBadge } from '@/components/review/ReviewSchedule';
 import { ScheduledDateField } from '@/components/task/fields/ScheduledDateField';
 import { DueDateField } from '@/components/task/fields/DueDateField';
 import { RepeatRuleField } from '@/components/task/fields/RepeatRuleField';
 import { TagsField } from '@/components/task/fields/TagsField';
-import { cn } from '@/lib/utils';
 
 interface Props {
   project: ProjectResponseDto;
 }
 
 /**
- * 项目详情头部的元数据行：计划日期 / 重复 / 截止日期 / 标签。
+ * 项目详情头部的元数据行：计划日期 / 重复 / 截止日期 / 标签 / 下次回顾日。
  * 展示风格与任务条目的徽章一致（图标 + 小字，过期/今天为警示色），
  * 点击徽章打开字段选择器编辑，复用任务侧的字段组件。
  */
@@ -96,21 +97,14 @@ export function ProjectMetaRow({ project }: Props) {
       {tags.length > 0 ? (
         <MetaPopover
           label={t('tags')}
-          trigger={
-            <span className="inline-flex items-center gap-1">
-              {tags.slice(0, 5).map((tag) => (
-                <span
-                  key={tag.id}
-                  className="h-2 w-2 rounded-full"
-                  style={{ backgroundColor: tag.color }}
-                  title={tag.title}
-                />
-              ))}
-            </span>
-          }
+          trigger={<MetaTagDots tags={tags} />}
         >
           <TagsField current={project} onPatch={patch} />
         </MetaPopover>
+      ) : null}
+
+      {projectTakesPartInReview(project) ? (
+        <ReviewMetaBadge target={{ kind: 'project', ...project }} />
       ) : null}
     </div>
   );
@@ -124,59 +118,4 @@ function isDeadlineUrgent(dateIso: string | null | undefined): boolean {
   if (!dateIso) return false;
   const date = parseCalendarDate(dateIso);
   return isOverdue(date) || isToday(date);
-}
-
-/** 徽章式触发器：风格对齐 TaskDateBadge / TaskDueDateBadge（图标 + xs 文字）。 */
-function MetaBadge({
-  icon,
-  text,
-  urgent = false,
-}: {
-  icon: React.ReactNode;
-  text: string | null;
-  urgent?: boolean;
-}) {
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1 text-xs tabular-nums',
-        urgent ? 'text-deadline' : 'text-muted-foreground',
-      )}
-    >
-      {icon}
-      {text}
-    </span>
-  );
-}
-
-/**
- * 可点击的元数据徽章：trigger 内渲染徽章内容（无值时退化为图标按钮），
- * 选择器（宽屏 Popover / 窄屏居中卡片）内容复用任务字段组件。
- */
-function MetaPopover({
-  label,
-  children,
-  trigger,
-}: {
-  label: string;
-  children: React.ReactNode | ((close: () => void) => React.ReactNode);
-  trigger: React.ReactNode;
-}) {
-  return (
-    <FieldPicker
-      label={label}
-      trigger={
-        <button
-          type="button"
-          aria-label={label}
-          title={label}
-          className="inline-flex h-7 items-center gap-1 rounded-md px-1.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground max-md:h-9"
-        >
-          {trigger}
-        </button>
-      }
-    >
-      {children}
-    </FieldPicker>
-  );
 }

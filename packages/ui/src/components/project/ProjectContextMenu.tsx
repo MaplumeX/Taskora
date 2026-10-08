@@ -139,10 +139,7 @@ export function ProjectMenuPanel({
         {t('tags')}
       </MenuRow>
       {showReview && variant === 'default' && (
-        <ReviewMenuRow
-          target={{ kind: 'project', ...current }}
-          onClick={() => openPicker('review')}
-        />
+        <ReviewMenuRow onClick={() => openPicker('review')} />
       )}
       <div className="-mx-1 my-1 h-px bg-muted" />
       <MenuRow
@@ -339,7 +336,7 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
         </PopoverTrigger>
         <PopoverContent
           align="end"
-          className="w-56 p-1"
+          className="w-44 p-1"
           onClick={(e) => e.stopPropagation()}
         >
           <ProjectMenuPanel

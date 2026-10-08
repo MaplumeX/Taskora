@@ -120,19 +120,12 @@ function AreaMenu({
             </Button>
           </PopoverTrigger>
         )}
-        <PopoverContent
-          align="end"
-          className={contextMenu ? 'w-44 p-1' : 'w-56 p-1'}
-          onClick={(e) => e.stopPropagation()}
-        >
+        <PopoverContent align="end" className="w-44 p-1" onClick={(e) => e.stopPropagation()}>
           <MenuRow icon={Tag} onClick={() => openPicker('tags')}>
             {t('tags')}
           </MenuRow>
           {!contextMenu && (
-            <ReviewMenuRow
-              target={{ kind: 'area', ...area }}
-              onClick={() => openPicker('review')}
-            />
+            <ReviewMenuRow onClick={() => openPicker('review')} />
           )}
           <div className="-mx-1 my-1 h-px bg-muted" />
           <MenuRow icon={Trash2} destructive onClick={handleDelete}>

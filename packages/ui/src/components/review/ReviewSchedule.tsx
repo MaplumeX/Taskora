@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { CalendarCheck, History } from 'lucide-react';
 
 import {
+  formatDateLabel,
   formatShortDate,
   parseCalendarDate,
   todayDateKey,
@@ -16,6 +17,7 @@ import {
 import type { ReviewInterval, ReviewQueueItem } from '@taskora/shared';
 
 import { MenuRow } from '@/components/common/MenuRow';
+import { MetaBadge, MetaPopover } from '@/components/common/MetaBadge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -24,7 +26,6 @@ import {
   NextReviewDateEditor,
   ReviewIntervalEditor,
   useLastReviewedLabel,
-  useReviewIntervalLabel,
 } from './ReviewFields';
 
 /** 回顾设置作用的对象：Project 或 Area 的回顾字段。 */
@@ -76,18 +77,35 @@ export function useReviewActions(target: ReviewTarget) {
   };
 }
 
-/** 「…」菜单的回顾一行：右侧是「每周 · 10月15日」式的摘要，点开回顾选择器。 */
-export function ReviewMenuRow({ target, onClick }: { target: ReviewTarget; onClick: () => void }) {
+/** 「…」菜单的回顾一行：点开回顾选择器。 */
+export function ReviewMenuRow({ onClick }: { onClick: () => void }) {
   const { t } = useTranslation('review');
-  const intervalLabel = useReviewIntervalLabel();
-  const schedule = useReviewSchedule(target);
-  const summary = `${intervalLabel(schedule.interval)} · ${formatShortDate(
-    parseCalendarDate(schedule.nextReviewDate),
-  )}`;
   return (
-    <MenuRow icon={CalendarCheck} trailing={summary} onClick={onClick}>
+    <MenuRow icon={CalendarCheck} onClick={onClick}>
       {t('title')}
     </MenuRow>
+  );
+}
+
+/**
+ * Project / Area 页头元数据行里的下次回顾日徽章，点开回顾选择器。
+ * 下次回顾日不逾期，到期也不套警示色。
+ */
+export function ReviewMetaBadge({ target }: { target: ReviewTarget }) {
+  const { t } = useTranslation('review');
+  const schedule = useReviewSchedule(target);
+  return (
+    <MetaPopover
+      label={t('nextReview')}
+      trigger={
+        <MetaBadge
+          icon={<CalendarCheck className="h-3 w-3" />}
+          text={formatDateLabel(parseCalendarDate(schedule.nextReviewDate))}
+        />
+      }
+    >
+      <ReviewPicker target={target} />
+    </MetaPopover>
   );
 }
 

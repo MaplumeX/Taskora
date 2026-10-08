@@ -9,8 +9,6 @@ interface MenuRowProps {
   /** 不可用：保留可聚焦与 title 提示（原生 disabled 按钮不显示 title），点击无效。 */
   disabled?: boolean;
   title?: string;
-  /** 行尾的弱化摘要（如回顾一行的「每周 · 10月15日」）。 */
-  trailing?: React.ReactNode;
   onClick: () => void;
   children: React.ReactNode;
 }
@@ -18,7 +16,7 @@ interface MenuRowProps {
 const BASE_CLASS =
   'relative flex h-7 w-full cursor-default select-none items-center gap-2 rounded-md px-2 text-sm outline-none max-md:h-11';
 export const MenuRow = React.forwardRef<HTMLButtonElement, MenuRowProps>(
-  ({ icon: Icon, destructive, disabled, title, trailing, onClick, children }, ref) => {
+  ({ icon: Icon, destructive, disabled, title, onClick, children }, ref) => {
     return (
       <button
         ref={ref}
@@ -37,9 +35,6 @@ export const MenuRow = React.forwardRef<HTMLButtonElement, MenuRowProps>(
       >
         <Icon className="h-4 w-4 shrink-0" />
         {children}
-        {trailing !== undefined && (
-          <span className="ml-auto truncate pl-2 text-meta opacity-60">{trailing}</span>
-        )}
       </button>
     );
   },
