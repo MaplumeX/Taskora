@@ -21,3 +21,13 @@ Status: implemented — awaiting visual acceptance
 - 回归任务 MovePicker、目标推导、TaskContextMenu 与 MultiSelect；共 5 个测试文件、48 项测试通过。
 - UI 类型检查、修改文件 ESLint 与 `git diff --check` 均通过。
 - 尚未在真实 App 中目视验收。
+
+
+## Comments
+
+### 2026-10-08 — 修复 CI 的跨包类型检查
+
+- CI run 37781288047 在 frontend typecheck 失败：UI 新组件把工具函数通过 `@/lib` 导入，而 frontend / desktop / mobile 的该别名指向各自 src，只为 UI 的 `utils` 单独映射。
+- 将 `useListboxNavigation` 与 `nameMatch` 改为包内相对路径；沿用既有任务选择器的导入约定。
+- UI、frontend、desktop、mobile 以及 shared / engine / api 类型检查通过；修改文件 ESLint 与差异空白检查通过。
+- 修复后完整 UI 回归通过：73 个文件、843 项测试。远程 CI 尚未重跑。

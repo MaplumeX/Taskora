@@ -6,7 +6,7 @@ import { useAreasQuery } from '@taskora/api';
 import type { ProjectResponseDto, UpdateProjectDto } from '@taskora/shared';
 
 import { MovePickerList } from '@/components/common/MovePickerList';
-import { needleOf, rankByName } from '@/lib/nameMatch';
+import { needleOf, rankByName } from '../../lib/nameMatch';
 
 interface Props {
   current: Pick<ProjectResponseDto, 'areaId'>;

@@ -2,7 +2,7 @@ import { useEffect, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, Search } from 'lucide-react';
 
-import { useListboxNavigation } from '@/lib/useListboxNavigation';
+import { useListboxNavigation } from '../../lib/useListboxNavigation';
 import { cn } from '@/lib/utils';
 
 interface Props<T extends { id: string }> {
