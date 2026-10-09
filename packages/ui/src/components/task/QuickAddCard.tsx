@@ -101,6 +101,19 @@ function applyPatch(
 /** 可由快捷键打开的选择器。 */
 type PickerField = 'when' | 'deadline' | 'tags' | 'move';
 
+/** 提交方式：keepOpen 为「添加并继续」，openInApp 为「在应用中继续」（Android 浮层）。 */
+export interface QuickAddSubmitOptions {
+  keepOpen: boolean;
+  openInApp?: boolean;
+}
+
+/** 自定义操作行（触屏）拿到的提交入口。 */
+export interface QuickAddCardFooterProps {
+  /** 标题非空且不在提交中。 */
+  canSubmit: boolean;
+  submit: (options: QuickAddSubmitOptions) => void;
+}
+
 export interface QuickAddCardHandle {
   /** 聚焦并全选标题（浮窗每次被唤起时调用）。 */
   focusTitle(): void;
@@ -111,9 +124,16 @@ interface Props {
    * 提交草稿。keepOpen 为真时是「添加并继续」：卡片清空字段但保留归属。
    * 抛错时卡片保留草稿，由调用方呈现错误。
    */
-  onSubmit: (draft: QuickAddDraft, options: { keepOpen: boolean }) => Promise<void> | void;
+  onSubmit: (draft: QuickAddDraft, options: QuickAddSubmitOptions) => Promise<void> | void;
   /** Esc：卡片已清空草稿，调用方负责关窗。 */
   onCancel: () => void;
+  /**
+   * 替换底部的快捷键提示行（触屏没有键盘快捷键，改放按钮）。不传时为
+   * 桌面的提示行。
+   */
+  footer?: (props: QuickAddCardFooterProps) => React.ReactNode;
+  /** 标题里按回车是否「添加并继续」（触屏的连续添加开关）。 */
+  keepOpenOnEnter?: boolean;
   className?: string;
 }
 
@@ -125,7 +145,7 @@ interface Props {
  * 字段编辑只改本地草稿，不写库；提交时交出 QuickAddDraft。
  */
 export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function QuickAddCard(
-  { onSubmit, onCancel, className },
+  { onSubmit, onCancel, footer, keepOpenOnEnter = false, className },
   ref,
 ) {
   const { t } = useTranslation();
@@ -173,11 +193,13 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
   const dueDate = state.dueDate ? parseCalendarDate(state.dueDate) : null;
   const showReminder = getClientKind() !== 'web';
 
-  const submit = async (keepOpen: boolean) => {
-    if (submitting || !state.title.trim()) return;
+  const canSubmit = !submitting && !!state.title.trim();
+  const submit = async (options: QuickAddSubmitOptions) => {
+    if (!canSubmit) return;
+    const { keepOpen } = options;
     setSubmitting(true);
     try {
-      await onSubmit(draftFromState(state), { keepOpen });
+      await onSubmit(draftFromState(state), options);
       setState((prev) =>
         keepOpen
           ? { ...EMPTY_QUICK_ADD_STATE, projectId: prev.projectId, areaId: prev.areaId }
@@ -220,7 +242,7 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
     switch (action) {
       case 'submit':
       case 'submitAndContinue':
-        void submit(action === 'submitAndContinue');
+        void submit({ keepOpen: action === 'submitAndContinue' });
         break;
       case 'today':
         patch({
@@ -281,7 +303,7 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
             if (e.nativeEvent.isComposing) return;
             if (e.key === 'Enter' && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
               e.preventDefault();
-              void submit(false);
+              void submit({ keepOpen: keepOpenOnEnter });
             }
           }}
           placeholder={t('task:quickAddTitlePlaceholder')}
@@ -417,18 +439,22 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
         </div>
       </div>
 
-      <div className="flex justify-end gap-3 pl-6 text-[11px] text-muted-foreground/80">
-        <span>
-          <kbd className="font-sans">↵</kbd> {t('task:quickAddSubmitHint')}
-        </span>
-        <span>
-          <kbd className="font-sans">{keyLabel('submitAndContinue')}</kbd>{' '}
-          {t('task:quickAddContinueHint')}
-        </span>
-        <span>
-          <kbd className="font-sans">Esc</kbd> {t('task:quickAddCloseHint')}
-        </span>
-      </div>
+      {footer ? (
+        footer({ canSubmit, submit: (options) => void submit(options) })
+      ) : (
+        <div className="flex justify-end gap-3 pl-6 text-[11px] text-muted-foreground/80">
+          <span>
+            <kbd className="font-sans">↵</kbd> {t('task:quickAddSubmitHint')}
+          </span>
+          <span>
+            <kbd className="font-sans">{keyLabel('submitAndContinue')}</kbd>{' '}
+            {t('task:quickAddContinueHint')}
+          </span>
+          <span>
+            <kbd className="font-sans">Esc</kbd> {t('task:quickAddCloseHint')}
+          </span>
+        </div>
+      )}
     </div>
   );
 });

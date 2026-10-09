@@ -5,9 +5,10 @@
   "type": "module",
   "scripts": {
     "dev:vite": "vite",
-    "dev": "node ../../scripts/sync-android-icons.mjs && tauri android dev",
+    "dev": "node ../../scripts/sync-android-icons.mjs && pnpm build:quick-add && tauri android dev",
     "build": "node ../../scripts/sync-android-icons.mjs && tauri android build --apk",
-    "build:vite": "vite build",
+    "build:vite": "vite build && pnpm build:quick-add",
+    "build:quick-add": "vite build -c vite.quick-add.config.ts",
     "preview": "vite preview",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
