@@ -16,6 +16,8 @@
  *   打断；冷却过后（下一次真实部署）又能自愈。
  */
 
+import { isBackgroundModuleError } from '@taskora/ui/lib/module-loader';
+
 /** sessionStorage 位：上一次为「换到新构建」自动刷新的时间戳（ms）。 */
 const CHUNK_RELOAD_FLAG = 'taskora:chunk-reload-at';
 
@@ -73,6 +75,15 @@ export function installChunkLoadRecovery(): void {
   if (installed) return;
   installed = true;
   window.addEventListener('vite:preloadError', (event: Event) => {
+    const error = (event as Event & { payload?: unknown }).payload;
+    if (error !== undefined) {
+      // 让 import 正常 reject，预加载器才能清除失败 Promise。下一轮任务
+      // 再判定错误来源：后台失败不刷新；实际渲染仍由 loadWithRecovery 自愈。
+      setTimeout(() => {
+        if (!isBackgroundModuleError(error)) reloadOnceForNewBuild();
+      }, 0);
+      return;
+    }
     event.preventDefault();
     reloadOnceForNewBuild();
   });

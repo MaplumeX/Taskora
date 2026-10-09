@@ -2,13 +2,10 @@ import { lazy, Suspense, useEffect, useState } from 'react';
 import { useUiInteractionStore } from '@taskora/api';
 
 import { useAssistantPanelLayout } from '../agent/assistant-panel-layout';
+import { shellLoaders } from '../../lib/page-loaders';
 
-const AssistantPanel = lazy(() =>
-  import('../agent/AssistantPanel').then((module) => ({ default: module.AssistantPanel })),
-);
-const SettingsModal = lazy(() =>
-  import('../settings/SettingsModal').then((module) => ({ default: module.SettingsModal })),
-);
+const AssistantPanel = lazy(shellLoaders.AssistantPanel);
+const SettingsModal = lazy(shellLoaders.SettingsModal);
 
 /** 首次打开才加载；之后保持挂载，保留原有关闭时的状态和清理行为。 */
 function useHasOpened(open: boolean): boolean {

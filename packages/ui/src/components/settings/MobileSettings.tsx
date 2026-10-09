@@ -1,3 +1,4 @@
+import { settingsLoaders } from '../../lib/page-loaders';
 import { Suspense, lazy, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ArrowLeft, Bot, Download, Info, SlidersHorizontal, SunMedium } from 'lucide-react';
@@ -22,13 +23,13 @@ import {
   type SettingsPageEntry,
 } from './SettingsList';
 
-const SettingsAppearance = lazy(() => import('@/components/settings/SettingsAppearance'));
-const SettingsShortcuts = lazy(() => import('@/components/settings/SettingsShortcuts'));
-const SettingsGeneral = lazy(() => import('@/components/settings/SettingsGeneral'));
-const SettingsAccount = lazy(() => import('@/components/settings/SettingsAccount'));
-const SettingsData = lazy(() => import('@/components/settings/SettingsData'));
-const SettingsAbout = lazy(() => import('@/components/settings/SettingsAbout'));
-const SettingsAssistant = lazy(() => import('@/components/settings/SettingsAssistant'));
+const SettingsAppearance = lazy(settingsLoaders.appearance);
+const SettingsShortcuts = lazy(settingsLoaders.shortcuts);
+const SettingsGeneral = lazy(settingsLoaders.general);
+const SettingsAccount = lazy(settingsLoaders.account);
+const SettingsData = lazy(settingsLoaders.data);
+const SettingsAbout = lazy(settingsLoaders.about);
+const SettingsAssistant = lazy(settingsLoaders.assistant);
 
 const TAB_TITLE_KEY: Record<SettingsTab, string> = {
   general: 'settings:general',

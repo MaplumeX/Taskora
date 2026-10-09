@@ -11,8 +11,10 @@ import { SyncIndicator } from './SyncIndicator';
 import { SidebarDropProvider } from './SidebarDropProvider';
 import { useSidebarYieldsToPanel } from '@/components/agent/assistant-panel-layout';
 import { useNavigationRequestListener, useTaskRevealListener } from '@taskora/api';
+import { useNavigationPreloadIntent } from '../../lib/navigation-preload';
 
 export function AppShell() {
+  const preloadIntent = useNavigationPreloadIntent();
   // Reveal Task：平台壳（点通知）投递的定位请求在这里执行（需在 Router 内）。
   useTaskRevealListener();
   // 路由请求：平台壳（点状态栏通知）投递的导航请求同样在 Router 内执行。
@@ -25,7 +27,7 @@ export function AppShell() {
   // 侧边栏与内容区共用一个拖拽上下文（ADR 0018）：任务 / 项目行可拖到侧边栏。
   return (
     <SidebarDropProvider>
-      <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] w-full">
+      <div {...preloadIntent} className="flex h-[calc(100dvh-var(--kb-inset,0px))] w-full">
         {/* 桌面侧边栏（手机端隐藏）：右缘可拖动调宽 / 拖到折叠 */}
         <ResizableSidebar />
         <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] min-w-0 flex-1 flex-col max-md:pt-[var(--safe-area-top)]">

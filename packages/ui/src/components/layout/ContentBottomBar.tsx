@@ -64,6 +64,7 @@ export function ContentBottomBar() {
               variant="ghost"
               size="icon"
               aria-label={t('agent:assistantPanel')}
+              data-preload-route="/assistant-panel"
               aria-pressed={panelOpen}
               className={cn(panelOpen && 'bg-accent text-primary')}
               onClick={togglePanel}

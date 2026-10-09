@@ -58,6 +58,7 @@ export { isEngineMode } from './api/task-backend';
 export { createEngineInvalidator, INVALIDATION_BY_ENTITY } from './engine/engine-invalidation';
 export {
   attachLiveQueries,
+  hasPendingLiveQueries,
   detachLiveQueries,
   isLiveQueryMode,
   queryCache,
@@ -109,6 +110,7 @@ export { taskMatchesQuery } from './events/task-query-match';
 export * from './hooks/useAreas';
 export * from './hooks/useFeed';
 export * from './hooks/useProjectHeadings';
+export { prefetchProject } from './hooks/prefetchProject';
 export * from './hooks/useProjects';
 export * from './hooks/useReview';
 export * from './hooks/useEffectiveTags';
