@@ -285,73 +285,89 @@ describe('ProjectSettledTasks', () => {
     expect(screen.queryByText('Trashed')).not.toBeInTheDocument();
   });
 
-  it('preserves list order (Position) instead of re-sorting by completedAt', async () => {
+  it('sorts settled tasks by settled time, most recent first', async () => {
     const user = userEvent.setup();
-    // The list order dictates display order: t-first then t-second.
-    // completedAt desc would put t-second first — assert that does NOT happen.
     mockQuery([
-      makeTask({
-        id: 't-first',
-        title: 'First',
-        completedAt: '2025-08-01T00:00:00.000Z',
-      }),
-      makeTask({
-        id: 't-second',
-        title: 'Second',
-        completedAt: '2025-08-10T00:00:00.000Z',
-      }),
+      makeTask({ id: 't-old', title: 'Older', completedAt: '2025-08-01T00:00:00.000Z' }),
+      makeTask({ id: 't-new', title: 'Newer', completedAt: '2025-08-10T00:00:00.000Z' }),
     ]);
     mockUncomplete();
     withQueryClient(<ProjectSettledTasks projectId="project-1" />);
 
     await user.click(screen.getByRole('button', { expanded: false }));
 
-    const allItems = screen.getAllByText(/First|Second/);
-    expect(allItems[0]).toHaveTextContent('First');
-    expect(allItems[1]).toHaveTextContent('Second');
+    const allItems = screen.getAllByText(/Older|Newer/);
+    expect(allItems[0]).toHaveTextContent('Newer');
+    expect(allItems[1]).toHaveTextContent('Older');
   });
 
   /* --------------------------- archived heading grouping --------------------------- */
 
-  it('renders ungrouped tasks first, then archived heading blocks in Position order', async () => {
+  it('interleaves archived headings with tasks by settled time, most recent first', async () => {
     const user = userEvent.setup();
-    const h1 = makeHeading({ id: 'h-1', title: 'Sprint 1', position: 'a0' });
-    const h2 = makeHeading({ id: 'h-2', title: 'Sprint 2', position: 'a1' });
+    const h1 = makeHeading({
+      id: 'h-1',
+      title: 'Sprint 1',
+      position: 'a0',
+      completedAt: '2025-08-05T00:00:00.000Z',
+    });
+    const h2 = makeHeading({
+      id: 'h-2',
+      title: 'Sprint 2',
+      position: 'a1',
+      completedAt: '2025-08-20T00:00:00.000Z',
+    });
     mockHeadings([h1, h2]);
     mockQuery([
-      // ungrouped tasks (headingId null) come first
-      makeTask({ id: 't-flat-1', title: 'Flat 1', headingId: null, position: 'a0' }),
-      makeTask({ id: 't-flat-2', title: 'Flat 2', headingId: null, position: 'a1' }),
-      // grouped under h-1
-      makeTask({ id: 't-g1', title: 'Grouped 1', headingId: 'h-1', position: 'a2' }),
-      // grouped under h-2 (empty of tasks, heading still shows)
+      makeTask({
+        id: 't-flat-old',
+        title: 'Flat old',
+        position: 'a0',
+        completedAt: '2025-08-01T00:00:00.000Z',
+      }),
+      makeTask({
+        id: 't-flat-mid',
+        title: 'Flat mid',
+        position: 'a1',
+        completedAt: '2025-08-10T00:00:00.000Z',
+      }),
+      makeTask({
+        id: 't-g-old',
+        title: 'Grouped old',
+        headingId: 'h-1',
+        position: 'a2',
+        completedAt: '2025-08-02T00:00:00.000Z',
+      }),
+      makeTask({
+        id: 't-g-new',
+        title: 'Grouped new',
+        headingId: 'h-1',
+        position: 'a3',
+        completedAt: '2025-08-05T00:00:00.000Z',
+      }),
+      // h-2 has no tasks; heading still shows
     ]);
     mockUncomplete();
     withQueryClient(<ProjectSettledTasks projectId="project-1" />);
 
-    // count = 3 tasks + 2 archived headings = 5
-    expect(screen.getByText('5')).toBeInTheDocument();
+    // count = 4 tasks + 2 archived headings = 6
+    expect(screen.getByText('6')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { expanded: false }));
 
-    // Archived heading titles appear as group labels
-    expect(screen.getByText('Sprint 1')).toBeInTheDocument();
-    expect(screen.getByText('Sprint 2')).toBeInTheDocument();
-    // All tasks visible
-    expect(screen.getByText('Flat 1')).toBeInTheDocument();
-    expect(screen.getByText('Flat 2')).toBeInTheDocument();
-    expect(screen.getByText('Grouped 1')).toBeInTheDocument();
-
-    // Verify DOM order: flat tasks before heading blocks
-    const flat1 = screen.getByText('Flat 1');
-    const flat2 = screen.getByText('Flat 2');
-    const sprint1 = screen.getByText('Sprint 1');
-    const grouped1 = screen.getByText('Grouped 1');
-    const sprint2 = screen.getByText('Sprint 2');
-    expect(flat1.compareDocumentPosition(flat2)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(flat2.compareDocumentPosition(sprint1)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(sprint1.compareDocumentPosition(grouped1)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
-    expect(grouped1.compareDocumentPosition(sprint2)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    const order = [
+      'Sprint 2',
+      'Flat mid',
+      'Sprint 1',
+      'Grouped new',
+      'Grouped old',
+      'Flat old',
+    ].map((text) => screen.getByText(text));
+    for (let i = 1; i < order.length; i++) {
+      expect(order[i - 1].compareDocumentPosition(order[i])).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    }
   });
 
   it('displays archived heading even when it has no settled tasks', async () => {

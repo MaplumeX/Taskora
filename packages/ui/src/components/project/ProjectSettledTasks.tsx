@@ -4,7 +4,7 @@ import { ChevronRight } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { HeadingStatus, TaskStatus } from '@taskora/shared';
-import type { TaskResponseDto } from '@taskora/shared';
+import type { ProjectHeadingResponseDto, TaskResponseDto } from '@taskora/shared';
 
 import { TaskItem } from '@/components/task/TaskItem';
 import { SettledDateBadge } from '@/components/feed/SettledDateBadge';
@@ -17,6 +17,15 @@ import { ProjectHeadingRow } from './ProjectHeadingRow';
 
 interface Props {
   projectId: string;
+}
+
+type SettledEntry =
+  | { kind: 'task'; task: TaskResponseDto; at: string }
+  | { kind: 'heading'; heading: ProjectHeadingResponseDto; tasks: TaskResponseDto[]; at: string };
+
+/** ISO 时间串可直接按字典序比较；倒序，最近的在前。 */
+function byRecentFirst<T>(at: (item: T) => string) {
+  return (a: T, b: T) => at(b).localeCompare(at(a));
 }
 
 export function ProjectSettledTasks({ projectId }: Props) {
@@ -38,8 +47,6 @@ export function ProjectSettledTasks({ projectId }: Props) {
   const uncancelTask = useUncancelTask();
   const { selectedId, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
 
-  // Keep the list order (Position) — do NOT re-sort
-  // by settlement time (the API field is still completedAt). This preserves the pre-archive structural distribution.
   // 口径：已了结（完成 + 取消），与 taskCompletedCount 统计一致（ADR 0006）。
   const settledTasks = useMemo(
     () =>
@@ -56,21 +63,24 @@ export function ProjectSettledTasks({ projectId }: Props) {
     [allHeadings],
   );
 
-  // Partition: ungrouped tasks (no headingId or headingId not in archived set)
-  // on top, then archived heading blocks (in Position order) with their grouped tasks.
-  const { ungroupedTasks, groupedTasks } = useMemo(() => {
+  // 同 Things：已了结任务与已归档分组混排，按了结时间倒序（任务看 completedAt 即了结时间，
+  // 分组看归档时间）；分组下的任务跟随分组，组内同样倒序。同一时刻保持原列表顺序。
+  const entries = useMemo(() => {
     const archivedHeadingIds = new Set(archivedHeadings.map((h) => h.id));
     const grouped: Record<string, TaskResponseDto[]> = {};
-    const ungrouped: TaskResponseDto[] = [];
+    const result: SettledEntry[] = [];
     for (const task of settledTasks) {
       if (task.headingId && archivedHeadingIds.has(task.headingId)) {
-        if (!grouped[task.headingId]) grouped[task.headingId] = [];
-        grouped[task.headingId].push(task);
+        (grouped[task.headingId] ??= []).push(task);
       } else {
-        ungrouped.push(task);
+        result.push({ kind: 'task', task, at: task.completedAt ?? '' });
       }
     }
-    return { ungroupedTasks: ungrouped, groupedTasks: grouped };
+    for (const heading of archivedHeadings) {
+      const tasks = (grouped[heading.id] ?? []).sort(byRecentFirst((t) => t.completedAt ?? ''));
+      result.push({ kind: 'heading', heading, tasks, at: heading.completedAt ?? '' });
+    }
+    return result.sort(byRecentFirst((e) => e.at));
   }, [settledTasks, archivedHeadings]);
 
   // Loading or error: silently hide (don't block the active task area).
@@ -123,18 +133,18 @@ export function ProjectSettledTasks({ projectId }: Props) {
 
       {expanded && (
         <div className="flex flex-col" onClick={handleBlankClick}>
-          {ungroupedTasks.map(renderTask)}
-          {archivedHeadings.map((heading) => {
-            const tasks = groupedTasks[heading.id] ?? [];
-            return (
-              <section key={heading.id} className="mt-2">
-                <ProjectHeadingRow heading={heading} />
+          {entries.map((entry) =>
+            entry.kind === 'task' ? (
+              renderTask(entry.task)
+            ) : (
+              <section key={entry.heading.id} className="mt-2">
+                <ProjectHeadingRow heading={entry.heading} />
                 <div className="flex flex-col">
-                  {tasks.map(renderTask)}
+                  {entry.tasks.map(renderTask)}
                 </div>
               </section>
-            );
-          })}
+            ),
+          )}
         </div>
       )}
     </div>
