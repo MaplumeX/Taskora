@@ -6,10 +6,10 @@ import { MobileTopBar } from '@/components/layout/MobileTopBar';
 import { MobileFab } from '@/components/layout/MobileFab';
 import { MultiSelectToolbar } from '@/components/task/MultiSelectToolbar';
 import { ExpandedTaskToolbar } from '@/components/task/ExpandedTaskToolbar';
-import { SettingsModal } from '@/components/settings/SettingsModal';
+import { LazyAssistantPanel, LazySettingsModal } from './LazyShellFeatures';
 import { SyncIndicator } from './SyncIndicator';
 import { SidebarDropProvider } from './SidebarDropProvider';
-import { AssistantPanel, useSidebarYieldsToPanel } from '@/components/agent/AssistantPanel';
+import { useSidebarYieldsToPanel } from '@/components/agent/assistant-panel-layout';
 import { useNavigationRequestListener, useTaskRevealListener } from '@taskora/api';
 
 export function AppShell() {
@@ -34,13 +34,13 @@ export function AppShell() {
           <ContentBottomBar />
         </div>
         {/* 桌面右侧助手面板：始终与内容并排，不浮在内容上 */}
-        <AssistantPanel />
+        <LazyAssistantPanel />
         <MobileFab />
         {/* 触控多选模式（左滑任务行进入）的底部工具栏，模式中替代 FAB。 */}
         <MultiSelectToolbar />
         {/* 任务展开时替代 FAB 的「移动 / 删除 / 更多」（桌面版在 ContentBottomBar 内）。 */}
         <ExpandedTaskToolbar variant="floating" />
-        <SettingsModal />
+        <LazySettingsModal />
         <KeyboardShortcuts />
         {/* 同步指示器（V2）：仅在离线 / 需要升级时出现在角落，不拦操作 */}
         <SyncIndicator />

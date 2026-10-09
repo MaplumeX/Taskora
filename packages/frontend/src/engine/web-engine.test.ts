@@ -81,6 +81,29 @@ describe('web-engine 装配', () => {
     useAuthStore.setState({ token: null, user: null } as never);
   });
 
+  it('token 恢复后预加载，但身份未确认前不争 leader 锁或打开账号库', async () => {
+    const prepareStorage = vi.fn();
+    const discardPreparedStorage = vi.fn();
+    const { runtime: rt, held } = runtime({ prepareStorage, discardPreparedStorage });
+    const openStorage = vi.spyOn(rt, 'openStorage');
+    initWebEngine(new QueryClient(), rt);
+
+    useAuthStore.setState({ token: 'stored-token', user: null } as never);
+    expect(prepareStorage).toHaveBeenCalled();
+    expect(openStorage).not.toHaveBeenCalled();
+    expect(held.size).toBe(0);
+    expect(getWebEngine()).toBeNull();
+
+    useAuthStore.setState({ user: { id: 'u1' } } as never);
+    await vi.waitFor(() => expect(useSyncStatusStore.getState().status).toBe('synced'));
+    expect(openStorage).toHaveBeenCalledWith('u1');
+    expect(held.has('taskora-replica:u1')).toBe(true);
+
+    useAuthStore.setState({ token: null, user: null } as never);
+    expect(discardPreparedStorage).toHaveBeenCalled();
+    await vi.waitFor(() => expect(held.size).toBe(0));
+  });
+
   it('登录 → leader 打开副本并首次同步；读写走本地副本；登出释放锁、退回 REST', async () => {
     const queryClient = new QueryClient();
     const { runtime: rt, held } = runtime();

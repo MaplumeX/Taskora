@@ -43,7 +43,7 @@ import {
 } from './keymap';
 import { runReviewCommand, type ReviewCommand } from '@/components/review/reviewCommands';
 import { KeyboardTagPicker, taggableSelection } from './KeyboardTagPicker';
-import { useDockToPanel } from '@/components/agent/AssistantPanel';
+import { useDockToPanel } from '@/components/agent/assistant-panel-layout';
 import { useDuplicate } from '@/components/task/useDuplicate';
 
 export { detectKeyPlatform };

@@ -17,8 +17,13 @@ import {
   type SqliteDatabase,
 } from './sqlite-protocol';
 
+// Worker 启动即初始化 WASM，不等待身份校验；此处不创建 OPFS 池或数据库。
+const sqlite3Ready = sqlite3InitModule();
+// 预加载期间的失败在 open 请求中返回主线程，避免未处理的 Promise 拒绝。
+void sqlite3Ready.catch(() => undefined);
+
 const openDatabase = async (userId: string): Promise<SqliteDatabase> => {
-  const sqlite3 = await sqlite3InitModule();
+  const sqlite3 = await sqlite3Ready;
   const pool = await sqlite3.installOpfsSAHPoolVfs({
     name: `taskora-${userId}`,
     directory: `/taskora/${userId}`,

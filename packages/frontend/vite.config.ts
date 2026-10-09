@@ -1,9 +1,10 @@
 import path from 'node:path';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { devLoading } from './vite/dev-loading';
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), devLoading()],
   resolve: {
     alias: [
       { find: /^@\/(api|hooks|stores|utils|i18n|events)\//, replacement: path.resolve(__dirname, '../api/src') + '/$1/' },

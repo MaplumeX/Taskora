@@ -79,7 +79,7 @@ hydrateAuthSnapshot(readLegacyAuthSnapshot());
 
 // Kick off recovery (restores the user after a full page reload) before
 // rendering so ProtectedRoute can wait on `refreshing`.
-const recoveryPromise = tryRecoverSession();
+const recoveryPromise = tryRecoverSession(queryClient);
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>

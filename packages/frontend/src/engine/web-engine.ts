@@ -48,7 +48,8 @@ import {
 } from '@taskora/engine';
 
 import { createEngineHost, TabEngine, type TabChannel, type TabMessage } from './tab-engine';
-import { createWorkerSqlStorage, type WorkerSqlStorage } from './worker-storage';
+import type { WorkerSqlStorage } from './worker-storage';
+import { createBrowserStorageRuntime } from './browser-storage';
 
 const DEVICE_ID_KEY = 'taskora.deviceId';
 const SYNC_INTERVAL_MS = 30_000;
@@ -57,26 +58,18 @@ const SYNC_INTERVAL_MS = 30_000;
 export interface WebEngineRuntime {
   locks: Pick<LockManager, 'request'>;
   createChannel(name: string): TabChannel & { close(): void };
+  prepareStorage?(): void;
+  discardPreparedStorage?(): void;
   openStorage(userId: string): Promise<WorkerSqlStorage>;
   openEngine: typeof openEngine;
 }
 
 function browserRuntime(): WebEngineRuntime {
   return {
+    ...createBrowserStorageRuntime(),
     locks: navigator.locks,
     createChannel: (name) =>
       new BroadcastChannel(name) as unknown as TabChannel & { close(): void },
-    async openStorage(userId) {
-      const worker = new Worker(new URL('./sqlite.worker.ts', import.meta.url), { type: 'module' });
-      const storage = createWorkerSqlStorage(worker, () => worker.terminate());
-      try {
-        await storage.open(userId);
-      } catch (error) {
-        worker.terminate();
-        throw error;
-      }
-      return storage;
-    },
     openEngine,
   };
 }
@@ -126,6 +119,9 @@ export function initWebEngine(
   if (!runtime || unsubscribeAuth) return;
   const sync = () => {
     const { token, user } = useAuthStore.getState();
+    // 身份恢复的 HTTP 请求与 SQLite/WASM 初始化并行；此时尚不打开账号库。
+    if (token && !session) runtime.prepareStorage?.();
+    if (!token) runtime.discardPreparedStorage?.();
     if (token && user) {
       if (session?.userId !== user.id) {
         void stopWebEngine();
@@ -135,7 +131,11 @@ export function initWebEngine(
       void stopWebEngine();
     }
   };
-  unsubscribeAuth = useAuthStore.subscribe(sync);
+  const offAuth = useAuthStore.subscribe(sync);
+  unsubscribeAuth = () => {
+    offAuth();
+    runtime.discardPreparedStorage?.();
+  };
   sync();
 }
 
@@ -151,7 +151,7 @@ function startSession(queryClient: QueryClient, runtime: WebEngineRuntime, userI
     channel,
     releaseLock,
     leader: null,
-    unsubscribers: [],
+    unsubscribers: [() => runtime.discardPreparedStorage?.()],
     restoreQueryDefaults: () => undefined,
     stopped: false,
   };
