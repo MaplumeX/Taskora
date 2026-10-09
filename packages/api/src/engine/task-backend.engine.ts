@@ -32,6 +32,7 @@ import {
   planRepeatInstance,
   planRepeatSkip,
   planTaskComplete,
+  planTaskDuplicate,
   planTaskCreate,
   planTaskSearch,
   planTaskUpdate,
@@ -480,6 +481,51 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         );
       }
       return taskDto(id);
+    },
+
+    async duplicateTask(id: string): Promise<TaskResponseDto> {
+      const source = await engine.get('task', id);
+      if (!source) throw new Error(`Task not found: ${id}`);
+      const f = source.fields;
+      const [subtasks, attachments, allTasks] = await Promise.all([
+        engine.list('subtask', { where: { taskId: id } }),
+        engine.list('attachment', { where: { taskId: id } }),
+        engine.list('task'),
+      ]);
+      const plan = planTaskDuplicate(
+        {
+          title: (f.title as string) ?? '',
+          notes: (f.notes as string | null) ?? null,
+          scheduledType: f.scheduledType,
+          scheduledDate: f.scheduledDate,
+          dueDate: f.dueDate,
+          reminderTime: (f.reminderTime as string | null) ?? null,
+          repeatRule: normalizeRepeatRule(f.repeatRule),
+          bucket: f.bucket,
+          projectId: (f.projectId as string | null) ?? null,
+          headingId: (f.headingId as string | null) ?? null,
+          areaId: (f.areaId as string | null) ?? null,
+          tagIds: tagIdsOf(source),
+        },
+        positionedRows(subtasks).map((subtask, index) => ({
+          ...subtask,
+          title: (subtasks[index].fields.title as string) ?? '',
+        })),
+        attachmentSources(attachments),
+        zones(),
+      );
+      // 副本紧跟来源任务
+      const copyId = await engine.create('task', {
+        ...plan.task,
+        position: positionAfterRow(positionedRows(allTasks), id),
+      });
+      for (const subtask of plan.subtasksFor(copyId)) {
+        await engine.create('subtask', { ...subtask });
+      }
+      for (const attachment of plan.attachmentsFor(copyId)) {
+        await engine.create('attachment', { ...attachment });
+      }
+      return taskDto(copyId);
     },
 
     async reorderTasks(orderedIds: string[]): Promise<void> {

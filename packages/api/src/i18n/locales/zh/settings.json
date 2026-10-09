@@ -121,6 +121,7 @@
   "shortcut_cancel": "取消选中项",
   "shortcut_delete": "删除选中项",
   "shortcut_tags": "编辑标签",
+  "shortcut_duplicate": "复制选中项",
   "shortcut_expand": "展开选中任务",
   "shortcut_search": "快速查找",
   "shortcut_toggleAssistantPanel": "开关助手面板",

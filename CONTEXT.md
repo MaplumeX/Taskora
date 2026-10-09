@@ -74,6 +74,10 @@ _Avoid_: 副本、克隆（实例是正式任务，不是复制品）
 带 Repeat Rule 的 Project 完成时派生出的下一轮 Project：项目连同其 Project Headings、Tasks、Subtasks 整份复制，全部重置为未完成——未进 Trash 的任务不论这一轮完成、取消与否都复制（对齐 Things 3：重复项目是每轮重来的清单），项目内重复链的后代除外（只复制链的源头）；任务自身的计划日期与截止日期按项目计划日期的位移平移。普通 Project，`repeatSourceId` 记录来源；派生后即独立，重开来源项目不删除它。完成仍有未了结任务的项目时先询问剩余任务标记为完成还是取消（一并了结时不派生这些任务自己的 Repeat Instance）。Skip Occurrence 同样适用于重复项目：项目与其内未了结任务的日期一起推进。
 _Avoid_: 项目模板、项目副本（实例是正式项目）
 
+**Duplicate（复制）**:
+把一个 Task 或 Project 整份复制成独立的新条目（对齐 Things 3 的 ⌘D）。内容照抄（标题、备注、计划日期、截止日期、提醒、重复规则、归属、Tags；Project 连同其 Project Headings、未进 Trash 的 Tasks、Subtasks），状态一律重置为未完成（同 Repeat Project Instance 的口径，副本常被当模板用）；附件随 Task 复制，指向同一 Blob。副本不记来源（`repeatSourceId` 为 null），紧跟来源排列：Task 在列表中、Project 在侧边栏中。日期不平移。
+_Avoid_: 克隆、副本任务（口语可用）、copy（易与复制为文本混淆）
+
 **Repeat Chain（重复链）**:
 同一规则沿 Task 字段传递形成的实例序列；无中心模板，编辑某实例的规则只影响该实例及其后代，链自然分叉。链在取消、移出日期或到达 until 日期时终结。
 _Avoid_: 系列、模板实例（链是结果不是投影）

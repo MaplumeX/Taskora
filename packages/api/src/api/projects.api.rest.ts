@@ -46,6 +46,10 @@ export function completeProject(
     .then((res) => res.data);
 }
 
+export function duplicateProject(id: string): Promise<ProjectResponseDto> {
+  return apiClient.post<ProjectResponseDto>(`/projects/${id}/duplicate`).then((res) => res.data);
+}
+
 export function skipProject(id: string): Promise<ProjectResponseDto> {
   return apiClient
     .post<ProjectResponseDto>(`/projects/${id}/skip`)

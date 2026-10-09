@@ -1,7 +1,7 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 
@@ -25,11 +25,14 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useDeleteProject: () => ({ mutate: vi.fn(), isPending: false }),
   useRestoreProject: () => ({ mutate: vi.fn(), isPending: false }),
   useSkipProject: () => ({ mutate: skipMock, isPending: false }),
+  useDuplicateTask: () => ({ mutateAsync: vi.fn() }),
+  useDuplicateProject: () => ({ mutateAsync: duplicateMock }),
 }));
 
 const updateMock = vi.hoisted(() => vi.fn());
 const completeMock = vi.hoisted(() => vi.fn());
 const skipMock = vi.hoisted(() => vi.fn());
+const duplicateMock = vi.hoisted(() => vi.fn(async (id: string) => ({ id: `${id}-copy` })));
 
 const baseProject: ProjectResponseDto = {
   id: 'project-1',
@@ -183,5 +186,56 @@ describe('项目移动', () => {
       { id: 'project-1', data: { areaId: 'home' } }, expect.anything(),
     );
     expect(screen.queryByRole('combobox')).toBeNull();
+  });
+});
+
+describe('复制项目（Duplicate）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    void i18n.changeLanguage('en');
+  });
+
+  it('右键菜单「复制」复制该项目', async () => {
+    renderMenu(baseProject);
+    fireEvent.click(await screen.findByRole('button', { name: 'Duplicate' }));
+    await vi.waitFor(() => expect(duplicateMock).toHaveBeenCalledWith('project-1'));
+  });
+
+  it('Trash 中不提供「复制」', async () => {
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <ProjectContextMenu project={baseProject} current={baseProject} variant="trash">
+            <span>{baseProject.title}</span>
+          </ProjectContextMenu>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.contextMenu(screen.getByText(baseProject.title));
+    await screen.findByRole('button', { name: 'Put Back' });
+    expect(screen.queryByRole('button', { name: 'Duplicate' })).toBeNull();
+  });
+
+  it('项目页更多菜单复制后打开副本', async () => {
+    function ProjectPage() {
+      const { id } = useParams();
+      return id === 'project-1' ? (
+        <ProjectMoreMenu project={baseProject} current={baseProject} />
+      ) : (
+        <span>opened {id}</span>
+      );
+    }
+    render(
+      <MemoryRouter initialEntries={['/projects/project-1']}>
+        <Routes>
+          <Route path="/projects/:id" element={<ProjectPage />} />
+        </Routes>
+      </MemoryRouter>,
+    );
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'More' }));
+    await user.click(await screen.findByRole('button', { name: 'Duplicate' }));
+    expect(await screen.findByText('opened project-1-copy')).toBeInTheDocument();
   });
 });

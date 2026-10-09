@@ -137,9 +137,11 @@ export {
   type RepeatSubtaskFields,
 } from './repeat-instance';
 export {
+  copyProjectContents,
   planProjectRepeatSkip,
   planRepeatProjectInstance,
   repeatProjectInstanceId,
+  type ProjectContentsSource,
   type RepeatHeadingFields,
   type RepeatProjectAttachment,
   type RepeatProjectCopy,
@@ -151,6 +153,12 @@ export {
   type RepeatProjectSubtaskFields,
   type RepeatProjectTask,
 } from './repeat-project';
+export {
+  planProjectDuplicate,
+  planTaskDuplicate,
+  type DuplicateProjectSource,
+  type DuplicateTaskSource,
+} from './duplicate';
 export {
   buildRepeatPreviews,
   type RepeatPreview,

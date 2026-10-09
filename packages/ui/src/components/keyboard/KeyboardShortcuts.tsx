@@ -44,6 +44,7 @@ import {
 import { runReviewCommand, type ReviewCommand } from '@/components/review/reviewCommands';
 import { KeyboardTagPicker, taggableSelection } from './KeyboardTagPicker';
 import { useDockToPanel } from '@/components/agent/AssistantPanel';
+import { useDuplicate } from '@/components/task/useDuplicate';
 
 export { detectKeyPlatform };
 export type { KeyPlatform };
@@ -138,6 +139,7 @@ export function KeyboardShortcuts({ platform }: Props) {
   const restoreTask = useRestoreTask();
   const reorderTasks = useReorderTasks();
   const createTask = useCreateTask();
+  const duplicate = useDuplicate();
   const createTaskContext = usePageTaskContext();
   const dockToPanel = useDockToPanel();
   /** ⇧⌘T 打开的 Tag Picker 作用的行（打开时的 Selection 快照）。 */
@@ -463,6 +465,25 @@ export function KeyboardShortcuts({ platform }: Props) {
           setTagPickerIds(targets.map((row) => row.id));
           return;
         }
+        case 'duplicate': {
+          // 作用于选中的任务行与项目行（组头、Heading 不算）；Trash 中不复制。
+          if (view === 'trash') return;
+          const targets = rows.filter(
+            (r) =>
+              selection.selectedIds.includes(r.id) &&
+              !r.groupHeader &&
+              (r.kind === 'task' || r.kind === 'project'),
+          );
+          if (targets.length === 0) return;
+          // 选中副本；Logbook 里的副本是未完成的，落回原列表，选中保持不变。
+          void duplicate(
+            targets.map((r) => ({ id: r.id, kind: r.kind as 'task' | 'project' })),
+            { selectCopies: view !== 'logbook' },
+          ).then((copies) => {
+            if (copies.length > 0 && view !== 'logbook') focusSelectionRow(copies.at(-1)!);
+          });
+          return;
+        }
       }
     };
 
@@ -486,6 +507,7 @@ export function KeyboardShortcuts({ platform }: Props) {
     restoreTask,
     reorderTasks,
     createTask,
+    duplicate,
     createTaskContext,
     dockToPanel,
     t,

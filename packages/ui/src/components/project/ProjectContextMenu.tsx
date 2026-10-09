@@ -9,6 +9,7 @@ import {
   Circle,
   CalendarClock,
   CalendarDays,
+  Copy,
   Repeat,
   SkipForward,
   Tag,
@@ -32,6 +33,7 @@ import { ScheduledDateField } from '@/components/task/fields/ScheduledDateField'
 import { DueDateField } from '@/components/task/fields/DueDateField';
 import { RepeatRuleField } from '@/components/task/fields/RepeatRuleField';
 import { TagsField } from '@/components/task/fields/TagsField';
+import { useDuplicate } from '@/components/task/useDuplicate';
 
 import { ReviewMenuRow, ReviewPicker } from '@/components/review/ReviewSchedule';
 import { useInReviewMode } from '@/components/review/reviewMode';
@@ -45,6 +47,8 @@ export interface ProjectMenuProps {
   current: ProjectResponseDto;
   variant?: 'default' | 'trash';
   onDeleted?: () => void;
+  /** 复制完成后（副本 id）；缺省为在列表中选中副本。 */
+  onDuplicated?: (copyId: string) => void;
 }
 
 type PickerKind = 'scheduled' | 'repeat' | 'due' | 'tags' | 'move' | 'review' | null;
@@ -54,6 +58,7 @@ export function ProjectMenuPanel({
   current,
   variant = 'default',
   onDeleted,
+  onDuplicated,
   onClose,
   openPicker,
   onToggleComplete,
@@ -73,6 +78,7 @@ export function ProjectMenuPanel({
 
   const deleteProject = useDeleteProject();
   const restoreProject = useRestoreProject();
+  const duplicate = useDuplicate();
   // 面板只在菜单打开时挂载
   const skipOccurrence = useSkipProjectOccurrence(current, true);
 
@@ -88,6 +94,15 @@ export function ProjectMenuPanel({
   const handleSkip = () => {
     onClose();
     skipOccurrence.skip();
+  };
+
+  const handleDuplicate = () => {
+    onClose();
+    void duplicate([{ id: project.id, kind: 'project' }], {
+      selectCopies: !onDuplicated,
+    }).then(([copyId]) => {
+      if (copyId) onDuplicated?.(copyId);
+    });
   };
 
   const handleDelete = () => {
@@ -143,6 +158,11 @@ export function ProjectMenuPanel({
       <MenuRow icon={FolderTree} onClick={() => openPicker('move')}>
         {t('move')}
       </MenuRow>
+      {variant === 'default' && (
+        <MenuRow icon={Copy} onClick={handleDuplicate}>
+          {t('duplicate')}
+        </MenuRow>
+      )}
       {showReview && variant === 'default' && (
         <ReviewMenuRow onClick={() => openPicker('review')} />
       )}
@@ -315,6 +335,7 @@ export function ProjectContextMenu({
 
 /** Trigger 版：内置 MoreHorizontal 按钮，点击打开菜单 + picker。 */
 export function ProjectMoreMenu({ project, current, variant = 'default' }: ProjectMenuProps) {
+  const { t } = useTranslation('task');
   const { t: tc } = useTranslation('common');
   const navigate = useNavigate();
   const inReview = useInReviewMode();
@@ -322,6 +343,11 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
   // 回顾中删除：回顾会话自动进入下一个，不跳走
   const onDeleted = () => {
     if (!inReview) navigate('/today');
+  };
+  // 项目页里复制：打开副本；回顾中留在回顾会话，只提示。
+  const onDuplicated = (copyId: string) => {
+    if (inReview) toast.success(t('duplicateProjectDone'));
+    else navigate(`/projects/${copyId}`);
   };
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
@@ -364,6 +390,7 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
             current={current}
             variant={variant}
             onDeleted={onDeleted}
+            onDuplicated={onDuplicated}
             onClose={closeMenu}
             openPicker={openPicker}
             onToggleComplete={completion.toggle}

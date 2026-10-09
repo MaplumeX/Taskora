@@ -16,6 +16,7 @@ import {
   planMarkReviewed,
   planProjectComplete,
   planProjectCreate,
+  planProjectDuplicate,
   planProjectRepeatSkip,
   planProjectRestore,
   planProjectTrash,
@@ -27,6 +28,8 @@ import {
   repeatDerivationTarget,
   RepeatSkipBlockedError,
   repositionMinimal,
+  type ProjectContentsSource,
+  type RepeatProjectCopy,
 } from '@taskora/engine';
 import type {
   CompleteProjectDto,
@@ -139,13 +142,21 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
       position: positionAfter(projects, parent.id),
     });
 
+    await writeProjectCopy(plan.copyFor(instanceId, await contentsOf(parent.id, tasks)));
+  }
+
+  /** 来源项目的内容（Headings / 任务 / Subtask / 附件），供整份复制。 */
+  async function contentsOf(
+    projectId: string,
+    tasks: readonly ReplicaRow[],
+  ): Promise<ProjectContentsSource> {
     const taskIds = { in: tasks.map((row) => row.id) };
     const [headings, subtasks, attachments] = await Promise.all([
-      engine.list('project-heading', { where: { projectId: parent.id } }),
+      engine.list('project-heading', { where: { projectId } }),
       engine.list('subtask', { where: { taskId: taskIds } }),
       engine.list('attachment', { where: { taskId: taskIds } }),
     ]);
-    const copy = plan.copyFor(instanceId, {
+    return {
       headings: positionedRows(headings).map((heading, index) => ({
         ...heading,
         title: (headings[index].fields.title as string) ?? '',
@@ -175,7 +186,10 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
         taskId: (subtasks[index].fields.taskId as string) ?? '',
       })),
       attachments: attachmentSources(attachments),
-    });
+    };
+  }
+
+  async function writeProjectCopy(copy: RepeatProjectCopy): Promise<void> {
     for (const heading of copy.headings) await engine.create('project-heading', { ...heading });
     for (const task of copy.tasks) await engine.create('task', { ...task });
     for (const subtask of copy.subtasks) await engine.create('subtask', { ...subtask });
@@ -337,6 +351,36 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
         plan.tasks.map(({ id: taskId, patch }) => ({ id: taskId, patch: { ...patch } })),
       );
       return projectDto(id);
+    },
+
+    async duplicateProject(id: string): Promise<ProjectResponseDto> {
+      const source = await engine.get('project', id);
+      if (!source) throw new Error(`Project not found: ${id}`);
+      const f = source.fields;
+      const plan = planProjectDuplicate(
+        {
+          title: (f.title as string) ?? '',
+          notes: (f.notes as string | null) ?? null,
+          scheduledType: f.scheduledType,
+          scheduledDate: f.scheduledDate,
+          dueDate: f.dueDate,
+          repeatRule: normalizeRepeatRule(f.repeatRule),
+          reviewInterval: f.reviewInterval,
+          areaId: (f.areaId as string | null) ?? null,
+          tagIds: tagIdsOf(source),
+        },
+        zones(),
+        currentReviewContext(),
+      );
+      // 侧边栏中紧跟来源项目
+      const projects = await engine.list('project');
+      const copyId = await engine.create('project', {
+        ...plan.project,
+        position: positionAfter(projects, id),
+      });
+      const tasks = await engine.list('task', { where: { projectId: id } });
+      await writeProjectCopy(plan.copyFor(copyId, await contentsOf(id, tasks)));
+      return projectDto(copyId);
     },
 
     async uncompleteProject(id: string): Promise<ProjectResponseDto> {

@@ -573,6 +573,41 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     await expect(h.tasks.skip(USER, 'missing')).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it('duplicate：副本紧跟来源、内容照抄、未完成，Subtask 一并复制，同一事务入日志', async () => {
+    await seedTag('tag-1');
+    await seedTask('task-1', {
+      title: '订机票',
+      notes: '靠窗',
+      position: 'a0',
+      status: TaskStatus.COMPLETED,
+      settledAt: new Date('2026-01-02T00:00:00Z'),
+      tags: { create: [{ tagId: 'tag-1' }] },
+    });
+    await seedTask('task-2', { position: 'a1' });
+    await testPrisma.subtask.create({
+      data: { id: 'st-1', taskId: 'task-1', title: '比价', status: 'COMPLETED' },
+    });
+
+    const dto = await h.tasks.duplicate(USER, 'task-1');
+    expect(dto.id).not.toBe('task-1');
+    expect(dto).toMatchObject({
+      title: '订机票',
+      notes: '靠窗',
+      status: TaskStatus.ACTIVE,
+      completedAt: null,
+      repeatSourceId: null,
+    });
+    expect(dto.tags.map((tag) => tag.id)).toEqual(['tag-1']);
+    expect(dto.position! > 'a0' && dto.position! < 'a1').toBe(true);
+    const subtasks = await testPrisma.subtask.findMany({ where: { taskId: dto.id } });
+    expect(subtasks.map((s) => [s.id, s.title, s.status])).toEqual([
+      [deriveSubtaskId(dto.id, 0), '比价', TaskStatus.ACTIVE],
+    ]);
+    await expectLoggedAsStored('task', dto.id);
+    await expectLoggedAsStored('subtask', subtasks[0].id);
+    await expect(h.tasks.duplicate(OTHER_USER, 'task-1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   // ---------- 转项目 / 重排 ----------
 
   it('convertToProject：新项目 + 按原顺序提升的任务 + 原任务物理删除，一个事务', async () => {

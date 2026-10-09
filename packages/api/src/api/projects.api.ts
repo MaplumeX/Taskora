@@ -47,6 +47,10 @@ export function skipProject(id: string): Promise<ProjectResponseDto> {
   return currentProjectBackend().skipProject(id);
 }
 
+export function duplicateProject(id: string): Promise<ProjectResponseDto> {
+  return currentProjectBackend().duplicateProject(id);
+}
+
 export function uncompleteProject(id: string): Promise<ProjectResponseDto> {
   return currentProjectBackend().uncompleteProject(id);
 }

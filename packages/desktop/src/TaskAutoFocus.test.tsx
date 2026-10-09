@@ -166,6 +166,9 @@ function makeEngineLikeBackend(client: QueryClient): TaskBackend {
       throw new Error('not needed');
     },
     reorderSubtasks: async () => {},
+    duplicateTask: async () => {
+      throw new Error('not needed');
+    },
     createAttachment: async () => {
       throw new Error('not needed');
     },

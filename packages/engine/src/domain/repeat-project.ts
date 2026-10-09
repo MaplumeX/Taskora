@@ -145,15 +145,7 @@ export function planRepeatProjectInstance(
 ): {
   id: string;
   project: ProjectFields;
-  copyFor: (
-    instanceId: string,
-    children: {
-      headings: ReadonlyArray<RepeatProjectHeading & { id: string }>;
-      tasks: ReadonlyArray<RepeatProjectTask & { id: string }>;
-      subtasks: ReadonlyArray<RepeatProjectSubtask & { id: string }>;
-      attachments?: ReadonlyArray<RepeatProjectAttachment & { id: string }>;
-    },
-  ) => RepeatProjectCopy;
+  copyFor: (instanceId: string, children: ProjectContentsSource) => RepeatProjectCopy;
 } | null {
   const target = repeatProjectInstanceId(parent, completedAt, zones);
   if (!target) return null;
@@ -179,79 +171,100 @@ export function planRepeatProjectInstance(
       areaId: parent.areaId,
       tagIds: [...parent.tagIds],
     },
-    copyFor: (instanceId, children) => {
-      const headings = sortByEffectivePosition(children.headings).map((heading) => ({
-        id: deriveRepeatCopyId(instanceId, 'project-heading', heading.id),
-        title: heading.title,
-        position: heading.position ?? null,
-        status: HeadingStatus.ACTIVE,
-        completedAt: null,
-        projectId: instanceId,
-      }));
-      const headingIds = new Map(
-        children.headings.map((heading) => [
-          heading.id,
-          deriveRepeatCopyId(instanceId, 'project-heading', heading.id),
-        ]),
-      );
-
-      const live = children.tasks.filter((task) => task.trashedAt == null);
-      const inProject = new Set(children.tasks.map((task) => task.id));
-      const templates = sortByEffectivePosition(
-        live.filter((task) => !(task.repeatSourceId && inProject.has(task.repeatSourceId))),
-      );
-      const taskIds = new Map(
-        templates.map((task) => [task.id, deriveRepeatCopyId(instanceId, 'task', task.id)]),
-      );
-      const tasks = templates.map((task) => {
-        const scheduledType = (task.scheduledType as ScheduledType) ?? ScheduledType.NONE;
-        const dated = scheduledType === ScheduledType.DATE;
-        return {
-          id: taskIds.get(task.id)!,
-          position: task.position ?? null,
-          title: task.title,
-          notes: task.notes,
-          scheduledType,
-          scheduledDate: dated ? shifted(task.scheduledDate, delta, zones) : null,
-          reminderTime: dated ? task.reminderTime : null,
-          repeatRule: dated ? task.repeatRule : null,
-          repeatSourceId: null,
-          dueDate: shifted(task.dueDate, delta, zones),
-          bucket: resolveTaskBucket(task.bucket, scheduledType, instanceId, task.areaId),
-          status: TaskStatus.ACTIVE,
-          settledAt: null,
-          trashedAt: null,
-          projectId: instanceId,
-          headingId: task.headingId ? (headingIds.get(task.headingId) ?? null) : null,
-          areaId: task.areaId,
-          tagIds: [...task.tagIds],
-        };
-      });
-
-      const subtasks = sortByEffectivePosition(
-        children.subtasks.filter((subtask) => taskIds.has(subtask.taskId)),
-      ).map((subtask) => ({
-        id: deriveRepeatCopyId(instanceId, 'subtask', subtask.id),
-        title: subtask.title,
-        taskId: taskIds.get(subtask.taskId)!,
-        position: subtask.position ?? null,
-        status: TaskStatus.ACTIVE,
-        settledAt: null,
-      }));
-
-      const attachments = sortByEffectivePosition(
-        (children.attachments ?? []).filter((attachment) => taskIds.has(attachment.taskId)),
-      ).map((attachment) =>
-        copyAttachment(
-          attachment,
-          deriveRepeatCopyId(instanceId, 'attachment', attachment.id),
-          taskIds.get(attachment.taskId)!,
-        ),
-      );
-
-      return { headings, tasks, subtasks, attachments };
-    },
+    copyFor: (instanceId, children) => copyProjectContents(instanceId, children, delta, zones),
   };
+}
+
+/** 项目内容副本的来源：来源项目下的全部行（含 Trash 中的任务，这里自行过滤）。 */
+export interface ProjectContentsSource {
+  headings: ReadonlyArray<RepeatProjectHeading & { id: string }>;
+  tasks: ReadonlyArray<RepeatProjectTask & { id: string }>;
+  subtasks: ReadonlyArray<RepeatProjectSubtask & { id: string }>;
+  attachments?: ReadonlyArray<RepeatProjectAttachment & { id: string }>;
+}
+
+/**
+ * 把来源项目的 Headings / 任务 / Subtask / 附件整份复制到 instanceId 名下
+ * （重复项目的下一轮与复制项目共用）：全部重置为未完成，任务日期平移
+ * delta 天，排除项目内重复链的后代；子实体 id 按 (instanceId, 来源 id)
+ * 派生。
+ */
+export function copyProjectContents(
+  instanceId: string,
+  children: ProjectContentsSource,
+  delta: number,
+  zones: CalendarZones,
+): RepeatProjectCopy {
+  const headings = sortByEffectivePosition(children.headings).map((heading) => ({
+    id: deriveRepeatCopyId(instanceId, 'project-heading', heading.id),
+    title: heading.title,
+    position: heading.position ?? null,
+    status: HeadingStatus.ACTIVE,
+    completedAt: null,
+    projectId: instanceId,
+  }));
+  const headingIds = new Map(
+    children.headings.map((heading) => [
+      heading.id,
+      deriveRepeatCopyId(instanceId, 'project-heading', heading.id),
+    ]),
+  );
+
+  const live = children.tasks.filter((task) => task.trashedAt == null);
+  const inProject = new Set(children.tasks.map((task) => task.id));
+  const templates = sortByEffectivePosition(
+    live.filter((task) => !(task.repeatSourceId && inProject.has(task.repeatSourceId))),
+  );
+  const taskIds = new Map(
+    templates.map((task) => [task.id, deriveRepeatCopyId(instanceId, 'task', task.id)]),
+  );
+  const tasks = templates.map((task) => {
+    const scheduledType = (task.scheduledType as ScheduledType) ?? ScheduledType.NONE;
+    const dated = scheduledType === ScheduledType.DATE;
+    return {
+      id: taskIds.get(task.id)!,
+      position: task.position ?? null,
+      title: task.title,
+      notes: task.notes,
+      scheduledType,
+      scheduledDate: dated ? shifted(task.scheduledDate, delta, zones) : null,
+      reminderTime: dated ? task.reminderTime : null,
+      repeatRule: dated ? task.repeatRule : null,
+      repeatSourceId: null,
+      dueDate: shifted(task.dueDate, delta, zones),
+      bucket: resolveTaskBucket(task.bucket, scheduledType, instanceId, task.areaId),
+      status: TaskStatus.ACTIVE,
+      settledAt: null,
+      trashedAt: null,
+      projectId: instanceId,
+      headingId: task.headingId ? (headingIds.get(task.headingId) ?? null) : null,
+      areaId: task.areaId,
+      tagIds: [...task.tagIds],
+    };
+  });
+
+  const subtasks = sortByEffectivePosition(
+    children.subtasks.filter((subtask) => taskIds.has(subtask.taskId)),
+  ).map((subtask) => ({
+    id: deriveRepeatCopyId(instanceId, 'subtask', subtask.id),
+    title: subtask.title,
+    taskId: taskIds.get(subtask.taskId)!,
+    position: subtask.position ?? null,
+    status: TaskStatus.ACTIVE,
+    settledAt: null,
+  }));
+
+  const attachments = sortByEffectivePosition(
+    (children.attachments ?? []).filter((attachment) => taskIds.has(attachment.taskId)),
+  ).map((attachment) =>
+    copyAttachment(
+      attachment,
+      deriveRepeatCopyId(instanceId, 'attachment', attachment.id),
+      taskIds.get(attachment.taskId)!,
+    ),
+  );
+
+  return { headings, tasks, subtasks, attachments };
 }
 
 // ---------- 跳过本次 ----------

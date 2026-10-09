@@ -6,6 +6,7 @@ import {
   planMarkReviewed,
   planProjectComplete,
   planProjectCreate,
+  planProjectDuplicate,
   planProjectRepeatSkip,
   planProjectRestore,
   planProjectTrash,
@@ -16,6 +17,8 @@ import {
   projectReopenPatch,
   projectUpdatePutsBack,
   repeatDerivationTarget,
+  type ProjectContentsSource,
+  type RepeatProjectCopy,
 } from '@taskora/engine';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -296,13 +299,28 @@ export class ProjectsService {
       position: positionBetween(projects[at]?.position ?? null, projects[at + 1]?.position ?? null),
     });
 
+    await this.writeProjectCopy(batch, parent.id, tasks, (children) =>
+      plan.copyFor(instanceId, children),
+    );
+  }
+
+  /**
+   * 来源项目内容的整份复制（重复项目的下一轮与复制项目共用）：读出
+   * Headings / Subtask / 附件，按 copy 生成的副本逐行写入。
+   */
+  private async writeProjectCopy(
+    batch: HubWriteBatch,
+    sourceId: string,
+    tasks: ReadonlyArray<Prisma.TaskGetPayload<{ include: { tags: true } }>>,
+    copy: (children: ProjectContentsSource) => RepeatProjectCopy,
+  ): Promise<void> {
     const taskIds = { in: tasks.map((task) => task.id) };
     const [headings, subtasks, attachments] = await Promise.all([
-      batch.tx.projectHeading.findMany({ where: { projectId: parent.id } }),
+      batch.tx.projectHeading.findMany({ where: { projectId: sourceId } }),
       batch.tx.subtask.findMany({ where: { taskId: taskIds } }),
       batch.tx.attachment.findMany({ where: { taskId: taskIds } }),
     ]);
-    const copy = plan.copyFor(instanceId, {
+    const result = copy({
       headings,
       tasks: tasks.map((task) => ({
         ...task,
@@ -312,14 +330,62 @@ export class ProjectsService {
       subtasks,
       attachments,
     });
-    for (const { id, ...heading } of copy.headings) {
+    for (const { id, ...heading } of result.headings) {
       await batch.write('project-heading', id, heading);
     }
-    for (const { id, ...task } of copy.tasks) await batch.write('task', id, toWireFields(task));
-    for (const { id, ...subtask } of copy.subtasks) await batch.write('subtask', id, subtask);
-    for (const { id, ...attachment } of copy.attachments) {
+    for (const { id, ...task } of result.tasks) await batch.write('task', id, toWireFields(task));
+    for (const { id, ...subtask } of result.subtasks) await batch.write('subtask', id, subtask);
+    for (const { id, ...attachment } of result.attachments) {
       await batch.write('attachment', id, attachment);
     }
+  }
+
+  /**
+   * 复制项目（Duplicate）：项目连同 Headings、任务、Subtask、附件整份复制，
+   * 全部为未完成，侧边栏中紧跟来源项目（规则见 domain planProjectDuplicate）。
+   */
+  async duplicate(userId: string, id: string) {
+    const source = await this.prisma.project.findFirst({
+      where: { id, userId },
+      include: { tags: true },
+    });
+    if (!source) {
+      throw new NotFoundException('Project not found');
+    }
+    const { zones, review } = await userReviewSettings(this.prisma, userId);
+    const plan = planProjectDuplicate(
+      {
+        ...source,
+        repeatRule: parseRepeatRule(source.repeatRule),
+        reviewInterval: parseReviewInterval(source.reviewInterval),
+        tagIds: source.tags.map((pt) => pt.tagId),
+      },
+      zones,
+      review,
+    );
+    const tasks = await this.prisma.task.findMany({
+      where: { projectId: id, userId },
+      include: { tags: true },
+    });
+    const copyId = randomUUID();
+    await this.hub.writeAsHub(userId, async (batch) => {
+      const projects = sortByPosition(
+        await batch.tx.project.findMany({
+          where: { userId },
+          select: { id: true, position: true },
+        }),
+      );
+      const at = projects.findIndex((p) => p.id === id);
+      await batch.write('project', copyId, {
+        ...toWireFields(plan.project),
+        position: positionBetween(
+          projects[at]?.position ?? null,
+          projects[at + 1]?.position ?? null,
+        ),
+      });
+      await this.writeProjectCopy(batch, id, tasks, (children) => plan.copyFor(copyId, children));
+    });
+    return this.findOne(userId, copyId);
   }
 
   /** 标记已回顾：下次回顾日为今天加回顾间隔（规则见 domain planMarkReviewed）。 */

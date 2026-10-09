@@ -38,10 +38,10 @@ describe('SettingsShortcuts', () => {
 
     await user.click(editButton('Complete selection'));
     expect(editButton('Complete selection')).toHaveTextContent('Press shortcut…');
-    fireEvent.keyDown(window, { key: 'd', code: 'KeyD', metaKey: true });
+    fireEvent.keyDown(window, { key: 'g', code: 'KeyG', metaKey: true });
 
-    expect(useKeybindingsStore.getState().overrides).toEqual({ complete: ['Meta+D'] });
-    expect(editButton('Complete selection')).toHaveTextContent('⌘D');
+    expect(useKeybindingsStore.getState().overrides).toEqual({ complete: ['Meta+G'] });
+    expect(editButton('Complete selection')).toHaveTextContent('⌘G');
 
     await user.click(screen.getByRole('button', { name: 'Restore default for “Complete selection”' }));
     expect(useKeybindingsStore.getState().overrides).toEqual({});

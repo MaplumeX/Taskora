@@ -51,6 +51,11 @@ export interface TaskBackend {
    * 不可跳过时抛 RepeatSkipBlockedError（reason 说明原因）。
    */
   skipTask(id: string): Promise<TaskResponseDto>;
+  /**
+   * 复制任务（Duplicate）：副本紧跟来源任务，内容照抄、状态为未完成，
+   * 连同 Subtask 与附件。返回副本。
+   */
+  duplicateTask(id: string): Promise<TaskResponseDto>;
   reorderTasks(orderedIds: string[]): Promise<void>;
   /**
    * feed 拖拽重排（任务与项目行混排）：items 为目标显示顺序。任务写

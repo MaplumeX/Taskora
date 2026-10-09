@@ -8,6 +8,7 @@ import {
   Check,
   Circle,
   CircleSlash,
+  Copy,
   FolderInput,
   FolderTree,
   MoreHorizontal,
@@ -53,6 +54,7 @@ import { MultiTagsField } from './fields/TagsField';
 import { MovePicker } from './fields/MovePicker';
 import { useSkipOccurrence } from './useSkipOccurrence';
 import { useConvertGuard } from './useConvertGuard';
+import { useDuplicate } from './useDuplicate';
 
 type PickerKind = 'scheduled' | 'move' | 'due' | 'tags' | 'repeat';
 
@@ -97,6 +99,7 @@ export function MultiSelectToolbar() {
   const uncancelTask = useUncancelTask();
   const convertToProject = useConvertTaskToProject();
   const convertGuard = useConvertGuard();
+  const duplicate = useDuplicate();
   const skipOccurrence = useSkipOccurrence(single, active);
 
   const [picker, setPicker] = React.useState<PickerKind | null>(null);
@@ -162,6 +165,12 @@ export function MultiSelectToolbar() {
 
   const handleSkip = () => {
     skipOccurrence.skip();
+    exit();
+  };
+
+  // 副本紧跟各自的来源；触控模式没有选中高亮，复制完即退出。
+  const handleDuplicate = () => {
+    void duplicate(ids.map((id) => ({ id, kind: 'task' as const })));
     exit();
   };
 
@@ -263,6 +272,11 @@ export function MultiSelectToolbar() {
                   onClick={handleSkip}
                 >
                   {t('task:skipOccurrence')}
+                </ActionSheetItem>
+              )}
+              {!inTrash && (
+                <ActionSheetItem icon={Copy} onClick={handleDuplicate}>
+                  {t('task:duplicate')}
                 </ActionSheetItem>
               )}
               {single && !inTrash && (

@@ -35,6 +35,11 @@ export interface ProjectBackend {
    */
   skipProject(id: string): Promise<ProjectResponseDto>;
   uncompleteProject(id: string): Promise<ProjectResponseDto>;
+  /**
+   * 复制项目（Duplicate）：项目连同 Headings、任务、Subtask、附件整份复制，
+   * 全部为未完成，侧边栏中紧跟来源项目。返回副本。
+   */
+  duplicateProject(id: string): Promise<ProjectResponseDto>;
   reorderProjects(orderedIds: string[]): Promise<void>;
   /** 标记已回顾（Mark Reviewed）：下次回顾日改为今天加回顾间隔。 */
   markProjectReviewed(id: string): Promise<ProjectResponseDto>;
