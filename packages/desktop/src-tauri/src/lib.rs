@@ -146,12 +146,18 @@ pub fn run() {
             #[cfg(target_os = "linux")]
             let tray = tray_menu::attach_native_menu(app, tray)?;
             tray.build(app)?;
-            // 开机自启的 --hidden 启动：主窗口隐藏、仅托盘常驻，避免登录时
-            // 弹窗打扰；用户从托盘 / 快捷键 / 再次启动随时唤出。手动启动
-            // 不带参数，行为不变。
-            if std::env::args().any(|arg| arg == "--hidden") {
-                if let Some(window) = app.get_webview_window("main") {
-                    let _ = window.hide();
+            // 自绘外壳（前端 WindowChrome）：主窗口配置为 visible=false，
+            // 先处理装饰再显示，避免原生标题栏闪一下。macOS 保留原生红绿灯
+            // （titleBarStyle Overlay + hiddenTitle，内容铺到顶）；Windows /
+            // Linux 去掉原生装饰，窗口按钮由前端绘制，边缘缩放由 Tauri 的
+            // undecorated resizing 接管。
+            // 开机自启的 --hidden 启动：主窗口保持隐藏、仅托盘常驻，避免登录
+            // 时弹窗打扰；用户从托盘 / 快捷键 / 再次启动随时唤出。
+            if let Some(window) = app.get_webview_window("main") {
+                #[cfg(not(target_os = "macos"))]
+                window.set_decorations(false)?;
+                if !std::env::args().any(|arg| arg == "--hidden") {
+                    window.show()?;
                 }
             }
             // 补回被安装包覆盖安装删掉的自启项，并刷新可执行文件路径。

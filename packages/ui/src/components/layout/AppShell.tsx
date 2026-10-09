@@ -23,14 +23,15 @@ export function AppShell() {
   useSidebarYieldsToPanel();
   // h-[calc(100dvh-var(--kb-inset,0px))]：Android 键盘避让（mobile 壳的
   // visualViewport 驱动，其余端未设置 → 0px，等价 h-dvh）。
-  // 手机端主列顶部让出状态栏（edge-to-edge 下内容铺到系统栏后面）。
+  // 手机端主列顶部让出状态栏（edge-to-edge 下内容铺到系统栏后面）；
+  // 桌面端各栏让出自绘外壳的拖拽带（--titlebar-h，desktop 壳注入，其余端 0）。
   // 侧边栏与内容区共用一个拖拽上下文（ADR 0018）：任务 / 项目行可拖到侧边栏。
   return (
     <SidebarDropProvider>
       <div {...preloadIntent} className="flex h-[calc(100dvh-var(--kb-inset,0px))] w-full">
         {/* 桌面侧边栏（手机端隐藏）：右缘可拖动调宽 / 拖到折叠 */}
         <ResizableSidebar />
-        <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] min-w-0 flex-1 flex-col max-md:pt-[var(--safe-area-top)]">
+        <div className="flex h-[calc(100dvh-var(--kb-inset,0px))] min-w-0 flex-1 flex-col max-md:pt-[var(--safe-area-top)] md:pt-[var(--titlebar-h,0px)]">
           <MobileTopBar />
           <MainContent />
           <ContentBottomBar />

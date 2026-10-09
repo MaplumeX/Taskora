@@ -70,6 +70,9 @@ async function mount() {
 
   const { QueryClient, QueryClientProvider } = await import('@tanstack/react-query');
   const { Toaster } = await import('@taskora/ui/components/ui/sonner');
+  // 自绘外壳：主窗口无原生标题栏（lib.rs），先写入拖拽带高度再挂载。
+  const { WindowChrome, installWindowChrome } = await import('./WindowChrome');
+  installWindowChrome();
 
   const queryClient = new QueryClient({
     defaultOptions: {
@@ -120,9 +123,14 @@ async function mount() {
   ReactDOM.createRoot(document.getElementById('root')!).render(
     <React.StrictMode>
       <QueryClientProvider client={queryClient}>
-        {/* 原生窗口装饰：App 直接铺满视口（h-dvh），与 web 端一致。 */}
+        {/* 自绘外壳：App 仍铺满视口（h-dvh），各栏按 --titlebar-h 让出顶部拖拽带。 */}
         <App />
-        <Toaster position="top-center" />
+        <WindowChrome />
+        <Toaster
+          position="top-center"
+          offset={{ top: 'calc(24px + var(--titlebar-h))' }}
+          mobileOffset={{ top: 'calc(16px + var(--titlebar-h))' }}
+        />
       </QueryClientProvider>
     </React.StrictMode>,
   );

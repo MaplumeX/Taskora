@@ -20,7 +20,9 @@
         "minWidth": 420,
         "minHeight": 320,
         "center": true,
-        "visible": true
+        "visible": false,
+        "titleBarStyle": "Overlay",
+        "hiddenTitle": true
       },
       {
         "label": "quick-add",
