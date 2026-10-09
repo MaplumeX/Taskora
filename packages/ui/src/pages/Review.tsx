@@ -252,26 +252,29 @@ function ReviewBar({
   );
   const settingsButton = inStep ? <ReviewSettingsButton target={target} /> : null;
 
+  // 手机端底部栏放不下四个带文字的按钮：上一个 / 下一个只留箭头
   const previousButton = (
     <Button
       variant="ghost"
-      size={desktop ? 'sm' : 'default'}
+      size={desktop ? 'sm' : 'icon'}
+      aria-label={desktop ? undefined : t('previous')}
       disabled={!session.canGoPrevious}
       onClick={session.previous}
     >
       <ChevronLeft />
-      {t('previous')}
+      {desktop && t('previous')}
     </Button>
   );
   // 上一个 / 下一个只在本轮列表里移动：不标记、不改日期，到头 / 到尾时禁用
   const nextButton = (
     <Button
       variant="ghost"
-      size={desktop ? 'sm' : 'default'}
+      size={desktop ? 'sm' : 'icon'}
+      aria-label={desktop ? undefined : t('next')}
       disabled={!session.canGoNext}
       onClick={session.next}
     >
-      {t('next')}
+      {desktop && t('next')}
       <ChevronRight />
     </Button>
   );
@@ -312,9 +315,13 @@ function ReviewBar({
     </FieldPickerDialog>
   );
   const markButton = (
-    <Button size={desktop ? 'sm' : 'default'} onClick={session.markNext}>
+    <Button
+      size={desktop ? 'sm' : 'default'}
+      className={desktop ? undefined : 'min-w-0'}
+      onClick={session.markNext}
+    >
       <CalendarCheck />
-      {t('markReviewed')}
+      <span className="truncate">{t('markReviewed')}</span>
     </Button>
   );
 
@@ -331,11 +338,15 @@ function ReviewBar({
             <div className="min-h-0 flex-1 overflow-y-auto px-2">{queueList}</div>
           </DrawerContent>
         </Drawer>
-        <div className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-2 border-t bg-background px-3 pb-[calc(var(--safe-area-bottom)+0.5rem)] pt-2">
+        <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-1 border-t bg-background px-3 pb-[calc(var(--safe-area-bottom)+0.5rem)] pt-2">
           {previousButton}
           {inStep && nextButton}
-          {inStep && postponeButton}
-          {inStep && markButton}
+          {inStep && (
+            <div className="ml-auto flex min-w-0 items-center gap-1">
+              {postponeButton}
+              {markButton}
+            </div>
+          )}
         </div>
       </>
     );
