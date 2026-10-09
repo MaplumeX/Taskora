@@ -1,232 +1,150 @@
+<div align="center">
+
+<img src="packages/frontend/public/icon.png" width="96" alt="Taskora icon" />
+
 # Taskora
 
-[English](README.md) · [简体中文](README.zh-CN.md)
+**A calm, keyboard-first task manager you host yourself.**
 
-A Things-inspired task manager built as a pnpm monorepo. NestJS API + Prisma/PostgreSQL on the backend, Vite + React + Tailwind on the frontend, with a shared DTO package and Docker-based deployment. A Tauri 2 desktop client shares the web app's views and data layer.
+Inspired by Things 3. Runs in the browser, on macOS, Windows, Linux and Android, and keeps all of them in sync through your own server.
+
+[Download](https://github.com/MaplumeX/Taskora/releases/latest) · [Self-host](#self-host-the-server) · [Keyboard shortcuts](docs/keyboard-shortcuts.md) · [中文](README.zh-CN.md)
+
+</div>
+
+![Today view](docs/images/screenshots/today-en.png)
+
+## Why Taskora
+
+- **Plan your day, not your backlog.** Today shows only what you chose to work on, grouped by project and area. Everything else waits quietly in Anytime, Upcoming or Someday until it's time.
+- **Works offline.** Every device keeps a full local copy of your tasks. Add, edit and complete things without a connection; changes sync the moment you're back online.
+- **Your data, your server.** One `docker compose up` gives you a private sync server. No third-party cloud, no account with anyone but yourself.
+- **Built for the keyboard.** Navigate, create, complete, tag and reschedule without touching the mouse. Every shortcut can be rebound.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/screenshots/project-en.png" alt="Project with headings" /><br /><sub><b>Projects</b>: group tasks under headings, track deadlines</sub></td>
+    <td width="50%"><img src="docs/images/screenshots/task-en.png" alt="Expanded task" /><br /><sub><b>Tasks</b>: notes, checklists, tags, dates and attachments in place</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/screenshots/upcoming-en.png" alt="Upcoming view" /><br /><sub><b>Upcoming</b>: what's coming, day by day</sub></td>
+    <td width="50%"><img src="docs/images/screenshots/calendar-en.png" alt="Calendar view" /><br /><sub><b>Calendar</b>: the month at a glance</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/images/screenshots/project-dark-en.png" alt="Dark mode" /><br /><sub><b>Dark mode</b>: follows your system, or pick one yourself</sub></td>
+  </tr>
+</table>
 
 ## Features
 
-- **Areas → Projects → Tasks → Subtasks** hierarchy for organizing work.
-- **Buckets**: Inbox, Anytime, Scheduled, Someday, Today, Upcoming, Logbook, Trash.
-- **Project headings** to group tasks within a project.
-- **Nested tags** with color and sort order, attachable to tasks, projects, and areas; filtering by a parent tag includes its children.
-- **Soft-delete (Trash)** with restore and cascade cleanup.
-- **JWT auth** with access tokens and rotating refresh tokens (bcrypt password hashing).
-- **i18n** with English and 简体中文 locales.
-- **Drag-and-drop** reordering via dnd-kit.
-- **Desktop client** (Tauri 2): full feature parity with the web app, OS-keychain token storage, global-shortcut quick add (Ctrl/Cmd+Space).
+### Organize
 
-## Tech Stack
+- **Areas, projects and tasks.** Areas hold the big parts of your life (Work, Personal, Health); projects are finite goals inside them; tasks are the steps.
+- **Headings** split a long project into phases.
+- **Checklists** break a task into small steps without turning it into a project.
+- **Tags** with colors and nesting. Filtering by a tag also matches its sub-tags, and tasks inherit tags from their project and area.
+- **Attachments**: drop files onto a task. Images open in a built-in preview.
+- **Duplicate** (⌘D) any task or project to reuse it as a template.
 
-| Layer | Stack |
-| --- | --- |
-| Backend | NestJS 11, Prisma 6, PostgreSQL 17, Passport-JWT, bcryptjs |
-| Frontend | Vite 5, React 18, TailwindCSS 3, TanStack Query, Zustand, react-router, dnd-kit, i18next |
-| Shared | TypeScript DTOs and enums (`workspace:*`, not published to npm) |
-| Tooling | pnpm 9, Node 22, ESLint, Prettier, Vitest |
-| Deploy | Docker (dual images), GitHub Actions CI/CD, GHCR |
+### Plan
 
-## Project Structure
+- **Inbox** catches everything you haven't sorted yet.
+- **Today**, **Upcoming**, **Anytime** and **Someday** show your tasks by when you plan to do them. Tasks scheduled for a day that has already passed stay in Today; they never pile up as "overdue".
+- **Deadlines** are separate from planned dates, with a countdown that turns red when time is up.
+- **Calendar** shows the whole month.
+- **Repeating tasks and projects**: daily, weekly on chosen weekdays, monthly or yearly. Repeat from the planned date or from when you finished it. Skip a single occurrence when needed.
+- **Reminders** pop up as system notifications on desktop and Android, with Complete and Snooze right in the notification.
+- **Review** walks you through your projects and areas one by one, on a schedule you set for each, so nothing goes stale.
+- **Logbook** keeps everything you've completed. **Trash** keeps what you deleted until you empty it.
 
-```
-packages/
-├── backend/       # NestJS API (Prisma schema, migrations, modules)
-├── frontend/      # Vite + React SPA (shell: router, entry, auth pages)
-├── desktop/       # Tauri 2 desktop client (shell, quick add, keyring auth)
-├── ui/            # Cross-client business components & page views
-├── api/           # Cross-client API client, query hooks, auth, i18n
-└── shared/        # Cross-package DTOs / enums / types
-```
+### Work faster
 
-Backend modules: `auth`, `users`, `areas`, `projects`, `tasks`, `subtasks`, `tags`, `project-headings`, `feed`. All API routes are prefixed with `/api/v1`.
+- **Quick Add** from anywhere on your desktop with ⌘⇧Space / Ctrl+Shift+Space, even when Taskora is in the tray.
+- **Multi-select and drag & drop**: move many tasks at once into a project, a heading, or onto a date in Upcoming.
+- **Search** across areas, projects and tasks, narrowed down by tags.
+- **Assistant** (optional): chat with an AI to create, reorganize and look up tasks. Bring your own key for any OpenAI-compatible endpoint; it's stored encrypted on your server.
+- **English and Simplified Chinese** interface.
 
-## Prerequisites
+## Get the apps
 
-- Node.js 22
-- pnpm 9 (enable via `corepack enable`)
-- PostgreSQL 17 (or use the provided `docker-compose.yml`)
+Download the latest version from [**GitHub Releases**](https://github.com/MaplumeX/Taskora/releases/latest).
 
-## Getting Started
+| Platform | File |
+|---|---|
+| macOS (Apple Silicon) | `Taskora_x.y.z_aarch64.dmg` |
+| Windows (x64) | `Taskora_x.y.z_x64-setup.exe` |
+| Linux (x64) | `Taskora_x.y.z_amd64.AppImage` |
+| Android (arm64) | `Taskora-vx.y.z.apk` |
+| Web | Included with your server, open it in any modern browser |
 
-### 1. Install dependencies
+On first launch, the desktop and Android apps ask for your **server address**: the URL of your Taskora server followed by `/api/v1`, e.g. `https://tasks.example.com/api/v1`.
 
-```bash
-pnpm install
-```
+> [!NOTE]
+> The apps are not code-signed yet, so your system will warn you the first time:
+>
+> - **macOS**: right-click Taskora in Applications → **Open** → **Open**. If macOS says the app is damaged, run `xattr -dr com.apple.quarantine /Applications/Taskora.app`.
+> - **Windows**: on the SmartScreen dialog, click **More info** → **Run anyway**.
+> - **Linux**: `chmod +x Taskora_*.AppImage`, then run it.
+> - **Android**: allow your browser or file manager to install unknown apps.
+>
+> There is no auto-update yet. To upgrade, download the new version and install it over the old one; your data stays.
 
-### 2. Configure environment variables
+## Self-host the server
 
-Backend — `packages/backend/.env`:
+The server stores your data, syncs your devices and serves the web app. You need a machine with Docker.
 
-```env
-DATABASE_URL=postgresql://taskora:taskora@localhost:5432/taskora?schema=public
-JWT_SECRET=your-secret-here
-# Optional: where attachment files are stored, defaults to packages/backend/data/blobs
-BLOB_STORAGE_DIR=./data/blobs
-```
-
-Frontend — `packages/frontend/.env`:
-
-```env
-VITE_API_URL=http://localhost:3000/api/v1
-```
-
-When using Docker Compose, Compose reads `.env` from the repository root. Create it from the template; do not reuse the backend `.env` directly because the database hostname inside Docker is `postgres`, not `localhost`:
+**1. Get the config files**
 
 ```bash
-cp .env.example .env
+mkdir taskora && cd taskora
+curl -O https://raw.githubusercontent.com/MaplumeX/Taskora/main/docker-compose.yml
+curl -o .env https://raw.githubusercontent.com/MaplumeX/Taskora/main/.env.example
 ```
 
-Before starting the shared environment, update `POSTGRES_PASSWORD` and `JWT_SECRET` in `.env`.
+**2. Edit `.env`.** At minimum, set your own values for:
 
-### 3. Set up the database
+| Variable | What it is |
+|---|---|
+| `POSTGRES_PASSWORD` | Database password |
+| `JWT_SECRET` | Signs login sessions; use a long random string |
+| `AGENT_ENCRYPTION_KEY` | Encrypts Assistant API keys; generate with `openssl rand -hex 32` |
+| `NODE_ENV` | Set to `production` |
 
-Start PostgreSQL (the compose file includes it, or run your own):
+**3. Start it**
 
 ```bash
-docker compose up -d postgres
+docker compose up -d
 ```
 
-Then run migrations and generate the Prisma client:
+Open <http://localhost:7646> and create your account. For the desktop and Android apps, use `http://<your-server>:7646/api/v1` as the server address.
+
+The ports are bound to `127.0.0.1` by default. To use Taskora from other devices, put it behind a reverse proxy with HTTPS (Caddy, nginx, Traefik…) pointing at port `7646`.
+
+**Upgrading**
 
 ```bash
-pnpm --filter @taskora/backend exec prisma migrate dev
-pnpm --filter @taskora/backend exec prisma generate
+docker compose pull && docker compose up -d
 ```
 
-Optional seed data:
+To stay on a specific version, set `IMAGE_TAG=v0.8.0` (for example) in `.env`.
 
-```bash
-pnpm --filter @taskora/backend exec prisma db seed
-# demo login: test@example.com / password123
-```
+**Backups**
 
-### 4. Run the dev servers
+Your data lives in two Docker volumes: `pgdata` (the database) and `blobs` (attachment files). Back up both together.
 
-```bash
-pnpm dev
-```
+## FAQ
 
-- Frontend: http://localhost:5173
-- Backend API: http://localhost:3000/api/v1
+**Can I use it without a server?**
+No. The apps work offline, but they need a server to sign in and to sync between devices.
 
-## Scripts
+**Is there an iPhone app?**
+Not yet. On iOS, use the web app in Safari.
 
-Run from the repo root:
+**Is the Assistant required?**
+No. It stays out of the way until you add an API key in Settings → Assistant.
 
-| Command | Description |
-| --- | --- |
-| `pnpm dev` | Start all packages in parallel (watch mode) |
-| `pnpm typecheck` | Typecheck all packages |
-| `pnpm test` | Run tests across all packages |
-| `pnpm lint` | Lint the repo |
-| `pnpm format` | Format with Prettier |
+## Development
 
-Backend-specific (run with `pnpm --filter @taskora/backend exec ...`):
-
-- `prisma migrate dev` — create/apply migrations
-- `prisma generate` — regenerate the Prisma client
-- `prisma db seed` — load seed data
-
-## Desktop Client
-
-Prebuilt desktop installers are published on the [GitHub Releases page](https://github.com/maplumex/taskora/releases) under tags matching `v*` (the same tag that releases the server images):
-
-| Platform | Artifact |
-| --- | --- |
-| macOS (Apple Silicon & Intel) | `Taskora_x.y.z_aarch64.dmg` / `_x64.dmg` |
-| Windows | `Taskora_x.y.z_x64-setup.exe` (NSIS) |
-| Linux | `Taskora_x.y.z_amd64.AppImage` |
-
-On first launch you configure the address of your self-hosted server (the API base URL, e.g. `https://taskora.example.com/api/v1`) and sign in with your account. Windows stores the access and refresh tokens together in a per-user DPAPI-encrypted file (normally `%LOCALAPPDATA%\app.taskora.desktop\session.dpapi`); macOS / Linux use the OS keychain. Tokens never reach plaintext files or browser storage. Legacy credentials are migrated automatically.
-
-### Unsigned builds — how to bypass the warnings
-
-V1 builds are **not code-signed**, so both platforms will warn on first launch:
-
-- **macOS Gatekeeper**: right-click the app → *Open* → *Open* in the dialog (or System Settings → Privacy & Security → *Open Anyway*). This is only needed once.
-- **Windows SmartScreen**: click *More info* → *Run anyway*.
-- **Linux**: AppImages are not affected; make the file executable (`chmod +x`) and run it.
-
-Code signing and auto-update will be added once there are real users; until then, download new versions manually from Releases.
-
-### Building from source
-
-```bash
-# Linux: install webkit2gtk and friends first, see
-# https://tauri.app/start/prerequisites/
-pnpm --filter @taskora/desktop dev    # dev window
-pnpm --filter @taskora/desktop build  # installers for your platform
-```
-
-## Android Client
-
-An Android build is published on the [GitHub Releases page](https://github.com/maplumex/taskora/releases) alongside the desktop installers: the `#Taskora-x.y.z.apk` attachment under each `v*` tag. It is the same full-parity local-first client as the desktop app (complete local replica, offline capture, foreground sync) — not a companion app.
-
-### Sideload installation
-
-1. Download the APK from the release page (on your phone, or transfer it there).
-2. Tap the file. Android will warn that the app comes from an unknown source — allow installs from your file manager / browser for this one app (*Settings → Apps → Special access → Install unknown apps*, depending on the Android version). No Play Services is required (no FCM; sync runs while the app is in the foreground).
-3. Sign in with your existing account after pointing the app at your self-hosted server.
-
-### Upgrades
-
-- Install the new APK on top of the old one — data (the local replica) is preserved.
-- Upgrades only work with the **same signing key**: the project never rotates the release keystore. If an upgrade refuses to install, check that you downloaded the official APK from Releases — never uninstall first, that deletes your local replica (queued offline edits would be lost).
-
-### Building from source
-
-```bash
-# Android Studio (SDK + NDK + JDK 17) and the Android Rust targets are
-# required: https://tauri.app/start/prerequisites/
-rustup target add aarch64-linux-android armv7-linux-androideabi \
-  i686-linux-android x86_64-linux-android
-pnpm --filter @taskora/mobile exec tauri android init   # generates gen/android
-pnpm --filter @taskora/mobile dev    # run on an emulator / device
-pnpm --filter @taskora/mobile build  # signed APK (debug keystore)
-```
-
-The `dev` and `build` scripts copy the checked-in Taskora launcher icons into the generated Android project before running Tauri. If you run `tauri android build` directly, run `node scripts/sync-android-icons.mjs` from the repository root after `tauri android init` first.
-
-## Docker Deployment
-
-A `docker-compose.yml` is provided for local full-stack runs:
-
-```bash
-test -f .env || cp .env.example .env  # Create once, then update the secrets
-docker compose up -d --build
-```
-
-This starts:
-
-- `postgres` on port 5432
-- `backend` on port 3000 (auto-runs `prisma migrate deploy` on boot)
-- `frontend` on port 7646 (nginx serves the SPA and reverse-proxies `/api` to the backend)
-
-Compose waits for PostgreSQL's health check before starting the backend. If `VITE_API_URL` changes, rebuild the frontend image with `--build` because Vite embeds this value at build time.
-
-Task attachment files live in the `blobs` volume (the database only stores attachment metadata). Back up and migrate the `pgdata` and `blobs` volumes together.
-
-### Building images manually
-
-```bash
-docker build -f packages/backend/Dockerfile  -t taskora-backend  .
-docker build -f packages/frontend/Dockerfile -t taskora-frontend .
-```
-
-## CI/CD
-
-GitHub Actions workflows live in `.github/workflows/`:
-
-- **CI** (`ci.yml`) — on every PR and `main` push: install, typecheck, test, desktop Rust check (Linux only), and verify both Docker images build.
-- **Release** (`release.yml`) — on git tags matching `v*`: builds and pushes images to GHCR.
-  - `ghcr.io/maplumex/taskora-backend:vX.Y.Z` / `:latest`
-  - `ghcr.io/maplumex/taskora-frontend:vX.Y.Z` / `:latest`
-- **Desktop Release** (`desktop-release.yml`) — on the same `v*` git tags: builds the three-platform desktop installers (dmg / NSIS exe / AppImage) and uploads them to a GitHub Release. The desktop version number is unified with the rest of the monorepo. V1 builds are unsigned and have no auto-update.
-- **Android Release** (`android-release.yml`) — on the same `v*` git tags: builds the signed Android APK (release keystore injected via secrets) and attaches it to the GitHub Release for sideloading. The signing key is never rotated — rotating it would force every user to uninstall (losing their local replica).
-
-See [docs/versioning-and-deployment.md](docs/versioning-and-deployment.md) for the full versioning, branching, and multi-client rollout strategy.
-
-## License
-
-Private project. All rights reserved.
+Taskora is a pnpm monorepo (React + Vite, NestJS + PostgreSQL, Tauri 2). Domain terms are defined in [`CONTEXT.md`](CONTEXT.md), design decisions in [`docs/adr/`](docs/adr/), and release notes in [`CHANGELOG.md`](CHANGELOG.md).

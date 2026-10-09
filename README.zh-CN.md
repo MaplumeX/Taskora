@@ -1,232 +1,150 @@
+<div align="center">
+
+<img src="packages/frontend/public/icon.png" width="96" alt="Taskora 图标" />
+
 # Taskora
 
-[English](README.md) · [简体中文](README.zh-CN.md)
+**安静、顺手、可以自己部署的任务管理器。**
 
-一个受 Things 启发的任务管理应用，采用 pnpm monorepo 架构。后端为 NestJS API + Prisma/PostgreSQL，前端为 Vite + React + Tailwind，附带共享 DTO 包与 Docker 部署方案。另提供 Tauri 2 桌面客户端，与 Web 端共享视图与数据层。
+灵感来自 Things 3。支持网页、macOS、Windows、Linux 和 Android，所有设备通过你自己的服务器保持同步。
 
-## 功能特性
+[下载](https://github.com/MaplumeX/Taskora/releases/latest) · [部署服务器](#部署服务器) · [快捷键](docs/keyboard-shortcuts.md) · [English](README.md)
 
-- **区域 → 项目 → 任务 → 子任务** 的层级组织结构。
-- **任务视图（Bucket）**：收件箱、随时、已计划（Scheduled）、某天、今天、计划（Upcoming）、日志、废纸篓。
-- **项目分组标题**：在项目内对任务进行分组。
-- **嵌套标签**：支持颜色和排序，可附加到任务、项目和区域；按父标签过滤时包含其子标签。
-- **软删除（废纸篓）**：支持恢复与级联清理。
-- **JWT 认证**：访问令牌 + 轮换刷新令牌（bcrypt 密码哈希）。
-- **国际化**：内置英语与简体中文。
-- **拖拽排序**：基于 dnd-kit 实现。
-- **桌面客户端**（Tauri 2）：与 Web 端功能对齐，令牌存 OS 钥匙串，全局快捷键快速添加（Ctrl/Cmd+Space）。
+</div>
 
-## 技术栈
+![今天视图](docs/images/screenshots/today-zh.png)
 
-| 层级 | 技术栈 |
-| --- | --- |
-| 后端 | NestJS 11, Prisma 6, PostgreSQL 17, Passport-JWT, bcryptjs |
-| 前端 | Vite 5, React 18, TailwindCSS 3, TanStack Query, Zustand, react-router, dnd-kit, i18next |
-| 共享包 | TypeScript DTO 与枚举（`workspace:*` 引用，不发布到 npm） |
-| 工具链 | pnpm 9, Node 22, ESLint, Prettier, Vitest |
-| 部署 | Docker（双镜像），GitHub Actions CI/CD，GHCR |
+## 为什么选 Taskora
 
-## 项目结构
+- **只看今天要做的事。** 「今天」里只有你挑出来的任务，按项目和区域分好组；其余的安静地待在「随时」「计划」「某天」里，到时候再出现。
+- **离线也能用。** 每台设备都保存一份完整的本地数据，断网时照常添加、修改、完成任务，恢复联网后自动同步。
+- **数据在你自己手里。** 一条 `docker compose up` 就能跑起私有同步服务器，不依赖任何第三方云服务。
+- **键盘优先。** 浏览、新建、完成、打标签、改日期都不用碰鼠标，所有快捷键都可以自定义。
 
-```
-packages/
-├── backend/       # NestJS API（Prisma schema、迁移、各模块）
-├── frontend/      # Vite + React SPA（壳：路由、入口、登录页）
-├── desktop/       # Tauri 2 桌面客户端（壳、快速添加、钥匙串认证）
-├── ui/            # 跨端业务组件与页面视图
-├── api/           # 跨端 API client、Query hooks、认证、i18n
-└── shared/        # 跨包共享的 DTO / 枚举 / 类型
-```
+## 截图
 
-后端模块：`auth`、`users`、`areas`、`projects`、`tasks`、`subtasks`、`tags`、`project-headings`、`feed`。所有 API 路由均带 `/api/v1` 前缀。
+<table>
+  <tr>
+    <td width="50%"><img src="docs/images/screenshots/project-zh.png" alt="带分组标题的项目" /><br /><sub><b>项目</b>：用分组标题划分阶段，截止日期一目了然</sub></td>
+    <td width="50%"><img src="docs/images/screenshots/task-zh.png" alt="展开的任务" /><br /><sub><b>任务</b>：备注、检查清单、标签、日期、附件都在原地编辑</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/images/screenshots/upcoming-zh.png" alt="计划视图" /><br /><sub><b>计划</b>：按天排开接下来要做的事</sub></td>
+    <td width="50%"><img src="docs/images/screenshots/calendar-zh.png" alt="日历视图" /><br /><sub><b>日历</b>：整月安排一眼看清</sub></td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/images/screenshots/project-dark-zh.png" alt="深色模式" /><br /><sub><b>深色模式</b>：跟随系统，也可以手动切换</sub></td>
+  </tr>
+</table>
 
-## 环境要求
+## 功能
 
-- Node.js 22
-- pnpm 9（通过 `corepack enable` 启用）
-- PostgreSQL 17（或使用附带的 `docker-compose.yml`）
+### 整理
 
-## 快速开始
+- **区域、项目、任务。** 区域是生活中的几大块（工作、个人、健康）；项目是区域里有终点的目标；任务是具体的一步。
+- **分组标题**把长项目拆成几个阶段。
+- **检查清单**把一个任务拆成小步骤，不必升级成项目。
+- **标签**支持颜色和多层嵌套。按标签筛选时会连同子标签一起匹配，任务也会继承所属项目和区域的标签。
+- **附件**：把文件拖到任务上即可添加，图片可以直接预览。
+- **复制**（⌘D）任意任务或项目，拿来当模板用。
 
-### 1. 安装依赖
+### 计划
 
-```bash
-pnpm install
-```
+- **收件箱**收下所有还没整理的想法。
+- **今天**、**计划**、**随时**、**某天**按你打算什么时候做来展示任务。计划日期过了的任务会留在「今天」，不会堆成一片「逾期」。
+- **截止日期**和计划日期分开设置，带倒计时，到期变红。
+- **日历**展示整月安排。
+- **重复任务和重复项目**：每天、每周指定星期几、每月、每年。可以从计划日期算下一次，也可以从完成那天算；需要时可以单独跳过一次。
+- **提醒**在桌面端和 Android 上以系统通知弹出，通知里可以直接完成或稍后提醒。
+- **回顾**按你为每个项目、区域设定的周期，逐个带你过一遍，避免计划过时。
+- **日志**记录所有完成的事；**废纸篓**保存删除的内容，直到你清空它。
 
-### 2. 配置环境变量
+### 更高效
 
-后端 —— `packages/backend/.env`：
+- **快速添加**：在桌面任意位置按 ⌘⇧Space / Ctrl+Shift+Space 记下任务，Taskora 缩在托盘里也行。
+- **多选与拖放**：一次把多个任务拖进项目、分组标题，或拖到「计划」里的某一天。
+- **搜索**区域、项目和任务，可以用标签缩小范围。
+- **助手**（可选）：用对话的方式新建、整理、查找任务。使用你自己的 API Key，支持任何 OpenAI 兼容接口，Key 加密保存在你的服务器上。
+- **简体中文和英文**界面。
 
-```env
-DATABASE_URL=postgresql://taskora:taskora@localhost:5432/taskora?schema=public
-JWT_SECRET=your-secret-here
-# 可选：附件文件的存放目录，缺省为 packages/backend/data/blobs
-BLOB_STORAGE_DIR=./data/blobs
-```
+## 下载客户端
 
-前端 —— `packages/frontend/.env`：
+从 [**GitHub Releases**](https://github.com/MaplumeX/Taskora/releases/latest) 下载最新版本。
 
-```env
-VITE_API_URL=http://localhost:3000/api/v1
-```
+| 平台 | 文件 |
+|---|---|
+| macOS（Apple 芯片） | `Taskora_x.y.z_aarch64.dmg` |
+| Windows（x64） | `Taskora_x.y.z_x64-setup.exe` |
+| Linux（x64） | `Taskora_x.y.z_amd64.AppImage` |
+| Android（arm64） | `Taskora-vx.y.z.apk` |
+| 网页版 | 随服务器一起提供，用任意现代浏览器打开即可 |
 
-使用 Docker Compose 时，Compose 读取仓库根目录的 `.env`。请从模板创建它；不要直接复用后端的 `.env`，因为容器内的数据库主机名是 `postgres` 而不是 `localhost`：
+桌面端和 Android 首次启动时会要求填写**服务器地址**：你的 Taskora 服务器网址加上 `/api/v1`，例如 `https://tasks.example.com/api/v1`。
 
-```bash
-cp .env.example .env
-```
+> [!NOTE]
+> 客户端暂未做代码签名，首次打开时系统会给出警告：
+>
+> - **macOS**：在「应用程序」里右键 Taskora →「打开」→「打开」。如果提示应用已损坏，运行 `xattr -dr com.apple.quarantine /Applications/Taskora.app`。
+> - **Windows**：在 SmartScreen 弹窗中点「更多信息」→「仍要运行」。
+> - **Linux**：先 `chmod +x Taskora_*.AppImage`，再运行。
+> - **Android**：允许浏览器或文件管理器安装未知来源应用。
+>
+> 目前还没有自动更新。升级时下载新版本覆盖安装即可，数据不会丢失。
 
-启动共享环境前，请修改 `.env` 中的 `POSTGRES_PASSWORD` 和 `JWT_SECRET`。
+## 部署服务器
 
-### 3. 初始化数据库
+服务器负责保存数据、同步各设备，并提供网页版。你需要一台装有 Docker 的机器。
 
-启动 PostgreSQL（compose 文件已包含，也可自行运行）：
-
-```bash
-docker compose up -d postgres
-```
-
-执行迁移并生成 Prisma client：
-
-```bash
-pnpm --filter @taskora/backend exec prisma migrate dev
-pnpm --filter @taskora/backend exec prisma generate
-```
-
-可选：加载种子数据：
+**1. 获取配置文件**
 
 ```bash
-pnpm --filter @taskora/backend exec prisma db seed
-# 演示账号：test@example.com / password123
+mkdir taskora && cd taskora
+curl -O https://raw.githubusercontent.com/MaplumeX/Taskora/main/docker-compose.yml
+curl -o .env https://raw.githubusercontent.com/MaplumeX/Taskora/main/.env.example
 ```
 
-### 4. 启动开发服务器
+**2. 编辑 `.env`**，至少改掉下面几项：
+
+| 变量 | 说明 |
+|---|---|
+| `POSTGRES_PASSWORD` | 数据库密码 |
+| `JWT_SECRET` | 用于签发登录会话，请填一串足够长的随机字符 |
+| `AGENT_ENCRYPTION_KEY` | 用于加密助手的 API Key，用 `openssl rand -hex 32` 生成 |
+| `NODE_ENV` | 改为 `production` |
+
+**3. 启动**
 
 ```bash
-pnpm dev
+docker compose up -d
 ```
 
-- 前端：http://localhost:5173
-- 后端 API：http://localhost:3000/api/v1
+打开 <http://localhost:7646> 注册账号。桌面端和 Android 的服务器地址填 `http://<你的服务器>:7646/api/v1`。
 
-## 常用脚本
+默认端口只绑定在 `127.0.0.1`。要从其他设备访问，请用反向代理（Caddy、nginx、Traefik 等）配好 HTTPS 并转发到 `7646` 端口。
 
-在仓库根目录执行：
-
-| 命令 | 说明 |
-| --- | --- |
-| `pnpm dev` | 并行启动所有包（watch 模式） |
-| `pnpm typecheck` | 全包类型检查 |
-| `pnpm test` | 跨包运行测试 |
-| `pnpm lint` | 代码检查 |
-| `pnpm format` | Prettier 格式化 |
-
-后端专用命令（通过 `pnpm --filter @taskora/backend exec ...` 执行）：
-
-- `prisma migrate dev` — 创建/应用迁移
-- `prisma generate` — 重新生成 Prisma client
-- `prisma db seed` — 加载种子数据
-
-## 桌面客户端
-
-预编译的桌面安装包发布在 [GitHub Releases](https://github.com/maplumex/taskora/releases)，对应 `v*` tag（与镜像发版同一 tag）：
-
-| 平台 | 产物 |
-| --- | --- |
-| macOS（Apple Silicon 与 Intel） | `Taskora_x.y.z_aarch64.dmg` / `_x64.dmg` |
-| Windows | `Taskora_x.y.z_x64-setup.exe`（NSIS） |
-| Linux | `Taskora_x.y.z_amd64.AppImage` |
-
-首次启动时配置自托管服务器地址（API 基础地址，如 `https://taskora.example.com/api/v1`）并登录。Windows 将访问令牌和刷新令牌一起保存到系统 DPAPI 加密的本地文件（通常为 `%LOCALAPPDATA%\app.taskora.desktop\session.dpapi`）；macOS / Linux 使用系统钥匙串。令牌不以明文落盘，也不保存在浏览器存储中。旧版系统凭据会自动迁移。
-
-### 未签名安装包绕过方法
-
-V1 安装包**未做代码签名**，首次启动时两个平台都会警告：
-
-- **macOS Gatekeeper**：右键点击应用 → 「打开」→ 对话框中再点「打开」（或系统设置 → 隐私与安全性 → 「仍要打开」）。只需一次。
-- **Windows SmartScreen**：点「更多信息」→ 「仍要运行」。
-- **Linux**：AppImage 不受影响；赋予可执行权限（`chmod +x`）后运行。
-
-待有真实用户后再购证书做签名与自动更新；在此之前请手动从 Releases 下载新版。
-
-### 从源码构建
+**升级**
 
 ```bash
-# Linux：先安装 webkit2gtk 等系统依赖，见
-# https://tauri.app/start/prerequisites/
-pnpm --filter @taskora/desktop dev    # 开发窗口
-pnpm --filter @taskora/desktop build  # 当前平台安装包
+docker compose pull && docker compose up -d
 ```
 
-## Android 客户端
+想固定在某个版本，在 `.env` 里设置 `IMAGE_TAG`，例如 `IMAGE_TAG=v0.8.0`。
 
-Android 版与桌面安装包一同发布在 [GitHub Releases](https://github.com/maplumex/taskora/releases)：每个 `v*` tag 下的 `#Taskora-x.y.z.apk` 附件。它与桌面端同为完整平价的 local-first 客户端（全量本地副本、断网捕获、前台同步）——不是伴侣应用。
+**备份**
 
-### 侧载安装
+数据存放在两个 Docker 卷里：`pgdata`（数据库）和 `blobs`（附件文件）。备份时两者要一起备份。
 
-1. 从 Release 页面下载 APK（直接在手机上下载，或传输到手机）。
-2. 点击安装。系统会提示「未知来源应用」——在系统弹窗里允许本次安装（不同 Android 版本入口略有差异，一般在 *设置 → 应用 → 特殊权限 → 安装未知应用*）。不依赖 Play Services（无 FCM，同步在前台进行），无 Google 服务的 ROM 也可用。
-3. 启动后先配置自托管服务器地址，再登录现有账号。
+## 常见问题
 
-### 升级
+**不部署服务器能用吗？**
+不能。客户端可以离线使用，但登录和多设备同步都需要服务器。
 
-- 直接用新版 APK 覆盖安装，数据（本地副本）保留。
-- 覆盖安装依赖**同一签名密钥**：项目的 release keystore 永不轮换。若升级安装失败，请确认下载的是 Releases 的官方 APK——切勿先卸载，卸载会删除本地副本（未同步的离线编辑将丢失）。
+**有 iPhone 版吗？**
+暂时没有。在 iOS 上可以用 Safari 打开网页版。
 
-### 从源码构建
+**一定要配置助手吗？**
+不需要。在「设置 → 助手」里填入 API Key 之前，它不会打扰你。
 
-```bash
-# 需要 Android Studio（SDK + NDK + JDK 17）与 Android Rust target：
-# https://tauri.app/start/prerequisites/
-rustup target add aarch64-linux-android armv7-linux-androideabi \
-  i686-linux-android x86_64-linux-android
-pnpm --filter @taskora/mobile exec tauri android init   # 生成 gen/android
-pnpm --filter @taskora/mobile dev    # 模拟器 / 真机运行
-pnpm --filter @taskora/mobile build  # 签名 APK（debug keystore）
-```
+## 开发
 
-`dev` 和 `build` 脚本会先把仓库内的 Taskora 启动图标复制到生成的 Android 工程。如果直接运行 `tauri android build`，请在 `tauri android init` 后先从仓库根目录执行 `node scripts/sync-android-icons.mjs`。
-
-## Docker 部署
-
-仓库提供 `docker-compose.yml`，用于本地全栈运行：
-
-```bash
-test -f .env || cp .env.example .env  # 首次运行时创建，并修改其中的密钥
-docker compose up -d --build
-```
-
-启动的服务：
-
-- `postgres`：端口 5432
-- `backend`：端口 3000（启动时自动执行 `prisma migrate deploy`）
-- `frontend`：端口 7646（nginx 托管 SPA，并将 `/api` 反向代理到后端）
-
-Compose 会等待 PostgreSQL 健康检查通过后再启动后端。修改 `VITE_API_URL` 后，需要使用 `--build` 重新构建前端镜像。
-
-任务附件的文件内容存在 `blobs` 卷里（数据库只存附件的元数据）。备份与迁移时，`pgdata` 和 `blobs` 两个卷要一起处理。
-
-### 手动构建镜像
-
-```bash
-docker build -f packages/backend/Dockerfile  -t taskora-backend  .
-docker build -f packages/frontend/Dockerfile -t taskora-frontend .
-```
-
-## CI/CD
-
-GitHub Actions 工作流位于 `.github/workflows/`：
-
-- **CI**（`ci.yml`）—— 每次 PR 和 `main` 分支 push 时触发：安装、类型检查、测试、桌面端 Rust 检查（仅 Linux），并验证两个 Docker 镜像可成功构建。
-- **Release**（`release.yml`）—— 匹配 `v*` 的 git tag 触发：构建并推送镜像到 GHCR。
-  - `ghcr.io/maplumex/taskora-backend:vX.Y.Z` / `:latest`
-  - `ghcr.io/maplumex/taskora-frontend:vX.Y.Z` / `:latest`
-- **桌面端 Release**（`desktop-release.yml`）—— 同样由 `v*` tag 触发：三平台安装包（dmg / NSIS exe / AppImage）构建并上传到 GitHub Release。桌面端版本号与仓库其余包统一。V1 不签名、无自动更新。
-- **Android Release**（`android-release.yml`）—— 同样由 `v*` tag 触发：签名构建 Android APK（release keystore 经 secrets 注入）并挂到 GitHub Release 供侧载。签名密钥永不轮换——轮换会迫使所有用户卸载重装（丢失本地副本）。
-
-完整的版本管理、分支策略与多客户端演进计划详见 [docs/versioning-and-deployment.md](docs/versioning-and-deployment.md)。
-
-## 许可
-
-私有项目，保留所有权利。
+Taskora 是一个 pnpm monorepo（React + Vite、NestJS + PostgreSQL、Tauri 2）。领域术语见 [`CONTEXT.md`](CONTEXT.md)，架构决策见 [`docs/adr/`](docs/adr/)，更新记录见 [`CHANGELOG.md`](CHANGELOG.md)。
