@@ -11,3 +11,10 @@
 - 这次浏览器验证检查行为与加载顺序，不是改动前后的性能基准，不能据此承诺固定启动耗时或所有首次点击都零等待。
 
 临时验证脚本和证据：`/tmp/taskora-navigation-preload/`；包括 `browser-check.mjs`、`browser-results.json` 和两端构建日志。
+
+## CI 回归修复
+
+- [CI 37887386653](https://github.com/MaplumeX/Taskora/actions/runs/37887386653) 在 UI 测试中失败：MainContent 的 4 个测试没有 QueryClientProvider，未启用预加载的 NavigationWarmup 仍调用 useQueryClient。首次验证仅运行相关测试，遗漏了这组既有测试；本地全量测试复现了相同失败。
+- 将启用后的预加载逻辑拆入子组件；未配置 NavigationPreloadProvider 时直接返回空内容，无需 QueryClient。新增不提供任何 Provider 时不报错、不加载模块的回归测试。
+- 修复后 UI 全量 81 个文件、938 项测试通过；UI TypeScript、变更文件 ESLint 和 diff 空白检查通过。本轮桌面全量 59 项测试及移动端 TypeScript 检查也通过。
+- 修复后的全量 UI 日志：`/tmp/taskora-preload-ui-fixed.log`。远端 CI 尚未运行此修复。

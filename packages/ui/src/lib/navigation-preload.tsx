@@ -20,9 +20,12 @@ export function NavigationPreloadProvider({
 /** 位于页面 Suspense 内：当前页的代码提交后才开始等待首屏数据和空闲。 */
 export function NavigationWarmup() {
   const platform = useContext(PreloadContext);
+  return platform ? <ActiveNavigationWarmup platform={platform} /> : null;
+}
+
+function ActiveNavigationWarmup({ platform }: { platform: PreloadPlatform }) {
   const client = useQueryClient();
   useEffect(() => {
-    if (!platform) return;
     const common = [
       pageLoaders.ProjectDetail,
       pageLoaders.AreaDetail,

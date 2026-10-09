@@ -79,6 +79,13 @@ function renderWarmup(platform: 'desktop' | 'web', child = <NavigationWarmup />)
 }
 
 describe('startup preloading', () => {
+  it('does not require a query client or load modules when preloading is not enabled', async () => {
+    const view = render(<NavigationWarmup />);
+    await act(() => vi.advanceTimersByTimeAsync(20_000));
+    expect(view.container).toBeEmptyDOMElement();
+    for (const preload of state.modules.values()) expect(preload).not.toHaveBeenCalled();
+  });
+
   it('waits for the current page module and data before starting background loads', async () => {
     let finish!: () => void;
     let done = false;
