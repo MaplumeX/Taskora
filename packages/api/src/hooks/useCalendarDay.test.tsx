@@ -1,10 +1,12 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { usePreferencesStore } from '@/stores/preferences.store';
 import { useCalendarDay } from './useCalendarDay';
 
 const initial = usePreferencesStore.getState();
 afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
   vi.useRealTimers();
   usePreferencesStore.setState({
     timeZone: initial.timeZone,
@@ -13,6 +15,26 @@ afterEach(() => {
 });
 
 describe('账号日历时钟', () => {
+  it('后台跨天后仅收到 visibilitychange 也立即更新，卸载后移除监听', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-08T15:59:50Z'));
+    usePreferencesStore.setState({
+      timeZone: 'Asia/Shanghai',
+      legacyDateTimeZone: 'Asia/Shanghai',
+    });
+    const remove = vi.spyOn(document, 'removeEventListener');
+    const { result, unmount } = renderHook(() => useCalendarDay());
+    expect(result.current).toContain('2026-10-08');
+
+    act(() => {
+      vi.setSystemTime(new Date('2026-10-09T01:00:00Z'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(result.current).toContain('2026-10-09');
+    unmount();
+    expect(remove).toHaveBeenCalledWith('visibilitychange', expect.any(Function));
+  });
+
   it('时区变更立即更新，跨午夜或恢复前台时更新，卸载后清除唯一计时器', () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-09-23T15:59:50Z'));

@@ -6,6 +6,7 @@ import { updatePreferences } from '@/api/users.api';
 import { useFeedQuery } from '@/hooks/useFeed';
 import { hydrateFromServer, usePreferencesStore } from '@/stores/preferences.store';
 import { currentTimeZone, toDateKey, todayDateKey } from '@/utils/date';
+import { useCalendarDay } from './useCalendarDay';
 
 /**
  * New in Today（新到）：Today 中上次看过 Today 之后才**随日期到来**进入
@@ -49,17 +50,22 @@ function markTodayReviewed(): void {
  * 访问内黄点保留，离开 Today 后不再出现。停留跨过零点时离开再推进一次。
  */
 export function useNewInTodayKeys(items: FeedItem[]): Set<string> {
+  const calendarDay = useCalendarDay();
   const [baseline] = useState(() => usePreferencesStore.getState().todayReviewedOn);
   useEffect(() => {
     markTodayReviewed();
     return markTodayReviewed;
   }, []);
-  return useMemo(() => newInTodayKeys(items, baseline), [items, baseline]);
+  return useMemo(() => newInTodayKeys(items, baseline), [items, baseline, calendarDay]);
 }
 
 /** 侧边栏：Today 中是否有尚未看过的新到条目。 */
 export function useHasNewInToday(): boolean {
+  const calendarDay = useCalendarDay();
   const { data: items = [] } = useFeedQuery('today');
   const reviewedOn = usePreferencesStore((s) => s.todayReviewedOn);
-  return useMemo(() => items.some((item) => isNewInToday(item, reviewedOn)), [items, reviewedOn]);
+  return useMemo(
+    () => items.some((item) => isNewInToday(item, reviewedOn)),
+    [items, reviewedOn, calendarDay],
+  );
 }
