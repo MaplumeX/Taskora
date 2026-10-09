@@ -15,12 +15,14 @@ function subscribe(listener: () => void): () => void {
   if (listeners.size === 1) {
     timer = setInterval(notify, 30_000);
     window.addEventListener('focus', notify);
+    document.addEventListener('visibilitychange', notify);
   }
   return () => {
     listeners.delete(listener);
     if (listeners.size === 0) {
       clearInterval(timer);
       window.removeEventListener('focus', notify);
+      document.removeEventListener('visibilitychange', notify);
     }
   };
 }
