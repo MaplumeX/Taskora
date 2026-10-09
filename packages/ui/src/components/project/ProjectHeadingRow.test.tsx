@@ -1,10 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectHeadingResponseDto } from '@taskora/shared';
 import { HeadingStatus } from '@taskora/shared';
 
 import { useUiInteractionStore } from '@taskora/api';
+import { mockDesktop } from '@/test/media';
 import { ProjectHeadingRow } from './ProjectHeadingRow';
 
 vi.mock('@taskora/api', async (importOriginal) => ({
@@ -48,9 +49,27 @@ const heading: ProjectHeadingResponseDto = {
 };
 
 describe('ProjectHeadingRow', () => {
+  let restoreMedia: () => void;
   beforeEach(() => {
     vi.clearAllMocks();
     useUiInteractionStore.setState({ pendingAutoEditId: null });
+    restoreMedia = mockDesktop(true);
+  });
+  afterEach(() => restoreMedia());
+
+  it('opens a bottom action sheet on narrow screens', async () => {
+    restoreMedia();
+    restoreMedia = mockDesktop(false);
+    const user = userEvent.setup();
+    render(<ProjectHeadingRow heading={heading} />);
+
+    await user.click(screen.getByRole('button', { name: /Heading actions|项目分组标题操作/ }));
+    const sheet = await screen.findByRole('dialog', { name: 'Build' });
+    expect(screen.queryByRole('menuitem')).not.toBeInTheDocument();
+
+    await user.click(within(sheet).getByRole('button', { name: /^Archive$|^归档$/ }));
+    expect(mutationMocks.archive).toHaveBeenCalledWith('heading-1', expect.any(Object));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
   it('provides an accessible inline editor and commits a renamed heading', async () => {

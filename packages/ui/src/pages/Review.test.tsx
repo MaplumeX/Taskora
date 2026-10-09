@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -194,6 +194,30 @@ describe('Review 页面', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Review Settings' }));
     expect(screen.getByRole('button', { name: 'Increase review interval' })).toBeInTheDocument();
     expect(screen.getByText('Last reviewed: never')).toBeInTheDocument();
+  });
+
+  it('窄屏：回顾设置与延后以字段卡片打开；延后选定后关闭并前进', () => {
+    renderReview();
+    fireEvent.click(screen.getByText('p1'));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Review Settings' }));
+    const settings = screen.getByRole('dialog', { name: 'Review Settings' });
+    expect(within(settings).getByText('Last reviewed: never')).toBeInTheDocument();
+    fireEvent.keyDown(settings, { key: 'Escape' });
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Postpone/ }));
+    const postpone = screen.getByRole('dialog', { name: 'Postpone' });
+    fireEvent.click(within(postpone).getByRole('button', { name: /In 1 week/ }));
+    expect(updateProject).toHaveBeenCalledWith(
+      {
+        id: 'p1',
+        data: { nextReviewDate: addReviewInterval(todayDateKey(), { unit: 'week', count: 1 }) },
+      },
+      expect.anything(),
+    );
+    expect(path()).toBe('/review/area/a1');
+    expect(screen.queryByRole('dialog', { name: 'Postpone' })).not.toBeInTheDocument();
   });
 
   it('延后快捷键打开延后菜单', () => {

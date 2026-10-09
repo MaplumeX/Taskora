@@ -29,6 +29,9 @@ import {
 } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
 import { cn } from '@/lib/utils';
+import { useIsDesktop } from '../../lib/use-media-query';
+import { MenuItems, type MenuItem } from '@/components/common/MenuItems';
+import { ActionSheet, ActionSheetContent, ActionSheetTrigger } from '@/components/ui/action-sheet';
 
 interface Props {
   heading: ProjectHeadingResponseDto;
@@ -52,6 +55,7 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
   const convertHeading = useConvertProjectHeadingToProject(heading.projectId);
   const archiveHeading = useArchiveProjectHeading(heading.projectId);
   const unarchiveHeading = useUnarchiveProjectHeading(heading.projectId);
+  const isDesktop = useIsDesktop();
 
   React.useEffect(() => {
     if (!autoEdit) return;
@@ -86,6 +90,57 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
       },
     );
   };
+
+  const trigger = (
+    <Button
+      type="button"
+      variant="ghost"
+      size="icon"
+      aria-label={t('project:headingActions')}
+      className="h-7 w-7 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 max-md:h-11 max-md:w-11 max-md:opacity-100"
+    >
+      <MoreHorizontal className="h-4 w-4" />
+    </Button>
+  );
+  const items: MenuItem[] = [
+    {
+      icon: FolderInput,
+      label: t('project:convertToProject'),
+      disabled: convertHeading.isPending,
+      onSelect: () =>
+        convertHeading.mutate(heading.id, {
+          onSuccess: () => toast.success(t('project:convertSuccess')),
+          onError: () => toast.error(t('project:convertFailed')),
+        }),
+    },
+    archived
+      ? {
+          icon: RotateCcw,
+          label: t('project:unarchive'),
+          disabled: unarchiveHeading.isPending,
+          onSelect: () =>
+            unarchiveHeading.mutate(heading.id, {
+              onSuccess: () => toast.success(t('project:unarchiveSuccess')),
+              onError: () => toast.error(t('project:unarchiveFailed')),
+            }),
+        }
+      : {
+          icon: Archive,
+          label: t('project:archive'),
+          disabled: archiveHeading.isPending,
+          onSelect: () =>
+            archiveHeading.mutate(heading.id, {
+              onSuccess: () => toast.success(t('project:archiveSuccess')),
+              onError: () => toast.error(t('project:archiveFailed')),
+            }),
+        },
+    {
+      icon: Trash2,
+      label: t('project:deleteHeading'),
+      destructive: true,
+      onSelect: () => setConfirmOpen(true),
+    },
+  ];
 
   return (
     <>
@@ -141,67 +196,34 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
             {heading.title || t('project:headingPlaceholder')}
           </button>
         )}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              size="icon"
-              aria-label={t('project:headingActions')}
-              className="h-7 w-7 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100 max-md:h-11 max-md:w-11 max-md:opacity-100"
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem
-              disabled={convertHeading.isPending}
-              onSelect={() =>
-                convertHeading.mutate(heading.id, {
-                  onSuccess: () => toast.success(t('project:convertSuccess')),
-                  onError: () => toast.error(t('project:convertFailed')),
-                })
-              }
-            >
-              <FolderInput className="h-4 w-4" />
-              {t('project:convertToProject')}
-            </DropdownMenuItem>
-            {archived ? (
-              <DropdownMenuItem
-                disabled={unarchiveHeading.isPending}
-                onSelect={() =>
-                  unarchiveHeading.mutate(heading.id, {
-                    onSuccess: () => toast.success(t('project:unarchiveSuccess')),
-                    onError: () => toast.error(t('project:unarchiveFailed')),
-                  })
-                }
-              >
-                <RotateCcw className="h-4 w-4" />
-                {t('project:unarchive')}
-              </DropdownMenuItem>
-            ) : (
-              <DropdownMenuItem
-                disabled={archiveHeading.isPending}
-                onSelect={() =>
-                  archiveHeading.mutate(heading.id, {
-                    onSuccess: () => toast.success(t('project:archiveSuccess')),
-                    onError: () => toast.error(t('project:archiveFailed')),
-                  })
-                }
-              >
-                <Archive className="h-4 w-4" />
-                {t('project:archive')}
-              </DropdownMenuItem>
-            )}
-            <DropdownMenuItem
-              className="text-destructive focus:bg-destructive focus:text-destructive-foreground"
-              onSelect={() => setConfirmOpen(true)}
-            >
-              <Trash2 className="h-4 w-4" />
-              {t('project:deleteHeading')}
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {isDesktop ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              {items.map(({ icon: Icon, label, disabled, destructive, onSelect }) => (
+                <DropdownMenuItem
+                  key={label}
+                  disabled={disabled}
+                  className={cn(
+                    destructive &&
+                      'text-destructive focus:bg-destructive focus:text-destructive-foreground',
+                  )}
+                  onSelect={onSelect}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : (
+          <ActionSheet>
+            <ActionSheetTrigger asChild>{trigger}</ActionSheetTrigger>
+            <ActionSheetContent title={heading.title || t('project:headingPlaceholder')}>
+              <MenuItems items={items} sheet />
+            </ActionSheetContent>
+          </ActionSheet>
+        )}
       </div>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>

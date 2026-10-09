@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes, useParams } from 'react-router-dom';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import React from 'react';
 
 import type { ProjectResponseDto } from '@taskora/shared';
@@ -10,6 +10,7 @@ import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
 
 import { i18n } from '@taskora/api';
 
+import { mockDesktop } from '@/test/media';
 import { ProjectContextMenu, ProjectMoreMenu } from './ProjectContextMenu';
 
 vi.mock('@taskora/api', async (importOriginal) => ({
@@ -186,6 +187,29 @@ describe('项目移动', () => {
       { id: 'project-1', data: { areaId: 'home' } }, expect.anything(),
     );
     expect(screen.queryByRole('combobox')).toBeNull();
+  });
+
+  it('窄屏更多菜单为底部动作面板，选择器为字段卡片', async () => {
+    render(<MemoryRouter><ProjectMoreMenu project={baseProject} current={baseProject} /></MemoryRouter>);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'More' }));
+    await screen.findByRole('dialog', { name: baseProject.title });
+    await user.click(screen.getByRole('button', { name: 'Move' }));
+    expect(await screen.findByRole('dialog', { name: 'Move' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: baseProject.title })).toBeNull();
+  });
+
+  it('桌面更多菜单仍为浮层', async () => {
+    onTestFinished(mockDesktop(true));
+    render(<MemoryRouter><ProjectMoreMenu project={baseProject} current={baseProject} /></MemoryRouter>);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'More' }));
+    await user.click(await screen.findByRole('button', { name: 'Move' }));
+    await user.click(await screen.findByRole('option', { name: 'Home' }));
+    expect(updateMock).toHaveBeenCalledWith(
+      { id: 'project-1', data: { areaId: 'home' } }, expect.anything(),
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
   });
 });
 
