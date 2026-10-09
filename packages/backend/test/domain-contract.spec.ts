@@ -31,7 +31,7 @@ const tagRows = VIEW_CONTRACT.tags.map((tag) => ({
 const taskRows = VIEW_CONTRACT.tasks.map(({ tagIds, ...task }) => ({
   ...task,
   scheduledDate: date(task.scheduledDate),
-  dueDate: null,
+  dueDate: date(task.dueDate),
   settledAt: instant(task.settledAt),
   trashedAt: instant(task.trashedAt),
   createdAt: new Date(task.createdAt),
@@ -54,7 +54,7 @@ const projectRows = VIEW_CONTRACT.projects.map(({ tagIds, ...project }) => ({
   ...project,
   notes: null,
   scheduledDate: date(project.scheduledDate),
-  dueDate: null,
+  dueDate: date(project.dueDate),
   completedAt: instant(project.completedAt),
   trashedAt: instant(project.trashedAt),
   createdAt: new Date(project.createdAt),
@@ -109,7 +109,7 @@ describe('任务搜索契约 — hub REST 服务', () => {
   const searchRows = SEARCH_CONTRACT.tasks.map(({ tagIds, ...task }) => ({
     ...task,
     scheduledDate: date(task.scheduledDate),
-    dueDate: null,
+    dueDate: date(task.dueDate),
     settledAt: instant(task.settledAt),
     trashedAt: instant(task.trashedAt),
     createdAt: new Date(task.createdAt),

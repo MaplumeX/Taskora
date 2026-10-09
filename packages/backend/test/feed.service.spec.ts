@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { PrismaService } from '../src/prisma/prisma.service';
 import { FeedService } from '../src/feed/feed.service';
+import { formatHlc } from '@taskora/engine';
 import { TaskStatus } from '@taskora/shared';
 
 // Note: trashedAt is the sole deletion indicator now; status no longer has TRASHED.
@@ -61,6 +62,41 @@ describe('FeedService', () => {
       mockPrisma.project.groupBy.mockResolvedValue([]);
       await service.findAll(userId, 'today');
       expect(mockPrisma.project.findMany).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('findAll — Today 收录截止日期已到的条目', () => {
+    it('只有截止日期的任务进 Today，并带出截止日期的写入时刻（New in Today）', async () => {
+      const setAt = Date.parse('2026-01-01T08:00:00.000Z');
+      mockPrisma.task.findMany.mockResolvedValue([
+        {
+          id: 'due',
+          title: 'due',
+          notes: null,
+          scheduledDate: null,
+          scheduledType: 'NONE',
+          dueDate: new Date('2026-01-02T00:00:00Z'),
+          status: TaskStatus.ACTIVE,
+          bucket: 'INBOX',
+          settledAt: null,
+          trashedAt: null,
+          projectId: null,
+          headingId: null,
+          areaId: null,
+          createdAt: new Date('2026-01-01T00:00:00Z'),
+          updatedAt: new Date('2026-01-01T00:00:00Z'),
+          fieldClocks: { dueDate: formatHlc({ wallMs: setAt, counter: 0, deviceId: 'd' }) },
+          tags: [],
+        },
+      ]);
+      mockPrisma.project.findMany.mockResolvedValue([]);
+      mockPrisma.project.groupBy.mockResolvedValue([]);
+
+      const [item] = await service.findAll('user-1', 'today');
+
+      expect(item.id).toBe('due');
+      expect(item.dueSetAt).toBe('2026-01-01T08:00:00.000Z');
+      expect(item.scheduledSetAt).toBeNull();
     });
   });
 

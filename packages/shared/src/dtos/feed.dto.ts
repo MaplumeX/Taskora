@@ -5,7 +5,8 @@ import { ProjectStatus, ProjectBucket } from '../enums/project.enum';
 
 export type FeedItemType = 'task' | 'project';
 
-export type FeedView = 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
+export type FeedView =
+  'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook' | 'deadlines';
 
 export interface FeedItemBase {
   id: string;
@@ -34,6 +35,8 @@ export interface FeedItemBase {
    * （New in Today）；未知（无时钟的旧数据）为 null。
    */
   scheduledSetAt?: string | null;
+  /** 截止日期最后一次被写入的时刻，口径同 scheduledSetAt（截止日期到来进入 Today）。 */
+  dueSetAt?: string | null;
   createdAt: string;
   updatedAt: string;
   tags: TagResponseDto[];

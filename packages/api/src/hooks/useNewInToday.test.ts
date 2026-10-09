@@ -95,6 +95,49 @@ describe('isNewInToday', () => {
   });
 });
 
+describe('截止日期到来（截止日期 ≤ 今天也进 Today）', () => {
+  // 今天是上海 10-09，已确认到 10-07
+  const due = (
+    id: string,
+    dueDate: string,
+    dueSetAt?: string | null,
+    scheduledDate: string | null = null,
+  ) => ({ type: 'task', id, scheduledDate, dueDate, dueSetAt }) as FeedItem;
+
+  it('截止日期提前设好、日期到来：新到', () => {
+    expect(isNewInToday(due('a', '2026-10-09', '2026-10-01T00:00:00.000Z'), '2026-10-07')).toBe(
+      true,
+    );
+    // 写入时刻未知：只按基线
+    expect(isNewInToday(due('a', '2026-10-08'), '2026-10-07')).toBe(true);
+  });
+
+  it('当天才把截止日期设成今天、或截止日期早于已确认日期：不算', () => {
+    // 上海 10-09 08:00 才设
+    expect(isNewInToday(due('a', '2026-10-09', '2026-10-09T00:00:00.000Z'), '2026-10-07')).toBe(
+      false,
+    );
+    expect(isNewInToday(due('a', '2026-10-05'), '2026-10-07')).toBe(false);
+  });
+
+  it('计划日期在以后、截止日期今天到：按截止日期算；计划日期的未来日期本身不算', () => {
+    expect(isNewInToday(due('a', '2026-10-09', null, '2026-10-20'), '2026-10-07')).toBe(true);
+    expect(isNewInToday(due('a', '2026-10-05', null, '2026-10-20'), '2026-10-07')).toBe(false);
+  });
+
+  it('两条路径都成立时已读键用计划日期；改截止日期后新的截止日到来再算新到', () => {
+    const both = due('a', '2026-10-09', null, '2026-10-08');
+    expect(newInTodayKeys([both], '2026-10-07', ['task:a@2026-10-08']).size).toBe(0);
+    expect(newInTodayKeys([due('b', '2026-10-08')], '2026-10-07', ['task:b@2026-10-08']).size).toBe(
+      0,
+    );
+    // 已读后截止日期改到 10-09，再次到来
+    expect(newInTodayKeys([due('b', '2026-10-09')], '2026-10-07', ['task:b@2026-10-08']).size).toBe(
+      1,
+    );
+  });
+});
+
 describe('单条已读与确认', () => {
   const items = [
     item('task', 't1', '2026-10-08'),

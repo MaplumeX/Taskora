@@ -2,7 +2,7 @@ import { ProjectStatus, ScheduledType } from '@taskora/shared';
 import { Prisma } from '@prisma/client';
 
 export type ProjectView =
-  'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
+  'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook' | 'deadlines';
 
 /**
  * 视图的 SQL 粗筛（Prisma `where`）。视图规则本身在 @taskora/engine 的
@@ -22,8 +22,16 @@ export function buildProjectViewWhere(view: ProjectView): Prisma.ProjectWhereInp
       break;
     case 'today':
       where.status = ProjectStatus.ACTIVE;
-      where.scheduledType = ScheduledType.DATE;
-      where.scheduledDate = { not: null }; // Calendar predicate is applied by the caller in the account zone.
+      // 计划日期或截止日期到了都进 Today；日历判定由调用方按账号时区做。
+      // 用 AND 包一层：调用方的 where.OR（搜索词）不会被覆盖。
+      where.AND = [
+        {
+          OR: [
+            { scheduledType: ScheduledType.DATE, scheduledDate: { not: null } },
+            { dueDate: { not: null } },
+          ],
+        },
+      ];
       where.trashedAt = null;
       break;
     case 'upcoming':
@@ -42,6 +50,11 @@ export function buildProjectViewWhere(view: ProjectView): Prisma.ProjectWhereInp
       break;
     case 'logbook':
       where.status = ProjectStatus.COMPLETED;
+      where.trashedAt = null;
+      break;
+    case 'deadlines':
+      where.status = ProjectStatus.ACTIVE;
+      where.dueDate = { not: null };
       where.trashedAt = null;
       break;
   }

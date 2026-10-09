@@ -9,31 +9,57 @@ import { useUiInteractionStore } from '@/stores/uiInteraction.store';
 import { currentTimeZone, toDateKey, todayDateKey } from '@/utils/date';
 import { useCalendarDay } from './useCalendarDay';
 
+type NewInTodayItem = Pick<
+  FeedItem,
+  'type' | 'id' | 'scheduledDate' | 'scheduledSetAt' | 'dueDate' | 'dueSetAt'
+>;
+
 /**
- * New in Today（新到）：Today 中上次确认之后才**随日期到来**进入的任务/
- * 项目（参考 Things 3 的黄色 new in Today 圆点）：
- * - 计划日期晚于「最近一次确认的日期」；基线缺失（从未看过）不算；
- * - 且排期发生在计划日期之前（scheduledSetAt 的日历日早于计划日期）。
- *   当天才排到今天（或排到已过日期）的是手动放进来的，不算新到；写入时刻
- *   未知（旧数据）时只按基线判断。
- * Today feed 里的条目计划日期都已 ≤ 今天。
+ * 某个日期字段让条目「随日期到来」进入 Today：日期已到（≤ 今天）、晚于
+ * 「最近一次确认的日期」，且该字段在这天之前就写好了（setAt 的日历日早于
+ * 它）。当天才设成今天（或已过日期）的是手动放进来的，不算；写入时刻未知
+ * （旧数据）时只按基线判断。
  */
-export function isNewInToday(
-  item: Pick<FeedItem, 'scheduledDate' | 'scheduledSetAt'>,
-  reviewedOn: string | null,
-): boolean {
-  if (reviewedOn === null || !item.scheduledDate) return false;
-  const day = toDateKey(item.scheduledDate);
-  if (day <= reviewedOn) return false;
-  if (!item.scheduledSetAt) return true;
-  return instantDateKey(item.scheduledSetAt, currentTimeZone()) < day;
+function arrivedOn(
+  date: string | null | undefined,
+  setAt: string | null | undefined,
+  reviewedOn: string,
+  today: string,
+): string | null {
+  if (!date) return null;
+  const day = toDateKey(date);
+  if (day > today || day <= reviewedOn) return null;
+  if (setAt && instantDateKey(setAt, currentTimeZone()) >= day) return null;
+  return day;
 }
 
-type NewInTodayItem = Pick<FeedItem, 'type' | 'id' | 'scheduledDate' | 'scheduledSetAt'>;
+/**
+ * 让条目成为新到的那个日期，不是新到为 null。计划日期、截止日期两条路径
+ * 任一成立即可，都成立时取计划日期（单条已读键按它记）。基线缺失（从未
+ * 看过）不算。
+ */
+function newInTodayDate(item: NewInTodayItem, reviewedOn: string | null): string | null {
+  if (reviewedOn === null) return null;
+  const today = todayDateKey();
+  return (
+    arrivedOn(item.scheduledDate, item.scheduledSetAt, reviewedOn, today) ??
+    arrivedOn(item.dueDate, item.dueSetAt, reviewedOn, today)
+  );
+}
 
-/** 条目的单条已读键（新到条目都有计划日期）。 */
-function seenKeyOf(item: NewInTodayItem): string {
-  return todaySeenKey(item.type, item.id, toDateKey(item.scheduledDate!));
+/**
+ * New in Today（新到）：Today 中上次确认之后才**随日期到来**进入的任务/
+ * 项目（参考 Things 3 的黄色 new in Today 圆点）——计划日期或截止日期
+ * 到来，规则见 arrivedOn。
+ */
+export function isNewInToday(item: NewInTodayItem, reviewedOn: string | null): boolean {
+  return newInTodayDate(item, reviewedOn) !== null;
+}
+
+/** 新到条目的单条已读键：按让它进入 Today 的那个日期记；不是新到为 null。 */
+function seenKeyOf(item: NewInTodayItem, reviewedOn: string | null): string | null {
+  const day = newInTodayDate(item, reviewedOn);
+  return day === null ? null : todaySeenKey(item.type, item.id, day);
 }
 
 /**
@@ -48,7 +74,10 @@ export function newInTodayKeys(
   const seen = new Set(seenKeys);
   return new Set(
     items
-      .filter((item) => isNewInToday(item, reviewedOn) && !seen.has(seenKeyOf(item)))
+      .filter((item) => {
+        const key = seenKeyOf(item, reviewedOn);
+        return key !== null && !seen.has(key);
+      })
       .map((item) => `${item.type}:${item.id}`),
   );
 }
@@ -106,10 +135,10 @@ function useUnreadNewInToday(items: FeedItem[]): Set<string> {
     unread = new Map(
       items.flatMap((item) => {
         const feedKey = `${item.type}:${item.id}`;
-        return keys.has(feedKey) ? [[feedKey, seenKeyOf(item)] as const] : [];
+        return keys.has(feedKey) ? [[feedKey, seenKeyOf(item, reviewedOn)!] as const] : [];
       }),
     );
-  }, [items, keys]);
+  }, [items, keys, reviewedOn]);
 
   // 展开任务（任一视图、任一入口）即已读。
   useEffect(

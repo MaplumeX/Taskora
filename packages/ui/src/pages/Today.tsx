@@ -35,12 +35,13 @@ export default function Today() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        // Today 视图本身即日期语境,行上省略日期标记(计划日期已过的任务同此——
-        // When 永不逾期,一律按「今天」对待,参考 Things 3)。
+        // Today 视图本身即日期语境,行上省略黄星(计划日期已过的任务同此——
+        // When 永不逾期,一律按「今天」对待,参考 Things 3);截止日期带进来、
+        // 计划在以后的条目仍显示灰色日期 chip。
         <TimeViewFeedList
           items={visible}
           emptyHint={filtering ? t('tag:filterEmpty') : t('task:todayEmpty')}
-          showScheduledBadge={false}
+          showScheduledBadge="future"
           freshKeys={freshKeys}
         />
       )}

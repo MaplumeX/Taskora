@@ -13,7 +13,8 @@ import {
 import { Prisma } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 
-export type TaskView = 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
+export type TaskView =
+  'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook' | 'deadlines';
 
 /** 已了结（Settled）状态白名单（ADR 0006）：单一来源在 @taskora/shared，前后端共用。 */
 export const SETTLED_STATUSES = SETTLED_TASK_STATUSES;
@@ -39,8 +40,16 @@ export function buildTaskViewWhere(view: TaskView): Prisma.TaskWhereInput {
       break;
     case 'today':
       where.status = TaskStatus.ACTIVE;
-      where.scheduledType = ScheduledType.DATE;
-      where.scheduledDate = { not: null }; // Calendar predicate is applied by the caller in the account zone.
+      // 计划日期或截止日期到了都进 Today；日历判定由调用方按账号时区做。
+      // 用 AND 包一层：调用方的 where.OR（搜索词）不会被覆盖。
+      where.AND = [
+        {
+          OR: [
+            { scheduledType: ScheduledType.DATE, scheduledDate: { not: null } },
+            { dueDate: { not: null } },
+          ],
+        },
+      ];
       where.trashedAt = null;
       break;
     case 'upcoming':
@@ -66,6 +75,11 @@ export function buildTaskViewWhere(view: TaskView): Prisma.TaskWhereInput {
     case 'logbook':
       // Logbook = 已了结（完成 + 取消）任务的档案，按了结时间排序。
       where.status = { in: [...SETTLED_STATUSES] };
+      where.trashedAt = null;
+      break;
+    case 'deadlines':
+      where.status = TaskStatus.ACTIVE;
+      where.dueDate = { not: null };
       where.trashedAt = null;
       break;
   }

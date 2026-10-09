@@ -50,6 +50,7 @@ function HomeRow({
   iconClassName,
   label,
   count,
+  dueCount = 0,
   hasNew = false,
 }: {
   to: string;
@@ -57,6 +58,8 @@ function HomeRow({
   iconClassName?: string;
   label: string;
   count?: number;
+  /** Today 中截止日期已到（今天或已过）的条目数：灰色计数前的红色计数。 */
+  dueCount?: number;
   /** Today 有尚未看过的新到条目：计数旁带黄点（New in Today）。 */
   hasNew?: boolean;
 }) {
@@ -69,9 +72,17 @@ function HomeRow({
           <NewInTodayDot className="left-1/2" />
         </span>
       )}
+      {dueCount > 0 && (
+        <span
+          aria-hidden
+          className="rounded-full bg-deadline px-1.5 text-sm font-medium tabular-nums text-white"
+        >
+          {dueCount > 99 ? '99+' : dueCount}
+        </span>
+      )}
       {count !== undefined && count > 0 && (
         <span aria-hidden className="text-sm tabular-nums text-muted-foreground">
-          {count}
+          {count > 99 ? '99+' : count}
         </span>
       )}
     </Link>
@@ -92,7 +103,7 @@ export default function Home() {
   const isDesktop = useIsDesktop();
   const navigate = useNavigate();
   const openSettings = useUiInteractionStore((s) => s.openSettings);
-  const { inboxCount, todayCount } = useBucketCounts();
+  const { inboxCount, todayCount, todayDueCount } = useBucketCounts();
   const hasNewInToday = useHasNewInToday();
   const reviewCount = useReviewCount();
   const { data: allProjects = [] } = useProjectsQuery();
@@ -142,6 +153,7 @@ export default function Home() {
                 iconClassName={item.colorClass}
                 label={t(item.labelKey)}
                 count={countByRoute[to]}
+                dueCount={to === '/today' ? todayDueCount : 0}
                 hasNew={to === '/today' && hasNewInToday}
               />
             );

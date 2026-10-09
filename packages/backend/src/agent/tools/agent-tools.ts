@@ -2,7 +2,6 @@ import { Type } from 'typebox';
 import { ConflictException, Injectable } from '@nestjs/common';
 import { normalizeRepeatRule } from '@taskora/engine';
 import { ScheduledType, TaskStatus, ProjectBucket, type RepeatRule } from '@taskora/shared';
-import type { TaskView } from '../../tasks/views';
 
 import { TasksService } from '../../tasks/tasks.service';
 import { ProjectsService } from '../../projects/projects.service';
@@ -268,7 +267,7 @@ export class AgentToolsService {
         }),
         execute: async (_id, params) => {
           const items = await this.tasks.findAll(userId, {
-            view: params.view as TaskView | undefined,
+            view: params.view,
             projectId: params.projectId,
             areaId: params.areaId,
             q: params.q,

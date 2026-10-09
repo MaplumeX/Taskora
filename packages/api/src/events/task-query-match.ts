@@ -92,14 +92,20 @@ function taskMatchesView(
         task.scheduledType === ScheduledType.NONE &&
         task.trashedAt === null
       );
-    case 'today':
-      return (
-        task.status === TaskStatus.ACTIVE &&
+    case 'today': {
+      // 计划日期或截止日期 ≤ 今天（截止日期到了也进 Today）。
+      const today = todayDateKey(now);
+      const scheduledReached =
         task.scheduledType === ScheduledType.DATE &&
         task.scheduledDate !== null &&
-        toDateKey(task.scheduledDate) <= todayDateKey(now) &&
+        toDateKey(task.scheduledDate) <= today;
+      const deadlineReached = task.dueDate !== null && toDateKey(task.dueDate) <= today;
+      return (
+        task.status === TaskStatus.ACTIVE &&
+        (scheduledReached || deadlineReached) &&
         task.trashedAt === null
       );
+    }
     case 'upcoming':
       return (
         task.status === TaskStatus.ACTIVE &&

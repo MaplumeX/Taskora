@@ -59,14 +59,24 @@ describe('日历日期与账号时区（不依赖测试进程 TZ）', () => {
       status: TaskStatus.ACTIVE,
       scheduledType: ScheduledType.DATE,
       scheduledDate: '2026-09-24',
+      dueDate: null,
       trashedAt: null,
       bucket: TaskBucket.SCHEDULED,
     } as Parameters<typeof taskMatchesQuery>[0];
+    // 截止日期到了也进 Today，与计划类型、Bucket 无关
+    const deadlineOnly = {
+      ...task,
+      scheduledType: ScheduledType.SOMEDAY,
+      scheduledDate: null,
+      dueDate: '2026-09-24',
+    };
     expect(taskMatchesQuery(task, { view: 'today' }, now)).toBe(true);
     expect(taskMatchesQuery(task, { view: 'upcoming' }, now)).toBe(false);
+    expect(taskMatchesQuery(deadlineOnly, { view: 'today' }, now)).toBe(true);
     usePreferencesStore.getState().setTimeZone('America/Los_Angeles');
     expect(taskMatchesQuery(task, { view: 'today' }, now)).toBe(false);
     expect(taskMatchesQuery(task, { view: 'upcoming' }, now)).toBe(true);
+    expect(taskMatchesQuery(deadlineOnly, { view: 'today' }, now)).toBe(false);
   });
 
   it('Logbook 的跨日分组按了结时刻在账号时区的日期', () => {

@@ -22,6 +22,7 @@ const Calendar = lazy(pageLoaders.Calendar);
 const Home = lazy(pageLoaders.Home);
 const Inbox = lazy(pageLoaders.Inbox);
 const Logbook = lazy(pageLoaders.Logbook);
+const Deadlines = lazy(pageLoaders.Deadlines);
 const Review = lazy(pageLoaders.Review);
 const ProjectDetail = lazy(pageLoaders.ProjectDetail);
 const Search = lazy(pageLoaders.Search);
@@ -57,6 +58,7 @@ export function MainApp() {
                 <Route path="/later-projects" element={<LaterProjects />} />
                 <Route path="/review/*" element={<Review />} />
                 <Route path="/logbook" element={<Logbook />} />
+                <Route path="/deadlines" element={<Deadlines />} />
                 <Route path="/projects/:id" element={<ProjectDetail />} />
                 <Route path="/areas/:id" element={<AreaDetail />} />
                 <Route path="/tags" element={<Tags />} />
