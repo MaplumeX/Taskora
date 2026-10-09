@@ -31,7 +31,8 @@ export function useTaskRowSelection() {
   const setExpandedId = useUiInteractionStore((s) => s.setExpandedId);
   const selectedId = selectedIds.length > 0 ? selectedIds[selectedIds.length - 1] : null;
 
-  // 点击任务行以外区域（含列表外空白、标题区等）关闭展开态。
+  // 点击任务行以外区域（含列表外空白、标题区等）关闭展开态；展开任务的
+  // 底栏（移动 / 删除 / 更多）作用于该任务，不算行外。
   // 若当前有 Radix 浮层（Popover/Dialog）打开，则让 Radix 自行处理这次
   // 点击（只关浮层、不关展开态），避免抢行为。
   useEffect(() => {
@@ -39,7 +40,7 @@ export function useTaskRowSelection() {
     const onPointerDown = (e: PointerEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
-      if (target.closest('[data-task-item]')) return;
+      if (target.closest('[data-task-item], [data-expanded-task-toolbar]')) return;
       const openOverlay = document.querySelector(
         '[data-radix-popper-content-wrapper] [data-state="open"], [role="dialog"][data-state="open"], [data-state="open"][role="listbox"]',
       );

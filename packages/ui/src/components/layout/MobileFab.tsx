@@ -10,7 +10,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useContentBottomActionsForRoute, useMultiSelectStore } from '@taskora/api';
+import {
+  useContentBottomActionsForRoute,
+  useMultiSelectStore,
+  useUiInteractionStore,
+} from '@taskora/api';
 import { cn } from '@/lib/utils';
 
 /**
@@ -19,7 +23,8 @@ import { cn } from '@/lib/utils';
  * - 首页：弹出朝上菜单选择「添加任务（落收件箱）/ 新增项目 / 新增区域」。
  * - area 详情页：弹出朝上菜单选择「添加项目」。
  * - project 详情页：弹出朝上菜单选择「添加标题」。
- * - 页面无任何添加动作（upcoming/calendar/logbook/trash）或处于多选模式时不渲染。
+ * - 页面无任何添加动作（upcoming/calendar/logbook/trash）或处于多选模式时不渲染；
+ *   有任务展开时缩小淡出（底部换成展开任务的工具栏）。
  */
 export function MobileFab() {
   const { t } = useTranslation();
@@ -41,6 +46,7 @@ export function MobileFab() {
   // 首页的项目为顶层新建（不归属区域），文案与侧边栏「添加」菜单一致
   const addProjectLabel = showAddArea ? t('common:newProject') : t('project:addProject');
   const multiSelecting = useMultiSelectStore((s) => s.active);
+  const taskExpanded = useUiInteractionStore((s) => s.expandedId !== null);
   // 回顾模式底部有回顾工具栏：按钮让到它上方
   const inReview = useLocation().pathname.startsWith('/review/');
 
@@ -76,8 +82,14 @@ export function MobileFab() {
 
   return (
     <div
+      // 任务展开时底部由 ExpandedTaskToolbar 占据（对齐 Things 3）：FAB 缩小淡出、
+      // 让出交互，收起后弹回。
+      aria-hidden={taskExpanded || undefined}
+      // React 18 不认布尔 inert，传空串。
+      {...(taskExpanded && { inert: '' })}
       className={cn(
-        'fixed right-5 z-40 md:hidden',
+        'fixed right-5 z-40 transition-[opacity,transform] duration-base ease-spring md:hidden',
+        taskExpanded ? 'pointer-events-none scale-75 opacity-0' : 'scale-100 opacity-100',
         inReview
           ? 'bottom-[calc(5rem+var(--safe-area-bottom)+var(--kb-inset,0px))]'
           : 'bottom-[calc(1.25rem+var(--safe-area-bottom)+var(--kb-inset,0px))]',
@@ -93,37 +105,25 @@ export function MobileFab() {
             onCloseAutoFocus={(event) => event.preventDefault()}
           >
             {showAddTask && (
-              <DropdownMenuItem
-                disabled={addTaskPending}
-                onClick={() => handleAddTask()}
-              >
+              <DropdownMenuItem disabled={addTaskPending} onClick={() => handleAddTask()}>
                 <Plus className="h-4 w-4" />
                 {t('task:addTask')}
               </DropdownMenuItem>
             )}
             {showAddProject && (
-              <DropdownMenuItem
-                disabled={addProjectPending}
-                onClick={() => handleAddProject()}
-              >
+              <DropdownMenuItem disabled={addProjectPending} onClick={() => handleAddProject()}>
                 <FolderPlus className="h-4 w-4" />
                 {addProjectLabel}
               </DropdownMenuItem>
             )}
             {showAddArea && (
-              <DropdownMenuItem
-                disabled={addAreaPending}
-                onClick={() => handleAddArea()}
-              >
+              <DropdownMenuItem disabled={addAreaPending} onClick={() => handleAddArea()}>
                 <Layers className="h-4 w-4" />
                 {t('common:newArea')}
               </DropdownMenuItem>
             )}
             {showAddHeading && (
-              <DropdownMenuItem
-                disabled={addHeadingPending}
-                onClick={() => handleAddHeading()}
-              >
+              <DropdownMenuItem disabled={addHeadingPending} onClick={() => handleAddHeading()}>
                 <Heading className="h-4 w-4" />
                 {t('project:addHeading')}
               </DropdownMenuItem>

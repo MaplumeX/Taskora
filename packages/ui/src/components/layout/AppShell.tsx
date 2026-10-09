@@ -5,6 +5,7 @@ import { KeyboardShortcuts } from '@/components/keyboard/KeyboardShortcuts';
 import { MobileTopBar } from '@/components/layout/MobileTopBar';
 import { MobileFab } from '@/components/layout/MobileFab';
 import { MultiSelectToolbar } from '@/components/task/MultiSelectToolbar';
+import { ExpandedTaskToolbar } from '@/components/task/ExpandedTaskToolbar';
 import { SettingsModal } from '@/components/settings/SettingsModal';
 import { SyncIndicator } from './SyncIndicator';
 import { SidebarDropProvider } from './SidebarDropProvider';
@@ -37,6 +38,8 @@ export function AppShell() {
         <MobileFab />
         {/* 触控多选模式（左滑任务行进入）的底部工具栏，模式中替代 FAB。 */}
         <MultiSelectToolbar />
+        {/* 任务展开时替代 FAB 的「移动 / 删除 / 更多」（桌面版在 ContentBottomBar 内）。 */}
+        <ExpandedTaskToolbar variant="floating" />
         <SettingsModal />
         <KeyboardShortcuts />
         {/* 同步指示器（V2）：仅在离线 / 需要升级时出现在角落，不拦操作 */}
