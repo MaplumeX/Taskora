@@ -37,6 +37,7 @@ export function ProjectItem({ project, dropOver = false }: Props) {
     <ProjectContextMenu project={project} current={project}>
       <div
         role="button"
+        data-preload-route={`/projects/${project.id}`}
         tabIndex={0}
         onClick={() => navigate(`/projects/${project.id}`)}
         onKeyDown={(e) => {

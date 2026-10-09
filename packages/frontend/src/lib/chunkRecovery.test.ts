@@ -1,4 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { moduleLoader, setModuleLoadRecovery } from '@taskora/ui/lib/module-loader';
+import { loadWithRecovery } from './lazyWithRetry';
 
 import {
   __setReloadForTest,
@@ -59,6 +61,25 @@ describe('reloadOnceForNewBuild', () => {
 });
 
 describe('installChunkLoadRecovery', () => {
+  it('background chunk failure leaves the current page intact and foreground navigation still recovers', async () => {
+    installChunkLoadRecovery();
+    setModuleLoadRecovery(loadWithRecovery);
+    const loader = moduleLoader(async () => {
+      const error = new Error('chunk 404');
+      const event = new Event('vite:preloadError', { cancelable: true });
+      Object.assign(event, { payload: error });
+      window.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+      throw error;
+    });
+    await expect(loader.preload()).rejects.toThrow('chunk 404');
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reload).not.toHaveBeenCalled();
+    void loader();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(reload).toHaveBeenCalledTimes(1);
+  });
+
   it('拦截 vite:preloadError 并自愈', () => {
     installChunkLoadRecovery();
 

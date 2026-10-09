@@ -29,16 +29,21 @@ export const projectHeadingKeys = {
     ['project-headings', { projectId, includeArchived: includeArchived ?? false }] as const,
 };
 
+export function projectHeadingsQueryDefinition(projectId: string, includeArchived?: boolean) {
+  return {
+    queryKey: projectHeadingKeys.list(projectId, includeArchived),
+    queryFn: () => getProjectHeadings(projectId, { includeArchived }),
+    // 项目不存在时查询报错：项目行也是依赖
+    dependsOn: ['project-heading', { entity: 'project', ids: [projectId] }] as const,
+  };
+}
+
 export function useProjectHeadingsQuery(
   projectId?: string,
   options?: { includeArchived?: boolean },
 ) {
-  const includeArchived = options?.includeArchived;
   return useReplicaQuery({
-    queryKey: projectHeadingKeys.list(projectId ?? '', includeArchived),
-    queryFn: () => getProjectHeadings(projectId!, { includeArchived }),
-    // 项目不存在时查询报错：项目行也是依赖
-    dependsOn: ['project-heading', { entity: 'project', ids: [projectId ?? ''] }],
+    ...projectHeadingsQueryDefinition(projectId ?? '', options?.includeArchived),
     enabled: !!projectId,
   });
 }

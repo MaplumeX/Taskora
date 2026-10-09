@@ -73,6 +73,7 @@ export function ProjectFeedRow({
     >
       <div
         data-task-item
+        data-preload-route={`/projects/${item.id}`}
         data-selection-row={item.id}
         tabIndex={selectionState !== 'idle' ? 0 : -1}
         aria-selected={selectionState !== 'idle' || undefined}

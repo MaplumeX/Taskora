@@ -67,6 +67,7 @@ export function SidebarBottomBar() {
           size="icon"
           className="h-8 w-8 text-muted-foreground hover:bg-sidebar-accent/60"
           aria-label={t('common:settings')}
+          data-preload-route="/settings"
           onClick={() => openSettings('appearance')}
         >
           <Settings className="h-4 w-4" />

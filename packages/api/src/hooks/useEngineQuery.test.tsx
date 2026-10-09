@@ -26,6 +26,12 @@ import { attachLiveQueries, detachLiveQueries, isLiveQueryMode } from '../engine
 import { createEngineProjectBackend } from '../engine/project-backend.engine';
 import { createEngineTagBackend } from '../engine/tag-backend.engine';
 import { createEngineTaskBackend } from '../engine/task-backend.engine';
+import { createEngineProjectHeadingBackend } from '../engine/project-heading-backend.engine';
+import { setProjectHeadingBackend } from '../api/project-heading-backend';
+import { prefetchProject } from './prefetchProject';
+import { projectHeadingKeys, useProjectHeadingsQuery } from './useProjectHeadings';
+import { liveQueryState } from '../engine/live-queries';
+import { taskKeys } from './useTasks';
 import { useAreasQuery } from './useAreas';
 import { useFeedQuery } from './useFeed';
 import { useTaskQuery, useTaskSearchQuery, useTasksQuery, useUpdateTask } from './useTasks';
@@ -42,7 +48,8 @@ function wrapper({ children }: { children: ReactNode }) {
 /** 让在飞的查询与通知跑完。 */
 async function settle() {
   await act(async () => {
-    for (let index = 0; index < 5; index += 1) await new Promise((resolve) => setTimeout(resolve, 0));
+    for (let index = 0; index < 5; index += 1)
+      await new Promise((resolve) => setTimeout(resolve, 0));
   });
 }
 
@@ -84,6 +91,7 @@ afterEach(async () => {
   setProjectBackend(undefined);
   setAreaBackend(undefined);
   setTagBackend(undefined);
+  setProjectHeadingBackend(undefined);
   queryClient.clear();
   await engine.close();
 });
@@ -91,6 +99,38 @@ afterEach(async () => {
 const titles = (items: FeedItem[] | undefined) => items?.map((item) => item.title);
 
 describe('useEngineQuery（Engine 模式的列表视图）', () => {
+  it('project navigation immediately reuses prefetched tasks and headings without an extra read', async () => {
+    const project = await createEngineProjectBackend({ engine }).createProject({
+      title: 'Project',
+    });
+    const headings = createEngineProjectHeadingBackend({ engine });
+    const getHeadings = vi.spyOn(headings, 'getProjectHeadings');
+    setProjectHeadingBackend(headings);
+    await tasks.createTask({ title: 'Prefetched task', projectId: project.id });
+    await headings.createProjectHeading({ title: 'Heading', projectId: project.id });
+    prefetchProject(project.id);
+    await waitFor(() => {
+      expect(liveQueryState(taskKeys.list({ projectId: project.id })).status).toBe('success');
+      expect(liveQueryState(projectHeadingKeys.list(project.id)).status).toBe('success');
+    });
+    const taskReads = calls.getTasks;
+    const headingReads = getHeadings.mock.calls.length;
+    const page = renderHook(
+      () => ({
+        tasks: useTasksQuery({ projectId: project.id }),
+        headings: useProjectHeadingsQuery(project.id),
+      }),
+      { wrapper },
+    );
+    expect(page.result.current.tasks.isLoading).toBe(false);
+    expect(page.result.current.tasks.data?.[0].title).toBe('Prefetched task');
+    expect(page.result.current.headings.data?.[0].title).toBe('Heading');
+    await settle();
+    expect(calls.getTasks).toBe(taskReads);
+    expect(getHeadings.mock.calls.length).toBe(headingReads);
+    expect(queryClient.getQueryData(taskKeys.list({ projectId: project.id }))).toBeUndefined();
+  });
+
   it('task search reruns when a subtask starts matching', async () => {
     const parent = await tasks.createTask({ title: 'Weekend' });
     const search = renderHook(() => useTaskSearchQuery(' milk '), { wrapper });

@@ -1,3 +1,5 @@
+import { pageLoaders } from '@taskora/ui/lib/page-loaders';
+import { NavigationPreloadProvider } from '@taskora/ui/lib/navigation-preload';
 import { Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
@@ -5,7 +7,10 @@ import { RootRedirect } from '@taskora/ui/components/layout/RootRedirect';
 import { ProtectedRoute } from './components/ProtectedRoute';
 // lazyWithRetry：部署后旧 chunk 被删除时自动刷新拉新入口，而不是把
 // `Failed to fetch dynamically imported module` 暴露给用户。
-import { lazyWithRetry } from './lib/lazyWithRetry';
+import { lazyWithRetry, loadWithRecovery } from './lib/lazyWithRetry';
+import { setModuleLoadRecovery } from '@taskora/ui/lib/module-loader';
+
+setModuleLoadRecovery(loadWithRecovery);
 
 function PageFallback() {
   return (
@@ -19,25 +24,25 @@ function PageFallback() {
 const AppShell = lazyWithRetry(() =>
   import('@taskora/ui/components/layout/AppShell').then((module) => ({ default: module.AppShell })),
 );
-const AgentPage = lazyWithRetry(() => import('@taskora/ui/pages/Agent'));
-const Anytime = lazyWithRetry(() => import('@taskora/ui/pages/Anytime'));
-const AreaDetail = lazyWithRetry(() => import('@taskora/ui/pages/AreaDetail'));
-const Calendar = lazyWithRetry(() => import('@taskora/ui/pages/Calendar'));
-const Home = lazyWithRetry(() => import('@taskora/ui/pages/Home'));
-const Inbox = lazyWithRetry(() => import('@taskora/ui/pages/Inbox'));
-const Logbook = lazyWithRetry(() => import('@taskora/ui/pages/Logbook'));
-const Review = lazyWithRetry(() => import('@taskora/ui/pages/Review'));
+const AgentPage = lazyWithRetry(pageLoaders.Agent);
+const Anytime = lazyWithRetry(pageLoaders.Anytime);
+const AreaDetail = lazyWithRetry(pageLoaders.AreaDetail);
+const Calendar = lazyWithRetry(pageLoaders.Calendar);
+const Home = lazyWithRetry(pageLoaders.Home);
+const Inbox = lazyWithRetry(pageLoaders.Inbox);
+const Logbook = lazyWithRetry(pageLoaders.Logbook);
+const Review = lazyWithRetry(pageLoaders.Review);
 const Login = lazyWithRetry(() => import('@/pages/Login'));
-const ProjectDetail = lazyWithRetry(() => import('@taskora/ui/pages/ProjectDetail'));
+const ProjectDetail = lazyWithRetry(pageLoaders.ProjectDetail);
 const Register = lazyWithRetry(() => import('@/pages/Register'));
-const Search = lazyWithRetry(() => import('@taskora/ui/pages/Search'));
-const Someday = lazyWithRetry(() => import('@taskora/ui/pages/Someday'));
-const LaterProjects = lazyWithRetry(() => import('@taskora/ui/pages/LaterProjects'));
-const TagDetail = lazyWithRetry(() => import('@taskora/ui/pages/TagDetail'));
-const Tags = lazyWithRetry(() => import('@taskora/ui/pages/Tags'));
-const Today = lazyWithRetry(() => import('@taskora/ui/pages/Today'));
-const Trash = lazyWithRetry(() => import('@taskora/ui/pages/Trash'));
-const Upcoming = lazyWithRetry(() => import('@taskora/ui/pages/Upcoming'));
+const Search = lazyWithRetry(pageLoaders.Search);
+const Someday = lazyWithRetry(pageLoaders.Someday);
+const LaterProjects = lazyWithRetry(pageLoaders.LaterProjects);
+const TagDetail = lazyWithRetry(pageLoaders.TagDetail);
+const Tags = lazyWithRetry(pageLoaders.Tags);
+const Today = lazyWithRetry(pageLoaders.Today);
+const Trash = lazyWithRetry(pageLoaders.Trash);
+const Upcoming = lazyWithRetry(pageLoaders.Upcoming);
 
 export const router = createBrowserRouter([
   {
@@ -62,7 +67,9 @@ export const router = createBrowserRouter([
       {
         element: (
           <Suspense fallback={<PageFallback />}>
-            <AppShell />
+            <NavigationPreloadProvider platform="web">
+              <AppShell />
+            </NavigationPreloadProvider>
           </Suspense>
         ),
         children: [

@@ -9,6 +9,7 @@ import { Suspense, useRef } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 
 import { usePullToFind } from '../../lib/usePullToFind';
+import { NavigationWarmup } from '../../lib/navigation-preload';
 import { cn } from '@/lib/utils';
 
 /**
@@ -113,6 +114,7 @@ export function MainContent() {
           }
         >
           <Outlet />
+          <NavigationWarmup />
         </Suspense>
       </div>
     </main>
