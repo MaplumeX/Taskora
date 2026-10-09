@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   complete: vi.fn(),
   restore: vi.fn(),
   skip: vi.fn(),
+  duplicate: vi.fn(async (id: string) => ({ id: `${id}-copy` })),
   task: null as TaskResponseDto | null,
 }));
 
@@ -26,6 +27,8 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   taskKeys: { detail: (id: string) => ['task', id] },
   useTaskQuery: () => ({ data: mocks.task }),
   useSkipTask: () => ({ mutate: mocks.skip, isPending: false }),
+  useDuplicateTask: () => ({ mutateAsync: mocks.duplicate }),
+  useDuplicateProject: () => ({ mutateAsync: vi.fn() }),
   useUpdateTask: () => ({ mutate: mocks.update, isPending: false }),
   useCompleteTask: () => ({ mutate: mocks.complete, isPending: false }),
   useUncompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
@@ -315,6 +318,27 @@ describe('MultiSelectToolbar', () => {
       { id: 'b', data: { tagIds: ['urgent'] } },
       expect.anything(),
     );
+  });
+
+  it('「更多」→ 复制：逐个复制全部勾选项并退出模式；Trash 页不提供', async () => {
+    const user = userEvent.setup();
+    mocks.duplicate.mockClear();
+    useMultiSelectStore.setState({ active: true, ids: ['a', 'b'] });
+    const { unmount } = renderWithProviders(<MultiSelectToolbar />);
+
+    await user.click(screen.getByRole('button', { name: /^(More|更多)$/ }));
+    await user.click(await screen.findByRole('button', { name: /^(Duplicate|复制)$/ }));
+
+    await waitFor(() => expect(mocks.duplicate).toHaveBeenCalledTimes(2));
+    expect(mocks.duplicate.mock.calls.map(([id]) => id).sort()).toEqual(['a', 'b']);
+    expect(useMultiSelectStore.getState().active).toBe(false);
+    unmount();
+
+    useMultiSelectStore.setState({ active: true, ids: ['a'] });
+    renderWithProviders(<MultiSelectToolbar />, '/trash');
+    await user.click(screen.getByRole('button', { name: /^(More|更多)$/ }));
+    await screen.findByRole('button', { name: /^(Tags|标签)$/ });
+    expect(screen.queryByRole('button', { name: /^(Duplicate|复制)$/ })).toBeNull();
   });
 
   it('勾选单个重复任务时「更多」提供跳过本次', async () => {
