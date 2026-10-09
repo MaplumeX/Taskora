@@ -70,7 +70,7 @@ describe('ProjectMetaRow', () => {
     vi.clearAllMocks();
   });
 
-  it('renders scheduled and due badges when set, plus tag dots', () => {
+  it('renders scheduled and due badges when set, plus tag pills', () => {
     const project: ProjectResponseDto = {
       ...baseProject,
       scheduledType: ScheduledType.DATE,
@@ -82,8 +82,8 @@ describe('ProjectMetaRow', () => {
     // 日期徽章触发器携带格式化后的日期文字（非空 textContent）。
     const buttons = screen.getAllByRole('button').map((b) => b.textContent ?? '');
     expect(buttons.some((text) => text.trim() !== '')).toBe(true);
-    // 标签色点渲染（title 提示携带标签名）。
-    expect(screen.getByTitle('design')).toBeInTheDocument();
+    // 标签胶囊直接显示标签名。
+    expect(screen.getByRole('button', { name: 'Tags' })).toHaveTextContent('design');
   });
 
   it('renders only the next review badge when no other metadata is set', () => {
@@ -93,7 +93,45 @@ describe('ProjectMetaRow', () => {
     const buttons = screen.getAllByRole('button');
     expect(buttons).toHaveLength(1);
     expect(buttons[0]).toHaveAccessibleName('Next review');
-    expect(buttons[0]).toHaveTextContent('Today');
+    expect(buttons[0]).toHaveTextContent('Review due');
+  });
+
+  it('shows a due review in the accent colour, never deadline-red', () => {
+    const { container } = render(
+      <ProjectMetaRow project={{ ...baseProject, tags: [], nextReviewDate: '2000-01-01' }} />,
+    );
+
+    const badge = screen.getByRole('button', { name: 'Next review' });
+    expect(badge).toHaveTextContent('Review due');
+    expect(badge.querySelector('.text-primary')).not.toBeNull();
+    expect(container.querySelector('.text-deadline')).toBeNull();
+  });
+
+  it('treats a stored ISO next review date of today as due', () => {
+    const today = new Date();
+    const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}T00:00:00.000Z`;
+    render(<ProjectMetaRow project={{ ...baseProject, tags: [], nextReviewDate: iso }} />);
+
+    expect(screen.getByRole('button', { name: 'Next review' })).toHaveTextContent('Review due');
+  });
+
+  it('shows the next review date in muted text before it is due', () => {
+    render(<ProjectMetaRow project={{ ...baseProject, tags: [], nextReviewDate: '2999-01-02' }} />);
+
+    const badge = screen.getByRole('button', { name: 'Next review' });
+    expect(badge).not.toHaveTextContent('Review due');
+    expect(badge.querySelector('.text-primary')).toBeNull();
+    expect(badge).not.toHaveAttribute('title');
+  });
+
+  it('separates the deadline from the review badge with a divider', () => {
+    const { container, rerender } = render(
+      <ProjectMetaRow project={{ ...baseProject, dueDate: '2999-01-03T00:00:00.000Z' }} />,
+    );
+    expect(container.querySelector('.bg-border')).not.toBeNull();
+
+    rerender(<ProjectMetaRow project={baseProject} />);
+    expect(container.querySelector('.bg-border')).toBeNull();
   });
 
   it('hides the next review badge for projects that do not take part in review', () => {
@@ -154,9 +192,7 @@ describe('ProjectMetaRow', () => {
       />,
     );
 
-    // 截止日期触发器为携带日期文字的第二个按钮。
-    const dateTriggers = screen.getAllByRole('button');
-    await user.click(dateTriggers[1]);
+    await user.click(screen.getByRole('button', { name: 'Deadline' }));
 
     // 到期弹层现在是共享的日历组件：点 Today 快捷按钮即提交并关闭。
     const todayButton = await screen.findByRole('button', { name: 'Today' });
@@ -177,10 +213,7 @@ describe('ProjectMetaRow', () => {
     const user = userEvent.setup();
     render(<ProjectMetaRow project={baseProject} />);
 
-    // 标签触发器携带色点（带 title 提示）。
-    const tagTrigger = screen.getByTitle('design').closest('button');
-    expect(tagTrigger).not.toBeNull();
-    await user.click(tagTrigger!);
+    await user.click(screen.getByRole('button', { name: 'Tags' }));
     // 选中未勾选的 urgent → 追加到已有 design 之后。
     await user.click(screen.getByRole('option', { name: 'urgent' }));
     await waitFor(() => {
@@ -189,5 +222,50 @@ describe('ProjectMetaRow', () => {
         expect.anything(),
       );
     });
+  });
+
+  it('shows a past scheduled date as Today with the yellow star（When 永不逾期）', () => {
+    const { container } = render(
+      <ProjectMetaRow
+        project={{
+          ...baseProject,
+          scheduledType: ScheduledType.DATE,
+          scheduledDate: '2000-01-01T00:00:00.000Z',
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Scheduled date' })).toHaveTextContent('Today');
+    expect(container.querySelector('.text-today')).not.toBeNull();
+  });
+
+  it('summarises the repeat rule on its badge', () => {
+    render(
+      <ProjectMetaRow
+        project={{
+          ...baseProject,
+          scheduledType: ScheduledType.DATE,
+          scheduledDate: '2999-01-02T00:00:00.000Z',
+          repeatRule: { unit: 'week', interval: 2, anchor: 'scheduled' },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Repeat' })).toHaveTextContent('Every 2 weeks');
+  });
+
+  it('lists repeat weekdays after the interval', () => {
+    render(
+      <ProjectMetaRow
+        project={{
+          ...baseProject,
+          scheduledType: ScheduledType.DATE,
+          scheduledDate: '2999-01-02T00:00:00.000Z',
+          repeatRule: { unit: 'week', interval: 1, weekdays: [3, 1], anchor: 'scheduled' },
+        }}
+      />,
+    );
+
+    expect(screen.getByRole('button', { name: 'Repeat' })).toHaveTextContent('Weekly · Mon, Wed');
   });
 });

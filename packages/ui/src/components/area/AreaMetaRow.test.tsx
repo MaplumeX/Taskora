@@ -53,11 +53,12 @@ describe('AreaMetaRow', () => {
     vi.clearAllMocks();
   });
 
-  it('renders tag dots and the next review badge', () => {
+  it('renders tag pills and the next review badge', () => {
     render(<AreaMetaRow area={baseArea} />);
 
-    expect(screen.getByTitle('design')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Next review' })).toHaveTextContent('Today');
+    expect(screen.getByRole('button', { name: 'Tags' })).toHaveTextContent('design');
+    // 存量空值视为今天 → 待回顾。
+    expect(screen.getByRole('button', { name: 'Next review' })).toHaveTextContent('Review due');
   });
 
   it('renders only the next review badge when the area has no tags', () => {
@@ -72,7 +73,7 @@ describe('AreaMetaRow', () => {
     const user = userEvent.setup();
     render(<AreaMetaRow area={baseArea} />);
 
-    await user.click(screen.getByTitle('design').closest('button')!);
+    await user.click(screen.getByRole('button', { name: 'Tags' }));
     await user.click(screen.getByRole('option', { name: 'urgent' }));
     await waitFor(() => {
       expect(mutationMocks.update).toHaveBeenCalledWith(
