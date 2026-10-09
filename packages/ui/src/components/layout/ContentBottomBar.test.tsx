@@ -1,16 +1,24 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 
 import { ContentBottomBar } from './ContentBottomBar';
-import { useAssistantUiStore, useContentBottomActionsForRoute, i18n } from '@taskora/api';
+import {
+  useAssistantUiStore,
+  useContentBottomActionsForRoute,
+  useUiInteractionStore,
+  i18n,
+} from '@taskora/api';
 
 // 与 MobileFab.test 同一 harness 模式：mock route-aware hook 而非底层 mutation。
 vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
   useContentBottomActionsForRoute: vi.fn(),
+  useTaskQuery: (id: string) => ({
+    data: id ? { id, title: 'Open task', status: 'ACTIVE' } : undefined,
+  }),
 }));
 const mockHook = vi.mocked(useContentBottomActionsForRoute);
 
@@ -102,5 +110,26 @@ describe('ContentBottomBar — 助手面板入口（assistant-panel issue 03）'
 
     await user.click(button);
     expect(useAssistantUiStore.getState().panelOpen).toBe(false);
+  });
+});
+
+describe('ContentBottomBar — 任务展开时切换（对齐 Things 3）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockHook.mockReturnValue({ ...baseActions } as never);
+    void i18n.changeLanguage('en');
+  });
+
+  it('展开任务时换成移动 / 删除 / 更多，收起即切回', async () => {
+    useUiInteractionStore.setState({ expandedId: 'task-1' });
+    renderBar();
+    expect(screen.getByRole('button', { name: 'Move' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Add task' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Quick Find' })).toBeNull();
+
+    act(() => useUiInteractionStore.setState({ expandedId: null }));
+    expect(screen.getByRole('button', { name: 'Add task' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Move' })).toBeNull();
   });
 });
