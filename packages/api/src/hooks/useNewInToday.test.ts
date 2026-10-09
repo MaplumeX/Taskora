@@ -1,10 +1,19 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { act, cleanup, renderHook } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 
-import type { FeedItem } from '@taskora/shared';
+import type { FeedItem, UserResponseDto } from '@taskora/shared';
 
+import * as usersApi from '@/api/users.api';
 import { usePreferencesStore } from '@/stores/preferences.store';
+import { useUiInteractionStore } from '@/stores/uiInteraction.store';
 
-import { isNewInToday, newInTodayKeys } from './useNewInToday';
+import {
+  acknowledgeNewInToday,
+  isNewInToday,
+  markNewInTodaySeen,
+  newInTodayKeys,
+  useNewInTodayKeys,
+} from './useNewInToday';
 
 function item(
   type: 'task' | 'project',
@@ -15,8 +24,32 @@ function item(
   return { type, id, scheduledDate, scheduledSetAt } as FeedItem;
 }
 
+const initial = usePreferencesStore.getState();
+let persist: MockInstance<typeof usersApi.updatePreferences>;
+
 beforeEach(() => {
-  usePreferencesStore.setState({ timeZone: 'Asia/Shanghai' });
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date('2026-10-09T04:00:00Z'));
+  usePreferencesStore.setState({
+    timeZone: 'Asia/Shanghai',
+    todayReviewedOn: '2026-10-07',
+    todaySeenKeys: [],
+  });
+  persist = vi
+    .spyOn(usersApi, 'updatePreferences')
+    .mockResolvedValue({ preferences: null } as unknown as UserResponseDto);
+});
+
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+  useUiInteractionStore.setState({ expandedId: null });
+  usePreferencesStore.setState({
+    timeZone: initial.timeZone,
+    todayReviewedOn: initial.todayReviewedOn,
+    todaySeenKeys: initial.todaySeenKeys,
+  });
 });
 
 describe('isNewInToday', () => {
@@ -59,5 +92,75 @@ describe('isNewInToday', () => {
       '2026-10-05',
     );
     expect([...keys]).toEqual(['task:t1', 'project:p1']);
+  });
+});
+
+describe('单条已读与确认', () => {
+  const items = [
+    item('task', 't1', '2026-10-08'),
+    item('task', 't2', '2026-10-09'),
+    item('project', 'p1', '2026-10-09'),
+  ];
+
+  it('excludes seen items until they arrive again on another date', () => {
+    expect([...newInTodayKeys(items, '2026-10-07', ['task:t1@2026-10-08'])]).toEqual([
+      'task:t2',
+      'project:p1',
+    ]);
+    // 改期后再次到来：已读键带旧日期，不再覆盖。
+    expect(
+      newInTodayKeys([item('task', 't1', '2026-10-09')], '2026-10-07', ['task:t1@2026-10-08']).size,
+    ).toBe(1);
+  });
+
+  it('marks one item seen, then confirms everything once the last one is read', () => {
+    const { result } = renderHook(() => useNewInTodayKeys(items));
+    expect(result.current.size).toBe(3);
+
+    act(() => markNewInTodaySeen('task', 't1'));
+    expect([...result.current]).toEqual(['task:t2', 'project:p1']);
+    expect(persist).toHaveBeenLastCalledWith({
+      todayReviewedOn: '2026-10-07',
+      todaySeenKeys: ['task:t1@2026-10-08'],
+    });
+    // 非新到条目：无操作。
+    act(() => markNewInTodaySeen('task', 'other'));
+    expect(persist).toHaveBeenCalledTimes(1);
+
+    act(() => markNewInTodaySeen('project', 'p1'));
+    act(() => markNewInTodaySeen('task', 't2'));
+    expect(result.current.size).toBe(0);
+    expect(usePreferencesStore.getState()).toMatchObject({
+      todayReviewedOn: '2026-10-09',
+      todaySeenKeys: [],
+    });
+    expect(persist).toHaveBeenLastCalledWith({ todayReviewedOn: '2026-10-09', todaySeenKeys: [] });
+  });
+
+  it('expanding a fresh task marks it seen', () => {
+    const { result } = renderHook(() => useNewInTodayKeys(items));
+    act(() => useUiInteractionStore.getState().setExpandedId('t2'));
+    expect(result.current.has('task:t2')).toBe(false);
+    expect(result.current.size).toBe(2);
+  });
+
+  it('acknowledging clears every dot; visiting Today alone does not', () => {
+    const { result, unmount } = renderHook(() => useNewInTodayKeys(items));
+    unmount();
+    expect(usePreferencesStore.getState().todayReviewedOn).toBe('2026-10-07');
+
+    const second = renderHook(() => useNewInTodayKeys(items));
+    expect(second.result.current.size).toBe(3);
+    act(() => acknowledgeNewInToday());
+    expect(second.result.current.size).toBe(0);
+    expect(result.current.size).toBe(3); // 已卸载的旧结果不再更新
+    expect(usePreferencesStore.getState().todayReviewedOn).toBe('2026-10-09');
+  });
+
+  it('starts the baseline on the first Today visit', () => {
+    usePreferencesStore.setState({ todayReviewedOn: null });
+    const { result } = renderHook(() => useNewInTodayKeys(items));
+    expect(result.current.size).toBe(0);
+    expect(usePreferencesStore.getState().todayReviewedOn).toBe('2026-10-09');
   });
 });

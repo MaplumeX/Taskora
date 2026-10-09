@@ -11,10 +11,15 @@ import { GroupHeaderRowShell } from './GroupHeaderRowShell';
 interface Props {
   project: ProjectResponseDto;
   selectionState?: SelectionState;
+  newInToday?: boolean;
 }
 
 /** Project 分组头保留进度环、完成操作与截止徽标，标题负责导航；右键菜单不变。 */
-export function ProjectGroupHeaderRow({ project, selectionState = 'idle' }: Props) {
+export function ProjectGroupHeaderRow({
+  project,
+  selectionState = 'idle',
+  newInToday = false,
+}: Props) {
   const { t } = useTranslation();
   const completion = useProjectCompletion();
 
@@ -26,6 +31,7 @@ export function ProjectGroupHeaderRow({ project, selectionState = 'idle' }: Prop
         to={`/projects/${project.id}`}
         title={project.title || t('project:newItemPlaceholder')}
         placeholder={!project.title}
+        newInToday={newInToday}
         trailing={project.dueDate ? <TaskDueDateBadge dueDate={project.dueDate} /> : undefined}
         icon={
           <ProjectProgressRing

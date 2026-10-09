@@ -2,7 +2,12 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
-import { useProjectQuery, useProjectsQuery, useUpdateProject } from '@taskora/api';
+import {
+  markNewInTodaySeen,
+  useProjectQuery,
+  useProjectsQuery,
+  useUpdateProject,
+} from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
 import { useEffectiveTags, useTasksQuery } from '@taskora/api';
 import { useProjectHeadingsQuery } from '@taskora/api';
@@ -26,6 +31,10 @@ export default function ProjectDetail() {
   useEffect(() => {
     if (autoEdit) clearPendingAutoEditId();
   }, [autoEdit, clearPendingAutoEditId]);
+  // 打开新到项目即已读（New in Today）。
+  useEffect(() => {
+    if (id) markNewInTodaySeen('project', id);
+  }, [id]);
   const { data: projects = [] } = useProjectsQuery();
   const foundInList = projects.find((p) => p.id === id);
   const { data: detail, isLoading: detailLoading, isError: detailError } = useProjectQuery(id ?? '', {

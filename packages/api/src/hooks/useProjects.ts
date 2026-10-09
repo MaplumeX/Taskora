@@ -33,6 +33,7 @@ import {
   useQueryCache,
 } from './cache-patches';
 import { useReplicaQuery } from './useEngineQuery';
+import { markNewInTodaySeen } from './useNewInToday';
 
 export const projectKeys = {
   all: ['projects'] as const,
@@ -180,6 +181,8 @@ export function useUpdateProject() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateProjectDto }) => updateProject(id, data),
     onMutate: async ({ id, data }) => {
+      // 编辑新到条目即已读（New in Today）。
+      markNewInTodaySeen('project', id);
       await cancelProjectLists(queryClient);
       const snapshot = snapshotProjectLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<ProjectResponseDto>(projectKeys.detail(id));

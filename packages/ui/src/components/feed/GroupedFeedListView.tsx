@@ -44,10 +44,12 @@ import { ProjectGroupHeaderRow } from './ProjectGroupHeaderRow';
 import { AreaGroupHeaderRow } from './AreaGroupHeaderRow';
 import {
   deriveGroupedFeedLayout,
+  feedItemKey,
   type GroupedFeedBlock,
   type GroupedFeedLayout,
 } from './groupedFeedLayout';
 import {
+  markNewInTodaySeen,
   selectionStateOf,
   useAreasQuery,
   useCompleteTask,
@@ -72,16 +74,14 @@ interface Props {
    */
   grouping?: boolean;
   /**
-   * New in Today 新到条目的键（`task:<id>` / `project:<id>`）：置顶于新到区、
-   * 行首带黄点。新到区只能区内重排，其他行不能拖入、新到行也不能拖出。
+   * New in Today 未读新到条目的键（`task:<id>` / `project:<id>`）：留在原位，
+   * 行首带黄点；拖拽排序即已读。
    */
   freshKeys?: ReadonlySet<string>;
 }
 
 const UNGROUPED = 'ungrouped';
-/** 新到区（New in Today）的容器 id。 */
-const FRESH = 'fresh';
-type ContainerId = typeof UNGROUPED | typeof FRESH | string;
+type ContainerId = typeof UNGROUPED | string;
 
 const TASK_DND_PREFIX = 'task:';
 const CONTAINER_DND_PREFIX = 'container:';
@@ -125,36 +125,30 @@ function parentMapsFromLayout(layout: GroupedFeedLayout): ParentMaps {
   return { kinds };
 }
 
-/** 推导结果中每个任务所在的容器（组头 id；新到区 FRESH；顶部未分组区 UNGROUPED）。 */
+/** 推导结果中每个任务所在的容器（组头 id；顶部未分组区 UNGROUPED）。 */
 export function taskContainersOf(layout: GroupedFeedLayout): Map<string, ContainerId> {
   const containers = new Map<string, ContainerId>();
   for (const block of layout.blocks) {
     if (block.kind === 'task') {
-      containers.set(block.item.id, block.fresh ? FRESH : (block.groupHeaderId ?? UNGROUPED));
+      containers.set(block.item.id, block.groupHeaderId ?? UNGROUPED);
     }
   }
   return containers;
 }
 
-/** 行所在的容器：任务按推导结果；独立项目行在新到区或顶部未分组区。 */
+/** 行所在的容器：任务按推导结果；独立项目行恒在顶部未分组区。 */
 function rowContainerOf(
   layout: GroupedFeedLayout,
   item: Pick<FeedItem, 'type' | 'id'>,
 ): ContainerId | undefined {
-  if (item.type === 'task') return taskContainersOf(layout).get(item.id);
-  const fresh = layout.blocks.some(
-    (block) => block.kind === 'projectRow' && block.fresh && block.item.id === item.id,
-  );
-  return fresh ? FRESH : UNGROUPED;
+  return item.type === 'task' ? taskContainersOf(layout).get(item.id) : UNGROUPED;
 }
 
-/** 新到区 / 顶部未分组区的行（按显示顺序）。 */
-function topRowsOf(layout: GroupedFeedLayout, fresh: boolean): FeedItem[] {
+/** 顶部未分组区的行（按显示顺序）。 */
+function topRowsOf(layout: GroupedFeedLayout): FeedItem[] {
   return layout.blocks.flatMap((block): FeedItem[] => {
-    if (block.kind === 'projectRow' && !!block.fresh === fresh) return [block.item];
-    if (block.kind === 'task' && block.groupHeaderId === null && !!block.fresh === fresh) {
-      return [block.item];
-    }
+    if (block.kind === 'projectRow') return [block.item];
+    if (block.kind === 'task' && block.groupHeaderId === null) return [block.item];
     return [];
   });
 }
@@ -186,8 +180,6 @@ function sameFeedItem(item: FeedItem, ref: Pick<FeedItem, 'type' | 'id'>) {
  * - 任务行 / 独立项目行 → 插到该行之前/之后（edge）；任务的归属随目标所在组；
  * - 组头 / 组容器 → 该组末尾；顶部未分组区空白 → 未分组区末尾。
  * - 独立项目行只能在顶部未分组区内移动（它不属于任何组），越界目标不生效。
- * - 新到区（New in Today）自成一区：新到行只在区内重排、不改归属，其他行
- *   也不能拖入。
  *
  * 组内顺序与未分组区顺序都跟随 feed 项数组顺序（deriveGroupedFeedLayout），
  * 因此只需在数组内挪位并改写归属字段。任务回到原组时恢复拖拽开始时的原
@@ -203,8 +195,8 @@ export function moveFeedItemToTarget(
   const containers = taskContainersOf(layout);
   const lastIn = (containerId: ContainerId): Pick<FeedItem, 'type' | 'id'> | null => {
     const rows =
-      containerId === UNGROUPED || containerId === FRESH
-        ? topRowsOf(layout, containerId === FRESH)
+      containerId === UNGROUPED
+        ? topRowsOf(layout)
         : [...containers]
             .filter(([, id]) => id === containerId)
             .map(([id]) => ({ type: 'task' as const, id }));
@@ -230,11 +222,7 @@ export function moveFeedItemToTarget(
   } else if (overKey.startsWith(HEADER_DND_PREFIX) || overKey.startsWith(CONTAINER_DND_PREFIX)) {
     const prefix = overKey.startsWith(HEADER_DND_PREFIX) ? HEADER_DND_PREFIX : CONTAINER_DND_PREFIX;
     targetContainer = overKey.slice(prefix.length);
-    if (
-      targetContainer !== UNGROUPED &&
-      targetContainer !== FRESH &&
-      !parentMapsFromLayout(layout).kinds.has(targetContainer)
-    ) {
+    if (targetContainer !== UNGROUPED && !parentMapsFromLayout(layout).kinds.has(targetContainer)) {
       return null;
     }
     anchor = lastIn(targetContainer);
@@ -242,8 +230,7 @@ export function moveFeedItemToTarget(
   } else {
     return null;
   }
-  if ((origin.container === FRESH) !== (targetContainer === FRESH)) return null;
-  if (active.type === 'project' && targetContainer !== UNGROUPED && targetContainer !== FRESH) {
+  if (active.type === 'project' && targetContainer !== UNGROUPED) {
     return null;
   }
 
@@ -351,20 +338,17 @@ function TaskContainerDropZone({
  * 拖拽开始时不会把整列往下推出一块空白。
  */
 function UngroupedDropZone({
-  containerId = UNGROUPED,
   floating = false,
   children,
 }: {
-  /** 顶部未分组区，或同形的新到区（FRESH）。 */
-  containerId?: typeof UNGROUPED | typeof FRESH;
   floating?: boolean;
   children?: React.ReactNode;
 }) {
-  const { setNodeRef } = useDroppable({ id: containerDndId(containerId) });
+  const { setNodeRef } = useDroppable({ id: containerDndId(UNGROUPED) });
   return (
     <div
       ref={setNodeRef}
-      data-task-container={containerId}
+      data-task-container={UNGROUPED}
       className={cn(
         'flex flex-col rounded-md',
         floating && 'absolute inset-x-0 bottom-full h-10',
@@ -420,7 +404,6 @@ export function GroupedFeedListView({
       areas,
       groupingEnabled: grouping,
       retainGroupIds,
-      freshKeys,
     });
 
   // 松手后的本地结果：显示顺序与任务归属追上之前一直以它渲染。
@@ -444,8 +427,8 @@ export function GroupedFeedListView({
   const retainGroupIds = drag?.retain;
   const layout = React.useMemo(
     () => derive(viewItems, retainGroupIds),
-    // derive 只依赖 projects / areas / grouping / freshKeys
-    [viewItems, retainGroupIds, projects, areas, grouping, freshKeys],
+    // derive 只依赖 projects / areas / grouping
+    [viewItems, retainGroupIds, projects, areas, grouping],
   );
   const flip = useFlipList<HTMLDivElement>(layout);
 
@@ -598,7 +581,7 @@ export function GroupedFeedListView({
     const containers = taskContainersOf(layout);
     const retain = new Set(
       [container, ...(groupIds ?? []).map((id) => containers.get(id))].filter(
-        (id): id is string => id !== undefined && id !== UNGROUPED && id !== FRESH,
+        (id): id is string => id !== undefined && id !== UNGROUPED,
       ),
     );
     lastTargetRef.current = null;
@@ -712,6 +695,9 @@ export function GroupedFeedListView({
     }
     if (!orderChanged && reassignments.length === 0) return;
 
+    // 拖拽排序新到条目即已读（New in Today；多项拖拽整组）。
+    if (moved.type === 'project') markNewInTodaySeen('project', moved.id);
+    else for (const task of current.group ?? [moved]) markNewInTodaySeen('task', task.id);
     holdItems(finalItems);
     // 跨组 = 改归属（headingId 由数据层随 projectId 变化自动清除）；顺序按
     // 显示顺序写回：任务写 Position，独立项目行写 Feed Position。跨组时
@@ -754,10 +740,9 @@ export function GroupedFeedListView({
   // 跨组预览会改写归属字段，浮层跟随当前预览中的那一行。
   const overlayItem = activeItem ? rowMap.get(feedItemDndId(activeItem)) ?? activeItem : null;
 
-  // 新到区置顶；顶部未分组区：未分组任务与独立项目行按 feed 顺序交错，
-  // 同属一个可排序容器。其后是扁平单层的分组：组头 + 组内任务。
-  const freshRows = topRowsOf(layout, true);
-  const topRows = topRowsOf(layout, false);
+  // 顶部未分组区：未分组任务与独立项目行按 feed 顺序交错，同属一个可排序
+  // 容器。其后是扁平单层的分组：组头 + 组内任务。
+  const topRows = topRowsOf(layout);
   const groupChunks: GroupChunk[] = [];
   for (const block of layout.blocks) {
     if (block.kind === 'projectGroupHeader' || block.kind === 'areaGroupHeader') {
@@ -775,7 +760,7 @@ export function GroupedFeedListView({
   // 孤儿任务在未分组区保留项目/区域标题标签；组内任务的归属已由组头
   // 表达，不再重复标签。列表行与拖拽浮层共用，保证拖起来的就是那一行。
   const rowLabels = (item: FeedItem, containerId: ContainerId | undefined) => {
-    const ungrouped = containerId === UNGROUPED || containerId === FRESH;
+    const ungrouped = containerId === UNGROUPED;
     if (item.type !== 'task') return {};
     return {
       projectTitle: ungrouped && item.projectId ? projectMap[item.projectId] : undefined,
@@ -795,7 +780,7 @@ export function GroupedFeedListView({
         hidePlacement={grouping}
         selectionState={selectionStateOf(selectedIds, expandedId, item.id)}
         showScheduledBadge={showScheduledBadge}
-        newInToday={containerId === FRESH}
+        newInToday={freshKeys?.has(feedItemKey(item)) ?? false}
         {...(item.type === 'task'
           ? {
               onToggleComplete: () => handleToggle(item),
@@ -819,6 +804,7 @@ export function GroupedFeedListView({
         <ProjectGroupHeaderRow
           project={block.project}
           selectionState={selectionStateOf(selectedIds, expandedId, block.project.id)}
+          newInToday={freshKeys?.has(feedItemKey({ type: 'project', id: block.project.id }))}
         />
       );
     }
@@ -840,14 +826,6 @@ export function GroupedFeedListView({
         {/* 顶部未分组区：未分组任务与独立项目行按合并 feed 顺序交错。
             拖拽期间即使为空也保留投放面（移出项目 = 拖到此处），但浮在
             列表上方，不额外占位（浮动投放面渲染在列表末尾，见下）。 */}
-        {freshRows.length > 0 && (
-          <UngroupedDropZone containerId={FRESH}>
-            <SortableContext items={freshRows.map(feedItemDndId)} strategy={noopSortingStrategy}>
-              {freshRows.map((item) => renderRow(item, FRESH))}
-            </SortableContext>
-          </UngroupedDropZone>
-        )}
-
         {topRows.length > 0 && (
           <UngroupedDropZone>
             <SortableContext items={topRows.map(feedItemDndId)} strategy={noopSortingStrategy}>
@@ -898,7 +876,7 @@ export function GroupedFeedListView({
                 hidePlacement={grouping}
                 selectionState="idle"
                 showScheduledBadge={showScheduledBadge}
-                newInToday={rowContainerOf(layout, overlayItem) === FRESH}
+                newInToday={freshKeys?.has(feedItemKey(overlayItem)) ?? false}
               />
               <DragCountBadge count={drag?.group?.length ?? 0} />
             </div>

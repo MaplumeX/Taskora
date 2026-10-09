@@ -1,5 +1,7 @@
 import { Type } from 'class-transformer';
 import {
+  ArrayMaxSize,
+  IsArray,
   IsBoolean,
   IsTimeZone,
   IsIn,
@@ -13,6 +15,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { ReviewIntervalDefaultsDto } from '../../common/review-interval.dto';
+import { TODAY_SEEN_KEY_PATTERN, TODAY_SEEN_KEYS_MAX } from '@taskora/shared';
 import type {
   UpdateProfileDto as IUpdateProfileDto,
   UpdatePasswordDto as IUpdatePasswordDto,
@@ -67,6 +70,12 @@ export class UpdatePreferencesDto implements IUpdatePreferencesDto {
   @IsOptional()
   @Matches(/^\d{4}-\d{2}-\d{2}$/)
   todayReviewedOn?: string;
+
+  @IsOptional()
+  @IsArray()
+  @ArrayMaxSize(TODAY_SEEN_KEYS_MAX)
+  @Matches(TODAY_SEEN_KEY_PATTERN, { each: true })
+  todaySeenKeys?: string[];
 
   @IsOptional()
   @ValidateNested()

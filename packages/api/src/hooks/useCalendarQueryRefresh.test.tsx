@@ -38,6 +38,7 @@ beforeEach(async () => {
     timeZone: 'Asia/Shanghai',
     legacyDateTimeZone: 'Asia/Shanghai',
     todayReviewedOn: '2026-10-08',
+    todaySeenKeys: [],
   });
   engine = await openEngine({
     storage: await createNodeSqliteStorage(':memory:'),
@@ -63,10 +64,11 @@ afterEach(async () => {
     timeZone: initial.timeZone,
     legacyDateTimeZone: initial.legacyDateTimeZone,
     todayReviewedOn: initial.todayReviewedOn,
+    todaySeenKeys: initial.todaySeenKeys,
   });
 });
 
-it('Today 本次访问的黄点随时区重算，同时保留进入时的已看基线', async () => {
+it('Today 的黄点随时区重算，进入 Today 不推进已确认日期', async () => {
   vi.spyOn(usersApi, 'updatePreferences').mockRejectedValue(new Error('offline'));
   const task = await tasks.createTask({
     title: '提前安排的任务',
@@ -77,7 +79,7 @@ it('Today 本次访问的黄点随时区重算，同时保留进入时的已看�
   const items = await tasks.getFeed('today');
   const { result } = renderHook(() => useNewInTodayKeys(items));
   expect(result.current.has(`task:${task.id}`)).toBe(true);
-  expect(usePreferencesStore.getState().todayReviewedOn).toBe('2026-10-09');
+  expect(usePreferencesStore.getState().todayReviewedOn).toBe('2026-10-08');
 
   act(() => usePreferencesStore.setState({ timeZone: 'Pacific/Kiritimati' }));
   expect(result.current.size).toBe(0);

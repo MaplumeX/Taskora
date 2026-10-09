@@ -3,6 +3,7 @@ import { ChevronRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { SelectionState } from '@taskora/api';
 
+import { NewInTodayDot } from '@/components/task/NewInTodayDot';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -15,6 +16,8 @@ interface Props {
   /** 标题右侧的常驻元信息，不参与标题链接的 hover。 */
   trailing?: ReactNode;
   placeholder?: boolean;
+  /** New in Today 未读新到（项目组头）：行首带黄点。 */
+  newInToday?: boolean;
 }
 
 /**
@@ -31,14 +34,16 @@ export function GroupHeaderRowShell({
   icon,
   trailing,
   placeholder = false,
+  newInToday = false,
 }: Props) {
   const titleId = useId();
   return (
     <h2
       data-group-header={parentId}
       aria-labelledby={titleId}
-      className="flex min-w-0 items-center gap-2.5 border-b border-border px-2"
+      className="relative flex min-w-0 items-center gap-2.5 border-b border-border px-2"
     >
+      {newInToday && <NewInTodayDot />}
       {icon}
       <Link
         to={to}

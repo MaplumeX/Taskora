@@ -46,6 +46,7 @@ const harness = vi.hoisted(() => ({
   pointerCollisionIds: [] as string[],
   closestCollisionIds: [] as string[],
   sidebarDrop: vi.fn(),
+  markNewInTodaySeen: vi.fn(),
 }));
 
 vi.mock('@dnd-kit/core', async () => {
@@ -191,6 +192,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
     useAreasQuery: () => ({ data: harness.areas }),
     useUpdateArea: () => ({ mutate: vi.fn() }),
     useDeleteArea: () => ({ mutate: vi.fn() }),
+    markNewInTodaySeen: harness.markNewInTodaySeen,
     // useTaskRowSelection / useSelectionScope 依赖真实 store，保持真实实现。
     useTaskRowSelection: actual.useTaskRowSelection,
   };
@@ -389,6 +391,7 @@ beforeEach(() => {
   harness.updateTaskMutate.mockReset();
   harness.completeProjectMutate.mockReset();
   harness.uncompleteProjectMutate.mockReset();
+  harness.markNewInTodaySeen.mockReset();
   harness.toastSuccess.mockReset();
   harness.toastError.mockReset();
   window.localStorage.clear();
@@ -545,7 +548,7 @@ describe('GroupedFeedListView — 展开归属入口', () => {
     },
   );
 
-  it('分组开关切换时更新入口标记，新到区同样遵循当前视图设置', () => {
+  it('分组开关切换时更新入口标记，新到条目同样遵循当前视图设置', () => {
     harness.projects = [project('p1')];
     const items = [taskItem('fresh-task', { projectId: 'p1' })];
     const content = (grouping: boolean) => (
@@ -1137,7 +1140,7 @@ describe('GroupedFeedListView — 拖拽语义', () => {
 });
 
 describe('GroupedFeedListView — New in Today', () => {
-  it('renders fresh tasks first with the dot and their project tag, outside the group', () => {
+  it('keeps fresh rows in place with the dot, inside their group', () => {
     harness.projects = [project('p1')];
     renderView(
       [taskItem('old', { projectId: 'p1' }), taskItem('new', { projectId: 'p1' })],
@@ -1146,27 +1149,14 @@ describe('GroupedFeedListView — New in Today', () => {
     );
 
     const rows = [...document.querySelectorAll<HTMLElement>('[data-mock-task-id]')];
-    expect(rows.map((row) => row.dataset.mockTaskId)).toEqual(['new', 'old']);
-    expect(rows[0]).toHaveAttribute('data-new-in-today');
-    expect(rows[1]).not.toHaveAttribute('data-new-in-today');
-    expect(screen.getByTestId('tag-project-new')).toHaveTextContent('p1');
-    expect(document.querySelector('[data-task-container="fresh"]')).not.toBeNull();
+    expect(rows.map((row) => row.dataset.mockTaskId)).toEqual(['old', 'new']);
+    expect(rows[0]).not.toHaveAttribute('data-new-in-today');
+    expect(rows[1]).toHaveAttribute('data-new-in-today');
+    expect(rows[1].closest('[data-task-container]')).toHaveAttribute('data-task-container', 'p1');
+    expect(document.querySelector('[data-task-container="fresh"]')).toBeNull();
   });
 
-  it('reorders within the fresh zone without reassigning', () => {
-    harness.projects = [project('p1')];
-    renderView(
-      [taskItem('a', { projectId: 'p1' }), taskItem('b', { projectId: 'p1' })],
-      'today',
-      new Set(['task:a', 'task:b']),
-    );
-
-    dragEnd('task:a', 'task:b', 'task:b');
-    expect(harness.updateTaskMutate).not.toHaveBeenCalled();
-    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('b', 'a'));
-  });
-
-  it('does not move rows across the fresh zone boundary', () => {
+  it('moves fresh rows freely and marks the dragged row as seen', () => {
     harness.projects = [project('p1')];
     renderView(
       [taskItem('old', { projectId: 'p1' }), taskItem('new')],
@@ -1174,9 +1164,20 @@ describe('GroupedFeedListView — New in Today', () => {
       new Set(['task:new']),
     );
 
-    dragEnd('task:old', 'task:new', 'task:new');
     dragEnd('task:new', 'task:old', 'task:old');
-    expect(harness.updateTaskMutate).not.toHaveBeenCalled();
-    expect(harness.reorderFeedMutate).not.toHaveBeenCalled();
+    expect(harness.updateTaskMutate).toHaveBeenCalledWith({
+      id: 'new',
+      data: { projectId: 'p1', areaId: null },
+    });
+    expect(harness.markNewInTodaySeen).toHaveBeenCalledWith('task', 'new');
+  });
+
+  it('does not mark anything seen when the drop changes nothing', () => {
+    harness.projects = [project('p1')];
+    renderView([taskItem('a'), taskItem('b')], 'today', new Set(['task:a']));
+
+    dragEnd('task:a', 'task:a', 'task:a');
+    expect(harness.markNewInTodaySeen).not.toHaveBeenCalled();
   });
 });
+

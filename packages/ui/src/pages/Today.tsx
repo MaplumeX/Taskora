@@ -1,4 +1,5 @@
 import {
+  acknowledgeNewInToday,
   useCalendarDay,
   useEffectiveTags,
   useFeedQuery,
@@ -9,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 import { TimeViewFeedList } from '@/components/feed/TimeViewFeedList';
 import { PageHeading } from '@/components/layout/PageHeading';
+import { NewInTodayBanner } from '@/components/task/NewInTodayBanner';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
 
 const todayISO = todayDateKey;
@@ -19,13 +21,16 @@ export default function Today() {
   const { data: items = [], isLoading, isError } = useFeedQuery('today');
   const effectiveTags = useEffectiveTags();
   const { visible, filtering, bar } = useTagFilter(items, effectiveTags.ofFeedItem);
-  // New in Today：上次查看后新到的条目置顶并带黄点，离开本页后消除。
+  // New in Today：未读新到条目留在原位、行首带黄点；横幅「好」全部确认。
   const freshKeys = useNewInTodayKeys(items);
 
   return (
     <div className="flex flex-col gap-4">
       <PageHeading nav="/today">{t('nav:today')}</PageHeading>
       <p className="text-sm text-muted-foreground tabular-nums">{todayISO()}</p>
+      {!isLoading && !isError && (
+        <NewInTodayBanner count={freshKeys.size} onAcknowledge={acknowledgeNewInToday} />
+      )}
       {!isLoading && !isError && <TagFilterBar {...bar} />}
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>

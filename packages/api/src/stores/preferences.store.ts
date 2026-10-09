@@ -5,6 +5,7 @@ import {
   DEFAULT_REVIEW_INTERVALS,
   deviceTimeZone,
   isValidTimeZone,
+  mergeTodaySeenKeys,
   type ReviewIntervalDefaults,
   type UserPreferences,
 } from '@taskora/shared';
@@ -77,8 +78,10 @@ interface PreferencesState {
   weekStartsOn: WeekStartsOn;
   /** 时间视图按项目/区域分组（Grouped View）全局开关，默认开启。 */
   bucketGrouping: boolean;
-  /** 最近一次查看 Today 的日期（New in Today 的基线，见 UserPreferences）。 */
+  /** 最近一次确认 Today 新到的日期（New in Today 的基线，见 UserPreferences）。 */
   todayReviewedOn: string | null;
+  /** New in Today 单条已读（见 UserPreferences.todaySeenKeys）。 */
+  todaySeenKeys: string[];
   /** 默认回顾间隔（Default Review Interval）：新建 Project / Area 时写入的间隔。 */
   defaultReviewIntervals: ReviewIntervalDefaults;
   resolved: 'light' | 'dark';
@@ -87,8 +90,10 @@ interface PreferencesState {
   setWeekStartsOn: (v: WeekStartsOn) => void;
   setBucketGrouping: (v: boolean) => void;
   setDefaultReviewIntervals: (v: ReviewIntervalDefaults) => void;
-  /** 记下已看过 Today（只进不退）；返回是否推进了基线。 */
+  /** 记下已确认 Today 新到（只进不退，同时剔除被覆盖的单条已读）；返回是否推进了基线。 */
   markTodayReviewed: (dateKey: string) => boolean;
+  /** 记下单条已读；返回是否有新增。 */
+  markTodaySeen: (keys: readonly string[]) => boolean;
   cycle: () => void;
   hydrateFromServer: (prefs: UserPreferences | null) => void;
 }
@@ -152,6 +157,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       weekStartsOn: 1,
       bucketGrouping: true,
       todayReviewedOn: null,
+      todaySeenKeys: [],
       defaultReviewIntervals: DEFAULT_REVIEW_INTERVALS,
       resolved: resolveTheme('system'),
       setTheme: (m) => {
@@ -168,7 +174,17 @@ export const usePreferencesStore = create<PreferencesState>()(
       markTodayReviewed: (dateKey) => {
         const current = get().todayReviewedOn;
         if (laterDateKey(current, dateKey) === current) return false;
-        set({ todayReviewedOn: dateKey });
+        set({
+          todayReviewedOn: dateKey,
+          todaySeenKeys: mergeTodaySeenKeys(get().todaySeenKeys, [], dateKey),
+        });
+        return true;
+      },
+      markTodaySeen: (keys) => {
+        const current = get().todaySeenKeys;
+        const next = mergeTodaySeenKeys(current, keys, get().todayReviewedOn);
+        if (next.length === current.length) return false;
+        set({ todaySeenKeys: next });
         return true;
       },
       cycle: () => {
@@ -190,6 +206,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           bucketGrouping,
           timeZone,
           todayReviewedOn,
+          todaySeenKeys,
           defaultReviewIntervals,
         } = normalizePreferences(prefs, {
           timeZone: get().timeZone,
@@ -198,6 +215,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           weekStartsOn: get().weekStartsOn,
           bucketGrouping: get().bucketGrouping,
           todayReviewedOn: get().todayReviewedOn,
+          todaySeenKeys: get().todaySeenKeys,
           defaultReviewIntervals: get().defaultReviewIntervals,
         });
         applyTheme(theme);
@@ -213,6 +231,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           weekStartsOn,
           bucketGrouping,
           todayReviewedOn,
+          todaySeenKeys,
           defaultReviewIntervals,
           timeZone,
           legacyDateTimeZone: legacyZone,
@@ -230,6 +249,7 @@ export const usePreferencesStore = create<PreferencesState>()(
         weekStartsOn: state.weekStartsOn,
         bucketGrouping: state.bucketGrouping,
         todayReviewedOn: state.todayReviewedOn,
+        todaySeenKeys: state.todaySeenKeys,
         defaultReviewIntervals: state.defaultReviewIntervals,
       }),
       merge: (persisted, current) => {
@@ -243,6 +263,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           bucketGrouping,
           timeZone,
           todayReviewedOn,
+          todaySeenKeys,
           defaultReviewIntervals,
         } = normalizePreferences(raw, {
           timeZone: current.timeZone,
@@ -251,6 +272,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           weekStartsOn: current.weekStartsOn,
           bucketGrouping: current.bucketGrouping,
           todayReviewedOn: current.todayReviewedOn,
+          todaySeenKeys: current.todaySeenKeys,
           defaultReviewIntervals: current.defaultReviewIntervals,
         });
         return {
@@ -264,6 +286,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           weekStartsOn,
           bucketGrouping,
           todayReviewedOn,
+          todaySeenKeys,
           defaultReviewIntervals,
           resolved: resolveTheme(theme),
         };

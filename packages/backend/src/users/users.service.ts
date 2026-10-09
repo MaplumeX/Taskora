@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import {
   accountTimeZone,
+  mergeTodaySeenKeys,
   normalizeReviewIntervalDefaults,
   REVIEW_DEFAULT_KINDS,
   type ReviewIntervalDefaults,
@@ -96,13 +97,21 @@ export class UsersService {
         ? { defaultReviewIntervals: plainReviewIntervalDefaults(defaultReviewIntervals) }
         : {}),
     };
-    // New in Today 的已看日期只进不退：迟到的旧设备写入不回拨。
+    // New in Today 的已确认日期只进不退：迟到的旧设备写入不回拨。
     if (
       typeof current.todayReviewedOn === 'string' &&
       dto.todayReviewedOn !== undefined &&
       dto.todayReviewedOn < current.todayReviewedOn
     ) {
       merged.todayReviewedOn = current.todayReviewedOn;
+    }
+    // 单条已读跨端取并集，已确认日期推进时剔除不再可能新到的元素。
+    if (dto.todaySeenKeys !== undefined || dto.todayReviewedOn !== undefined) {
+      merged.todaySeenKeys = mergeTodaySeenKeys(
+        Array.isArray(current.todaySeenKeys) ? current.todaySeenKeys : [],
+        dto.todaySeenKeys,
+        typeof merged.todayReviewedOn === 'string' ? merged.todayReviewedOn : null,
+      );
     }
 
     return this.prisma.user.update({

@@ -53,6 +53,7 @@ import {
 } from './cache-patches';
 import { useDebouncedValue } from './useDebouncedValue';
 import { useLiveQueryMode, useReplicaQuery } from './useEngineQuery';
+import { markNewInTodaySeen } from './useNewInToday';
 
 export const taskKeys = {
   all: ['tasks'] as const,
@@ -407,6 +408,8 @@ export function useUpdateTask() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: UpdateTaskDto }) => updateTask(id, data),
     onMutate: async ({ id, data }) => {
+      // 编辑新到条目即已读（New in Today）。
+      markNewInTodaySeen('task', id);
       await cancelTaskLists(queryClient);
       const snapshot = snapshotTaskLists(queryClient);
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));

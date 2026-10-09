@@ -34,6 +34,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 0,
       bucketGrouping: false,
       todayReviewedOn: null,
+      todaySeenKeys: [],
       defaultReviewIntervals: INITIAL_INTERVALS,
     });
   });
@@ -59,6 +60,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 1,
       bucketGrouping: true,
       todayReviewedOn: null,
+      todaySeenKeys: [],
       defaultReviewIntervals: INITIAL_INTERVALS,
     });
   });
@@ -72,6 +74,7 @@ describe('normalizePreferences', () => {
         weekStartsOn: 1,
         bucketGrouping: true,
         todayReviewedOn: null,
+        todaySeenKeys: [],
         defaultReviewIntervals: INITIAL_INTERVALS,
       });
     }
@@ -85,6 +88,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 1,
       bucketGrouping: true,
       todayReviewedOn: null,
+      todaySeenKeys: [],
       defaultReviewIntervals: INITIAL_INTERVALS,
     });
     expect(normalizePreferences({ language: 'zh' }, defaults)).toEqual({
@@ -94,6 +98,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 1,
       bucketGrouping: true,
       todayReviewedOn: null,
+      todaySeenKeys: [],
       defaultReviewIntervals: INITIAL_INTERVALS,
     });
   });
@@ -107,6 +112,7 @@ describe('normalizePreferences', () => {
       weekStartsOn: 1,
       bucketGrouping: true,
       todayReviewedOn: null,
+      todaySeenKeys: [],
       defaultReviewIntervals: INITIAL_INTERVALS,
     });
   });
@@ -124,6 +130,26 @@ describe('normalizePreferences', () => {
     );
     expect(normalizePreferences({}, defaults).todayReviewedOn).toBeNull();
   });
+  it('unions todaySeenKeys of payload and default, pruning confirmed or dirty entries', () => {
+    const local = {
+      ...defaults,
+      todayReviewedOn: '2026-10-07',
+      todaySeenKeys: ['task:a@2026-10-08'],
+    };
+    expect(
+      normalizePreferences(
+        {
+          todayReviewedOn: '2026-10-08',
+          todaySeenKeys: ['task:b@2026-10-09', 'task:c@2026-10-08', 'junk', 42],
+        },
+        local,
+      ).todaySeenKeys,
+    ).toEqual(['task:b@2026-10-09']);
+    expect(normalizePreferences({ todaySeenKeys: 'nope' }, local).todaySeenKeys).toEqual([
+      'task:a@2026-10-08',
+    ]);
+  });
+
 
   it('accepts only real booleans for bucketGrouping (invalid/missing → default)', () => {
     expect(normalizePreferences({ bucketGrouping: false }, defaults).bucketGrouping).toBe(false);
