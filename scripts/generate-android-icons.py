@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Regenerate Android launcher icons in packages/mobile/src-tauri/icons/android.
 
-Why this exists: `tauri icon` shrinks the artwork into the adaptive-icon safe
-zone (~66%), so the launcher icon looked smaller than the web/desktop icon.
-This script makes the artwork fill the whole adaptive canvas instead. The
-background color (#fff, see values/ic_launcher_background.xml) shows through
-the master icon's transparent corners, so launcher masks (circle/squircle)
-only ever crop white — the result matches the iOS/web look.
+Why this exists: an adaptive icon's foreground is a 108dp canvas, but the
+launcher only shows the centre 72dp (the rest is reserved for parallax and is
+cropped by the mask). The master icon is already a full app tile with its own
+white padding, so it is placed exactly over that 72dp viewport — the visible
+icon then matches the web/desktop tile. Filling the whole 108dp canvas instead
+zooms the artwork 1.5x and the mask cuts into it. The background color (#fff,
+see values/ic_launcher_background.xml) fills the margin and the master's
+transparent corners, so launcher masks (circle/squircle) only ever crop white.
 
 Usage: python3 scripts/generate-android-icons.py  (requires Pillow)
 After running, sync into the generated Android project with:
@@ -38,8 +40,11 @@ def main() -> None:
         out_dir = OUT / f"mipmap-{density}"
         out_dir.mkdir(parents=True, exist_ok=True)
 
-        # Adaptive foreground: artwork fills the full 108dp canvas.
-        fg = master.resize((fg_px, fg_px), Image.LANCZOS)
+        # Adaptive foreground: artwork covers the visible 72dp of the 108dp canvas.
+        art_px = fg_px * 72 // 108
+        offset = (fg_px - art_px) // 2
+        fg = Image.new("RGBA", (fg_px, fg_px), (0, 0, 0, 0))
+        fg.alpha_composite(master.resize((art_px, art_px), Image.LANCZOS), (offset, offset))
         fg.save(out_dir / "ic_launcher_foreground.png")
 
         # Legacy square icon: full-bleed artwork on white.
