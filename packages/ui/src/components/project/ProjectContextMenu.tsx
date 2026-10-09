@@ -26,7 +26,10 @@ import {
   PopoverTrigger,
 } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { MenuRow } from '@/components/common/MenuRow';
+import { MenuItems, type MenuItem } from '@/components/common/MenuItems';
+import { FieldPickerDialog } from '@/components/common/FieldPicker';
+import { ActionSheet, ActionSheetContent, ActionSheetTrigger } from '@/components/ui/action-sheet';
+import { useIsDesktop } from '@/lib/use-media-query';
 import { isTouchContextMenu } from '../../lib/useLongPress';
 import { useDeleteProject, useRestoreProject, useUpdateProject } from '@taskora/api';
 import { ScheduledDateField } from '@/components/task/fields/ScheduledDateField';
@@ -35,7 +38,7 @@ import { RepeatRuleField } from '@/components/task/fields/RepeatRuleField';
 import { TagsField } from '@/components/task/fields/TagsField';
 import { useDuplicate } from '@/components/task/useDuplicate';
 
-import { ReviewMenuRow, ReviewPicker } from '@/components/review/ReviewSchedule';
+import { ReviewPicker, useReviewMenuItem } from '@/components/review/ReviewSchedule';
 import { useInReviewMode } from '@/components/review/reviewMode';
 
 import { ProjectMovePicker } from './ProjectMovePicker';
@@ -63,6 +66,7 @@ export function ProjectMenuPanel({
   openPicker,
   onToggleComplete,
   showReview,
+  sheet,
   firstItemRef,
 }: ProjectMenuProps & {
   onClose: () => void;
@@ -71,6 +75,8 @@ export function ProjectMenuPanel({
   showReview?: boolean;
   /** 完成 / 取消完成（含剩余任务询问，见 useProjectCompletion；对话框由外层渲染）。 */
   onToggleComplete: (project: ProjectResponseDto) => void;
+  /** 窄屏底部动作面板形态（须渲染在 ActionSheetContent 内）。 */
+  sheet?: boolean;
   firstItemRef?: React.RefObject<HTMLButtonElement>;
 }) {
   const { t } = useTranslation('task');
@@ -85,6 +91,7 @@ export function ProjectMenuPanel({
   const completed = current.status === 'COMPLETED';
   const isDate = (current.scheduledType ?? ScheduledType.NONE) === ScheduledType.DATE;
   const canOfferSkip = variant === 'default' && skipOccurrence.available;
+  const reviewItem = useReviewMenuItem(() => openPicker('review'));
 
   const handleToggleComplete = () => {
     onClose();
@@ -120,60 +127,50 @@ export function ProjectMenuPanel({
     });
   };
 
+  const items: MenuItem[] = [
+    {
+      icon: completed ? Circle : Check,
+      label: completed ? t('markIncomplete') : t('markComplete'),
+      onSelect: handleToggleComplete,
+    },
+    {
+      icon: CalendarClock,
+      label: t('scheduledDate'),
+      onSelect: () => openPicker('scheduled'),
+      separated: true,
+    },
+    // 重复规则：仅 DATE 项目（规则需要计划日期作锚点，recurring-projects spec）。
+    ...(isDate ? [{ icon: Repeat, label: t('repeat'), onSelect: () => openPicker('repeat') }] : []),
+    ...(canOfferSkip
+      ? [
+          {
+            icon: SkipForward,
+            label: t('skipOccurrence'),
+            disabled: skipOccurrence.target === null,
+            title: skipOccurrence.target === null ? t('skipOccurrenceLast') : undefined,
+            onSelect: handleSkip,
+          },
+        ]
+      : []),
+    { icon: CalendarDays, label: t('dueDate'), onSelect: () => openPicker('due') },
+    { icon: Tag, label: t('tags'), onSelect: () => openPicker('tags') },
+    { icon: FolderTree, label: t('move'), onSelect: () => openPicker('move') },
+    ...(variant === 'default'
+      ? [{ icon: Copy, label: t('duplicate'), onSelect: handleDuplicate }]
+      : []),
+    ...(showReview && variant === 'default' ? [reviewItem] : []),
+    {
+      icon: variant === 'trash' ? RotateCcw : Trash2,
+      label: variant === 'trash' ? tc('putBack') : tc('delete'),
+      onSelect: variant === 'trash' ? handleRestore : handleDelete,
+      destructive: true,
+      separated: true,
+    },
+  ];
+
   return (
     <div className="flex flex-col" onClick={(e) => e.stopPropagation()}>
-      <MenuRow
-        ref={firstItemRef}
-        icon={completed ? Circle : Check}
-        onClick={handleToggleComplete}
-      >
-        {completed ? t('markIncomplete') : t('markComplete')}
-      </MenuRow>
-      <div className="-mx-1 my-1 h-px bg-muted" />
-      <MenuRow icon={CalendarClock} onClick={() => openPicker('scheduled')}>
-        {t('scheduledDate')}
-      </MenuRow>
-      {/* 重复规则：仅 DATE 项目（规则需要计划日期作锚点，recurring-projects spec）。 */}
-      {isDate && (
-        <MenuRow icon={Repeat} onClick={() => openPicker('repeat')}>
-          {t('repeat')}
-        </MenuRow>
-      )}
-      {canOfferSkip && (
-        <MenuRow
-          icon={SkipForward}
-          disabled={skipOccurrence.target === null}
-          title={skipOccurrence.target === null ? t('skipOccurrenceLast') : undefined}
-          onClick={handleSkip}
-        >
-          {t('skipOccurrence')}
-        </MenuRow>
-      )}
-      <MenuRow icon={CalendarDays} onClick={() => openPicker('due')}>
-        {t('dueDate')}
-      </MenuRow>
-      <MenuRow icon={Tag} onClick={() => openPicker('tags')}>
-        {t('tags')}
-      </MenuRow>
-      <MenuRow icon={FolderTree} onClick={() => openPicker('move')}>
-        {t('move')}
-      </MenuRow>
-      {variant === 'default' && (
-        <MenuRow icon={Copy} onClick={handleDuplicate}>
-          {t('duplicate')}
-        </MenuRow>
-      )}
-      {showReview && variant === 'default' && (
-        <ReviewMenuRow onClick={() => openPicker('review')} />
-      )}
-      <div className="-mx-1 my-1 h-px bg-muted" />
-      <MenuRow
-        icon={variant === 'trash' ? RotateCcw : Trash2}
-        destructive
-        onClick={variant === 'trash' ? handleRestore : handleDelete}
-      >
-        {variant === 'trash' ? tc('putBack') : tc('delete')}
-      </MenuRow>
+      <MenuItems items={items} sheet={sheet} firstItemRef={firstItemRef} />
     </div>
   );
 }
@@ -333,12 +330,15 @@ export function ProjectContextMenu({
   );
 }
 
-/** Trigger 版：内置 MoreHorizontal 按钮，点击打开菜单 + picker。 */
+/** Trigger 版：内置 MoreHorizontal 按钮，点击打开菜单 + picker；窄屏改为底部动作面板 + 字段卡片。 */
 export function ProjectMoreMenu({ project, current, variant = 'default' }: ProjectMenuProps) {
   const { t } = useTranslation('task');
   const { t: tc } = useTranslation('common');
+  const { t: tr } = useTranslation('review');
+  const { t: tp } = useTranslation('project');
   const navigate = useNavigate();
   const inReview = useInReviewMode();
+  const isDesktop = useIsDesktop();
 
   // 回顾中删除：回顾会话自动进入下一个，不跳走
   const onDeleted = () => {
@@ -363,19 +363,67 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
     setActivePicker(kind);
   };
 
+  const trigger = (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-8 w-8 text-muted-foreground max-md:-mr-1.5 max-md:h-11 max-md:w-11"
+      aria-label={tc('more')}
+    >
+      <MoreHorizontal className="h-4 w-4 max-md:h-5 max-md:w-5" />
+    </Button>
+  );
+  const panel = (sheet: boolean) => (
+    <ProjectMenuPanel
+      project={project}
+      current={current}
+      variant={variant}
+      onDeleted={onDeleted}
+      onDuplicated={onDuplicated}
+      onClose={closeMenu}
+      openPicker={openPicker}
+      onToggleComplete={completion.toggle}
+      showReview
+      sheet={sheet}
+    />
+  );
+  const pickerBody = activePicker !== null && (
+    <PickerContent kind={activePicker} current={current} patch={patch} onClose={() => setActivePicker(null)} />
+  );
+
+  if (!isDesktop) {
+    const pickerLabel: Record<Exclude<PickerKind, null>, string> = {
+      scheduled: t('scheduledDate'),
+      repeat: t('repeat'),
+      due: t('dueDate'),
+      tags: t('tags'),
+      move: t('move'),
+      review: tr('title'),
+    };
+    return (
+      <>
+        <ActionSheet open={menuOpen} onOpenChange={setMenuOpen}>
+          <ActionSheetTrigger asChild>{trigger}</ActionSheetTrigger>
+          <ActionSheetContent title={current.title || tp('defaultTitle')}>
+            {panel(true)}
+          </ActionSheetContent>
+        </ActionSheet>
+        <FieldPickerDialog
+          label={activePicker ? pickerLabel[activePicker] : ''}
+          open={activePicker !== null}
+          onOpenChange={(o) => !o && setActivePicker(null)}
+        >
+          {pickerBody}
+        </FieldPickerDialog>
+        {completion.dialog}
+      </>
+    );
+  }
+
   return (
     <div ref={containerRef}>
       <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-8 w-8 text-muted-foreground"
-            aria-label={tc('more')}
-          >
-            <MoreHorizontal className="h-4 w-4" />
-          </Button>
-        </PopoverTrigger>
+        <PopoverTrigger asChild>{trigger}</PopoverTrigger>
         <PopoverContent
           align="end"
           className="w-44 p-1"
@@ -385,17 +433,7 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          <ProjectMenuPanel
-            project={project}
-            current={current}
-            variant={variant}
-            onDeleted={onDeleted}
-            onDuplicated={onDuplicated}
-            onClose={closeMenu}
-            openPicker={openPicker}
-            onToggleComplete={completion.toggle}
-            showReview
-          />
+          {panel(false)}
         </PopoverContent>
       </Popover>
 
@@ -405,9 +443,7 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
       >
         <PopoverAnchor virtualRef={containerRef} />
         <PopoverContent align="end" onClick={(e) => e.stopPropagation()}>
-          {activePicker !== null && (
-            <PickerContent kind={activePicker} current={current} patch={patch} onClose={() => setActivePicker(null)} />
-          )}
+          {pickerBody}
         </PopoverContent>
       </Popover>
       {completion.dialog}

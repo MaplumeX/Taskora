@@ -3,7 +3,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
+import { mockDesktop } from '@/test/media';
 
 import type { ProjectHeadingResponseDto, TaskResponseDto } from '@taskora/shared';
 import { HeadingStatus, ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
@@ -387,6 +388,8 @@ describe('ProjectSettledTasks', () => {
   });
 
   it('calls unarchive mutation when unarchive menu item is clicked', async () => {
+    const restoreMedia = mockDesktop(true);
+    onTestFinished(restoreMedia);
     const user = userEvent.setup();
     const archivedHeading = makeHeading({ id: 'h-1', title: 'Sprint 1' });
     mockHeadings([archivedHeading]);

@@ -17,7 +17,7 @@ import {
 } from '@taskora/api';
 import type { ReviewInterval, ReviewQueueItem } from '@taskora/shared';
 
-import { MenuRow } from '@/components/common/MenuRow';
+import type { MenuItem } from '@/components/common/MenuItems';
 import { MetaBadge, MetaPopover } from '@/components/common/MetaBadge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -78,14 +78,10 @@ export function useReviewActions(target: ReviewTarget) {
   };
 }
 
-/** 「…」菜单的回顾一行：点开回顾选择器。 */
-export function ReviewMenuRow({ onClick }: { onClick: () => void }) {
+/** 「…」菜单的回顾项：点开回顾选择器。 */
+export function useReviewMenuItem(onSelect: () => void): MenuItem {
   const { t } = useTranslation('review');
-  return (
-    <MenuRow icon={CalendarCheck} onClick={onClick}>
-      {t('title')}
-    </MenuRow>
-  );
+  return { icon: CalendarCheck, label: t('title'), onSelect };
 }
 
 /**

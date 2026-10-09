@@ -16,10 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { MenuRow } from '@/components/common/MenuRow';
+import { MenuItems, type MenuItem } from '@/components/common/MenuItems';
+import { FieldPickerDialog } from '@/components/common/FieldPicker';
+import { ActionSheet, ActionSheetContent, ActionSheetTrigger } from '@/components/ui/action-sheet';
+import { useIsDesktop } from '@/lib/use-media-query';
 import { useDeleteArea, useUpdateArea } from '@taskora/api';
 import { TagsField } from '@/components/task/fields/TagsField';
-import { ReviewMenuRow, ReviewPicker } from '@/components/review/ReviewSchedule';
+import { ReviewPicker, useReviewMenuItem } from '@/components/review/ReviewSchedule';
 import { useInReviewMode } from '@/components/review/reviewMode';
 import { isTouchContextMenu } from '../../lib/useLongPress';
 
@@ -56,10 +59,13 @@ function AreaMenu({
   const { t } = useTranslation('task');
   const { t: tc } = useTranslation('common');
   const { t: ta } = useTranslation('area');
+  const { t: tr } = useTranslation('review');
   const navigate = useNavigate();
   const inReview = useInReviewMode();
   const updateArea = useUpdateArea();
   const deleteArea = useDeleteArea();
+  // 窄屏「…」：底部动作面板 + 字段卡片；右键入口只在桌面出现（触屏长按只负责拖动）。
+  const sheet = !useIsDesktop() && !contextMenu;
 
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
@@ -74,6 +80,22 @@ function AreaMenu({
     closeMenu();
     setActivePicker(kind);
   };
+
+  const reviewItem = useReviewMenuItem(() => openPicker('review'));
+  const items: MenuItem[] = [
+    { icon: Tag, label: t('tags'), onSelect: () => openPicker('tags') },
+    ...(contextMenu ? [] : [reviewItem]),
+    {
+      icon: Trash2,
+      label: tc('delete'),
+      destructive: true,
+      separated: true,
+      onSelect: () => {
+        closeMenu();
+        setConfirmOpen(true);
+      },
+    },
+  ];
 
   const handlePatch = (data: UpdateAreaDto) => {
     updateArea.mutate(
@@ -96,6 +118,23 @@ function AreaMenu({
     });
   };
 
+  const trigger = (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-8 w-8 text-muted-foreground max-md:-mr-1.5 max-md:h-11 max-md:w-11"
+      aria-label={tc('more')}
+    >
+      <MoreHorizontal className="h-4 w-4 max-md:h-5 max-md:w-5" />
+    </Button>
+  );
+  const pickerBody = (
+    <>
+      {activePicker === 'tags' && <TagsField current={area} onPatch={handlePatch} />}
+      {activePicker === 'review' && <ReviewPicker target={{ kind: 'area', ...area }} />}
+    </>
+  );
+
   return (
     <div
       ref={containerRef}
@@ -116,49 +155,43 @@ function AreaMenu({
       }
     >
       {children}
-      <Popover open={menuOpen} onOpenChange={setMenuOpen}>
-        {contextMenu ? (
-          <PopoverAnchor virtualRef={virtualAnchorRef} />
-        ) : (
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 text-muted-foreground"
-              aria-label={tc('more')}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
-          </PopoverTrigger>
-        )}
-        <PopoverContent align="end" className="w-44 p-1" onClick={(e) => e.stopPropagation()}>
-          <MenuRow icon={Tag} onClick={() => openPicker('tags')}>
-            {t('tags')}
-          </MenuRow>
-          {!contextMenu && (
-            <ReviewMenuRow onClick={() => openPicker('review')} />
-          )}
-          <div className="-mx-1 my-1 h-px bg-muted" />
-          <MenuRow
-            icon={Trash2}
-            destructive
-            onClick={() => {
-              closeMenu();
-              setConfirmOpen(true);
-            }}
+      {sheet ? (
+        <>
+          <ActionSheet open={menuOpen} onOpenChange={setMenuOpen}>
+            <ActionSheetTrigger asChild>{trigger}</ActionSheetTrigger>
+            <ActionSheetContent title={area.title || ta('defaultTitle')}>
+              <MenuItems items={items} sheet />
+            </ActionSheetContent>
+          </ActionSheet>
+          <FieldPickerDialog
+            label={activePicker === 'review' ? tr('title') : t('tags')}
+            open={activePicker !== null}
+            onOpenChange={(o) => !o && setActivePicker(null)}
           >
-            {tc('delete')}
-          </MenuRow>
-        </PopoverContent>
-      </Popover>
+            {pickerBody}
+          </FieldPickerDialog>
+        </>
+      ) : (
+        <>
+          <Popover open={menuOpen} onOpenChange={setMenuOpen}>
+            {contextMenu ? (
+              <PopoverAnchor virtualRef={virtualAnchorRef} />
+            ) : (
+              <PopoverTrigger asChild>{trigger}</PopoverTrigger>
+            )}
+            <PopoverContent align="end" className="w-44 p-1" onClick={(e) => e.stopPropagation()}>
+              <MenuItems items={items} />
+            </PopoverContent>
+          </Popover>
 
-      <Popover open={activePicker !== null} onOpenChange={(o) => !o && setActivePicker(null)}>
-        <PopoverAnchor virtualRef={containerRef} />
-        <PopoverContent align="end" onClick={(e) => e.stopPropagation()}>
-          {activePicker === 'tags' && <TagsField current={area} onPatch={handlePatch} />}
-          {activePicker === 'review' && <ReviewPicker target={{ kind: 'area', ...area }} />}
-        </PopoverContent>
-      </Popover>
+          <Popover open={activePicker !== null} onOpenChange={(o) => !o && setActivePicker(null)}>
+            <PopoverAnchor virtualRef={containerRef} />
+            <PopoverContent align="end" onClick={(e) => e.stopPropagation()}>
+              {pickerBody}
+            </PopoverContent>
+          </Popover>
+        </>
+      )}
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent onClick={(e) => e.stopPropagation()}>
