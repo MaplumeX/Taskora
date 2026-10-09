@@ -9,6 +9,7 @@
   "exit": "Exit Review",
   "interval": "Review every",
   "nextReview": "Next review",
+  "due": "Review due",
   "unit": "Unit",
   "unit_day": "days",
   "unit_week": "weeks",

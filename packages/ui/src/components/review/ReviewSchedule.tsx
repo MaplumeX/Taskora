@@ -6,6 +6,7 @@ import {
   formatDateLabel,
   formatShortDate,
   parseCalendarDate,
+  startOfTomorrow,
   todayDateKey,
   useCalendarDay,
   useMarkAreaReviewed,
@@ -89,18 +90,23 @@ export function ReviewMenuRow({ onClick }: { onClick: () => void }) {
 
 /**
  * Project / Area 页头元数据行里的下次回顾日徽章，点开回顾选择器。
- * 下次回顾日不逾期，到期也不套警示色。
+ * 未到期显示下次回顾日；待回顾（不晚于今天）显示「待回顾」并套交互蓝
+ * （与侧边栏回顾入口同色）——回顾不逾期，不用 Deadline 的红色。
  */
 export function ReviewMetaBadge({ target }: { target: ReviewTarget }) {
   const { t } = useTranslation('review');
   const schedule = useReviewSchedule(target);
+  // 存储值可能带时间部分（ISO），按日历日比较
+  const nextReviewDate = parseCalendarDate(schedule.nextReviewDate);
+  const due = nextReviewDate < startOfTomorrow();
   return (
     <MetaPopover
       label={t('nextReview')}
       trigger={
         <MetaBadge
           icon={<CalendarCheck className="h-3 w-3" />}
-          text={formatDateLabel(parseCalendarDate(schedule.nextReviewDate))}
+          text={due ? t('due') : formatDateLabel(nextReviewDate)}
+          accent={due}
         />
       }
     >

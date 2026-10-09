@@ -9,6 +9,7 @@
   "exit": "退出回顾",
   "interval": "回顾间隔",
   "nextReview": "下次回顾",
+  "due": "待回顾",
   "unit": "单位",
   "unit_day": "天",
   "unit_week": "周",

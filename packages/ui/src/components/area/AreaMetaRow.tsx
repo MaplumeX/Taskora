@@ -4,13 +4,13 @@ import { toast } from 'sonner';
 import type { AreaResponseDto, UpdateAreaDto } from '@taskora/shared';
 import { useUpdateArea } from '@taskora/api';
 
-import { MetaPopover, MetaTagDots } from '@/components/common/MetaBadge';
+import { MetaPopover, MetaRowLayout, MetaTagPills } from '@/components/common/MetaBadge';
 import { ReviewMetaBadge } from '@/components/review/ReviewSchedule';
 import { TagsField } from '@/components/task/fields/TagsField';
 
 /**
- * Area 详情头部的元数据行：标签 / 下次回顾日。
- * 徽章风格与 ProjectMetaRow 一致，点击打开对应选择器编辑。
+ * Area 详情头部的元数据行：左槽标签胶囊，右槽下次回顾日。
+ * 骨架与 ProjectMetaRow 一致（左缘与备注对齐），点击打开对应选择器编辑。
  */
 export function AreaMetaRow({ area }: { area: AreaResponseDto }) {
   const { t } = useTranslation('task');
@@ -23,14 +23,15 @@ export function AreaMetaRow({ area }: { area: AreaResponseDto }) {
   const tags = area.tags ?? [];
 
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {tags.length > 0 ? (
-        <MetaPopover label={t('tags')} trigger={<MetaTagDots tags={tags} />}>
-          <TagsField current={area} onPatch={patch} />
-        </MetaPopover>
-      ) : null}
-
-      <ReviewMetaBadge target={{ kind: 'area', ...area }} />
-    </div>
+    <MetaRowLayout
+      start={
+        tags.length > 0 ? (
+          <MetaPopover label={t('tags')} trigger={<MetaTagPills tags={tags} />}>
+            <TagsField current={area} onPatch={patch} />
+          </MetaPopover>
+        ) : null
+      }
+      end={<ReviewMetaBadge target={{ kind: 'area', ...area }} />}
+    />
   );
 }
