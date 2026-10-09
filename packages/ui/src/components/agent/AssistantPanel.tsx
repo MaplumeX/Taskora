@@ -53,7 +53,7 @@ export function AssistantPanel() {
       aria-label={t('agent:assistantPanel')}
       data-assistant-panel=""
       style={{ width }}
-      className="relative flex h-full shrink-0 flex-col border-l border-border bg-background"
+      className="relative flex h-full shrink-0 flex-col border-l border-border bg-background pt-[var(--titlebar-h,0px)]"
     >
       <ResizeHandle width={width} maxWidth={maxWidth} onDrag={setDragWidth} />
       <PanelFocus />

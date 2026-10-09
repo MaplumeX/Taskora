@@ -103,7 +103,9 @@ export function MainContent() {
             ? 'h-full max-md:pb-[var(--safe-area-bottom)]'
             : canvas
               ? 'h-full pt-2 md:px-6 md:pt-4 max-md:pb-[var(--safe-area-bottom)]'
-              : 'max-w-3xl px-4 pb-24 pt-2 md:px-12 md:pb-12 md:pt-10',
+              : // 桌面自绘外壳的拖拽带（--titlebar-h）已在主列顶部留白，从 pt-10
+                // 里扣掉，标题与窗口顶的距离与 web 端一致。
+                'max-w-3xl px-4 pb-24 pt-2 md:px-12 md:pb-12 md:pt-[max(0.5rem,calc(2.5rem-var(--titlebar-h,0px)))]',
         )}
       >
         <Suspense

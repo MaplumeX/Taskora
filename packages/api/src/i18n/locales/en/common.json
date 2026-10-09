@@ -51,5 +51,8 @@
   "clear": "Clear",
   "syncStatusOffline": "Offline · {{count}} pending",
   "syncStatusUpgradeRequired": "Update Taskora to sync",
-  "undo": "Undo"
+  "undo": "Undo",
+  "windowMinimize": "Minimize",
+  "windowMaximize": "Maximize",
+  "windowRestore": "Restore Down"
 }

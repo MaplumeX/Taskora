@@ -51,5 +51,8 @@
   "clear": "清除",
   "syncStatusOffline": "离线 · {{count}} 条待同步",
   "syncStatusUpgradeRequired": "需要升级 Taskora 才能同步",
-  "undo": "撤销"
+  "undo": "撤销",
+  "windowMinimize": "最小化",
+  "windowMaximize": "最大化",
+  "windowRestore": "向下还原"
 }

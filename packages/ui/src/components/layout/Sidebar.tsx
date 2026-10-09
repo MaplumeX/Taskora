@@ -128,13 +128,18 @@ export function Sidebar() {
   };
 
   return (
-    <aside ref={dropArea.setAreaRef} className="flex h-screen w-full flex-col bg-sidebar">
+    <aside
+      ref={dropArea.setAreaRef}
+      className="flex h-screen w-full flex-col bg-sidebar pt-[var(--sidebar-inset-top,0px)]"
+    >
+      {/* 桌面自绘外壳：侧边栏只为 macOS 红绿灯让位（--sidebar-inset-top），
+          账号按钮叠在窗口拖拽带（z-40）之上才能点到，按钮外的空白仍可拖窗口。 */}
       <div className="px-2 pb-2 pt-3">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              className="w-full justify-start gap-2 px-2 font-semibold hover:bg-sidebar-accent/60"
+              className="relative z-[41] w-full justify-start gap-2 px-2 font-semibold hover:bg-sidebar-accent/60"
             >
               <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-xs text-primary-foreground">
                 {user?.avatarUrl ? (
