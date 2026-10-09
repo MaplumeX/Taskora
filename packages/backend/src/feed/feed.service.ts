@@ -76,12 +76,19 @@ function toTaskFeedItem(t: TaskWithTags): TaskFeedItem {
 }
 
 /**
- * 计划日期最后一次被写入的时刻（New in Today，见 FeedItemBase.scheduledSetAt）：
- * 取 hub 存下的该字段时钟；没有时钟的旧行为 null。
+ * 计划日期 / 截止日期最后一次被写入的时刻（New in Today，见
+ * FeedItemBase.scheduledSetAt / dueSetAt）：取 hub 存下的字段时钟；没有
+ * 时钟的旧行为 null。
  */
-function scheduledSetAtOf(row: { fieldClocks: unknown }): string | null {
+function setAtOf(row: { fieldClocks: unknown }): {
+  scheduledSetAt: string | null;
+  dueSetAt: string | null;
+} {
   const clocks = row.fieldClocks as Record<string, unknown> | null;
-  return hlcIsoTime(clocks?.scheduledDate);
+  return {
+    scheduledSetAt: hlcIsoTime(clocks?.scheduledDate),
+    dueSetAt: hlcIsoTime(clocks?.dueDate),
+  };
 }
 
 /** 归档分页令牌：上一页最后一条的 (settledAt, id)，base64url JSON。 */
@@ -222,9 +229,7 @@ export class FeedService {
       .filter((task) => !task.projectId || !hiddenProjectIds.has(task.projectId))
       .filter((task) => taskMatchesView(task, view, context))
       .map((task) =>
-        view === 'today'
-          ? { ...toTaskFeedItem(task), scheduledSetAt: scheduledSetAtOf(task) }
-          : toTaskFeedItem(task),
+        view === 'today' ? { ...toTaskFeedItem(task), ...setAtOf(task) } : toTaskFeedItem(task),
       );
 
     const visibleProjects = projects.filter((project) =>
@@ -261,11 +266,11 @@ export class FeedService {
         tags: p.tags.map((pt) => mapTag(pt.tag)),
         taskTotalCount: total,
         taskCompletedCount: completed,
-        ...(view === 'today' ? { scheduledSetAt: scheduledSetAtOf(p) } : {}),
+        ...(view === 'today' ? setAtOf(p) : {}),
       };
     });
 
-    return sortFeedItems<FeedItem>([...taskItems, ...projectItems], view);
+    return sortFeedItems<FeedItem>([...taskItems, ...projectItems], view, context);
   }
 
   /**

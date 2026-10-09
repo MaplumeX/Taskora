@@ -64,8 +64,8 @@ const REPAIR_ORDER: SyncEntity[] = [
 export interface ReplicaRow {
   id: string;
   fields: WireRow;
-  /** ListOptions.clockOf 指定字段的 HLC 时间戳（该字段从未写过为 null）。 */
-  clock?: string | null;
+  /** ListOptions.clocksOf 各字段的 HLC 时间戳（该字段从未写过为 null）。 */
+  clocks?: Record<string, string | null>;
 }
 
 /**
@@ -83,10 +83,10 @@ export interface ListOptions {
   /** 只取按列表序的前 N 行（如取首行位次）。 */
   limit?: number;
   /**
-   * 同时取出该字段的 HLC 时间戳（ReplicaRow.clock），用于推导「字段何时
-   * 被写」（如 New in Today）。SQL 内只抽这一个键，不传整列 clocks。
+   * 同时取出这些字段的 HLC 时间戳（ReplicaRow.clocks），用于推导「字段何时
+   * 被写」（如 New in Today）。SQL 内只抽这几个键，不传整列 clocks。
    */
-  clockOf?: string;
+  clocksOf?: readonly string[];
 }
 
 /**
@@ -410,26 +410,32 @@ export class LocalReplica {
     const limit =
       options.limit !== undefined ? `LIMIT ${Math.max(0, Math.floor(options.limit))}` : '';
     // 不取 clocks 列：UI 用不到，整表 JSON 经 IPC 传输再丢弃是纯浪费；
-    // 需要某字段的时钟时只在 SQL 内抽出那一个键。
-    const clockOf = options.clockOf;
-    if (clockOf !== undefined && !def.fields.some((field) => field.name === clockOf)) {
-      throw new Error(`list: ${entity} 没有字段 ${clockOf}`);
+    // 需要某些字段的时钟时只在 SQL 内抽出那几个键。
+    const clocksOf = options.clocksOf ?? [];
+    for (const name of clocksOf) {
+      if (!def.fields.some((field) => field.name === name)) {
+        throw new Error(`list: ${entity} 没有字段 ${name}`);
+      }
     }
     const columns = [
       'id',
       ...def.fields.map((field) => field.name),
-      ...(clockOf !== undefined ? [`json_extract(clocks, '$.${clockOf}') AS _clock`] : []),
+      ...clocksOf.map((name, i) => `json_extract(clocks, '$.${name}') AS _clock${i}`),
     ].join(', ');
     const rows = await this.storage.all<Record<string, unknown>>(
       `SELECT ${columns} FROM ${def.table} ${where} ${order} ${limit}`,
       params,
     );
     return rows.map((row) => {
-      const { id, _clock, ...rest } = row;
+      const { id, ...rest } = row;
+      const clocks: Record<string, string | null> = {};
+      clocksOf.forEach((name, i) => {
+        const clock = rest[`_clock${i}`];
+        delete rest[`_clock${i}`];
+        clocks[name] = typeof clock === 'string' ? clock : null;
+      });
       const decoded = { id: id as string, fields: this.decodeRow(entity, rest) };
-      return clockOf !== undefined
-        ? { ...decoded, clock: typeof _clock === 'string' ? _clock : null }
-        : decoded;
+      return clocksOf.length > 0 ? { ...decoded, clocks } : decoded;
     });
   }
 

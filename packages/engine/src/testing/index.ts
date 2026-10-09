@@ -17,6 +17,7 @@ export interface ContractTask {
   status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
   scheduledType: 'NONE' | 'DATE' | 'SOMEDAY';
   scheduledDate: string | null;
+  dueDate: string | null;
   bucket: 'INBOX' | 'ANYTIME' | 'SCHEDULED';
   settledAt: string | null;
   trashedAt: string | null;
@@ -33,6 +34,7 @@ export interface ContractProject {
   status: 'ACTIVE' | 'COMPLETED';
   scheduledType: 'NONE' | 'DATE' | 'SOMEDAY';
   scheduledDate: string | null;
+  dueDate: string | null;
   bucket: 'ANYTIME' | 'SCHEDULED';
   completedAt: string | null;
   trashedAt: string | null;
@@ -60,6 +62,7 @@ function task(id: string, position: string, fields: Partial<ContractTask> = {}):
     status: 'ACTIVE',
     scheduledType: 'NONE',
     scheduledDate: null,
+    dueDate: null,
     bucket: 'INBOX',
     settledAt: null,
     trashedAt: null,
@@ -83,6 +86,7 @@ function project(
     status: 'ACTIVE',
     scheduledType: 'NONE',
     scheduledDate: null,
+    dueDate: null,
     bucket: 'ANYTIME',
     completedAt: null,
     trashedAt: null,
@@ -135,6 +139,7 @@ export const VIEW_CONTRACT = {
     }),
     task('t-done', 'a6', {
       status: 'COMPLETED',
+      dueDate: '2026-09-20',
       settledAt: '2026-09-22T10:00:00.000Z',
       bucket: 'ANYTIME',
       projectId: 'p-active',
@@ -144,8 +149,22 @@ export const VIEW_CONTRACT = {
       status: 'CANCELLED',
       settledAt: '2026-09-23T10:00:00.000Z',
     }),
-    task('t-trashed', 'a8', { trashedAt: '2026-09-21T00:00:00.000Z' }),
+    task('t-trashed', 'a8', { trashedAt: '2026-09-21T00:00:00.000Z', dueDate: '2026-09-20' }),
     task('t-in-p-today', 'a9', { bucket: 'ANYTIME', projectId: 'p-today' }),
+    // 截止日期 ≤ 今天也进 Today，同时留在原视图
+    task('t-due-inbox', 'b0', { dueDate: '2026-09-24' }),
+    task('t-due-someday', 'b1', {
+      scheduledType: 'SOMEDAY',
+      bucket: 'SCHEDULED',
+      dueDate: '2026-09-22',
+    }),
+    task('t-due-later', 'b2', {
+      scheduledType: 'DATE',
+      scheduledDate: '2026-09-30',
+      bucket: 'SCHEDULED',
+      dueDate: '2026-09-24',
+    }),
+    task('t-due-tomorrow', 'b3', { bucket: 'ANYTIME', dueDate: '2026-09-25' }),
   ],
   projects: [
     project('p-active', 'a0', { tagIds: ['tag-2'] }),
@@ -157,14 +176,25 @@ export const VIEW_CONTRACT = {
     }),
     project('p-trashed', 'a2', { trashedAt: '2026-09-21T00:00:00.000Z' }),
     project('p-done', 'a3', { status: 'COMPLETED', completedAt: '2026-09-23T12:00:00.000Z' }),
+    project('p-due', 'a4', { dueDate: '2026-09-23' }),
   ],
   /** feed 视图 → 期望的行（任务与项目混排，带顺序）。 */
   feeds: {
-    inbox: ['t-inbox'],
-    anytime: ['t-anytime', 't-in-p-today'],
-    today: ['p-today', 't-today', 't-overdue'],
-    upcoming: ['t-upcoming'],
-    someday: ['t-someday'],
+    inbox: ['t-inbox', 't-due-inbox'],
+    anytime: ['t-anytime', 't-in-p-today', 't-due-tomorrow'],
+    today: [
+      'p-today',
+      't-today',
+      't-overdue',
+      'p-due',
+      't-due-inbox',
+      't-due-someday',
+      't-due-later',
+    ],
+    upcoming: ['t-upcoming', 't-due-later'],
+    someday: ['t-someday', 't-due-someday'],
+    // 截止日期升序，同一天按位次
+    deadlines: ['t-due-someday', 'p-due', 't-due-inbox', 't-due-later', 't-due-tomorrow'],
     logbook: ['p-done', 't-cancelled', 't-done'],
     trash: ['p-trashed', 't-trashed'],
   } satisfies Record<ListView, string[]>,
@@ -173,6 +203,7 @@ export const VIEW_CONTRACT = {
     'p-today': { total: 1, completed: 0 },
     'p-done': { total: 0, completed: 0 },
     'p-trashed': { total: 0, completed: 0 },
+    'p-due': { total: 0, completed: 0 },
   } as Record<string, { total: number; completed: number }>,
   /** 任务列表查询 → 期望的任务（带顺序）。 */
   queries: [
@@ -186,6 +217,10 @@ export const VIEW_CONTRACT = {
         't-upcoming',
         't-someday',
         't-in-p-today',
+        't-due-inbox',
+        't-due-someday',
+        't-due-later',
+        't-due-tomorrow',
       ],
     },
     { query: { projectId: 'p-active' }, ids: ['t-anytime'] },
@@ -202,7 +237,10 @@ export const VIEW_CONTRACT = {
     { query: { q: 'search' }, ids: ['t-someday'] },
     // 搜索 + completed：未了结与已了结都在（ADR 0006）
     { query: { q: 'search', completed: true }, ids: ['t-someday', 't-cancelled'] },
-    { query: { view: 'today' }, ids: ['t-today', 't-overdue'] },
+    {
+      query: { view: 'today' },
+      ids: ['t-today', 't-overdue', 't-due-inbox', 't-due-someday', 't-due-later'],
+    },
     { query: { view: 'logbook' }, ids: ['t-cancelled', 't-done'] },
     { query: { view: 'trash' }, ids: ['t-trashed'] },
   ] satisfies Array<{ query: TaskListQuery; ids: string[] }>,

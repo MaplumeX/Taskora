@@ -3,12 +3,12 @@ import { useTranslation } from 'react-i18next';
 
 import { ProjectStatus, TaskStatus } from '@taskora/shared';
 
-import { mainNav, trashNav, type NavItem } from '@/components/layout/navItems';
+import { deadlinesNav, mainNav, trashNav, type NavItem } from '@/components/layout/navItems';
 import { ProjectProgressPie } from '@/components/project/ProjectProgressRing';
 import { cn } from '@/lib/utils';
 import { highlightParts, type QuickFindItem } from './quickFindResults';
 
-/** 可搜到的内置列表（spec 第 1 节）：主导航 + 稍后项目 + 废纸篓 + 标签。 */
+/** 可搜到的内置列表（spec 第 1 节）：主导航 + 稍后项目 + 截止日期 + 废纸篓 + 标签。 */
 export const LIST_TARGETS: Array<{
   to: string;
   labelKey: string;
@@ -17,6 +17,7 @@ export const LIST_TARGETS: Array<{
 }> = [
   ...mainNav,
   { to: '/later-projects', labelKey: 'project:laterProjects', icon: CalendarClock },
+  deadlinesNav,
   trashNav,
   { to: '/tags', labelKey: 'nav:tags', icon: Tags },
 ];

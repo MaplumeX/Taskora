@@ -91,6 +91,7 @@ export class TasksService {
         title: parent.title,
         notes: parent.notes,
         scheduledDate: parent.scheduledDate,
+        dueDate: parent.dueDate,
         repeatRule,
         reminderTime: parent.reminderTime,
         projectId: parent.projectId,

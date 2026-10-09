@@ -6,7 +6,7 @@ import { ProjectStatus } from '@taskora/shared';
 import type { ProjectFeedItem, ProjectResponseDto } from '@taskora/shared';
 
 import { cn } from '@/lib/utils';
-import { TaskDateBadge } from '@/components/task/TaskDateBadge';
+import { TaskDateBadge, type ScheduledBadgeMode } from '@/components/task/TaskDateBadge';
 import { TaskDueDateBadge } from '@/components/task/TaskDueDateBadge';
 import { TaskTagCapsules } from '@/components/task/TaskTagCapsules';
 import { TaskTodayBadge } from '@/components/task/TaskTodayBadge';
@@ -22,7 +22,7 @@ interface Props {
   /** Feed 视图传 `ProjectFeedItem`；列表页（区域页等）传 `ProjectResponseDto`。
    * 两者共享本行所需字段（title / status / 计数 / 日期 / tags）。 */
   item: ProjectFeedItem | ProjectResponseDto;
-  showScheduledBadge?: boolean;
+  showScheduledBadge?: ScheduledBadgeMode;
   selectionState?: SelectionState;
   /** Logbook 专用：标题后注入的了却日期徽标 */
   settledDateBadge?: React.ReactNode;
@@ -108,7 +108,7 @@ export function ProjectFeedRow({
           ? settledDateBadge
           : showScheduledBadge &&
             (item.scheduledDate && parseCalendarDate(item.scheduledDate) < startOfTomorrow() ? (
-              <TaskTodayBadge className="shrink-0" />
+              showScheduledBadge === true && <TaskTodayBadge className="shrink-0" />
             ) : (
               <TaskDateBadge scheduledDate={item.scheduledDate} />
             ))}

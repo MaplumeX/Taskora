@@ -25,7 +25,7 @@ import { isAppleOS } from '../keyboard/keymap';
 import { NewInTodayDot } from './NewInTodayDot';
 import { TaskCheckbox } from './TaskCheckbox';
 import { TaskContextMenu } from './TaskContextMenu';
-import { TaskDateBadge } from './TaskDateBadge';
+import { TaskDateBadge, type ScheduledBadgeMode } from './TaskDateBadge';
 import { TaskDueDateBadge } from './TaskDueDateBadge';
 import { TaskTodayBadge } from './TaskTodayBadge';
 import { TaskNotesBadge } from './TaskNotesBadge';
@@ -59,7 +59,7 @@ interface Props {
   selectionState?: SelectionState;
   onToggleComplete: () => void;
   onRowClick?: () => void;
-  showScheduledBadge?: boolean;
+  showScheduledBadge?: ScheduledBadgeMode;
   /** Logbook 专用：标题区后注入的了却日期徽标 */
   settledDateBadge?: React.ReactNode;
   /** Logbook 场景：已了结标题保留删除线但不置灰（正常前景色）。 */
@@ -328,7 +328,7 @@ export function TaskItem({
                   settledDateBadge
                 ) : (
                   <>
-                    {showScheduledBadge && scheduledOnOrBeforeToday && (
+                    {showScheduledBadge === true && scheduledOnOrBeforeToday && (
                       <TaskTodayBadge className="shrink-0" />
                     )}
                     {showScheduledBadge && (

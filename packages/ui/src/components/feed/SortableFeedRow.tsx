@@ -4,6 +4,7 @@ import type { SelectionState } from '@taskora/api';
 
 import { flipId, noLayoutAnimation } from '../../lib/dnd';
 import { FeedItemRow } from './FeedItemRow';
+import type { ScheduledBadgeMode } from '@/components/task/TaskDateBadge';
 
 interface SortableFeedRowProps {
   dndId: string;
@@ -16,7 +17,7 @@ interface SortableFeedRowProps {
   selectionState: SelectionState;
   onToggleComplete?: () => void;
   onRowClick?: () => void;
-  showScheduledBadge?: boolean;
+  showScheduledBadge?: ScheduledBadgeMode;
   /** New in Today 新到条目：行首左侧黄点。 */
   newInToday?: boolean;
 }
