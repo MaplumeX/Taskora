@@ -23,6 +23,8 @@ android {
 
 dependencies {
     implementation("androidx.core:core-ktx:1.13.1")
+    // 快速添加浮层的 WebView 从插件 assets 加载页面（WebViewAssetLoader）。
+    implementation("androidx.webkit:webkit:1.12.1")
     // tauri Plugin 基类；模块由 gen/android 的 settings 统一 include。
     implementation(project(":tauri-android"))
 }

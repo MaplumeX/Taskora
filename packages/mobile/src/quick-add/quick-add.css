@@ -1,0 +1,17 @@
+@import '@taskora/ui/styles/tokens.css';
+
+/*
+ * 快速添加浮层：WebView 透明，遮罩由原生绘制（与进出场动画一起），页面
+ * 只画卡片。
+ */
+html,
+body,
+#root {
+  height: 100%;
+  background: transparent;
+}
+
+body {
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+}

@@ -206,4 +206,40 @@ describe('QuickAddCard', () => {
     await user.keyboard('{Control>}{Shift>}T{/Shift}{/Control}');
     expect(await screen.findByRole('option', { name: /Work/ })).toBeInTheDocument();
   });
+
+  it('自定义操作行（触屏）替换快捷键提示行，可「在应用中继续」提交', async () => {
+    const onSubmit = vi.fn();
+    render(
+      <QuickAddCard
+        onSubmit={onSubmit}
+        onCancel={vi.fn()}
+        footer={({ canSubmit, submit }) => (
+          <button
+            type="button"
+            disabled={!canSubmit}
+            onClick={() => submit({ keepOpen: false, openInApp: true })}
+          >
+            Open
+          </button>
+        )}
+      />,
+    );
+    expect(screen.queryByText('Esc')).not.toBeInTheDocument();
+    const open = screen.getByRole('button', { name: 'Open' });
+    expect(open).toBeDisabled();
+
+    await user.type(screen.getByRole('textbox', { name: 'New task' }), 'Call mom');
+    await user.click(open);
+    expect(onSubmit).toHaveBeenCalledWith(
+      { title: 'Call mom' },
+      { keepOpen: false, openInApp: true },
+    );
+  });
+
+  it('keepOpenOnEnter：回车即「添加并继续」（触屏的连续添加开关）', async () => {
+    const onSubmit = vi.fn();
+    render(<QuickAddCard onSubmit={onSubmit} onCancel={vi.fn()} keepOpenOnEnter />);
+    await user.type(screen.getByRole('textbox', { name: 'New task' }), 'Milk{Enter}');
+    expect(onSubmit).toHaveBeenCalledWith({ title: 'Milk' }, { keepOpen: true });
+  });
 });

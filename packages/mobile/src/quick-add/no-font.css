@@ -1,0 +1,6 @@
+/*
+ * 快速添加浮层不打包 Noto Sans SC 网络字体（vite.quick-add.config.ts 把
+ * @fontsource-variable/noto-sans-sc 指到本文件）：浮层随插件 assets 另打一
+ * 份，带字体会让 APK 再大约 4MB；Android 系统 CJK 字体本身就是 Noto Sans
+ * CJK，字体栈回退后观感一致。
+ */
