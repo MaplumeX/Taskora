@@ -29,6 +29,7 @@ import type { AreaResponseDto, ProjectResponseDto, ReviewQueueItem } from '@task
 import { Button } from '@/components/ui/button';
 import { Drawer, DrawerContent, DrawerTitle } from '@/components/ui/drawer';
 import { Hint } from '@/components/ui/hint';
+import { FieldPickerDialog } from '@/components/common/FieldPicker';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { PageHeading } from '@/components/layout/PageHeading';
 import { reviewNav } from '@/components/layout/navItems';
@@ -274,38 +275,41 @@ function ReviewBar({
       <ChevronRight />
     </Button>
   );
-  const postponeTrigger = (
-    <PopoverTrigger asChild>
-      <Button variant="ghost" size={desktop ? 'sm' : 'default'}>
-        <CalendarClock />
-        {t('postpone')}
-        <ChevronDown className="h-3.5 w-3.5" />
-      </Button>
-    </PopoverTrigger>
+  const postponeTriggerButton = (
+    <Button variant="ghost" size={desktop ? 'sm' : 'default'}>
+      <CalendarClock />
+      {t('postpone')}
+      <ChevronDown className="h-3.5 w-3.5" />
+    </Button>
   );
+  const postponeMenu = (
+    <PostponeMenu
+      onPick={(date) => {
+        onPostponeOpenChange(false);
+        session.postponeNext(date);
+      }}
+    />
+  );
+  // 宽屏：锚定浮层；窄屏：居中字段卡片（选日历日期时不被底栏和屏幕边缘挤压）。
   // Hint 包住触发按钮（Popover 根节点不是 DOM，不能作 Tooltip 的 asChild）
-  const postponeButton = (
+  const postponeButton = desktop ? (
     <Popover open={postponeOpen} onOpenChange={onPostponeOpenChange}>
-      {desktop ? (
-        <Hint label={t('postpone')} action="reviewPostpone">
-          {postponeTrigger}
-        </Hint>
-      ) : (
-        postponeTrigger
-      )}
-      <PopoverContent
-        align={desktop ? 'end' : 'center'}
-        side={desktop ? 'bottom' : 'top'}
-        className="w-auto p-1"
-      >
-        <PostponeMenu
-          onPick={(date) => {
-            onPostponeOpenChange(false);
-            session.postponeNext(date);
-          }}
-        />
+      <Hint label={t('postpone')} action="reviewPostpone">
+        <PopoverTrigger asChild>{postponeTriggerButton}</PopoverTrigger>
+      </Hint>
+      <PopoverContent align="end" side="bottom" className="w-auto p-1">
+        {postponeMenu}
       </PopoverContent>
     </Popover>
+  ) : (
+    <FieldPickerDialog
+      label={t('postpone')}
+      open={postponeOpen}
+      onOpenChange={onPostponeOpenChange}
+      trigger={postponeTriggerButton}
+    >
+      {postponeMenu}
+    </FieldPickerDialog>
   );
   const markButton = (
     <Button size={desktop ? 'sm' : 'default'} onClick={session.markNext}>

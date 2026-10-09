@@ -29,7 +29,7 @@ import {
 } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
 import { cn } from '@/lib/utils';
-import { useIsDesktop } from '@/lib/use-media-query';
+import { useIsDesktop } from '../../lib/use-media-query';
 import { MenuItems, type MenuItem } from '@/components/common/MenuItems';
 import { ActionSheet, ActionSheetContent, ActionSheetTrigger } from '@/components/ui/action-sheet';
 

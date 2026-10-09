@@ -19,7 +19,7 @@ import {
 import { MenuItems, type MenuItem } from '@/components/common/MenuItems';
 import { FieldPickerDialog } from '@/components/common/FieldPicker';
 import { ActionSheet, ActionSheetContent, ActionSheetTrigger } from '@/components/ui/action-sheet';
-import { useIsDesktop } from '@/lib/use-media-query';
+import { useIsDesktop } from '../../lib/use-media-query';
 import { useDeleteArea, useUpdateArea } from '@taskora/api';
 import { TagsField } from '@/components/task/fields/TagsField';
 import { ReviewPicker, useReviewMenuItem } from '@/components/review/ReviewSchedule';

@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/button';
 import { MenuItems, type MenuItem } from '@/components/common/MenuItems';
 import { FieldPickerDialog } from '@/components/common/FieldPicker';
 import { ActionSheet, ActionSheetContent, ActionSheetTrigger } from '@/components/ui/action-sheet';
-import { useIsDesktop } from '@/lib/use-media-query';
+import { useIsDesktop } from '../../lib/use-media-query';
 import { isTouchContextMenu } from '../../lib/useLongPress';
 import { useDeleteProject, useRestoreProject, useUpdateProject } from '@taskora/api';
 import { ScheduledDateField } from '@/components/task/fields/ScheduledDateField';

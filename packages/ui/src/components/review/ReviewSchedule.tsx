@@ -20,7 +20,7 @@ import type { ReviewInterval, ReviewQueueItem } from '@taskora/shared';
 import type { MenuItem } from '@/components/common/MenuItems';
 import { MetaBadge, MetaPopover } from '@/components/common/MetaBadge';
 import { Button } from '@/components/ui/button';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { FieldPicker } from '@/components/common/FieldPicker';
 import { cn } from '@/lib/utils';
 
 import {
@@ -123,18 +123,23 @@ export function ReviewSettingsButton({
   className?: string;
 }) {
   const { t } = useTranslation('review');
+  // FieldPicker：宽屏锚定浮层，窄屏居中字段卡片。
   return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <Button variant="outline" size="sm" className={cn('h-7 gap-1.5 px-2 text-meta', className)}>
+    <FieldPicker
+      label={t('settings')}
+      trigger={
+        <Button
+          variant="outline"
+          size="sm"
+          className={cn('h-7 gap-1.5 px-2 text-meta max-md:h-9 max-md:px-3', className)}
+        >
           <CalendarCheck className="h-3.5 w-3.5 text-muted-foreground" />
           {t('settings')}
         </Button>
-      </PopoverTrigger>
-      <PopoverContent align="start">
-        <ReviewPicker target={target} />
-      </PopoverContent>
-    </Popover>
+      }
+    >
+      <ReviewPicker target={target} />
+    </FieldPicker>
   );
 }
 
