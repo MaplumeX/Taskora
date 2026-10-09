@@ -1,4 +1,5 @@
-import { getMe, hydrateFromServer, refresh, useAuthStore } from '@taskora/api';
+import type { QueryClient } from '@tanstack/react-query';
+import { authKeys, getMe, hydrateFromServer, refresh, useAuthStore } from '@taskora/api';
 
 /**
  * Startup session recovery for the web client.
@@ -16,7 +17,7 @@ import { getMe, hydrateFromServer, refresh, useAuthStore } from '@taskora/api';
  *
  * A fully hydrated session (token + user) or a signed-out one needs no work.
  */
-export async function tryRecoverSession(): Promise<void> {
+export async function tryRecoverSession(queryClient: QueryClient): Promise<void> {
   const { user, token, setRefreshing, setUser } = useAuthStore.getState();
 
   if ((token && user) || (!token && !user)) return;
@@ -24,7 +25,14 @@ export async function tryRecoverSession(): Promise<void> {
   setRefreshing(true);
   try {
     if (token) {
-      const me = await getMe();
+      // 校验当前身份，同时让界面的查询复用在途请求与结果。
+      // staleTime: 0 保证不会拿已有缓存代替本次身份校验。
+      const me = await queryClient.fetchQuery({
+        queryKey: authKeys.me,
+        queryFn: getMe,
+        staleTime: 0,
+        retry: false,
+      });
       setUser(me);
       hydrateFromServer(me.preferences ?? null);
     } else {

@@ -9,7 +9,7 @@ import { useActiveConversation, useCreateConversation } from '@taskora/api';
 
 import { AgentChatView } from '@/components/agent/AgentChatView';
 import { AgentEmptyState } from '@/components/agent/AgentEmptyState';
-import { useDockToPanel } from '@/components/agent/AssistantPanel';
+import { useDockToPanel } from '@/components/agent/assistant-panel-layout';
 import { MobileBackButton } from '@/components/layout/MobileTopBar';
 import { ConversationList } from '@/components/agent/ConversationList';
 

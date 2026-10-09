@@ -1,7 +1,6 @@
 import { Suspense } from 'react';
 import { createBrowserRouter, Navigate } from 'react-router-dom';
 
-import { AppShell } from '@taskora/ui/components/layout/AppShell';
 import { RootRedirect } from '@taskora/ui/components/layout/RootRedirect';
 import { ProtectedRoute } from './components/ProtectedRoute';
 // lazyWithRetry：部署后旧 chunk 被删除时自动刷新拉新入口，而不是把
@@ -16,6 +15,10 @@ function PageFallback() {
   );
 }
 
+// 入口先恢复身份、准备本地引擎，壳与页面的 UI 依赖随后并行加载。
+const AppShell = lazyWithRetry(() =>
+  import('@taskora/ui/components/layout/AppShell').then((module) => ({ default: module.AppShell })),
+);
 const AgentPage = lazyWithRetry(() => import('@taskora/ui/pages/Agent'));
 const Anytime = lazyWithRetry(() => import('@taskora/ui/pages/Anytime'));
 const AreaDetail = lazyWithRetry(() => import('@taskora/ui/pages/AreaDetail'));
@@ -57,7 +60,11 @@ export const router = createBrowserRouter([
     element: <ProtectedRoute />,
     children: [
       {
-        element: <AppShell />,
+        element: (
+          <Suspense fallback={<PageFallback />}>
+            <AppShell />
+          </Suspense>
+        ),
         children: [
           { index: true, path: '/', element: <RootRedirect /> },
           { path: '/home', element: <Home /> },

@@ -7,7 +7,8 @@ import type { ConversationDto } from '@taskora/shared';
 
 import { agentKeys, i18n, useAssistantUiStore, useSidebarUiStore } from '@taskora/api';
 
-import { AssistantPanel, useDockToPanel, useSidebarYieldsToPanel } from './AssistantPanel';
+import { AssistantPanel } from './AssistantPanel';
+import { useDockToPanel, useSidebarYieldsToPanel } from './assistant-panel-layout';
 
 // The chat view opens an SSE stream; the panel only decides which
 // conversation it shows.

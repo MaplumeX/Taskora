@@ -1,15 +1,18 @@
+import { QueryClient } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('@taskora/api', () => ({
+  authKeys: { me: ['auth', 'me'] },
   getMe: vi.fn(),
   refresh: vi.fn(),
   hydrateFromServer: vi.fn(),
   useAuthStore: { getState: vi.fn() },
 }));
 
-import { getMe, hydrateFromServer, refresh, useAuthStore } from '@taskora/api';
+import { authKeys, getMe, hydrateFromServer, refresh, useAuthStore } from '@taskora/api';
 import { tryRecoverSession } from './sessionRecovery';
 
+let queryClient: QueryClient;
 const setRefreshing = vi.fn();
 const setUser = vi.fn();
 
@@ -38,6 +41,9 @@ const authResponse = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  queryClient = new QueryClient({
+    defaultOptions: { queries: { staleTime: 30_000, retry: false } },
+  });
 });
 
 describe('tryRecoverSession', () => {
@@ -46,7 +52,7 @@ describe('tryRecoverSession', () => {
 
     vi.mocked(getMe).mockResolvedValue(meResponse as never);
 
-    await tryRecoverSession();
+    await tryRecoverSession(queryClient);
 
     expect(getMe).toHaveBeenCalledTimes(1);
     expect(refresh).not.toHaveBeenCalled();
@@ -56,12 +62,53 @@ describe('tryRecoverSession', () => {
     expect(setRefreshing).toHaveBeenLastCalledWith(false);
   });
 
+  it('shares the verified user with the first UI query before exposing the session', async () => {
+    mockAuthState({ token: 'stored-token', user: null });
+    vi.mocked(getMe).mockResolvedValue(meResponse as never);
+    setUser.mockImplementationOnce(() => {
+      expect(queryClient.getQueryData(authKeys.me)).toEqual(meResponse);
+    });
+
+    await tryRecoverSession(queryClient);
+    // 与界面相同的 key / staleTime：启动后的查询命中缓存，不再请求 /auth/me。
+    const user = await queryClient.fetchQuery({ queryKey: authKeys.me, queryFn: getMe });
+    expect(user).toEqual(meResponse);
+    expect(getMe).toHaveBeenCalledTimes(1);
+  });
+
+  it('shares an in-flight recovery request if the UI mounts while a token is being refreshed', async () => {
+    mockAuthState({ token: 'stored-token', user: null });
+    let resolveMe!: (value: typeof meResponse) => void;
+    vi.mocked(getMe).mockReturnValue(
+      new Promise((resolve) => {
+        resolveMe = resolve;
+      }) as never,
+    );
+
+    const recovery = tryRecoverSession(queryClient);
+    const uiQuery = queryClient.fetchQuery({ queryKey: authKeys.me, queryFn: getMe });
+    expect(getMe).toHaveBeenCalledTimes(1);
+    resolveMe(meResponse);
+    await recovery;
+    expect(await uiQuery).toEqual(meResponse);
+  });
+
+  it('verifies the current identity even when an earlier user exists in the query cache', async () => {
+    mockAuthState({ token: 'stored-token', user: null });
+    queryClient.setQueryData(authKeys.me, { ...meResponse, id: 'previous-account' });
+    vi.mocked(getMe).mockResolvedValue(meResponse as never);
+
+    await tryRecoverSession(queryClient);
+    expect(getMe).toHaveBeenCalledTimes(1);
+    expect(setUser).toHaveBeenCalledWith(meResponse);
+  });
+
   it('silently refreshes when a legacy user snapshot exists without a token', async () => {
     mockAuthState({ token: null, user: { id: 'u1', email: 'a@b.c' } as never });
 
     vi.mocked(refresh).mockResolvedValue(authResponse as never);
 
-    await tryRecoverSession();
+    await tryRecoverSession(queryClient);
 
     expect(refresh).toHaveBeenCalledTimes(1);
     expect(getMe).not.toHaveBeenCalled();
@@ -73,7 +120,7 @@ describe('tryRecoverSession', () => {
   it('does nothing when the session is fully hydrated (token + user)', async () => {
     mockAuthState({ token: 't', user: { id: 'u1' } as never });
 
-    await tryRecoverSession();
+    await tryRecoverSession(queryClient);
 
     expect(getMe).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
@@ -83,7 +130,7 @@ describe('tryRecoverSession', () => {
   it('does nothing when signed out (no token, no user)', async () => {
     mockAuthState({ token: null, user: null });
 
-    await tryRecoverSession();
+    await tryRecoverSession(queryClient);
 
     expect(getMe).not.toHaveBeenCalled();
     expect(refresh).not.toHaveBeenCalled();
@@ -95,9 +142,10 @@ describe('tryRecoverSession', () => {
 
     vi.mocked(getMe).mockRejectedValue(new Error('network down'));
 
-    await expect(tryRecoverSession()).resolves.toBeUndefined();
+    await expect(tryRecoverSession(queryClient)).resolves.toBeUndefined();
 
     expect(setUser).not.toHaveBeenCalled();
+    expect(queryClient.getQueryData(authKeys.me)).toBeUndefined();
     expect(hydrateFromServer).not.toHaveBeenCalled();
     expect(setRefreshing).toHaveBeenLastCalledWith(false);
   });
