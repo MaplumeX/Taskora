@@ -81,6 +81,14 @@ export class ProjectsController {
     return this.projectsService.complete(req.user.id, id, dto);
   }
 
+  @Post(':id/duplicate')
+  duplicate(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.projectsService.duplicate(req.user.id, id);
+  }
+
   @Post(':id/skip')
   skip(
     @Request() req: { user: { id: string } },

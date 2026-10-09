@@ -121,6 +121,7 @@
   "shortcut_cancel": "Cancel selection",
   "shortcut_delete": "Delete selection",
   "shortcut_tags": "Edit tags",
+  "shortcut_duplicate": "Duplicate selected items",
   "shortcut_expand": "Open selected task",
   "shortcut_search": "Quick Find",
   "shortcut_toggleAssistantPanel": "Toggle assistant panel",

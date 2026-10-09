@@ -8,8 +8,10 @@ import {
   planRepeatSkip,
   planTaskComplete,
   planTaskCreate,
+  planTaskDuplicate,
   planTaskSearch,
   planTaskUpdate,
+  positionAfterRow,
   positionBetween,
   positionsBetween,
   repeatDerivationTarget,
@@ -536,6 +538,48 @@ export class TasksService {
         await batch.write('subtask', subtask.id, subtaskStatusPatch(TaskStatus.ACTIVE, now));
       }
       return this.listDto(batch.tx, id);
+    });
+  }
+
+  /**
+   * 复制任务（Duplicate）：副本紧跟来源任务，内容照抄、状态为未完成，连同
+   * Subtask 与附件（规则见 domain planTaskDuplicate）。
+   */
+  async duplicate(userId: string, id: string) {
+    const source = await this.prisma.task.findFirst({
+      where: { id, userId },
+      include: { tags: true, subtasks: true, attachments: true },
+    });
+    if (!source) {
+      throw new NotFoundException('Task not found');
+    }
+    const plan = planTaskDuplicate(
+      {
+        ...source,
+        repeatRule: parseRepeatRule(source.repeatRule),
+        tagIds: source.tags.map((tt) => tt.tagId),
+      },
+      source.subtasks,
+      source.attachments,
+      await userCalendarZones(this.prisma, userId),
+    );
+    const copyId = randomUUID();
+    return this.hub.writeAsHub(userId, async (batch) => {
+      const positions = await batch.tx.task.findMany({
+        where: { userId },
+        select: { id: true, position: true },
+      });
+      await batch.write('task', copyId, {
+        ...toWireFields(plan.task),
+        position: positionAfterRow(positions, id),
+      });
+      for (const { id: subtaskId, ...subtask } of plan.subtasksFor(copyId)) {
+        await batch.write('subtask', subtaskId, subtask);
+      }
+      for (const { id: attachmentId, ...attachment } of plan.attachmentsFor(copyId)) {
+        await batch.write('attachment', attachmentId, attachment);
+      }
+      return this.listDto(batch.tx, copyId);
     });
   }
 

@@ -26,6 +26,7 @@ import {
   createTask,
   deleteSubtask,
   deleteTask,
+  duplicateTask,
   getTask,
   getTasks,
   reorderFeed,
@@ -716,6 +717,19 @@ export function useConvertTaskToProject() {
     mutationFn: (id: string) => convertTaskToProject(id),
     onSuccess: (_data, id) => {
       refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: ['tasks'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+    },
+  });
+}
+
+/** 复制任务（Duplicate，⌘D）：副本紧跟来源任务，data 为副本。 */
+export function useDuplicateTask() {
+  const queryClient = useQueryCache();
+  return useMutation({
+    mutationFn: (id: string) => duplicateTask(id),
+    onSuccess: () => {
       refreshAfterWrite(queryClient, { queryKey: ['tasks'] });
       refreshAfterWrite(queryClient, { queryKey: ['projects'] });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });

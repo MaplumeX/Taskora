@@ -60,6 +60,12 @@ export function skipTask(...args: Parameters<typeof import('./tasks.api.rest').s
   return currentTaskBackend().skipTask(...args);
 }
 
+export function duplicateTask(
+  ...args: Parameters<typeof import('./tasks.api.rest').duplicateTask>
+) {
+  return currentTaskBackend().duplicateTask(...args);
+}
+
 export function reorderTasks(
   ...args: Parameters<typeof import('./tasks.api.rest').reorderTasks>
 ) {

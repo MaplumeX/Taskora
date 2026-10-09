@@ -50,6 +50,8 @@
   "markUncancelled": "Uncancel Task",
   "convertToProject": "Convert to Project",
   "move": "Move",
+  "duplicate": "Duplicate",
+  "duplicateProjectDone": "Project duplicated",
   "placement": "Located in {{place}}",
   "placementGoToProject": "Go to project",
   "placementChangeProject": "Change project",

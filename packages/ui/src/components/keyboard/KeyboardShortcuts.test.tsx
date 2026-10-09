@@ -24,6 +24,8 @@ const harness = vi.hoisted(() => ({
   createMutate: vi.fn(),
   updateTaskMutate: vi.fn(),
   updateHeadingMutate: vi.fn(),
+  duplicateTask: vi.fn(async (id: string) => ({ id: `${id}-copy` })),
+  duplicateProject: vi.fn(async (id: string) => ({ id: `${id}-copy` })),
 }));
 
 vi.mock('react-i18next', () => ({
@@ -43,6 +45,8 @@ vi.mock('@taskora/api', async (importOriginal) => {
     useDeleteTask: () => ({ mutate: harness.deleteMutate }),
     useRestoreTask: () => ({ mutate: harness.restoreMutate }),
     useReorderTasks: () => ({ mutate: harness.reorderMutate }),
+    useDuplicateTask: () => ({ mutateAsync: harness.duplicateTask }),
+    useDuplicateProject: () => ({ mutateAsync: harness.duplicateProject }),
     useCreateTask: () => ({
       mutate: (data: { title: string }, opts?: { onSuccess?: (t: { id: string }) => void }) => {
         harness.createMutate(data);
@@ -204,6 +208,8 @@ beforeEach(() => {
   harness.createMutate.mockReset();
   harness.updateTaskMutate.mockReset();
   harness.updateHeadingMutate.mockReset();
+  harness.duplicateTask.mockClear();
+  harness.duplicateProject.mockClear();
   useSelectionStore.getState().setSelection([]);
   useSelectionStore.getState().clearSelection();
   useUiInteractionStore.setState({ expandedId: null, searchOpen: false, searchSeed: null });
@@ -350,6 +356,31 @@ describe('KeyboardShortcuts — 完成与删除', () => {
     press('Delete');
     expect(harness.restoreMutate).toHaveBeenCalledWith('t1');
     expect(harness.deleteMutate).not.toHaveBeenCalled();
+  });
+});
+
+describe('KeyboardShortcuts — 复制（Duplicate）', () => {
+  it('⌘D 复制选中任务', async () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press('d', { metaKey: true });
+    await waitFor(() => expect(harness.duplicateTask).toHaveBeenCalledWith('t1'));
+    expect(harness.duplicateProject).not.toHaveBeenCalled();
+  });
+
+  it('⌘A 后 ⌘D 按显示顺序逐个复制；Windows 为 Ctrl+D', async () => {
+    renderAt('/today', tasks, 'windows');
+    press('a', { ctrlKey: true });
+    press('d', { ctrlKey: true });
+    await waitFor(() => expect(harness.duplicateTask).toHaveBeenCalledTimes(3));
+    expect(harness.duplicateTask.mock.calls.map(([id]) => id)).toEqual(['t1', 't2', 't3']);
+  });
+
+  it('Trash 中不复制', () => {
+    renderAt('/trash', tasks);
+    press('ArrowDown');
+    press('d', { metaKey: true });
+    expect(harness.duplicateTask).not.toHaveBeenCalled();
   });
 });
 

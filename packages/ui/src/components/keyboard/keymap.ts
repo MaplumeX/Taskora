@@ -41,6 +41,8 @@ export type KeyAction =
   | { type: 'search' }
   /** ⇧⌘T / Ctrl+Shift+T / Alt+Shift+T：对选中项打开 Tag Picker。 */
   | { type: 'tags' }
+  /** ⌘D / Ctrl+D：复制选中的任务 / 项目（Duplicate），副本紧跟来源。 */
+  | { type: 'duplicate' }
   /** ⌘J / Ctrl+J / Alt+J：开关助手面板（`/agent` 页为「收回到面板」）。 */
   | { type: 'toggleAssistantPanel' }
   /** 回顾模式（Review Mode）：标记已回顾并进入下一个 / 跳过 / 上一个；只在回顾模式下生效。 */
@@ -131,6 +133,7 @@ export type ShortcutId =
   | 'cancel'
   | 'delete'
   | 'tags'
+  | 'duplicate'
   | 'expand'
   | 'search'
   | 'toggleAssistantPanel'
@@ -327,6 +330,14 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     group: 'edit',
     action: { type: 'tags' },
     defaults: { mac: ['Shift+Meta+T'], windows: ['Ctrl+Shift+T'], web: ['Alt+Shift+T'] },
+  },
+  // Web 的 Ctrl+D（加入书签）可以拦截，与桌面同键。
+  {
+    id: 'duplicate',
+    scope: 'app',
+    group: 'edit',
+    action: { type: 'duplicate' },
+    defaults: primaryDefaults('D'),
   },
   {
     id: 'expand',

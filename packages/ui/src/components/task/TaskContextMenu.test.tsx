@@ -24,6 +24,8 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useRestoreTask: () => ({ mutate: vi.fn(), isPending: false }),
   useConvertTaskToProject: () => ({ mutate: vi.fn(), isPending: false }),
   useSkipTask: () => ({ mutate: skipMock, isPending: false }),
+  useDuplicateTask: () => ({ mutateAsync: duplicateMock }),
+  useDuplicateProject: () => ({ mutateAsync: vi.fn() }),
   useProjectsQuery: () => ({
     data: [
       { id: 'project-1', title: 'Project Alpha', areaId: null, status: 'ACTIVE', trashedAt: null },
@@ -37,6 +39,7 @@ const updateMock = vi.hoisted(() => vi.fn());
 const skipMock = vi.hoisted(() => vi.fn());
 const completeMock = vi.hoisted(() => vi.fn());
 const deleteMock = vi.hoisted(() => vi.fn());
+const duplicateMock = vi.hoisted(() => vi.fn(async (id: string) => ({ id: `${id}-copy` })));
 
 const baseTask: TaskResponseDto = {
   id: 'task-1',
@@ -251,6 +254,17 @@ describe('TaskContextMenu — 多选整组', () => {
     await user.click(await screen.findByRole('button', { name: /^(Delete|删除)/ }));
     expect(deleteMock.mock.calls.map(([id]) => id)).toEqual(['task-1', 'task-2']);
     expect(useSelectionStore.getState().selectedIds).toEqual([]);
+  });
+
+  it('整组复制：按列表顺序逐个复制，选中副本', async () => {
+    const user = userEvent.setup();
+    useSelectionStore.getState().setSelection(['task-3', 'task-1']);
+    fireEvent.contextMenu(screen.getByText('Third task'));
+    await user.click(await screen.findByRole('button', { name: /^(Duplicate|复制)$/ }));
+    await waitFor(() =>
+      expect(useSelectionStore.getState().selectedIds).toEqual(['task-1-copy', 'task-3-copy']),
+    );
+    expect(duplicateMock.mock.calls.map(([id]) => id)).toEqual(['task-1', 'task-3']);
   });
 
   it('右键多选之外的行：只作用于它，多选改为只选中它', async () => {

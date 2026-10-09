@@ -111,6 +111,10 @@ export function skipTask(id: string): Promise<TaskResponseDto> {
     });
 }
 
+export function duplicateTask(id: string): Promise<TaskResponseDto> {
+  return apiClient.post<TaskResponseDto>(`/tasks/${id}/duplicate`).then((res) => res.data);
+}
+
 export function reorderTasks(orderedIds: string[]): Promise<void> {
   return apiClient.post('/tasks/reorder', { orderedIds }).then(() => undefined);
 }

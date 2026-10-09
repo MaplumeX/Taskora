@@ -311,6 +311,55 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     expect(await testPrisma.project.count({ where: { repeatSourceId: 'p-1' } })).toBe(1);
   });
 
+  it('Project 复制（Duplicate）：整份复制、全部未完成、紧跟来源项目；Trash 中的任务不复制', async () => {
+    await seedProject('p-1', { position: 'a0', title: '搬家' });
+    await seedProject('p-2', { position: 'a1' });
+    await seedHeading('h-1', 'p-1', { position: 'a0' });
+    await seedTask('t-done', {
+      projectId: 'p-1',
+      headingId: 'h-1',
+      bucket: 'ANYTIME',
+      status: TaskStatus.COMPLETED,
+      settledAt: new Date('2030-01-07T08:00:00Z'),
+    });
+    await testPrisma.subtask.create({
+      data: { id: 's-1', taskId: 't-done', title: 'step', status: TaskStatus.COMPLETED } as never,
+    });
+    await seedTask('t-trashed', { projectId: 'p-1', trashedAt: new Date('2030-01-01T00:00:00Z') });
+
+    const copy = await h.projects.duplicate(USER, 'p-1');
+    expect(copy).toMatchObject({
+      title: '搬家',
+      status: ProjectStatus.ACTIVE,
+      repeatSourceId: null,
+    });
+    expect((await h.projects.findAll(USER)).map((p) => p.id)).toEqual(['p-1', copy.id, 'p-2']);
+    await expectLoggedAsStored('project', copy.id);
+
+    const heading = await testPrisma.projectHeading.findFirstOrThrow({
+      where: { projectId: copy.id },
+    });
+    const copies = await testPrisma.task.findMany({
+      where: { projectId: copy.id },
+      include: { subtasks: true },
+    });
+    expect(copies).toHaveLength(1);
+    expect(copies[0]).toMatchObject({
+      title: 't-done',
+      status: TaskStatus.ACTIVE,
+      settledAt: null,
+      headingId: heading.id,
+    });
+    expect(copies[0].subtasks.map((s) => [s.title, s.status])).toEqual([
+      ['step', TaskStatus.ACTIVE],
+    ]);
+    // 来源不受影响
+    expect((await testPrisma.task.findUniqueOrThrow({ where: { id: 't-done' } })).status).toBe(
+      TaskStatus.COMPLETED,
+    );
+    await expect(h.projects.duplicate(OTHER_USER, 'p-1')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   // ---------- Project Heading ----------
 
   it('Heading：create 追加在末尾；update 改名；他人的分组 → 404', async () => {

@@ -15,6 +15,7 @@ import {
   completeProject,
   createProject,
   deleteProject,
+  duplicateProject,
   getProject,
   getProjects,
   reorderProjects,
@@ -344,6 +345,21 @@ export function useSkipProject() {
       refreshAfterWrite(queryClient, { queryKey: ['review'] });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });
       refreshAfterWrite(queryClient, { queryKey: ['tasks'] });
+    },
+  });
+}
+
+/** 复制项目（Duplicate）：整份复制，侧边栏中紧跟来源项目；data 为副本。 */
+export function useDuplicateProject() {
+  const queryClient = useQueryCache();
+  return useMutation({
+    mutationFn: (id: string) => duplicateProject(id),
+    onSuccess: () => {
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['review'] });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['tasks'] });
+      refreshAfterWrite(queryClient, { queryKey: ['project-headings'] });
     },
   });
 }

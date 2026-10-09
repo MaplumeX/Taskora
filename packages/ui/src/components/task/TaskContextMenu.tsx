@@ -5,6 +5,7 @@ import {
   Check,
   Circle,
   CircleSlash,
+  Copy,
   CalendarClock,
   CalendarDays,
   FolderTree,
@@ -43,6 +44,7 @@ import { RepeatRuleField } from './fields/RepeatRuleField';
 import { MultiTagsField, TagsField } from './fields/TagsField';
 import { MovePicker } from './fields/MovePicker';
 import { useSkipOccurrence } from './useSkipOccurrence';
+import { useDuplicate } from './useDuplicate';
 
 interface Props {
   task: TaskResponseDto;
@@ -80,6 +82,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const restoreTask = useRestoreTask();
   const convertToProjectTask = useConvertTaskToProject();
   const convertGuard = useConvertGuard();
+  const duplicate = useDuplicate();
 
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
@@ -150,6 +153,15 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
       restoreTask.mutate(id, { onError: () => toast.error(tc('restoreFailed')) });
     }
     if (group) useSelectionStore.getState().clearSelection();
+  };
+
+  // 已了结的副本是未完成的，会落回原列表：不改选中。
+  const handleDuplicate = () => {
+    closeMenu();
+    void duplicate(
+      targets.map((id) => ({ id, kind: 'task' as const })),
+      { selectCopies: !completed && !cancelled },
+    );
   };
 
   const handleConvertToProject = () => {
@@ -258,6 +270,11 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
           <MenuRow icon={FolderTree} onClick={() => openPicker('move')}>
             {t('move')}
           </MenuRow>
+          {variant === 'default' && (
+            <MenuRow icon={Copy} onClick={handleDuplicate}>
+              {t('duplicate')}
+            </MenuRow>
+          )}
           {!group && variant === 'default' && (
             <>
               <div className="-mx-1 my-1 h-px bg-muted" />

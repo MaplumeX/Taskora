@@ -14,6 +14,7 @@
   "save": "Save",
   "saveFailed": "Failed to save",
   "createFailed": "Failed to create",
+  "duplicateFailed": "Failed to duplicate",
   "deleteFailed": "Failed to delete",
   "operationFailed": "Operation failed",
   "notLoggedIn": "Not logged in",

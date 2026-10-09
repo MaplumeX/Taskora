@@ -121,6 +121,14 @@ export class TasksController {
     return this.tasksService.skip(req.user.id, id);
   }
 
+  @Post(':id/duplicate')
+  duplicate(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.tasksService.duplicate(req.user.id, id);
+  }
+
   @Post(':id/convert-to-project')
   convertToProject(
     @Request() req: { user: { id: string } },
