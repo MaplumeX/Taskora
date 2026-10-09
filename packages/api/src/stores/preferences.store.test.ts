@@ -198,6 +198,28 @@ describe('usePreferencesStore hydrateFromServer normalization', () => {
     expect(readPersistedState().todayReviewedOn).toBe('2026-10-07');
   });
 
+  it('accumulates seen keys across devices and prunes them on confirmation', async () => {
+    const fresh = await freshStore();
+    fresh.getState().markTodayReviewed('2026-10-07');
+    expect(fresh.getState().markTodaySeen(['task:a@2026-10-08'])).toBe(true);
+    expect(fresh.getState().markTodaySeen(['task:a@2026-10-08'])).toBe(false);
+
+    const base = {
+      theme: 'system',
+      language: 'en',
+      weekStartsOn: 1,
+      bucketGrouping: true,
+      todayReviewedOn: '2026-10-07',
+    } as const;
+    // 其他设备的单条已读并入，不覆盖本地。
+    fresh.getState().hydrateFromServer({ ...base, todaySeenKeys: ['task:b@2026-10-09'] });
+    expect(fresh.getState().todaySeenKeys).toEqual(['task:b@2026-10-09', 'task:a@2026-10-08']);
+    expect(readPersistedState().todaySeenKeys).toEqual(fresh.getState().todaySeenKeys);
+
+    fresh.getState().markTodayReviewed('2026-10-08');
+    expect(fresh.getState().todaySeenKeys).toEqual(['task:b@2026-10-09']);
+  });
+
   it('applies a valid server bucketGrouping flag and ignores dirty ones', async () => {
     const fresh = await freshStore();
     fresh.getState().hydrateFromServer({

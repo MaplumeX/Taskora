@@ -199,6 +199,35 @@ describe('UsersService', () => {
       expect(result).toEqual(fullUser);
     });
 
+    it('unions New in Today seen keys and prunes those the confirmed date covers', async () => {
+      mockPrisma.user.findUnique.mockResolvedValue({
+        preferences: {
+          todayReviewedOn: '2026-10-07',
+          todaySeenKeys: ['task:a@2026-10-08', 'task:b@2026-10-09'],
+        },
+      });
+      mockPrisma.user.update.mockResolvedValue(baseUser);
+
+      await service.updatePreferences(userId, { todaySeenKeys: ['task:c@2026-10-09'] });
+      expect(mockPrisma.user.update.mock.calls[0][0].data.preferences.todaySeenKeys).toEqual([
+        'task:a@2026-10-08',
+        'task:b@2026-10-09',
+        'task:c@2026-10-09',
+      ]);
+
+      // 确认推进到 10-08：计划日期不晚于它的已读元素剔除；迟到的旧日期不回拨。
+      await service.updatePreferences(userId, { todayReviewedOn: '2026-10-08' });
+      expect(mockPrisma.user.update.mock.calls[1][0].data.preferences).toMatchObject({
+        todayReviewedOn: '2026-10-08',
+        todaySeenKeys: ['task:b@2026-10-09'],
+      });
+      await service.updatePreferences(userId, { todayReviewedOn: '2026-10-01' });
+      expect(mockPrisma.user.update.mock.calls[2][0].data.preferences).toMatchObject({
+        todayReviewedOn: '2026-10-07',
+        todaySeenKeys: ['task:a@2026-10-08', 'task:b@2026-10-09'],
+      });
+    });
+
     it('throws NotFoundException when user does not exist', async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 

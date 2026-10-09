@@ -34,6 +34,8 @@
   "somedayLabel": "某天",
   "inboxEmpty": "收件箱是空的",
   "todayEmpty": "今天没有任务",
+  "newInTodayBanner_other": "你有 {{count}} 个新的待办事项",
+  "newInTodayAck": "好",
   "upcomingEmpty": "「计划」中没有任务",
   "anytimeEmpty": "「随时」中没有任务",
   "somedayEmpty": "没有某天任务",
