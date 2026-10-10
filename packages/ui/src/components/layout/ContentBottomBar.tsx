@@ -41,9 +41,10 @@ export function ContentBottomBar() {
 
   return (
     <>
-      <footer className="relative hidden h-11 shrink-0 bg-background px-4 md:block">
+      <footer className="relative hidden h-11 shrink-0 overflow-hidden bg-background px-4 md:block">
         {/* 任务展开时整栏切换为作用于该任务的动作（对齐 Things 3），收起即切回：
-            两组按钮叠放，与行展开同时长交叉淡入淡出。 */}
+            两组按钮叠放，与行展开同时长交叉淡入淡出。
+            隐藏组下移 6px，底栏需裁切动画溢出，否则会撑出整页滚动条。 */}
         <BarLayer shown={taskExpanded}>
           <ExpandedTaskToolbar variant="bar" />
         </BarLayer>
