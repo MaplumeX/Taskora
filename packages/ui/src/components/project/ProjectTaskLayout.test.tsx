@@ -143,6 +143,7 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('sonner', () => ({ toast: { error: harness.toastError } }));
 
+const createHeadingMutate = vi.fn();
 vi.mock('@taskora/api', async (importOriginal) => {
   const ReactModule = await import('react');
   return {
@@ -151,6 +152,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
     useUncompleteTask: () => ({ mutate: harness.uncompleteMutate }),
     useUncancelTask: () => ({ mutate: vi.fn() }),
     useReorderProjectHeadingLayout: () => ({ mutate: harness.saveMutate }),
+    useCreateProjectHeading: () => ({ mutate: createHeadingMutate }),
     useTaskRowSelection: () => {
       const [selectedId, setSelectedId] = ReactModule.useState(harness.initialSelectedId);
       const [expandedId, setExpandedId] = ReactModule.useState(harness.initialExpandedId);
@@ -178,6 +180,8 @@ import {
   resolveTaskPlacement,
   serializeLayout,
   type LayoutState,
+  layoutFromRowOrder,
+  layoutWithHeadingFromTasks,
 } from './ProjectTaskLayout';
 import { useSelectionStore } from '@taskora/api';
 import { AppDndProvider } from '../../lib/appDnd';
@@ -308,6 +312,31 @@ describe('project task layout drag serialization', () => {
 
     expect(next?.headingIds).toEqual(['heading-2', 'heading-1']);
     expect(next?.containers).toEqual(layout.containers);
+  });
+});
+
+describe('project task layout keyboard edits', () => {
+  const base = {
+    headingIds: ['h1', 'h2'],
+    containers: { ungrouped: ['a', 'b'], h1: ['c'], h2: ['d', 'e'] },
+  };
+
+  it('layoutFromRowOrder 按新行序重新分配各容器', () => {
+    expect(layoutFromRowOrder(base, ['b', 'a', 'h1', 'c', 'h2', 'e', 'd'])).toEqual({
+      headingIds: ['h1', 'h2'],
+      containers: { ungrouped: ['b', 'a'], h1: ['c'], h2: ['e', 'd'] },
+    });
+  });
+
+  it('新 Heading 插在首个选中任务所在分组之后，选中任务归入', () => {
+    expect(layoutWithHeadingFromTasks(base, 'new', ['d', 'e'])).toEqual({
+      headingIds: ['h1', 'h2', 'new'],
+      containers: { ungrouped: ['a', 'b'], h1: ['c'], h2: [], new: ['d', 'e'] },
+    });
+    expect(layoutWithHeadingFromTasks(base, 'new', ['b', 'c'])).toEqual({
+      headingIds: ['new', 'h1', 'h2'],
+      containers: { ungrouped: ['a'], h1: [], h2: ['d', 'e'], new: ['b', 'c'] },
+    });
   });
 });
 

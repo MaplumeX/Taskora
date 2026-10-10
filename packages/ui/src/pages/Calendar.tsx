@@ -56,6 +56,7 @@ export default function Calendar() {
         completed: t.status === 'COMPLETED',
         cancelled: t.status === 'CANCELLED',
         tagIds: (t.tags ?? []).map((tag) => tag.id),
+        item: t,
       })),
     [tasks],
   );

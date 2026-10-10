@@ -63,6 +63,7 @@ export function SidebarAreaRow({
       >
         <NavLink
           to={`/areas/${area.id}`}
+          data-sidebar-nav={`/areas/${area.id}`}
           className={({ isActive }) =>
             sidebarRowClass(
               isActive,

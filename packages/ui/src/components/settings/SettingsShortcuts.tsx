@@ -35,6 +35,8 @@ const APP_GROUPS: ShortcutGroup[] = [
   'create',
   'complete',
   'edit',
+  'dates',
+  'move',
   'global',
   'review',
 ];

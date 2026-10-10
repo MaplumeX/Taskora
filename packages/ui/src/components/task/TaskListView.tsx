@@ -39,6 +39,12 @@ export function TaskListView({
   const { t } = useTranslation();
   const { handleRowClick, handleBlankClick, selectedIds, expandedId } =
     useTaskRowSelection();
+  const completeTask = useCompleteTask();
+  const uncompleteTask = useUncompleteTask();
+  const uncancelTask = useUncancelTask();
+  const reorderTasks = useReorderTasks();
+  // 与 TaskList 的拖拽同一开关：可排序时 ⌘↑/⌘↓ 也可用。
+  const reorderable = sortable ?? true;
   // 注册当前可见行为全局键盘 Selection 的可遍历序列（ADR-0004）。
   const rows = useMemo(
     () =>
@@ -48,14 +54,17 @@ export function TaskListView({
         completed: task.status === 'COMPLETED',
         cancelled: task.status === 'CANCELLED',
         tagIds: (task.tags ?? []).map((tag) => tag.id),
+        item: task,
+        sortGroup: reorderable ? 'list' : undefined,
       })),
-    [tasks],
+    [tasks, reorderable],
   );
-  useSelectionScope(rows, selectionRank);
-  const completeTask = useCompleteTask();
-  const uncompleteTask = useUncompleteTask();
-  const uncancelTask = useUncancelTask();
-  const reorderTasks = useReorderTasks();
+  const reorder = reorderTasks.mutate;
+  const scopeActions = useMemo(
+    () => (reorderable ? { reorder: (ids: string[]) => reorder(ids) } : undefined),
+    [reorderable, reorder],
+  );
+  useSelectionScope(rows, selectionRank, scopeActions);
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
 

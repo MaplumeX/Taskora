@@ -52,8 +52,14 @@ export default function Deadlines() {
               completed: item.status === 'COMPLETED',
               cancelled: item.status === 'CANCELLED',
               tagIds: item.tags.map((tag) => tag.id),
+              item,
             }
-          : { id: item.id, kind: 'project' as const, tagIds: item.tags.map((tag) => tag.id) },
+          : {
+              id: item.id,
+              kind: 'project' as const,
+              tagIds: item.tags.map((tag) => tag.id),
+              item,
+            },
       ),
     [visible],
   );

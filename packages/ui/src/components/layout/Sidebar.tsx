@@ -79,6 +79,7 @@ const NavRow = ({
     <NavLink
       ref={drop.setNodeRef}
       to={item.to}
+      data-sidebar-nav={item.to}
       className={({ isActive }) =>
         sidebarRowClass(isActive, drop.isOver ? sidebarDropOverClass : undefined)
       }
@@ -143,6 +144,7 @@ export function Sidebar() {
   return (
     <aside
       ref={dropArea.setAreaRef}
+      data-sidebar=""
       className="flex h-screen w-full flex-col bg-sidebar pt-[var(--sidebar-inset-top,0px)]"
     >
       {/* 桌面自绘外壳：侧边栏只为 macOS 红绿灯让位（--sidebar-inset-top），

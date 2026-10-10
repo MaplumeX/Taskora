@@ -119,5 +119,7 @@
   "quickAddSubmitHint": "Add",
   "quickAddContinueHint": "Add & continue",
   "quickAddCloseHint": "Close",
-  "quickAddAddedTo": "Added to {{place}}"
+  "quickAddAddedTo": "Added to {{place}}",
+  "repeatNeedsScheduledDate": "Set a start date before adding a repeat",
+  "pasteMoveUnavailable": "Items can’t be moved into this list"
 }

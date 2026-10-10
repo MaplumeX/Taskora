@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import {
   useSelectionStore,
   type SelectionRow,
+  type SelectionScopeActions,
 } from '@/stores/selection.store';
 
 /**
@@ -17,8 +18,14 @@ import {
  * `rank` 显式指定该 scope 在页面中的先后（默认 0，同号按注册顺序）。子组件的
  * effect 先于父组件执行、异步加载的列表挂载更晚，单靠注册顺序不能保证与 DOM
  * 顺序一致；同页有多个列表时应按从上到下的位置传入递增的 rank。
+ *
+ * `actions` 是该列表提供给键盘动作的能力（如 ⌘↑/⌘↓ 排序的写回），应 memo 化。
  */
-export function useSelectionScope(rows: SelectionRow[], rank = 0): void {
+export function useSelectionScope(
+  rows: SelectionRow[],
+  rank = 0,
+  actions?: SelectionScopeActions,
+): void {
   const registerScope = useSelectionStore((s) => s.registerScope);
   const unregisterScope = useSelectionStore((s) => s.unregisterScope);
   const keyRef = useRef<string | null>(null);
@@ -26,12 +33,14 @@ export function useSelectionScope(rows: SelectionRow[], rank = 0): void {
   rowsRef.current = rows;
   const rankRef = useRef(rank);
   rankRef.current = rank;
+  const actionsRef = useRef(actions);
+  actionsRef.current = actions;
 
   // mount/unmount：一次性注册/注销稳定 key。
   useEffect(() => {
     const key = `scope-${crypto.randomUUID()}`;
     keyRef.current = key;
-    registerScope(key, rowsRef.current, rankRef.current);
+    registerScope(key, rowsRef.current, rankRef.current, actionsRef.current);
     return () => {
       keyRef.current = null;
       unregisterScope(key);
@@ -42,6 +51,6 @@ export function useSelectionScope(rows: SelectionRow[], rank = 0): void {
   useEffect(() => {
     const key = keyRef.current;
     if (!key) return;
-    registerScope(key, rows, rank);
-  }, [rows, rank, registerScope]);
+    registerScope(key, rows, rank, actions);
+  }, [rows, rank, actions, registerScope]);
 }

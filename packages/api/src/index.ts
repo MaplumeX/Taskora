@@ -163,7 +163,12 @@ export {
   toggleRowSelection,
   contextMenuTargets,
   extendSelectionTo,
+  reorderedRowIds,
+  scopeOfRow,
+  type ReorderDirection,
   type SelectionRow,
+  type SelectionRowItem,
+  type SelectionScopeActions,
   type SelectionRowKind,
   type SelectionRowGroupHeader,
 } from './stores/selection.store';
