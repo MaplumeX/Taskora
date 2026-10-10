@@ -71,6 +71,7 @@
   "serverChecking": "Connecting…",
   "serverConnect": "Connect",
   "assistant": "Assistant",
+  "calendars": "Calendars",
   "assistantSettings": "Assistant Settings",
   "assistantProvider": "Provider",
   "assistantBaseUrl": "Base URL",

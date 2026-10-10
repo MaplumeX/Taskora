@@ -52,6 +52,7 @@ export * from './api/project-headings.api';
 export * from './api/projects.api';
 export * from './api/tags.api';
 export * from './api/tasks.api';
+export * from './api/calendar.api';
 export { setTaskBackend, currentTaskBackend, type TaskBackend } from './api/task-backend';
 export { createEngineTaskBackend } from './engine/task-backend.engine';
 export { isEngineMode } from './api/task-backend';
@@ -139,6 +140,7 @@ export * from './hooks/useScheduledTasksQuery';
 export * from './hooks/useRepeatPreviews';
 export * from './hooks/useUsers';
 export * from './hooks/useCalendarDay';
+export * from './hooks/useCalendarEvents';
 export * from './hooks/useNewInToday';
 export * from './hooks/useLogging';
 export * from './hooks/useAgent';
@@ -298,6 +300,7 @@ export {
   type Language,
 } from './utils/preferences';
 export * from './utils/calendarGrid';
+export * from './utils/calendarEvents';
 export * from './utils/upcomingLayout';
 export * from './utils/logbookLayout';
 export * from './utils/logbookArchive';

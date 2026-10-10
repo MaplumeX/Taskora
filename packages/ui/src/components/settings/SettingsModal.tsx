@@ -7,6 +7,7 @@ import {
   Download,
   Info,
   Bot,
+  CalendarDays,
   Keyboard,
   SlidersHorizontal,
   type LucideIcon,
@@ -31,6 +32,7 @@ const SettingsAccount = lazy(settingsLoaders.account);
 const SettingsData = lazy(settingsLoaders.data);
 const SettingsAbout = lazy(settingsLoaders.about);
 const SettingsAssistant = lazy(settingsLoaders.assistant);
+const SettingsCalendars = lazy(settingsLoaders.calendars);
 
 interface SettingsNavItem {
   tab: SettingsTab;
@@ -42,6 +44,7 @@ const settingsNav: SettingsNavItem[] = [
   { tab: 'general', labelKey: 'settings:general', icon: SlidersHorizontal },
   { tab: 'appearance', labelKey: 'settings:appearance', icon: SunMedium },
   { tab: 'shortcuts', labelKey: 'settings:shortcuts', icon: Keyboard },
+  { tab: 'calendars', labelKey: 'settings:calendars', icon: CalendarDays },
   { tab: 'account', labelKey: 'settings:account', icon: User },
   { tab: 'data', labelKey: 'settings:data', icon: Download },
   { tab: 'assistant', labelKey: 'settings:assistant', icon: Bot },
@@ -78,6 +81,8 @@ export function SettingsModal() {
         return <SettingsData />;
       case 'assistant':
         return <SettingsAssistant />;
+      case 'calendars':
+        return <SettingsCalendars />;
       case 'about':
         return <SettingsAbout />;
     }

@@ -100,6 +100,9 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get syncCounter() {
     return this.extended.syncCounter;
   }
+  get calendarSubscription() {
+    return this.extended.calendarSubscription;
+  }
 
   // Overridden in the constructor (wrapped with the collector's tx scope).
   declare $transaction: PrismaClient['$transaction'];
