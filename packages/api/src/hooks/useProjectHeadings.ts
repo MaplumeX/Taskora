@@ -14,6 +14,7 @@ import {
   convertProjectHeadingToProject,
   createProjectHeading,
   deleteProjectHeading,
+  getActiveHeadings,
   getProjectHeadings,
   reorderProjectHeadingLayout,
   unarchiveProjectHeading,
@@ -27,6 +28,7 @@ export const projectHeadingKeys = {
   all: ['project-headings'] as const,
   list: (projectId: string, includeArchived?: boolean) =>
     ['project-headings', { projectId, includeArchived: includeArchived ?? false }] as const,
+  active: ['project-headings', 'active'] as const,
 };
 
 export function projectHeadingsQueryDefinition(projectId: string, includeArchived?: boolean) {
@@ -48,9 +50,20 @@ export function useProjectHeadingsQuery(
   });
 }
 
+/** 所有项目中未归档的 Heading（Quick Find 的导航目标）。 */
+export function useActiveHeadingsQuery(options?: { enabled?: boolean }) {
+  return useReplicaQuery({
+    queryKey: projectHeadingKeys.active,
+    queryFn: getActiveHeadings,
+    dependsOn: ['project-heading'],
+    enabled: options?.enabled,
+  });
+}
+
 /** 写入成功后的刷新：Engine 模式下由 Engine 变更通知负责（见 refreshAfterWrite）。 */
 function refreshProjectData(queryClient: QueryCacheFacade, projectId: string) {
   refreshAfterWrite(queryClient, { queryKey: ['project-headings', { projectId }] });
+  refreshAfterWrite(queryClient, { queryKey: projectHeadingKeys.active });
   refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
   refreshAfterWrite(queryClient, { queryKey: ['feed'] });
 }
@@ -61,6 +74,7 @@ function invalidateProjectData(queryClient: QueryCacheFacade, projectId: string)
   void queryClient.invalidateQueries({
     queryKey: ['project-headings', { projectId }],
   });
+  void queryClient.invalidateQueries({ queryKey: projectHeadingKeys.active });
   void queryClient.invalidateQueries({ queryKey: taskKeys.all });
   void queryClient.invalidateQueries({ queryKey: ['feed'] });
 }

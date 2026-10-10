@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { deadlinesNav, mainNav, reviewNav, trashNav } from '@/components/layout/navItems';
+import { hiddenListNavs, mainNav, reviewNav, trashNav } from '@/components/layout/navItems';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -15,7 +15,7 @@ interface Props {
  */
 export function PageHeading({ nav, className, children }: Props) {
   const item = nav
-    ? [...mainNav, trashNav, reviewNav, deadlinesNav].find((n) => n.to === nav)
+    ? [...mainNav, trashNav, reviewNav, ...hiddenListNavs].find((n) => n.to === nav)
     : undefined;
   const Icon = item?.icon;
 

@@ -34,7 +34,17 @@ export class ReorderFeedDto {
 
 export class FeedQueryDto {
   @IsOptional()
-  @IsEnum(['inbox', 'today', 'upcoming', 'anytime', 'someday', 'trash', 'logbook', 'deadlines'])
+  @IsEnum([
+    'inbox',
+    'today',
+    'upcoming',
+    'anytime',
+    'someday',
+    'trash',
+    'logbook',
+    'deadlines',
+    'repeating',
+  ])
   view?: FeedView;
 }
 export class LogbookArchiveQueryDto {

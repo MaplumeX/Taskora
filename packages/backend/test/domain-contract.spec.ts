@@ -37,7 +37,6 @@ const taskRows = VIEW_CONTRACT.tasks.map(({ tagIds, ...task }) => ({
   createdAt: new Date(task.createdAt),
   updatedAt: new Date(task.createdAt),
   reminderTime: null,
-  repeatRule: null,
   headingId: null,
   tags: tagIds.map((tagId) => ({ tagId, tag: tagRows.find((tag) => tag.id === tagId)! })),
 }));

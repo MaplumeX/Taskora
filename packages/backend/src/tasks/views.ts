@@ -14,7 +14,15 @@ import { Prisma } from '@prisma/client';
 import type { PrismaService } from '../prisma/prisma.service';
 
 export type TaskView =
-  'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook' | 'deadlines';
+  | 'inbox'
+  | 'today'
+  | 'upcoming'
+  | 'anytime'
+  | 'someday'
+  | 'trash'
+  | 'logbook'
+  | 'deadlines'
+  | 'repeating';
 
 /** 已了结（Settled）状态白名单（ADR 0006）：单一来源在 @taskora/shared，前后端共用。 */
 export const SETTLED_STATUSES = SETTLED_TASK_STATUSES;
@@ -29,10 +37,7 @@ export const WITH_SETTLED_STATUSES = WITH_SETTLED_TASK_STATUSES;
  *
  * Returns only the view-specific conditions (not userId — caller must add that).
  */
-export function buildTaskViewWhere(
-  view: TaskView,
-  keepsSettled = false,
-): Prisma.TaskWhereInput {
+export function buildTaskViewWhere(view: TaskView, keepsSettled = false): Prisma.TaskWhereInput {
   const where: Prisma.TaskWhereInput = {};
   // 非立即模式下这些视图还留着尚未移入 Logbook 的已了结任务（ADR 0022）
   const listed = keepsSettled ? undefined : TaskStatus.ACTIVE;
@@ -85,6 +90,12 @@ export function buildTaskViewWhere(
     case 'deadlines':
       where.status = TaskStatus.ACTIVE;
       where.dueDate = { not: null };
+      where.trashedAt = null;
+      break;
+    case 'repeating':
+      // Repeat Rule 只能设在计划类型为 DATE 的条目上；规则本身由调用方判定。
+      where.status = TaskStatus.ACTIVE;
+      where.scheduledType = ScheduledType.DATE;
       where.trashedAt = null;
       break;
   }

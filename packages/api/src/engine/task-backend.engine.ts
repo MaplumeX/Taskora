@@ -123,6 +123,7 @@ function queryFieldsOf(row: ReplicaRow) {
     scheduledDate: f.scheduledDate,
     dueDate: f.dueDate,
     trashedAt: f.trashedAt,
+    repeatRule: f.repeatRule,
     // 了结时间：Task 行是 settledAt，Project 行是 completedAt（Logging Mode）
     settledAt: f.settledAt,
     completedAt: f.completedAt,
@@ -882,6 +883,7 @@ function viewPrefilter(view: string | undefined, context: ViewContext): ListWher
         ? { trashedAt: null }
         : { status: TaskStatus.ACTIVE, trashedAt: null };
     case 'deadlines':
+    case 'repeating':
       return { status: TaskStatus.ACTIVE, trashedAt: null };
     case 'trash':
       return { trashedAt: { notNull: true } };

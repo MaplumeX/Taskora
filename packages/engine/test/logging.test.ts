@@ -115,11 +115,16 @@ describe('视图里的 Unlogged Item', () => {
     expect(taskMatchesView(task, 'logbook', context)).toBe(true);
   });
 
-  it('手动模式：未移入的留在原视图、不在 Logbook；Deadlines 仍只列未了结', () => {
+  it('手动模式：未移入的留在原视图、不在 Logbook；Deadlines / Repeating 仍只列未了结', () => {
     const context = manual('2026-10-09T00:00:00.000Z');
     expect(taskMatchesView(task, 'today', context)).toBe(true);
     expect(taskMatchesView(task, 'logbook', context)).toBe(false);
     expect(taskMatchesView(task, 'deadlines', context)).toBe(false);
+    const repeating = { ...task, repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' } };
+    expect(taskMatchesView(repeating, 'repeating', context)).toBe(false);
+    expect(taskMatchesView({ ...repeating, status: TaskStatus.ACTIVE }, 'repeating', context)).toBe(
+      true,
+    );
     const cancelled = { ...task, status: TaskStatus.CANCELLED };
     expect(taskMatchesView(cancelled, 'today', context)).toBe(true);
   });

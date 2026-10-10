@@ -33,6 +33,11 @@ export class ProjectHeadingsController {
     );
   }
 
+  @Get('active')
+  findActive(@Request() req: { user: { id: string } }) {
+    return this.headingsService.findActive(req.user.id);
+  }
+
   @Post()
   create(@Request() req: { user: { id: string } }, @Body() dto: CreateProjectHeadingDto) {
     return this.headingsService.create(req.user.id, dto);

@@ -40,6 +40,8 @@
   "anytimeEmpty": "「随时」中没有任务",
   "somedayEmpty": "没有某天任务",
   "deadlinesEmpty": "没有带截止日期的待办",
+  "tomorrowEmpty": "明天没有安排",
+  "repeatingEmpty": "没有重复的待办",
   "logbookEmpty": "还没有已了结的任务",
   "logbookArchiveFailed": "更早的记录加载失败",
   "logbookArchiveRetry": "重试",

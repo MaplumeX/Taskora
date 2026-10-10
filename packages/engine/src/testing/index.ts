@@ -8,6 +8,8 @@
  * 换成存储形态。期望的 id 列表带顺序。
  */
 
+import type { RepeatRule } from '@taskora/shared';
+
 import type { ListView, TaskListQuery } from '../domain';
 
 export interface ContractTask {
@@ -18,6 +20,7 @@ export interface ContractTask {
   scheduledType: 'NONE' | 'DATE' | 'SOMEDAY';
   scheduledDate: string | null;
   dueDate: string | null;
+  repeatRule: RepeatRule | null;
   bucket: 'INBOX' | 'ANYTIME' | 'SCHEDULED';
   settledAt: string | null;
   trashedAt: string | null;
@@ -35,6 +38,7 @@ export interface ContractProject {
   scheduledType: 'NONE' | 'DATE' | 'SOMEDAY';
   scheduledDate: string | null;
   dueDate: string | null;
+  repeatRule: RepeatRule | null;
   bucket: 'ANYTIME' | 'SCHEDULED';
   completedAt: string | null;
   trashedAt: string | null;
@@ -54,6 +58,8 @@ export interface ContractArea {
 
 const CREATED = '2026-09-01T00:00:00.000Z';
 
+const WEEKLY: RepeatRule = { unit: 'week', interval: 1, anchor: 'scheduled' };
+
 function task(id: string, position: string, fields: Partial<ContractTask> = {}): ContractTask {
   return {
     id,
@@ -63,6 +69,7 @@ function task(id: string, position: string, fields: Partial<ContractTask> = {}):
     scheduledType: 'NONE',
     scheduledDate: null,
     dueDate: null,
+    repeatRule: null,
     bucket: 'INBOX',
     settledAt: null,
     trashedAt: null,
@@ -87,6 +94,7 @@ function project(
     scheduledType: 'NONE',
     scheduledDate: null,
     dueDate: null,
+    repeatRule: null,
     bucket: 'ANYTIME',
     completedAt: null,
     trashedAt: null,
@@ -125,11 +133,13 @@ export const VIEW_CONTRACT = {
       scheduledType: 'DATE',
       scheduledDate: '2026-09-20',
       bucket: 'SCHEDULED',
+      repeatRule: WEEKLY,
     }),
     task('t-upcoming', 'a4', {
       scheduledType: 'DATE',
       scheduledDate: '2026-09-25',
       bucket: 'SCHEDULED',
+      repeatRule: WEEKLY,
     }),
     task('t-someday', 'a5', {
       scheduledType: 'SOMEDAY',
@@ -173,6 +183,7 @@ export const VIEW_CONTRACT = {
       scheduledType: 'DATE',
       scheduledDate: '2026-09-24',
       bucket: 'SCHEDULED',
+      repeatRule: WEEKLY,
     }),
     project('p-trashed', 'a2', { trashedAt: '2026-09-21T00:00:00.000Z' }),
     project('p-done', 'a3', { status: 'COMPLETED', completedAt: '2026-09-23T12:00:00.000Z' }),
@@ -195,6 +206,8 @@ export const VIEW_CONTRACT = {
     someday: ['t-someday', 't-due-someday'],
     // 截止日期升序，同一天按位次
     deadlines: ['t-due-someday', 'p-due', 't-due-inbox', 't-due-later', 't-due-tomorrow'],
+    // 计划日期（下一次出现）升序
+    repeating: ['t-overdue', 'p-today', 't-upcoming'],
     logbook: ['p-done', 't-cancelled', 't-done'],
     trash: ['p-trashed', 't-trashed'],
   } satisfies Record<ListView, string[]>,

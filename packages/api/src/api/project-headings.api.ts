@@ -19,6 +19,10 @@ export function getProjectHeadings(
   return currentProjectHeadingBackend().getProjectHeadings(projectId, options);
 }
 
+export function getActiveHeadings(): Promise<ProjectHeadingResponseDto[]> {
+  return currentProjectHeadingBackend().getActiveHeadings();
+}
+
 export function createProjectHeading(
   data: CreateProjectHeadingDto,
 ): Promise<ProjectHeadingResponseDto> {

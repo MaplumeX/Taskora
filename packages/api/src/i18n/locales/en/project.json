@@ -36,6 +36,8 @@
   "archivedHeadingCount": "{{count}} archived headings",
   "laterProjects": "Later Projects",
   "laterProjectsEmpty": "No later projects",
+  "allProjectsEmpty": "No open projects",
+  "loggedProjectsEmpty": "No logged projects yet",
   "laterProjectCount_one": "{{count}} later project",
   "laterProjectCount_other": "{{count}} later projects",
   "completeRemainingTitle": "Complete Project",

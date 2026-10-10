@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 
 import type { TaskSearchHit } from '@taskora/shared';
 import {
+  useActiveHeadingsQuery,
   useAreasQuery,
   useIsLogged,
   useProjectsQuery,
@@ -55,14 +56,16 @@ type QuickFindOption = QuickFindItem | typeof CONTINUE;
 const GROUP_LABEL_KEYS: Record<QuickFindGroupId, string> = {
   lists: 'search:groupLists',
   places: 'search:groupPlaces',
+  headings: 'search:groupHeadings',
   tags: 'search:groupTags',
   tasks: 'search:groupTasks',
 };
 
 /**
  * Quick Find（`.scratch/quick-find` spec）：一个输入框既搜任务，也能跳到
- * 列表、区域、项目与标签。↑/↓ 在全部结果间移动（跨组），Enter 打开：
- * 导航目标直接跳转，任务走 Reveal（跳到所在视图并展开）。只含未了结、
+ * 列表、区域、项目、Project Heading 与标签。↑/↓ 在全部结果间移动（跨组），
+ * Enter 打开：导航目标直接跳转（Heading 跳到所在项目并选中、滚入视野），
+ * 任务走 Reveal（跳到所在视图并展开）。只含未了结、
  * 未进 Trash 的条目；「继续搜索」关闭面板，在主内容区的搜索页（`/search`）
  * 里把范围扩大到已了结与 Trash（对齐 Things 3）。
  *
@@ -90,6 +93,7 @@ export function QuickFind({ open, onOpenChange }: Props) {
   const { data: projects = [] } = useProjectsQuery();
   const isLogged = useIsLogged();
   const { data: areas = [] } = useAreasQuery();
+  const { data: headings = [] } = useActiveHeadingsQuery({ enabled: open });
   const { tags, inTags } = useSearchTagScope(chips);
 
   const token = completionDismissed ? null : tagTokenAt(query, caret);
@@ -125,13 +129,14 @@ export function QuickFind({ open, onOpenChange }: Props) {
         lists,
         projects,
         areas,
+        headings,
         tags,
         hits,
         tagIds: chips,
         inTags,
         isLogged,
       }),
-    [searchedQuery, lists, projects, areas, tags, hits, chips, inTags, isLogged],
+    [searchedQuery, lists, projects, areas, headings, tags, hits, chips, inTags, isLogged],
   );
   const items = useMemo<QuickFindOption[]>(() => {
     const found: QuickFindOption[] = groups.flatMap((group) => group.items);
@@ -203,6 +208,12 @@ export function QuickFind({ open, onOpenChange }: Props) {
       return;
     }
     const route = quickFindRoute(item);
+    if (item.kind === 'heading') {
+      // 项目页里的 Heading 行取走它：选中并滚入视野
+      const ui = useUiInteractionStore.getState();
+      ui.setExpandedId(null);
+      ui.setRevealId(item.heading.id);
+    }
     if (route !== null) navigate(route);
     else if (item.kind === 'task') void reveal(item.hit.task.id, { allowTrash: true });
   };

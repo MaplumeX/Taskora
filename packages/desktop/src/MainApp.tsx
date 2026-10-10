@@ -23,6 +23,10 @@ const Home = lazy(pageLoaders.Home);
 const Inbox = lazy(pageLoaders.Inbox);
 const Logbook = lazy(pageLoaders.Logbook);
 const Deadlines = lazy(pageLoaders.Deadlines);
+const Tomorrow = lazy(pageLoaders.Tomorrow);
+const Repeating = lazy(pageLoaders.Repeating);
+const AllProjects = lazy(pageLoaders.AllProjects);
+const LoggedProjects = lazy(pageLoaders.LoggedProjects);
 const Review = lazy(pageLoaders.Review);
 const ProjectDetail = lazy(pageLoaders.ProjectDetail);
 const Search = lazy(pageLoaders.Search);
@@ -59,6 +63,10 @@ export function MainApp() {
                 <Route path="/review/*" element={<Review />} />
                 <Route path="/logbook" element={<Logbook />} />
                 <Route path="/deadlines" element={<Deadlines />} />
+                <Route path="/tomorrow" element={<Tomorrow />} />
+                <Route path="/repeating" element={<Repeating />} />
+                <Route path="/all-projects" element={<AllProjects />} />
+                <Route path="/logged-projects" element={<LoggedProjects />} />
                 <Route path="/projects/:id" element={<ProjectDetail />} />
                 <Route path="/areas/:id" element={<AreaDetail />} />
                 <Route path="/tags" element={<Tags />} />

@@ -69,6 +69,16 @@ export function createEngineProjectHeadingBackend(
       );
     },
 
+    async getActiveHeadings() {
+      const headings = await engine.list('project-heading', {
+        where: { status: HeadingStatus.ACTIVE },
+      });
+      const rowById = new Map(headings.map((row) => [row.id, row]));
+      return sortHeadings(positionedRows(headings)).map(({ id }) =>
+        projectHeadingRowToDto(rowById.get(id)!),
+      );
+    },
+
     async createProjectHeading(data) {
       await assertProject(data.projectId);
       const siblings = await engine.list('project-heading', {

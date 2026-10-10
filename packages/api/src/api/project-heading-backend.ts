@@ -18,6 +18,8 @@ export interface ProjectHeadingBackend {
     projectId: string,
     options?: { includeArchived?: boolean },
   ): Promise<ProjectHeadingResponseDto[]>;
+  /** 所有项目中未归档的 Heading（Quick Find 的导航目标），按位次。 */
+  getActiveHeadings(): Promise<ProjectHeadingResponseDto[]>;
   createProjectHeading(data: CreateProjectHeadingDto): Promise<ProjectHeadingResponseDto>;
   updateProjectHeading(
     id: string,

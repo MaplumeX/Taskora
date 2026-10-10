@@ -21,6 +21,10 @@ const Home = lazy(() => import('@taskora/ui/pages/Home'));
 const Inbox = lazy(() => import('@taskora/ui/pages/Inbox'));
 const Logbook = lazy(() => import('@taskora/ui/pages/Logbook'));
 const Deadlines = lazy(() => import('@taskora/ui/pages/Deadlines'));
+const Tomorrow = lazy(() => import('@taskora/ui/pages/Tomorrow'));
+const Repeating = lazy(() => import('@taskora/ui/pages/Repeating'));
+const AllProjects = lazy(() => import('@taskora/ui/pages/AllProjects'));
+const LoggedProjects = lazy(() => import('@taskora/ui/pages/LoggedProjects'));
 const Review = lazy(() => import('@taskora/ui/pages/Review'));
 const ProjectDetail = lazy(() => import('@taskora/ui/pages/ProjectDetail'));
 const Search = lazy(() => import('@taskora/ui/pages/Search'));
@@ -60,6 +64,10 @@ export function MainApp() {
               <Route path="/review/*" element={<Review />} />
               <Route path="/logbook" element={<Logbook />} />
               <Route path="/deadlines" element={<Deadlines />} />
+              <Route path="/tomorrow" element={<Tomorrow />} />
+              <Route path="/repeating" element={<Repeating />} />
+              <Route path="/all-projects" element={<AllProjects />} />
+              <Route path="/logged-projects" element={<LoggedProjects />} />
               <Route path="/projects/:id" element={<ProjectDetail />} />
               <Route path="/areas/:id" element={<AreaDetail />} />
               <Route path="/tags" element={<Tags />} />
