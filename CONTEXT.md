@@ -31,7 +31,7 @@ _Avoid_: 文件、file、媒体、图片（图片只是一种附件）
 _Avoid_: 休眠项目（口语可用）、inactive project、归档
 
 **Project Heading（项目分组标题）**:
-Project 内的静态分组标题，用于组织 Project 内的 Tasks。
+Project 内的静态分组标题，用于组织 Project 内的 Tasks。未归档的 Heading 可在 Quick Find 中按名称搜到（所属项目须是导航目标），打开即跳到所在项目，该行成为 Selection 并滚入视野。
 _Avoid_: 项目标题（易与项目名称混淆）、Section、Group Header
 
 **Tag**:
@@ -112,6 +112,26 @@ _Avoid_: 稍后（不可用来指 Someday）
 **Deadlines（截止日期列表）**:
 所有带截止日期的未了结、未进 Trash 的 Task 与 Project（含 Later Project 及其内任务）的隐藏列表（对齐 Things 3）：不在侧边栏、没有计数，只能从 Quick Find 进入。按截止日期升序（逾期的在最前），同一天内按 Position / Feed Position；平铺不分组，不可拖拽排序。
 _Avoid_: 到期列表、DDL 列表
+
+**Hidden List（隐藏列表）**:
+不在侧边栏、没有计数、只能从 Quick Find 的「列表」组进入的列表（对齐 Things 3）：Tomorrow、Deadlines、Repeating、All Projects、Logged Projects。不能固定到侧边栏，也不在手机首页。
+_Avoid_: 智能列表、smart list、隐藏视图
+
+**Tomorrow（明天）**:
+Upcoming 中计划日期为账号时区明天的 Task 与 Project（与 Upcoming「明天」一节同一批条目）的隐藏列表；截止日期在明天不算。展示同 Today：按偏好分组或平铺、可拖拽排序，不显示 Repeat Preview。
+_Avoid_: 明日待办
+
+**Repeating（重复列表）**:
+所有带 Repeat Rule、未了结、未进 Trash 的 Task 与 Project（含 Later Project 及其内任务）的隐藏列表，即每条 Repeat Chain 当前的一环；尚未移入 Logbook 的已了结条目不算（链已经走到它派生的实例）。按计划日期（下一次出现）升序，同一天按 Position / Feed Position；平铺不分组，不可拖拽排序。
+_Avoid_: 重复模板列表（没有独立模板实体）
+
+**All Projects（所有项目）**:
+所有未了结、未进 Trash 的 Project（含 Later Project）的隐藏列表：无区域的在最前，之后每个有项目的 Area 一节；节与节内顺序都跟随侧边栏。不可拖拽排序。
+_Avoid_: 项目总览
+
+**Logged Projects（已完成项目）**:
+Logbook 中的 Project 的隐藏列表，按了结时间分组（规则同 Logbook）；不含 Archived Logbook。
+_Avoid_: 归档项目（「归档」专指 Archived Logbook）
 
 **Inbox**:
 「尚未整理」的 Bucket：无归属（Project / Area）、无计划（计划类型为 NONE）的未了结任务。任何整理动作都会让任务离开 Inbox：获得归属转入 Anytime，获得计划转入 Scheduled。移入 Inbox 时同时清除归属与计划（计划日期、提醒、重复规则随之清除），截止日期保留（参考 Things 3）。不是 Project，也不是存储位置。

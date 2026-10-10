@@ -2,12 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import type {
   AreaResponseDto,
+  ProjectHeadingResponseDto,
   ProjectResponseDto,
   TagResponseDto,
   TaskResponseDto,
   TaskSearchHit,
 } from '@taskora/shared';
-import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
+import { HeadingStatus, ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
 
 import {
   buildQuickFindGroups,
@@ -55,6 +56,19 @@ function tag(id: string, title: string): TagResponseDto {
     title,
     color: '#3B82F6',
     parentId: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
+function heading(id: string, projectId: string, title: string): ProjectHeadingResponseDto {
+  return {
+    id,
+    projectId,
+    title,
+    position: null,
+    status: HeadingStatus.ACTIVE,
+    completedAt: null,
     createdAt: NOW,
     updatedAt: NOW,
   };
@@ -185,6 +199,46 @@ describe('buildQuickFindGroups', () => {
     ).toEqual(['project:p-trash', 'project:p-open']);
   });
 
+  it('Heading 组在区域与项目之后：前缀命中先于包含命中，同档按项目的侧边栏顺序', () => {
+    const groups = buildQuickFindGroups(
+      input({
+        query: 'plan',
+        projects: [project('p1', 'Trip'), project('p2', 'House')],
+        headings: [
+          heading('h1', 'p2', 'Planning'),
+          heading('h2', 'p1', 'Plan B'),
+          heading('h3', 'p1', 'Replan'),
+        ],
+        tags: [tag('g1', 'Planned')],
+      }),
+    );
+    expect(summary(groups)).toEqual({
+      headings: ['heading:h2', 'heading:h1', 'heading:h3'],
+      tags: ['tag:g1'],
+    });
+    const [first] = groups[0].items;
+    expect(first.kind === 'heading' && first.project.id).toBe('p1');
+    expect(quickFindRoute(first)).toBe('/projects/p1');
+  });
+
+  it('所属项目不是导航目标（已移入 Logbook / 在 Trash）时，其 Heading 不出现', () => {
+    const groups = buildQuickFindGroups(
+      input({
+        query: 'plan',
+        projects: [
+          project('p1', 'Done', { status: ProjectStatus.COMPLETED }),
+          project('p2', 'Trashed', { trashedAt: NOW }),
+        ],
+        headings: [
+          heading('h1', 'p1', 'Plan'),
+          heading('h2', 'p2', 'Plan'),
+          heading('h3', 'gone', 'Plan'),
+        ],
+      }),
+    );
+    expect(groups).toEqual([]);
+  });
+
   it('任务组保持 searchTasks 的顺序', () => {
     const groups = buildQuickFindGroups(input({ query: 'x', hits: [hit('b'), hit('a')] }));
     expect(summary(groups).tasks).toEqual(['task:b', 'task:a']);
@@ -211,15 +265,19 @@ describe('quickFindRoute', () => {
 describe('buildQuickFindGroups — `#tag` chip', () => {
   const projects = [project('p-home', 'Home stuff'), project('p-work', 'Work stuff')];
   const areas = [area('a-house', 'House')];
-  const inTags = (entry: { kind: 'area' | 'project'; area?: { id: string }; project?: { id: string } }) =>
-    entry.kind === 'project' ? entry.project!.id === 'p-home' : entry.area!.id === 'a-house';
+  const inTags = (entry: {
+    kind: 'area' | 'project';
+    area?: { id: string };
+    project?: { id: string };
+  }) => (entry.kind === 'project' ? entry.project!.id === 'p-home' : entry.area!.id === 'a-house');
 
-  it('有 chip 时不出现列表与标签组，区域与项目按 chip 过滤', () => {
+  it('有 chip 时不出现列表、Heading 与标签组，区域与项目按 chip 过滤', () => {
     const groups = buildQuickFindGroups(
       input({
         query: 'h',
         projects,
         areas,
+        headings: [heading('h1', 'p-home', 'Hallway')],
         tags: [tag('g1', 'Home')],
         hits: [hit('t1')],
         tagIds: ['g1'],

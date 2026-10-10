@@ -5,6 +5,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 
 import {
   i18n,
+  useActiveHeadingsQuery,
   useAreasQuery,
   useProjectsQuery,
   useRevealTask,
@@ -13,6 +14,7 @@ import {
   useUiInteractionStore,
 } from '@taskora/api';
 import {
+  HeadingStatus,
   ProjectBucket,
   ProjectStatus,
   ScheduledType,
@@ -28,14 +30,14 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
   useProjectsQuery: vi.fn(),
   useAreasQuery: vi.fn(),
+  useActiveHeadingsQuery: vi.fn(),
   useTagsQuery: vi.fn(),
   useTaskSearchQuery: vi.fn(),
   useRevealTask: vi.fn(),
   // 有效 Tag：测试数据里 Project / Area 不带 Tag，直接用自身 Tag
   useEffectiveTags: () => ({
     ofTask: (task: { tags?: { id: string }[] }) => (task.tags ?? []).map((tag) => tag.id),
-    ofProject: (project: { tags?: { id: string }[] }) =>
-      (project.tags ?? []).map((tag) => tag.id),
+    ofProject: (project: { tags?: { id: string }[] }) => (project.tags ?? []).map((tag) => tag.id),
     ofFeedItem: (item: { tags?: { id: string }[] }) => (item.tags ?? []).map((tag) => tag.id),
   }),
 }));
@@ -103,6 +105,20 @@ beforeEach(() => {
   void i18n.changeLanguage('en');
   hitsByQuery = {};
   vi.mocked(useProjectsQuery).mockReturnValue({ data: [PROJECT] } as never);
+  vi.mocked(useActiveHeadingsQuery).mockReturnValue({
+    data: [
+      {
+        id: 'h1',
+        projectId: 'p1',
+        title: 'Produce',
+        position: null,
+        status: HeadingStatus.ACTIVE,
+        completedAt: null,
+        createdAt: NOW,
+        updatedAt: NOW,
+      },
+    ],
+  } as never);
   vi.mocked(useAreasQuery).mockReturnValue({
     data: [{ id: 'a1', title: 'Home', notes: null, createdAt: NOW, updatedAt: NOW }],
   } as never);
@@ -148,13 +164,13 @@ describe('QuickFind', () => {
     expect(screen.queryAllByRole('option')).toHaveLength(0);
   });
 
-  it('按组显示列表、区域与项目、标签、任务', async () => {
+  it('按组显示列表、区域与项目、分组标题、标签、任务', async () => {
     hitsByQuery.r = [hit('t1', 'Buy bread')];
     const { input } = renderQuickFind();
     await user.type(input, 'r');
 
     const groups = screen.getAllByRole('group').map((g) => g.getAttribute('aria-label'));
-    expect(groups).toEqual(['Lists', 'Areas & Projects', 'Tags', 'Tasks']);
+    expect(groups).toEqual(['Lists', 'Areas & Projects', 'Headings', 'Tags', 'Tasks']);
     const places = within(screen.getByRole('group', { name: 'Areas & Projects' }));
     expect(places.getAllByRole('option').map((o) => o.textContent)).toEqual(['Groceries' + 'Home']);
     const task = within(screen.getByRole('group', { name: 'Tasks' })).getByRole('option');
@@ -188,6 +204,35 @@ describe('QuickFind', () => {
     await user.clear(input);
     await user.type(input, 'dead{Enter}');
     expect(screen.getByTestId('path')).toHaveTextContent('/deadlines');
+  });
+
+  it('其余隐藏列表（明天、重复、所有项目、已完成项目）也能用中英文名搜到', async () => {
+    await i18n.changeLanguage('zh');
+    const { input } = renderQuickFind();
+    for (const [query, name, path] of [
+      ['明天', '明天', '/tomorrow'],
+      ['repeating', '重复', '/repeating'],
+      ['所有项目', '所有项目', '/all-projects'],
+      ['logged', '已完成项目', '/logged-projects'],
+    ]) {
+      await user.clear(input);
+      await user.type(input, query);
+      expect(screen.getByRole('option', { name })).toBeInTheDocument();
+      await user.click(screen.getByRole('option', { name }));
+      expect(screen.getByTestId('path')).toHaveTextContent(path);
+    }
+  });
+
+  it('Enter 打开 Heading：跳到所在项目，并请求选中、滚入视野', async () => {
+    useUiInteractionStore.setState({ revealId: null, expandedId: 't9' });
+    const { input, onOpenChange } = renderQuickFind();
+    await user.type(input, 'produ');
+    const headings = within(screen.getByRole('group', { name: 'Headings' }));
+    expect(headings.getByRole('option')).toHaveTextContent('Produce' + 'Groceries');
+    await user.keyboard('{Enter}');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(screen.getByTestId('path')).toHaveTextContent('/projects/p1');
+    expect(useUiInteractionStore.getState()).toMatchObject({ revealId: 'h1', expandedId: null });
   });
 
   it('↑/↓ 跨组移动高亮，Enter 打开任务走 Reveal', async () => {

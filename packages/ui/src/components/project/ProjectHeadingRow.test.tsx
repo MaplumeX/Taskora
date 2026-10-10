@@ -1,10 +1,10 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectHeadingResponseDto } from '@taskora/shared';
 import { HeadingStatus } from '@taskora/shared';
 
-import { useUiInteractionStore } from '@taskora/api';
+import { useSelectionStore, useUiInteractionStore } from '@taskora/api';
 import { mockDesktop } from '@/test/media';
 import { ProjectHeadingRow } from './ProjectHeadingRow';
 
@@ -235,5 +235,24 @@ describe('ProjectHeadingRow', () => {
         onError: expect.any(Function),
       }),
     );
+  });
+
+  it('Quick Find 打开 Heading：该行成为 Selection 并滚到视野中央，请求一次性消费', async () => {
+    const scrollIntoView = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrollIntoView;
+    useSelectionStore.setState({ selectedIds: [] });
+    useUiInteractionStore.setState({ revealId: 'heading-1' });
+    try {
+      render(<ProjectHeadingRow heading={heading} />);
+      await act(async () => {
+        await new Promise((resolve) => requestAnimationFrame(() => resolve(undefined)));
+      });
+      expect(useSelectionStore.getState().selectedIds).toEqual(['heading-1']);
+      expect(scrollIntoView).toHaveBeenCalledTimes(1);
+      expect(useUiInteractionStore.getState().revealId).toBeNull();
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
   });
 });

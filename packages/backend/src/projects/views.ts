@@ -2,7 +2,15 @@ import { ProjectStatus, ScheduledType } from '@taskora/shared';
 import { Prisma } from '@prisma/client';
 
 export type ProjectView =
-  'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook' | 'deadlines';
+  | 'inbox'
+  | 'today'
+  | 'upcoming'
+  | 'anytime'
+  | 'someday'
+  | 'trash'
+  | 'logbook'
+  | 'deadlines'
+  | 'repeating';
 
 /**
  * 视图的 SQL 粗筛（Prisma `where`）。视图规则本身在 @taskora/engine 的
@@ -60,6 +68,12 @@ export function buildProjectViewWhere(
     case 'deadlines':
       where.status = ProjectStatus.ACTIVE;
       where.dueDate = { not: null };
+      where.trashedAt = null;
+      break;
+    case 'repeating':
+      // Repeat Rule 只能设在计划类型为 DATE 的条目上；规则本身由调用方判定。
+      where.status = ProjectStatus.ACTIVE;
+      where.scheduledType = ScheduledType.DATE;
       where.trashedAt = null;
       break;
   }

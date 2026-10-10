@@ -68,6 +68,15 @@ export class ProjectHeadingsService {
     return sortHeadings(await this.prisma.projectHeading.findMany({ where }));
   }
 
+  /** 所有项目中未归档的 Heading（Quick Find 的导航目标）。 */
+  async findActive(userId: string) {
+    return sortHeadings(
+      await this.prisma.projectHeading.findMany({
+        where: { userId, status: HeadingStatus.ACTIVE },
+      }),
+    );
+  }
+
   async create(userId: string, dto: CreateProjectHeadingDto) {
     await this.assertProjectOwnership(userId, dto.projectId);
     // 追加末尾

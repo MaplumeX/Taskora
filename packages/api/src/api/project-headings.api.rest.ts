@@ -20,6 +20,12 @@ export function getProjectHeadings(
     .then((response) => response.data);
 }
 
+export function getActiveHeadings(): Promise<ProjectHeadingResponseDto[]> {
+  return apiClient
+    .get<ProjectHeadingResponseDto[]>('/project-headings/active')
+    .then((response) => response.data);
+}
+
 export function createProjectHeading(
   data: CreateProjectHeadingDto,
 ): Promise<ProjectHeadingResponseDto> {

@@ -1,5 +1,6 @@
 import type {
   AreaResponseDto,
+  ProjectHeadingResponseDto,
   ProjectResponseDto,
   TagResponseDto,
   TaskSearchHit,
@@ -12,7 +13,7 @@ import { needleOf, rankByName } from '../../lib/nameMatch';
 /**
  * Quick Find 结果推导（`.scratch/quick-find` spec 第 1 节）：纯函数。
  *
- * 导航目标（列表 / 区域与项目 / 标签）在客户端按名称子串匹配（不区分
+ * 导航目标（列表 / 区域与项目 / Heading / 标签）在客户端按名称子串匹配（不区分
  * 大小写），组内名称前缀命中先于包含命中，同档保持视觉顺序（继续搜索
  * 时：未了结 → 已了结 → Trash）；任务组直接
  * 取 searchTasks 的结果（已按相关度排好）。组顺序固定，空组不出现。
@@ -28,10 +29,16 @@ export type QuickFindItem =
   | { kind: 'list'; id: string; target: QuickFindListTarget }
   | { kind: 'area'; id: string; area: AreaResponseDto }
   | { kind: 'project'; id: string; project: ProjectResponseDto }
+  | {
+      kind: 'heading';
+      id: string;
+      heading: ProjectHeadingResponseDto;
+      project: ProjectResponseDto;
+    }
   | { kind: 'tag'; id: string; tag: TagResponseDto }
   | { kind: 'task'; id: string; hit: TaskSearchHit };
 
-export type QuickFindGroupId = 'lists' | 'places' | 'tags' | 'tasks';
+export type QuickFindGroupId = 'lists' | 'places' | 'headings' | 'tags' | 'tasks';
 
 export interface QuickFindGroup {
   id: QuickFindGroupId;
@@ -44,6 +51,11 @@ export interface QuickFindInput {
   /** 侧边栏位次即数组顺序（与 Sidebar 同源）。 */
   projects: ProjectResponseDto[];
   areas: AreaResponseDto[];
+  /**
+   * 未归档的 Project Heading（按位次）：所属项目在「区域与项目」组的常规
+   * 候选里才出现；同档按项目的侧边栏顺序、再按位次。搜索页不传。
+   */
+  headings?: ProjectHeadingResponseDto[];
   tags: TagResponseDto[];
   hits: TaskSearchHit[];
   /**
@@ -53,7 +65,7 @@ export interface QuickFindInput {
   extended?: boolean;
   trashedProjects?: ProjectResponseDto[];
   /**
-   * `#tag` chip（issue 07）：有 chip 时不出现「列表」「标签」组，「区域与
+   * `#tag` chip（issue 07）：有 chip 时不出现「列表」「Heading」「标签」组，「区域与
    * 项目」组只留下 inTags 判定命中全部 chip 的条目；搜索词可以为空。
    */
   tagIds?: readonly string[];
@@ -94,10 +106,8 @@ export function buildQuickFindGroups(input: QuickFindInput): QuickFindGroup[] {
   const isLogged = input.isLogged ?? (() => true);
   const listed = (project: ProjectResponseDto) =>
     isOpenProject(project) || (project.trashedAt == null && !isLogged(project));
-  const parents: ReturnType<typeof flatParentOrder> = flatParentOrder(
-    input.projects.filter(listed),
-    input.areas,
-  );
+  const listedProjects = input.projects.filter(listed);
+  const parents: ReturnType<typeof flatParentOrder> = flatParentOrder(listedProjects, input.areas);
   if (input.extended) {
     const settled = input.projects.filter(
       (project) =>
@@ -117,6 +127,23 @@ export function buildQuickFindGroups(input: QuickFindInput): QuickFindGroup[] {
       : { kind: 'project', id: `project:${entry.project.id}`, project: entry.project },
   );
 
+  const projectRank = new Map(listedProjects.map((project, index) => [project.id, index]));
+  const headingCandidates = tagged
+    ? []
+    : (input.headings ?? [])
+        .filter((heading) => projectRank.has(heading.projectId))
+        .sort((a, b) => projectRank.get(a.projectId)! - projectRank.get(b.projectId)!);
+  const headings: QuickFindItem[] = rankByName(
+    headingCandidates,
+    (heading) => [heading.title],
+    needle,
+  ).map((heading) => ({
+    kind: 'heading',
+    id: `heading:${heading.id}`,
+    heading,
+    project: listedProjects[projectRank.get(heading.projectId)!],
+  }));
+
   const tags: QuickFindItem[] = tagged
     ? []
     : rankByName(input.tags, (tag) => [tag.title], needle).map((tag) => ({
@@ -134,6 +161,7 @@ export function buildQuickFindGroups(input: QuickFindInput): QuickFindGroup[] {
   const groups: QuickFindGroup[] = [
     { id: 'lists', items: lists },
     { id: 'places', items: places },
+    { id: 'headings', items: headings },
     { id: 'tags', items: tags },
     { id: 'tasks', items: tasks },
   ];
@@ -149,6 +177,8 @@ export function quickFindRoute(item: QuickFindItem): string | null {
       return `/areas/${item.area.id}`;
     case 'project':
       return `/projects/${item.project.id}`;
+    case 'heading':
+      return `/projects/${item.heading.projectId}`;
     case 'tag':
       return `/tags/${item.tag.id}`;
     case 'task':

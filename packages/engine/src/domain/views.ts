@@ -1,6 +1,6 @@
 /**
  * 视图规则（CONTEXT：Inbox / Today / Upcoming / Anytime / Someday /
- * Logbook / Trash / Deadlines）：一个任务或项目是否出现在某个视图里、feed 怎么排。
+ * Logbook / Trash / Deadlines / Repeating）：一个任务或项目是否出现在某个视图里、feed 怎么排。
  *
  * 设备（Engine 后端）与 hub（REST 服务）都以这里的判定为准：各自可以
  * 先用存储查询粗筛（SQL where），但最终过滤必须经过这些函数，粗筛只能
@@ -24,11 +24,24 @@ import {
   type CalendarZones,
 } from './calendar';
 import { settledIsLogged, type ViewContext } from './logging';
-import { feedSortKey, sortByEffectivePosition, type FeedPositioned, type Positioned } from './order';
+import {
+  feedSortKey,
+  sortByEffectivePosition,
+  type FeedPositioned,
+  type Positioned,
+} from './order';
 import { effectiveTaskTagIds, tagHit, type TagParents } from './tags';
 
 export type ListView =
-  'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook' | 'deadlines';
+  | 'inbox'
+  | 'today'
+  | 'upcoming'
+  | 'anytime'
+  | 'someday'
+  | 'trash'
+  | 'logbook'
+  | 'deadlines'
+  | 'repeating';
 
 /** 视图判定用到的字段（两端存储形态：日期可为 Date 或字符串）。 */
 export interface ViewFields {
@@ -38,6 +51,8 @@ export interface ViewFields {
   /** 截止日期 ≤ 今天的未了结条目也进 Today（对齐 Things 3）。 */
   dueDate: unknown;
   trashedAt: unknown;
+  /** Repeating 收录带 Repeat Rule 的条目；其余视图不看它。 */
+  repeatRule?: unknown;
   /**
    * 了结时间，判定是否已移入 Logbook（Logging Mode，ADR 0022）。Task 行是
    * settledAt，Project 行与 DTO 是 completedAt，两者取其一。
@@ -51,11 +66,11 @@ export interface TaskViewFields extends ViewFields {
 }
 
 /**
- * 只有 Today / Upcoming 依赖「今天」，Deadlines 按截止日期的日历日排序；
- * 其余视图不必查账号时区。
+ * 只有 Today / Upcoming 依赖「今天」，Deadlines / Repeating 按截止日期 /
+ * 计划日期的日历日排序；其余视图不必查账号时区。
  */
 export function viewNeedsCalendar(view: string | undefined): boolean {
-  return view === 'today' || view === 'upcoming' || view === 'deadlines';
+  return view === 'today' || view === 'upcoming' || view === 'deadlines' || view === 'repeating';
 }
 
 function isSettledTask(status: unknown): boolean {
@@ -104,7 +119,7 @@ function inToday(fields: ViewFields, context: CalendarContext): boolean {
 }
 
 /**
- * Deadlines 只列未了结条目；其余排期 / 收纳视图还留着尚未移入 Logbook 的
+ * Deadlines / Repeating 只列未了结条目；其余排期 / 收纳视图还留着尚未移入 Logbook 的
  * 已了结条目，Logbook 只收已移入的（Logging Mode，ADR 0022）。
  */
 export function taskMatchesView(
@@ -139,6 +154,8 @@ export function taskMatchesView(
       );
     case 'deadlines':
       return open && dateKeyOf(task.dueDate, context) !== null;
+    case 'repeating':
+      return open && task.repeatRule != null;
     default:
       return false;
   }
@@ -169,6 +186,8 @@ export function projectMatchesView(
       );
     case 'deadlines':
       return open && dateKeyOf(project.dueDate, context) !== null;
+    case 'repeating':
+      return open && project.repeatRule != null;
     default:
       return false;
   }
@@ -254,22 +273,30 @@ export function sortForView<T extends Positioned & { id: string }>(
   );
 }
 
+/** 先按日历日排序的视图：Deadlines 按截止日期，Repeating 按计划日期（下一次出现）。 */
+const DAY_SORTED_VIEWS: Partial<Record<ListView, 'dueDate' | 'scheduledDate'>> = {
+  deadlines: 'dueDate',
+  repeating: 'scheduledDate',
+};
+
 /**
- * feed 顺序：Logbook 同 sortForView；Deadlines 先按截止日期升序（逾期的
- * 自然在最前），同一天内按 feed 排序键；其余视图任务与项目混排，按 feed
- * 排序键（feedSortKey：项目优先用 Feed Position）。平局按 id，两端稳定。
- * Deadlines 需要 zones 把截止日期换成日历日。
+ * feed 顺序：Logbook 同 sortForView；Deadlines / Repeating 先按截止日期 /
+ * 计划日期升序（逾期的自然在最前），同一天内按 feed 排序键；其余视图任务
+ * 与项目混排，按 feed 排序键（feedSortKey：项目优先用 Feed Position）。
+ * 平局按 id，两端稳定。按日期排的视图需要 zones 把日期换成日历日。
  */
 export function sortFeedItems<
   T extends FeedPositioned & {
     id: string;
     completedAt?: Date | string | null;
     dueDate?: unknown;
+    scheduledDate?: unknown;
   },
 >(items: readonly T[], view: ListView, zones?: CalendarZones): T[] {
   if (view === 'logbook') return sortForView(items, view, (item) => item.completedAt);
-  if (view === 'deadlines' && !zones) throw new Error('sortFeedItems: deadlines 需要 zones');
-  const dayOf = (item: T) => (view === 'deadlines' ? (dateKeyOf(item.dueDate, zones!) ?? '') : '');
+  const dayField = DAY_SORTED_VIEWS[view];
+  if (dayField && !zones) throw new Error(`sortFeedItems: ${view} 需要 zones`);
+  const dayOf = (item: T) => (dayField ? (dateKeyOf(item[dayField], zones!) ?? '') : '');
   const keyed = items.map((item) => ({ item, day: dayOf(item), key: feedSortKey(item) }));
   keyed.sort(
     (a, b) =>

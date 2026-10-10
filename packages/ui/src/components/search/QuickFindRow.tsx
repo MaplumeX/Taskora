@@ -1,14 +1,23 @@
-import { CalendarClock, CornerDownRight, Layers, Tag, Tags, Trash2, X } from 'lucide-react';
+import {
+  CalendarClock,
+  CornerDownRight,
+  Heading,
+  Layers,
+  Tag,
+  Tags,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { ProjectStatus, TaskStatus } from '@taskora/shared';
 
-import { deadlinesNav, mainNav, trashNav, type NavItem } from '@/components/layout/navItems';
+import { hiddenListNavs, mainNav, trashNav, type NavItem } from '@/components/layout/navItems';
 import { ProjectProgressPie } from '@/components/project/ProjectProgressRing';
 import { cn } from '@/lib/utils';
 import { highlightParts, type QuickFindItem } from './quickFindResults';
 
-/** 可搜到的内置列表（spec 第 1 节）：主导航 + 稍后项目 + 截止日期 + 废纸篓 + 标签。 */
+/** 可搜到的内置列表（spec 第 1 节）：主导航 + 稍后项目 + 隐藏列表 + 废纸篓 + 标签。 */
 export const LIST_TARGETS: Array<{
   to: string;
   labelKey: string;
@@ -17,7 +26,7 @@ export const LIST_TARGETS: Array<{
 }> = [
   ...mainNav,
   { to: '/later-projects', labelKey: 'project:laterProjects', icon: CalendarClock },
-  deadlinesNav,
+  ...hiddenListNavs,
   trashNav,
   { to: '/tags', labelKey: 'nav:tags', icon: Tags },
 ];
@@ -98,6 +107,21 @@ export function QuickFindRow({ item, query, projectTitle, areaTitle }: RowProps)
             </span>
           )}
           {item.project.trashedAt && <TrashedMark />}
+        </div>
+      );
+    case 'heading':
+      return (
+        <div className="flex items-center gap-2">
+          <Heading className="h-4 w-4 shrink-0 text-primary" />
+          <span className="flex-1 truncate">
+            <Highlighted
+              text={item.heading.title || t('project:headingPlaceholder')}
+              query={query}
+            />
+          </span>
+          <span className="max-w-[40%] shrink-0 truncate text-meta text-muted-foreground">
+            {item.project.title || t('project:newItemPlaceholder')}
+          </span>
         </div>
       );
     case 'tag':

@@ -80,7 +80,7 @@ describe('NavigationPopover（⇧⌘O）', () => {
   it('输入过滤，Enter 前往首个结果', async () => {
     const { input, onNavigate } = renderPopover();
     expect(input).toHaveFocus();
-    await user.type(input, 'rep');
+    await user.type(input, 'repo');
     expect(optionNames()).toEqual(['ReportWork']);
     await user.keyboard('{Enter}');
     expect(onNavigate).toHaveBeenCalledWith('/projects/p-report');

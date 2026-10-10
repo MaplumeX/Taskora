@@ -19,5 +19,9 @@
   "navigationTitle": "Go to",
   "navigationPlaceholder": "Go to a list, area or project…",
   "navigationNoResults": "No matching lists",
-  "deadlines": "Deadlines"
+  "deadlines": "Deadlines",
+  "tomorrow": "Tomorrow",
+  "repeating": "Repeating",
+  "allProjects": "All Projects",
+  "loggedProjects": "Logged Projects"
 }

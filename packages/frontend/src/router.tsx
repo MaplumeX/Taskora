@@ -32,6 +32,10 @@ const Home = lazyWithRetry(pageLoaders.Home);
 const Inbox = lazyWithRetry(pageLoaders.Inbox);
 const Logbook = lazyWithRetry(pageLoaders.Logbook);
 const Deadlines = lazyWithRetry(pageLoaders.Deadlines);
+const Tomorrow = lazyWithRetry(pageLoaders.Tomorrow);
+const Repeating = lazyWithRetry(pageLoaders.Repeating);
+const AllProjects = lazyWithRetry(pageLoaders.AllProjects);
+const LoggedProjects = lazyWithRetry(pageLoaders.LoggedProjects);
 const Review = lazyWithRetry(pageLoaders.Review);
 const Login = lazyWithRetry(() => import('@/pages/Login'));
 const ProjectDetail = lazyWithRetry(pageLoaders.ProjectDetail);
@@ -86,6 +90,10 @@ export const router = createBrowserRouter([
           { path: '/review/*', element: <Review /> },
           { path: '/logbook', element: <Logbook /> },
           { path: '/deadlines', element: <Deadlines /> },
+          { path: '/tomorrow', element: <Tomorrow /> },
+          { path: '/repeating', element: <Repeating /> },
+          { path: '/all-projects', element: <AllProjects /> },
+          { path: '/logged-projects', element: <LoggedProjects /> },
           { path: '/projects/:id', element: <ProjectDetail /> },
           { path: '/areas/:id', element: <AreaDetail /> },
           { path: '/tags', element: <Tags /> },

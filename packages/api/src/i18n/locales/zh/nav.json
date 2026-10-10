@@ -19,5 +19,9 @@
   "navigationTitle": "前往",
   "navigationPlaceholder": "前往列表、区域或项目…",
   "navigationNoResults": "没有匹配的列表",
-  "deadlines": "截止日期"
+  "deadlines": "截止日期",
+  "tomorrow": "明天",
+  "repeating": "重复",
+  "allProjects": "所有项目",
+  "loggedProjects": "已完成项目"
 }

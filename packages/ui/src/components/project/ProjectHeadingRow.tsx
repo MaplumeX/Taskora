@@ -27,7 +27,7 @@ import {
   useUnarchiveProjectHeading,
   useUpdateProjectHeading,
 } from '@taskora/api';
-import { useUiInteractionStore } from '@taskora/api';
+import { useSelectionStore, useUiInteractionStore } from '@taskora/api';
 import { cn } from '@/lib/utils';
 import { useIsDesktop } from '../../lib/use-media-query';
 import { MenuItems, type MenuItem } from '@/components/common/MenuItems';
@@ -49,6 +49,7 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
   const [draft, setDraft] = React.useState(heading.title);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
+  const rowRef = React.useRef<HTMLDivElement>(null);
   const archived = heading.status === HeadingStatus.COMPLETED;
   const updateHeading = useUpdateProjectHeading(heading.projectId);
   const deleteHeading = useDeleteProjectHeading(heading.projectId);
@@ -62,6 +63,18 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
     setEditing(true);
     clearPendingAutoEditId();
   }, [autoEdit, clearPendingAutoEditId]);
+
+  // Quick Find 打开 Heading：该行成为 Selection 并滚到视野中央，一次性。
+  const revealing = useUiInteractionStore((state) => state.revealId === heading.id);
+  React.useEffect(() => {
+    if (!revealing) return;
+    useSelectionStore.getState().setSelection([heading.id]);
+    const frame = requestAnimationFrame(() => {
+      rowRef.current?.scrollIntoView?.({ block: 'center' });
+      useUiInteractionStore.getState().setRevealId(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [revealing, heading.id]);
 
   React.useEffect(() => {
     if (!editing) setDraft(heading.title);
@@ -145,6 +158,7 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
   return (
     <>
       <div
+        ref={rowRef}
         aria-selected={selected || undefined}
         data-selection-row={heading.id}
         tabIndex={selected ? 0 : -1}

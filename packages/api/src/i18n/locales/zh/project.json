@@ -36,6 +36,8 @@
   "archivedHeadingCount": "{{count}} 个已归档项目分组标题",
   "laterProjects": "稍后项目",
   "laterProjectsEmpty": "没有稍后项目",
+  "allProjectsEmpty": "没有进行中的项目",
+  "loggedProjectsEmpty": "还没有已完成的项目",
   "laterProjectCount": "{{count}} 个稍后项目",
   "completeRemainingTitle": "完成项目",
   "completeRemainingDescription": "项目中还有 {{count}} 个未了结的任务，要如何处理？",

@@ -289,6 +289,8 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     expect(archived.status).toBe(HeadingStatus.COMPLETED);
     expect((await engine.get('task', taskId))?.fields.status).toBe(TaskStatus.COMPLETED);
     expect((await headings.getProjectHeadings(project.id)).map((h) => h.title)).toEqual(['阶段二']);
+    // Quick Find 的导航目标只有未归档的
+    expect((await headings.getActiveHeadings()).map((h) => h.id)).toEqual([h2.id]);
     expect(
       (await headings.getProjectHeadings(project.id, { includeArchived: true })).map(
         (h) => h.title,

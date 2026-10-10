@@ -6,7 +6,15 @@ import { ProjectStatus, ProjectBucket } from '../enums/project.enum';
 export type FeedItemType = 'task' | 'project';
 
 export type FeedView =
-  'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook' | 'deadlines';
+  | 'inbox'
+  | 'today'
+  | 'upcoming'
+  | 'anytime'
+  | 'someday'
+  | 'trash'
+  | 'logbook'
+  | 'deadlines'
+  | 'repeating';
 
 export interface FeedItemBase {
   id: string;
