@@ -154,7 +154,7 @@ export default function Upcoming() {
     () => buildUpcomingLayout(items, new Date(), filtering ? [] : previews),
     [items, previews, filtering, calendarDay],
   );
-  const groups = useMemo(() => upcomingGroups(layout, items), [layout, items]);
+  const groups = useMemo(() => upcomingGroups(layout), [layout]);
   const flip = useFlipList<HTMLDivElement>(groups);
 
   // 多项拖拽：拖拽开始那次提交之后再收起组内其余行，浮层才贴着手。
@@ -296,10 +296,7 @@ export default function Upcoming() {
 
   const applyTarget = (current: ScheduleDrag, target: UpcomingDragTarget | null): FeedItem[] => {
     if (!target) return current.items;
-    const currentGroups = upcomingGroups(
-      buildUpcomingLayout(current.items, new Date()),
-      current.items,
-    );
+    const currentGroups = upcomingGroups(buildUpcomingLayout(current.items, new Date()));
     return (
       moveUpcomingTask(
         current.items,
@@ -657,7 +654,7 @@ function withScheduleDragGroup(
   moved: TaskFeedItem,
   group: Array<{ item: TaskFeedItem; groupId: string }>,
 ): FeedItem[] {
-  const groups = upcomingGroups(buildUpcomingLayout(items, new Date()), items);
+  const groups = upcomingGroups(buildUpcomingLayout(items, new Date()));
   const finalGroupId = groups.find((entry) =>
     entry.items.some((item) => feedKey(item) === feedKey(moved)),
   )?.id;
