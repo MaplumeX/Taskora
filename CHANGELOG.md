@@ -10,6 +10,132 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > Android 小节，端专属改动标注 `(desktop)` / `(android)`。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [0.9.0] - 2026-10-10
+
+### Added
+
+- **engine/shared/api/backend/ui/mobile**: Logging Mode：自选已了结条目进入 Logbook 的时机 (#202) —
+  此前条目一了结就立刻离开所属视图，现在对齐 Things 3 提供 **Immediately**（默认，行为不变）、**Daily**
+  与 **Manually** 三种记账模式，已了结条目可以划着横线留在原处成为 **Unlogged Item**，直到被记入
+  Logbook。是否已记账是**推导**结果、绝不存到 Task / Project 上：由账号偏好 `loggingMode` 与可空的 ISO
+  水位 `loggedThrough` 决定，规则落在 `engine/src/domain/logging.ts` 的 `settledIsLogged` /
+  `keepsSettledInViews`，经 `ViewContext.logging` 贯穿 `taskMatchesView`、`projectMatchesView`、
+  `taskMatchesQuery` 与 `planTaskSearch`，设备引擎与 hub 共用；缺省 `logging` 即 Immediately，旧调用方
+  行为不变。条目按各自的了结时刻判断，因此了结一个项目会连同其未了结任务一起了结，而早已了结的任务
+  不会被拉回视图。**Log Completed** 把水位推进到当下——任意条数都是 O(1) 的一次偏好写入——并支持撤销；
+  入口有 `⇧⌘Y`（Windows `Ctrl+Shift+Y`、Web `Alt+Shift+Y`，可在 keymap 重绑）、任务与项目右键菜单，
+  以及手机端 Logbook 页按钮，Immediately 模式下全部隐藏，操作后有带 **Undo** 的 toast。
+  `UserPreferences` / `UpdatePreferencesDto` 增这两个字段并由后端 DTO 用 `IsIn` / `IsISO8601` 校验，
+  `normalizePreferences` 改为 payload 权威（LWW、`null` 也是值、接受更早水位以支持撤销回退）；新增
+  `useLogging`（`useLoggingActions` / `useLoggingMode` / `useIsLogged`，乐观写入失败回滚）与按模式 + 水位
+  取键的 `useCalendarQueryRefresh`。非 Logbook 视图中未记账的已了结条目留在原处划横线，项目的「已了结」
+  面板只取已记账条目，勾选未记账条目即重开（取消的则取消取消），侧边栏 / 首页徽章与 Android 状态栏
+  通知计数只数未了结条目，New in Today 排除已了结条目，项目进度仍计入它们；快速查找 / 搜索把
+  Unlogged Item 当普通结果返回；设置 → 通用新增分段控件与说明（Manually 显示当前快捷键），
+  `useCompletionRhythm` 在非 Immediately 模式下勾选立即提交、行不消失（不 hold、不收起、不预览）。
+  `CONTEXT.md` 新增 Logging Mode / Unlogged Item / Log Completed 词条，机制见 ADR-0022。
+
+- **engine/api/backend/shared/ui/frontend/desktop/mobile**: Quick Find 隐藏列表与项目分组标题搜索 (#203) —
+  对齐 Things 3（3.11+）：快速查找除既有的 Deadlines 外，新增只能从快速查找进入的隐藏列表
+  **Tomorrow**（Upcoming 中计划在明天的条目）、**Repeating**（全部带重复规则的未了结条目，按下次发生
+  排序）、**All Projects**（全部未了结项目，按区域分节）与 **Logged Projects**（Logbook 中的项目，按了结
+  日期分组）；输入项目分组标题名称会跳到其所属项目、选中该标题行并滚入视野。这些隐藏列表与 Deadlines
+  一致：无侧边栏入口、无计数、无手机首页入口、不可固定，出现在快速查找的「列表」组与 ⇧⌘O 前往弹层
+  （共享列表目标），按本地化与英文名匹配，到处都排除 Archived Logbook。engine 新增 `repeating` 视图与
+  `ViewFields.repeatRule`，日序视图统一进 `DAY_SORTED_VIEWS`（Deadlines → `dueDate`，Repeating →
+  `scheduledDate`），`viewNeedsCalendar` 覆盖 `repeating`；设备引擎补 `repeating` 粗筛、`repeatRule` 经
+  `queryFieldsOf` 透传，并新增 `ProjectHeadingBackend.getActiveHeadings()`；后端 `TaskView` / `ProjectView`
+  粗筛与 feed DTO 校验跟进，新增 `GET /project-headings/active`（`ProjectHeadingsService.findActive`）；
+  shared 的 `FeedView` 扩展 `repeating`。UI 侧从 Deadlines 抽出共享的 `FlatFeedPage` 供 Repeating 复用，
+  新增 `Tomorrow`、`AllProjects`（含纯函数 `allProjectSections`）与 `LoggedProjects` 页面，`navItems` 的
+  `hiddenListNavs` 同时喂给快速查找的 `LIST_TARGETS` 与 `PageHeading`，`quickFindResults` 新增 `headings`
+  组（位于地点与标签之间，`#tag` chip 激活时隐藏，候选仅限本身是导航目标的项目、按侧边栏顺序排序），
+  新增 `useActiveHeadingsQuery` hook 与 `ProjectHeadingRow` 的 `revealId` 处理；三端补路由与懒加载，
+  i18n 补名称 / 分组 / 空状态，`CONTEXT.md` 新增 Hidden List、Tomorrow、Repeating、All Projects、
+  Logged Projects 词条。
+
+- **backend/api/shared/ui**: 可订阅的外部日历（ICS） (#204) —
+  粘贴 iCal（ICS）链接即可把外部日历的事件只读地显示在 **Today**、**Upcoming**（日分组与月分组）与
+  **Calendar**（月网格与日详情）的任务旁边，让一天可以围绕会议来安排：Google / Outlook / iCloud 等都能
+  直接给出 iCal 链接，无需 OAuth、CalDAV 或读取设备日历。设置 → 日历可粘贴链接（`https://`、`http://`
+  或 `webcal://`）、重命名、从 8 色调色板选色、临时停用或删除；名称默认取日历自身的 `X-WR-CALNAME`，
+  否则取主机名，抓取失败会在设置里给出原因（链接错误、地址被拦截、超时、HTTP 状态、文件过大、不是
+  iCal 文件）。**抓取与解析在 hub 而非设备**：浏览器无法跨域读取 Google / Outlook 的 ICS，因此后端用
+  `ical.js` 下载 feed、按订阅缓存解析结果 15 分钟，并按需经 `GET /calendar/events?from&to` 展开重复
+  （账号时区的日期键、闭区间、最多 100 天）；重新抓取失败时继续提供过期副本并把错误记在订阅上。订阅是
+  **普通 REST 资源而非同步实体**（`/calendar/subscriptions`），不走 Change Event、不进 Local Replica
+  ——URL 是秘密，没理由躺在每台设备的 SQLite 里；事件是像 Repeat Preview 一样的投影：无复选框、不可
+  拖拽 / 编辑、不进 Selection，标签筛选激活时隐藏。线格式：全天事件带日期键（`end` 独占），定时事件带
+  UTC 时刻，由客户端把定时事件分配到它在账号时区覆盖的每一天（正好结束于午夜的事件不外溢）；时区上
+  文件内的 VTIMEZONE 定义优先，无定义的 IANA TZID 按该时区解析（含 DST），浮动时间用账号时区，
+  `STATUS:CANCELLED` 的事件与实例一律丢弃。SSRF 防护：只接受 http(s)（`webcal://` 视作 `https://`），
+  每个解析出的地址在 socket 的 `lookup` 内检查（DNS rebinding 无法绕过），回环 / 私有 / 链路本地 /
+  CGNAT / 组播网段一律拒绝，IP 字面量直接检查，重定向手动跟随（最多 5 跳、每跳重检），15 秒超时、
+  10 MB 体积上限，内网日历的自建者可设 `CALENDAR_ALLOW_PRIVATE_NETWORK=true`；订阅只在一次成功的抓取
+  与解析之后才创建，坏链接当场报错而不是日后悄无声息地失败。迁移 `20261010120000_calendar_subscriptions`
+  新增 `CalendarSubscription` 表，决策见 ADR-0023。
+
+- **ui**: Expanded Linger：展开中的任务被编辑到视图外时留在原位 (#205) —
+  对齐 Things 3：当前展开（打开）的任务被编辑到不再属于当前视图时（例如把 Inbox 任务设为 Today、或把
+  Upcoming 任务改成 Someday），该行留在原来的位置与分组里，直到被收起；数据立即写入，推迟的只是这一行
+  从列表里的移除，且该行继续渲染最新数据。任务仍在列表里、只是会移到另一个分组时（例如在 Upcoming 改成
+  另一个未来日期）同样留在原日期直到收起；同组内的排序变化仍照常跟随数据。任务进 Trash、已不存在、或
+  已出现在同一页面的另一个列表时不 linger（例如 Search 把任务从「任务」区移到「Logbook」）；只有展开的
+  行 linger，未展开的行立即离开。这是渲染层行为，不改写数据。新增
+  `packages/ui/src/lib/useLingeringExpanded.ts`：记住条目离开前的形态、前一个兄弟节点与索引，并把它重新
+  插回原位（前一个兄弟之后，若该行已不在则用原索引）；`stays` 谓词把「仍在但换了分组」也当作离开
+  （Upcoming 用它处理日期变化），`unlessShownElsewhere` 在任务已出现在同页另一个 Selection 作用域时跳过
+  linger（调用方须登记未 linger 的行，以免 linger 行把自己算进去），并经 `useTaskQuery` 检测 Trash /
+  缺失。`GroupedFeedListView`（覆盖 Inbox 与平铺时间视图）、`ProjectTaskLayout` 与 `TaskListView`（用
+  `unlessShownElsewhere`，Selection 作用域仍按未 linger 的行登记）、`Upcoming`（`sameScheduledDate` 的
+  `stays`，排在 `useHeldValue` 之前，使 linger 先于落位后的 hold 逻辑）接入。`CONTEXT.md` 新增
+  Expanded Linger 词条。
+
+- **api/ui/desktop**: Things 风格日期、排序、导航与剪贴板快捷键 (#200) —
+  补齐 `docs/keyboard-shortcuts.md` 中记为 P1/P2 的键位，更贴近 Things：日期编辑（When 卡片 `⌘S`，
+  Today / Anytime / Someday `⌘T` / `⌘R` / `⌘O`，计划日期前后挪 `⌃[` / `⌃]`、`⌃⇧[` / `⌃⇧]`，截止日期卡片
+  `⇧⌘D`，截止日期前后挪 `⌃,` / `⌃.`、`⌃⇧,` / `⌃⇧.`，重复规则 `⇧⌘R`）、移动与排序（移动到另一个列表
+  `⇧⌘M`，上 / 下 / 顶 / 底 `⌘↑` / `⌘↓` / `⌥⌘↑` / `⌥⌘↓`）、导航（上一个 / 下一个侧边栏列表 `⌃⌥⌘↑` /
+  `↓`，打开选中项目 / 区域 `⌘→`，Show in Parent `⌘L`，导航弹层 `⇧⌘O`，切换侧边栏 `⌘/`）、选择与新建
+  （扩展到顶 / 底 `⌥⇧↑` / `↓`，从选中项新建分组标题 `⌥⇧⌘N`，在打开的任务里新建子步骤 `⇧⌘C`）以及剪贴板
+  （复制 `⌘C`、粘贴 `⌘V`、把复制的内容移到这里 `⌥⌘V`）；标点组合键按物理键解析，因此 `⌃⇧]` → `}` 等带
+  shift 的变体也能正确映射。新增 `NavigationPopover.tsx`（⇧⌘O 快速切换内置列表、区域与项目，按名称英中
+  过滤、前缀匹配优先）、`KeyboardFieldPicker.tsx`（把旧的 `KeyboardTagPicker` 泛化为标签 / 计划 / 截止 /
+  重复 / 移动卡片，锚定在最后选中的行上）、`keyboardEdits.ts`（纯计划 / 截止日期步进与 `⌘L` 的父级路由
+  解析）、`itemClipboard.ts`（内存中的已复制条目加系统文本识别、外部文本转任务标题、页面放置目标与载荷）
+  与 `systemClipboard.ts`（桌面走原生 `tauri-plugin-clipboard-manager`，Web 走 `navigator.clipboard`）。
+  `SelectionRow` 现在携带 `item` 快照与 `sortGroup`，作用域可注册 `reorder` 与 `headingFromSelection`
+  动作，新增 `reorderedRowIds` 把多选作为一个整体在同一 `sortGroup` 内移动、分组标题与其他组原位不动。
+  项目页接入组内排序与从选中任务新建分组标题，分组 feed、Upcoming（按天）与任务列表的排序与拖拽走同一条
+  写回路径。桌面端新增 clipboard-manager 插件与读写文本能力，绕过 WKWebView 的跨应用粘贴确认。Web 上被
+  浏览器占用的组合键改绑：`Ctrl+L` → `Alt+L`、`Ctrl+Shift+O` → `Alt+Shift+O`、`Ctrl+Shift+C` →
+  `Alt+Shift+C`、重复 → `Alt+Shift+P`（`Alt+Shift+R` 仍属回顾模式）。`docs/keyboard-shortcuts.md` 的
+  P1/P2 小节改写为真正的 Dates / Move / Global 小节并新增 Clipboard 小节，i18n 补英中文案。
+
+### Changed
+
+- **ui**: Upcoming 月分组按计划日期排序，禁止月内跨日重排 (#206) —
+  Upcoming 的月分组不再按 feed 的 `Position` 渲染，而按计划日期排序，同一天的任务保持 feed 顺序：
+  `upcomingGroups` 不再接收 `items`，直接从布局的日桶（`month.days.flatMap((day) => day.items)`）派生
+  月条目，使顺序跟随计划日期而不是按 key 过滤 feed 数组。`moveUpcomingTask` 对 `month:` 分组内的跨日移动
+  返回 `null`（锚点与被拖条目落在不同天）：同日内拖拽仍可用并经 `reorder` 持久化，跨日拖拽既不写日期也
+  不存顺序，刷新前后都保持按日期排序；跨组拖拽不变，仍由落点所属的月 / 周标题提供新日期，行随后按日期
+  显示。此前月分组沿用 feed 的手动 `Position`，可能把较晚的日期排到较早的日期之上，让可见顺序与行上的
+  日期相互矛盾，月内跨日拖拽还可能产生刷新后无法复现的顺序。
+
+### Fixed
+
+- **ui**: 底部栏切换动画不再撑高桌面窗口 (#201) —
+  桌面窗口此前会整体滚动：底部栏与侧边栏跟着页面一起移动。`ContentBottomBar` 里的两组按钮通过透明度与
+  位移交叉淡入淡出，隐藏的一组留在 DOM 中且 `translate-y-1.5` 使其下移 6px，而栏位于窗口底部又未裁剪
+  溢出，于是不可见的按钮把文档滚动高度撑高了 6px。修复为给底部栏加 `overflow-hidden`，让按钮切换动画
+  裁在栏内；同时隐藏主内容区的滚动条（`[scrollbar-width:none]` / `[&::-webkit-scrollbar]:hidden`）并
+  去掉已不需要的 `[scrollbar-gutter:stable]`，列表增长或跨组拖拽不再改变任务行宽度。列表仍在
+  `MainContent` 内独立滚动，菜单与提示仍走 portal。在 Chromium 中以项目生成的 Tailwind CSS 与相同布局
+  实测：窗口高 800px、标题栏 0px（Web / 全屏）/ 28px（macOS）/ 32px（Windows / Linux）各变体下，文档
+  滚动高度由修复前的 806px 降为 800px，1800px 高的任务内容仍在主内容区独立滚动，底部栏下缘保持在
+  800px。
+
 ## [0.8.1] - 2026-10-09
 
 ### Added
