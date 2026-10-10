@@ -365,7 +365,9 @@ describe('Upcoming — 复用分组列表拖动来改计划日期', () => {
   });
 
   it('日程只读显示在当天分组的任务之前，不注册为可拖动任务', () => {
-    harness.events = new Map([['2026-10-07', [eventEntry('evt', '评审会', '2026-10-07', '10:00')]]]);
+    harness.events = new Map([
+      ['2026-10-07', [eventEntry('evt', '评审会', '2026-10-07', '10:00')]],
+    ]);
     renderUpcoming([task('task-1', '2026-10-07')]);
     const row = document.querySelector('[data-calendar-event-row="evt"]');
     expect(row).toHaveTextContent('10:00');
@@ -453,18 +455,27 @@ describe('Upcoming — 复用分组列表拖动来改计划日期', () => {
     );
   });
 
-  it('月份内跨具体日期排序，保留日期并按保存的顺序显示', () => {
-    const items = [task('task-1', '2026-11-10'), task('task-2', '2026-11-20')];
+  it.each([
+    ['2026-10-15', '2026-10-25'],
+    ['2026-11-10', '2026-11-20'],
+  ])('月份分组按计划日期排序，同日保留 feed 顺序（%s / %s）', (early, late) => {
+    renderUpcoming([task('task-1', late), task('task-3', early), task('task-2', early)]);
+    expect(taskOrder()).toEqual(['task-3', 'task-2', 'task-1']);
+  });
+
+  it('月份内跨具体日期拖拽不改变日期或手动顺序，重新加载仍按日期显示', () => {
+    const items = [task('task-2', '2026-11-20'), task('task-1', '2026-11-10')];
     const view = renderUpcoming(items);
     start();
     pointAt('task:task-2', 'after');
     over('task:task-2');
     end('task:task-2');
-    expect(taskOrder()).toEqual(['task-2', 'task-1']);
+    expect(taskOrder()).toEqual(['task-1', 'task-2']);
     expect(harness.update).not.toHaveBeenCalled();
+    expect(harness.reorder).not.toHaveBeenCalled();
     expect(screen.getByTestId('row-task-1')).toHaveAttribute('data-date', '2026-11-10');
     vi.mocked(useFeedQuery).mockReturnValue({
-      data: [items[1], items[0]],
+      data: [...items],
       isLoading: false,
       isError: false,
     } as never);
@@ -473,7 +484,31 @@ describe('Upcoming — 复用分组列表拖动来改计划日期', () => {
         <Upcoming />
       </MemoryRouter>,
     );
-    expect(taskOrder()).toEqual(['task-2', 'task-1']);
+    expect(taskOrder()).toEqual(['task-1', 'task-2']);
+  });
+
+  it('月份内同一天仍可手动排序，其他日期始终按日期显示', () => {
+    renderUpcoming([
+      task('task-3', '2026-11-20'),
+      task('task-1', '2026-11-10'),
+      task('task-2', '2026-11-10'),
+    ]);
+    expect(taskOrder()).toEqual(['task-1', 'task-2', 'task-3']);
+    start();
+    pointAt('task:task-2', 'after');
+    over('task:task-2');
+    expect(taskOrder()).toEqual(['task-2', 'task-1', 'task-3']);
+    end('task:task-2');
+    expect(taskOrder()).toEqual(['task-2', 'task-1', 'task-3']);
+    expect(harness.update).not.toHaveBeenCalled();
+    expect(harness.reorder).toHaveBeenCalledWith(
+      [
+        { type: 'task', id: 'task-3' },
+        { type: 'task', id: 'task-2' },
+        { type: 'task', id: 'task-1' },
+      ],
+      expect.anything(),
+    );
   });
 
   it('多项拖拽：选中的任务一起改到落点日期，日期都写完再保存顺序', () => {
@@ -517,7 +552,7 @@ describe('Upcoming — 复用分组列表拖动来改计划日期', () => {
     expect(taskOrder()).toEqual(['task-3', 'task-4', 'task-5']);
   });
 
-  it('跨组落到具体行前后，按月份标题改期；日期写入成功后再保存顺序', () => {
+  it('跨组落到具体行前后，按月份标题改期并按日期显示；日期写入成功后再保存顺序', () => {
     renderUpcoming([
       task('task-1', '2026-10-07'),
       task('task-2', '2026-11-15'),
@@ -527,7 +562,7 @@ describe('Upcoming — 复用分组列表拖动来改计划日期', () => {
     pointAt('task:task-2', 'after');
     over('task:task-2');
     expect(taskGroup()).toBe('month:2026-11');
-    expect(taskOrder()).toEqual(['task-2', 'task-1', 'task-3']);
+    expect(taskOrder()).toEqual(['task-1', 'task-2', 'task-3']);
     end('task:task-2');
     expect(harness.update.mock.calls[0][0].data.scheduledDate).toBe('2026-11-01');
     expect(harness.reorder).not.toHaveBeenCalled();
@@ -715,24 +750,24 @@ describe('Upcoming — 复用分组列表拖动来改计划日期', () => {
     );
   });
 
-  it.each([
-    ['before', ['task-1', 'task-2', 'task-3']],
-    ['after', ['task-2', 'task-1', 'task-3']],
-  ] as const)('跨月向上拖到任务行 %s 半区，按该位置插入并使用目标月首日', (edge, expected) => {
-    renderUpcoming([
-      task('task-2', '2026-11-15'),
-      task('task-3', '2026-11-20'),
-      task('task-1', '2026-12-15'),
-    ]);
-    start();
-    pointAt('task:task-2', edge);
-    over('task:task-2');
-    expect(taskOrder()).toEqual(expected);
-    expect(taskGroup()).toBe('month:2026-11');
-    end('task:task-2');
-    expect(taskOrder()).toEqual(expected);
-    expect(harness.update.mock.calls[0][0].data.scheduledDate).toBe('2026-11-01');
-  });
+  it.each(['before', 'after'] as const)(
+    '跨月向上拖到任务行 %s 半区，使用目标月首日并按日期显示',
+    (edge) => {
+      renderUpcoming([
+        task('task-2', '2026-11-15'),
+        task('task-3', '2026-11-20'),
+        task('task-1', '2026-12-15'),
+      ]);
+      start();
+      pointAt('task:task-2', edge);
+      over('task:task-2');
+      expect(taskOrder()).toEqual(['task-1', 'task-2', 'task-3']);
+      expect(taskGroup()).toBe('month:2026-11');
+      end('task:task-2');
+      expect(taskOrder()).toEqual(['task-1', 'task-2', 'task-3']);
+      expect(harness.update.mock.calls[0][0].data.scheduledDate).toBe('2026-11-01');
+    },
+  );
 
   it('向上拖动后取消，恢复原来的具体日期和顺序', () => {
     renderUpcoming([
