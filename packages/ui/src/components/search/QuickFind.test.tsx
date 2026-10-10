@@ -180,6 +180,16 @@ describe('QuickFind', () => {
     expect(screen.getByRole('option', { name: '今天' })).toBeInTheDocument();
   });
 
+  it('Deadlines 隐藏列表只能从 Quick Find 进入：中英文名都能命中', async () => {
+    await i18n.changeLanguage('zh');
+    const { input } = renderQuickFind();
+    await user.type(input, '截止');
+    expect(screen.getByRole('option', { name: '截止日期' })).toBeInTheDocument();
+    await user.clear(input);
+    await user.type(input, 'dead{Enter}');
+    expect(screen.getByTestId('path')).toHaveTextContent('/deadlines');
+  });
+
   it('↑/↓ 跨组移动高亮，Enter 打开任务走 Reveal', async () => {
     hitsByQuery.gro = [hit('t1', 'Grocery run')];
     const { input, onOpenChange } = renderQuickFind();

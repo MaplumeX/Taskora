@@ -2,12 +2,13 @@ import type { FeedItem } from '@taskora/shared';
 
 import { usePreferencesStore } from '@taskora/api';
 import { GroupedFeedListView } from './GroupedFeedListView';
+import type { ScheduledBadgeMode } from '@/components/task/TaskDateBadge';
 
 interface Props {
   items: FeedItem[];
   emptyHint?: string;
   /** 视图本身已表达日期语境时传 false（如 Today），省略行首日期 chip。 */
-  showScheduledBadge?: boolean;
+  showScheduledBadge?: ScheduledBadgeMode;
   /** New in Today 新到条目的键（仅 Today 传入），见 GroupedFeedListView。 */
   freshKeys?: ReadonlySet<string>;
 }

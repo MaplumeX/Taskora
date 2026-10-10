@@ -40,6 +40,7 @@
   "upcomingEmpty": "No upcoming tasks",
   "anytimeEmpty": "No anytime tasks",
   "somedayEmpty": "No Someday tasks",
+  "deadlinesEmpty": "No to-dos with deadlines",
   "logbookEmpty": "No settled tasks yet",
   "logbookArchiveFailed": "Couldn't load older entries",
   "logbookArchiveRetry": "Retry",

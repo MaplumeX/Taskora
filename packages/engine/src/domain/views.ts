@@ -1,6 +1,6 @@
 /**
  * 视图规则（CONTEXT：Inbox / Today / Upcoming / Anytime / Someday /
- * Logbook / Trash）：一个任务或项目是否出现在某个视图里、feed 怎么排。
+ * Logbook / Trash / Deadlines）：一个任务或项目是否出现在某个视图里、feed 怎么排。
  *
  * 设备（Engine 后端）与 hub（REST 服务）都以这里的判定为准：各自可以
  * 先用存储查询粗筛（SQL where），但最终过滤必须经过这些函数，粗筛只能
@@ -16,17 +16,26 @@ import {
   WITH_SETTLED_TASK_STATUSES,
 } from '@taskora/shared';
 
-import { dateKeyOf, instantMs, todayKey, type CalendarContext } from './calendar';
+import {
+  dateKeyOf,
+  instantMs,
+  todayKey,
+  type CalendarContext,
+  type CalendarZones,
+} from './calendar';
 import { feedSortKey, sortByEffectivePosition, type FeedPositioned, type Positioned } from './order';
 import { effectiveTaskTagIds, tagHit, type TagParents } from './tags';
 
-export type ListView = 'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook';
+export type ListView =
+  'inbox' | 'today' | 'upcoming' | 'anytime' | 'someday' | 'trash' | 'logbook' | 'deadlines';
 
 /** 视图判定用到的字段（两端存储形态：日期可为 Date 或字符串）。 */
 export interface ViewFields {
   status: unknown;
   scheduledType: unknown;
   scheduledDate: unknown;
+  /** 截止日期 ≤ 今天的未了结条目也进 Today（对齐 Things 3）。 */
+  dueDate: unknown;
   trashedAt: unknown;
 }
 
@@ -34,9 +43,12 @@ export interface TaskViewFields extends ViewFields {
   bucket: unknown;
 }
 
-/** 只有 Today / Upcoming 依赖「今天」：其余视图不必查账号时区。 */
+/**
+ * 只有 Today / Upcoming 依赖「今天」，Deadlines 按截止日期的日历日排序；
+ * 其余视图不必查账号时区。
+ */
 export function viewNeedsCalendar(view: string | undefined): boolean {
-  return view === 'today' || view === 'upcoming';
+  return view === 'today' || view === 'upcoming' || view === 'deadlines';
 }
 
 function isSettledTask(status: unknown): boolean {
@@ -49,6 +61,17 @@ function datePlacement(fields: ViewFields, context: CalendarContext): 'today' | 
   const day = dateKeyOf(fields.scheduledDate, context);
   if (day === null) return null;
   return day <= todayKey(context) ? 'today' : 'upcoming';
+}
+
+/** 截止日期已到（今天或已过）。 */
+function deadlineReached(fields: ViewFields, context: CalendarContext): boolean {
+  const day = dateKeyOf(fields.dueDate, context);
+  return day !== null && day <= todayKey(context);
+}
+
+/** Today：计划日期或截止日期 ≤ 今天。 */
+function inToday(fields: ViewFields, context: CalendarContext): boolean {
+  return datePlacement(fields, context) === 'today' || deadlineReached(fields, context);
 }
 
 export function taskMatchesView(
@@ -65,14 +88,17 @@ export function taskMatchesView(
         open && task.bucket === TaskBucket.ANYTIME && task.scheduledType === ScheduledType.NONE
       );
     case 'today':
+      return open && inToday(task, context);
     case 'upcoming':
-      return open && datePlacement(task, context) === view;
+      return open && datePlacement(task, context) === 'upcoming';
     case 'someday':
       return open && task.scheduledType === ScheduledType.SOMEDAY;
     case 'trash':
       return task.trashedAt != null;
     case 'logbook':
       return isSettledTask(task.status) && task.trashedAt == null;
+    case 'deadlines':
+      return open && dateKeyOf(task.dueDate, context) !== null;
     default:
       return false;
   }
@@ -87,14 +113,17 @@ export function projectMatchesView(
   const open = project.status === ProjectStatus.ACTIVE && project.trashedAt == null;
   switch (view) {
     case 'today':
+      return open && inToday(project, context);
     case 'upcoming':
-      return open && datePlacement(project, context) === view;
+      return open && datePlacement(project, context) === 'upcoming';
     case 'someday':
       return open && project.scheduledType === ScheduledType.SOMEDAY;
     case 'trash':
       return project.trashedAt != null;
     case 'logbook':
       return project.status === ProjectStatus.COMPLETED && project.trashedAt == null;
+    case 'deadlines':
+      return open && dateKeyOf(project.dueDate, context) !== null;
     default:
       return false;
   }
@@ -181,16 +210,25 @@ export function sortForView<T extends Positioned & { id: string }>(
 }
 
 /**
- * feed 顺序：Logbook 同 sortForView；其余视图任务与项目混排，按 feed
+ * feed 顺序：Logbook 同 sortForView；Deadlines 先按截止日期升序（逾期的
+ * 自然在最前），同一天内按 feed 排序键；其余视图任务与项目混排，按 feed
  * 排序键（feedSortKey：项目优先用 Feed Position）。平局按 id，两端稳定。
+ * Deadlines 需要 zones 把截止日期换成日历日。
  */
 export function sortFeedItems<
-  T extends FeedPositioned & { id: string; completedAt?: Date | string | null },
->(items: readonly T[], view: ListView): T[] {
+  T extends FeedPositioned & {
+    id: string;
+    completedAt?: Date | string | null;
+    dueDate?: unknown;
+  },
+>(items: readonly T[], view: ListView, zones?: CalendarZones): T[] {
   if (view === 'logbook') return sortForView(items, view, (item) => item.completedAt);
-  const keyed = items.map((item) => ({ item, key: feedSortKey(item) }));
+  if (view === 'deadlines' && !zones) throw new Error('sortFeedItems: deadlines 需要 zones');
+  const dayOf = (item: T) => (view === 'deadlines' ? (dateKeyOf(item.dueDate, zones!) ?? '') : '');
+  const keyed = items.map((item) => ({ item, day: dayOf(item), key: feedSortKey(item) }));
   keyed.sort(
     (a, b) =>
+      (a.day < b.day ? -1 : a.day > b.day ? 1 : 0) ||
       (a.key < b.key ? -1 : a.key > b.key ? 1 : 0) ||
       (a.item.id < b.item.id ? -1 : a.item.id > b.item.id ? 1 : 0),
   );

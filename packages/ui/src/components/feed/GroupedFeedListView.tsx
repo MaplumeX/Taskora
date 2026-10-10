@@ -62,12 +62,13 @@ import {
   useUpdateTask,
   type SelectionRow,
 } from '@taskora/api';
+import type { ScheduledBadgeMode } from '@/components/task/TaskDateBadge';
 
 interface Props {
   items: FeedItem[];
   emptyHint?: string;
   /** 视图本身已表达日期语境时传 false（如 Today），省略行首日期 chip。 */
-  showScheduledBadge?: boolean;
+  showScheduledBadge?: ScheduledBadgeMode;
   /**
    * 是否按项目/区域分组（默认 true）。关闭时为平铺列表：全部任务在
    * 未分组区、与独立项目行按 feed 顺序交错，拖拽只重排、不改归属。

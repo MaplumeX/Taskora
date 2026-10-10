@@ -23,6 +23,8 @@ export interface RepeatParent {
   title: string;
   notes: string | null;
   scheduledDate: unknown;
+  /** 截止日期：实例按计划日期的位移平移（保持提前量）。 */
+  dueDate: unknown;
   /** 规范化后的规则（两端各自从存储解析）。 */
   repeatRule: RepeatRule | null;
   reminderTime: string | null;
@@ -100,7 +102,8 @@ export function repeatInstanceId(
 
 /**
  * 完成时派生的实例：复制标题 / 备注 / 标签 / 提醒时刻 / 归属 / 规则，
- * 计划到下一个日期；Subtask 复制并重置为未完成（序号决定确定性 id，
+ * 计划到下一个日期；截止日期按计划日期的位移平移（与 Skip Occurrence
+ * 同口径），来源没有截止日期则为 null；Subtask 复制并重置为未完成（序号决定确定性 id，
  * 按有效 Position——两端列表同一口径；新实例沿用原 Position）；附件
  * 同样按序号复制，指向同一 Blob（ADR-0019）。
  *
@@ -124,6 +127,12 @@ export function planRepeatInstance(
   if (!target) return null;
   const ordered = sortByEffectivePosition(subtasks);
   const orderedAttachments = sortByEffectivePosition(attachments);
+  const scheduledKey = dateKeyOf(parent.scheduledDate, zones);
+  const dueKey = dateKeyOf(parent.dueDate, zones);
+  const dueDate =
+    scheduledKey !== null && dueKey !== null
+      ? shiftDateKey(dueKey, daysBetweenKeys(scheduledKey, target.occurrence))
+      : null;
   return {
     id: target.id,
     task: {
@@ -134,7 +143,7 @@ export function planRepeatInstance(
       reminderTime: parent.reminderTime,
       repeatRule: parent.repeatRule,
       repeatSourceId: parent.id,
-      dueDate: null,
+      dueDate,
       bucket: TaskBucket.SCHEDULED,
       status: TaskStatus.ACTIVE,
       settledAt: null,

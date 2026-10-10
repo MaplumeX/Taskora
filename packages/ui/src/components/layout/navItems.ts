@@ -4,6 +4,7 @@ import {
   CalendarDays,
   Circle,
   CloudSun,
+  Flag,
   Inbox,
   Notebook,
   Trash2,
@@ -44,4 +45,15 @@ export const reviewNav: NavItem = {
   labelKey: 'nav:review',
   icon: CalendarCheck,
   colorClass: 'text-primary',
+};
+
+/**
+ * 截止日期列表（Deadlines，对齐 Things 3 的隐藏列表）：不在侧边栏，只从
+ * Quick Find 进入；页面标题共用。
+ */
+export const deadlinesNav: NavItem = {
+  to: '/deadlines',
+  labelKey: 'nav:deadlines',
+  icon: Flag,
+  colorClass: 'text-deadline',
 };

@@ -31,6 +31,7 @@ const Calendar = lazyWithRetry(pageLoaders.Calendar);
 const Home = lazyWithRetry(pageLoaders.Home);
 const Inbox = lazyWithRetry(pageLoaders.Inbox);
 const Logbook = lazyWithRetry(pageLoaders.Logbook);
+const Deadlines = lazyWithRetry(pageLoaders.Deadlines);
 const Review = lazyWithRetry(pageLoaders.Review);
 const Login = lazyWithRetry(() => import('@/pages/Login'));
 const ProjectDetail = lazyWithRetry(pageLoaders.ProjectDetail);
@@ -84,6 +85,7 @@ export const router = createBrowserRouter([
           { path: '/later-projects', element: <LaterProjects /> },
           { path: '/review/*', element: <Review /> },
           { path: '/logbook', element: <Logbook /> },
+          { path: '/deadlines', element: <Deadlines /> },
           { path: '/projects/:id', element: <ProjectDetail /> },
           { path: '/areas/:id', element: <AreaDetail /> },
           { path: '/tags', element: <Tags /> },

@@ -62,10 +62,13 @@ const DROP_TARGET_BY_ROUTE: Record<string, SidebarDropTarget> = {
 const NavRow = ({
   item,
   count,
+  dueCount = 0,
   hasNew = false,
 }: {
   item: NavItem;
   count?: number;
+  /** Today 中截止日期已到（今天或已过）的条目数：灰色计数前的红色计数。 */
+  dueCount?: number;
   /** Today 有尚未看过的新到条目：计数旁带黄点（New in Today）。 */
   hasNew?: boolean;
 }) => {
@@ -88,11 +91,21 @@ const NavRow = ({
           <NewInTodayDot className="left-1/2" />
         </span>
       )}
+      {dueCount > 0 && (
+        <span
+          className={cn(
+            'ml-1 rounded-full bg-deadline px-1.5 text-meta font-medium tabular-nums text-white',
+            !hasNew && 'ml-auto',
+          )}
+        >
+          {dueCount > 99 ? '99+' : dueCount}
+        </span>
+      )}
       {count !== undefined && count > 0 && (
         <span
           className={cn(
             'pl-1 text-meta font-normal tabular-nums text-muted-foreground',
-            !hasNew && 'ml-auto',
+            !hasNew && dueCount === 0 && 'ml-auto',
           )}
         >
           {count > 99 ? '99+' : count}
@@ -118,7 +131,7 @@ export function Sidebar() {
   const openSettings = useUiInteractionStore((s) => s.openSettings);
   const { data: allProjects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
-  const { inboxCount, todayCount } = useBucketCounts();
+  const { inboxCount, todayCount, todayDueCount } = useBucketCounts();
   const dropArea = useSidebarDropArea();
   const hasNewInToday = useHasNewInToday();
   const reviewCount = useReviewCount();
@@ -192,6 +205,7 @@ export function Sidebar() {
                 key={item.to}
                 item={item}
                 count={countByRoute[item.to]}
+                dueCount={item.to === '/today' ? todayDueCount : 0}
                 hasNew={item.to === '/today' && hasNewInToday}
               />
             ))}

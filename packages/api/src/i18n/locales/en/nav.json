@@ -18,5 +18,6 @@
   "review": "Review",
   "navigationTitle": "Go to",
   "navigationPlaceholder": "Go to a list, area or project…",
-  "navigationNoResults": "No matching lists"
+  "navigationNoResults": "No matching lists",
+  "deadlines": "Deadlines"
 }

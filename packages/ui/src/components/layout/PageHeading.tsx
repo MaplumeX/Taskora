@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { mainNav, reviewNav, trashNav } from '@/components/layout/navItems';
+import { deadlinesNav, mainNav, reviewNav, trashNav } from '@/components/layout/navItems';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -14,7 +14,9 @@ interface Props {
  * Bucket 页面的大标题（Things 3）：标题前带与侧边栏 / 首页列表同色的图标。
  */
 export function PageHeading({ nav, className, children }: Props) {
-  const item = nav ? [...mainNav, trashNav, reviewNav].find((n) => n.to === nav) : undefined;
+  const item = nav
+    ? [...mainNav, trashNav, reviewNav, deadlinesNav].find((n) => n.to === nav)
+    : undefined;
   const Icon = item?.icon;
 
   return (

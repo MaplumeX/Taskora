@@ -2,6 +2,7 @@ import type { FeedItem, TaskFeedItem } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { TaskItem } from '@/components/task/TaskItem';
+import type { ScheduledBadgeMode } from '@/components/task/TaskDateBadge';
 import { ProjectFeedRow } from './ProjectFeedRow';
 import { SettledDateBadge } from './SettledDateBadge';
 import type { SelectionState } from '@taskora/api';
@@ -15,7 +16,7 @@ interface Props {
   selectionState?: SelectionState;
   onToggleComplete?: () => void;
   onRowClick?: () => void;
-  showScheduledBadge?: boolean;
+  showScheduledBadge?: ScheduledBadgeMode;
   /** Logbook 场景：显示行内了却日期 */
   showSettledDate?: boolean;
   /** New in Today 新到条目：行首左侧黄点。 */

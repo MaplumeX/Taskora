@@ -85,6 +85,16 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     expect(inbox).not.toHaveProperty('scheduledSetAt');
   });
 
+  it('Today feed 带出截止日期的写入时刻；只有截止日期到了的任务也在 Today', async () => {
+    const before = Date.now();
+    const task = await backend.createTask({ title: '交房租', dueDate: '2026-01-01' });
+    const [item] = await backend.getFeed('today');
+    expect(item.id).toBe(task.id);
+    const dueSetAt = Date.parse(item.dueSetAt ?? '');
+    expect(dueSetAt).toBeGreaterThanOrEqual(before - 1);
+    expect(dueSetAt).toBeLessThanOrEqual(Date.now() + 1);
+  });
+
   it('完成 → Today 视图消失；取消与恢复语义（Settled At，ADR 0006）', async () => {
     const task = await backend.createTask({
       title: '今天的任务',

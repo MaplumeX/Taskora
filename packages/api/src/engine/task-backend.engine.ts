@@ -118,6 +118,7 @@ function queryFieldsOf(row: ReplicaRow) {
     status: f.status,
     scheduledType: f.scheduledType,
     scheduledDate: f.scheduledDate,
+    dueDate: f.dueDate,
     trashedAt: f.trashedAt,
     bucket: f.bucket,
     title: f.title,
@@ -203,6 +204,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         title: (f.title as string) ?? '',
         notes: (f.notes as string | null) ?? null,
         scheduledDate: f.scheduledDate,
+        dueDate: f.dueDate,
         repeatRule: normalizeRepeatRule(f.repeatRule),
         reminderTime: (f.reminderTime as string | null) ?? null,
         projectId: (f.projectId as string | null) ?? null,
@@ -341,22 +343,28 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     async getFeed(view: FeedView): Promise<FeedItem[]> {
       const index = await tagIndex();
       const context = calendar();
-      // Today 带出计划日期的写入时刻（scheduledSetAt），供 New in Today 推导。
-      const clockOf = view === 'today' ? 'scheduledDate' : undefined;
-      const scheduledSetAt = (row: ReplicaRow) =>
-        clockOf ? { scheduledSetAt: hlcIsoTime(row.clock) } : {};
-      const viewTasks = await engine.list('task', { where: viewPrefilter(view), clockOf });
+      // Today 带出计划日期 / 截止日期的写入时刻（scheduledSetAt / dueSetAt），
+      // 供 New in Today 推导。
+      const clocksOf = view === 'today' ? ['scheduledDate', 'dueDate'] : undefined;
+      const setAt = (row: ReplicaRow) =>
+        row.clocks
+          ? {
+              scheduledSetAt: hlcIsoTime(row.clocks.scheduledDate),
+              dueSetAt: hlcIsoTime(row.clocks.dueDate),
+            }
+          : {};
+      const viewTasks = await engine.list('task', { where: viewPrefilter(view), clocksOf });
       const inActiveProject = notInLaterProject(await laterProjectIdsFor(view));
       const taskItems: TaskFeedItem[] = viewTasks
         .filter((row) => inActiveProject(row) && taskMatchesView(queryFieldsOf(row), view, context))
         .map((row) => {
           const dto = taskRowToDto(row, index);
-          return { ...dto, type: 'task' as const, tags: dto.tags ?? [], ...scheduledSetAt(row) };
+          return { ...dto, type: 'task' as const, tags: dto.tags ?? [], ...setAt(row) };
         });
 
       let projectItems: FeedItem[] = [];
       if (feedIncludesProjects(view)) {
-        const projectRows = (await engine.list('project', { clockOf })).filter((row) =>
+        const projectRows = (await engine.list('project', { clocksOf })).filter((row) =>
           projectMatchesView(queryFieldsOf(row), view, context),
         );
         const projectIds = projectRows.map((row) => row.id);
@@ -368,10 +376,10 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         );
         projectItems = projectRows.map((row) => {
           const { total, completed } = counts.get(row.id)!;
-          return { ...projectRowToFeedItem(row, index, total, completed), ...scheduledSetAt(row) };
+          return { ...projectRowToFeedItem(row, index, total, completed), ...setAt(row) };
         });
       }
-      return sortFeedItems([...taskItems, ...projectItems], view);
+      return sortFeedItems([...taskItems, ...projectItems], view, context);
     },
 
     // ---------- 写（全部本地，进 Outbox） ----------
@@ -850,6 +858,7 @@ function viewPrefilter(view: string | undefined): ListWhere | undefined {
     case 'upcoming':
     case 'anytime':
     case 'someday':
+    case 'deadlines':
       return { status: TaskStatus.ACTIVE, trashedAt: null };
     case 'trash':
       return { trashedAt: { notNull: true } };

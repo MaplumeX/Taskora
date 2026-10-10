@@ -69,7 +69,7 @@ describe('视图契约（纯函数）', () => {
       ? VIEW_CONTRACT.projects.filter((project) => projectMatchesView(project, listView, context))
       : [];
     const items = [...tasks.map((task) => ({ ...task, completedAt: task.settledAt })), ...projects];
-    expect(sortFeedItems(items, listView).map((item) => item.id)).toEqual(expected);
+    expect(sortFeedItems(items, listView, context).map((item) => item.id)).toEqual(expected);
   });
 
   it('项目进度计数', () => {
@@ -436,6 +436,7 @@ describe('任务写入规则', () => {
       title: 'Water plants',
       notes: null,
       scheduledDate: '2026-09-24',
+      dueDate: null,
       repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' } as const,
       reminderTime: '09:00',
       projectId: null,
@@ -459,12 +460,54 @@ describe('任务写入规则', () => {
     expect(planRepeatInstance({ ...parent, repeatRule: null }, [], 'x', UTC)).toBeNull();
   });
 
+  it('重复实例：截止日期按计划日期的位移平移，保持提前量', () => {
+    const parent = {
+      id: 'task-1',
+      title: '交房租',
+      notes: null,
+      scheduledDate: '2026-09-24',
+      dueDate: '2026-09-26',
+      repeatRule: { unit: 'week', interval: 1, anchor: 'scheduled' } as const,
+      reminderTime: null,
+      projectId: null,
+      headingId: null,
+      areaId: null,
+      tagIds: [],
+    };
+    const settledAt = '2026-09-24T08:00:00.000Z';
+    expect(planRepeatInstance(parent, [], settledAt, UTC)!.task).toMatchObject({
+      scheduledDate: '2026-10-01',
+      dueDate: '2026-10-03',
+    });
+    // 负偏移：截止日期早于计划日期
+    expect(
+      planRepeatInstance({ ...parent, dueDate: '2026-09-23' }, [], settledAt, UTC)!.task.dueDate,
+    ).toBe('2026-09-30');
+    // 完成日期锚点：出现日 = 完成日 + 间隔，截止日期同样平移
+    const completion = {
+      ...parent,
+      repeatRule: { unit: 'day', interval: 3, anchor: 'completion' } as const,
+    };
+    expect(planRepeatInstance(completion, [], '2026-09-28T08:00:00.000Z', UTC)!.task).toMatchObject(
+      { scheduledDate: '2026-10-01', dueDate: '2026-10-03' },
+    );
+    // 来源没有截止日期：实例也没有
+    expect(planRepeatInstance({ ...parent, dueDate: null }, [], settledAt, UTC)!.task.dueDate).toBe(
+      null,
+    );
+    // 截止日期不影响确定性 id
+    expect(planRepeatInstance(parent, [], settledAt, UTC)!.id).toBe(
+      planRepeatInstance({ ...parent, dueDate: null }, [], settledAt, UTC)!.id,
+    );
+  });
+
   it('重复实例：附件按 Position 复制，指向同一 Blob，id 按序号确定', () => {
     const parent = {
       id: 'task-1',
       title: '月报',
       notes: null,
       scheduledDate: '2026-09-24',
+      dueDate: null,
       repeatRule: { unit: 'month', interval: 1, anchor: 'scheduled' } as const,
       reminderTime: null,
       projectId: null,
