@@ -2,6 +2,7 @@ import * as React from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
+  Archive,
   Check,
   Circle,
   CircleSlash,
@@ -45,6 +46,7 @@ import { MultiTagsField, TagsField } from './fields/TagsField';
 import { MovePicker } from './fields/MovePicker';
 import { useSkipOccurrence } from './useSkipOccurrence';
 import { useDuplicate } from './useDuplicate';
+import { useLogCompleted } from './useLogCompleted';
 
 interface Props {
   task: TaskResponseDto;
@@ -83,6 +85,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const convertToProjectTask = useConvertTaskToProject();
   const convertGuard = useConvertGuard();
   const duplicate = useDuplicate();
+  const logCompleted = useLogCompleted();
 
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
@@ -240,6 +243,17 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
           <MenuRow icon={CircleSlash} onClick={handleToggleCancel}>
             {cancelled ? t('markUncancelled') : t('markCancelled')}
           </MenuRow>
+          {logCompleted.available && variant === 'default' && (
+            <MenuRow
+              icon={Archive}
+              onClick={() => {
+                closeMenu();
+                logCompleted.run();
+              }}
+            >
+              {t('logCompleted')}
+            </MenuRow>
+          )}
           <div className="-mx-1 my-1 h-px bg-muted" />
           <MenuRow icon={CalendarClock} onClick={() => openPicker('scheduled')}>
             {t('scheduledDate')}

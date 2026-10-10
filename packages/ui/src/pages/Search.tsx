@@ -14,6 +14,7 @@ import {
 import {
   useAreasQuery,
   useFeedQuery,
+  useIsLogged,
   useProjectsQuery,
   useRevealTask,
   useTaskSearchQuery,
@@ -47,6 +48,7 @@ export default function Search() {
   const { tags, inTags } = useSearchTagScope(tagIds);
 
   const { data: projects = [] } = useProjectsQuery();
+  const isLogged = useIsLogged();
   const { data: areas = [] } = useAreasQuery();
   const search = useTaskSearchQuery(query, { extended: true, tagIds });
   const { searchedQuery } = search;
@@ -88,8 +90,9 @@ export default function Search() {
         trashedProjects,
         tagIds,
         inTags,
+        isLogged,
       }).flatMap((group) => group.items),
-    [searchedQuery, projects, areas, trashedProjects, tagIds, inTags],
+    [searchedQuery, projects, areas, trashedProjects, tagIds, inTags, isLogged],
   );
 
   // hits 已按相关度排好；分节保持组内顺序
@@ -101,11 +104,13 @@ export default function Search() {
     };
     for (const hit of hits) {
       if (hit.task.trashedAt) sections.trashed.push(hit);
-      else if (hit.task.status === TaskStatus.ACTIVE) sections.open.push(hit.task);
-      else sections.settled.push(hit.task);
+      // 尚未移入 Logbook 的已了结任务与未了结的同组（Logging Mode）
+      else if (hit.task.status === TaskStatus.ACTIVE || !isLogged(hit.task)) {
+        sections.open.push(hit.task);
+      } else sections.settled.push(hit.task);
     }
     return sections;
-  }, [hits]);
+  }, [hits, isLogged]);
 
   const noResults =
     places.length + open.length + settled.length + trashed.length === 0 && !search.isPending;

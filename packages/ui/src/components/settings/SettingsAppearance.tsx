@@ -4,7 +4,6 @@ import { toast } from 'sonner';
 import type { UpdatePreferencesDto } from '@taskora/shared';
 
 import { Label } from '@/components/ui/label';
-import { cn } from '@/lib/utils';
 import {
   usePreferencesStore,
   type Language,
@@ -13,32 +12,7 @@ import {
 } from '@taskora/api';
 import { useUpdatePreferences } from '@taskora/api';
 
-import { SettingsOptionGroup, SettingsPage, useSettingsNav } from './SettingsList';
-
-function OptionButton({
-  active,
-  onClick,
-  children,
-}: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        'rounded-md border px-3 py-1.5 text-sm transition-colors max-md:py-2.5',
-        active
-          ? 'bg-primary text-primary-foreground border-primary'
-          : 'bg-transparent hover:bg-accent border-border',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
+import { OptionButton, SettingsOptionGroup, SettingsPage, useSettingsNav } from './SettingsList';
 
 export default function SettingsAppearance() {
   const { t } = useTranslation(['settings', 'theme', 'common']);

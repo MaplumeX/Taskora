@@ -58,6 +58,7 @@ import {
   useSelectionScope,
   useSelectionStore,
   useTaskRowSelection,
+  useUncancelTask,
   useUncompleteTask,
   useUpdateTask,
   type SelectionRow,
@@ -395,6 +396,7 @@ export function GroupedFeedListView({
   const { data: areas = [] } = useAreasQuery();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
+  const uncancelTask = useUncancelTask();
   const reorderFeed = useReorderFeed();
   const updateTask = useUpdateTask();
 
@@ -540,7 +542,9 @@ export function GroupedFeedListView({
   }, []);
 
   const handleToggle = (item: TaskFeedItem) => {
-    if (item.status === 'COMPLETED') uncompleteTask.mutate(item.id);
+    // 撤销了结（尚未移入 Logbook 的条目还在这里）：已取消 → 撤销取消
+    if (item.status === 'CANCELLED') uncancelTask.mutate(item.id);
+    else if (item.status === 'COMPLETED') uncompleteTask.mutate(item.id);
     else {
       completeTask.mutate(item.id, {
         onError: () => toast.error(t('common:operationFailed')),

@@ -1,6 +1,12 @@
 import { useEffect, useMemo } from 'react';
 
-import { instantDateKey, todaySeenKey, type FeedItem } from '@taskora/shared';
+import {
+  instantDateKey,
+  SETTLED_TASK_STATUSES,
+  todaySeenKey,
+  type FeedItem,
+  type TaskStatus,
+} from '@taskora/shared';
 
 import { updatePreferences } from '@/api/users.api';
 import { useFeedQuery } from '@/hooks/useFeed';
@@ -11,7 +17,7 @@ import { useCalendarDay } from './useCalendarDay';
 
 type NewInTodayItem = Pick<
   FeedItem,
-  'type' | 'id' | 'scheduledDate' | 'scheduledSetAt' | 'dueDate' | 'dueSetAt'
+  'type' | 'id' | 'status' | 'scheduledDate' | 'scheduledSetAt' | 'dueDate' | 'dueSetAt'
 >;
 
 /**
@@ -36,10 +42,10 @@ function arrivedOn(
 /**
  * 让条目成为新到的那个日期，不是新到为 null。计划日期、截止日期两条路径
  * 任一成立即可，都成立时取计划日期（单条已读键按它记）。基线缺失（从未
- * 看过）不算。
+ * 看过）不算；已了结的（尚未移入 Logbook、还留在 Today 里的）不算。
  */
 function newInTodayDate(item: NewInTodayItem, reviewedOn: string | null): string | null {
-  if (reviewedOn === null) return null;
+  if (reviewedOn === null || SETTLED_TASK_STATUSES.includes(item.status as TaskStatus)) return null;
   const today = todayDateKey();
   return (
     arrivedOn(item.scheduledDate, item.scheduledSetAt, reviewedOn, today) ??

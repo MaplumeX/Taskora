@@ -55,6 +55,8 @@
   "convertToProject": "Convert to Project",
   "move": "Move",
   "duplicate": "Duplicate",
+  "logCompleted": "Log Completed",
+  "logCompletedDone": "Moved completed items to the Logbook",
   "duplicateProjectDone": "Project duplicated",
   "placement": "Located in {{place}}",
   "placementGoToProject": "Go to project",

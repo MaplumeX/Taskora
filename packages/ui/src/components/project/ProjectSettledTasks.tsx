@@ -8,7 +8,7 @@ import type { ProjectHeadingResponseDto, TaskResponseDto } from '@taskora/shared
 
 import { TaskItem } from '@/components/task/TaskItem';
 import { SettledDateBadge } from '@/components/feed/SettledDateBadge';
-import { useTasksQuery, useUncancelTask, useUncompleteTask } from '@taskora/api';
+import { useIsLogged, useTasksQuery, useUncancelTask, useUncompleteTask } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
 import { useProjectHeadingsQuery } from '@taskora/api';
 import { useProjectUiPrefsStore } from '@taskora/api';
@@ -46,16 +46,19 @@ export function ProjectSettledTasks({ projectId }: Props) {
   const uncompleteTask = useUncompleteTask();
   const uncancelTask = useUncancelTask();
   const { selectedId, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
+  const isLogged = useIsLogged();
 
-  // 口径：已了结（完成 + 取消），与 taskCompletedCount 统计一致（ADR 0006）。
+  // 口径：已了结（完成 + 取消），与 taskCompletedCount 统计一致（ADR 0006）；
+  // 尚未移入 Logbook 的还留在上方任务列表里（Logging Mode），这里不重复。
   const settledTasks = useMemo(
     () =>
       mixedTasks.filter(
         (t) =>
           (t.status === TaskStatus.COMPLETED || t.status === TaskStatus.CANCELLED) &&
-          t.trashedAt === null,
+          t.trashedAt === null &&
+          isLogged(t),
       ),
-    [mixedTasks],
+    [mixedTasks, isLogged],
   );
 
   const archivedHeadings = useMemo(

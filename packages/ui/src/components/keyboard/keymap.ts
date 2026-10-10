@@ -30,6 +30,8 @@ export type KeyAction =
   | { type: 'cancel' }
   /** ⌫/Delete：移入 Trash；Trash 页遵循该页约定（恢复）。 */
   | { type: 'delete' }
+  /** ⇧⌘Y / Ctrl+Shift+Y / Alt+Shift+Y：Log Completed（立即模式下无操作）。 */
+  | { type: 'logCompleted' }
   /** Enter：行内展开选中任务。 */
   | { type: 'expand' }
   /** Space：选中项下方新建任务（无选中时等同 newTask）。 */
@@ -132,6 +134,7 @@ export type ShortcutId =
   | 'complete'
   | 'cancel'
   | 'delete'
+  | 'logCompleted'
   | 'tags'
   | 'duplicate'
   | 'expand'
@@ -322,6 +325,14 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     group: 'complete',
     action: { type: 'delete' },
     defaults: samePerPlatform('Backspace', 'Delete'),
+  },
+  // Things 3 的 Log Completed（3.14 起 ⇧⌘Y）。Web 的 Ctrl+Shift+Y 被浏览器占用，降级为 Alt+Shift。
+  {
+    id: 'logCompleted',
+    scope: 'app',
+    group: 'complete',
+    action: { type: 'logCompleted' },
+    defaults: { mac: ['Shift+Meta+Y'], windows: ['Ctrl+Shift+Y'], web: ['Alt+Shift+Y'] },
   },
   // Web 的 Ctrl+Shift+T 是浏览器「重新打开标签页」，拦截不了。
   {

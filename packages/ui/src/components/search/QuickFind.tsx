@@ -15,6 +15,7 @@ import { useNavigate } from 'react-router-dom';
 import type { TaskSearchHit } from '@taskora/shared';
 import {
   useAreasQuery,
+  useIsLogged,
   useProjectsQuery,
   useRevealTask,
   useTaskSearchQuery,
@@ -87,6 +88,7 @@ export function QuickFind({ open, onOpenChange }: Props) {
   const pendingCaret = useRef<number | null>(null);
 
   const { data: projects = [] } = useProjectsQuery();
+  const isLogged = useIsLogged();
   const { data: areas = [] } = useAreasQuery();
   const { tags, inTags } = useSearchTagScope(chips);
 
@@ -127,8 +129,9 @@ export function QuickFind({ open, onOpenChange }: Props) {
         hits,
         tagIds: chips,
         inTags,
+        isLogged,
       }),
-    [searchedQuery, lists, projects, areas, tags, hits, chips, inTags],
+    [searchedQuery, lists, projects, areas, tags, hits, chips, inTags, isLogged],
   );
   const items = useMemo<QuickFindOption[]>(() => {
     const found: QuickFindOption[] = groups.flatMap((group) => group.items);

@@ -22,7 +22,12 @@ import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 import { SortableProjectItem } from '@/components/layout/SortableProjectItem';
 import { SortableAreaRow } from '@/components/layout/SortableAreaRow';
 import { ProjectItem } from '@/components/project/ProjectItem';
-import { useLaterProjectKind, useReorderProjects, useUpdateProject } from '@taskora/api';
+import {
+  useIsLogged,
+  useLaterProjectKind,
+  useReorderProjects,
+  useUpdateProject,
+} from '@taskora/api';
 import { useReorderAreas } from '@taskora/api';
 import { SIDEBAR_AUTO_SCROLL, useDndSurface } from '../../lib/appDnd';
 import {
@@ -148,13 +153,17 @@ export function SidebarProjectSection({
 }: Props) {
   const { t } = useTranslation();
   const kindOf = useLaterProjectKind();
-  // 侧边栏只放活跃项目：已完成与稍后项目（Someday / 未来日期）都不显示。
+  const isLogged = useIsLogged();
+  // 侧边栏只放活跃项目：已移入 Logbook 的已完成项目与稍后项目（Someday /
+  // 未来日期）都不显示；尚未移入的已完成项目留在原位（Logging Mode）。
   const projects = React.useMemo(
     () =>
       allProjects.filter(
-        (project) => project.status !== ProjectStatus.COMPLETED && kindOf(project) === null,
+        (project) =>
+          (project.status !== ProjectStatus.COMPLETED || !isLogged(project)) &&
+          kindOf(project) === null,
       ),
-    [allProjects, kindOf],
+    [allProjects, kindOf, isLogged],
   );
   const laterCount = React.useMemo(() => {
     const areaIds = new Set(areas.map((area) => area.id));

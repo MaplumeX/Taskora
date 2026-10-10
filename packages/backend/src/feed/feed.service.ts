@@ -9,7 +9,7 @@ import {
   projectMatchesView,
   sortFeedItems,
   taskMatchesView,
-  viewNeedsCalendar,
+  keepsSettledInViews,
 } from '@taskora/engine';
 import {
   ScheduledType,
@@ -203,23 +203,20 @@ export class FeedService {
   async findAll(userId: string, view: FeedView): Promise<FeedItem[]> {
     // SQL 只是粗筛；最终过滤、计数与排序按 domain 规则（与设备同一份）
     const hideLaterProjectTasks = hidesTasksInLaterProjects(view);
+    const context = await calendarContextFor(this.prisma, userId);
+    const keepsSettled = keepsSettledInViews(context);
     const [tasks, projects] = await Promise.all([
       this.prisma.task.findMany({
-        where: { userId, ...buildTaskViewWhere(view as TaskView) },
+        where: { userId, ...buildTaskViewWhere(view as TaskView, keepsSettled) },
         include: { tags: { include: { tag: true } } },
       }),
       feedIncludesProjects(view)
         ? this.prisma.project.findMany({
-            where: { userId, ...buildProjectViewWhere(view as ProjectView) },
+            where: { userId, ...buildProjectViewWhere(view as ProjectView, keepsSettled) },
             include: { tags: { include: { tag: true } } },
           })
         : Promise.resolve([]),
     ]);
-    const context = await calendarContextFor(
-      this.prisma,
-      userId,
-      viewNeedsCalendar(view) || hideLaterProjectTasks,
-    );
     // 稍后项目内的任务在 Anytime / Someday 中随父项目休眠（Later Project）。
     const hiddenProjectIds = hideLaterProjectTasks
       ? await laterProjectIds(this.prisma, userId, context, context.now)

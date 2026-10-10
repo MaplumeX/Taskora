@@ -111,6 +111,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useReorderFeed: () => ({ mutate: harness.reorder }),
   useCompleteTask: () => ({ mutate: vi.fn() }),
   useUncompleteTask: () => ({ mutate: vi.fn() }),
+  useUncancelTask: () => ({ mutate: vi.fn() }),
 }));
 
 vi.mock('sonner', () => ({ toast: { error: harness.error } }));

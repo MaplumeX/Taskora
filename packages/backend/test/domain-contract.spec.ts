@@ -125,6 +125,8 @@ describe('任务搜索契约 — hub REST 服务', () => {
   }));
   const prisma = {
     task: { findMany: vi.fn().mockResolvedValue(searchRows) },
+    // 搜索按账号的移入时机划定默认范围；契约夹具是立即模式
+    user: { findUnique: vi.fn().mockResolvedValue({ preferences: null }) },
     project: { findMany: vi.fn().mockResolvedValue([]) },
     area: {
       findMany: vi.fn().mockResolvedValue(

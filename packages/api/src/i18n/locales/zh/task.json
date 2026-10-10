@@ -54,6 +54,8 @@
   "convertToProject": "转换为项目",
   "move": "移动",
   "duplicate": "复制",
+  "logCompleted": "移入 Logbook",
+  "logCompletedDone": "已把完成的条目移入 Logbook",
   "duplicateProjectDone": "已复制项目",
   "placement": "所属：{{place}}",
   "placementGoToProject": "前往项目",

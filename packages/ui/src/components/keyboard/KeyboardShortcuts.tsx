@@ -45,6 +45,7 @@ import { runReviewCommand, type ReviewCommand } from '@/components/review/review
 import { KeyboardTagPicker, taggableSelection } from './KeyboardTagPicker';
 import { useDockToPanel } from '@/components/agent/assistant-panel-layout';
 import { useDuplicate } from '@/components/task/useDuplicate';
+import { useLogCompleted } from '@/components/task/useLogCompleted';
 
 export { detectKeyPlatform };
 export type { KeyPlatform };
@@ -140,6 +141,7 @@ export function KeyboardShortcuts({ platform }: Props) {
   const reorderTasks = useReorderTasks();
   const createTask = useCreateTask();
   const duplicate = useDuplicate();
+  const logCompleted = useLogCompleted();
   const createTaskContext = usePageTaskContext();
   const dockToPanel = useDockToPanel();
   /** ⇧⌘T 打开的 Tag Picker 作用的行（打开时的 Selection 快照）。 */
@@ -459,6 +461,11 @@ export function KeyboardShortcuts({ platform }: Props) {
           useUiInteractionStore.getState().openSearch();
           return;
         }
+        case 'logCompleted': {
+          // 立即模式下没有可移入的条目（Logging Mode）
+          if (logCompleted.available) logCompleted.run();
+          return;
+        }
         case 'tags': {
           const targets = taggableSelection(selection.selectedIds);
           if (targets.length === 0) return;
@@ -508,6 +515,7 @@ export function KeyboardShortcuts({ platform }: Props) {
     reorderTasks,
     createTask,
     duplicate,
+    logCompleted,
     createTaskContext,
     dockToPanel,
     t,

@@ -140,6 +140,7 @@ export * from './hooks/useRepeatPreviews';
 export * from './hooks/useUsers';
 export * from './hooks/useCalendarDay';
 export * from './hooks/useNewInToday';
+export * from './hooks/useLogging';
 export * from './hooks/useAgent';
 export * from './hooks/useCreateListActions';
 export * from './hooks/useContentBottomActions';

@@ -7,6 +7,7 @@ import {
   PREVIEW_RELEASE_MS,
   useCompletionRhythm,
 } from './useCompletionRhythm';
+import { usePreferencesStore } from '@taskora/api';
 
 function mockReducedMotion(reduce: boolean) {
   vi.stubGlobal(
@@ -124,5 +125,24 @@ describe('useCompletionRhythm preview', () => {
 
     act(() => vi.advanceTimersByTime(PREVIEW_RELEASE_MS));
     expect(preview.clear).toHaveBeenCalledOnce();
+  });
+
+  describe('每天 / 手动模式（行留在原视图）', () => {
+    afterEach(() => usePreferencesStore.setState({ loggingMode: 'IMMEDIATE' }));
+
+    it.each(['DAILY', 'MANUAL'] as const)('%s：勾选立即提交，不停留、不收起', (mode) => {
+      usePreferencesStore.setState({ loggingMode: mode });
+      const commit = vi.fn();
+      const show = vi.fn();
+      const { result } = renderHook(() =>
+        useCompletionRhythm(false, commit, { show, clear: vi.fn() }),
+      );
+
+      act(() => result.current.toggle());
+      expect(commit).toHaveBeenCalledTimes(1);
+      expect(result.current.pendingComplete).toBe(false);
+      expect(result.current.exiting).toBe(false);
+      expect(show).not.toHaveBeenCalled();
+    });
   });
 });

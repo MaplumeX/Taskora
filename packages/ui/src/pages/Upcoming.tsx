@@ -44,6 +44,7 @@ import {
   selectionStateOf,
   useCompleteTask,
   useSelectionScope,
+  useUncancelTask,
   useUncompleteTask,
 } from '@taskora/api';
 import { buildUpcomingLayout, type UpcomingDay } from '@taskora/api';
@@ -109,6 +110,7 @@ export default function Upcoming() {
   const previews = useRepeatPreviews();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
+  const uncancelTask = useUncancelTask();
   const updateTask = useUpdateTask();
   const reorderFeed = useReorderFeed();
   const { selectedIds, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
@@ -436,7 +438,9 @@ export default function Upcoming() {
 
   const toggleComplete = (item: FeedItem) => {
     if (item.type !== 'task') return;
-    if (item.status === 'COMPLETED') uncompleteTask.mutate(item.id);
+    // 撤销了结（尚未移入 Logbook 的条目还在这里）：已取消 → 撤销取消
+    if (item.status === 'CANCELLED') uncancelTask.mutate(item.id);
+    else if (item.status === 'COMPLETED') uncompleteTask.mutate(item.id);
     else completeTask.mutate(item.id, { onError: () => toast.error(t('common:operationFailed')) });
   };
 

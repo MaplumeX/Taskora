@@ -15,6 +15,7 @@ import { ProjectContextMenu, ProjectMoreMenu } from './ProjectContextMenu';
 
 vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
+  useLoggingActions: () => ({ setLoggingMode: vi.fn(), logCompleted: vi.fn() }),
   useAreasQuery: () => ({ data: [
     { id: 'work', title: 'Work' },
     { id: 'home', title: 'Home' },

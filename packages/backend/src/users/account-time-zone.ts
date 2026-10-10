@@ -1,5 +1,6 @@
-import type { ReviewContext } from '@taskora/engine';
+import type { ReviewContext, ViewContext } from '@taskora/engine';
 import {
+  accountLogging,
   accountReviewIntervalDefaults,
   accountTimeZone,
   instantDateKey,
@@ -23,6 +24,21 @@ export async function userCalendarZones(
   return {
     timeZone: accountTimeZone(preferences),
     legacyDateTimeZone: legacyDateTimeZone(preferences),
+  };
+}
+
+/** 视图判定的上下文：账号时区、当前时刻与移入时机（ADR 0022）。 */
+export async function userViewContext(
+  prisma: PrismaService,
+  userId: string,
+  now = new Date(),
+): Promise<ViewContext> {
+  const preferences = await userPreferences(prisma, userId);
+  return {
+    timeZone: accountTimeZone(preferences),
+    legacyDateTimeZone: legacyDateTimeZone(preferences),
+    now,
+    logging: accountLogging(preferences),
   };
 }
 

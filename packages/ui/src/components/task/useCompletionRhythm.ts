@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { useLoggingMode } from '@taskora/api';
+
 /** 勾选后保持勾选态的停留时长；期间再次点击可撤销。 */
 export const COMPLETE_HOLD_MS = 600;
 /** 停留结束后行收起 + 淡出的时长（与 TaskItem 的 transition 时长一致）。 */
@@ -22,6 +24,8 @@ function prefersReducedMotion() {
  * - 停留期内再次点击撤销，不提交。
  * - 收起阶段不再响应点击（行即将离开）。
  * - reduced-motion 下不停留、不收起，立即提交。
+ * - 每天 / 手动模式（Logging Mode）下行不会离开视图：同样立即提交，不收起；
+ *   再点一次就是重开，不需要撤销窗。
  * - 组件卸载不取消计时：用户已勾选，切走视图也应完成。
  * - preview：勾上即调用 show（如项目进度饼提前计入），撤销时 clear；提交后
  *   {@link PREVIEW_RELEASE_MS} 再 clear 兜底（写入已接管时为空操作）。
@@ -37,6 +41,7 @@ export function useCompletionRhythm(
   commitRef.current = onToggleComplete;
   const previewRef = React.useRef(preview);
   previewRef.current = preview;
+  const rowStays = useLoggingMode() !== 'IMMEDIATE';
 
   const toggle = () => {
     if (settled) {
@@ -50,7 +55,7 @@ export function useCompletionRhythm(
       setPhase('idle');
       return;
     }
-    if (prefersReducedMotion()) {
+    if (rowStays || prefersReducedMotion()) {
       onToggleComplete();
       return;
     }
