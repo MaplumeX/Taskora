@@ -21,6 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { QuickFind } from '@/components/search/QuickFind';
 import { SidebarProjectSection } from '@/components/layout/SidebarProjectSection';
+import { MobileFab } from '@/components/layout/MobileFab';
 import { AppDndProvider } from '../lib/appDnd';
 import { mainNav, reviewNav, type NavItem } from '@/components/layout/navItems';
 import { useBucketCounts } from '@/components/layout/useBucketCounts';
@@ -172,7 +173,9 @@ export default function Home() {
       {/* 区域 / 项目：与桌面侧边栏同一组件（含长按拖拽排序）。隐藏的桌面侧边栏
           同样挂着这些项目 / 区域，拖拽 id 相同，因此用独立的拖拽上下文隔开。 */}
       <AppDndProvider>
-        <SidebarProjectSection projects={allProjects} areas={areas} />
+        <SidebarProjectSection projects={allProjects} areas={areas} magicPlus />
+        {/* 首页的添加按钮在这个拖拽上下文里，才能拖进区域新建项目（Magic Plus）。 */}
+        <MobileFab scope="home" />
       </AppDndProvider>
 
       <HomeGroup>

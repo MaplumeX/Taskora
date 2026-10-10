@@ -49,6 +49,7 @@ const harness = vi.hoisted(() => ({
   pointerIds: [] as string[],
   useGeometry: false,
   sidebarDrop: vi.fn(),
+  createTask: vi.fn(),
 }));
 
 vi.mock('@dnd-kit/core', async (importOriginal) => ({
@@ -112,6 +113,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useCalendarEvents: () => harness.events,
   useUpdateTask: () => ({ mutate: harness.update }),
   useReorderFeed: () => ({ mutate: harness.reorder }),
+  useCreateTask: () => ({ mutateAsync: harness.createTask }),
   useCompleteTask: () => ({ mutate: vi.fn() }),
   useUncompleteTask: () => ({ mutate: vi.fn() }),
   useUncancelTask: () => ({ mutate: vi.fn() }),
@@ -965,5 +967,55 @@ describe('Upcoming — Sidebar Drop', () => {
     expect(payload.tasks.map((t: { id: string }) => t.id)).toEqual(['task-1', 'task-2']);
     expect(taskGroup('task-1')).toBe('date:2026-10-07');
     expect(harness.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('Upcoming — Magic Plus', () => {
+  async function dropMagicPlus(target: string) {
+    act(() => handlers().onDragStart({ active: { id: 'magic-plus' } } as DragStartEvent));
+    act(() =>
+      handlers().onDragOver({
+        active: { id: 'magic-plus' },
+        over: { id: targetKey(target) },
+      } as DragOverEvent),
+    );
+    expect(screen.getByTestId('task-placeholder-magic-plus-draft')).toHaveClass('invisible');
+    await act(async () => {
+      handlers().onDragEnd({
+        active: { id: 'magic-plus' },
+        over: { id: targetKey(target) },
+        delta: { x: -40, y: -400 },
+      } as unknown as DragEndEvent);
+    });
+  }
+
+  it('dropped on a day creates a task scheduled for that day, placed there', async () => {
+    harness.createTask.mockResolvedValue({ ...task('new', '2026-10-09'), subtasks: [] });
+    renderUpcoming([task('task-1', '2026-10-07'), task('task-2', '2026-10-09')]);
+
+    await dropMagicPlus('date:2026-10-09');
+
+    expect(harness.createTask).toHaveBeenCalledWith({
+      title: '',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: '2026-10-09',
+    });
+    expect(harness.update).not.toHaveBeenCalled();
+    expect(harness.reorder).toHaveBeenCalledWith([
+      { type: 'task', id: 'task-1' },
+      { type: 'task', id: 'task-2' },
+      { type: 'task', id: 'new' },
+    ]);
+  });
+
+  it('dropped on a month takes that group’s first day', async () => {
+    harness.createTask.mockResolvedValue({ ...task('new', '2026-11-01'), subtasks: [] });
+    renderUpcoming([task('task-1', '2026-10-07')]);
+
+    await dropMagicPlus('month:2026-11');
+
+    expect(harness.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ scheduledDate: '2026-11-01' }),
+    );
   });
 });

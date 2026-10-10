@@ -16,6 +16,7 @@ import {
   useUpdateTask,
   useReorderFeed,
   useMultiSelectStore,
+  usePageTaskContext,
   useSelectionStore,
 } from '@taskora/api';
 import { useCallback, useMemo, useRef, useState } from 'react';
@@ -62,6 +63,12 @@ import { toast } from 'sonner';
 import { PageHeading } from '@/components/layout/PageHeading';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
 import { useDndSurface } from '../lib/appDnd';
+import {
+  MAGIC_PLUS_DRAFT_ID,
+  isMagicPlus,
+  magicPlusDraftFeedItem,
+  useMagicPlusCreate,
+} from '../lib/magicPlus';
 import type { SidebarDropPayload } from '@/components/layout/sidebarDrop';
 import {
   dndListProps,
@@ -75,6 +82,8 @@ import {
 } from '../lib/dnd';
 
 interface ScheduleDrag {
+  /** 拖拽源的 dnd id：任务行为 task:<id>，Magic Plus 为 MAGIC_PLUS_ID。 */
+  activeKey: string;
   origin: TaskFeedItem;
   originGroup: string;
   items: FeedItem[];
@@ -140,6 +149,7 @@ export default function Upcoming() {
   const uncancelTask = useUncancelTask();
   const updateTask = useUpdateTask();
   const reorderFeed = useReorderFeed();
+  const magicPlus = useMagicPlusCreate(usePageTaskContext());
   const { selectedIds, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
   const multiSelectActive = useMultiSelectStore((s) => s.active);
 
@@ -174,10 +184,14 @@ export default function Upcoming() {
 
   const collisionDetection = useCallback<CollisionDetection>(
     (args) => {
-      if (!String(args.active.id).startsWith('task:') || !args.pointerCoordinates) return [];
-      const activeKey = String(args.active.id);
+      const magic = isMagicPlus(String(args.active.id));
+      if ((!String(args.active.id).startsWith('task:') && !magic) || !args.pointerCoordinates) {
+        return [];
+      }
+      // Magic Plus 的空位行即草稿任务；浮层是圆形按钮，落位直接跟手指。
+      const activeKey = magic ? `task:${MAGIC_PLUS_DRAFT_ID}` : String(args.active.id);
       let placementY = args.pointerCoordinates.y;
-      if (args.collisionRect) {
+      if (args.collisionRect && !magic) {
         const previous = dragMotionRef.current?.id === activeKey ? dragMotionRef.current : null;
         const initialTop = args.active.rect.current.initial?.top ?? args.collisionRect.top;
         const change = args.collisionRect.top - (previous?.top ?? initialTop);
@@ -230,7 +244,7 @@ export default function Upcoming() {
         const rowRects = (group?.items ?? []).flatMap((item) => {
           const id = feedKey(item);
           const rect = visibleRects.get(id);
-          return item.type === 'task' && id !== String(args.active.id) && rect
+          return item.type === 'task' && id !== activeKey && rect
             ? [{ id, rect }]
             : [];
         });
@@ -255,6 +269,23 @@ export default function Upcoming() {
   };
 
   const handleDragStart = ({ active }: DragStartEvent) => {
+    if (isMagicPlus(String(active.id))) {
+      if (multiSelectActive) return;
+      handleBlankClick();
+      lastTargetRef.current = null;
+      dragMotionRef.current = null;
+      updateDrag({
+        activeKey: String(active.id),
+        origin: magicPlusDraftFeedItem(magicPlus.context),
+        // 来源组不存在：落在哪一组就取哪一组的日期。
+        originGroup: MAGIC_PLUS_DRAFT_ID,
+        items,
+        startItems: items,
+        group: null,
+        collapsed: true,
+      });
+      return;
+    }
     const item = items.find(
       (item): item is TaskFeedItem => item.type === 'task' && `task:${item.id}` === active.id,
     );
@@ -285,6 +316,7 @@ export default function Upcoming() {
     lastTargetRef.current = null;
     dragMotionRef.current = null;
     updateDrag({
+      activeKey: feedKey(item),
       origin: item,
       originGroup,
       items,
@@ -312,7 +344,7 @@ export default function Upcoming() {
 
   const previewTarget = (activeKey: string) => {
     const current = dragRef.current;
-    if (!current || activeKey !== feedKey(current.origin)) return;
+    if (!current || activeKey !== current.activeKey) return;
     const next = applyTarget(current, lastTargetRef.current);
     if (next === current.items) return;
     flip.capture();
@@ -367,7 +399,11 @@ export default function Upcoming() {
     dragMotionRef.current = null;
     flip.capture();
     updateDrag(null);
-    if (!current || !droppedItems || active.id !== feedKey(current.origin)) return;
+    if (!current || !droppedItems || String(active.id) !== current.activeKey) return;
+    if (isMagicPlus(current.activeKey)) {
+      dropMagicPlus(droppedItems);
+      return;
+    }
     const item = droppedItems.find((item) => feedKey(item) === feedKey(current.origin));
     if (!item?.scheduledDate || !current.origin.scheduledDate) return;
     const finalItems = current.group
@@ -428,16 +464,41 @@ export default function Upcoming() {
     updateDrag(null);
   };
 
+  /**
+   * Magic Plus 松手：草稿所在组的日期即新任务的计划日期；先以含草稿的结果
+   * 占位，新建后换成新任务并写回显示顺序。没落在任何一组即取消。
+   */
+  const dropMagicPlus = (droppedItems: FeedItem[]) => {
+    const draft = droppedItems.find(
+      (entry) => entry.type === 'task' && entry.id === MAGIC_PLUS_DRAFT_ID,
+    );
+    if (!draft?.scheduledDate) return;
+    holdItems(droppedItems);
+    void magicPlus
+      .create({ scheduledType: ScheduledType.DATE, scheduledDate: toDateKey(draft.scheduledDate) })
+      .then((created) => {
+        if (!created) {
+          holdItems(filteredItems);
+          return;
+        }
+        const createdItem: TaskFeedItem = { ...created, type: 'task', tags: created.tags ?? [] };
+        const finalItems = droppedItems.map((entry) => (entry === draft ? createdItem : entry));
+        holdItems(finalItems);
+        reorderFeed.mutate(finalItems.map(({ type, id }) => ({ type, id })));
+      });
+  };
+
   /** 拖到侧边栏的载荷：被拖任务，多选时为整组（按显示顺序，拖拽开始时的原样）。 */
   const sidebarPayload = (activeKey: string): SidebarDropPayload | null => {
     const current = dragRef.current;
-    if (!current || activeKey !== feedKey(current.origin)) return null;
+    if (!current || activeKey !== current.activeKey || isMagicPlus(activeKey)) return null;
     return { kind: 'tasks', tasks: current.group?.map(({ item }) => item) ?? [current.origin] };
   };
 
   // 共享拖拽上下文里的一个 surface（ADR 0018）。
   const surface = useDndSurface({
     owns: isUpcomingKey,
+    magicPlus: true,
     collisionDetection,
     sidebarPayload,
     onDragStart: handleDragStart,
@@ -513,7 +574,8 @@ export default function Upcoming() {
         key={item.id}
         dndId={`task:${item.id}`}
         item={drag?.origin.id === item.id ? drag.origin : item}
-        placeholder={drag?.origin.id === item.id}
+        // Magic Plus 松手到新任务建好之间，草稿仍是空位（不可点、不可勾选）。
+        placeholder={drag?.origin.id === item.id || item.id === MAGIC_PLUS_DRAFT_ID}
         dragDisabled={multiSelectActive}
         projectTitle={item.projectId ? projectMap[item.projectId] : undefined}
         areaTitle={item.areaId ? areaMap[item.areaId] : undefined}

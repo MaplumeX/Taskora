@@ -4,6 +4,7 @@ import { ContentBottomBar } from '@/components/layout/ContentBottomBar';
 import { KeyboardShortcuts } from '@/components/keyboard/KeyboardShortcuts';
 import { MobileTopBar } from '@/components/layout/MobileTopBar';
 import { MobileFab } from '@/components/layout/MobileFab';
+import { MagicPlusInbox } from '@/components/layout/MagicPlusInbox';
 import { MultiSelectToolbar } from '@/components/task/MultiSelectToolbar';
 import { ExpandedTaskToolbar } from '@/components/task/ExpandedTaskToolbar';
 import { LazyAssistantPanel, LazySettingsModal } from './LazyShellFeatures';
@@ -39,6 +40,8 @@ export function AppShell() {
         {/* 桌面右侧助手面板：始终与内容并排，不浮在内容上 */}
         <LazyAssistantPanel />
         <MobileFab />
+        {/* 拖动 MobileFab（Magic Plus）时左下角浮现的 Inbox 目标及其快速添加卡片。 */}
+        <MagicPlusInbox />
         {/* 触控多选模式（左滑任务行进入）的底部工具栏，模式中替代 FAB。 */}
         <MultiSelectToolbar />
         {/* 任务展开时替代 FAB 的「移动 / 删除 / 更多」（桌面版在 ContentBottomBar 内）。 */}

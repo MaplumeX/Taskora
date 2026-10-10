@@ -167,6 +167,26 @@ export function moveProjectToPlacement(
   return next;
 }
 
+/**
+ * 拖拽落位：项目已在布局里则移动；尚不在（Magic Plus 的草稿第一次进入列表）
+ * 则插入到 placement。
+ */
+export function placeProject(
+  layout: SidebarProjectLayout,
+  projectId: string,
+  placement: ProjectPlacement,
+): SidebarProjectLayout | null {
+  if (findProjectContainer(layout, projectId)) {
+    return moveProjectToPlacement(layout, projectId, placement);
+  }
+  const targetIds = layout.containers[placement.containerId];
+  if (!targetIds) return null;
+  const index = Math.max(0, Math.min(placement.index, targetIds.length));
+  const next = cloneSidebarProjectLayout(layout);
+  next.containers[placement.containerId].splice(index, 0, projectId);
+  return next;
+}
+
 export function serializeProjectOrder(
   layout: SidebarProjectLayout,
   areas: AreaResponseDto[],

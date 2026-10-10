@@ -4,7 +4,7 @@ import { useLocation, useParams } from 'react-router-dom';
 
 import { reviewDetailOf } from './reviewRoute';
 
-import { ScheduledType, TaskBucket } from '@taskora/shared';
+import { ScheduledType, TaskBucket, addCalendarDays } from '@taskora/shared';
 
 import type { CreateTaskDto } from '@taskora/shared';
 
@@ -23,6 +23,14 @@ export function usePageTaskContext(): PageTaskContext {
     return {
       scheduledType: ScheduledType.DATE,
       scheduledDate: todayDateKey(),
+    };
+  }
+
+  // Upcoming / Tomorrow 新建的任务计划为明天（对齐 Things 3：Upcoming 点按 Magic Plus）
+  if (pathname === '/upcoming' || pathname === '/tomorrow') {
+    return {
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: addCalendarDays(todayDateKey(), 1),
     };
   }
 
