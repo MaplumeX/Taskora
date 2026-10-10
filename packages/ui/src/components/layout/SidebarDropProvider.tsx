@@ -32,6 +32,20 @@ import {
   type SidebarDropTarget,
 } from './sidebarDrop';
 
+/** 执行一次「放到落点」（不需要锚点的落点：Inbox / Today / Anytime / Someday / 区域 / 项目等）。 */
+export type SidebarDropExecutor = (payload: SidebarDropPayload, target: SidebarDropTarget) => void;
+
+const SidebarDropExecutorContext = React.createContext<SidebarDropExecutor | null>(null);
+
+/**
+ * 键盘的「把复制的条目移到这里」（⌥⌘V）与粘贴副本落位复用 Sidebar Drop 的
+ * 规划与执行（已在目标处的跳过、移入项目排到末尾、项目移入区域排到末尾）。
+ * 不在 SidebarDropProvider 内时为 null。
+ */
+export function useSidebarDropExecutor(): SidebarDropExecutor | null {
+  return React.useContext(SidebarDropExecutorContext);
+}
+
 /** 落在「计划」上：在该行旁弹出计划日期卡片，选定后写给被拖的条目。 */
 interface SchedulePick {
   anchor: HTMLElement;
@@ -147,9 +161,18 @@ export function SidebarDropProvider({ children }: { children: React.ReactNode })
     }
   };
 
+  const handleDropRef = React.useRef(handleDrop);
+  handleDropRef.current = handleDrop;
+  const execute = React.useCallback<SidebarDropExecutor>(
+    (payload, target) => handleDropRef.current(payload, target, null),
+    [],
+  );
+
   return (
     <AppDndProvider onSidebarDrop={handleDrop}>
-      {children}
+      <SidebarDropExecutorContext.Provider value={execute}>
+        {children}
+      </SidebarDropExecutorContext.Provider>
       {completion.dialog}
       <Popover open={schedulePick !== null} onOpenChange={(open) => !open && setSchedulePick(null)}>
         {schedulePick && <PopoverAnchor virtualRef={{ current: schedulePick.anchor }} />}

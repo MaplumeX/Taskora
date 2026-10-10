@@ -15,5 +15,8 @@
   "moreNavigation": "更多导航",
   "assistant": "助手",
   "resizeSidebar": "调整侧边栏宽度",
-  "review": "回顾"
+  "review": "回顾",
+  "navigationTitle": "前往",
+  "navigationPlaceholder": "前往列表、区域或项目…",
+  "navigationNoResults": "没有匹配的列表"
 }

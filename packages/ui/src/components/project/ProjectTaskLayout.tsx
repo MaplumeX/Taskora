@@ -30,7 +30,14 @@ import { toast } from 'sonner';
 import { TaskItem } from '@/components/task/TaskItem';
 import { EmptyState } from '@/components/common/EmptyState';
 import { cn } from '@/lib/utils';
-import { useCompleteTask, useSelectionStore, useUncompleteTask } from '@taskora/api';
+import {
+  useCompleteTask,
+  useCreateProjectHeading,
+  useSelectionStore,
+  useUiInteractionStore,
+  useUncompleteTask,
+  type SelectionRow,
+} from '@taskora/api';
 import { useSelectionScope } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
 import { useReorderProjectHeadingLayout } from '@taskora/api';
@@ -136,6 +143,47 @@ function findTaskContainer(layout: LayoutState, id: string) {
   return Object.keys(layout.containers).find((container) =>
     layout.containers[container].includes(id),
   );
+}
+
+/** 键盘重排后的布局：按新行序（Heading 行 + 任务行）重新分配各容器。 */
+export function layoutFromRowOrder(layout: LayoutState, rowIds: readonly string[]): LayoutState {
+  const known = new Set(layout.headingIds);
+  const containers: Record<string, string[]> = { [UNGROUPED]: [] };
+  layout.headingIds.forEach((id) => {
+    containers[id] = [];
+  });
+  const headingIds: string[] = [];
+  let current: ContainerId = UNGROUPED;
+  for (const id of rowIds) {
+    if (known.has(id)) {
+      headingIds.push(id);
+      current = id;
+    } else {
+      containers[current].push(id);
+    }
+  }
+  return { headingIds, containers };
+}
+
+/**
+ * 用选中任务新建 Heading（⌥⇧⌘N）：新 Heading 插在首个选中任务所在分组之后
+ * （选中任务在无 Heading 部分时成为第一个 Heading），选中任务按显示顺序归入。
+ */
+export function layoutWithHeadingFromTasks(
+  layout: LayoutState,
+  headingId: string,
+  taskIds: readonly string[],
+): LayoutState {
+  const moved = new Set(taskIds);
+  const origin = findTaskContainer(layout, taskIds[0]) ?? UNGROUPED;
+  const containers = Object.fromEntries(
+    Object.entries(layout.containers).map(([id, ids]) => [id, ids.filter((t) => !moved.has(t))]),
+  );
+  containers[headingId] = [...taskIds];
+  const headingIds = layout.headingIds.filter((id) => id !== headingId);
+  const at = origin === UNGROUPED ? 0 : headingIds.indexOf(origin) + 1;
+  headingIds.splice(at, 0, headingId);
+  return { headingIds, containers };
 }
 
 function cloneLayout(layout: LayoutState): LayoutState {
@@ -499,35 +547,59 @@ export function ProjectTaskLayout({
     () => (visibleTaskIds ? filterLayout(layout, visibleTaskIds) : layout),
     [layout, visibleTaskIds],
   );
+  // 过滤后的布局不能整组写回（同拖拽），键盘排序随之停用。
+  const reorderable = visibleTaskIds === null;
   const selectionRows = React.useMemo(() => {
-    const rows: Array<{
-      id: string;
-      kind: 'task' | 'heading';
-      completed?: boolean;
-      cancelled?: boolean;
-      tagIds?: string[];
-    }> = (shown.containers[UNGROUPED] ?? []).map((id) => ({
-      id,
-      kind: 'task' as const,
-      completed: taskMap.get(id)?.status === 'COMPLETED',
-      cancelled: taskMap.get(id)?.status === 'CANCELLED',
-      tagIds: (taskMap.get(id)?.tags ?? []).map((tag) => tag.id),
-    }));
+    const taskRow = (id: string, container: ContainerId): SelectionRow => {
+      const task = taskMap.get(id);
+      return {
+        id,
+        kind: 'task',
+        completed: task?.status === 'COMPLETED',
+        cancelled: task?.status === 'CANCELLED',
+        tagIds: (task?.tags ?? []).map((tag) => tag.id),
+        item: task,
+        // ⌘↑/⌘↓ 在同一 Heading 下重排
+        sortGroup: reorderable ? container : undefined,
+      };
+    };
+    const rows: SelectionRow[] = (shown.containers[UNGROUPED] ?? []).map((id) =>
+      taskRow(id, UNGROUPED),
+    );
     for (const hid of shown.headingIds) {
       rows.push({ id: hid, kind: 'heading' });
-      for (const id of shown.containers[hid] ?? []) {
-        rows.push({
-          id,
-          kind: 'task' as const,
-          completed: taskMap.get(id)?.status === 'COMPLETED',
-          cancelled: taskMap.get(id)?.status === 'CANCELLED',
-          tagIds: (taskMap.get(id)?.tags ?? []).map((tag) => tag.id),
-        });
-      }
+      for (const id of shown.containers[hid] ?? []) rows.push(taskRow(id, hid));
     }
     return rows;
-  }, [shown, taskMap]);
-  useSelectionScope(selectionRows);
+  }, [shown, taskMap, reorderable]);
+  // 键盘编辑经 ref 拿到本次渲染的 persist（定义在下方）。
+  const persistRef = React.useRef<(next: LayoutState) => void>(() => {});
+  const createHeading = useCreateProjectHeading();
+  const createHeadingMutate = createHeading.mutate;
+  /** ⌥⇧⌘N 新建的 Heading 及要归入的任务：等 Heading 出现在 props 里再写布局。 */
+  const [pendingHeading, setPendingHeading] = React.useState<{
+    headingId: string;
+    taskIds: string[];
+  } | null>(null);
+  const scopeActions = React.useMemo(
+    () =>
+      reorderable
+        ? {
+            reorder: (ids: string[]) =>
+              persistRef.current(layoutFromRowOrder(layoutRef.current, ids)),
+            headingFromSelection: (taskIds: string[]) =>
+              createHeadingMutate(
+                { projectId, title: '' },
+                {
+                  onSuccess: (heading) => setPendingHeading({ headingId: heading.id, taskIds }),
+                  onError: () => toast.error(t('project:createHeadingFailed')),
+                },
+              ),
+          }
+        : undefined,
+    [reorderable, createHeadingMutate, projectId, t],
+  );
+  useSelectionScope(selectionRows, 0, scopeActions);
   const keyboardCoordinates = React.useCallback<KeyboardCoordinateGetter>((event, args) => {
     if (event.code === 'ArrowDown' || event.code === 'ArrowRight') {
       keyboardTaskEdgeRef.current = 'after';
@@ -582,6 +654,23 @@ export function ProjectTaskLayout({
       },
     });
   };
+
+  persistRef.current = persist;
+
+  React.useEffect(() => {
+    if (!pendingHeading || !headings.some((h) => h.id === pendingHeading.headingId)) return;
+    setPendingHeading(null);
+    persistRef.current(
+      layoutWithHeadingFromTasks(
+        layoutRef.current,
+        pendingHeading.headingId,
+        pendingHeading.taskIds,
+      ),
+    );
+    // 同新建 Heading：Selection 移到新 Heading 并进入标题编辑。
+    useUiInteractionStore.getState().setPendingAutoEditId(pendingHeading.headingId);
+    useSelectionStore.getState().setSelection([pendingHeading.headingId]);
+  }, [pendingHeading, headings]);
 
   const cleanupTaskDrag = () => {
     activeTaskIdRef.current = null;

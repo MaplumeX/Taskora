@@ -115,5 +115,7 @@
   "quickAddSubmitHint": "添加",
   "quickAddContinueHint": "添加并继续",
   "quickAddCloseHint": "关闭",
-  "quickAddAddedTo": "已添加到「{{place}}」"
+  "quickAddAddedTo": "已添加到「{{place}}」",
+  "repeatNeedsScheduledDate": "重复规则需要先设置计划日期",
+  "pasteMoveUnavailable": "当前列表不能放入条目"
 }

@@ -21,6 +21,7 @@ const harness = vi.hoisted(() => ({
   deleteMutate: vi.fn(),
   restoreMutate: vi.fn(),
   reorderMutate: vi.fn(),
+  scopeReorder: vi.fn(),
   createMutate: vi.fn(),
   updateTaskMutate: vi.fn(),
   updateHeadingMutate: vi.fn(),
@@ -29,10 +30,13 @@ const harness = vi.hoisted(() => ({
 }));
 
 vi.mock('react-i18next', () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
+  useTranslation: () => ({
+    t: (key: string) => key,
+    i18n: { language: 'en', getFixedT: () => (key: string) => key },
+  }),
   initReactI18next: { type: '3rdParty', init: () => undefined },
 }));
-vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: Object.assign(vi.fn(), { error: vi.fn() }) }));
 
 vi.mock('@taskora/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@taskora/api')>();
@@ -92,8 +96,13 @@ import { useUiInteractionStore } from '@taskora/api';
 import { useKeybindingsStore } from '@taskora/api';
 import { useAssistantUiStore } from '@taskora/api';
 import { mockDesktop } from '@/test/media';
-import { useSelectionScope } from '@taskora/api';
+import { useSelectionScope, useSidebarUiStore, todayDateKey } from '@taskora/api';
+import { addCalendarDays } from '@taskora/shared';
+import { toast } from 'sonner';
+import { resetCopiedItems } from './itemClipboard';
 import { type SelectionRow } from '@taskora/api';
+
+const listActions = { reorder: (ids: string[]) => harness.scopeReorder(ids) };
 
 /** 测试页：渲染任务行（aria-selected + 点击选中）并注册 selection scope。 */
 function ListPage({ tasks }: { tasks: TaskResponseDto[] }) {
@@ -105,10 +114,12 @@ function ListPage({ tasks }: { tasks: TaskResponseDto[] }) {
         completed: t.status === 'COMPLETED',
         cancelled: t.status === 'CANCELLED',
         tagIds: (t.tags ?? []).map((tag) => tag.id),
+        item: t,
+        sortGroup: 'list',
       })),
     [tasks],
   );
-  useSelectionScope(rows);
+  useSelectionScope(rows, 0, listActions);
   const selectedIds = useSelectionStore((s) => s.selectedIds);
   const setSelection = useSelectionStore((s) => s.setSelection);
   return (
@@ -205,6 +216,7 @@ beforeEach(() => {
   harness.deleteMutate.mockReset();
   harness.restoreMutate.mockReset();
   harness.reorderMutate.mockReset();
+  harness.scopeReorder.mockReset();
   harness.createMutate.mockReset();
   harness.updateTaskMutate.mockReset();
   harness.updateHeadingMutate.mockReset();
@@ -1047,5 +1059,196 @@ describe('KeyboardShortcuts — 助手面板（assistant-panel issue 03）', () 
     renderAt('/today', tasks);
     press('j', { metaKey: true });
     expect(useAssistantUiStore.getState().panelOpen).toBe(false);
+  });
+});
+
+describe('KeyboardShortcuts — 日期（Things Edit Dates）', () => {
+  it('⌘T 计划为今天，⌘O 某天，⌘R 随时（无归属的任务离开 Inbox）', () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press('t', { metaKey: true });
+    expect(harness.updateTaskMutate).toHaveBeenLastCalledWith(
+      { id: 't1', data: { scheduledType: ScheduledType.DATE, scheduledDate: todayDateKey() } },
+      expect.anything(),
+    );
+    press('o', { metaKey: true });
+    expect(harness.updateTaskMutate).toHaveBeenLastCalledWith(
+      { id: 't1', data: { scheduledType: ScheduledType.SOMEDAY } },
+      expect.anything(),
+    );
+    press('r', { metaKey: true });
+    expect(harness.updateTaskMutate).toHaveBeenLastCalledWith(
+      {
+        id: 't1',
+        data: { scheduledType: ScheduledType.NONE, scheduledDate: null, bucket: TaskBucket.ANYTIME },
+      },
+      expect.anything(),
+    );
+  });
+
+  it('⌃] 计划日期 +1 天（无计划从今天起算）；⌃⇧. 截止日期 +1 周', () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press(']', { ctrlKey: true, code: 'BracketRight' });
+    expect(harness.updateTaskMutate).toHaveBeenLastCalledWith(
+      {
+        id: 't1',
+        data: {
+          scheduledType: ScheduledType.DATE,
+          scheduledDate: addCalendarDays(todayDateKey(), 1),
+        },
+      },
+      expect.anything(),
+    );
+    press('>', { ctrlKey: true, shiftKey: true, code: 'Period' });
+    expect(harness.updateTaskMutate).toHaveBeenLastCalledWith(
+      { id: 't1', data: { dueDate: addCalendarDays(todayDateKey(), 7) } },
+      expect.anything(),
+    );
+  });
+
+  it('Logbook 中日期键不写入', () => {
+    renderAt('/logbook', [task('done', true)]);
+    press('ArrowDown');
+    press('t', { metaKey: true });
+    press(']', { ctrlKey: true, code: 'BracketRight' });
+    expect(harness.updateTaskMutate).not.toHaveBeenCalled();
+  });
+});
+
+describe('KeyboardShortcuts — 排序与移动', () => {
+  it('⌘↓ 下移一位、⌥⌘↑ 移到顶（经 scope 写回新行序）', () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press('ArrowDown', { metaKey: true });
+    expect(harness.scopeReorder).toHaveBeenLastCalledWith(['t2', 't1', 't3']);
+    act(() => useSelectionStore.getState().setSelection(['t3']));
+    press('ArrowUp', { metaKey: true, altKey: true });
+    expect(harness.scopeReorder).toHaveBeenLastCalledWith(['t3', 't1', 't2']);
+  });
+
+  it('已在顶部时 ⌘↑ 不写入', () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press('ArrowUp', { metaKey: true });
+    expect(harness.scopeReorder).not.toHaveBeenCalled();
+  });
+
+  it('⌥⇧↓ 从锚点扩展到底部', () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press('ArrowDown', { altKey: true, shiftKey: true });
+    expect(useSelectionStore.getState().selectedIds).toEqual(['t1', 't2', 't3']);
+  });
+});
+
+describe('KeyboardShortcuts — 导航补齐', () => {
+  it('⌘L 在父列表中显示：Inbox 任务跳到 Inbox', () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press('l', { metaKey: true });
+    expect(screen.getByTestId('inbox-page')).toBeInTheDocument();
+    expect(useSelectionStore.getState().selectedIds).toEqual(['t1']);
+  });
+
+  it('⌘/ 收起 / 展开侧边栏', () => {
+    const restore = mockDesktop(true);
+    useSidebarUiStore.setState({ collapsed: false });
+    renderAt('/today', tasks);
+    press('/', { metaKey: true });
+    expect(useSidebarUiStore.getState().collapsed).toBe(true);
+    press('/', { metaKey: true });
+    expect(useSidebarUiStore.getState().collapsed).toBe(false);
+    restore();
+  });
+
+  it('⇧⌘C 展开选中任务并请求新建子任务', () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press('ArrowDown');
+    press('C', { metaKey: true, shiftKey: true, code: 'KeyC' });
+    expect(useUiInteractionStore.getState().expandedId).toBe('t2');
+    expect(useUiInteractionStore.getState().subtaskDraftTaskId).toBe('t2');
+  });
+});
+
+describe('KeyboardShortcuts — 剪贴板（⌘C / ⌘V / ⌥⌘V）', () => {
+  let clipboardText = '';
+  beforeEach(() => {
+    resetCopiedItems();
+    clipboardText = '';
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {
+        writeText: vi.fn(async (text: string) => {
+          clipboardText = text;
+        }),
+        readText: vi.fn(async () => clipboardText),
+      },
+    });
+  });
+
+  it('⌘C 复制选中任务的标题；没有选中时让给原生复制', () => {
+    renderAt('/today', tasks);
+    const unhandled = new KeyboardEvent('keydown', {
+      key: 'c',
+      metaKey: true,
+      bubbles: true,
+      cancelable: true,
+    });
+    act(() => {
+      window.dispatchEvent(unhandled);
+    });
+    expect(unhandled.defaultPrevented).toBe(false);
+    expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
+
+    press('a', { metaKey: true });
+    press('c', { metaKey: true });
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('t1\nt2\nt3');
+  });
+
+  it('⌘C 后 ⌘V 粘贴副本并选中副本', async () => {
+    renderAt('/today', tasks);
+    press('ArrowDown');
+    press('c', { metaKey: true });
+    press('v', { metaKey: true });
+    await waitFor(() => expect(harness.duplicateTask).toHaveBeenCalledWith('t1'));
+    await waitFor(() =>
+      expect(useSelectionStore.getState().selectedIds).toEqual(['t1-copy']),
+    );
+  });
+
+  it('剪贴板是外部文字时 ⌘V 逐行建任务（去掉列表记号与空行）', async () => {
+    renderAt('/today', tasks);
+    clipboardText = '- 买牛奶\n\n* [ ] 回邮件\n';
+    press('v', { metaKey: true });
+    await waitFor(() => expect(harness.createMutate).toHaveBeenCalledTimes(2));
+    expect(harness.createMutate.mock.calls.map(([data]) => data.title)).toEqual([
+      '买牛奶',
+      '回邮件',
+    ]);
+    expect(harness.createMutate.mock.calls[0][0]).toMatchObject({
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: todayDateKey(),
+    });
+  });
+
+  it('⌥⌘V 在没有落点的页面提示不可移入', () => {
+    renderAt('/logbook', [task('done', true)]);
+    press('ArrowDown');
+    press('c', { metaKey: true });
+    press('v', { metaKey: true, altKey: true, code: 'KeyV' });
+    expect(toast).toHaveBeenCalledWith('task:pasteMoveUnavailable');
+  });
+});
+
+describe('KeyboardShortcuts — 导航弹窗（⇧⌘O）', () => {
+  it('⇧⌘O 打开导航弹窗，输入后 Enter 前往', async () => {
+    renderAt('/today', tasks);
+    press('O', { metaKey: true, shiftKey: true, code: 'KeyO' });
+    const input = await screen.findByRole('combobox');
+    await userEvent.type(input, 'nav:inbox');
+    await userEvent.keyboard('{Enter}');
+    expect(await screen.findByTestId('inbox-page')).toBeInTheDocument();
   });
 });

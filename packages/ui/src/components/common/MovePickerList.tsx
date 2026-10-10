@@ -15,6 +15,8 @@ interface Props<T extends { id: string }> {
   emptyMessage: string;
   renderTarget: (target: T) => ReactNode;
   isNested?: (target: T) => boolean;
+  /** 列表的无障碍名称（默认「移动」）。 */
+  listLabel?: string;
 }
 
 /** 任务与项目共用移动列表的外观、当前位置标记和键盘交互。 */
@@ -28,6 +30,7 @@ export function MovePickerList<T extends { id: string }>({
   emptyMessage,
   renderTarget,
   isNested,
+  listLabel,
 }: Props<T>) {
   const { t } = useTranslation('task');
   const select = (target: T) => {
@@ -39,7 +42,10 @@ export function MovePickerList<T extends { id: string }>({
   );
   const initialIndex = query.trim()
     ? 0
-    : Math.max(targets.findIndex((target) => target.id === currentId), 0);
+    : Math.max(
+        targets.findIndex((target) => target.id === currentId),
+        0,
+      );
 
   useEffect(() => {
     setActiveIndex(initialIndex);
@@ -67,7 +73,7 @@ export function MovePickerList<T extends { id: string }>({
       <div
         id={listboxId}
         role="listbox"
-        aria-label={t('move')}
+        aria-label={listLabel ?? t('move')}
         className="flex max-h-72 flex-col gap-0.5 overflow-y-auto"
       >
         {targets.length === 0 && (

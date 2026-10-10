@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import type { RepeatRule, ScheduledType } from '@taskora/shared';
+
 /**
  * Selection（键盘选中）跨页面全局状态（ADR-0004）。
  *
@@ -16,6 +18,36 @@ export type SelectionRowKind = 'task' | 'heading' | 'project' | 'area';
 export interface SelectionRowGroupHeader {
   /** 「下方新建」落在该组头时预填的父级上下文（无 heading）。 */
   createContext: { projectId?: string; areaId?: string };
+}
+
+/**
+ * 行数据的字段快照（task / project 行）：键盘的日期、移动、重复规则、在父列表
+ * 中显示等动作据此计算写入值。任务 DTO、feed 行与项目 DTO 都满足。
+ */
+export interface SelectionRowItem {
+  /** 标题：⌘C 复制时作为剪贴板文本。 */
+  title?: string;
+  status: string;
+  bucket: string;
+  scheduledType: ScheduledType;
+  scheduledDate: string | null;
+  dueDate: string | null;
+  reminderTime?: string | null;
+  repeatRule?: RepeatRule | null;
+  projectId?: string | null;
+  headingId?: string | null;
+  areaId: string | null;
+}
+
+/** 键盘排序（⌘↑/⌘↓、⌥⌘↑/⌥⌘↓）的方向。 */
+export type ReorderDirection = 'up' | 'down' | 'top' | 'bottom';
+
+/** 列表随 scope 登记的能力：键盘动作经它写回，列表自行决定写哪种排序。 */
+export interface SelectionScopeActions {
+  /** 写回该 scope 的新行序（全部行 id，按新显示顺序）。 */
+  reorder?: (orderedIds: string[]) => void;
+  /** 选中任务归入新建的 Heading（项目页，⌥⇧⌘N）。 */
+  headingFromSelection?: (taskIds: string[]) => void;
 }
 
 export interface SelectionRow {
@@ -35,6 +67,13 @@ export interface SelectionRow {
   groupHeaderId?: string;
   /** 仅 Group Header 行：新建上下文元数据。 */
   groupHeader?: SelectionRowGroupHeader;
+  /** 行数据快照（task / project 行）。 */
+  item?: SelectionRowItem;
+  /**
+   * 可排序行的同级分组键：同一 scope 内同键的行之间可经键盘重排（项目页的
+   * Heading、分组视图的组、Upcoming 的日期各成一组）。无此字段的行不可重排。
+   */
+  sortGroup?: string;
 }
 
 interface SelectionState {
@@ -51,9 +90,16 @@ interface SelectionState {
   scopeOrder: string[];
   /** scope 显式排序号（默认 0）：同页多个列表挂载时机不定时，按它确定先后，同号按注册顺序。 */
   scopeRank: Record<string, number>;
+  /** scope 登记的能力（排序写回等）。 */
+  scopeActions: Record<string, SelectionScopeActions>;
   /** 替换选中；anchorId 缺省为首项（单选时即该行）。 */
   setSelection: (ids: string[], anchorId?: string | null) => void;
-  registerScope: (key: string, rows: SelectionRow[], rank?: number) => void;
+  registerScope: (
+    key: string,
+    rows: SelectionRow[],
+    rank?: number,
+    actions?: SelectionScopeActions,
+  ) => void;
   unregisterScope: (key: string) => void;
   /** 清空 selection（页面切换、点击空白时）。 */
   clearSelection: () => void;
@@ -65,9 +111,10 @@ export const useSelectionStore = create<SelectionState>()((set) => ({
   scopes: {},
   scopeOrder: [],
   scopeRank: {},
+  scopeActions: {},
   setSelection: (ids, anchorId) =>
     set({ selectedIds: ids, anchorId: anchorId === undefined ? (ids[0] ?? null) : anchorId }),
-  registerScope: (key, rows, rank = 0) =>
+  registerScope: (key, rows, rank = 0, actions) =>
     set((state) => {
       const known = key in state.scopes;
       return {
@@ -75,6 +122,10 @@ export const useSelectionStore = create<SelectionState>()((set) => ({
         scopeOrder: known ? state.scopeOrder : [...state.scopeOrder, key],
         scopeRank:
           state.scopeRank[key] === rank ? state.scopeRank : { ...state.scopeRank, [key]: rank },
+        scopeActions:
+          state.scopeActions[key] === actions
+            ? state.scopeActions
+            : { ...state.scopeActions, [key]: actions ?? {} },
       };
     }),
   unregisterScope: (key) =>
@@ -84,7 +135,14 @@ export const useSelectionStore = create<SelectionState>()((set) => ({
       delete scopes[key];
       const scopeRank = { ...state.scopeRank };
       delete scopeRank[key];
-      return { scopes, scopeRank, scopeOrder: state.scopeOrder.filter((k) => k !== key) };
+      const scopeActions = { ...state.scopeActions };
+      delete scopeActions[key];
+      return {
+        scopes,
+        scopeRank,
+        scopeActions,
+        scopeOrder: state.scopeOrder.filter((k) => k !== key),
+      };
     }),
   clearSelection: () => set({ selectedIds: [], anchorId: null }),
 }));
@@ -150,4 +208,63 @@ export function contextMenuTargets(id: string): string[] {
   if (selected.length >= 2 && selected.includes(id)) return selected;
   if (state.selectedIds.length >= 2) state.setSelection([id]);
   return [id];
+}
+
+/** 含该行的 scope（行序与能力）；不在任何 scope 中返回 null。 */
+export function scopeOfRow(
+  id: string,
+): { rows: SelectionRow[]; actions: SelectionScopeActions } | null {
+  const state = useSelectionStore.getState();
+  for (const key of state.scopeOrder) {
+    const rows = state.scopes[key] ?? [];
+    if (rows.some((row) => row.id === id)) return { rows, actions: state.scopeActions[key] ?? {} };
+  }
+  return null;
+}
+
+/**
+ * 键盘排序（⌘↑/⌘↓ 一步、⌥⌘↑/⌥⌘↓ 到顶 / 到底）：把选中行作为一个整块，在
+ * 同级（同 sortGroup）行之间移动；其他行（Heading、组头、别组的行）原位不动。
+ * 选中行须同在一个 sortGroup 里；无法移动（已在边界、跨组、不可排序）时返回 null。
+ */
+export function reorderedRowIds(
+  rows: readonly SelectionRow[],
+  selectedIds: readonly string[],
+  direction: ReorderDirection,
+): string[] | null {
+  const selected = new Set(selectedIds);
+  const picked = rows.filter((row) => selected.has(row.id));
+  if (picked.length === 0) return null;
+  const group = picked[0].sortGroup;
+  if (group === undefined || picked.some((row) => row.sortGroup !== group)) return null;
+
+  const siblings = rows.filter((row) => row.sortGroup === group);
+  const rest = siblings.filter((row) => !selected.has(row.id));
+  const first = siblings.findIndex((row) => selected.has(row.id));
+  const last =
+    siblings.length - 1 - [...siblings].reverse().findIndex((row) => selected.has(row.id));
+  // 选中块之前 / 之后（含块内间隙）的非选中同级行数
+  const restBefore = siblings.slice(0, first).filter((row) => !selected.has(row.id)).length;
+  const restThrough = siblings.slice(0, last).filter((row) => !selected.has(row.id)).length;
+  let at: number;
+  switch (direction) {
+    case 'up':
+      at = Math.max(0, restBefore - 1);
+      break;
+    case 'down':
+      at = Math.min(rest.length, restThrough + 1);
+      break;
+    case 'top':
+      at = 0;
+      break;
+    case 'bottom':
+      at = rest.length;
+      break;
+  }
+  const nextSiblings = [...rest.slice(0, at), ...picked, ...rest.slice(at)];
+  if (nextSiblings.every((row, i) => row.id === siblings[i].id)) return null;
+
+  // 同级行按新顺序填回原槽位
+  let cursor = 0;
+  return rows.map((row) => (row.sortGroup === group ? nextSiblings[cursor++].id : row.id));
 }

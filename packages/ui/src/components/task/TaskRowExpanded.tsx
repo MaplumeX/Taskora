@@ -15,6 +15,7 @@ import {
   isToday,
   parseCalendarDate,
   useAddAttachmentFiles,
+  useUiInteractionStore,
   useUpdateTask,
 } from '@taskora/api';
 import { toast } from 'sonner';
@@ -43,6 +44,16 @@ export function TaskRowExpanded({ task, current }: Props) {
 
   const subtasks = current.subtasks ?? [];
   const subtaskListRef = React.useRef<TaskSubtaskListHandle>(null);
+  // ⇧⌘C：新建子任务草稿。等展开时标题框的自动聚焦（rAF）过去再聚焦草稿。
+  const subtaskDraftRequested = useUiInteractionStore((s) => s.subtaskDraftTaskId === task.id);
+  React.useEffect(() => {
+    if (!subtaskDraftRequested) return;
+    if (!useUiInteractionStore.getState().takeSubtaskDraft(task.id)) return;
+    // 取走请求会让本 effect 重跑，不随之取消（卸载后 ref 为空，调用无效）。
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => subtaskListRef.current?.startDraft());
+    });
+  }, [subtaskDraftRequested, task.id]);
   const attachments = current.attachments ?? [];
   const addAttachmentFiles = useAddAttachmentFiles();
   const fileInputRef = React.useRef<HTMLInputElement>(null);

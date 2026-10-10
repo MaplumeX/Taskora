@@ -139,6 +139,7 @@ export default function AreaDetail() {
         kind: 'project' as const,
         completed: false,
         tagIds: (p.tags ?? []).map((tag) => tag.id),
+        item: p,
       })),
     [orderedProjects],
   );

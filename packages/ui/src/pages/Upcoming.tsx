@@ -418,7 +418,7 @@ export default function Upcoming() {
     onDragCancel: handleDragCancel,
   });
 
-  // 注册可遍历行（按渲染顺序：本周每天，之后各月）。
+  // 注册可遍历行（按渲染顺序：本周每天，之后各月）。⌘↑/⌘↓ 只在同一天内重排。
   const rows = useMemo(
     () =>
       groups
@@ -429,10 +429,26 @@ export default function Upcoming() {
           completed: item.type === 'task' ? item.status === 'COMPLETED' : false,
           cancelled: item.type === 'task' ? item.status === 'CANCELLED' : false,
           tagIds: item.tags.map((tag) => tag.id),
+          item,
+          sortGroup: item.scheduledDate ? toDateKey(item.scheduledDate) : undefined,
         })),
     [groups],
   );
-  useSelectionScope(rows);
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+  const reorderFeedMutate = reorderFeed.mutate;
+  const scopeActions = useMemo(
+    () => ({
+      reorder: (ids: string[]) => {
+        const kindById = new Map(rowsRef.current.map((row) => [row.id, row.kind]));
+        reorderFeedMutate(ids.map((id) => ({ type: kindById.get(id) ?? 'task', id })), {
+          onError: () => toast.error(t('common:operationFailed')),
+        });
+      },
+    }),
+    [reorderFeedMutate, t],
+  );
+  useSelectionScope(rows, 0, scopeActions);
 
   const toggleComplete = (item: FeedItem) => {
     if (item.type !== 'task') return;

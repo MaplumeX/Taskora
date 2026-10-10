@@ -65,7 +65,7 @@ export function MovePicker({ current, onSelect }: Props) {
   );
 }
 
-function MoveTargetRow({ target }: { target: MoveTarget }) {
+export function MoveTargetRow({ target }: { target: MoveTarget }) {
   const { t } = useTranslation();
   switch (target.kind) {
     case 'inbox':

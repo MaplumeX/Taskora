@@ -127,6 +127,7 @@ function LaterProjectsEntry({ count }: { count: number }) {
     <NavLink
       {...flipId('later-projects')}
       to="/later-projects"
+      data-sidebar-nav="/later-projects"
       className={({ isActive }) =>
         sidebarRowClass(isActive, isActive ? undefined : 'text-muted-foreground')
       }
