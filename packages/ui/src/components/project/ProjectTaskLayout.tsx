@@ -56,6 +56,7 @@ import {
   useCollapseAfterDragStart,
   useFlipList,
 } from '../../lib/dnd';
+import { useLingeringExpanded } from '../../lib/useLingeringExpanded';
 import { ProjectHeadingRow } from './ProjectHeadingRow';
 import { DragCountBadge } from '@/components/common/DragCountBadge';
 
@@ -508,13 +509,15 @@ function SortableHeadingBlock({
 
 export function ProjectTaskLayout({
   projectId,
-  tasks,
+  tasks: sourceTasks,
   headings,
   emptyHint,
   visibleTaskIds = null,
   filteredEmptyHint,
 }: Props) {
   const { t } = useTranslation();
+  // 展开中的任务编辑后离开本项目视图（如立即模式下完成）时留在原位，收起后才离开。
+  const tasks = useLingeringExpanded(sourceTasks, taskIdOf);
   const serverLayout = React.useMemo(() => normalizeLayout(tasks, headings), [tasks, headings]);
   const [layout, setLayout] = React.useState(serverLayout);
   const [activeTask, setActiveTask] = React.useState<TaskResponseDto | null>(null);
@@ -968,3 +971,7 @@ export function ProjectTaskLayout({
 }
 
 export { applyLayoutDrag, filterLayout, normalizeLayout, serializeLayout };
+
+function taskIdOf(task: TaskResponseDto) {
+  return task.id;
+}

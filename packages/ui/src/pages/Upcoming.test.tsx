@@ -106,6 +106,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useFeedQuery: vi.fn(),
   useProjectsQuery: () => ({ data: [] }),
   useAreasQuery: () => ({ data: [] }),
+  useTaskQuery: () => ({ data: undefined, isError: false }),
   useTagsQuery: () => ({ data: [] }),
   useEffectiveTags: () => ({ ofFeedItem: () => [] }),
   useRepeatPreviews: () => harness.previews,
@@ -1000,5 +1001,48 @@ describe('Upcoming — Sidebar Drop', () => {
     expect(payload.tasks.map((t: { id: string }) => t.id)).toEqual(['task-1', 'task-2']);
     expect(taskGroup('task-1')).toBe('date:2026-10-07');
     expect(harness.update).not.toHaveBeenCalled();
+  });
+});
+
+describe('Upcoming — 展开暂留', () => {
+  function feed(items: FeedItem[]) {
+    vi.mocked(useFeedQuery).mockReturnValue({
+      data: items,
+      isLoading: false,
+      isError: false,
+    } as never);
+  }
+
+  const page = (
+    <MemoryRouter>
+      <Upcoming />
+    </MemoryRouter>
+  );
+
+  it('展开中的任务改到另一个未来日期时留在原日期原位，收起后才移过去', () => {
+    act(() => useUiInteractionStore.setState({ expandedId: 'task-1' }));
+    const { rerender } = renderUpcoming([
+      task('task-1', '2026-10-07'),
+      task('task-2', '2026-10-07'),
+    ]);
+
+    feed([task('task-2', '2026-10-07'), task('task-1', '2026-10-09')]);
+    rerender(page);
+    expect(taskGroup('task-1')).toBe('date:2026-10-07');
+
+    act(() => useUiInteractionStore.setState({ expandedId: null }));
+    expect(taskGroup('task-1')).toBe('date:2026-10-09');
+  });
+
+  it('展开中的任务改到今天离开 Upcoming 时留在原日期，收起后才离开', () => {
+    act(() => useUiInteractionStore.setState({ expandedId: 'task-1' }));
+    const { rerender } = renderUpcoming([task('task-1', '2026-10-07')]);
+
+    feed([]);
+    rerender(page);
+    expect(taskGroup('task-1')).toBe('date:2026-10-07');
+
+    act(() => useUiInteractionStore.setState({ expandedId: null }));
+    expect(screen.queryByTestId('row-task-1')).not.toBeInTheDocument();
   });
 });

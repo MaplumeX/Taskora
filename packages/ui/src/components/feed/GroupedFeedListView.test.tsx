@@ -191,6 +191,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
     useUncompleteProject: () => ({ mutate: harness.uncompleteProjectMutate }),
     useProjectsQuery: () => ({ data: harness.projects }),
     useAreasQuery: () => ({ data: harness.areas }),
+    useTaskQuery: () => ({ data: undefined, isError: false }),
     useUpdateArea: () => ({ mutate: vi.fn() }),
     useDeleteArea: () => ({ mutate: vi.fn() }),
     markNewInTodaySeen: harness.markNewInTodaySeen,
@@ -1182,3 +1183,33 @@ describe('GroupedFeedListView — New in Today', () => {
   });
 });
 
+
+describe('GroupedFeedListView — 展开暂留', () => {
+  function rowOrder() {
+    return Array.from(
+      document.querySelectorAll<HTMLElement>(
+        '[data-task-container="ungrouped"] [data-sortable-task-id]',
+      ),
+    ).map((node) => node.dataset.sortableTaskId);
+  }
+
+  function inbox(items: FeedItem[]) {
+    return (
+      <MemoryRouter>
+        <GroupedFeedListView items={items} grouping={false} />
+      </MemoryRouter>
+    );
+  }
+
+  it('展开中的任务被设为今天离开 Inbox 后留在原位，收起后才离开', () => {
+    const [a, b, c] = [taskItem('a'), taskItem('b'), taskItem('c')];
+    act(() => useUiInteractionStore.setState({ expandedId: 'b' }));
+    const { rerender } = renderDnd(inbox([a, b, c]));
+
+    rerender(inbox([a, c]));
+    expect(rowOrder()).toEqual(['a', 'b', 'c']);
+
+    act(() => useUiInteractionStore.setState({ expandedId: null }));
+    expect(rowOrder()).toEqual(['a', 'c']);
+  });
+});

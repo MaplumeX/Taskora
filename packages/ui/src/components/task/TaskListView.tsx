@@ -16,6 +16,8 @@ import { useSelectionScope } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
 import { toast } from 'sonner';
 
+import { useLingeringExpanded } from '../../lib/useLingeringExpanded';
+
 interface Props {
   tasks: TaskResponseDto[];
   emptyHint?: string;
@@ -65,6 +67,8 @@ export function TaskListView({
     [reorderable, reorder],
   );
   useSelectionScope(rows, selectionRank, scopeActions);
+  // 注册的是未暂留的行：暂留行据此判断任务是否已出现在同页另一个列表里。
+  const shownTasks = useLingeringExpanded(tasks, taskIdOf, { unlessShownElsewhere: true });
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
 
@@ -91,7 +95,7 @@ export function TaskListView({
   return (
     <div className="flex flex-col" onClick={handleBlankClick}>
       <TaskList
-        tasks={tasks}
+        tasks={shownTasks}
         projects={projectMap}
         areas={areaMap}
         selectedIds={selectedIds}
@@ -106,4 +110,8 @@ export function TaskListView({
       />
     </div>
   );
+}
+
+function taskIdOf(task: TaskResponseDto) {
+  return task.id;
 }
