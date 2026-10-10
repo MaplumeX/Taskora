@@ -63,6 +63,7 @@ import {
   useFlipList,
   useHeldValue,
 } from '../lib/dnd';
+import { useLingeringExpanded } from '@/lib/useLingeringExpanded';
 
 interface ScheduleDrag {
   origin: TaskFeedItem;
@@ -94,8 +95,13 @@ export default function Upcoming() {
     filtering,
     bar,
   } = useTagFilter(allItems, effectiveTags.ofFeedItem);
+  // 展开中的任务改到今天 / Someday、或改到另一个未来日期时留在原日期原位，
+  // 收起后才离开 / 移到新日期。
+  const lingeringItems = useLingeringExpanded(filteredItems, feedItemIdOf, {
+    stays: sameScheduledDate,
+  });
   // 松手立即移到目标分组，等更新 hook 的乐观数据追上，避免闪回原日期。
-  const [shownItems, holdItems] = useHeldValue(filteredItems, scheduleSignature);
+  const [shownItems, holdItems] = useHeldValue(lingeringItems, scheduleSignature);
   const [drag, setDrag] = useState<ScheduleDrag | null>(null);
   const dragRef = useRef<ScheduleDrag | null>(null);
   const lastTargetRef = useRef<UpcomingDragTarget | null>(null);
@@ -624,4 +630,13 @@ function withScheduleDragGroup(
     return { ...item, scheduledType: ScheduledType.DATE, scheduledDate: moved.scheduledDate };
   });
   return expandDragGroup(items, feedKey(moved), placed, feedKey);
+}
+
+function feedItemIdOf(item: FeedItem) {
+  return item.id;
+}
+
+function sameScheduledDate(before: FeedItem, now: FeedItem) {
+  const key = (item: FeedItem) => (item.scheduledDate ? toDateKey(item.scheduledDate) : null);
+  return key(before) === key(now);
 }
