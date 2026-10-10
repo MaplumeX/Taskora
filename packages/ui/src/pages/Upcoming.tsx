@@ -63,7 +63,7 @@ import {
   useFlipList,
   useHeldValue,
 } from '../lib/dnd';
-import { useLingeringExpanded } from '@/lib/useLingeringExpanded';
+import { useLingeringExpanded } from '../lib/useLingeringExpanded';
 
 interface ScheduleDrag {
   origin: TaskFeedItem;

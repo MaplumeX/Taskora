@@ -56,7 +56,7 @@ import {
   useCollapseAfterDragStart,
   useFlipList,
 } from '../../lib/dnd';
-import { useLingeringExpanded } from '@/lib/useLingeringExpanded';
+import { useLingeringExpanded } from '../../lib/useLingeringExpanded';
 import { ProjectHeadingRow } from './ProjectHeadingRow';
 import { DragCountBadge } from '@/components/common/DragCountBadge';
 

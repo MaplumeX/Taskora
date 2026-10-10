@@ -16,7 +16,7 @@ import { useSelectionScope } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
 import { toast } from 'sonner';
 
-import { useLingeringExpanded } from '@/lib/useLingeringExpanded';
+import { useLingeringExpanded } from '../../lib/useLingeringExpanded';
 
 interface Props {
   tasks: TaskResponseDto[];

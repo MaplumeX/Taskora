@@ -64,7 +64,7 @@ import {
   type SelectionRow,
 } from '@taskora/api';
 import type { ScheduledBadgeMode } from '@/components/task/TaskDateBadge';
-import { useLingeringExpanded } from '@/lib/useLingeringExpanded';
+import { useLingeringExpanded } from '../../lib/useLingeringExpanded';
 
 interface Props {
   items: FeedItem[];
