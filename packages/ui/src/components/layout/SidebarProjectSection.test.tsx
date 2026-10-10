@@ -1,6 +1,6 @@
 import * as React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import {
   ProjectBucket,
   ProjectStatus,
@@ -40,6 +40,7 @@ const harness = vi.hoisted(() => ({
   updateProjectMutate: vi.fn(),
   reorderAreasMutate: vi.fn(),
   toastError: vi.fn(),
+  createProjectMutate: vi.fn(),
 }));
 
 vi.mock('@dnd-kit/core', async () => {
@@ -119,6 +120,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useReorderProjects: () => ({ mutate: harness.reorderProjectsMutate }),
   useUpdateProject: () => ({ mutate: harness.updateProjectMutate }),
   useReorderAreas: () => ({ mutate: harness.reorderAreasMutate }),
+  useCreateProject: () => ({ mutate: harness.createProjectMutate }),
 }));
 
 import { SidebarProjectSection } from './SidebarProjectSection';
@@ -235,6 +237,7 @@ beforeEach(() => {
   harness.updateProjectMutate.mockReset();
   harness.reorderAreasMutate.mockReset();
   harness.toastError.mockReset();
+  harness.createProjectMutate.mockReset();
 });
 
 describe('SidebarProjectSection project drag preview', () => {
@@ -647,5 +650,85 @@ describe('SidebarProjectSection later projects', () => {
     endProjectDrag('t', 'proj:s');
 
     expect(harness.reorderProjectsMutate).toHaveBeenCalledWith(['t', 'ls', 's'], expect.any(Object));
+  });
+});
+
+describe('SidebarProjectSection — Magic Plus（手机首页）', () => {
+  function renderHome() {
+    return render(
+      <MemoryRouter initialEntries={['/home']}>
+        <Routes>
+          <Route
+            path="/home"
+            element={<SidebarProjectSection projects={projects} areas={areas} magicPlus />}
+          />
+          <Route path="/projects/:id" element={<div data-testid="project-page" />} />
+        </Routes>
+      </MemoryRouter>,
+      { wrapper: AppDndProvider },
+    );
+  }
+
+  function dropMagicPlus(overId: string, pointerY = 30, delta = { x: -40, y: -400 }) {
+    act(() => handlers().onDragStart?.({ active: { id: 'magic-plus' } }));
+    harness.pointerCollisionIds = [overId];
+    act(() => {
+      handlers().collisionDetection?.({
+        active: { id: 'magic-plus' },
+        pointerCoordinates: { x: 10, y: pointerY },
+        droppableContainers: [{ id: overId }],
+        droppableRects: new Map([[overId, { top: 0, height: 40 }]]),
+      });
+      handlers().onDragOver?.({ active: { id: 'magic-plus' }, over: { id: overId } });
+    });
+    harness.pointerCollisionIds = [];
+    act(() => {
+      handlers().onDragEnd?.({ active: { id: 'magic-plus' }, over: { id: overId }, delta });
+    });
+  }
+
+  it('dropped between two projects of an area creates a project there and opens it', () => {
+    renderHome();
+    dropMagicPlus('proj:a1');
+
+    expect(harness.createProjectMutate).toHaveBeenCalledWith(
+      { title: '', areaId: 'a' },
+      expect.any(Object),
+    );
+    act(() => {
+      harness.createProjectMutate.mock.calls[0][1].onSuccess(project('new', 'a'));
+    });
+    expect(harness.reorderProjectsMutate).toHaveBeenCalledWith(['s', 'a1', 'new', 'a2', 'b1']);
+    expect(screen.getByTestId('project-page')).toBeInTheDocument();
+  });
+
+  it('dropped among projects without an area creates a top-level project', () => {
+    renderHome();
+    dropMagicPlus('project-heading:standalone');
+    expect(harness.createProjectMutate).toHaveBeenCalledWith({ title: '' }, expect.any(Object));
+  });
+
+  it('dragging back to the button cancels and removes the gap', () => {
+    renderHome();
+    dropMagicPlus('proj:a1', 30, { x: 5, y: -10 });
+    expect(harness.createProjectMutate).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('project-placeholder-magic-plus-draft')).toBeNull();
+  });
+
+  it('a failed create removes the gap', () => {
+    renderHome();
+    dropMagicPlus('proj:a1');
+    act(() => {
+      harness.createProjectMutate.mock.calls[0][1].onError(new Error('offline'));
+    });
+    expect(harness.toastError).toHaveBeenCalled();
+    expect(harness.reorderProjectsMutate).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('project-placeholder-magic-plus-draft')).toBeNull();
+  });
+
+  it('the desktop sidebar (no magicPlus) ignores Magic Plus', () => {
+    renderSection();
+    act(() => handlers().onDragStart?.({ active: { id: 'magic-plus' } }));
+    expect(screen.queryByTestId('project-placeholder-magic-plus-draft')).toBeNull();
   });
 });

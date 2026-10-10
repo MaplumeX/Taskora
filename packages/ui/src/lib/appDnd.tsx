@@ -1,9 +1,11 @@
 import * as React from 'react';
 import {
   DndContext,
+  DragOverlay,
   KeyboardSensor,
   MeasuringStrategy,
   MouseSensor,
+  PointerSensor,
   TouchSensor,
   closestCenter,
   useDroppable,
@@ -21,7 +23,11 @@ import {
   type DroppableContainer,
   type KeyboardCoordinateGetter,
   type KeyboardSensorOptions,
+  type MouseSensorOptions,
+  type PointerSensorOptions,
+  type TouchSensorOptions,
 } from '@dnd-kit/core';
+import { Plus } from 'lucide-react';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 
 import {
@@ -34,6 +40,7 @@ import {
   type SidebarDropTarget,
 } from '@/components/layout/sidebarDrop';
 import { dropAnimation } from './dnd';
+import { MAGIC_PLUS_CANCEL_RADIUS, MAGIC_PLUS_INBOX_ID, isMagicPlus } from './magicPlus';
 
 /**
  * 全应用唯一的 DndContext（ADR 0018）：侧边栏与内容区共用，任务 / 项目行
@@ -54,6 +61,11 @@ import { dropAnimation } from './dnd';
  *
  * 只能在一个 surface 里同时存在的 DragOverlay：overlayActive 为 true 的
  * surface 才渲染 DragOverlay（DndContext 只有一个浮层测量位）。
+ *
+ * Magic Plus（手机端添加按钮的拖动，见 lib/magicPlus.ts）：由声明了
+ * magicPlus 的 surface 认领（当前页的主列表），浮层是 provider 自己渲染的
+ * 圆形按钮；拖回按钮原位附近松手视为取消。指针在左下角 Inbox 目标上时
+ * over 为该目标（同侧边栏，列表收回空位），在其上松手由目标自己处理。
  */
 
 export interface DndSurface {
@@ -63,6 +75,8 @@ export interface DndSurface {
   /** 键盘拖拽的坐标计算（仅对 keyboardDragData 标记过的拖拽源生效）。 */
   keyboardCoordinates?: KeyboardCoordinateGetter;
   sidebarPayload?: (activeId: string) => SidebarDropPayload | null;
+  /** 接收 Magic Plus 拖动（把新建的空任务放到落点）。 */
+  magicPlus?: boolean;
   onDragStart?: (event: DragStartEvent) => void;
   onDragMove?: (event: DragMoveEvent) => void;
   onDragOver?: (event: DragOverEvent) => void;
@@ -100,9 +114,63 @@ class OptInKeyboardSensor extends KeyboardSensor {
   ];
 }
 
+interface ActivationContext {
+  active: { data: { current?: Record<string, unknown> | undefined } };
+}
+
+const isMagicPlusSource = (context?: ActivationContext) =>
+  context?.active.data.current?.magicPlus === true;
+
+/**
+ * Magic Plus 专用：按下后移动 8px 即开始拖（不需要长按——按钮固定在角落，
+ * 不在滚动容器里）。用 pointer 事件，与下面两个只认列表行的传感器各占一个
+ * 事件名（dnd-kit 同一拖拽源上同名 activator 只保留最后一个）。按钮需
+ * `touch-action: none`，否则触屏移动会被浏览器当作平移而 pointercancel。
+ */
+class MagicPlusSensor extends PointerSensor {
+  static activators = [
+    {
+      eventName: 'onPointerDown' as const,
+      handler: (
+        event: React.PointerEvent,
+        options: PointerSensorOptions,
+        context?: ActivationContext,
+      ) =>
+        isMagicPlusSource(context) && PointerSensor.activators[0].handler(event, options),
+    },
+  ];
+}
+
+class RowMouseSensor extends MouseSensor {
+  static activators = [
+    {
+      eventName: 'onMouseDown' as const,
+      handler: (event: React.MouseEvent, options: MouseSensorOptions, context?: ActivationContext) =>
+        !isMagicPlusSource(context) && MouseSensor.activators[0].handler(event, options),
+    },
+  ];
+}
+
+class RowTouchSensor extends TouchSensor {
+  static activators = [
+    {
+      eventName: 'onTouchStart' as const,
+      handler: (event: React.TouchEvent, options: TouchSensorOptions, context?: ActivationContext) =>
+        !isMagicPlusSource(context) && TouchSensor.activators[0].handler(event, options),
+    },
+  ];
+}
+
+/** overlaySurface 的特殊值：Magic Plus 浮层由 provider 渲染。 */
+const MAGIC_PLUS_OVERLAY = 'magic-plus-overlay';
+
 interface AppDndValue {
   register: (id: string, surface: React.MutableRefObject<DndSurface>) => () => void;
   overlaySurface: string | null;
+  /** 正在拖动 Magic Plus（Inbox 目标据此浮现）。 */
+  magicPlusDragging: boolean;
+  /** 当前有列表接收 Magic Plus（添加按钮据此决定可否拖动）。 */
+  magicPlusAvailable: boolean;
   overSidebar: boolean;
   sidebarAreaRef: React.MutableRefObject<HTMLElement | null>;
 }
@@ -145,13 +213,26 @@ export function AppDndProvider({
   onSidebarDropRef.current = onSidebarDrop;
   const [overlaySurface, setOverlaySurface] = React.useState<string | null>(null);
   const [overSidebar, setOverSidebar] = React.useState(false);
+  const [magicPlusDragging, setMagicPlusDragging] = React.useState(false);
+  const [magicPlusSurfaces, setMagicPlusSurfaces] = React.useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
   const [autoScroll, setAutoScroll] = React.useState<boolean | AutoScrollOptions>(true);
 
   const register = React.useCallback(
     (id: string, surface: React.MutableRefObject<DndSurface>) => {
       surfacesRef.current.set(id, surface);
+      const accepts = !!surface.current.magicPlus;
+      if (accepts) setMagicPlusSurfaces((prev) => new Set(prev).add(id));
       return () => {
         surfacesRef.current.delete(id);
+        if (accepts) {
+          setMagicPlusSurfaces((prev) => {
+            const next = new Set(prev);
+            next.delete(id);
+            return next;
+          });
+        }
       };
     },
     [],
@@ -159,6 +240,12 @@ export function AppDndProvider({
 
   const activeFor = React.useCallback((activeId: string): ActiveDrag | null => {
     if (activeRef.current?.id === activeId) return activeRef.current;
+    if (isMagicPlus(activeId)) {
+      // 后登记的优先：页面切换时新页的列表晚于旧页卸载前登记。
+      const accepting = [...surfacesRef.current].filter(([, s]) => s.current.magicPlus);
+      const [surfaceId, surface] = accepting[accepting.length - 1] ?? [];
+      return surfaceId && surface ? { id: activeId, surfaceId, surface, payloadKind: null } : null;
+    }
     for (const [surfaceId, surface] of surfacesRef.current) {
       if (!surface.current.owns(activeId)) continue;
       const payloadKind = surface.current.sidebarPayload?.(activeId)?.kind ?? null;
@@ -179,16 +266,22 @@ export function AppDndProvider({
   // 鼠标：移动 5px 激活；触摸：按住 300ms 再移动才激活，避免与列表滚动
   // 冲突（PointerSensor 会在触摸滑动 5px 时误触拖拽）。
   const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
+    useSensor(MagicPlusSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(RowMouseSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(RowTouchSensor, { activationConstraint: { delay: 300, tolerance: 8 } }),
     useSensor(OptInKeyboardSensor, { coordinateGetter: keyboardCoordinates }),
   );
 
   const collisionDetection = React.useCallback<CollisionDetection>(
     (args) => {
+      const pointer = args.pointerCoordinates;
+      if (isMagicPlus(String(args.active.id)) && pointer) {
+        const inbox = args.droppableContainers.find(({ id }) => id === MAGIC_PLUS_INBOX_ID);
+        const rect = inbox && liveRect(inbox, args.droppableRects);
+        if (rect && contains(rect, pointer.x, pointer.y)) return [{ id: MAGIC_PLUS_INBOX_ID }];
+      }
       const active = activeFor(String(args.active.id));
       if (!active) return [];
-      const pointer = args.pointerCoordinates;
       const area = sidebarAreaRef.current?.getBoundingClientRect();
       if (active.payloadKind && pointer && area && contains(area, pointer.x, pointer.y)) {
         // 侧边栏的行随侧边栏滚动，按当前位置命中（缓存的测量可能已过时）。
@@ -203,7 +296,7 @@ export function AppDndProvider({
       const surface = active.surface.current;
       const own = args.droppableContainers.filter((container) => {
         const id = String(container.id);
-        return !isSidebarDropId(id) && surface.owns(id);
+        return !isSidebarDropId(id) && id !== MAGIC_PLUS_INBOX_ID && surface.owns(id);
       });
       return (surface.collisionDetection ?? closestCenter)({ ...args, droppableContainers: own });
     },
@@ -214,9 +307,21 @@ export function AppDndProvider({
   const endDrag = () => {
     activeRef.current = null;
     setAutoScroll(true);
+    setMagicPlusDragging(false);
   };
 
   const handleDragStart = (event: DragStartEvent) => {
+    if (isMagicPlus(String(event.active.id))) {
+      const active = activeFor(String(event.active.id));
+      activeRef.current = active;
+      setOverSidebar(false);
+      setOverlaySurface(MAGIC_PLUS_OVERLAY);
+      setMagicPlusDragging(true);
+      if (!active) return;
+      setAutoScroll(active.surface.current.autoScroll ?? true);
+      active.surface.current.onDragStart?.(event);
+      return;
+    }
     const found = activeFor(String(event.active.id));
     // Sidebar Drop 只属于桌面 / Web 指针交互：触摸长按只负责排序（带触屏的
     // 桌面上侧边栏可见，也不接收）。
@@ -247,8 +352,22 @@ export function AppDndProvider({
   const handleDragEnd = (event: DragEndEvent) => {
     const active = activeRef.current;
     endDrag();
+    if (event.over?.id === MAGIC_PLUS_INBOX_ID) {
+      // 落在 Inbox 目标上：列表复位，由目标打开快速添加卡片。
+      active?.surface.current.onDragCancel?.();
+      (event.over.data.current as MagicPlusInboxData | undefined)?.onDrop();
+      return;
+    }
     if (!active) return;
     const surface = active.surface.current;
+    if (
+      isMagicPlus(active.id) &&
+      Math.hypot(event.delta.x, event.delta.y) < MAGIC_PLUS_CANCEL_RADIUS
+    ) {
+      // 拖回按钮原位：取消，不新建。
+      surface.onDragCancel?.();
+      return;
+    }
     const overId = event.over ? String(event.over.id) : null;
     if (overId === null || !isSidebarDropId(overId)) {
       surface.onDragEnd?.(event);
@@ -264,14 +383,23 @@ export function AppDndProvider({
   };
 
   const handleDragCancel = () => {
+    setMagicPlusDragging(false);
     const active = activeRef.current;
     endDrag();
     active?.surface.current.onDragCancel?.();
   };
 
+  const magicPlusAvailable = magicPlusSurfaces.size > 0;
   const value = React.useMemo<AppDndValue>(
-    () => ({ register, overlaySurface, overSidebar, sidebarAreaRef }),
-    [register, overlaySurface, overSidebar],
+    () => ({
+      register,
+      overlaySurface,
+      magicPlusDragging,
+      magicPlusAvailable,
+      overSidebar,
+      sidebarAreaRef,
+    }),
+    [register, overlaySurface, magicPlusDragging, magicPlusAvailable, overSidebar],
   );
 
   return (
@@ -289,6 +417,17 @@ export function AppDndProvider({
         onDragCancel={handleDragCancel}
       >
         {children}
+        {overlaySurface === MAGIC_PLUS_OVERLAY && (
+          // 跟手的是按钮本身；松手后条目已在列表里展开，不飞回。
+          <DragOverlay className="pointer-events-none" dropAnimation={null}>
+            <div
+              aria-hidden="true"
+              className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-popover"
+            >
+              <Plus className="h-6 w-6" />
+            </div>
+          </DragOverlay>
+        )}
       </DndContext>
     </AppDndContext.Provider>
   );
@@ -310,11 +449,42 @@ export function useDndSurface(surface: DndSurface) {
   const id = React.useId();
   const surfaceRef = React.useRef(surface);
   surfaceRef.current = surface;
-  React.useLayoutEffect(() => register?.(id, surfaceRef), [register, id]);
+  // 是否接收 Magic Plus 变化时重新登记（provider 据此告诉添加按钮能否拖动）。
+  const acceptsMagicPlus = !!surface.magicPlus;
+  React.useLayoutEffect(
+    () => register?.(id, surfaceRef),
+    [register, id, acceptsMagicPlus],
+  );
   return {
     overlayActive: app?.overlaySurface === id,
     dropAnimation: app?.overSidebar ? null : dropAnimation,
   } satisfies { overlayActive: boolean; dropAnimation: DropAnimation | null };
+}
+
+interface MagicPlusInboxData {
+  onDrop: () => void;
+}
+
+/**
+ * 左下角 Inbox 目标（Magic Plus 拖动中浮现）：返回是否在拖、指针是否在其上；
+ * 在其上松手调用 onDrop。
+ */
+/** 当前页有列表接收 Magic Plus（不在应用壳里时为 false）。 */
+export function useMagicPlusAvailable() {
+  return React.useContext(AppDndContext)?.magicPlusAvailable ?? false;
+}
+
+export function useMagicPlusInboxTarget(onDrop: () => void) {
+  const dragging = React.useContext(AppDndContext)?.magicPlusDragging ?? false;
+  const onDropRef = React.useRef(onDrop);
+  onDropRef.current = onDrop;
+  const data = React.useMemo<MagicPlusInboxData>(() => ({ onDrop: () => onDropRef.current() }), []);
+  const { setNodeRef, isOver } = useDroppable({
+    id: MAGIC_PLUS_INBOX_ID,
+    disabled: !dragging,
+    data,
+  });
+  return { dragging, isOver: dragging && isOver, setNodeRef };
 }
 
 interface SidebarDropData {

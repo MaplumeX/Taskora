@@ -47,6 +47,7 @@ const harness = vi.hoisted(() => ({
   closestCollisionIds: [] as string[],
   sidebarDrop: vi.fn(),
   markNewInTodaySeen: vi.fn(),
+  createTask: vi.fn(),
 }));
 
 vi.mock('@dnd-kit/core', async () => {
@@ -187,6 +188,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
     useUncancelTask: () => ({ mutate: vi.fn() }),
     useReorderFeed: () => ({ mutate: harness.reorderFeedMutate }),
     useUpdateTask: () => ({ mutate: harness.updateTaskMutate }),
+    useCreateTask: () => ({ mutateAsync: harness.createTask }),
     useCompleteProject: () => ({ mutate: harness.completeProjectMutate }),
     useUncompleteProject: () => ({ mutate: harness.uncompleteProjectMutate }),
     useProjectsQuery: () => ({ data: harness.projects }),
@@ -394,6 +396,7 @@ beforeEach(() => {
   harness.completeProjectMutate.mockReset();
   harness.uncompleteProjectMutate.mockReset();
   harness.markNewInTodaySeen.mockReset();
+  harness.createTask.mockReset();
   harness.toastSuccess.mockReset();
   harness.toastError.mockReset();
   window.localStorage.clear();
@@ -1183,6 +1186,95 @@ describe('GroupedFeedListView — New in Today', () => {
   });
 });
 
+
+describe('GroupedFeedListView — Magic Plus', () => {
+  /** 拖动 Magic Plus：可选地在 overId 上预览（edge 按指针在行下半），再松手。 */
+  async function dropMagicPlus(overId: string | null, delta = { x: -40, y: -300 }) {
+    act(() => {
+      handlers().onDragStart?.({ active: { id: 'magic-plus' } });
+    });
+    if (overId) {
+      harness.pointerCollisionIds = [overId];
+      act(() => {
+        handlers().collisionDetection?.({
+          active: { id: 'magic-plus' },
+          pointerCoordinates: { x: 20, y: 31 },
+          droppableContainers: [{ id: overId }],
+          droppableRects: new Map([[overId, { top: 10, height: 40 }]]),
+        });
+        handlers().onDragOver?.({ active: { id: 'magic-plus' }, over: { id: overId } });
+      });
+      harness.pointerCollisionIds = [];
+    }
+    await act(async () => {
+      handlers().onDragEnd?.({
+        active: { id: 'magic-plus' },
+        over: overId ? { id: overId } : null,
+        delta,
+      });
+    });
+  }
+
+  function created(id: string, opts: { projectId?: string | null } = {}) {
+    return { ...taskItem(id, opts), subtasks: [] };
+  }
+
+  it('drops a new task with the page context where it is released', async () => {
+    harness.createTask.mockResolvedValue(created('new'));
+    renderView([taskItem('t1'), taskItem('t2')]);
+
+    await dropMagicPlus('task:t1');
+
+    expect(harness.createTask).toHaveBeenCalledWith({
+      title: '',
+      scheduledType: ScheduledType.DATE,
+      scheduledDate: todayDateKey(),
+    });
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('t1', 'new', 't2'));
+    expect(useUiInteractionStore.getState().expandedId).toBe('new');
+  });
+
+  it('dropping into a project group creates the task in that project', async () => {
+    harness.projects = [project('p1')];
+    harness.createTask.mockResolvedValue(created('new', { projectId: 'p1' }));
+    renderView([taskItem('loose'), taskItem('in-p1', { projectId: 'p1' })]);
+
+    await dropMagicPlus('header:p1');
+
+    expect(harness.createTask).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'p1' }),
+    );
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('loose', 'in-p1', 'new'));
+  });
+
+  it('dragging back to the button cancels without creating', async () => {
+    renderView([taskItem('t1')]);
+
+    await dropMagicPlus('task:t1', { x: 4, y: -10 });
+
+    expect(harness.createTask).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-mock-task-id="magic-plus-draft"]')).toBeNull();
+  });
+
+  it('releasing without ever reaching the list creates nothing', async () => {
+    renderView([taskItem('t1')]);
+
+    await dropMagicPlus(null);
+
+    expect(harness.createTask).not.toHaveBeenCalled();
+  });
+
+  it('a failed create leaves no draft behind', async () => {
+    harness.createTask.mockRejectedValue(new Error('offline'));
+    renderView([taskItem('t1')]);
+
+    await dropMagicPlus('task:t1');
+
+    expect(harness.toastError).toHaveBeenCalled();
+    expect(harness.reorderFeedMutate).not.toHaveBeenCalled();
+    expect(document.querySelector('[data-mock-task-id="magic-plus-draft"]')).toBeNull();
+  });
+});
 
 describe('GroupedFeedListView — 展开暂留', () => {
   function rowOrder() {

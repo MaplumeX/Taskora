@@ -34,6 +34,7 @@ const harness = vi.hoisted(() => ({
     | null
     | ((event: KeyboardEvent, args: unknown) => unknown),
   sidebarDrop: vi.fn(),
+  createTask: vi.fn(),
 }));
 
 vi.mock('@dnd-kit/core', async () => {
@@ -154,6 +155,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
     useTaskQuery: () => ({ data: undefined, isError: false }),
     useReorderProjectHeadingLayout: () => ({ mutate: harness.saveMutate }),
     useCreateProjectHeading: () => ({ mutate: createHeadingMutate }),
+    useCreateTask: () => ({ mutateAsync: harness.createTask }),
     useTaskRowSelection: () => {
       const [selectedId, setSelectedId] = ReactModule.useState(harness.initialSelectedId);
       const [expandedId, setExpandedId] = ReactModule.useState(harness.initialExpandedId);
@@ -183,6 +185,8 @@ import {
   type LayoutState,
   layoutFromRowOrder,
   layoutWithHeadingFromTasks,
+  placeTask,
+  splitAtTask,
 } from './ProjectTaskLayout';
 import { useSelectionStore } from '@taskora/api';
 import { AppDndProvider } from '../../lib/appDnd';
@@ -440,6 +444,29 @@ describe('project task placement helpers', () => {
       moveTaskToPlacement(layout, 'task-a', { containerId: 'heading-1', index: 1 }),
     ).toBeNull();
     expect(layout).toEqual(snapshot);
+  });
+
+  it('placeTask inserts a task that is not in the layout yet (Magic Plus draft)', () => {
+    expect(placeTask(layout, 'draft', { containerId: 'heading-1', index: 1 })?.containers).toEqual(
+      { ...layout.containers, 'heading-1': [layout.containers['heading-1'][0], 'draft', ...layout.containers['heading-1'].slice(1)] },
+    );
+    expect(placeTask(layout, 'draft', { containerId: 'missing', index: 0 })).toBeNull();
+  });
+
+  it('splitAtTask cuts the group at the task and puts the rest under a new heading after it', () => {
+    const base: LayoutState = {
+      headingIds: ['h1', 'h2'],
+      containers: { ungrouped: ['u1', 'draft', 'u2'], h1: ['a', 'draft2', 'b', 'c'], h2: [] },
+    };
+    expect(splitAtTask(base, 'new', 'draft')).toEqual({
+      headingIds: ['new', 'h1', 'h2'],
+      containers: { ungrouped: ['u1'], new: ['u2'], h1: ['a', 'draft2', 'b', 'c'], h2: [] },
+    });
+    expect(splitAtTask(base, 'new', 'draft2')).toEqual({
+      headingIds: ['h1', 'new', 'h2'],
+      containers: { ungrouped: ['u1', 'draft', 'u2'], h1: ['a'], new: ['b', 'c'], h2: [] },
+    });
+    expect(splitAtTask(base, 'new', 'missing')).toBeNull();
   });
 
   it('rejects unknown task and destination ids', () => {
@@ -1123,5 +1150,252 @@ describe('ProjectTaskLayout drag sessions', () => {
       expect(harness.sidebarDrop).not.toHaveBeenCalled();
       expect(harness.saveMutate).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('ProjectTaskLayout — Magic Plus', () => {
+  const tasks = [task('task-u1', null), task('task-a', 'heading-1'), task('task-b', 'heading-1')];
+
+  beforeEach(() => {
+    harness.dndProps = null;
+    harness.initialSelectedId = null;
+    harness.initialExpandedId = null;
+    harness.pointerCollisionIds = [];
+    harness.closestCollisionIds = [];
+    harness.saveMutate.mockReset();
+    harness.createTask.mockReset();
+    harness.toastError.mockReset();
+  });
+
+  function handlers() {
+    if (!harness.dndProps) throw new Error('DndContext was not rendered');
+    return harness.dndProps;
+  }
+
+  function renderLayout(currentTasks = tasks) {
+    return render(
+      <ProjectTaskLayout
+        projectId="project-1"
+        tasks={currentTasks}
+        headings={[heading, secondHeading]}
+        emptyHint="Empty"
+      />,
+      { wrapper: DndShell },
+    );
+  }
+
+  async function dropMagicPlus(overId: string, delta = { x: -30, y: -250 }) {
+    act(() => {
+      handlers().onDragStart?.({ active: { id: 'magic-plus' } });
+    });
+    harness.pointerCollisionIds = [overId];
+    act(() => {
+      handlers().collisionDetection?.({
+        active: { id: 'magic-plus' },
+        pointerCoordinates: { x: 20, y: 31 },
+        droppableContainers: [{ id: overId }],
+        droppableRects: new Map([[overId, { top: 10, height: 40 }]]),
+      });
+      handlers().onDragOver?.({ active: { id: 'magic-plus' }, over: { id: overId } });
+    });
+    harness.pointerCollisionIds = [];
+    await act(async () => {
+      handlers().onDragEnd?.({ active: { id: 'magic-plus' }, over: { id: overId }, delta });
+    });
+  }
+
+  it('previews a gap and creates the task under the heading it is dropped in', async () => {
+    harness.createTask.mockResolvedValue(task('new', null));
+    renderLayout();
+
+    await dropMagicPlus('task:task-a');
+
+    expect(harness.createTask).toHaveBeenCalledWith({ title: '', projectId: 'project-1' });
+    expect(harness.saveMutate).toHaveBeenCalledWith(
+      {
+        projectId: 'project-1',
+        ungroupedTaskIds: ['task-u1'],
+        groups: [
+          { headingId: 'heading-1', taskIds: ['task-a', 'new', 'task-b'] },
+          { headingId: 'heading-2', taskIds: [] },
+        ],
+      },
+      expect.any(Object),
+    );
+  });
+
+  it('dropping into an empty project still has a target', async () => {
+    harness.createTask.mockResolvedValue(task('new', null));
+    render(
+      <ProjectTaskLayout projectId="project-1" tasks={[]} headings={[]} emptyHint="Empty" />,
+      { wrapper: DndShell },
+    );
+    expect(screen.getByText('Empty')).toBeInTheDocument();
+
+    await dropMagicPlus('container:ungrouped');
+
+    expect(harness.saveMutate).toHaveBeenCalledWith(
+      { projectId: 'project-1', ungroupedTaskIds: ['new'], groups: [] },
+      expect.any(Object),
+    );
+  });
+
+  it('dragging back to the button cancels and removes the gap', async () => {
+    renderLayout();
+
+    await dropMagicPlus('task:task-a', { x: 0, y: -20 });
+
+    expect(harness.createTask).not.toHaveBeenCalled();
+    expect(harness.saveMutate).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('task-placeholder-magic-plus-draft')).toBeNull();
+  });
+
+  it('a failed create removes the gap and saves nothing', async () => {
+    harness.createTask.mockRejectedValue(new Error('offline'));
+    renderLayout();
+
+    await dropMagicPlus('task:task-a');
+
+    expect(harness.toastError).toHaveBeenCalled();
+    expect(harness.saveMutate).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('task-placeholder-magic-plus-draft')).toBeNull();
+  });
+});
+
+describe('ProjectTaskLayout — Magic Plus 左边缘新建 Heading', () => {
+  const tasks = [task('task-u1', null), task('task-a', 'heading-1'), task('task-b', 'heading-1')];
+
+  beforeEach(() => {
+    harness.dndProps = null;
+    harness.initialSelectedId = null;
+    harness.initialExpandedId = null;
+    harness.pointerCollisionIds = [];
+    harness.saveMutate.mockReset();
+    harness.createTask.mockReset();
+    harness.toastError.mockReset();
+    createHeadingMutate.mockReset();
+    useSelectionStore.getState().clearSelection();
+  });
+
+  function handlers() {
+    if (!harness.dndProps) throw new Error('DndContext was not rendered');
+    return harness.dndProps;
+  }
+
+  function view(headings = [heading, secondHeading]) {
+    return (
+      <ProjectTaskLayout projectId="project-1" tasks={tasks} headings={headings} emptyHint="Empty" />
+    );
+  }
+
+  /** 开始拖动并停在 task-a 下半（落点 = task-a 之后），指针 x 为 pointerX。 */
+  function dragTo(pointerX: number) {
+    const activatorEvent = { clientX: 340, clientY: 700 };
+    act(() => {
+      handlers().onDragStart?.({ active: { id: 'magic-plus' }, activatorEvent });
+    });
+    harness.pointerCollisionIds = ['task:task-a'];
+    act(() => {
+      handlers().collisionDetection?.({
+        active: { id: 'magic-plus' },
+        pointerCoordinates: { x: pointerX, y: 31 },
+        droppableContainers: [{ id: 'task:task-a' }],
+        droppableRects: new Map([['task:task-a', { top: 10, height: 40 }]]),
+      });
+      handlers().onDragOver?.({ active: { id: 'magic-plus' }, over: { id: 'task:task-a' } });
+    });
+    harness.pointerCollisionIds = [];
+    act(() => {
+      handlers().onDragMove?.({
+        active: { id: 'magic-plus' },
+        activatorEvent,
+        delta: { x: pointerX - 340, y: -600 },
+      });
+    });
+  }
+
+  function drop() {
+    act(() => {
+      handlers().onDragEnd?.({
+        active: { id: 'magic-plus' },
+        over: { id: 'task:task-a' },
+        delta: { x: -300, y: -600 },
+      });
+    });
+  }
+
+  it('at the left edge previews a heading that cuts the group, then creates it there', () => {
+    const { rerender } = render(view(), { wrapper: DndShell });
+    dragTo(10);
+
+    expect(screen.getByTestId('heading-placeholder')).toBeInTheDocument();
+    expect(screen.queryByTestId('task-placeholder-magic-plus-draft')).toBeNull();
+
+    drop();
+    expect(harness.createTask).not.toHaveBeenCalled();
+    expect(createHeadingMutate).toHaveBeenCalledWith(
+      { projectId: 'project-1', title: '' },
+      expect.any(Object),
+    );
+    expect(harness.saveMutate).not.toHaveBeenCalled();
+
+    const created = { ...heading, id: 'heading-new', title: '' };
+    act(() => {
+      createHeadingMutate.mock.calls[0][1].onSuccess(created);
+    });
+    rerender(view([heading, created, secondHeading]));
+
+    expect(harness.saveMutate).toHaveBeenCalledWith(
+      {
+        projectId: 'project-1',
+        ungroupedTaskIds: ['task-u1'],
+        groups: [
+          { headingId: 'heading-1', taskIds: ['task-a'] },
+          { headingId: 'heading-new', taskIds: ['task-b'] },
+          { headingId: 'heading-2', taskIds: [] },
+        ],
+      },
+      expect.any(Object),
+    );
+    expect(useSelectionStore.getState().selectedIds).toEqual(['heading-new']);
+    expect(screen.queryByTestId('heading-placeholder')).toBeNull();
+  });
+
+  it('leaving the edge switches back to a new task', async () => {
+    harness.createTask.mockResolvedValue(task('new', null));
+    render(view(), { wrapper: DndShell });
+    dragTo(10);
+    act(() => {
+      handlers().onDragMove?.({
+        active: { id: 'magic-plus' },
+        activatorEvent: { clientX: 340, clientY: 700 },
+        delta: { x: -140, y: -600 },
+      });
+    });
+
+    expect(screen.queryByTestId('heading-placeholder')).toBeNull();
+    expect(screen.getByTestId('task-placeholder-magic-plus-draft')).toBeInTheDocument();
+
+    await act(async () => {
+      handlers().onDragEnd?.({
+        active: { id: 'magic-plus' },
+        over: { id: 'task:task-a' },
+        delta: { x: -140, y: -600 },
+      });
+    });
+    expect(createHeadingMutate).not.toHaveBeenCalled();
+    expect(harness.createTask).toHaveBeenCalled();
+  });
+
+  it('a failed heading create restores the layout', () => {
+    render(view(), { wrapper: DndShell });
+    dragTo(10);
+    drop();
+    act(() => {
+      createHeadingMutate.mock.calls[0][1].onError(new Error('offline'));
+    });
+    expect(harness.toastError).toHaveBeenCalled();
+    expect(screen.queryByTestId('heading-placeholder')).toBeNull();
+    expect(harness.saveMutate).not.toHaveBeenCalled();
   });
 });

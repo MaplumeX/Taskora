@@ -14,22 +14,25 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 
-import { ProjectStatus } from '@taskora/shared';
+import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 
 import { SortableProjectItem } from '@/components/layout/SortableProjectItem';
 import { SortableAreaRow } from '@/components/layout/SortableAreaRow';
 import { ProjectItem } from '@/components/project/ProjectItem';
 import {
+  useCreateProject,
   useIsLogged,
   useLaterProjectKind,
   useReorderProjects,
+  useUiInteractionStore,
   useUpdateProject,
 } from '@taskora/api';
 import { useReorderAreas } from '@taskora/api';
 import { SIDEBAR_AUTO_SCROLL, useDndSurface } from '../../lib/appDnd';
+import { MAGIC_PLUS_DRAFT_ID, isMagicPlus } from '../../lib/magicPlus';
 import {
   dndListProps,
   dragOverlayClass,
@@ -53,6 +56,7 @@ import {
   mergeVisibleProjectOrder,
   moveProjectToPlacement,
   normalizeSidebarProjectLayout,
+  placeProject,
   projectContainerDndId,
   projectDndId,
   resolveProjectPlacement,
@@ -68,6 +72,34 @@ interface Props {
   areas: AreaResponseDto[];
   /** 项目与区域行作为 Sidebar Drop 落点（仅桌面侧边栏；手机「更多」页不接收）。 */
   dropTargets?: boolean;
+  /**
+   * 接收 Magic Plus（仅手机首页）：落在某个区域里即在该区域新建项目，落在
+   * 无区域部分即新建顶层项目，位于落点；随后进入项目页编辑标题。
+   */
+  magicPlus?: boolean;
+}
+
+/** Magic Plus 草稿项目（只用于渲染空位）。 */
+function draftProjectOf(): ProjectResponseDto {
+  const now = new Date(0).toISOString();
+  return {
+    id: MAGIC_PLUS_DRAFT_ID,
+    title: '',
+    notes: null,
+    areaId: null,
+    status: ProjectStatus.ACTIVE,
+    bucket: ProjectBucket.ANYTIME,
+    scheduledType: ScheduledType.NONE,
+    scheduledDate: null,
+    dueDate: null,
+    completedAt: null,
+    trashedAt: null,
+    tags: [],
+    taskTotalCount: 0,
+    taskCompletedCount: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
 }
 
 interface ProjectContainerProps {
@@ -151,8 +183,13 @@ export function SidebarProjectSection({
   projects: allProjects,
   areas,
   dropTargets = false,
+  magicPlus = false,
 }: Props) {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const createProject = useCreateProject();
+  /** Magic Plus 草稿：开始拖动到新项目建好（或取消）期间在布局里占位。 */
+  const [draftProject, setDraftProject] = React.useState<ProjectResponseDto | null>(null);
   const kindOf = useLaterProjectKind();
   const isLogged = useIsLogged();
   // 侧边栏只放活跃项目：已移入 Logbook 的已完成项目与稍后项目（Someday /
@@ -190,10 +227,11 @@ export function SidebarProjectSection({
   } | null>(null);
   serverLayoutRef.current = serverLayout;
 
-  const projectMap = React.useMemo(
-    () => new Map(projects.map((project) => [project.id, project])),
-    [projects],
-  );
+  const projectMap = React.useMemo(() => {
+    const map = new Map(projects.map((project) => [project.id, project]));
+    if (draftProject) map.set(draftProject.id, draftProject);
+    return map;
+  }, [projects, draftProject]);
   const reorderProjects = useReorderProjects();
   const reorderAreas = useReorderAreas();
   const updateProject = useUpdateProject();
@@ -292,7 +330,7 @@ export function SidebarProjectSection({
         ),
       });
     }
-    if (!activeKey.startsWith(PROJECT_DND_PREFIX)) return [];
+    if (!activeKey.startsWith(PROJECT_DND_PREFIX) && !isMagicPlus(activeKey)) return [];
 
     const compatibleContainers = args.droppableContainers.filter((container) => {
       const id = String(container.id);
@@ -330,8 +368,26 @@ export function SidebarProjectSection({
     return [collision];
   }, []);
 
+  /** 拖拽源 dnd id → 布局里的项目 id（Magic Plus 为草稿）。 */
+  const draggedProjectId = (activeKey: string) => {
+    if (isMagicPlus(activeKey)) return MAGIC_PLUS_DRAFT_ID;
+    return activeKey.startsWith(PROJECT_DND_PREFIX)
+      ? activeKey.slice(PROJECT_DND_PREFIX.length)
+      : null;
+  };
+
   const handleDragStart = ({ active }: DragStartEvent) => {
     const activeKey = String(active.id);
+    if (isMagicPlus(activeKey)) {
+      const draft = draftProjectOf();
+      dragStartLayoutRef.current = cloneSidebarProjectLayout(layoutRef.current);
+      pendingServerLayoutRef.current = null;
+      activeProjectIdRef.current = draft.id;
+      lastProjectTargetRef.current = null;
+      setDraftProject(draft);
+      setActiveProject(draft);
+      return;
+    }
     if (!activeKey.startsWith(PROJECT_DND_PREFIX)) return;
     const activeId = activeKey.slice(PROJECT_DND_PREFIX.length);
     const project = projectMap.get(activeId);
@@ -345,15 +401,14 @@ export function SidebarProjectSection({
   };
 
   const previewProjectTarget = (activeKey: string) => {
-    if (!activeKey.startsWith(PROJECT_DND_PREFIX)) return;
-    const activeId = activeKey.slice(PROJECT_DND_PREFIX.length);
-    if (activeProjectIdRef.current !== activeId) return;
+    const activeId = draggedProjectId(activeKey);
+    if (!activeId || activeProjectIdRef.current !== activeId) return;
 
     const target = lastProjectTargetRef.current;
     if (!target) return;
     const placement = resolveProjectPlacement(layoutRef.current, target.overKey, target.edge);
     if (!placement) return;
-    const next = moveProjectToPlacement(layoutRef.current, activeId, placement);
+    const next = placeProject(layoutRef.current, activeId, placement);
     if (!next) return;
     flip.capture();
     updateRenderedLayout(next);
@@ -368,7 +423,7 @@ export function SidebarProjectSection({
 
   const handleDragOver = ({ active, over }: DragOverEvent) => {
     const activeKey = String(active.id);
-    if (!activeKey.startsWith(PROJECT_DND_PREFIX) || !over) return;
+    if (!draggedProjectId(activeKey) || !over) return;
 
     const overKey = String(over.id);
     if (lastProjectTargetRef.current?.overKey !== overKey) {
@@ -379,6 +434,10 @@ export function SidebarProjectSection({
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     const activeKey = String(active.id);
+    if (isMagicPlus(activeKey)) {
+      dropMagicPlus(over ? String(over.id) : null);
+      return;
+    }
     if (activeKey.startsWith(PROJECT_DND_PREFIX)) {
       const activeId = activeKey.slice(PROJECT_DND_PREFIX.length);
       const snapshot = dragStartLayoutRef.current;
@@ -428,11 +487,65 @@ export function SidebarProjectSection({
 
   const handleDragCancel = () => {
     if (activeProjectIdRef.current !== null) restoreProjectDrag();
+    setDraftProject(null);
+  };
+
+  /**
+   * Magic Plus 松手：草稿所在的区域（或无区域部分）即新项目的归属，位于落点。
+   * 先以含草稿的布局占位；建好后按新顺序写回（草稿换成新项目），进入项目页
+   * 编辑标题。没落在任何落点即取消。
+   */
+  const dropMagicPlus = (overKey: string | null) => {
+    const edge =
+      overKey !== null && lastProjectTargetRef.current?.overKey === overKey
+        ? lastProjectTargetRef.current.edge
+        : 'before';
+    const placement =
+      overKey !== null ? resolveProjectPlacement(layoutRef.current, overKey, edge) : null;
+    const placed = placement
+      ? (placeProject(layoutRef.current, MAGIC_PLUS_DRAFT_ID, placement) ?? layoutRef.current)
+      : layoutRef.current;
+    const containerId = findProjectContainer(placed, MAGIC_PLUS_DRAFT_ID);
+    if (!containerId) {
+      restoreProjectDrag();
+      setDraftProject(null);
+      return;
+    }
+    cleanupProjectDrag();
+    persistenceActiveRef.current = true;
+    updateRenderedLayout(placed);
+    const areaId = containerId === STANDALONE_PROJECT_CONTAINER ? undefined : containerId;
+    createProject.mutate(areaId ? { title: '', areaId } : { title: '' }, {
+      onSuccess: (created) => {
+        const withCreated = cloneSidebarProjectLayout(placed);
+        withCreated.containers[containerId] = withCreated.containers[containerId].map((id) =>
+          id === MAGIC_PLUS_DRAFT_ID ? created.id : id,
+        );
+        reorderProjects.mutate(
+          mergeVisibleProjectOrder(
+            [...allProjects, created],
+            serializeProjectOrder(withCreated, areas),
+          ),
+        );
+        persistenceActiveRef.current = false;
+        setDraftProject(null);
+        useUiInteractionStore.getState().setPendingAutoEditId(created.id);
+        navigate(`/projects/${created.id}`);
+      },
+      onError: () => {
+        persistenceActiveRef.current = false;
+        setDraftProject(null);
+        updateRenderedLayout(pendingServerLayoutRef.current ?? serverLayoutRef.current);
+        pendingServerLayoutRef.current = null;
+        toast.error(t('common:createFailed'));
+      },
+    });
   };
 
   // 侧边栏的项目 / 区域排序是共享拖拽上下文里的一个 surface（ADR 0018）。
   const surface = useDndSurface({
     owns: isSidebarSortKey,
+    magicPlus,
     collisionDetection,
     autoScroll: SIDEBAR_AUTO_SCROLL,
     onDragStart: handleDragStart,

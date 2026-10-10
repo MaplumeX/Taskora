@@ -15,6 +15,7 @@ import { SortableContext } from '@dnd-kit/sortable';
 import { toast } from 'sonner';
 
 import type {
+  CreateTaskDto,
   FeedItem,
   FeedOrderItem,
   TaskFeedItem,
@@ -23,6 +24,13 @@ import type {
 
 import { cn } from '@/lib/utils';
 import { useDndSurface } from '../../lib/appDnd';
+import {
+  MAGIC_PLUS_DRAFT_ID,
+  MAGIC_PLUS_ID,
+  isMagicPlus,
+  magicPlusDraftFeedItem,
+  useMagicPlusCreate,
+} from '../../lib/magicPlus';
 import type { SidebarDropPayload } from '@/components/layout/sidebarDrop';
 import {
   dndListProps,
@@ -53,6 +61,7 @@ import {
   selectionStateOf,
   useAreasQuery,
   useCompleteTask,
+  usePageTaskContext,
   useProjectsQuery,
   useReorderFeed,
   useSelectionScope,
@@ -342,9 +351,12 @@ function TaskContainerDropZone({
  */
 function UngroupedDropZone({
   floating = false,
+  fill = false,
   children,
 }: {
   floating?: boolean;
+  /** 空列表里拖 Magic Plus：占满一块投放面（列表里没有别的落点）。 */
+  fill?: boolean;
   children?: React.ReactNode;
 }) {
   const { setNodeRef } = useDroppable({ id: containerDndId(UNGROUPED) });
@@ -355,6 +367,7 @@ function UngroupedDropZone({
       className={cn(
         'flex flex-col rounded-md',
         floating && 'absolute inset-x-0 bottom-full h-10',
+        fill && 'min-h-40',
       )}
     >
       {children}
@@ -382,6 +395,10 @@ type GroupChunk =
  * 拖拽为实时预览：拖拽中在本地 feed 项副本上挪位（含跨组改归属）并重新
  * 推导分组，空位即落点；松手后本地结果保留到乐观更新追上（lib/dnd.ts）。
  * grouping=false 时同一套渲染与拖拽用于平铺时间视图。
+ *
+ * Magic Plus：被拖的是一条不在列表里的草稿任务（来源容器不存在，落到任何
+ * 组都按该组改归属），预览与行拖拽同一路径；松手后按落点新建任务，再把
+ * 草稿替换为新任务写回顺序。
  */
 export function GroupedFeedListView({
   items: sourceItems,
@@ -400,6 +417,7 @@ export function GroupedFeedListView({
   const uncancelTask = useUncancelTask();
   const reorderFeed = useReorderFeed();
   const updateTask = useUpdateTask();
+  const magicPlus = useMagicPlusCreate(usePageTaskContext());
 
   const derive = (list: FeedItem[], retainGroupIds?: ReadonlySet<string>) =>
     deriveGroupedFeedLayout({
@@ -415,6 +433,8 @@ export function GroupedFeedListView({
   // 松手后的本地结果：显示顺序与任务归属追上之前一直以它渲染。
   const [shownItems, holdItems] = useHeldValue(items, (list) => feedSignature(derive(list)));
   const [drag, setDrag] = React.useState<{
+    /** 拖拽源的 dnd id：行为 feedItemDndId，Magic Plus 为 MAGIC_PLUS_ID。 */
+    activeKey: string;
     origin: { item: FeedItem; container: ContainerId };
     items: FeedItem[];
     /** 未预览任何落点时的行（拖拽开始时的原样；收起组内其余行后同样去掉它们）。 */
@@ -544,7 +564,7 @@ export function GroupedFeedListView({
 
   const collisionDetection = React.useCallback<CollisionDetection>((args) => {
     const activeKey = String(args.active.id);
-    if (!isRowKey(activeKey)) return [];
+    if (!isRowKey(activeKey) && !isMagicPlus(activeKey)) return [];
     const compatible = args.droppableContainers.filter((container) =>
       isFeedKey(String(container.id)),
     );
@@ -590,6 +610,21 @@ export function GroupedFeedListView({
   };
 
   const handleDragStart = ({ active }: DragStartEvent) => {
+    if (isMagicPlus(String(active.id))) {
+      handleBlankClick();
+      lastTargetRef.current = null;
+      updateDrag({
+        activeKey: MAGIC_PLUS_ID,
+        // 来源容器不存在：落在任何组（含未分组区）都按该组定归属。
+        origin: { item: magicPlusDraftFeedItem(magicPlus.context), container: MAGIC_PLUS_DRAFT_ID },
+        items: viewItems,
+        startItems: viewItems,
+        retain: undefined,
+        group: null,
+        collapsed: true,
+      });
+      return;
+    }
     const item = rowMap.get(String(active.id));
     if (!item) return;
     const container = rowContainerOf(layout, item);
@@ -623,6 +658,7 @@ export function GroupedFeedListView({
     );
     lastTargetRef.current = null;
     updateDrag({
+      activeKey: feedItemDndId(item),
       origin: { item, container },
       items: viewItems,
       startItems: viewItems,
@@ -647,7 +683,7 @@ export function GroupedFeedListView({
 
   const previewTarget = (activeKey: string) => {
     const current = dragRef.current;
-    if (!current || activeKey !== feedItemDndId(current.origin.item)) return;
+    if (!current || activeKey !== current.activeKey) return;
     const next = applyTarget(lastTargetRef.current);
     if (!next || next === current.items) return;
     flip.capture();
@@ -694,7 +730,11 @@ export function GroupedFeedListView({
     const droppedItems = applyTarget(target);
     lastTargetRef.current = null;
     updateDrag(null);
-    if (!current || !droppedItems || String(active.id) !== feedItemDndId(current.origin.item)) {
+    if (!current || !droppedItems || String(active.id) !== current.activeKey) {
+      return;
+    }
+    if (isMagicPlus(current.activeKey)) {
+      dropMagicPlus(droppedItems);
       return;
     }
 
@@ -749,6 +789,33 @@ export function GroupedFeedListView({
     updateDrag(null);
   };
 
+  /**
+   * Magic Plus 松手：草稿所在组决定归属，先以含草稿的结果占位，新建成功后
+   * 换成真实任务并写回显示顺序；没落在任何落点（草稿不在结果里）即取消。
+   */
+  const dropMagicPlus = (droppedItems: FeedItem[]) => {
+    const dropped = derive(droppedItems);
+    const container = taskContainersOf(dropped).get(MAGIC_PLUS_DRAFT_ID);
+    if (container === undefined) return;
+    const owner = container === UNGROUPED ? null : reassignmentDto(container, parentMapsFromLayout(dropped));
+    const fields: Omit<Partial<CreateTaskDto>, 'title'> = {};
+    if (owner?.projectId) fields.projectId = owner.projectId;
+    if (owner?.areaId) fields.areaId = owner.areaId;
+    holdItems(droppedItems);
+    void magicPlus.create(fields).then((created) => {
+      if (!created) {
+        holdItems(items);
+        return;
+      }
+      const createdItem: TaskFeedItem = { ...created, type: 'task', tags: created.tags ?? [] };
+      const finalItems = droppedItems.map((row) =>
+        row.type === 'task' && row.id === MAGIC_PLUS_DRAFT_ID ? createdItem : row,
+      );
+      holdItems(finalItems);
+      reorderFeed.mutate(feedOrderOf(derive(finalItems)));
+    });
+  };
+
   /** 拖到侧边栏的载荷：被拖任务（多选时整组，拖拽开始时的原样）或独立项目行。 */
   const sidebarPayload = (activeKey: string): SidebarDropPayload | null => {
     const current = dragRef.current;
@@ -760,6 +827,7 @@ export function GroupedFeedListView({
 
   const surface = useDndSurface({
     owns: isFeedKey,
+    magicPlus: true,
     collisionDetection,
     sidebarPayload,
     onDragStart: handleDragStart,
@@ -769,7 +837,7 @@ export function GroupedFeedListView({
     onDragCancel: handleDragCancel,
   });
 
-  if (items.length === 0 && !drag) {
+  if (shownItems.length === 0 && !drag) {
     return <EmptyState hint={emptyHint ?? t('task:empty')} />;
   }
 
@@ -812,7 +880,11 @@ export function GroupedFeedListView({
         key={dndId}
         dndId={dndId}
         item={item}
-        placeholder={activeItem !== null && feedItemDndId(activeItem) === dndId}
+        placeholder={
+          (activeItem !== null && feedItemDndId(activeItem) === dndId) ||
+          // Magic Plus 松手到新任务建好之间，草稿仍是空位（不可点、不可勾选）。
+          (item.type === 'task' && item.id === MAGIC_PLUS_DRAFT_ID)
+        }
         {...rowLabels(item, containerId)}
         hidePlacement={grouping}
         selectionState={selectionStateOf(selectedIds, expandedId, item.id)}
@@ -897,7 +969,9 @@ export function GroupedFeedListView({
 
         {/* 绝对定位，DOM 位置不影响显示；放在末尾是为了不挤掉首个组头的
             :first-child（否则 mt-6 生效，拖拽一开始整列下移 24px）。 */}
-        {topRows.length === 0 && activeItem && <UngroupedDropZone floating />}
+        {topRows.length === 0 && activeItem && (
+          <UngroupedDropZone floating={layout.blocks.length > 0} fill={layout.blocks.length === 0} />
+        )}
 
         {surface.overlayActive && (
         <DragOverlay className={dragOverlayWrapperClass} dropAnimation={surface.dropAnimation}>

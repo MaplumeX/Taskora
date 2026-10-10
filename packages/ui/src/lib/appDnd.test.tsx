@@ -265,3 +265,82 @@ describe('AppDndProvider — event routing', () => {
     });
   });
 });
+
+describe('AppDndProvider — Magic Plus', () => {
+  it('goes to the surface that accepts Magic Plus, not to row owners', () => {
+    const rows = taskSurface();
+    const list = taskSurface({ owns: (id) => id.startsWith('feed:'), magicPlus: true });
+    renderApp([rows, list]);
+
+    act(() => dnd().onDragStart({ active: { id: 'magic-plus' } }));
+    act(() =>
+      dnd().onDragEnd({ active: { id: 'magic-plus' }, over: { id: 'feed:t1' }, delta: { x: -50, y: -300 } }),
+    );
+
+    expect(list.onDragStart).toHaveBeenCalledTimes(1);
+    expect(list.onDragEnd).toHaveBeenCalledTimes(1);
+    expect(rows.onDragStart).not.toHaveBeenCalled();
+  });
+
+  it('never offers the sidebar to Magic Plus', () => {
+    renderApp([taskSurface({ magicPlus: true })]);
+    act(() => dnd().onDragStart({ active: { id: 'magic-plus' } }));
+    const inbox = container('sidebar-drop:inbox', rect(0, 100, 200, 28));
+    expect(collide('magic-plus', { x: 50, y: 110 }, [inbox])).toEqual([]);
+  });
+
+  it('released back near the button cancels instead of dropping', () => {
+    const list = taskSurface({ magicPlus: true });
+    renderApp([list]);
+
+    act(() => dnd().onDragStart({ active: { id: 'magic-plus' } }));
+    act(() =>
+      dnd().onDragEnd({ active: { id: 'magic-plus' }, over: { id: 'task:t1' }, delta: { x: 10, y: -20 } }),
+    );
+
+    expect(list.onDragCancel).toHaveBeenCalledTimes(1);
+    expect(list.onDragEnd).not.toHaveBeenCalled();
+  });
+
+  it('does nothing when no list on the page accepts it', () => {
+    const rows = taskSurface();
+    renderApp([rows]);
+    act(() => dnd().onDragStart({ active: { id: 'magic-plus' } }));
+    act(() =>
+      dnd().onDragEnd({ active: { id: 'magic-plus' }, over: null, delta: { x: -50, y: -300 } }),
+    );
+    expect(rows.onDragStart).not.toHaveBeenCalled();
+    expect(rows.onDragEnd).not.toHaveBeenCalled();
+  });
+});
+
+describe('AppDndProvider — Magic Plus Inbox target', () => {
+  const inboxTarget = container('magic-plus-inbox', rect(300, 700, 56, 56));
+  const row = container('task:t1', rect(250, 600, 400, 40));
+
+  it('the Inbox target wins while the pointer is on it, only for Magic Plus', () => {
+    renderApp([taskSurface({ magicPlus: true })]);
+    expect(collide('magic-plus', { x: 320, y: 720 }, [row, inboxTarget])).toEqual([
+      { id: 'magic-plus-inbox' },
+    ]);
+    expect(collide('magic-plus', { x: 320, y: 620 }, [row, inboxTarget])).toEqual([{ id: 'task:t1' }]);
+    expect(collide('task:t1', { x: 320, y: 720 }, [row, inboxTarget])).toEqual([{ id: 'task:t1' }]);
+  });
+
+  it('dropping on it resets the list and hands over to the target', () => {
+    const list = taskSurface({ magicPlus: true });
+    const onDrop = vi.fn();
+    renderApp([list]);
+    act(() => dnd().onDragStart({ active: { id: 'magic-plus' } }));
+    act(() =>
+      dnd().onDragEnd({
+        active: { id: 'magic-plus' },
+        over: { id: 'magic-plus-inbox', data: { current: { onDrop } } },
+        delta: { x: -300, y: 0 },
+      }),
+    );
+    expect(onDrop).toHaveBeenCalledTimes(1);
+    expect(list.onDragCancel).toHaveBeenCalledTimes(1);
+    expect(list.onDragEnd).not.toHaveBeenCalled();
+  });
+});

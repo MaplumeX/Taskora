@@ -39,7 +39,10 @@ export function feedKey(item: Pick<FeedItem, 'type' | 'id'>) {
   return `${item.type}:${item.id}`;
 }
 
-/** 和侧边栏一样：标题落到组首，行的上下半区决定前后插入，末尾空白落到组尾。 */
+/**
+ * 和侧边栏一样：标题落到组首，行的上下半区决定前后插入，末尾空白落到组尾。
+ * 被拖任务不在 items 里（Magic Plus 的草稿）时插入到落点，日期取该组。
+ */
 export function moveUpcomingTask(
   items: FeedItem[],
   groups: UpcomingGroup[],
@@ -79,8 +82,7 @@ export function moveUpcomingTask(
     : rest.length;
   const scheduledDate =
     group.id === origin.groupId ? origin.item.scheduledDate : group.scheduledDate;
-  const current = items.find((item) => feedKey(item) === activeKey);
-  if (!current) return null;
+  const current = items.find((item) => feedKey(item) === activeKey) ?? origin.item;
   const moved =
     current.scheduledDate === scheduledDate
       ? current

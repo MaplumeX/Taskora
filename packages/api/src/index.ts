@@ -265,6 +265,7 @@ export {
   parseQuickAddInput,
   quickAddOpensInApp,
   toQuickAddDraft,
+  type QuickAddDeps,
   type QuickAddDraft,
   type QuickAddWhen,
   type QuickAddPlacement,

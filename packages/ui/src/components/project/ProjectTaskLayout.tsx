@@ -19,6 +19,7 @@ import {
   verticalListSortingStrategy,
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
+import { HeadingStatus } from '@taskora/shared';
 import type {
   ProjectHeadingResponseDto,
   ReorderProjectHeadingLayoutDto,
@@ -43,6 +44,14 @@ import { useSelectionScope } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
 import { useReorderProjectHeadingLayout } from '@taskora/api';
 import { keyboardDragData, useDndSurface } from '../../lib/appDnd';
+import {
+  MAGIC_PLUS_DRAFT_ID,
+  MAGIC_PLUS_HEADING_EDGE,
+  MAGIC_PLUS_HEADING_ID,
+  isMagicPlus,
+  magicPlusDraftTask,
+  useMagicPlusCreate,
+} from '../../lib/magicPlus';
 import type { SidebarDropPayload } from '@/components/layout/sidebarDrop';
 import {
   dndListProps,
@@ -316,6 +325,77 @@ export function moveTaskToPlacement(
   return { ...layout, containers };
 }
 
+/**
+ * 拖拽预览 / 松手的落位：任务已在布局里则移动；尚不在（Magic Plus 草稿第一次
+ * 进入列表）则插入到 placement。
+ */
+export function placeTask(
+  layout: LayoutState,
+  id: string,
+  placement: TaskPlacement,
+): LayoutState | null {
+  if (findTaskContainer(layout, id)) return moveTaskToPlacement(layout, id, placement);
+  const targetIds = layout.containers[placement.containerId];
+  if (!targetIds) return null;
+  const index = Math.max(0, Math.min(placement.index, targetIds.length));
+  return {
+    ...layout,
+    containers: {
+      ...layout.containers,
+      [placement.containerId]: [...targetIds.slice(0, index), id, ...targetIds.slice(index)],
+    },
+  };
+}
+
+/**
+ * 在任务 taskId 所在处新建 Heading（Magic Plus 拖到左边缘）：去掉该任务，
+ * 所在组从它的位置切开，其后的任务归入紧跟该组之后的新 Heading（在无
+ * Heading 部分则成为第一个 Heading）。taskId 不在布局里返回 null。
+ */
+export function splitAtTask(
+  layout: LayoutState,
+  newHeadingId: string,
+  taskId: string,
+): LayoutState | null {
+  const container = findTaskContainer(layout, taskId);
+  if (!container) return null;
+  const ids = layout.containers[container];
+  const index = ids.indexOf(taskId);
+  const headingIds = [...layout.headingIds];
+  headingIds.splice(container === UNGROUPED ? 0 : headingIds.indexOf(container) + 1, 0, newHeadingId);
+  return {
+    headingIds,
+    containers: {
+      ...layout.containers,
+      [container]: ids.slice(0, index),
+      [newHeadingId]: ids.slice(index + 1),
+    },
+  };
+}
+
+/** Magic Plus 草稿 Heading（只用于占位渲染）。 */
+function draftHeadingOf(projectId: string): ProjectHeadingResponseDto {
+  const now = new Date(0).toISOString();
+  return {
+    id: MAGIC_PLUS_HEADING_ID,
+    projectId,
+    title: '',
+    status: HeadingStatus.ACTIVE,
+    completedAt: null,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/** 布局里的 Heading 改 id（草稿 Heading → 新建好的 Heading）。 */
+function renameHeading(layout: LayoutState, from: string, to: string): LayoutState {
+  const { [from]: ids = [], ...containers } = layout.containers;
+  return {
+    headingIds: layout.headingIds.map((id) => (id === from ? to : id)),
+    containers: { ...containers, [to]: ids },
+  };
+}
+
 function applyLayoutDrag(
   layout: LayoutState,
   activeKey: string,
@@ -455,7 +535,8 @@ function TaskContainer({
             <SortableTask
               key={id}
               task={task}
-              placeholder={activeTaskId === id}
+              // Magic Plus 草稿在新任务建好之前始终是空位（不可点、不可勾选）。
+              placeholder={activeTaskId === id || id === MAGIC_PLUS_DRAFT_ID}
               dragDisabled={dragDisabled}
               selected={selectedIds.includes(id)}
               expanded={expandedId === id}
@@ -472,11 +553,14 @@ function TaskContainer({
 interface SortableHeadingBlockProps extends Omit<TaskContainerProps, 'id' | 'taskIds'> {
   heading: ProjectHeadingResponseDto;
   taskIds: string[];
+  /** Magic Plus 的草稿 Heading：只占位并以一条横线提示「在这里新建 Heading」。 */
+  placeholder?: boolean;
 }
 
 function SortableHeadingBlock({
   heading,
   taskIds,
+  placeholder = false,
   ...taskContainerProps
 }: SortableHeadingBlockProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
@@ -496,11 +580,20 @@ function SortableHeadingBlock({
       className="mt-3"
     >
       <div {...flipId(headingId(heading.id))}>
-        <ProjectHeadingRow
-          heading={heading}
-          selected={taskContainerProps.selectedIds.includes(heading.id)}
-          dragHandleProps={{ ...attributes, ...listeners }}
-        />
+        {placeholder ? (
+          <div data-testid="heading-placeholder" className="relative" aria-hidden="true">
+            <div className="invisible">
+              <ProjectHeadingRow heading={heading} />
+            </div>
+            <div className="absolute inset-x-2 bottom-1 h-0.5 rounded-full bg-primary" />
+          </div>
+        ) : (
+          <ProjectHeadingRow
+            heading={heading}
+            selected={taskContainerProps.selectedIds.includes(heading.id)}
+            dragHandleProps={{ ...attributes, ...listeners }}
+          />
+        )}
       </div>
       <TaskContainer {...taskContainerProps} id={heading.id} taskIds={taskIds} />
     </section>
@@ -521,6 +614,19 @@ export function ProjectTaskLayout({
   const serverLayout = React.useMemo(() => normalizeLayout(tasks, headings), [tasks, headings]);
   const [layout, setLayout] = React.useState(serverLayout);
   const [activeTask, setActiveTask] = React.useState<TaskResponseDto | null>(null);
+  /** Magic Plus 草稿：从开始拖动到新任务建好（或取消）期间在布局里占位。 */
+  const [draftTask, setDraftTask] = React.useState<TaskResponseDto | null>(null);
+  const draftPendingRef = React.useRef(false);
+  /** Magic Plus 拖动中、草稿任务所在的布局（左边缘模式下实际渲染的是它切开后的样子）。 */
+  const taskModeLayoutRef = React.useRef<LayoutState | null>(null);
+  /** 手指在屏幕左边缘：松手新建 Heading 而不是任务。 */
+  const headingModeRef = React.useRef(false);
+  /** 草稿 Heading：左边缘模式中，以及松手后到新 Heading 出现在 props 之前。 */
+  const [draftHeading, setDraftHeading] = React.useState<ProjectHeadingResponseDto | null>(null);
+  /** Magic Plus 新建好的 Heading：等它出现在 props 里再替换草稿、写布局。 */
+  const [createdHeadingId, setCreatedHeadingId] = React.useState<string | null>(null);
+  const magicPlusContext = React.useMemo(() => ({ projectId }), [projectId]);
+  const magicPlus = useMagicPlusCreate(magicPlusContext);
   /** 多项拖拽的整组任务 id（单项拖拽为 null）。 */
   const [dragGroup, setDragGroup] = React.useState<string[] | null>(null);
   const dragGroupRef = React.useRef<string[] | null>(null);
@@ -537,11 +643,16 @@ export function ProjectTaskLayout({
     edge: TaskPlacementEdge;
   } | null>(null);
   serverLayoutRef.current = serverLayout;
-  const taskMap = React.useMemo(() => new Map(tasks.map((task) => [task.id, task])), [tasks]);
-  const headingMap = React.useMemo(
-    () => new Map(headings.map((heading) => [heading.id, heading])),
-    [headings],
-  );
+  const taskMap = React.useMemo(() => {
+    const map = new Map(tasks.map((task) => [task.id, task]));
+    if (draftTask) map.set(draftTask.id, draftTask);
+    return map;
+  }, [tasks, draftTask]);
+  const headingMap = React.useMemo(() => {
+    const map = new Map(headings.map((heading) => [heading.id, heading]));
+    if (draftHeading) map.set(draftHeading.id, draftHeading);
+    return map;
+  }, [headings, draftHeading]);
   const { selectedIds, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
@@ -632,7 +743,7 @@ export function ProjectTaskLayout({
   });
 
   React.useEffect(() => {
-    if (activeTaskIdRef.current !== null) {
+    if (activeTaskIdRef.current !== null || draftPendingRef.current) {
       pendingServerLayoutRef.current = serverLayout;
       return;
     }
@@ -711,7 +822,7 @@ export function ProjectTaskLayout({
         ),
       });
     }
-    if (!activeKey.startsWith('task:')) return [];
+    if (!activeKey.startsWith('task:') && !isMagicPlus(activeKey)) return [];
 
     const compatibleContainers = args.droppableContainers.filter((container) => {
       const id = String(container.id);
@@ -745,8 +856,29 @@ export function ProjectTaskLayout({
     return [collision];
   }, []);
 
+  /** 拖拽源 dnd id → 布局里的任务 id（Magic Plus 为草稿）。 */
+  const draggedTaskId = (activeKey: string) => {
+    if (isMagicPlus(activeKey)) return MAGIC_PLUS_DRAFT_ID;
+    return activeKey.startsWith('task:') ? activeKey.slice('task:'.length) : null;
+  };
+
   const handleDragStart = ({ active }: DragStartEvent) => {
     const activeKey = String(active.id);
+    if (isMagicPlus(activeKey)) {
+      handleBlankClick();
+      const draft = magicPlusDraftTask(magicPlus.context);
+      dragStartLayoutRef.current = cloneLayout(layoutRef.current);
+      pendingServerLayoutRef.current = null;
+      activeTaskIdRef.current = draft.id;
+      keyboardTaskEdgeRef.current = 'before';
+      lastTaskTargetRef.current = null;
+      draftPendingRef.current = true;
+      taskModeLayoutRef.current = cloneLayout(layoutRef.current);
+      headingModeRef.current = false;
+      setDraftTask(draft);
+      setActiveTask(draft);
+      return;
+    }
     if (!activeKey.startsWith('task:')) return;
     const activeId = activeKey.slice('task:'.length);
     const task = taskMap.get(activeId);
@@ -780,16 +912,35 @@ export function ProjectTaskLayout({
     return group ? withDragGroup(next, activeId, group) : next;
   };
 
+  /**
+   * Magic Plus 的预览：落点总在「草稿任务」布局上算（左边缘模式下渲染的是
+   * 它在草稿处切开的样子，行 id 相同，碰撞结果照样可用）。
+   */
+  const renderMagicPlus = (taskMode: LayoutState) => {
+    taskModeLayoutRef.current = taskMode;
+    const split = headingModeRef.current
+      ? splitAtTask(taskMode, MAGIC_PLUS_HEADING_ID, MAGIC_PLUS_DRAFT_ID)
+      : null;
+    setDraftHeading(split ? draftHeadingOf(projectId) : null);
+    flip.capture();
+    updateRenderedLayout(split ?? taskMode);
+  };
+
   const previewTaskTarget = (activeKey: string) => {
-    if (!activeKey.startsWith('task:')) return;
-    const activeId = activeKey.slice('task:'.length);
-    if (activeTaskIdRef.current !== activeId) return;
+    const activeId = draggedTaskId(activeKey);
+    if (!activeId || activeTaskIdRef.current !== activeId) return;
     const target = lastTaskTargetRef.current;
     if (!target) return;
-    const placement = resolveTaskPlacement(layoutRef.current, target.overKey, target.edge);
+    const magic = isMagicPlus(activeKey);
+    const base = (magic && taskModeLayoutRef.current) || layoutRef.current;
+    const placement = resolveTaskPlacement(base, target.overKey, target.edge);
     if (!placement) return;
-    const next = moveTaskToPlacement(layoutRef.current, activeId, placement);
+    const next = placeTask(base, activeId, placement);
     if (!next) return;
+    if (magic) {
+      renderMagicPlus(next);
+      return;
+    }
     flip.capture();
     updateRenderedLayout(next);
   };
@@ -803,6 +954,10 @@ export function ProjectTaskLayout({
       const snapshot = dragStartLayoutRef.current;
       const activeId = activeTaskIdRef.current;
       if (!snapshot || !activeId) return;
+      if (isMagicPlus(String(active.id))) {
+        renderMagicPlus(snapshot);
+        return;
+      }
       const group = dragGroupRef.current;
       const origin = group
         ? withoutTasks(snapshot, new Set(group.filter((id) => id !== activeId)))
@@ -820,12 +975,25 @@ export function ProjectTaskLayout({
 
   // dnd-kit 只在 over.id 变化时触发 onDragOver；同一行内越过中线（before ↔
   // after）要靠每次指针移动重读碰撞检测记下的 edge，空位才会跟上。
-  const handleDragMove = ({ active }: DragMoveEvent) => {
+  const handleDragMove = ({ active, activatorEvent, delta }: DragMoveEvent) => {
+    if (isMagicPlus(String(active.id)) && activatorEvent && 'clientX' in activatorEvent) {
+      // Magic Plus 在屏幕左边缘：落点从任务切换为 Heading。
+      const x = (activatorEvent as PointerEvent).clientX + delta.x;
+      const atEdge = x <= MAGIC_PLUS_HEADING_EDGE;
+      if (atEdge !== headingModeRef.current) {
+        headingModeRef.current = atEdge;
+        if (taskModeLayoutRef.current) renderMagicPlus(taskModeLayoutRef.current);
+      }
+    }
     previewTaskTarget(String(active.id));
   };
 
   const handleDragEnd = ({ active, over }: DragEndEvent) => {
     const activeKey = String(active.id);
+    if (isMagicPlus(activeKey)) {
+      dropMagicPlus(over ? String(over.id) : null);
+      return;
+    }
     if (activeKey.startsWith('task:')) {
       const activeId = activeKey.slice('task:'.length);
       const snapshot = dragStartLayoutRef.current;
@@ -877,7 +1045,99 @@ export function ProjectTaskLayout({
 
   const handleDragCancel = () => {
     if (activeTaskIdRef.current !== null) restoreTaskDrag();
+    clearDraft();
   };
+
+  const clearDraft = () => {
+    draftPendingRef.current = false;
+    taskModeLayoutRef.current = null;
+    headingModeRef.current = false;
+    setDraftTask(null);
+    setDraftHeading(null);
+  };
+
+  /**
+   * Magic Plus 松手：落点同任务拖拽（无 Heading 区 / 某 Heading 下的位置）。
+   * 先以含草稿的布局占位，新任务建好后替换草稿并整份写回布局（Heading
+   * 归属随布局写入）；左边缘模式则在草稿处切开所在组、新建 Heading。
+   * 没落在任何落点即取消。
+   */
+  const dropMagicPlus = (overKey: string | null) => {
+    const base = taskModeLayoutRef.current ?? layoutRef.current;
+    const edge =
+      overKey !== null && lastTaskTargetRef.current?.overKey === overKey
+        ? lastTaskTargetRef.current.edge
+        : 'before';
+    const placement =
+      overKey !== null && isLayoutKey(overKey) ? resolveTaskPlacement(base, overKey, edge) : null;
+    const placed = placement
+      ? (placeTask(base, MAGIC_PLUS_DRAFT_ID, placement) ?? base)
+      : base;
+    if (!findTaskContainer(placed, MAGIC_PLUS_DRAFT_ID)) {
+      restoreTaskDrag();
+      clearDraft();
+      return;
+    }
+    const fallback = dragStartLayoutRef.current;
+    const restore = () => {
+      const latest = pendingServerLayoutRef.current;
+      pendingServerLayoutRef.current = null;
+      clearDraft();
+      updateRenderedLayout(latest ?? fallback ?? serverLayoutRef.current);
+    };
+    activeTaskIdRef.current = null;
+    dragStartLayoutRef.current = null;
+    lastTaskTargetRef.current = null;
+    setActiveTask(null);
+
+    if (headingModeRef.current) {
+      const split = splitAtTask(placed, MAGIC_PLUS_HEADING_ID, MAGIC_PLUS_DRAFT_ID);
+      if (!split) return restore();
+      setDraftTask(null);
+      setDraftHeading(draftHeadingOf(projectId));
+      updateRenderedLayout(split);
+      createHeadingMutate(
+        { projectId, title: '' },
+        {
+          onSuccess: (heading) => setCreatedHeadingId(heading.id),
+          onError: () => {
+            restore();
+            toast.error(t('project:createHeadingFailed'));
+          },
+        },
+      );
+      return;
+    }
+
+    updateRenderedLayout(placed);
+    void magicPlus.create().then((created) => {
+      if (!created) return restore();
+      pendingServerLayoutRef.current = null;
+      clearDraft();
+      const replace = (ids: string[]) =>
+        ids.map((id) => (id === MAGIC_PLUS_DRAFT_ID ? created.id : id));
+      const current = layoutRef.current;
+      persist({
+        ...current,
+        containers: Object.fromEntries(
+          Object.entries(current.containers).map(([id, ids]) => [id, replace(ids)]),
+        ),
+      });
+    });
+  };
+
+  // Magic Plus 新建的 Heading 出现在 props 里之后：草稿换成它、整份写回布局，
+  // 并同新建 Heading 一样进入标题编辑。
+  React.useEffect(() => {
+    if (!createdHeadingId || !headings.some((h) => h.id === createdHeadingId)) return;
+    setCreatedHeadingId(null);
+    pendingServerLayoutRef.current = null;
+    const next = renameHeading(layoutRef.current, MAGIC_PLUS_HEADING_ID, createdHeadingId);
+    clearDraft();
+    persistRef.current(next);
+    useUiInteractionStore.getState().setPendingAutoEditId(createdHeadingId);
+    useSelectionStore.getState().setSelection([createdHeadingId]);
+  }, [createdHeadingId, headings]);
 
   /** 拖到侧边栏的载荷：被拖任务，多选时为整组（按显示顺序）。 */
   const sidebarPayload = (activeKey: string): SidebarDropPayload | null => {
@@ -890,6 +1150,8 @@ export function ProjectTaskLayout({
   // 共享拖拽上下文里的一个 surface（ADR 0018）。
   const surface = useDndSurface({
     owns: isLayoutKey,
+    // 过滤视图不能整份写回布局（同拖拽），不接收 Magic Plus。
+    magicPlus: !visibleTaskIds,
     collisionDetection,
     keyboardCoordinates,
     sidebarPayload,
@@ -909,6 +1171,7 @@ export function ProjectTaskLayout({
     onRowClick: handleRowClick,
     onToggleComplete: toggleComplete,
   };
+  // taskMap 含 Magic Plus 草稿：空项目里拖动时也渲染投放面。
   const hasContent = taskMap.size > 0 || headings.length > 0;
   const filteredEmpty =
     !!visibleTaskIds && Object.values(shown.containers).every((ids) => ids.length === 0);
@@ -942,6 +1205,7 @@ export function ProjectTaskLayout({
                   {...commonContainerProps}
                   heading={heading}
                   taskIds={shown.containers[id] ?? []}
+                  placeholder={id === MAGIC_PLUS_HEADING_ID}
                 />
               );
             })}
