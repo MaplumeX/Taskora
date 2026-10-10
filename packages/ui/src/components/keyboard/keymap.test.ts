@@ -11,6 +11,7 @@ import {
   resolveAction,
   resolveQuickAddAction,
   shortcutLabel,
+  SHORTCUTS,
   type KeyEventLike,
 } from './keymap';
 
@@ -56,11 +57,13 @@ describe('resolveAction — mac 桌面（Things 原键位）', () => {
     });
   });
 
-  it('裸 ←/→ 不派发动作（分组不可折叠）；带修饰同样不触发', () => {
+  it('裸 ←/→ 不派发动作（分组不可折叠）；⌘→ 进入选中项目', () => {
     expect(resolveAction(key('ArrowLeft'), platform)).toBeNull();
     expect(resolveAction(key('ArrowRight'), platform)).toBeNull();
     expect(resolveAction(key('ArrowRight', { altKey: true }), platform)).toBeNull();
-    expect(resolveAction(key('ArrowRight', { metaKey: true }), platform)).toBeNull();
+    expect(resolveAction(key('ArrowRight', { metaKey: true }), platform)).toEqual({
+      type: 'enterProject',
+    });
     expect(resolveAction(key('ArrowLeft', { shiftKey: true }), platform)).toBeNull();
   });
 
@@ -203,10 +206,18 @@ describe('resolveAction — 通用', () => {
     });
   });
 
-  it.each(['mac', 'windows', 'web'] as const)('%s: 带其他修饰的 ↑/↓ 不误触移动', (platform) => {
-    expect(resolveAction(key('ArrowUp', { ctrlKey: true, shiftKey: true }), platform)).toBeNull();
-    expect(resolveAction(key('ArrowDown', { ctrlKey: true }), platform)).toBeNull();
-    expect(resolveAction(key('ArrowDown', { metaKey: true }), platform)).toBeNull();
+  it.each(['mac', 'windows', 'web'] as const)('%s: 带其他修饰的 ↑/↓ 不误触选中移动', (platform) => {
+    const selectionMoves = ['moveUp', 'moveDown', 'extendUp', 'extendDown'];
+    for (const mods of [
+      { ctrlKey: true, shiftKey: true },
+      { ctrlKey: true },
+      { metaKey: true },
+    ]) {
+      for (const arrow of ['ArrowUp', 'ArrowDown']) {
+        const action = resolveAction(key(arrow, mods), platform);
+        expect(selectionMoves).not.toContain(action?.type);
+      }
+    }
   });
 
   it.each(['mac', 'windows', 'web'] as const)(
@@ -263,11 +274,14 @@ describe('resolveAction — 通用', () => {
 // shortcutLabel 的期望值以 docs/keyboard-shortcuts.md 的 P0 键位表为
 // 独立真值来源（⌘N / Ctrl+N / Alt+N 三平台矩阵）。
 describe('resolveAction — 标签（tags-things3 issue 04）', () => {
-  it('mac ⇧⌘T；⌘T 不触发', () => {
+  it('mac ⇧⌘T；⌘T 是计划为今天', () => {
     expect(resolveAction(key('T', { metaKey: true, shiftKey: true }), 'mac')).toEqual({
       type: 'tags',
     });
-    expect(resolveAction(key('t', { metaKey: true }), 'mac')).toBeNull();
+    expect(resolveAction(key('t', { metaKey: true }), 'mac')).toEqual({
+      type: 'schedule',
+      target: 'today',
+    });
   });
 
   it('Windows 桌面 Ctrl+Shift+T', () => {
@@ -464,11 +478,181 @@ describe('resolveQuickAddAction — Quick Add 卡片', () => {
     // ⇧⌘T 在主窗口是标签、在卡片里也是标签，各自解析
     expect(findChordOwner('Shift+Meta+T', 'mac', undefined, 'quickAddTags')).toBeNull();
     expect(findChordOwner('Meta+T', 'mac', undefined, 'quickAddWhen')).toBe('quickAddToday');
-    expect(resolveAction(key('s', { metaKey: true }), 'mac')).toBeNull();
+    expect(resolveAction(key('s', { metaKey: true }), 'mac')).toEqual({ type: 'when' });
   });
 
   it('键位文案按平台', () => {
     expect(quickAddShortcutLabel('move', 'mac')).toBe('⇧⌘M');
     expect(quickAddShortcutLabel('move', 'windows')).toBe('Ctrl+Shift+M');
+  });
+});
+
+describe('resolveAction — Things 补齐的键位（日期 / 移动 / 导航）', () => {
+  it.each(['mac', 'windows', 'web'] as const)('%s: 同一作用域内默认键位不重复', (platform) => {
+    for (const scope of ['app', 'quickAdd'] as const) {
+      const seen = new Map<string, string>();
+      for (const def of SHORTCUTS.filter((d) => d.scope === scope)) {
+        for (const chord of def.defaults[platform]) {
+          expect(seen.get(chord), `${chord} 同时属于 ${seen.get(chord)} 与 ${def.id}`).toBe(
+            undefined,
+          );
+          seen.set(chord, def.id);
+        }
+      }
+    }
+  });
+
+  it('mac：⌘S / ⌘T / ⌘R / ⌘O / ⇧⌘D / ⇧⌘R / ⇧⌘M', () => {
+    const p = 'mac' as const;
+    expect(resolveAction(key('s', { metaKey: true }), p)).toEqual({ type: 'when' });
+    expect(resolveAction(key('r', { metaKey: true }), p)).toEqual({
+      type: 'schedule',
+      target: 'anytime',
+    });
+    expect(resolveAction(key('o', { metaKey: true }), p)).toEqual({
+      type: 'schedule',
+      target: 'someday',
+    });
+    expect(resolveAction(key('D', { metaKey: true, shiftKey: true, code: 'KeyD' }), p)).toEqual({
+      type: 'deadline',
+    });
+    expect(resolveAction(key('R', { metaKey: true, shiftKey: true, code: 'KeyR' }), p)).toEqual({
+      type: 'repeat',
+    });
+    expect(resolveAction(key('M', { metaKey: true, shiftKey: true, code: 'KeyM' }), p)).toEqual({
+      type: 'moveToList',
+    });
+  });
+
+  it('⌃] ⌃[ / ⌃⇧] ⌃⇧[ 步进计划日期（Shift 时按物理键还原）', () => {
+    const p = 'mac' as const;
+    expect(resolveAction(key(']', { ctrlKey: true, code: 'BracketRight' }), p)).toEqual({
+      type: 'shiftStart',
+      days: 1,
+    });
+    expect(resolveAction(key('[', { ctrlKey: true, code: 'BracketLeft' }), p)).toEqual({
+      type: 'shiftStart',
+      days: -1,
+    });
+    expect(
+      resolveAction(key('}', { ctrlKey: true, shiftKey: true, code: 'BracketRight' }), p),
+    ).toEqual({ type: 'shiftStart', days: 7 });
+    expect(
+      resolveAction(key('{', { ctrlKey: true, shiftKey: true, code: 'BracketLeft' }), 'windows'),
+    ).toEqual({ type: 'shiftStart', days: -7 });
+  });
+
+  it('⌃. ⌃, / ⌃⇧. ⌃⇧, 步进截止日期', () => {
+    expect(resolveAction(key('.', { ctrlKey: true, code: 'Period' }), 'web')).toEqual({
+      type: 'shiftDeadline',
+      days: 1,
+    });
+    expect(resolveAction(key(',', { ctrlKey: true, code: 'Comma' }), 'web')).toEqual({
+      type: 'shiftDeadline',
+      days: -1,
+    });
+    expect(
+      resolveAction(key('>', { ctrlKey: true, shiftKey: true, code: 'Period' }), 'mac'),
+    ).toEqual({ type: 'shiftDeadline', days: 7 });
+    expect(
+      resolveAction(key('<', { ctrlKey: true, shiftKey: true, code: 'Comma' }), 'mac'),
+    ).toEqual({ type: 'shiftDeadline', days: -7 });
+  });
+
+  it('排序：mac ⌘↑ / ⌥⌘↓；Windows Ctrl+↑ / Ctrl+Alt+↓', () => {
+    expect(resolveAction(key('ArrowUp', { metaKey: true }), 'mac')).toEqual({
+      type: 'reorder',
+      direction: 'up',
+    });
+    expect(resolveAction(key('ArrowDown', { metaKey: true, altKey: true }), 'mac')).toEqual({
+      type: 'reorder',
+      direction: 'bottom',
+    });
+    expect(resolveAction(key('ArrowUp', { ctrlKey: true }), 'windows')).toEqual({
+      type: 'reorder',
+      direction: 'up',
+    });
+    expect(resolveAction(key('ArrowDown', { ctrlKey: true, altKey: true }), 'windows')).toEqual({
+      type: 'reorder',
+      direction: 'bottom',
+    });
+  });
+
+  it('侧边栏导航：mac ⌃⌥⌘↑；Windows 加 Shift 与「移到顶」区分', () => {
+    expect(
+      resolveAction(key('ArrowUp', { ctrlKey: true, altKey: true, metaKey: true }), 'mac'),
+    ).toEqual({ type: 'sidebarNavigate', delta: -1 });
+    expect(
+      resolveAction(key('ArrowDown', { ctrlKey: true, altKey: true, shiftKey: true }), 'windows'),
+    ).toEqual({ type: 'sidebarNavigate', delta: 1 });
+  });
+
+  it('⌥⇧↑ / ⌥⇧↓ 扩展到顶 / 到底', () => {
+    expect(resolveAction(key('ArrowUp', { altKey: true, shiftKey: true }), 'web')).toEqual({
+      type: 'extendTop',
+    });
+    expect(resolveAction(key('ArrowDown', { altKey: true, shiftKey: true }), 'mac')).toEqual({
+      type: 'extendBottom',
+    });
+  });
+
+  it('⌘L / ⌥⇧⌘N / ⇧⌘C / ⌘/', () => {
+    const p = 'mac' as const;
+    expect(resolveAction(key('l', { metaKey: true }), p)).toEqual({ type: 'showInParent' });
+    expect(
+      resolveAction(
+        key('N', { metaKey: true, altKey: true, shiftKey: true, code: 'KeyN' }),
+        p,
+      ),
+    ).toEqual({ type: 'newHeadingWithSelection' });
+    expect(resolveAction(key('C', { metaKey: true, shiftKey: true, code: 'KeyC' }), p)).toEqual({
+      type: 'newChecklistItem',
+    });
+    expect(resolveAction(key('/', { metaKey: true, code: 'Slash' }), p)).toEqual({
+      type: 'toggleSidebar',
+    });
+  });
+
+  it('Web 避开浏览器保留键：Alt+S / Alt+L / Alt+Shift+P（重复）', () => {
+    expect(resolveAction(key('s', { altKey: true, code: 'KeyS' }), 'web')).toEqual({
+      type: 'when',
+    });
+    expect(resolveAction(key('l', { altKey: true, code: 'KeyL' }), 'web')).toEqual({
+      type: 'showInParent',
+    });
+    expect(
+      resolveAction(key('P', { altKey: true, shiftKey: true, code: 'KeyP' }), 'web'),
+    ).toEqual({ type: 'repeat' });
+    // Alt+Shift+R 仍归回顾模式
+    expect(
+      resolveAction(key('R', { altKey: true, shiftKey: true, code: 'KeyR' }), 'web'),
+    ).toEqual({ type: 'reviewMarkNext' });
+  });
+});
+
+describe('resolveAction — 剪贴板与导航弹窗', () => {
+  it('mac：⌘C / ⌘V / ⌥⌘V / ⇧⌘O', () => {
+    expect(resolveAction(key('c', { metaKey: true }), 'mac')).toEqual({ type: 'copy' });
+    expect(resolveAction(key('v', { metaKey: true }), 'mac')).toEqual({ type: 'paste' });
+    expect(
+      resolveAction(key('√', { metaKey: true, altKey: true, code: 'KeyV' }), 'mac'),
+    ).toEqual({ type: 'pasteMove' });
+    expect(resolveAction(key('O', { metaKey: true, shiftKey: true, code: 'KeyO' }), 'mac')).toEqual(
+      { type: 'navigationPopover' },
+    );
+  });
+
+  it('Windows：Ctrl+C / Ctrl+V / Ctrl+Alt+V / Ctrl+Shift+O；Web 导航弹窗为 Alt+Shift+O', () => {
+    expect(resolveAction(key('c', { ctrlKey: true }), 'windows')).toEqual({ type: 'copy' });
+    expect(resolveAction(key('v', { ctrlKey: true }), 'windows')).toEqual({ type: 'paste' });
+    expect(
+      resolveAction(key('v', { ctrlKey: true, altKey: true, code: 'KeyV' }), 'windows'),
+    ).toEqual({ type: 'pasteMove' });
+    expect(
+      resolveAction(key('O', { ctrlKey: true, shiftKey: true, code: 'KeyO' }), 'windows'),
+    ).toEqual({ type: 'navigationPopover' });
+    expect(
+      resolveAction(key('O', { altKey: true, shiftKey: true, code: 'KeyO' }), 'web'),
+    ).toEqual({ type: 'navigationPopover' });
   });
 });

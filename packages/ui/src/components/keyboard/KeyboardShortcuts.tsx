@@ -10,15 +10,21 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   extendSelectionTo,
   flattenSelectionRows,
+  reorderedRowIds,
+  scopeOfRow,
+  todayDateKey,
   useAssistantUiStore,
   useKeybindingsStore,
   useSelectionStore,
+  useSidebarUiStore,
+  useUpdateProject,
+  useUpdateTask,
   type SelectionRow,
 } from '@taskora/api';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import type { CreateTaskDto } from '@taskora/shared';
+import type { CreateTaskDto, UpdateProjectDto, UpdateTaskDto } from '@taskora/shared';
 import {
   useCancelTask,
   useCompleteTask,
@@ -42,7 +48,26 @@ import {
   type KeyPlatform,
 } from './keymap';
 import { runReviewCommand, type ReviewCommand } from '@/components/review/reviewCommands';
-import { KeyboardTagPicker, taggableSelection } from './KeyboardTagPicker';
+import {
+  KeyboardFieldPicker,
+  fieldPickerApplies,
+  fieldSelection,
+  type FieldTarget,
+  type KeyboardFieldKind,
+} from './KeyboardFieldPicker';
+import { parentRouteFor, shiftedDeadline, shiftedStart } from './keyboardEdits';
+import { planSidebarDrop } from '@/components/layout/sidebarDrop';
+import { useSidebarDropExecutor } from '@/components/layout/SidebarDropProvider';
+import {
+  dropPayloads,
+  getCopiedItems,
+  pageDropTarget,
+  setCopiedItems,
+  titlesFromText,
+  type CopiedItems,
+} from './itemClipboard';
+import { NavigationPopover } from './NavigationPopover';
+import { readClipboardText, writeClipboardText } from './systemClipboard';
 import { useDockToPanel } from '@/components/agent/assistant-panel-layout';
 import { useDuplicate } from '@/components/task/useDuplicate';
 
@@ -86,6 +111,26 @@ function hasOpenOverlay(): boolean {
   );
 }
 
+/** 编辑态里仍然生效的键位：⇧⌘C 在打开的任务（含其标题、备注输入）里新建子任务。 */
+function isInExpandedTask(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  return typeof el?.closest === 'function' && !!el.closest('[data-task-item]');
+}
+
+/** 页面上有选中的文字：⌘C 让给原生复制。 */
+function hasTextSelection(): boolean {
+  const selection = window.getSelection?.();
+  return !!selection && !selection.isCollapsed && selection.toString().length > 0;
+}
+
+/** 侧边栏中的列表行（[data-sidebar-nav] 为其路由），按显示顺序。 */
+function sidebarRoutes(): string[] {
+  const rows = document.querySelectorAll<HTMLElement>('[data-sidebar] [data-sidebar-nav]');
+  return Array.from(rows).flatMap(
+    (el) => (el.dataset.sidebarNav ? [el.dataset.sidebarNav] : []),
+  );
+}
+
 /** 打字唤起 Quick Find 的前提（事件级前提 isEditableTarget / hasOpenOverlay 已在前面判过）。 */
 function canTypeToFind(pathname: string): boolean {
   if (pathname.startsWith('/agent')) return false;
@@ -106,6 +151,15 @@ function neighborAfter(rows: SelectionRow[], ids: string[]): SelectionRow | null
   }
   return null;
 }
+
+/** 打开字段卡片的键位动作。 */
+const FIELD_PICKERS: Partial<Record<KeyAction['type'], KeyboardFieldKind>> = {
+  tags: 'tags',
+  when: 'when',
+  deadline: 'deadline',
+  repeat: 'repeat',
+  moveToList: 'move',
+};
 
 const REVIEW_COMMANDS: Partial<Record<KeyAction['type'], ReviewCommand>> = {
   reviewMarkNext: 'markNext',
@@ -140,20 +194,130 @@ export function KeyboardShortcuts({ platform }: Props) {
   const reorderTasks = useReorderTasks();
   const createTask = useCreateTask();
   const duplicate = useDuplicate();
+  const updateTask = useUpdateTask();
+  const updateProject = useUpdateProject();
+  const executeDrop = useSidebarDropExecutor();
+  /** ⇧⌘O 导航弹窗是否打开。 */
+  const [navigationOpen, setNavigationOpen] = useState(false);
   const createTaskContext = usePageTaskContext();
   const dockToPanel = useDockToPanel();
-  /** ⇧⌘T 打开的 Tag Picker 作用的行（打开时的 Selection 快照）。 */
-  const [tagPickerIds, setTagPickerIds] = useState<string[] | null>(null);
+  /** 键盘打开的字段卡片及其作用的行（打开时的 Selection 快照）。 */
+  const [fieldPicker, setFieldPicker] = useState<{
+    kind: KeyboardFieldKind;
+    ids: string[];
+  } | null>(null);
+  /** ⌘L 导航到父列表后要选中的行。 */
+  const selectAfterNavigate = useRef<string | null>(null);
 
   // 页面切换后 Selection 重置，不残留对已不可见行的选中（story 25）。
   const clearSelection = useSelectionStore((s) => s.clearSelection);
   useEffect(() => {
     clearSelection();
-    setTagPickerIds(null);
+    setFieldPicker(null);
+    const id = selectAfterNavigate.current;
+    if (!id) return;
+    selectAfterNavigate.current = null;
+    useSelectionStore.getState().setSelection([id]);
+    // 目标页的行可能还在加载：等它挂载（至多约 1 秒）再聚焦、滚入视野。
+    let frame = 0;
+    let tries = 60;
+    const reveal = () => {
+      const row = document.querySelector<HTMLElement>(`[data-selection-row="${id}"]`);
+      if (row) {
+        row.focus({ preventScroll: true });
+        row.scrollIntoView?.({ block: 'center' });
+      } else if (--tries > 0) {
+        frame = requestAnimationFrame(reveal);
+      }
+    };
+    frame = requestAnimationFrame(reveal);
+    return () => cancelAnimationFrame(frame);
   }, [pathname, clearSelection]);
 
   useEffect(() => {
     const resolvedPlatform = platform ?? detectKeyPlatform();
+
+    const view = viewOf(pathname);
+    const onSaveError = () => toast.error(t('common:saveFailed'));
+
+    /** 复制的条目按当前页面的显示顺序（不在本页的排在后面，保持复制顺序）。 */
+    const inPageOrder = (copied: CopiedItems) => {
+      const order = new Map(
+        flattenSelectionRows(useSelectionStore.getState()).map((row, index) => [row.id, index]),
+      );
+      return [...copied.items].sort(
+        (a, b) => (order.get(a.id) ?? Infinity) - (order.get(b.id) ?? Infinity),
+      );
+    };
+
+    /** ⌘V 粘贴条目：在原处复制出副本，再落到当前页（同 Sidebar Drop），选中副本。 */
+    const pasteCopies = async (copied: CopiedItems) => {
+      if (view === 'trash' || view === 'logbook') return;
+      const items = inPageOrder(copied);
+      const copies = await duplicate(items, { selectCopies: false });
+      if (copies.length === 0) return;
+      const placed = items.slice(0, copies.length);
+      const target = pageDropTarget(pathname);
+      if (target && executeDrop) {
+        for (const payload of dropPayloads(placed, copies)) executeDrop(payload, target);
+      }
+      // 标签页：副本带上该标签
+      const tagId = /^\/tags\/([^/]+)$/.exec(pathname)?.[1];
+      if (tagId) {
+        placed.forEach((entry, index) => {
+          if (entry.kind !== 'task' || entry.tagIds.includes(tagId)) return;
+          updateTask.mutate(
+            { id: copies[index], data: { tagIds: [...entry.tagIds, tagId] } },
+            { onError: onSaveError },
+          );
+        });
+      }
+      useSelectionStore.getState().setSelection(copies);
+    };
+
+    /** ⌘V 粘贴外部文字：每行一个任务，带当前页上下文，排在选中行下方并选中。 */
+    const pasteText = async (text: string) => {
+      const titles = titlesFromText(text);
+      if (titles.length === 0 || !showAddTask) return;
+      const rows = flattenSelectionRows(useSelectionStore.getState());
+      const taskRows = rows.filter((row) => row.kind === 'task');
+      const anchorId = useSelectionStore.getState().selectedIds.at(-1);
+      const anchorIndex = taskRows.findIndex((row) => row.id === anchorId);
+      const created: string[] = [];
+      for (const title of titles) {
+        try {
+          const task = await new Promise<{ id: string }>((resolve, reject) =>
+            createTask.mutate(
+              { ...createTaskContext, title },
+              { onSuccess: resolve, onError: reject },
+            ),
+          );
+          created.push(task.id);
+        } catch {
+          toast.error(t('common:createFailed'));
+          break;
+        }
+      }
+      if (created.length === 0) return;
+      if (anchorIndex >= 0) {
+        const ids = taskRows.map((row) => row.id);
+        reorderTasks.mutate([
+          ...ids.slice(0, anchorIndex + 1),
+          ...created,
+          ...ids.slice(anchorIndex + 1),
+        ]);
+      }
+      useUiInteractionStore.getState().setExpandedId(null);
+      useSelectionStore.getState().setSelection(created);
+    };
+
+    /** ⌘V：剪贴板仍是 ⌘C 写入的文字（或读不到剪贴板）时粘贴条目，否则粘贴文字。 */
+    const pasteFromClipboard = async () => {
+      const text = await readClipboardText();
+      const copied = getCopiedItems();
+      if (copied && (text === null || text === copied.text)) return pasteCopies(copied);
+      if (text) await pasteText(text);
+    };
 
     const on_keydown = (e: KeyboardEvent) => {
       // 用户自定义键位（设置 → 快捷键）在事件时读取，改绑即时生效。
@@ -167,6 +331,18 @@ export function KeyboardShortcuts({ platform }: Props) {
         e.preventDefault();
         if (pathname.startsWith('/agent')) dockToPanel();
         else useAssistantUiStore.getState().togglePanel();
+        return;
+      }
+      // ⇧⌘C：打开的任务里正在编辑标题 / 备注时同样生效。
+      if (
+        action?.type === 'newChecklistItem' &&
+        isEditableTarget(e.target) &&
+        isInExpandedTask(e.target)
+      ) {
+        const expandedId = useUiInteractionStore.getState().expandedId;
+        if (!expandedId || hasOpenOverlay()) return;
+        e.preventDefault();
+        useUiInteractionStore.getState().requestSubtaskDraft(expandedId);
         return;
       }
       // 编辑态让路（story 22）：行内编辑聚焦时快捷键全部让路。
@@ -194,6 +370,26 @@ export function KeyboardShortcuts({ platform }: Props) {
         if (!canTypeToFind(pathname)) return;
         e.preventDefault();
         useUiInteractionStore.getState().openSearch(action.seed);
+        return;
+      }
+      // 剪贴板（⌘C / ⌘V / ⌥⌘V）：只在没有可作用的条目时让给原生行为，
+      // 因此在统一 preventDefault 之前单独处理。
+      if (action.type === 'copy') {
+        if (hasTextSelection()) return;
+        const targets = fieldSelection(useSelectionStore.getState().selectedIds).filter(
+          (target) => target.item,
+        );
+        if (targets.length === 0) return;
+        e.preventDefault();
+        const copied = setCopiedItems(
+          targets.map(({ id, kind, item, tagIds }) => ({ id, kind, item: item!, tagIds: tagIds ?? [] })),
+        );
+        void writeClipboardText(copied.text);
+        return;
+      }
+      if (action.type === 'paste') {
+        e.preventDefault();
+        void pasteFromClipboard();
         return;
       }
       // 回顾模式的键位：不在回顾模式时不拦截
@@ -252,12 +448,77 @@ export function KeyboardShortcuts({ platform }: Props) {
       // 只跳过分组标题，独立 Project 行与项目内部 Heading 仍可导航。
       const navigationRows = rows.filter((r) => !r.groupHeader);
       const taskRows = rows.filter((r) => r.kind === 'task');
-      const view = viewOf(pathname);
       const rowById = new Map(rows.map((r) => [r.id, r]));
+      // 日期、移动等编辑不作用于 Trash 与 Logbook 中的条目。
+      const editable = view !== 'trash' && view !== 'logbook';
+      const patchTarget = (target: FieldTarget, data: UpdateTaskDto & UpdateProjectDto) => {
+        if (target.kind === 'project') {
+          updateProject.mutate({ id: target.id, data }, { onError: onSaveError });
+        } else {
+          updateTask.mutate({ id: target.id, data }, { onError: onSaveError });
+        }
+      };
 
       switch (action.type) {
         case 'navigate': {
           navigate(BUCKET_ROUTES[action.index - 1]);
+          return;
+        }
+        case 'sidebarNavigate': {
+          const routes = sidebarRoutes();
+          if (routes.length === 0) return;
+          let index = routes.indexOf(pathname);
+          if (index === -1) index = routes.findIndex((route) => pathname.startsWith(`${route}/`));
+          const next =
+            index === -1
+              ? action.delta > 0
+                ? 0
+                : routes.length - 1
+              : Math.max(0, Math.min(routes.length - 1, index + action.delta));
+          if (next !== index) navigate(routes[next]);
+          return;
+        }
+        case 'enterProject': {
+          const id = selection.selectedIds.at(-1);
+          const row = id ? rowById.get(id) : undefined;
+          if (row?.kind === 'project') navigate(`/projects/${row.id}`);
+          else if (row?.kind === 'area') navigate(`/areas/${row.id}`);
+          return;
+        }
+        case 'showInParent': {
+          const id = selection.selectedIds.at(-1);
+          const row = id ? rowById.get(id) : undefined;
+          if (!row?.item || row.groupHeader || (row.kind !== 'task' && row.kind !== 'project')) {
+            return;
+          }
+          const route = parentRouteFor(row.kind, row.item, todayDateKey());
+          if (!route || route === pathname) return;
+          selectAfterNavigate.current = row.id;
+          navigate(route);
+          return;
+        }
+        case 'navigationPopover': {
+          setNavigationOpen(true);
+          return;
+        }
+        case 'pasteMove': {
+          // ⌥⌘V：把复制的条目移到当前列表（同 Sidebar Drop 落在该列表）。
+          const copied = getCopiedItems();
+          if (!copied) return;
+          const target = pageDropTarget(pathname);
+          if (!target || !executeDrop) {
+            toast(t('task:pasteMoveUnavailable'));
+            return;
+          }
+          const items = inPageOrder(copied);
+          for (const payload of dropPayloads(items)) executeDrop(payload, target);
+          useSelectionStore.getState().setSelection(items.map((item) => item.id));
+          return;
+        }
+        case 'toggleSidebar': {
+          // 侧边栏只在桌面宽度可收起（与 useIsDesktop 同阈值）。
+          if (!window.matchMedia('(min-width: 768px)').matches) return;
+          useSidebarUiStore.getState().toggleCollapsed();
           return;
         }
         case 'back': {
@@ -313,6 +574,15 @@ export function KeyboardShortcuts({ platform }: Props) {
           useUiInteractionStore.getState().setExpandedId(null);
           extendSelectionTo(rows[next].id);
           focusSelectionRow(rows[next].id);
+          return;
+        }
+        case 'extendTop':
+        case 'extendBottom': {
+          if (taskRows.length === 0) return;
+          const target = action.type === 'extendTop' ? taskRows[0] : taskRows[taskRows.length - 1];
+          useUiInteractionStore.getState().setExpandedId(null);
+          extendSelectionTo(target.id);
+          focusSelectionRow(target.id);
           return;
         }
         case 'selectAll': {
@@ -459,10 +729,115 @@ export function KeyboardShortcuts({ platform }: Props) {
           useUiInteractionStore.getState().openSearch();
           return;
         }
-        case 'tags': {
-          const targets = taggableSelection(selection.selectedIds);
-          if (targets.length === 0) return;
-          setTagPickerIds(targets.map((row) => row.id));
+        case 'tags':
+        case 'when':
+        case 'deadline':
+        case 'repeat':
+        case 'moveToList': {
+          const kind = FIELD_PICKERS[action.type]!;
+          if (kind !== 'tags' && !editable) return;
+          const targets = fieldSelection(selection.selectedIds);
+          if (!fieldPickerApplies(kind, targets)) {
+            // 重复规则以计划日期为锚点（同右键菜单只对 DATE 型条目提供）。
+            if (kind === 'repeat' && targets.length === 1) {
+              toast(t('task:repeatNeedsScheduledDate'));
+            }
+            return;
+          }
+          setFieldPicker({ kind, ids: targets.map((target) => target.id) });
+          return;
+        }
+        case 'schedule': {
+          // 与拖到侧边栏的 Today / Anytime / Someday 同一套规划（已符合的跳过）。
+          if (!editable) return;
+          const targets = fieldSelection(selection.selectedIds).filter((target) => target.item);
+          const today = todayDateKey();
+          const tasks = targets.filter((target) => target.kind === 'task');
+          const planned = [
+            ...(tasks.length > 0
+              ? (planSidebarDrop(
+                  {
+                    kind: 'tasks',
+                    tasks: tasks.map(({ id, item }) => ({
+                      id,
+                      ...item!,
+                      projectId: item!.projectId ?? null,
+                    })),
+                  },
+                  { kind: action.target },
+                  today,
+                ) ?? [])
+              : []),
+            ...targets
+              .filter((target) => target.kind === 'project')
+              .flatMap(
+                ({ id, item }) =>
+                  planSidebarDrop(
+                    { kind: 'project', project: { id, ...item! } },
+                    { kind: action.target },
+                    today,
+                  ) ?? [],
+              ),
+          ];
+          for (const step of planned) {
+            if (step.type === 'updateTask') {
+              updateTask.mutate({ id: step.id, data: step.data }, { onError: onSaveError });
+            } else if (step.type === 'updateProject') {
+              updateProject.mutate({ id: step.id, data: step.data }, { onError: onSaveError });
+            }
+          }
+          return;
+        }
+        case 'shiftStart':
+        case 'shiftDeadline': {
+          if (!editable) return;
+          const today = todayDateKey();
+          for (const target of fieldSelection(selection.selectedIds)) {
+            if (!target.item) continue;
+            const data =
+              action.type === 'shiftStart'
+                ? shiftedStart(target.item, action.days, today)
+                : shiftedDeadline(target.item, action.days, today);
+            if (data) patchTarget(target, data);
+          }
+          return;
+        }
+        case 'reorder': {
+          const cursor = selection.selectedIds.at(-1);
+          const scope = cursor ? scopeOfRow(cursor) : null;
+          if (!cursor || !scope?.actions.reorder) return;
+          const next = reorderedRowIds(scope.rows, selection.selectedIds, action.direction);
+          if (!next) return;
+          scope.actions.reorder(next);
+          requestAnimationFrame(() => {
+            document
+              .querySelector<HTMLElement>(`[data-selection-row="${cursor}"]`)
+              ?.scrollIntoView?.({ block: 'nearest' });
+          });
+          return;
+        }
+        case 'newHeadingWithSelection': {
+          const taskIds = rows
+            .filter((r) => r.kind === 'task' && selection.selectedIds.includes(r.id))
+            .map((r) => r.id);
+          const scope = taskIds.length > 0 ? scopeOfRow(taskIds[0]) : null;
+          if (scope?.actions.headingFromSelection) {
+            scope.actions.headingFromSelection(taskIds);
+          } else if (taskIds.length === 0 && showAddHeading) {
+            handleAddHeading();
+          }
+          return;
+        }
+        case 'newChecklistItem': {
+          const ui = useUiInteractionStore.getState();
+          const id = ui.expandedId ?? selection.selectedIds.at(-1);
+          if (!id || rowById.get(id)?.kind !== 'task' || view === 'trash') return;
+          // 只选中未展开时一并展开（展开态挂载后取走请求）。
+          if (ui.expandedId !== id) {
+            useSelectionStore.getState().setSelection([id]);
+            ui.setExpandedId(id);
+          }
+          ui.requestSubtaskDraft(id);
           return;
         }
         case 'duplicate': {
@@ -508,6 +883,9 @@ export function KeyboardShortcuts({ platform }: Props) {
     reorderTasks,
     createTask,
     duplicate,
+    updateTask,
+    updateProject,
+    executeDrop,
     createTaskContext,
     dockToPanel,
     t,
@@ -516,13 +894,23 @@ export function KeyboardShortcuts({ platform }: Props) {
   return (
     <>
       <TypeToFindSink pathname={pathname} />
-      {tagPickerIds && (
-        <KeyboardTagPicker
-          ids={tagPickerIds}
+      {navigationOpen && (
+        <NavigationPopover
+          onClose={() => setNavigationOpen(false)}
+          onNavigate={(route) => {
+            setNavigationOpen(false);
+            if (route !== pathname) navigate(route);
+          }}
+        />
+      )}
+      {fieldPicker && (
+        <KeyboardFieldPicker
+          kind={fieldPicker.kind}
+          ids={fieldPicker.ids}
           onClose={() => {
-            setTagPickerIds(null);
+            setFieldPicker(null);
             // 焦点还给最后一个选中行，Selection 不变
-            const id = tagPickerIds.at(-1);
+            const id = fieldPicker.ids.at(-1);
             requestAnimationFrame(() => {
               document
                 .querySelector<HTMLElement>(`[data-selection-row="${id}"]`)

@@ -23,6 +23,9 @@ export type KeyAction =
   /** ⇧↑ / ⇧↓：从锚点扩展（或收缩）连续多选。 */
   | { type: 'extendUp' }
   | { type: 'extendDown' }
+  /** ⌥⇧↑ / ⌥⇧↓：多选扩展到顶 / 到底。 */
+  | { type: 'extendTop' }
+  | { type: 'extendBottom' }
   | { type: 'selectAll' }
   /** ⌘K/Ctrl+K：完成选中；Logbook 中撤销完成。 */
   | { type: 'complete' }
@@ -43,6 +46,42 @@ export type KeyAction =
   | { type: 'tags' }
   /** ⌘D / Ctrl+D：复制选中的任务 / 项目（Duplicate），副本紧跟来源。 */
   | { type: 'duplicate' }
+  /** ⌘S：对选中项打开计划日期（When）卡片。 */
+  | { type: 'when' }
+  /** ⌘T / ⌘R / ⌘O：计划为今天 / 随时（清除计划）/ 某天。 */
+  | { type: 'schedule'; target: 'today' | 'anytime' | 'someday' }
+  /** ⌃] ⌃[ / ⌃⇧] ⌃⇧[：计划日期 ±1 天 / ±1 周。 */
+  | { type: 'shiftStart'; days: number }
+  /** ⇧⌘D：打开截止日期卡片。 */
+  | { type: 'deadline' }
+  /** ⌃. ⌃, / ⌃⇧. ⌃⇧,：截止日期 ±1 天 / ±1 周。 */
+  | { type: 'shiftDeadline'; days: number }
+  /** ⇧⌘R：打开重复规则卡片。 */
+  | { type: 'repeat' }
+  /** ⇧⌘M：移动到其他列表。 */
+  | { type: 'moveToList' }
+  /** ⌘↑ / ⌘↓ / ⌥⌘↑ / ⌥⌘↓：选中项上移 / 下移 / 到顶 / 到底（排序）。 */
+  | { type: 'reorder'; direction: 'up' | 'down' | 'top' | 'bottom' }
+  /** ⌃⌥⌘↑ / ↓：侧边栏上一个 / 下一个列表。 */
+  | { type: 'sidebarNavigate'; delta: 1 | -1 }
+  /** ⌘→：进入选中的项目 / 区域。 */
+  | { type: 'enterProject' }
+  /** ⌘L：在父列表中显示选中项。 */
+  | { type: 'showInParent' }
+  /** ⌥⇧⌘N：用选中任务新建 Heading（项目页）。 */
+  | { type: 'newHeadingWithSelection' }
+  /** ⇧⌘C：在打开的任务里新建子任务。 */
+  | { type: 'newChecklistItem' }
+  /** ⌘/：显示 / 隐藏侧边栏。 */
+  | { type: 'toggleSidebar' }
+  /** ⌘C：复制选中的任务 / 项目（无条目选中时让给原生复制）。 */
+  | { type: 'copy' }
+  /** ⌘V：粘贴复制的条目副本，或把剪贴板文字逐行建成任务。 */
+  | { type: 'paste' }
+  /** ⌥⌘V：把复制的条目移到当前列表。 */
+  | { type: 'pasteMove' }
+  /** ⇧⌘O：导航弹窗（跳到任意列表、区域、项目）。 */
+  | { type: 'navigationPopover' }
   /** ⌘J / Ctrl+J / Alt+J：开关助手面板（`/agent` 页为「收回到面板」）。 */
   | { type: 'toggleAssistantPanel' }
   /** 回顾模式（Review Mode）：标记已回顾并进入下一个 / 跳过 / 上一个；只在回顾模式下生效。 */
@@ -101,7 +140,16 @@ export type Chord = string;
 
 /** 设置页的分组（与 docs/keyboard-shortcuts.md 的小节一致）。 */
 export type ShortcutGroup =
-  'navigation' | 'selection' | 'create' | 'complete' | 'edit' | 'global' | 'review' | 'quickAdd';
+  | 'navigation'
+  | 'selection'
+  | 'create'
+  | 'complete'
+  | 'edit'
+  | 'dates'
+  | 'move'
+  | 'global'
+  | 'review'
+  | 'quickAdd';
 
 /**
  * 键位作用域：主窗口（KeyboardShortcuts）与 Quick Add 卡片（独立浮窗）各自
@@ -118,24 +166,56 @@ export type ShortcutId =
   | 'navigateSomeday'
   | 'navigateLogbook'
   | 'back'
+  | 'sidebarUp'
+  | 'sidebarDown'
+  | 'enterProject'
+  | 'showInParent'
+  | 'navigationPopover'
   | 'moveUp'
   | 'moveDown'
   | 'moveFirst'
   | 'moveLast'
   | 'extendUp'
   | 'extendDown'
+  | 'extendTop'
+  | 'extendBottom'
   | 'selectAll'
   | 'newTask'
   | 'newTaskBelow'
   | 'newProject'
   | 'newHeading'
+  | 'newHeadingWithSelection'
+  | 'newChecklistItem'
   | 'complete'
   | 'cancel'
   | 'delete'
   | 'tags'
   | 'duplicate'
+  | 'copy'
+  | 'paste'
+  | 'pasteMove'
   | 'expand'
+  | 'when'
+  | 'startToday'
+  | 'startAnytime'
+  | 'startSomeday'
+  | 'startNextDay'
+  | 'startPreviousDay'
+  | 'startNextWeek'
+  | 'startPreviousWeek'
+  | 'deadline'
+  | 'deadlineNextDay'
+  | 'deadlinePreviousDay'
+  | 'deadlineNextWeek'
+  | 'deadlinePreviousWeek'
+  | 'repeat'
+  | 'moveToList'
+  | 'reorderUp'
+  | 'reorderDown'
+  | 'reorderTop'
+  | 'reorderBottom'
   | 'search'
+  | 'toggleSidebar'
   | 'toggleAssistantPanel'
   | 'reviewMarkNext'
   | 'reviewPostpone'
@@ -168,6 +248,29 @@ function primaryDefaults(key: string): Record<KeyPlatform, Chord[]> {
 
 function samePerPlatform(...chords: Chord[]): Record<KeyPlatform, Chord[]> {
   return { mac: chords, windows: chords, web: chords };
+}
+
+/** mac ⌘ / Windows Ctrl / Web Alt（浏览器保留键）的同一字母键。 */
+function altOnWebDefaults(key: string): Record<KeyPlatform, Chord[]> {
+  return { mac: [`Meta+${key}`], windows: [`Ctrl+${key}`], web: [`Alt+${key}`] };
+}
+
+/** mac ⇧⌘ / Windows Ctrl+Shift / Web Alt+Shift 的同一字母键。 */
+function shiftAltOnWebDefaults(key: string, webKey = key): Record<KeyPlatform, Chord[]> {
+  return {
+    mac: [`Shift+Meta+${key}`],
+    windows: [`Ctrl+Shift+${key}`],
+    web: [`Alt+Shift+${webKey}`],
+  };
+}
+
+function appDef(
+  id: ShortcutId,
+  group: ShortcutGroup,
+  action: Exclude<KeyAction, { type: 'typeToFind' }>,
+  defaults: Record<KeyPlatform, Chord[]>,
+): ShortcutDef {
+  return { id, scope: 'app', group, action, defaults };
 }
 
 function navigateDef(id: ShortcutId, index: 1 | 2 | 3 | 4 | 5 | 6): ShortcutDef {
@@ -223,6 +326,37 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     action: { type: 'back' },
     defaults: { mac: ['Meta+ArrowLeft'], windows: ['Alt+ArrowLeft'], web: [] },
   },
+  // Windows 没有独立的 ⌃：⌥⌘↑ 已归「移到顶」，侧边栏导航加 Shift。
+  appDef(
+    'sidebarUp',
+    'navigation',
+    { type: 'sidebarNavigate', delta: -1 },
+    {
+      mac: ['Ctrl+Alt+Meta+ArrowUp'],
+      windows: ['Ctrl+Alt+Shift+ArrowUp'],
+      web: ['Ctrl+Alt+Shift+ArrowUp', 'Ctrl+Alt+Meta+ArrowUp'],
+    },
+  ),
+  appDef(
+    'sidebarDown',
+    'navigation',
+    { type: 'sidebarNavigate', delta: 1 },
+    {
+      mac: ['Ctrl+Alt+Meta+ArrowDown'],
+      windows: ['Ctrl+Alt+Shift+ArrowDown'],
+      web: ['Ctrl+Alt+Shift+ArrowDown', 'Ctrl+Alt+Meta+ArrowDown'],
+    },
+  ),
+  appDef('enterProject', 'navigation', { type: 'enterProject' }, primaryDefaults('ArrowRight')),
+  // Web 的 Ctrl+L 是地址栏，拦截不了。
+  appDef('showInParent', 'navigation', { type: 'showInParent' }, altOnWebDefaults('L')),
+  // Web 的 Ctrl+Shift+O 是浏览器书签管理器。
+  appDef(
+    'navigationPopover',
+    'navigation',
+    { type: 'navigationPopover' },
+    shiftAltOnWebDefaults('O'),
+  ),
   {
     id: 'moveUp',
     scope: 'app',
@@ -265,6 +399,13 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     action: { type: 'extendDown' },
     defaults: samePerPlatform('Shift+ArrowDown'),
   },
+  appDef('extendTop', 'selection', { type: 'extendTop' }, samePerPlatform('Alt+Shift+ArrowUp')),
+  appDef(
+    'extendBottom',
+    'selection',
+    { type: 'extendBottom' },
+    samePerPlatform('Alt+Shift+ArrowDown'),
+  ),
   {
     id: 'selectAll',
     scope: 'app',
@@ -301,6 +442,18 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     action: { type: 'newHeading' },
     defaults: { mac: ['Shift+Meta+N'], windows: ['Ctrl+Shift+N'], web: ['Alt+H'] },
   },
+  appDef(
+    'newHeadingWithSelection',
+    'create',
+    { type: 'newHeadingWithSelection' },
+    {
+      mac: ['Alt+Shift+Meta+N'],
+      windows: ['Ctrl+Alt+Shift+N'],
+      web: ['Alt+Shift+H'],
+    },
+  ),
+  // Web 的 Ctrl+Shift+C 是开发者工具的检查元素。
+  appDef('newChecklistItem', 'create', { type: 'newChecklistItem' }, shiftAltOnWebDefaults('C')),
   {
     id: 'complete',
     scope: 'app',
@@ -339,6 +492,19 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     action: { type: 'duplicate' },
     defaults: primaryDefaults('D'),
   },
+  // 剪贴板：焦点在输入框里或页面上有选中文字时让给原生复制 / 粘贴。
+  appDef('copy', 'edit', { type: 'copy' }, primaryDefaults('C')),
+  appDef('paste', 'edit', { type: 'paste' }, primaryDefaults('V')),
+  appDef(
+    'pasteMove',
+    'edit',
+    { type: 'pasteMove' },
+    {
+      mac: ['Alt+Meta+V'],
+      windows: ['Ctrl+Alt+V'],
+      web: ['Ctrl+Alt+V', 'Alt+Meta+V'],
+    },
+  ),
   {
     id: 'expand',
     scope: 'app',
@@ -346,6 +512,76 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     action: { type: 'expand' },
     defaults: samePerPlatform('Enter'),
   },
+  // 日期（Things 的 Edit Dates）：Web 的 Ctrl+S/T/R/O 是浏览器保留键，降级为 Alt 系。
+  appDef('when', 'dates', { type: 'when' }, altOnWebDefaults('S')),
+  appDef('startToday', 'dates', { type: 'schedule', target: 'today' }, altOnWebDefaults('T')),
+  appDef('startAnytime', 'dates', { type: 'schedule', target: 'anytime' }, altOnWebDefaults('R')),
+  appDef('startSomeday', 'dates', { type: 'schedule', target: 'someday' }, altOnWebDefaults('O')),
+  appDef('startNextDay', 'dates', { type: 'shiftStart', days: 1 }, samePerPlatform('Ctrl+]')),
+  appDef('startPreviousDay', 'dates', { type: 'shiftStart', days: -1 }, samePerPlatform('Ctrl+[')),
+  appDef(
+    'startNextWeek',
+    'dates',
+    { type: 'shiftStart', days: 7 },
+    samePerPlatform('Ctrl+Shift+]'),
+  ),
+  appDef(
+    'startPreviousWeek',
+    'dates',
+    { type: 'shiftStart', days: -7 },
+    samePerPlatform('Ctrl+Shift+['),
+  ),
+  appDef('deadline', 'dates', { type: 'deadline' }, shiftAltOnWebDefaults('D')),
+  appDef('deadlineNextDay', 'dates', { type: 'shiftDeadline', days: 1 }, samePerPlatform('Ctrl+.')),
+  appDef(
+    'deadlinePreviousDay',
+    'dates',
+    { type: 'shiftDeadline', days: -1 },
+    samePerPlatform('Ctrl+,'),
+  ),
+  appDef(
+    'deadlineNextWeek',
+    'dates',
+    { type: 'shiftDeadline', days: 7 },
+    samePerPlatform('Ctrl+Shift+.'),
+  ),
+  appDef(
+    'deadlinePreviousWeek',
+    'dates',
+    { type: 'shiftDeadline', days: -7 },
+    samePerPlatform('Ctrl+Shift+,'),
+  ),
+  // Web 的 Alt+Shift+R 已归回顾模式的「标记已回顾」，重复规则走 Alt+Shift+P。
+  appDef('repeat', 'dates', { type: 'repeat' }, shiftAltOnWebDefaults('R', 'P')),
+  // 移动 / 排序
+  appDef('moveToList', 'move', { type: 'moveToList' }, shiftAltOnWebDefaults('M')),
+  appDef('reorderUp', 'move', { type: 'reorder', direction: 'up' }, primaryDefaults('ArrowUp')),
+  appDef(
+    'reorderDown',
+    'move',
+    { type: 'reorder', direction: 'down' },
+    primaryDefaults('ArrowDown'),
+  ),
+  appDef(
+    'reorderTop',
+    'move',
+    { type: 'reorder', direction: 'top' },
+    {
+      mac: ['Alt+Meta+ArrowUp'],
+      windows: ['Ctrl+Alt+ArrowUp'],
+      web: ['Ctrl+Alt+ArrowUp', 'Alt+Meta+ArrowUp'],
+    },
+  ),
+  appDef(
+    'reorderBottom',
+    'move',
+    { type: 'reorder', direction: 'bottom' },
+    {
+      mac: ['Alt+Meta+ArrowDown'],
+      windows: ['Ctrl+Alt+ArrowDown'],
+      web: ['Ctrl+Alt+ArrowDown', 'Alt+Meta+ArrowDown'],
+    },
+  ),
   {
     id: 'search',
     scope: 'app',
@@ -353,6 +589,7 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     action: { type: 'search' },
     defaults: primaryDefaults('F'),
   },
+  appDef('toggleSidebar', 'global', { type: 'toggleSidebar' }, primaryDefaults('/')),
   // Web 的 Ctrl+J 是浏览器下载页。
   {
     id: 'toggleAssistantPanel',
@@ -466,9 +703,18 @@ function chordKey(e: KeyEventLike): string | null {
   return e.key;
 }
 
+/** 带 Shift 时按物理键还原的标点（⌃⇧] 的 key 是 `}`）。 */
+const PUNCTUATION_CODES: Record<string, string> = {
+  BracketLeft: '[',
+  BracketRight: ']',
+  Comma: ',',
+  Period: '.',
+  Slash: '/',
+};
+
 function codeKey(code: string): string | null {
   const m = /^(?:Key([A-Z])|Digit(\d))$/.exec(code);
-  return m ? (m[1] ?? m[2]) : null;
+  return m ? (m[1] ?? m[2]) : (PUNCTUATION_CODES[code] ?? null);
 }
 
 /** 事件 → 规范键位；单按修饰键、输入法组字中返回 null。 */

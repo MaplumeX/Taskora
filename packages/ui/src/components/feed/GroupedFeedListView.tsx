@@ -467,12 +467,17 @@ export function GroupedFeedListView({
               cancelled: block.item.status === 'CANCELLED',
               tagIds: block.item.tags.map((tag) => tag.id),
               groupHeaderId: block.groupHeaderId ?? undefined,
+              item: block.item,
+              // ⌘↑/⌘↓ 只在组内（或顶部未分组区内）重排，不经键盘改归属。
+              sortGroup: block.groupHeaderId ?? UNGROUPED,
             };
           case 'projectRow':
             return {
               id: block.item.id,
               kind: 'project',
               tagIds: block.item.tags.map((tag) => tag.id),
+              item: block.item,
+              sortGroup: UNGROUPED,
             };
           case 'projectGroupHeader':
             return {
@@ -492,7 +497,31 @@ export function GroupedFeedListView({
       }),
     [layout],
   );
-  useSelectionScope(rows);
+  const rowsRef = React.useRef(rows);
+  rowsRef.current = rows;
+  const reorderFeedMutate = reorderFeed.mutate;
+  // ⌘↑/⌘↓：新行序按显示顺序写回（同拖拽松手），组头不写；挪动即已读（New in Today）。
+  const scopeActions = React.useMemo(
+    () => ({
+      reorder: (ids: string[]) => {
+        const rowById = new Map(rowsRef.current.map((row) => [row.id, row]));
+        const order = ids.flatMap((id): FeedOrderItem[] => {
+          const row = rowById.get(id);
+          if (!row || row.groupHeader) return [];
+          return [{ type: row.kind === 'project' ? 'project' : 'task', id }];
+        });
+        for (const id of useSelectionStore.getState().selectedIds) {
+          const row = rowById.get(id);
+          if (row && !row.groupHeader) {
+            markNewInTodaySeen(row.kind === 'project' ? 'project' : 'task', id);
+          }
+        }
+        reorderFeedMutate(order);
+      },
+    }),
+    [reorderFeedMutate],
+  );
+  useSelectionScope(rows, 0, scopeActions);
 
   const projectMap = React.useMemo(
     () => Object.fromEntries(projects.map((p) => [p.id, p.title])),

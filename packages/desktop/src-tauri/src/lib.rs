@@ -112,6 +112,9 @@ pub fn run() {
         // 系统通知（Reminders spec）：权限查询。reminder 本身带操作按钮，
         // 走 reminder_notification::show_reminder（插件桌面端无按钮/回调）。
         .plugin(tauri_plugin_notification::init())
+        // 系统剪贴板（⌘C / ⌘V 复制粘贴任务）：WKWebView 的 navigator.clipboard
+        // 读其他应用写入的内容会弹系统「粘贴」确认，改走原生剪贴板。
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|app| {
             // System tray (desktop shell hardening): re-entry point for a
             // hidden main window + the explicit quit path. Without it, the

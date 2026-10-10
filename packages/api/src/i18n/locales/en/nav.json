@@ -16,5 +16,8 @@
   "assistant": "Assistant",
   "resizeSidebar": "Resize sidebar",
   "review": "Review",
+  "navigationTitle": "Go to",
+  "navigationPlaceholder": "Go to a list, area or project…",
+  "navigationNoResults": "No matching lists",
   "deadlines": "Deadlines"
 }

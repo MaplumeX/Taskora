@@ -38,6 +38,7 @@ export function ProjectItem({ project, dropOver = false }: Props) {
       <div
         role="button"
         data-preload-route={`/projects/${project.id}`}
+        data-sidebar-nav={`/projects/${project.id}`}
         tabIndex={0}
         onClick={() => navigate(`/projects/${project.id}`)}
         onKeyDown={(e) => {

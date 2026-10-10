@@ -88,6 +88,7 @@ export default function Logbook() {
           completed: item.status === 'COMPLETED',
           cancelled: item.status === 'CANCELLED',
           tagIds: item.tags.map((tag) => tag.id),
+          item,
         })),
     [items, archivedIds],
   );

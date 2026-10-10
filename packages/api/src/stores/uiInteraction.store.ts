@@ -17,6 +17,11 @@ interface UiInteractionState {
    */
   revealId: string | null;
   pendingAutoEditId: string | null;
+  /**
+   * ⇧⌘C 的待处理请求：在该任务的展开态里新建一条子任务草稿。展开态可能
+   * 尚未挂载（键位同时展开任务），因此保存为待处理状态，由展开态取走。
+   */
+  subtaskDraftTaskId: string | null;
   settingsOpen: boolean;
   settingsTab: SettingsTab;
   /**
@@ -35,6 +40,9 @@ interface UiInteractionState {
   setRevealId: (id: string | null) => void;
   setPendingAutoEditId: (id: string | null) => void;
   clearPendingAutoEditId: () => void;
+  requestSubtaskDraft: (taskId: string) => void;
+  /** 取走该任务的子任务草稿请求；有则返回 true。 */
+  takeSubtaskDraft: (taskId: string) => boolean;
   openSettings: (tab?: SettingsTab) => void;
   closeSettings: () => void;
   setSettingsTab: (tab: SettingsTab) => void;
@@ -44,6 +52,7 @@ export const useUiInteractionStore = create<UiInteractionState>()((set, get) => 
   expandedId: null,
   revealId: null,
   pendingAutoEditId: null,
+  subtaskDraftTaskId: null,
   settingsOpen: false,
   settingsTab: 'appearance',
   settingsEntryTab: null,
@@ -61,6 +70,12 @@ export const useUiInteractionStore = create<UiInteractionState>()((set, get) => 
   setRevealId: (id) => set({ revealId: id }),
   setPendingAutoEditId: (id) => set({ pendingAutoEditId: id }),
   clearPendingAutoEditId: () => set({ pendingAutoEditId: null }),
+  requestSubtaskDraft: (taskId) => set({ subtaskDraftTaskId: taskId }),
+  takeSubtaskDraft: (taskId) => {
+    if (get().subtaskDraftTaskId !== taskId) return false;
+    set({ subtaskDraftTaskId: null });
+    return true;
+  },
   openSettings: (tab) =>
     set({ settingsOpen: true, settingsTab: tab ?? 'appearance', settingsEntryTab: tab ?? null }),
   closeSettings: () => set({ settingsOpen: false }),

@@ -4,6 +4,7 @@ import {
   contextMenuTargets,
   extendSelectionTo,
   flattenSelectionRows,
+  reorderedRowIds,
   toggleRowSelection,
   useSelectionStore,
 } from './selection.store';
@@ -119,5 +120,41 @@ describe('右键菜单作用对象', () => {
     useSelectionStore.getState().setSelection(['a']);
     expect(contextMenuTargets('b')).toEqual(['b']);
     expect(ids()).toEqual(['a']);
+  });
+});
+
+describe('reorderedRowIds（⌘↑/⌘↓ 键盘排序）', () => {
+  const sorted = (id: string, sortGroup = 'a') => ({ ...row(id), sortGroup });
+  it('单行上移 / 下移一步，到顶 / 到底', () => {
+    const rows = [sorted('1'), sorted('2'), sorted('3')];
+    expect(reorderedRowIds(rows, ['2'], 'up')).toEqual(['2', '1', '3']);
+    expect(reorderedRowIds(rows, ['2'], 'down')).toEqual(['1', '3', '2']);
+    expect(reorderedRowIds(rows, ['3'], 'top')).toEqual(['3', '1', '2']);
+    expect(reorderedRowIds(rows, ['1'], 'bottom')).toEqual(['2', '3', '1']);
+  });
+
+  it('已在边界时返回 null', () => {
+    const rows = [sorted('1'), sorted('2')];
+    expect(reorderedRowIds(rows, ['1'], 'up')).toBeNull();
+    expect(reorderedRowIds(rows, ['2'], 'bottom')).toBeNull();
+  });
+
+  it('多选作为整块移动（块内间隙合拢）', () => {
+    const rows = [sorted('1'), sorted('2'), sorted('3'), sorted('4')];
+    expect(reorderedRowIds(rows, ['2', '4'], 'up')).toEqual(['2', '4', '1', '3']);
+    expect(reorderedRowIds(rows, ['1', '2'], 'down')).toEqual(['3', '1', '2', '4']);
+  });
+
+  it('只在同组内移动，其他行原位不动；跨组或不可排序返回 null', () => {
+    const rows = [
+      sorted('a1', 'a'),
+      { id: 'h', kind: 'heading' as const },
+      sorted('b1', 'b'),
+      sorted('b2', 'b'),
+    ];
+    expect(reorderedRowIds(rows, ['b2'], 'top')).toEqual(['a1', 'h', 'b2', 'b1']);
+    expect(reorderedRowIds(rows, ['b1'], 'up')).toBeNull();
+    expect(reorderedRowIds(rows, ['a1', 'b1'], 'down')).toBeNull();
+    expect(reorderedRowIds(rows, ['h'], 'down')).toBeNull();
   });
 });
