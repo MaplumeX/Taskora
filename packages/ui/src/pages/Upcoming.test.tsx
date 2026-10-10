@@ -15,6 +15,7 @@ import {
   usePreferencesStore,
   useSelectionStore,
   useUiInteractionStore,
+  type DayCalendarEvent,
   type RepeatPreview,
 } from '@taskora/api';
 import {
@@ -43,6 +44,7 @@ const harness = vi.hoisted(() => ({
   reorder: vi.fn(),
   error: vi.fn(),
   previews: [] as RepeatPreview[],
+  events: new Map<string, DayCalendarEvent[]>(),
   draggable: new Map<string, { draggable: boolean; droppable: boolean }>(),
   pointerIds: [] as string[],
   useGeometry: false,
@@ -107,6 +109,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useTagsQuery: () => ({ data: [] }),
   useEffectiveTags: () => ({ ofFeedItem: () => [] }),
   useRepeatPreviews: () => harness.previews,
+  useCalendarEvents: () => harness.events,
   useUpdateTask: () => ({ mutate: harness.update }),
   useReorderFeed: () => ({ mutate: harness.reorder }),
   useCompleteTask: () => ({ mutate: vi.fn() }),
@@ -153,6 +156,31 @@ function task(
     headingId: 'heading-1',
     areaId: null,
     ...overrides,
+  };
+}
+
+function eventEntry(
+  id: string,
+  title: string,
+  dateKey: string,
+  startTime: string | null,
+): DayCalendarEvent {
+  return {
+    event: {
+      id,
+      subscriptionId: 's',
+      color: 'blue',
+      title,
+      location: null,
+      allDay: false,
+      start: `${dateKey}T02:00:00Z`,
+      end: `${dateKey}T03:00:00Z`,
+    },
+    dateKey,
+    allDay: startTime === null,
+    startTime,
+    endTime: null,
+    endsAt: Date.parse(`${dateKey}T03:00:00Z`),
   };
 }
 
@@ -219,6 +247,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   harness.draggable.clear();
   harness.previews = [];
+  harness.events = new Map();
   harness.pointerIds = [];
   harness.useGeometry = false;
   usePreferencesStore.setState({ timeZone: 'Asia/Shanghai', legacyDateTimeZone: 'Asia/Shanghai' });
@@ -333,6 +362,50 @@ describe('Upcoming — 复用分组列表拖动来改计划日期', () => {
     expect(screen.getByText('下次预告')).toBeInTheDocument();
     expect([...harness.draggable.keys()]).toEqual(['task:task-1']);
     expect(document.querySelectorAll('[data-schedule-dropzone]')).toHaveLength(10);
+  });
+
+  it('日程只读显示在当天分组的任务之前，不注册为可拖动任务', () => {
+    harness.events = new Map([['2026-10-07', [eventEntry('evt', '评审会', '2026-10-07', '10:00')]]]);
+    renderUpcoming([task('task-1', '2026-10-07')]);
+    const row = document.querySelector('[data-calendar-event-row="evt"]');
+    expect(row).toHaveTextContent('10:00');
+    expect(row).not.toHaveTextContent('11:00');
+    expect(row).toHaveTextContent('评审会');
+    // 计划里不显示订阅颜色竖条
+    expect(row?.querySelector('.bg-blue-500')).toBeNull();
+    expect(row?.closest('[data-schedule-dropzone]')?.getAttribute('data-schedule-dropzone')).toBe(
+      'date:2026-10-07',
+    );
+    expect(
+      row!.compareDocumentPosition(screen.getByTestId('row-task-1')) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect([...harness.draggable.keys()]).toEqual(['task:task-1']);
+  });
+
+  it('月份分组列出区间内的日程并带日期 chip，跨天日程只出现一次', () => {
+    const leave = (day: string) => eventEntry('leave', '年假', day, null);
+    harness.events = new Map([
+      ['2026-10-13', [eventEntry('week', '本周日程', '2026-10-13', '09:00')]],
+      ['2026-10-20', [eventEntry('oct', '十月日程', '2026-10-20', '14:00')]],
+      ['2026-11-24', [leave('2026-11-24')]],
+      ['2026-11-25', [leave('2026-11-25')]],
+    ]);
+    renderUpcoming([]);
+    const zone = (id: string) =>
+      document.querySelector<HTMLElement>(`[data-schedule-dropzone="${id}"]`)!;
+    const titles = (id: string) =>
+      [...zone(id).querySelectorAll('[data-calendar-event-row]')].map((row) => row.textContent);
+
+    // 本周最后一天 10/13 的日程不重复出现在 10 月分组（10/14 起）
+    expect(titles('month:2026-10')).toEqual([expect.stringContaining('十月日程')]);
+    // 月份分组只到月：行上带日期 chip
+    expect(titles('month:2026-10')[0]).toBe('Oct 2014:00十月日程');
+    // 日期用订阅颜色的文字、无灰底，不同于任务行的日期 chip
+    const date = zone('month:2026-10').querySelector('[data-calendar-event-date]');
+    expect(date).toHaveClass('text-blue-600');
+    expect(date).not.toHaveClass('bg-muted');
+    expect(titles('month:2026-11')).toEqual([expect.stringContaining('年假')]);
   });
 
   it('碰撞优先任务行，再分组头、容器，忽略其他列表', () => {

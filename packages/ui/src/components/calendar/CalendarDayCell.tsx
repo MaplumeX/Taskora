@@ -9,14 +9,18 @@ import {
   isToday,
   parseCalendarDate,
   toInputDateValue,
+  type DayCalendarEvent,
   type RepeatPreview,
 } from '@taskora/api';
+import { CALENDAR_COLOR_CLASS } from './calendarColors';
 
 interface Props {
   date: Date;
   tasks: TaskResponseDto[];
   /** 下次预告：虚线弱化色块排在任务之后，占格位但不计入任务数。 */
   previews?: RepeatPreview[];
+  /** 日历订阅的日程：订阅颜色左边线的色块，排在任务之前。 */
+  events?: DayCalendarEvent[];
   /** 格内最多可放的色块行数（含「+N」行）。 */
   capacity: number;
   outOfMonth?: boolean;
@@ -46,6 +50,7 @@ export function CalendarDayCell({
   date,
   tasks,
   previews = [],
+  events = [],
   capacity,
   outOfMonth = false,
   selectedIds = [],
@@ -55,6 +60,7 @@ export function CalendarDayCell({
   const todayCell = isToday(date);
 
   const entries = [
+    ...events.map((entry) => ({ kind: 'event' as const, entry })),
     ...tasks.map((task) => ({ kind: 'task' as const, task })),
     ...previews.map((preview) => ({ kind: 'preview' as const, preview })),
   ];
@@ -93,6 +99,22 @@ export function CalendarDayCell({
         </span>
 
         {visible.map((entry) => {
+          if (entry.kind === 'event') {
+            const { event } = entry.entry;
+            return (
+              <span
+                key={`event:${event.id}`}
+                data-calendar-event-chip
+                className={cn(
+                  CHIP_CLASS,
+                  'border-l-2 bg-muted/60 text-foreground md:border-l-[3px]',
+                  CALENDAR_COLOR_CLASS[event.color].border,
+                )}
+              >
+                {event.title || t('common:empty')}
+              </span>
+            );
+          }
           if (entry.kind === 'preview') {
             return (
               <span

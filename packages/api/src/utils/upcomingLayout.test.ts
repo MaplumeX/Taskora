@@ -2,7 +2,7 @@ import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
 import type { FeedItem } from '@taskora/shared';
 import { describe, expect, it } from 'vitest';
 
-import { buildUpcomingLayout } from './upcomingLayout';
+import { buildUpcomingLayout, laterMonthDateRange, upcomingDateRange } from './upcomingLayout';
 
 function localNoonIso(year: number, month: number, day: number): string {
   return new Date(year, month - 1, day, 12).toISOString();
@@ -286,5 +286,22 @@ describe('buildUpcomingLayout', () => {
     expect(layout.later.flatMap((month) => month.days.flatMap((day) => day.previews))).toHaveLength(
       1,
     );
+  });
+});
+
+describe('upcomingDateRange / laterMonthDateRange', () => {
+  it('covers today, the week and the three month groups', () => {
+    expect(upcomingDateRange('2026-10-06')).toEqual({ from: '2026-10-06', to: '2026-12-31' });
+    // 本周延伸到下个月：月份分组从下个月起
+    expect(upcomingDateRange('2026-10-28')).toEqual({ from: '2026-10-28', to: '2027-01-31' });
+  });
+
+  it('starts a month group overlapping the week after the week', () => {
+    const layout = buildUpcomingLayout([], new Date(2026, 9, 6, 12));
+    expect(layout.later.map(laterMonthDateRange)).toEqual([
+      { from: '2026-10-14', to: '2026-10-31' },
+      { from: '2026-11-01', to: '2026-11-30' },
+      { from: '2026-12-01', to: '2026-12-31' },
+    ]);
   });
 });

@@ -21,3 +21,4 @@ export * from './dtos/user.dto';
 export * from './dtos/project-heading.dto';
 export * from './dtos/agent.dto';
 export * from './dtos/event.dto';
+export * from './dtos/calendar.dto';

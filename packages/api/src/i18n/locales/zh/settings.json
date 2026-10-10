@@ -71,6 +71,7 @@
   "serverChecking": "连接中…",
   "serverConnect": "连接",
   "assistant": "助手",
+  "calendars": "日历",
   "assistantSettings": "助手设置",
   "assistantProvider": "服务商",
   "assistantBaseUrl": "Base URL",

@@ -7,7 +7,8 @@ export type SettingsTab =
   | 'account'
   | 'data'
   | 'about'
-  | 'assistant';
+  | 'assistant'
+  | 'calendars';
 
 interface UiInteractionState {
   expandedId: string | null;

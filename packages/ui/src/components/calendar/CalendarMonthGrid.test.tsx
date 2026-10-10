@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
-import type { RepeatPreview } from '@taskora/api';
+import type { DayCalendarEvent, RepeatPreview } from '@taskora/api';
 
 import { CalendarDaySheet } from './CalendarDaySheet';
 import { CalendarMonthGrid } from './CalendarMonthGrid';
@@ -46,9 +46,11 @@ function task(id: string, scheduledDate: string, status = TaskStatus.ACTIVE): Ta
 function Harness({
   tasksByDate,
   previewsByDate = new Map(),
+  eventsByDate = new Map(),
 }: {
   tasksByDate: Map<string, TaskResponseDto[]>;
   previewsByDate?: Map<string, RepeatPreview[]>;
+  eventsByDate?: Map<string, DayCalendarEvent[]>;
 }) {
   const [open, setOpen] = useState<Date | null>(null);
   const key = open
@@ -60,6 +62,7 @@ function Harness({
         anchor={new Date(2026, 8, 15)}
         tasksByDate={tasksByDate}
         previewsByDate={previewsByDate}
+        eventsByDate={eventsByDate}
         weekStartsOn={1}
         locale="en"
         onOpenDay={setOpen}
@@ -68,6 +71,7 @@ function Harness({
         date={open}
         tasks={tasksByDate.get(key) ?? []}
         previews={previewsByDate.get(key) ?? []}
+        events={eventsByDate.get(key) ?? []}
         onClose={() => setOpen(null)}
       />
     </>
@@ -77,11 +81,16 @@ function Harness({
 function renderGrid(
   tasksByDate: Map<string, TaskResponseDto[]>,
   previewsByDate?: Map<string, RepeatPreview[]>,
+  eventsByDate?: Map<string, DayCalendarEvent[]>,
 ) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={qc}>
-      <Harness tasksByDate={tasksByDate} previewsByDate={previewsByDate} />
+      <Harness
+        tasksByDate={tasksByDate}
+        previewsByDate={previewsByDate}
+        eventsByDate={eventsByDate}
+      />
     </QueryClientProvider>,
   );
 }
@@ -89,7 +98,47 @@ function renderGrid(
 const cell = (date: string) =>
   document.querySelector<HTMLElement>(`[data-calendar-date="${date}"]`)!;
 
+function allDayEvent(id: string, title: string, day: string): DayCalendarEvent {
+  return {
+    event: {
+      id,
+      subscriptionId: 's',
+      color: 'green',
+      title,
+      location: 'Office',
+      allDay: true,
+      start: day,
+      end: day,
+    },
+    dateKey: day,
+    allDay: true,
+    startTime: null,
+    endTime: null,
+    endsAt: 0,
+  };
+}
+
 describe('CalendarMonthGrid', () => {
+  it('renders calendar events as chips before tasks and lists them in the day sheet', async () => {
+    const user = userEvent.setup();
+    renderGrid(
+      new Map([['2026-09-10', [task('Pay rent', '2026-09-10')]]]),
+      undefined,
+      new Map([['2026-09-10', [allDayEvent('e1', 'Offsite', '2026-09-10')]]]),
+    );
+
+    const day = cell('2026-09-10');
+    const chips = day.querySelectorAll('[data-calendar-event-chip], [data-calendar-chip]');
+    expect([...chips].map((chip) => chip.textContent)).toEqual(['Offsite', 'Pay rent']);
+    expect(chips[0]).toHaveClass('border-green-500');
+
+    await user.click(day);
+    const sheet = await screen.findByRole('dialog', { name: /September 10/ });
+    const row = within(sheet).getByRole('listitem');
+    expect(row).toHaveTextContent(/^Offsite$/);
+    expect(within(sheet).getByText('Pay rent')).toBeInTheDocument();
+  });
+
   it('shows task titles as chips inside the day cell', () => {
     renderGrid(new Map([['2026-09-10', [task('Pay rent', '2026-09-10')]]]));
 

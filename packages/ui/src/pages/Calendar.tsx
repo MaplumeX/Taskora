@@ -1,5 +1,7 @@
 import {
+  buildMonthCells,
   useCalendarDay,
+  useCalendarEvents,
   useScheduledTasksQuery,
   useRepeatPreviews,
   useSelectionScope,
@@ -34,6 +36,12 @@ export default function Calendar() {
   const [openDay, setOpenDay] = useState<Date | null>(null);
 
   const tasksByDate = useMemo(() => groupByScheduledDate(tasks), [tasks]);
+  // 日历订阅的日程（ADR 0023）：按当前月网格的 6 周区间查询
+  const [gridFrom, gridTo] = useMemo(() => {
+    const cells = buildMonthCells(anchor, weekStartsOn);
+    return [toInputDateValue(cells[0]), toInputDateValue(cells[cells.length - 1])];
+  }, [anchor, weekStartsOn]);
+  const eventsByDate = useCalendarEvents(gridFrom, gridTo);
   // 下次预告：只读，排在当天真实任务之后，不进 Selection
   const previews = useRepeatPreviews();
   const previewsByDate = useMemo(() => {
@@ -125,6 +133,7 @@ export default function Calendar() {
           anchor={anchor}
           tasksByDate={tasksByDate}
           previewsByDate={previewsByDate}
+          eventsByDate={eventsByDate}
           weekStartsOn={weekStartsOn}
           locale={i18n.language}
           selectedIds={selectedIds}
@@ -136,6 +145,7 @@ export default function Calendar() {
         date={openDay}
         tasks={openDay ? (tasksByDate.get(toInputDateValue(openDay)) ?? []) : []}
         previews={openDay ? (previewsByDate.get(toInputDateValue(openDay)) ?? []) : []}
+        events={openDay ? (eventsByDate.get(toInputDateValue(openDay)) ?? []) : []}
         onClose={() => setOpenDay(null)}
       />
     </div>

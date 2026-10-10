@@ -135,6 +135,9 @@ importers:
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
+      ical.js:
+        specifier: ^2.2.1
+        version: 2.2.1
       passport:
         specifier: ^0.7.0
         version: 0.7.0
@@ -4262,6 +4265,9 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
+
+  ical.js@2.2.1:
+    resolution: {integrity: sha512-yK/UlPbEs316igb/tjRgbFA8ZV75rCsBJp/hWOatpyaPNlgw0dGDmU+FoicOcwX4xXkeXOkYiOmCqNPFpNPkQg==}
 
   iconv-lite@0.4.24:
     resolution: {integrity: sha512-v3MXnZAcvnywkTUEZomIActle7RXXeedOR31wwl7VlyoXO4Qi9arvSenNQWne1TcRwhCL1HwLI21bEqdpj8/rA==}
@@ -9937,6 +9943,8 @@ snapshots:
   i18next@26.3.6(typescript@5.9.3):
     optionalDependencies:
       typescript: 5.9.3
+
+  ical.js@2.2.1: {}
 
   iconv-lite@0.4.24:
     dependencies:

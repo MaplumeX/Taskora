@@ -8,26 +8,27 @@ datasource db {
 }
 
 model User {
-  id              String           @id @default(uuid())
-  email           String           @unique
-  passwordHash    String
-  displayName     String?
-  avatarUrl       String?
-  preferences     Json?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  tasks           Task[]
-  projects        Project[]
-  areas           Area[]
-  tags            Tag[]
-  projectHeadings ProjectHeading[]
-  refreshTokens   RefreshToken[]
-  agentConfig     AgentConfig?
-  conversations   Conversation[]
-  devices         Device[]
-  compactedEntities CompactedEntity[]
-  syncChanges     SyncChange[]
-  syncCounter     SyncCounter?
+  id                    String                 @id @default(uuid())
+  email                 String                 @unique
+  passwordHash          String
+  displayName           String?
+  avatarUrl             String?
+  preferences           Json?
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  tasks                 Task[]
+  projects              Project[]
+  areas                 Area[]
+  tags                  Tag[]
+  projectHeadings       ProjectHeading[]
+  refreshTokens         RefreshToken[]
+  agentConfig           AgentConfig?
+  conversations         Conversation[]
+  devices               Device[]
+  compactedEntities     CompactedEntity[]
+  syncChanges           SyncChange[]
+  syncCounter           SyncCounter?
+  calendarSubscriptions CalendarSubscription[]
 }
 
 model RefreshToken {
@@ -57,19 +58,18 @@ model Area {
   tags      AreaTag[]
 
   /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
-  position String?
+  position       String?
   /// Review Interval（回顾间隔）：{ unit, count } 的 JSON 文本；为空即跟随默认。
   reviewInterval String?
   /// Next Review Date（下次回顾日）：日历日（UTC 零点编码）；为空视为今天待回顾。
   nextReviewDate DateTime?
   /// Last Reviewed Date（上次回顾日）：日历日（UTC 零点编码）；为空即从未回顾。
   lastReviewedOn DateTime?
-
-  @@index([userId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
-  fieldClocks Json?
+  fieldClocks    Json?
   /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
-  fieldDigests Json?
+  fieldDigests   Json?
 
+  @@index([userId]) /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
 }
 
 enum ProjectStatus {
@@ -96,14 +96,13 @@ model Project {
   tasks     Task[]
   headings  ProjectHeading[]
 
-
-  status        ProjectStatus @default(ACTIVE)
-  bucket        ProjectBucket @default(ANYTIME)
-  scheduledType ScheduledType @default(NONE)
-  scheduledDate DateTime?
-  dueDate       DateTime?
+  status         ProjectStatus @default(ACTIVE)
+  bucket         ProjectBucket @default(ANYTIME)
+  scheduledType  ScheduledType @default(NONE)
+  scheduledDate  DateTime?
+  dueDate        DateTime?
   /// Repeat Rule（recurring-projects spec）：规范形规则对象的 JSON 文本。仅 DATE 项目携带。
-  repeatRule    String?
+  repeatRule     String?
   /// 派生来源：派生出本项目的重复项目 id。不设外键，只用于派生幂等。
   repeatSourceId String?
   /// Review Interval（回顾间隔）：{ unit, count } 的 JSON 文本；为空即跟随默认。
@@ -112,23 +111,22 @@ model Project {
   nextReviewDate DateTime?
   /// Last Reviewed Date（上次回顾日）：日历日（UTC 零点编码）；为空即从未回顾。
   lastReviewedOn DateTime?
-  completedAt   DateTime?
-  trashedAt     DateTime?
+  completedAt    DateTime?
+  trashedAt      DateTime?
 
-  tags ProjectTag[]
-
-  @@index([userId])
-  @@index([repeatSourceId])
-  @@index([areaId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
-  fieldClocks Json?
+  tags         ProjectTag[]
+  fieldClocks  Json?
   /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
-  position String?
+  position     String?
   /// Feed Position：项目行在 feed 视图中与任务混排的位次（与 Task.position 同一键空间）；
   /// 为空时 feed 退回 position。不影响侧边栏顺序（feed-project-ordering spec）。
   feedPosition String?
   /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
   fieldDigests Json?
 
+  @@index([userId])
+  @@index([repeatSourceId])
+  @@index([areaId]) /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
 }
 
 model AreaTag {
@@ -181,29 +179,28 @@ enum HeadingStatus {
 }
 
 model Tag {
-  id         String       @id @default(uuid())
-  title      String
-  color      String       @default("#3B82F6")
+  id           String       @id @default(uuid())
+  title        String
+  color        String       @default("#3B82F6")
   /// 父 Tag（嵌套 Tag，ADR-0016）；null 为顶层。删除父 Tag 时子 Tag 提升为顶层。
-  parentId   String?
-  parent     Tag?         @relation("TagTree", fields: [parentId], references: [id], onDelete: SetNull)
-  children   Tag[]        @relation("TagTree")
-  userId     String
-  user       User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tasks      TaskTag[]
-  projects   ProjectTag[]
-  areas      AreaTag[]
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
-
-  @@index([userId])
-  @@index([parentId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
-  fieldClocks Json?
+  parentId     String?
+  parent       Tag?         @relation("TagTree", fields: [parentId], references: [id], onDelete: SetNull)
+  children     Tag[]        @relation("TagTree")
+  userId       String
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks        TaskTag[]
+  projects     ProjectTag[]
+  areas        AreaTag[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  fieldClocks  Json?
   /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
-  position String?
+  position     String?
   /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
   fieldDigests Json?
 
+  @@index([userId])
+  @@index([parentId]) /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
 }
 
 model TaskTag {
@@ -220,25 +217,25 @@ model TaskTag {
 }
 
 model Task {
-  id            String        @id @default(uuid())
-  title         String
-  notes         String?
-  scheduledDate DateTime?
-  dueDate       DateTime?
-  reminderTime  String?
+  id             String        @id @default(uuid())
+  title          String
+  notes          String?
+  scheduledDate  DateTime?
+  dueDate        DateTime?
+  reminderTime   String?
   /// Repeat Rule（recurring-tasks spec）：规范形规则对象的 JSON 文本
   /// （unit/interval/weekdays/anchor/until）。仅 DATE 型任务携带。
-  repeatRule    String?
+  repeatRule     String?
   /// 派生来源（recurring-tasks-v2）：派生出本实例的重复任务 id。不设外键：
   /// 来源被物理删除后字段悬空无害，只用于派生幂等。
   repeatSourceId String?
-  bucket        TaskBucket    @default(INBOX)
-  scheduledType ScheduledType @default(NONE)
-  status        TaskStatus    @default(ACTIVE)
-  settledAt     DateTime?
-  trashedAt     DateTime?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  bucket         TaskBucket    @default(INBOX)
+  scheduledType  ScheduledType @default(NONE)
+  status         TaskStatus    @default(ACTIVE)
+  settledAt      DateTime?
+  trashedAt      DateTime?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
 
   userId String
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -255,55 +252,53 @@ model Task {
   areaId String?
   area   Area?   @relation(fields: [areaId], references: [id], onDelete: SetNull)
 
-  tags TaskTag[]
+  tags         TaskTag[]
+  fieldClocks  Json?
+  /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
+  position     String?
+  /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
+  fieldDigests Json?
 
   @@index([userId])
   @@index([userId, settledAt])
   @@index([projectId])
   @@index([headingId])
   @@index([repeatSourceId])
-  @@index([areaId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
-  fieldClocks Json?
-  /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
-  position String?
-  /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
-  fieldDigests Json?
-
+  @@index([areaId]) /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
 }
 
 model Subtask {
-  id          String     @id @default(uuid())
-  title       String
-  status      TaskStatus @default(ACTIVE)
-  settledAt   DateTime?
+  id           String     @id @default(uuid())
+  title        String
+  status       TaskStatus @default(ACTIVE)
+  settledAt    DateTime?
   /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
-  position String?
-  taskId      String
-  task        Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  createdAt   DateTime   @default(now())
-  updatedAt   DateTime   @updatedAt
-
-  @@index([taskId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
-  fieldClocks Json?
+  position     String?
+  taskId       String
+  task         Task       @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+  fieldClocks  Json?
   /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
   fieldDigests Json?
 
+  @@index([taskId]) /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
 }
 
 /// Task 附件的元数据（ADR-0019）。文件内容是按 blobHash（sha256）寻址的
 /// Blob，存在 BlobStore 里，不在数据库中。mimeType / size / blobHash 创建后不再改写。
 model Attachment {
-  id        String   @id @default(uuid())
-  name      String
-  mimeType  String   @default("application/octet-stream")
-  size      Int      @default(0)
-  blobHash  String
+  id           String   @id @default(uuid())
+  name         String
+  mimeType     String   @default("application/octet-stream")
+  size         Int      @default(0)
+  blobHash     String
   /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
-  position  String?
-  taskId    String
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  position     String?
+  taskId       String
+  task         Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
   /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
   fieldClocks  Json?
   /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
@@ -314,26 +309,25 @@ model Attachment {
 }
 
 model ProjectHeading {
-  id          String        @id @default(uuid())
-  title       String
+  id           String        @id @default(uuid())
+  title        String
   /// Position：fractional indexing 排序位次（ADR-0007）；列表顺序只看它。
-  position String?
-  userId      String
-  user        User          @relation(fields: [userId], references: [id], onDelete: Cascade)
-  projectId   String
-  project     Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  tasks       Task[]
-  status      HeadingStatus @default(ACTIVE)
-  completedAt DateTime?
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-
-  @@index([userId])
-  @@index([projectId])  /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
-  fieldClocks Json?
+  position     String?
+  userId       String
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId    String
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tasks        Task[]
+  status       HeadingStatus @default(ACTIVE)
+  completedAt  DateTime?
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  fieldClocks  Json?
   /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
   fieldDigests Json?
 
+  @@index([userId])
+  @@index([projectId]) /// 字段级 LWW 时钟（ADR-0007）：{field: "hlc:deviceId"}。
 }
 
 /// BYOK configuration for the conversational Assistant (see ADR 0003).
@@ -400,13 +394,13 @@ model AgentApproval {
 /// 登录设备（ADR-0007）：device id 在登录时分配、持久保存于 Local Replica；
 /// 登出保留本地数据，重新登录分配新 device id。
 model Device {
-  id        String   @id @default(uuid())
-  deviceId  String
-  userId    String
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  label     String?
-  createdAt DateTime @default(now())
-  lastSeenAt DateTime @default(now())
+  id                       String    @id @default(uuid())
+  deviceId                 String
+  userId                   String
+  user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  label                    String?
+  createdAt                DateTime  @default(now())
+  lastSeenAt               DateTime  @default(now())
   /// Android 后台同步的只读凭据（local-first-v3 issue 09）：只能读提醒计划
   /// （GET /reminders/plan）。存 SHA-256；每次设备注册时轮换并续期。
   backgroundTokenHash      String?   @unique
@@ -455,4 +449,25 @@ model SyncCounter {
   seq           BigInt @default(1)
   prunedThrough BigInt @default(1)
   user          User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// 外部日历订阅（ADR 0023）：hub 按 URL 拉取 ICS，日程只读显示在 Today /
+/// Upcoming / Calendar。经 REST 管理，不是同步实体（不进 Local Replica）。
+model CalendarSubscription {
+  id            String    @id @default(uuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name          String
+  url           String
+  /// CALENDAR_COLORS 中的键
+  color         String
+  enabled       Boolean   @default(true)
+  /// 最近一次成功拉取的时刻
+  lastFetchedAt DateTime?
+  /// 最近一次拉取失败的错误码（CalendarFetchErrorCode）；成功后清空
+  lastError     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  @@index([userId])
 }

@@ -1,7 +1,15 @@
 import { settingsLoaders } from '../../lib/page-loaders';
 import { Suspense, lazy, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowLeft, Bot, Download, Info, SlidersHorizontal, SunMedium } from 'lucide-react';
+import {
+  ArrowLeft,
+  Bot,
+  CalendarDays,
+  Download,
+  Info,
+  SlidersHorizontal,
+  SunMedium,
+} from 'lucide-react';
 
 import { DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
@@ -30,6 +38,7 @@ const SettingsAccount = lazy(settingsLoaders.account);
 const SettingsData = lazy(settingsLoaders.data);
 const SettingsAbout = lazy(settingsLoaders.about);
 const SettingsAssistant = lazy(settingsLoaders.assistant);
+const SettingsCalendars = lazy(settingsLoaders.calendars);
 
 const TAB_TITLE_KEY: Record<SettingsTab, string> = {
   general: 'settings:general',
@@ -38,6 +47,7 @@ const TAB_TITLE_KEY: Record<SettingsTab, string> = {
   account: 'settings:account',
   data: 'settings:data',
   assistant: 'settings:assistant',
+  calendars: 'settings:calendars',
   about: 'settings:about',
 };
 
@@ -55,6 +65,8 @@ function renderTab(tab: SettingsTab): ReactNode {
       return <SettingsData />;
     case 'assistant':
       return <SettingsAssistant />;
+    case 'calendars':
+      return <SettingsCalendars />;
     case 'about':
       return <SettingsAbout />;
   }
@@ -108,6 +120,11 @@ function SettingsRoot({ open }: { open: (tab: SettingsTab) => void }) {
           leading={<SettingsIcon icon={SunMedium} />}
           label={t('settings:appearance')}
           value={t(`theme:${theme}`)}
+        />
+        <SettingsRow
+          onClick={() => open('calendars')}
+          leading={<SettingsIcon icon={CalendarDays} />}
+          label={t('settings:calendars')}
         />
       </SettingsGroup>
 

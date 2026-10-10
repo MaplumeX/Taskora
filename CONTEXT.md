@@ -90,6 +90,14 @@ _Avoid_: 推迟、延期（那是普通改期）
 Upcoming / Calendar 中对一条 Repeat Chain 下一次出现的只读投影：每条链只投影一次，灰色弱化、无复选框、不进 Selection。不是 Task、不存储、不同步，纯渲染层推导。锚点为完成日期的规则不投影（下一次取决于实际完成日）；下一次不晚于今天、链已终结或下一次已派生时不投影。
 _Avoid_: 幽灵任务、虚拟实例（预告不是实例）
 
+**Calendar Subscription（日历订阅）**:
+用户粘贴的一个外部日历 ICS 链接（Google / Outlook / iCloud 等的 iCal 地址），带名称、颜色与启用开关（ADR 0023）。存在 Sync Hub、经 REST 管理，不是同步实体，不进 Local Replica；由 hub 拉取并缓存解析结果。添加时先拉取一次，链接无效即拒绝。
+_Avoid_: 日历账号、日历集成（泛称可用）、calendar sync（并不双向同步）
+
+**Calendar Event（日程）**:
+Calendar Subscription 中的一次出现，只读显示在 Today（任务之前）、Upcoming（按天分组与月份分组，均在任务之前；月份分组行上带日期）与 Calendar（格内先于任务的色块、当天面板顶部）。不是 Task：没有复选框、不能拖动或编辑、不进 Selection，按 Tag 过滤时隐藏；不存储、不同步，离线时不显示。定时日程按账号时区归到它覆盖的每一天，全天日程按日期。
+_Avoid_: 事件（与 Change Event 混淆）、会议、日历任务
+
 **Bucket**:
 按状态/时间过滤出的任务视图：Inbox、Anytime、Scheduled、Someday、Today、Upcoming、Logbook、Trash。不是存储位置。
 _Avoid_: 收纳桶、列表、filter、缓存

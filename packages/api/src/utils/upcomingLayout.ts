@@ -53,6 +53,25 @@ function monthEndDate(ym: { year: number; month: number }): Date {
   return new Date(ym.year, ym.month, 0);
 }
 
+/**
+ * Upcoming 覆盖的整个日期区间（账号时区的日期键，含首尾）：今天起，到本周
+ * 7 天之后第 3 个月分组的月末。Today 与 Upcoming 的日程共用这个查询区间。
+ */
+export function upcomingDateRange(todayKey: string): { from: string; to: string } {
+  const laterStart = localDay(fromInputDateValue(todayKey), 8);
+  const laterEnd = new Date(laterStart.getFullYear(), laterStart.getMonth() + 3, 0);
+  return { from: todayKey, to: toInputDateValue(laterEnd) };
+}
+
+/** 月份分组覆盖的日期区间（与本周重叠的月份从本周之后那天起）。 */
+export function laterMonthDateRange(month: UpcomingLaterMonth): { from: string; to: string } {
+  const startDay = month.headingKind === 'range' ? (month.rangeStartDay ?? 1) : 1;
+  return {
+    from: toInputDateValue(new Date(month.year, month.month - 1, startDay)),
+    to: toInputDateValue(monthEndDate(month)),
+  };
+}
+
 export function buildUpcomingLayout(
   items: FeedItem[],
   today: Date,

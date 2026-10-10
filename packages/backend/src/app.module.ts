@@ -15,6 +15,7 @@ import { BlobsModule } from './blobs/blobs.module';
 import { AgentModule } from './agent/agent.module';
 import { SyncModule } from './sync/sync.module';
 import { RemindersModule } from './reminders/reminders.module';
+import { CalendarModule } from './calendar/calendar.module';
 import { HealthController } from './health/health.controller';
 
 @Module({
@@ -35,6 +36,7 @@ import { HealthController } from './health/health.controller';
     AgentModule,
     SyncModule,
     RemindersModule,
+    CalendarModule,
   ],
   controllers: [HealthController],
 })

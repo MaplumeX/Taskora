@@ -27,6 +27,8 @@ services:
       PORT: 3000
       # 附件文件内容（Blob，ADR-0019）；备份时与数据库一起备份
       BLOB_STORAGE_DIR: /data/blobs
+      # 日历订阅允许内网地址（ADR 0023），缺省拒绝
+      CALENDAR_ALLOW_PRIVATE_NETWORK: ${CALENDAR_ALLOW_PRIVATE_NETWORK:-false}
     volumes:
       - blobs:/data/blobs
     depends_on:

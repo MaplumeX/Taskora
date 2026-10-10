@@ -1,5 +1,9 @@
 import {
   useCalendarDay,
+  useCalendarEvents,
+  todayDateKey,
+  laterMonthDateRange,
+  upcomingDateRange,
   useEffectiveTags,
   useFeedQuery,
   useProjectsQuery,
@@ -26,7 +30,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 
-import { ScheduledType, type FeedItem, type TaskFeedItem } from '@taskora/shared';
+import { addCalendarDays, ScheduledType, type FeedItem, type TaskFeedItem } from '@taskora/shared';
 import type { RepeatPreview } from '@taskora/api';
 
 import { FeedItemRow } from '@/components/feed/FeedItemRow';
@@ -39,6 +43,7 @@ import {
 } from '@/components/feed/upcomingDragLayout';
 import { SortableFeedRow } from '@/components/feed/SortableFeedRow';
 import { RepeatPreviewRow } from '@/components/task/RepeatPreviewRow';
+import { CalendarEventList } from '@/components/calendar/CalendarEventRow';
 import { DragCountBadge } from '@/components/common/DragCountBadge';
 import {
   selectionStateOf,
@@ -47,7 +52,12 @@ import {
   useUncancelTask,
   useUncompleteTask,
 } from '@taskora/api';
-import { buildUpcomingLayout, type UpcomingDay } from '@taskora/api';
+import {
+  buildUpcomingLayout,
+  type DayCalendarEvent,
+  type UpcomingDay,
+  type UpcomingLaterMonth,
+} from '@taskora/api';
 import { toast } from 'sonner';
 import { PageHeading } from '@/components/layout/PageHeading';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
@@ -108,6 +118,23 @@ export default function Upcoming() {
   const { data: projects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
   const previews = useRepeatPreviews();
+  // 日历订阅的日程（ADR 0023）：覆盖本周与之后的月份分组，与 Today 共用查询区间
+  const eventRange = upcomingDateRange(todayDateKey());
+  const eventsByDay = useCalendarEvents(eventRange.from, eventRange.to);
+  /** 月份分组内的日程：按日期排，跨天日程只在区间内的首日出现一次。 */
+  const monthEvents = (month: UpcomingLaterMonth): DayCalendarEvent[] => {
+    const { from, to } = laterMonthDateRange(month);
+    const seen = new Set<string>();
+    const out: DayCalendarEvent[] = [];
+    for (let day = from; day <= to; day = addCalendarDays(day, 1)) {
+      for (const entry of eventsByDay.get(day) ?? []) {
+        if (seen.has(entry.event.id)) continue;
+        seen.add(entry.event.id);
+        out.push(entry);
+      }
+    }
+    return out;
+  };
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const uncancelTask = useUncancelTask();
@@ -532,6 +559,14 @@ export default function Upcoming() {
             <div className="min-w-4 flex-1 border-t border-border" aria-hidden="true" />
           </div>
         </UpcomingGroupHeader>
+        {/* 只读日程排在任务之前；按 Tag 过滤时隐藏（日程没有 Tag） */}
+        {!filtering && (
+          <CalendarEventList
+            entries={eventsByDay.get(day.dateKey) ?? []}
+            boxed={false}
+            colorBar={false}
+          />
+        )}
         {/* 空日期只留一行高度（仍是放置目标），避免一周空档把列表拉得过长。 */}
         <div className="flex min-h-6 flex-col">
           {day.items.map((item) => renderDraggableItem(item))}
@@ -575,6 +610,14 @@ export default function Upcoming() {
                           ).format(new Date(month.year, month.month - 1, 1))}
                     </h2>
                   </UpcomingGroupHeader>
+                  {!filtering && (
+                    <CalendarEventList
+                      entries={monthEvents(month)}
+                      boxed={false}
+                      showDates
+                      colorBar={false}
+                    />
+                  )}
                   {/* 与日分组保留相同的空白高度，任务或占位移入后仍能撑高分组。 */}
                   <div className="flex min-h-6 flex-col gap-1">
                     {group.items.map((item) => renderDraggableItem(item, true))}

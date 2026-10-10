@@ -47,6 +47,7 @@ export const settingsLoaders = {
   data: moduleLoader(() => import('../components/settings/SettingsData')),
   about: moduleLoader(() => import('../components/settings/SettingsAbout')),
   assistant: moduleLoader(() => import('../components/settings/SettingsAssistant')),
+  calendars: moduleLoader(() => import('../components/settings/SettingsCalendars')),
 };
 
 export function loaderForRoute(pathname: string): ModuleLoader<unknown> | undefined {
