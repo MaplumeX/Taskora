@@ -1,3 +1,4 @@
+import type { LoggingMode } from '../logging';
 import type { ReviewIntervalDefaults } from '../review';
 
 export interface UpdateProfileDto {
@@ -35,6 +36,13 @@ export interface UserPreferences {
    * 写入的回顾间隔；缺省为每周 / 每月。
    */
   defaultReviewIntervals?: ReviewIntervalDefaults;
+  /** 移入时机（Logging Mode，ADR 0022）；缺省为立即。LWW。 */
+  loggingMode?: LoggingMode;
+  /**
+   * 移入水位线（ISO 时刻）：在它及之前了结的条目已移入 Logbook。Log Completed
+   * 推进它，撤销把它退回原值；LWW，不取较晚者。
+   */
+  loggedThrough?: string | null;
 }
 
 export interface UpdatePreferencesDto {
@@ -46,6 +54,8 @@ export interface UpdatePreferencesDto {
   todayReviewedOn?: string;
   todaySeenKeys?: string[];
   defaultReviewIntervals?: ReviewIntervalDefaults;
+  loggingMode?: LoggingMode;
+  loggedThrough?: string | null;
 }
 
 export interface DeleteAccountDto {

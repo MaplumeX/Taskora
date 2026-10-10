@@ -58,6 +58,11 @@ export interface QuickFindInput {
    */
   tagIds?: readonly string[];
   inTags?: (entry: PlaceEntry) => boolean;
+  /**
+   * 已完成项目是否已移入 Logbook（Logging Mode）：尚未移入的与未了结项目
+   * 一样出现在常规结果里。缺省按已移入。
+   */
+  isLogged?: (project: ProjectResponseDto) => boolean;
 }
 
 /** 「区域与项目」组的候选。 */
@@ -86,13 +91,17 @@ export function buildQuickFindGroups(input: QuickFindInput): QuickFindGroup[] {
         target,
       }));
 
+  const isLogged = input.isLogged ?? (() => true);
+  const listed = (project: ProjectResponseDto) =>
+    isOpenProject(project) || (project.trashedAt == null && !isLogged(project));
   const parents: ReturnType<typeof flatParentOrder> = flatParentOrder(
-    input.projects.filter(isOpenProject),
+    input.projects.filter(listed),
     input.areas,
   );
   if (input.extended) {
     const settled = input.projects.filter(
-      (project) => project.status !== ProjectStatus.ACTIVE && project.trashedAt == null,
+      (project) =>
+        project.status !== ProjectStatus.ACTIVE && project.trashedAt == null && !listed(project),
     );
     for (const project of [...settled, ...(input.trashedProjects ?? [])]) {
       parents.push({ kind: 'project', project });

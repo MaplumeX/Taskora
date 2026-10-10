@@ -8,6 +8,7 @@
 
 import { SETTLED_TASK_STATUSES, TaskStatus, type TaskSearchRank } from '@taskora/shared';
 
+import { settledIsLogged, type ViewContext } from './logging';
 import { effectivePosition, sortByEffectivePosition, type Positioned } from './order';
 import { effectiveTaskTagIds, tagHit, type TagParents } from './tags';
 
@@ -17,6 +18,8 @@ export interface SearchTaskFields extends Positioned {
   notes: unknown;
   status: unknown;
   trashedAt: unknown;
+  /** 了结时间：判定已了结的任务是否还是 Unlogged Item（Logging Mode）。 */
+  settledAt?: unknown;
   /** 自身 Tag 与归属：只在带 Tag 条件时用于算有效 Tag。 */
   tagIds?: readonly string[];
   projectId?: unknown;
@@ -62,10 +65,27 @@ export function hasSearchCriteria(
   return searchNeedle(q) !== '' || (options?.tagIds?.length ?? 0) > 0;
 }
 
-/** 默认：未了结且不在 Trash；extended：再加已了结与 Trash。 */
-export function taskInSearchScope(task: SearchTaskFields, options?: TaskSearchOptions): boolean {
-  if (task.trashedAt != null) return options?.extended === true;
+/**
+ * 还留在原视图里的任务（未了结，或尚未移入 Logbook 的已了结任务）按未了结
+ * 对待：在默认范围里，与未了结任务同档。未给出 context 时按立即模式。
+ */
+function listedInViews(task: SearchTaskFields, context?: ViewContext): boolean {
   if (task.status === TaskStatus.ACTIVE) return true;
+  return (
+    context !== undefined &&
+    SETTLED_TASK_STATUSES.includes(task.status as TaskStatus) &&
+    !settledIsLogged(task.settledAt, context)
+  );
+}
+
+/** 默认：未了结（含 Unlogged Item）且不在 Trash；extended：再加已了结与 Trash。 */
+export function taskInSearchScope(
+  task: SearchTaskFields,
+  options?: TaskSearchOptions,
+  context?: ViewContext,
+): boolean {
+  if (task.trashedAt != null) return options?.extended === true;
+  if (listedInViews(task, context)) return true;
   return options?.extended === true && SETTLED_TASK_STATUSES.includes(task.status as TaskStatus);
 }
 
@@ -88,10 +108,10 @@ export function taskSearchRank(
 
 const RANK_ORDER: Record<TaskSearchRank, number> = { titlePrefix: 0, title: 1, other: 2 };
 
-/** 同档内：未了结 → 已了结 → Trash。 */
-function scopeTier(task: SearchTaskFields): number {
+/** 同档内：未了结（含 Unlogged Item）→ 已了结 → Trash。 */
+function scopeTier(task: SearchTaskFields, context?: ViewContext): number {
   if (task.trashedAt != null) return 2;
-  return task.status === TaskStatus.ACTIVE ? 0 : 1;
+  return listedInViews(task, context) ? 0 : 1;
 }
 
 function compareStrings(a: string, b: string): number {
@@ -109,7 +129,7 @@ function sortSubtasks<S extends SearchSubtaskFields>(subtasks: S[]): S[] {
  *
  * 带 Tag 条件时必须传入 parents（有效 Tag 的继承来源与 Tag 树）。只有 Tag
  * 条件、没有搜索词时，范围内命中全部 Tag 的任务都算命中，档位记为 other，
- * 顺序退化为范围层级 → 有效 Position。
+ * 顺序退化为范围层级 → 有效 Position。context 给出移入时机（Logging Mode）。
  */
 export function planTaskSearch<T extends SearchTaskFields, S extends SearchSubtaskFields>(
   tasks: readonly T[],
@@ -117,6 +137,7 @@ export function planTaskSearch<T extends SearchTaskFields, S extends SearchSubta
   q: string,
   options?: TaskSearchOptions,
   parents?: TagParents,
+  context?: ViewContext,
 ): PlannedSearchHit<T, S>[] {
   const needle = searchNeedle(q);
   const tagIds = options?.tagIds ?? [];
@@ -144,7 +165,7 @@ export function planTaskSearch<T extends SearchTaskFields, S extends SearchSubta
 
   const hits: Array<PlannedSearchHit<T, S> & { key: string }> = [];
   for (const task of tasks) {
-    if (!taskInSearchScope(task, options) || !inTags(task)) continue;
+    if (!taskInSearchScope(task, options, context) || !inTags(task)) continue;
     const matched = matchedByTask.get(task.id) ?? [];
     const rank = needle ? taskSearchRank(task, matched.length > 0, needle) : 'other';
     if (rank === null) continue;
@@ -154,7 +175,7 @@ export function planTaskSearch<T extends SearchTaskFields, S extends SearchSubta
   hits.sort(
     (a, b) =>
       RANK_ORDER[a.rank] - RANK_ORDER[b.rank] ||
-      scopeTier(a.task) - scopeTier(b.task) ||
+      scopeTier(a.task, context) - scopeTier(b.task, context) ||
       compareStrings(a.key, b.key) ||
       compareStrings(a.task.id, b.task.id),
   );

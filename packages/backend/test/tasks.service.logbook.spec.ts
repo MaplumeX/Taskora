@@ -21,6 +21,8 @@ describe('TasksService — logbook view', () => {
         findFirst: vi.fn(),
         update: vi.fn(),
       },
+      // 视图上下文读账号偏好（时区与移入时机）；缺省即立即模式
+      user: { findUnique: vi.fn().mockResolvedValue({ preferences: null }) },
     } as unknown as InstanceType<typeof PrismaService>;
 
     service = new TasksService(mockPrisma);

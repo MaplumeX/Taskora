@@ -57,11 +57,14 @@ export function initStatusBar(): void {
     t: (key, options) => i18n.t(key, options),
     listTodayTasks: async (): Promise<StatusBarTaskInput[]> => {
       const tasks = await currentTaskBackend().getTasks({ view: 'today' });
-      return tasks.map((task) => ({
-        title: task.title,
-        scheduledDate: task.scheduledDate,
-        position: task.position ?? null,
-      }));
+      // 只放未了结的：每天 / 手动模式下 Today 里还有尚未移入 Logbook 的已了结任务
+      return tasks
+        .filter((task) => task.status === 'ACTIVE')
+        .map((task) => ({
+          title: task.title,
+          scheduledDate: task.scheduledDate,
+          position: task.position ?? null,
+        }));
     },
     createDraft: (draft) => createFromQuickAddDraft(draft),
     revealTask: requestTaskReveal,

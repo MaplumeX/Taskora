@@ -23,6 +23,7 @@ import {
   type CalendarContext,
   type CalendarZones,
 } from './calendar';
+import { settledIsLogged, type ViewContext } from './logging';
 import { feedSortKey, sortByEffectivePosition, type FeedPositioned, type Positioned } from './order';
 import { effectiveTaskTagIds, tagHit, type TagParents } from './tags';
 
@@ -37,6 +38,12 @@ export interface ViewFields {
   /** 截止日期 ≤ 今天的未了结条目也进 Today（对齐 Things 3）。 */
   dueDate: unknown;
   trashedAt: unknown;
+  /**
+   * 了结时间，判定是否已移入 Logbook（Logging Mode，ADR 0022）。Task 行是
+   * settledAt，Project 行与 DTO 是 completedAt，两者取其一。
+   */
+  settledAt?: unknown;
+  completedAt?: unknown;
 }
 
 export interface TaskViewFields extends ViewFields {
@@ -53,6 +60,28 @@ export function viewNeedsCalendar(view: string | undefined): boolean {
 
 function isSettledTask(status: unknown): boolean {
   return SETTLED_TASK_STATUSES.includes(status as TaskStatus);
+}
+
+function settledAtOf(fields: ViewFields): unknown {
+  return fields.settledAt ?? fields.completedAt;
+}
+
+/**
+ * 留在原视图里的任务：未了结，或已了结但尚未移入 Logbook（Unlogged Item）；
+ * 都不在 Trash 里。
+ */
+function listedTask(task: ViewFields, context: ViewContext): boolean {
+  if (task.trashedAt != null) return false;
+  if (task.status === TaskStatus.ACTIVE) return true;
+  return isSettledTask(task.status) && !settledIsLogged(settledAtOf(task), context);
+}
+
+function listedProject(project: ViewFields, context: ViewContext): boolean {
+  if (project.trashedAt != null) return false;
+  if (project.status === ProjectStatus.ACTIVE) return true;
+  return (
+    project.status === ProjectStatus.COMPLETED && !settledIsLogged(settledAtOf(project), context)
+  );
 }
 
 /** DATE 计划相对「今天」的位置：today（今天及以前）/ upcoming / null（不适用）。 */
@@ -74,29 +103,40 @@ function inToday(fields: ViewFields, context: CalendarContext): boolean {
   return datePlacement(fields, context) === 'today' || deadlineReached(fields, context);
 }
 
+/**
+ * Deadlines 只列未了结条目；其余排期 / 收纳视图还留着尚未移入 Logbook 的
+ * 已了结条目，Logbook 只收已移入的（Logging Mode，ADR 0022）。
+ */
 export function taskMatchesView(
   task: TaskViewFields,
   view: ListView,
-  context: CalendarContext,
+  context: ViewContext,
 ): boolean {
   const open = task.status === TaskStatus.ACTIVE && task.trashedAt == null;
+  const listed = listedTask(task, context);
   switch (view) {
     case 'inbox':
-      return open && task.bucket === TaskBucket.INBOX && task.scheduledType === ScheduledType.NONE;
+      return (
+        listed && task.bucket === TaskBucket.INBOX && task.scheduledType === ScheduledType.NONE
+      );
     case 'anytime':
       return (
-        open && task.bucket === TaskBucket.ANYTIME && task.scheduledType === ScheduledType.NONE
+        listed && task.bucket === TaskBucket.ANYTIME && task.scheduledType === ScheduledType.NONE
       );
     case 'today':
-      return open && inToday(task, context);
+      return listed && inToday(task, context);
     case 'upcoming':
-      return open && datePlacement(task, context) === 'upcoming';
+      return listed && datePlacement(task, context) === 'upcoming';
     case 'someday':
-      return open && task.scheduledType === ScheduledType.SOMEDAY;
+      return listed && task.scheduledType === ScheduledType.SOMEDAY;
     case 'trash':
       return task.trashedAt != null;
     case 'logbook':
-      return isSettledTask(task.status) && task.trashedAt == null;
+      return (
+        isSettledTask(task.status) &&
+        task.trashedAt == null &&
+        settledIsLogged(settledAtOf(task), context)
+      );
     case 'deadlines':
       return open && dateKeyOf(task.dueDate, context) !== null;
     default:
@@ -108,20 +148,25 @@ export function taskMatchesView(
 export function projectMatchesView(
   project: ViewFields,
   view: ListView,
-  context: CalendarContext,
+  context: ViewContext,
 ): boolean {
   const open = project.status === ProjectStatus.ACTIVE && project.trashedAt == null;
+  const listed = listedProject(project, context);
   switch (view) {
     case 'today':
-      return open && inToday(project, context);
+      return listed && inToday(project, context);
     case 'upcoming':
-      return open && datePlacement(project, context) === 'upcoming';
+      return listed && datePlacement(project, context) === 'upcoming';
     case 'someday':
-      return open && project.scheduledType === ScheduledType.SOMEDAY;
+      return listed && project.scheduledType === ScheduledType.SOMEDAY;
     case 'trash':
       return project.trashedAt != null;
     case 'logbook':
-      return project.status === ProjectStatus.COMPLETED && project.trashedAt == null;
+      return (
+        project.status === ProjectStatus.COMPLETED &&
+        project.trashedAt == null &&
+        settledIsLogged(settledAtOf(project), context)
+      );
     case 'deadlines':
       return open && dateKeyOf(project.dueDate, context) !== null;
     default:
@@ -161,7 +206,7 @@ function includesText(value: unknown, needle: string): boolean {
 /**
  * - q：标题或备注包含（不区分大小写）；与 view 可叠加。
  * - view：按视图判定，忽略其余条件。
- * - 否则按归属 / 标签 / 有计划日期过滤；状态默认只含未了结，completed
+ * - 否则按归属 / 标签 / 有计划日期过滤；状态默认只含未了结与 Unlogged Item，completed
  *   时含已了结（搜索时为 ACTIVE + 已了结三值，ADR 0006）。均不含 Trash。
  * - tagId 按有效 Tag 判定（ADR 0015），命中该 Tag 的整棵子树（ADR-0016），
  *   此时必须传入 parents。
@@ -169,7 +214,7 @@ function includesText(value: unknown, needle: string): boolean {
 export function taskMatchesQuery(
   task: TaskQueryFields,
   query: TaskListQuery,
-  context: CalendarContext,
+  context: ViewContext,
   parents?: TagParents,
 ): boolean {
   if (query.q) {
@@ -188,7 +233,7 @@ export function taskMatchesQuery(
   if (query.q && query.completed) {
     return WITH_SETTLED_TASK_STATUSES.includes(task.status as TaskStatus);
   }
-  return query.completed ? true : task.status === TaskStatus.ACTIVE;
+  return query.completed ? true : listedTask(task, context);
 }
 
 /**

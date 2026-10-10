@@ -12,7 +12,7 @@ import { canonicalRepeatRule } from '@taskora/engine';
 import type { RepeatRule } from '@taskora/shared';
 
 import type { PrismaService } from '../prisma/prisma.service';
-import { userCalendarZones } from '../users/account-time-zone';
+import { userViewContext } from '../users/account-time-zone';
 
 /**
  * 规则补丁 → hub 字段写：去掉 undefined，重复规则换成规范形对象（与
@@ -50,16 +50,12 @@ export async function edgePositions(
   return { first: await edge('ASC'), last: await edge('DESC') };
 }
 
-/** 视图判定的上下文：只有 Today / Upcoming 需要查账号时区。 */
-export async function calendarContextFor(
-  prisma: PrismaService,
-  userId: string,
-  needsCalendar: boolean,
-) {
-  const zones = needsCalendar
-    ? await userCalendarZones(prisma, userId)
-    : { timeZone: 'UTC', legacyDateTimeZone: 'UTC' };
-  return { ...zones, now: new Date() };
+/**
+ * 视图判定的上下文。各视图都要账号的移入时机（ADR 0022），每天模式还要
+ * 账号时区，所以总是读一次偏好。
+ */
+export function calendarContextFor(prisma: PrismaService, userId: string) {
+  return userViewContext(prisma, userId);
 }
 
 /** 一批项目的进度计数所需的任务字段（规则见 domain countProjectTasks）。 */

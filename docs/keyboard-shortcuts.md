@@ -70,8 +70,11 @@ Grouped View（今天/随时/某天按项目/区域分组）补充规则：
 | 完成选中 | ⌘K | Ctrl+K | Ctrl+K（⚠️ Web 端原为搜索，已改） |
 | 取消选中（撤销取消） | ⌥⌘K | Ctrl+Alt+K | Alt+Shift+K |
 | 删除到 Trash | ⌫ / Delete | ⌫ / Delete | ⌫ / Delete |
+| 把完成的条目移入 Logbook（Log Completed） | ⇧⌘Y | Ctrl+Shift+Y | Alt+Shift+Y |
 
 取消与完成同型：Logbook 中 ⌘K 撤销了结（已完成的撤销完成，已取消的撤销取消）。
+
+Log Completed 只在移入时机为「每天」或「手动」时生效（立即模式下没有留在列表里的已了结条目），作用于整个账号，执行后 toast 可撤销；规则见 CONTEXT.md「Log Completed」与 ADR 0022。任务 / 项目右键菜单与 Logbook 页顶部按钮同样提供。Web 的 Ctrl+Shift+Y 被浏览器占用，降级为 Alt 系。
 
 ### 标签
 

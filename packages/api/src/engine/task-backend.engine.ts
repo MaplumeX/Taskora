@@ -15,13 +15,14 @@ import {
   currentTimeZone,
   projectLaterKind,
 } from '@/utils/date';
+import { currentLogging } from '@/utils/logging';
 import type {
-  CalendarContext,
   CalendarZones,
   Engine,
   ListWhere,
   ReplicaRow,
   TagParents,
+  ViewContext,
 } from '@taskora/engine';
 import {
   countProjectTasks,
@@ -48,6 +49,7 @@ import {
   repositionFeed,
   repositionMinimal,
   hasSearchCriteria,
+  keepsSettledInViews,
   sortFeedItems,
   sortForView,
   subtaskStatusPatch,
@@ -103,8 +105,9 @@ function zones(): CalendarZones {
   return { timeZone: currentTimeZone(), legacyDateTimeZone: currentLegacyDateTimeZone() };
 }
 
-function calendar(): CalendarContext {
-  return { ...zones(), now: new Date() };
+/** 视图判定的上下文：账号时区 + 当前时刻 + 移入时机（ADR 0022）。 */
+function calendar(): ViewContext {
+  return { ...zones(), now: new Date(), logging: currentLogging() };
 }
 
 function tagIdsOf(row: ReplicaRow): string[] {
@@ -120,6 +123,9 @@ function queryFieldsOf(row: ReplicaRow) {
     scheduledDate: f.scheduledDate,
     dueDate: f.dueDate,
     trashedAt: f.trashedAt,
+    // 了结时间：Task 行是 settledAt，Project 行是 completedAt（Logging Mode）
+    settledAt: f.settledAt,
+    completedAt: f.completedAt,
     bucket: f.bucket,
     title: f.title,
     notes: f.notes,
@@ -138,6 +144,7 @@ function searchFieldsOf(row: ReplicaRow) {
     notes: f.notes,
     status: f.status,
     trashedAt: f.trashedAt,
+    settledAt: f.settledAt,
     position: typeof f.position === 'string' ? f.position : null,
     createdAt: typeof f.createdAt === 'string' ? f.createdAt : null,
     tagIds: tagIdsOf(row),
@@ -286,9 +293,9 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
 
   return {
     async getTasks(params?: TaskQuery): Promise<TaskResponseDto[]> {
-      const rows = await engine.list('task', { where: tasksPrefilter(params) });
-      const index = await tagIndex();
       const context = calendar();
+      const rows = await engine.list('task', { where: tasksPrefilter(params, context) });
+      const index = await tagIndex();
       const inActiveProject = notInLaterProject(await laterProjectIdsFor(params?.view));
       const parents = params?.tagId ? await tagParents() : undefined;
       const visible = rows.filter(
@@ -306,9 +313,17 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     async searchTasks(q: string, options?: TaskSearchOptions): Promise<TaskSearchHit[]> {
       if (!hasSearchCriteria(q, options)) return [];
       // 副本在本机，全量读出后由 domain 判定命中；默认范围先用 SQL 粗筛
+      // （非立即模式下默认范围还有 Unlogged Item）
+      const context = calendar();
       const taskRows = await engine.list(
         'task',
-        options?.extended ? undefined : { where: { status: TaskStatus.ACTIVE, trashedAt: null } },
+        options?.extended
+          ? undefined
+          : {
+              where: keepsSettledInViews(context)
+                ? { trashedAt: null }
+                : { status: TaskStatus.ACTIVE, trashedAt: null },
+            },
       );
       const subtaskRows = await engine.list('subtask');
       const hits = planTaskSearch(
@@ -321,6 +336,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         q,
         options,
         options?.tagIds?.length ? await tagParents() : undefined,
+        context,
       );
       const index = await tagIndex();
       return hits.map(({ task, matchedSubtasks, rank }) => ({
@@ -353,7 +369,10 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
               dueSetAt: hlcIsoTime(row.clocks.dueDate),
             }
           : {};
-      const viewTasks = await engine.list('task', { where: viewPrefilter(view), clocksOf });
+      const viewTasks = await engine.list('task', {
+        where: viewPrefilter(view, context),
+        clocksOf,
+      });
       const inActiveProject = notInLaterProject(await laterProjectIdsFor(view));
       const taskItems: TaskFeedItem[] = viewTasks
         .filter((row) => inActiveProject(row) && taskMatchesView(queryFieldsOf(row), view, context))
@@ -851,13 +870,17 @@ function projectRowToFeedItem(
  * 视图的 SQL 预过滤：只做粗筛（精确语义由 domain taskMatchesView 判定，
  * 粗筛只能比它宽），让活跃视图不再把只增不减的 Logbook 整表读出来。
  */
-function viewPrefilter(view: string | undefined): ListWhere | undefined {
+function viewPrefilter(view: string | undefined, context: ViewContext): ListWhere | undefined {
   switch (view) {
     case 'inbox':
     case 'today':
     case 'upcoming':
     case 'anytime':
     case 'someday':
+      // 非立即模式下视图里还有尚未移入的已了结条目（Logging Mode）
+      return keepsSettledInViews(context)
+        ? { trashedAt: null }
+        : { status: TaskStatus.ACTIVE, trashedAt: null };
     case 'deadlines':
       return { status: TaskStatus.ACTIVE, trashedAt: null };
     case 'trash':
@@ -870,12 +893,15 @@ function viewPrefilter(view: string | undefined): ListWhere | undefined {
 }
 
 /** getTasks 的 SQL 预过滤（domain taskMatchesQuery 各分支的必要条件）。 */
-function tasksPrefilter(params?: TaskQuery): ListWhere | undefined {
-  if (params?.view) return viewPrefilter(params.view);
+function tasksPrefilter(
+  params: TaskQuery | undefined,
+  context: ViewContext,
+): ListWhere | undefined {
+  if (params?.view) return viewPrefilter(params.view, context);
   const where: ListWhere = { trashedAt: null };
   if (params?.projectId) where.projectId = params.projectId;
   if (params?.areaId) where.areaId = params.areaId;
-  if (!params?.completed) where.status = TaskStatus.ACTIVE;
+  if (!params?.completed && !keepsSettledInViews(context)) where.status = TaskStatus.ACTIVE;
   return where;
 }
 

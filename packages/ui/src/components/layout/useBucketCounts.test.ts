@@ -46,4 +46,15 @@ describe('useBucketCounts：Today 拆成红色（截止日期已到）与灰色�
     expect(result.current.todayDueCount).toBe(0);
     expect(result.current.todayCount).toBe(2);
   });
+
+  it('不数尚未移入 Logbook 的已了结条目（Logging Mode）', () => {
+    feeds.inbox = [item('i1', null), { ...item('i2', null), status: 'COMPLETED' } as FeedItem];
+    feeds.today = [
+      item('open', null),
+      { ...item('done', '2026-09-24'), status: 'COMPLETED' } as FeedItem,
+      { ...item('cancelled', null), status: 'CANCELLED' } as FeedItem,
+    ];
+    const { result } = renderHook(() => useBucketCounts());
+    expect(result.current).toEqual({ inboxCount: 1, todayDueCount: 0, todayCount: 1 });
+  });
 });

@@ -1,8 +1,11 @@
 import {
+  DEFAULT_LOGGING_MODE,
   DEFAULT_REVIEW_INTERVALS,
+  isLoggingMode,
   isValidTimeZone,
   mergeTodaySeenKeys,
   normalizeReviewIntervalDefaults,
+  type LoggingMode,
   type ReviewIntervalDefaults,
 } from '@taskora/shared';
 
@@ -19,6 +22,8 @@ export interface ValidPreferences {
   todayReviewedOn: string | null;
   todaySeenKeys: string[];
   defaultReviewIntervals: ReviewIntervalDefaults;
+  loggingMode: LoggingMode;
+  loggedThrough: string | null;
 }
 
 export interface PreferencesDefaults {
@@ -30,6 +35,8 @@ export interface PreferencesDefaults {
   todayReviewedOn?: string | null;
   todaySeenKeys?: string[];
   defaultReviewIntervals?: ReviewIntervalDefaults;
+  loggingMode?: LoggingMode;
+  loggedThrough?: string | null;
 }
 
 const THEME_MODES: readonly ThemeMode[] = ['light', 'dark', 'system'];
@@ -91,6 +98,15 @@ export function normalizePreferences(
     obj.defaultReviewIntervals,
     defaults.defaultReviewIntervals ?? DEFAULT_REVIEW_INTERVALS,
   );
+  // 移入时机（ADR 0022）：LWW，载荷里有就以载荷为准（null 也是值），
+  // 缺失或脏值保留默认（本地现状）。
+  const loggingMode = isLoggingMode(obj.loggingMode)
+    ? obj.loggingMode
+    : (defaults.loggingMode ?? DEFAULT_LOGGING_MODE);
+  const loggedThrough =
+    obj.loggedThrough === null || isInstant(obj.loggedThrough)
+      ? (obj.loggedThrough as string | null)
+      : (defaults.loggedThrough ?? null);
   return {
     theme,
     language,
@@ -100,7 +116,13 @@ export function normalizePreferences(
     todayReviewedOn,
     todaySeenKeys,
     defaultReviewIntervals,
+    loggingMode,
+    loggedThrough,
   };
+}
+
+function isInstant(value: unknown): value is string {
+  return typeof value === 'string' && !Number.isNaN(Date.parse(value));
 }
 
 function isDateKey(value: unknown): value is string {

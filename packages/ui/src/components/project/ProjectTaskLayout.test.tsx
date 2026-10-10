@@ -150,6 +150,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
     ...(await importOriginal()),
     useCompleteTask: () => ({ mutate: harness.completeMutate }),
     useUncompleteTask: () => ({ mutate: harness.uncompleteMutate }),
+    useUncancelTask: () => ({ mutate: vi.fn() }),
     useReorderProjectHeadingLayout: () => ({ mutate: harness.saveMutate }),
     useCreateProjectHeading: () => ({ mutate: createHeadingMutate }),
     useTaskRowSelection: () => {

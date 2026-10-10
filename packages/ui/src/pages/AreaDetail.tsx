@@ -18,6 +18,7 @@ import {
 } from '@taskora/api';
 import {
   selectionStateOf,
+  useIsLogged,
   useLaterProjectKind,
   useProjectsQuery,
   useReorderProjects,
@@ -57,6 +58,13 @@ export default function AreaDetail() {
   const area = areas.find((a) => a.id === id);
   const { data: allProjects = [] } = useProjectsQuery();
   const kindOf = useLaterProjectKind();
+  const isLogged = useIsLogged();
+  // 已移入 Logbook 的已完成项目不显示；尚未移入的留在原位（Logging Mode）
+  const shownProject = React.useCallback(
+    (p: { status: ProjectStatus; completedAt: string | null }) =>
+      p.status !== ProjectStatus.COMPLETED || !isLogged(p),
+    [isLogged],
+  );
   const areaProjects = useMemo(
     () => allProjects.filter((p) => p.areaId === id),
     [allProjects, id],
@@ -66,12 +74,10 @@ export default function AreaDetail() {
   const effectiveTags = useEffectiveTags();
   const filterItems = useMemo(
     () => [
-      ...areaProjects
-        .filter((p) => p.status !== ProjectStatus.COMPLETED)
-        .map((project) => ({ project, task: null })),
+      ...areaProjects.filter(shownProject).map((project) => ({ project, task: null })),
       ...tasks.map((task) => ({ project: null, task })),
     ],
-    [areaProjects, tasks],
+    [areaProjects, tasks, shownProject],
   );
   const effectiveOfItem = React.useCallback(
     (item: (typeof filterItems)[number]) =>
@@ -88,11 +94,11 @@ export default function AreaDetail() {
     [visible],
   );
   const shownAreaProjects = filtering ? visibleProjects : areaProjects;
-  // 活跃项目可拖拽排序；稍后项目放在下方「计划」/「Someday」小节，已完成项目不显示。
+  // 活跃项目可拖拽排序；稍后项目放在下方「计划」/「Someday」小节，已移入 Logbook 的
+  // 已完成项目不显示。
   const projects = useMemo(
-    () =>
-      shownAreaProjects.filter((p) => p.status !== ProjectStatus.COMPLETED && kindOf(p) === null),
-    [shownAreaProjects, kindOf],
+    () => shownAreaProjects.filter((p) => shownProject(p) && kindOf(p) === null),
+    [shownAreaProjects, kindOf, shownProject],
   );
   // 松手后先按本地顺序渲染，等乐观更新追上，避免条目闪回原位。
   const [orderedProjects, holdProjectOrder] = useHeldOrder(projects, projectKey);

@@ -11,8 +11,13 @@ export type ProjectView =
  *
  * Returns only the view-specific conditions (not userId — caller must add that).
  */
-export function buildProjectViewWhere(view: ProjectView): Prisma.ProjectWhereInput {
+export function buildProjectViewWhere(
+  view: ProjectView,
+  keepsSettled = false,
+): Prisma.ProjectWhereInput {
   const where: Prisma.ProjectWhereInput = {};
+  // 非立即模式下排期视图还留着尚未移入 Logbook 的已完成项目（ADR 0022）
+  const listed = keepsSettled ? undefined : ProjectStatus.ACTIVE;
   switch (view) {
     case 'inbox':
     case 'anytime':
@@ -21,7 +26,7 @@ export function buildProjectViewWhere(view: ProjectView): Prisma.ProjectWhereInp
       where.id = { lt: '' };
       break;
     case 'today':
-      where.status = ProjectStatus.ACTIVE;
+      where.status = listed;
       // 计划日期或截止日期到了都进 Today；日历判定由调用方按账号时区做。
       // 用 AND 包一层：调用方的 where.OR（搜索词）不会被覆盖。
       where.AND = [
@@ -35,14 +40,14 @@ export function buildProjectViewWhere(view: ProjectView): Prisma.ProjectWhereInp
       where.trashedAt = null;
       break;
     case 'upcoming':
-      where.status = ProjectStatus.ACTIVE;
+      where.status = listed;
       where.scheduledType = ScheduledType.DATE;
       where.scheduledDate = { not: null };
       where.trashedAt = null;
       break;
     case 'someday':
       where.scheduledType = ScheduledType.SOMEDAY;
-      where.status = ProjectStatus.ACTIVE;
+      where.status = listed;
       where.trashedAt = null;
       break;
     case 'trash':

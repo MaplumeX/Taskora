@@ -2,10 +2,13 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
 import {
+  DEFAULT_LOGGING_MODE,
   DEFAULT_REVIEW_INTERVALS,
   deviceTimeZone,
   isValidTimeZone,
   mergeTodaySeenKeys,
+  type LoggingMode,
+  type LoggingPreferences,
   type ReviewIntervalDefaults,
   type UserPreferences,
 } from '@taskora/shared';
@@ -84,12 +87,18 @@ interface PreferencesState {
   todaySeenKeys: string[];
   /** 默认回顾间隔（Default Review Interval）：新建 Project / Area 时写入的间隔。 */
   defaultReviewIntervals: ReviewIntervalDefaults;
+  /** 移入时机（Logging Mode，ADR 0022）。 */
+  loggingMode: LoggingMode;
+  /** 移入水位线（见 UserPreferences.loggedThrough）。 */
+  loggedThrough: string | null;
   resolved: 'light' | 'dark';
   setTheme: (m: ThemeMode) => void;
   setLanguage: (l: Language) => void;
   setWeekStartsOn: (v: WeekStartsOn) => void;
   setBucketGrouping: (v: boolean) => void;
   setDefaultReviewIntervals: (v: ReviewIntervalDefaults) => void;
+  /** 原样写入移入时机与水位线（规则在 useLogging，这里不推导）。 */
+  setLogging: (v: LoggingPreferences) => void;
   /** 记下已确认 Today 新到（只进不退，同时剔除被覆盖的单条已读）；返回是否推进了基线。 */
   markTodayReviewed: (dateKey: string) => boolean;
   /** 记下单条已读；返回是否有新增。 */
@@ -159,6 +168,8 @@ export const usePreferencesStore = create<PreferencesState>()(
       todayReviewedOn: null,
       todaySeenKeys: [],
       defaultReviewIntervals: DEFAULT_REVIEW_INTERVALS,
+      loggingMode: DEFAULT_LOGGING_MODE,
+      loggedThrough: null,
       resolved: resolveTheme('system'),
       setTheme: (m) => {
         applyTheme(m);
@@ -171,6 +182,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       setWeekStartsOn: (v) => set({ weekStartsOn: v }),
       setBucketGrouping: (v) => set({ bucketGrouping: v }),
       setDefaultReviewIntervals: (v) => set({ defaultReviewIntervals: v }),
+      setLogging: (v) => set({ loggingMode: v.mode, loggedThrough: v.loggedThrough }),
       markTodayReviewed: (dateKey) => {
         const current = get().todayReviewedOn;
         if (laterDateKey(current, dateKey) === current) return false;
@@ -208,6 +220,8 @@ export const usePreferencesStore = create<PreferencesState>()(
           todayReviewedOn,
           todaySeenKeys,
           defaultReviewIntervals,
+          loggingMode,
+          loggedThrough,
         } = normalizePreferences(prefs, {
           timeZone: get().timeZone,
           theme: get().theme,
@@ -217,6 +231,8 @@ export const usePreferencesStore = create<PreferencesState>()(
           todayReviewedOn: get().todayReviewedOn,
           todaySeenKeys: get().todaySeenKeys,
           defaultReviewIntervals: get().defaultReviewIntervals,
+          loggingMode: get().loggingMode,
+          loggedThrough: get().loggedThrough,
         });
         applyTheme(theme);
         applyLanguageSideEffect(language);
@@ -233,6 +249,8 @@ export const usePreferencesStore = create<PreferencesState>()(
           todayReviewedOn,
           todaySeenKeys,
           defaultReviewIntervals,
+          loggingMode,
+          loggedThrough,
           timeZone,
           legacyDateTimeZone: legacyZone,
           resolved: resolveTheme(theme),
@@ -251,6 +269,8 @@ export const usePreferencesStore = create<PreferencesState>()(
         todayReviewedOn: state.todayReviewedOn,
         todaySeenKeys: state.todaySeenKeys,
         defaultReviewIntervals: state.defaultReviewIntervals,
+        loggingMode: state.loggingMode,
+        loggedThrough: state.loggedThrough,
       }),
       merge: (persisted, current) => {
         // When the unified key is absent (first load after upgrade), fall back
@@ -265,6 +285,8 @@ export const usePreferencesStore = create<PreferencesState>()(
           todayReviewedOn,
           todaySeenKeys,
           defaultReviewIntervals,
+          loggingMode,
+          loggedThrough,
         } = normalizePreferences(raw, {
           timeZone: current.timeZone,
           theme: current.theme,
@@ -274,6 +296,8 @@ export const usePreferencesStore = create<PreferencesState>()(
           todayReviewedOn: current.todayReviewedOn,
           todaySeenKeys: current.todaySeenKeys,
           defaultReviewIntervals: current.defaultReviewIntervals,
+          loggingMode: current.loggingMode,
+          loggedThrough: current.loggedThrough,
         });
         return {
           ...current,
@@ -288,6 +312,8 @@ export const usePreferencesStore = create<PreferencesState>()(
           todayReviewedOn,
           todaySeenKeys,
           defaultReviewIntervals,
+          loggingMode,
+          loggedThrough,
           resolved: resolveTheme(theme),
         };
       },

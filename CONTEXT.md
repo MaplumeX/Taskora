@@ -162,7 +162,7 @@ Grouped View 中位于每组任务上方、代表其父级 Project / Area 的标
 _Avoid_: Section、Project Heading
 
 **Logbook Entry**:
-已了结（完成或取消）任务的档案记录，按了结日期（今天/昨天/更早）分组展示。Logbook 即所有 Logbook Entry 的聚合视图。
+已了结（完成或取消）任务的档案记录，按了结日期（今天/昨天/更早）分组展示。Logbook 即所有 Logbook Entry 的聚合视图。何时从原视图移入由 Logging Mode 决定，尚未移入的是 Unlogged Item，不在 Logbook 里。
 _Avoid_: 已完成列表（Logbook 不只含完成任务）
 
 **Cancelled**:
@@ -176,6 +176,18 @@ _Avoid_: 已完成泛指完成与取消的集合、完成时间（取消任务�
 **Task Terminal State**:
 任务的两种了结状态：Completed（做完）与 Cancelled（放弃）。皆留痕、可逆，记录于 Logbook；与 Trash（软删除）正交。取消父 Task 不改动其 Subtasks。
 _Avoid_: 把 Cancelled 当作 COMPLETED 的子集、把终态与删除混淆
+
+**Logging Mode（移入时机）**:
+账号偏好 `loggingMode`，决定已了结的 Task / Project 何时离开原视图、成为 Logbook Entry（对齐 Things 3）：立即（缺省）、每天（了结日按账号时区早于今天即移入）、手动（执行 Log Completed 才移入）。经账号偏好同步（LWW）。从立即切到每天 / 手动、或在两者之间切换时，水位线 `loggedThrough` 设为当前时刻（切换之前了结的不回到原视图）；切回立即不写水位线，剩余的 Unlogged Item 全部按已移入对待。
+_Avoid_: 归档时机（「归档」专指 Archived Logbook）
+
+**Unlogged Item（未移入条目）**:
+已了结但尚未移入 Logbook 的 Task / Project，纯推导：立即模式下不存在；否则了结时间晚于水位线 `loggedThrough`（每天模式下还须了结日为今天）、且不早于 Archived Logbook 的保留期截止时刻。任务一律按自己的了结时间判断（项目了结时其内任务同时了结，结果与项目一致；早已了结的旧任务不会因项目刚完成而回到原视图）。留在原视图原位（Inbox / Today / Upcoming / Anytime / Someday、项目页、Area 页、Tag 页、侧边栏中的已完成项目），删除线 + 弱化，Quick Find 按普通条目搜到；不出现在 Logbook（含项目页的「已了结」面板），不在 Deadlines，不计入侧边栏 / 首页角标与状态栏常驻通知，不算 Today 的新到（项目进度照常计为已完成）。点勾选框即重开（已取消的撤销取消）；重复任务完成后它与派生的 Repeat Instance 同时可见。Calendar 不受影响。
+_Avoid_: 待归档、已完成未归档
+
+**Log Completed（移入已了结）**:
+把账号所有 Unlogged Item 一次移入 Logbook 的命令：把 `loggedThrough` 推进到当前时刻。入口：`⇧⌘Y`（可改绑）、任务 / 项目右键菜单、Logbook 页顶部按钮（手机端的入口）；立即模式下全部隐藏。执行后 toast 可撤销，撤销把水位线退回执行前的值（水位线唯一的回退）。
+_Avoid_: 归档已完成、清理已完成
 
 **Trash（废纸篓）**:
 软删除的暂存处，可放回；倾倒后不可恢复。放回只撤销删除：回到删除前的位置与状态（已了结的回到 Logbook），进 Trash 时清掉的提醒不恢复。在 Trash 中改计划 / 截止日期、归属、标签、重复规则即隐式放回（项目连同随它进 Trash 的任务）；改状态、标题、备注、子任务不放回。

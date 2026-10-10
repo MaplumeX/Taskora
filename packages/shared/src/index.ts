@@ -3,6 +3,7 @@ export * from './later-project';
 export * from './when-query';
 export * from './review';
 export * from './new-in-today';
+export * from './logging';
 export * from './enums/task.enum';
 export * from './enums/project.enum';
 export * from './enums/heading.enum';

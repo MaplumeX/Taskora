@@ -11,6 +11,7 @@ import {
   mergeLogbookArchive,
 } from '@taskora/api';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { Archive } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { FeedItem } from '@taskora/shared';
@@ -25,6 +26,8 @@ import {
 } from '@taskora/api';
 import { toast } from 'sonner';
 import { PageHeading } from '@/components/layout/PageHeading';
+import { Button } from '@/components/ui/button';
+import { useLogCompleted } from '@/components/task/useLogCompleted';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
 import { EmptyState } from '@/components/common/EmptyState';
 
@@ -136,10 +139,28 @@ export default function Logbook() {
   };
 
   const hasAny = groups.length > 0;
+  const logCompleted = useLogCompleted();
 
   return (
     <div className="flex flex-col gap-4" onClick={handleBlankClick}>
-      <PageHeading nav="/logbook">{t('nav:logbook')}</PageHeading>
+      <div className="flex items-center justify-between">
+        <PageHeading nav="/logbook">{t('nav:logbook')}</PageHeading>
+        {/* Log Completed 的常驻入口（手机端没有快捷键与右键菜单）；立即模式下隐藏 */}
+        {logCompleted.available && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-muted-foreground"
+            onClick={(event) => {
+              event.stopPropagation();
+              logCompleted.run();
+            }}
+          >
+            <Archive className="h-4 w-4" />
+            {t('task:logCompleted')}
+          </Button>
+        )}
+      </div>
       {!isLoading && !isError && <TagFilterBar {...bar} />}
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>

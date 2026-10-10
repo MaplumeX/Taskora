@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
+  Archive,
   MoreHorizontal,
   FolderTree,
   Check,
@@ -37,6 +38,7 @@ import { DueDateField } from '@/components/task/fields/DueDateField';
 import { RepeatRuleField } from '@/components/task/fields/RepeatRuleField';
 import { TagsField } from '@/components/task/fields/TagsField';
 import { useDuplicate } from '@/components/task/useDuplicate';
+import { useLogCompleted } from '@/components/task/useLogCompleted';
 
 import { ReviewPicker, useReviewMenuItem } from '@/components/review/ReviewSchedule';
 import { useInReviewMode } from '@/components/review/reviewMode';
@@ -92,6 +94,7 @@ export function ProjectMenuPanel({
   const isDate = (current.scheduledType ?? ScheduledType.NONE) === ScheduledType.DATE;
   const canOfferSkip = variant === 'default' && skipOccurrence.available;
   const reviewItem = useReviewMenuItem(() => openPicker('review'));
+  const logCompleted = useLogCompleted();
 
   const handleToggleComplete = () => {
     onClose();
@@ -133,6 +136,18 @@ export function ProjectMenuPanel({
       label: completed ? t('markIncomplete') : t('markComplete'),
       onSelect: handleToggleComplete,
     },
+    ...(logCompleted.available && variant === 'default'
+      ? [
+          {
+            icon: Archive,
+            label: t('logCompleted'),
+            onSelect: () => {
+              onClose();
+              logCompleted.run();
+            },
+          },
+        ]
+      : []),
     {
       icon: CalendarClock,
       label: t('scheduledDate'),

@@ -3,6 +3,7 @@ import {
   ArrayMaxSize,
   IsArray,
   IsBoolean,
+  IsISO8601,
   IsTimeZone,
   IsIn,
   IsOptional,
@@ -15,7 +16,12 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { ReviewIntervalDefaultsDto } from '../../common/review-interval.dto';
-import { TODAY_SEEN_KEY_PATTERN, TODAY_SEEN_KEYS_MAX } from '@taskora/shared';
+import {
+  LOGGING_MODES,
+  TODAY_SEEN_KEY_PATTERN,
+  TODAY_SEEN_KEYS_MAX,
+  type LoggingMode,
+} from '@taskora/shared';
 import type {
   UpdateProfileDto as IUpdateProfileDto,
   UpdatePasswordDto as IUpdatePasswordDto,
@@ -81,6 +87,15 @@ export class UpdatePreferencesDto implements IUpdatePreferencesDto {
   @ValidateNested()
   @Type(() => ReviewIntervalDefaultsDto)
   defaultReviewIntervals?: ReviewIntervalDefaultsDto;
+
+  @IsOptional()
+  @IsIn(LOGGING_MODES)
+  loggingMode?: LoggingMode;
+
+  // null 合法（从未写过水位线）；undefined 表示不改
+  @ValidateIf((_, value) => value !== undefined && value !== null)
+  @IsISO8601({ strict: true })
+  loggedThrough?: string | null;
 }
 
 export class DeleteAccountDto implements IDeleteAccountDto {

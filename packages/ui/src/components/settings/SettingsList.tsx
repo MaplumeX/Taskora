@@ -227,3 +227,29 @@ export function SettingsOptionGroup<T extends string | number>({
 export function SettingsPage({ children }: { children: React.ReactNode }) {
   return <div className="flex flex-col gap-6">{children}</div>;
 }
+
+/** 宽屏设置页的单选按钮组成员（分段式：选中项高亮）。 */
+export function OptionButton({
+  active,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'rounded-md border px-3 py-1.5 text-sm transition-colors max-md:py-2.5',
+        active
+          ? 'bg-primary text-primary-foreground border-primary'
+          : 'bg-transparent hover:bg-accent border-border',
+      )}
+    >
+      {children}
+    </button>
+  );
+}

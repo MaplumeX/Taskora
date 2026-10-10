@@ -70,6 +70,7 @@ import { NavigationPopover } from './NavigationPopover';
 import { readClipboardText, writeClipboardText } from './systemClipboard';
 import { useDockToPanel } from '@/components/agent/assistant-panel-layout';
 import { useDuplicate } from '@/components/task/useDuplicate';
+import { useLogCompleted } from '@/components/task/useLogCompleted';
 
 export { detectKeyPlatform };
 export type { KeyPlatform };
@@ -194,6 +195,7 @@ export function KeyboardShortcuts({ platform }: Props) {
   const reorderTasks = useReorderTasks();
   const createTask = useCreateTask();
   const duplicate = useDuplicate();
+  const logCompleted = useLogCompleted();
   const updateTask = useUpdateTask();
   const updateProject = useUpdateProject();
   const executeDrop = useSidebarDropExecutor();
@@ -729,6 +731,11 @@ export function KeyboardShortcuts({ platform }: Props) {
           useUiInteractionStore.getState().openSearch();
           return;
         }
+        case 'logCompleted': {
+          // 立即模式下没有可移入的条目（Logging Mode）
+          if (logCompleted.available) logCompleted.run();
+          return;
+        }
         case 'tags':
         case 'when':
         case 'deadline':
@@ -883,6 +890,7 @@ export function KeyboardShortcuts({ platform }: Props) {
     reorderTasks,
     createTask,
     duplicate,
+    logCompleted,
     updateTask,
     updateProject,
     executeDrop,

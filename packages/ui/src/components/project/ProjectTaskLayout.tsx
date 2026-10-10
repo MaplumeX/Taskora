@@ -35,6 +35,7 @@ import {
   useCreateProjectHeading,
   useSelectionStore,
   useUiInteractionStore,
+  useUncancelTask,
   useUncompleteTask,
   type SelectionRow,
 } from '@taskora/api';
@@ -541,6 +542,7 @@ export function ProjectTaskLayout({
   const { selectedIds, expandedId, handleRowClick, handleBlankClick } = useTaskRowSelection();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
+  const uncancelTask = useUncancelTask();
   const saveLayout = useReorderProjectHeadingLayout();
   // 注册可遍历行：ungrouped 任务 → 每个 Heading 后跟其分组任务。
   const shown = React.useMemo(
@@ -636,7 +638,13 @@ export function ProjectTaskLayout({
   }, [serverLayout, updateRenderedLayout]);
 
   const toggleComplete = (task: TaskResponseDto) => {
-    const mutation = task.status === 'COMPLETED' ? uncompleteTask : completeTask;
+    // 撤销了结（尚未移入 Logbook 的条目还在这里）：已取消 → 撤销取消
+    const mutation =
+      task.status === 'CANCELLED'
+        ? uncancelTask
+        : task.status === 'COMPLETED'
+          ? uncompleteTask
+          : completeTask;
     mutation.mutate(task.id, {
       onError: () => toast.error(t('common:operationFailed')),
     });

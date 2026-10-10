@@ -36,6 +36,8 @@ describe('normalizePreferences', () => {
       todayReviewedOn: null,
       todaySeenKeys: [],
       defaultReviewIntervals: INITIAL_INTERVALS,
+      loggingMode: 'IMMEDIATE',
+      loggedThrough: null,
     });
   });
 
@@ -62,6 +64,8 @@ describe('normalizePreferences', () => {
       todayReviewedOn: null,
       todaySeenKeys: [],
       defaultReviewIntervals: INITIAL_INTERVALS,
+      loggingMode: 'IMMEDIATE',
+      loggedThrough: null,
     });
   });
 
@@ -76,6 +80,8 @@ describe('normalizePreferences', () => {
         todayReviewedOn: null,
         todaySeenKeys: [],
         defaultReviewIntervals: INITIAL_INTERVALS,
+        loggingMode: 'IMMEDIATE',
+        loggedThrough: null,
       });
     }
   });
@@ -90,6 +96,8 @@ describe('normalizePreferences', () => {
       todayReviewedOn: null,
       todaySeenKeys: [],
       defaultReviewIntervals: INITIAL_INTERVALS,
+      loggingMode: 'IMMEDIATE',
+      loggedThrough: null,
     });
     expect(normalizePreferences({ language: 'zh' }, defaults)).toEqual({
       timeZone: 'UTC',
@@ -100,6 +108,8 @@ describe('normalizePreferences', () => {
       todayReviewedOn: null,
       todaySeenKeys: [],
       defaultReviewIntervals: INITIAL_INTERVALS,
+      loggingMode: 'IMMEDIATE',
+      loggedThrough: null,
     });
   });
 
@@ -114,6 +124,8 @@ describe('normalizePreferences', () => {
       todayReviewedOn: null,
       todaySeenKeys: [],
       defaultReviewIntervals: INITIAL_INTERVALS,
+      loggingMode: 'IMMEDIATE',
+      loggedThrough: null,
     });
   });
 
@@ -200,5 +212,38 @@ describe('normalizePreferences', () => {
         normalizePreferences({ defaultReviewIntervals: dirty }, defaults).defaultReviewIntervals,
       ).toEqual(INITIAL_INTERVALS);
     }
+  });
+
+  describe('移入时机（Logging Mode）', () => {
+    const through = '2026-10-10T02:00:00.000Z';
+
+    it('载荷里的合法值为准（LWW），null 也是值', () => {
+      const local = { ...defaults, loggingMode: 'MANUAL' as const, loggedThrough: through };
+      expect(normalizePreferences({ loggingMode: 'DAILY', loggedThrough: null }, local)).toMatchObject({
+        loggingMode: 'DAILY',
+        loggedThrough: null,
+      });
+      // 比本地更早的水位线也照收（撤销 Log Completed 会回退）
+      const earlier = '2026-10-01T00:00:00.000Z';
+      expect(normalizePreferences({ loggedThrough: earlier }, local).loggedThrough).toBe(earlier);
+    });
+
+    it('缺失或脏值保留本地现状', () => {
+      const local = { ...defaults, loggingMode: 'MANUAL' as const, loggedThrough: through };
+      expect(normalizePreferences({}, local)).toMatchObject({
+        loggingMode: 'MANUAL',
+        loggedThrough: through,
+      });
+      expect(
+        normalizePreferences({ loggingMode: 'WEEKLY', loggedThrough: 'yesterday' }, local),
+      ).toMatchObject({ loggingMode: 'MANUAL', loggedThrough: through });
+    });
+
+    it('都没有时为立即模式', () => {
+      expect(normalizePreferences({}, defaults)).toMatchObject({
+        loggingMode: 'IMMEDIATE',
+        loggedThrough: null,
+      });
+    });
   });
 });

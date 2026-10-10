@@ -36,10 +36,13 @@ export function useCalendarDay(): string {
 
 /** Mounted once by the shared app shell; does not remount editors. */
 export function useCalendarQueryRefresh(): void {
-  const key = useCalendarDay();
+  const day = useCalendarDay();
+  // 移入时机（ADR 0022）同样决定视图里有哪些已了结条目
+  const logging = usePreferencesStore((state) => `${state.loggingMode}:${state.loggedThrough}`);
+  const key = `${day}|${logging}`;
   const cache = useQueryCache();
   useEffect(() => {
-    // 「今天」不是副本数据：Engine 模式下没有变更通知，同样要主动重跑
+    // 「今天」与移入时机不是副本数据：Engine 模式下没有变更通知，同样要主动重跑
     for (const root of ['tasks', 'feed', 'projects', 'review']) {
       void cache.invalidateQueries({ queryKey: [root] });
     }

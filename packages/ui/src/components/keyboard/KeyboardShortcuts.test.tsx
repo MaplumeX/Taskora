@@ -46,6 +46,7 @@ vi.mock('@taskora/api', async (importOriginal) => {
     useUncompleteTask: () => ({ mutate: harness.uncompleteMutate }),
     useCancelTask: () => ({ mutate: harness.cancelMutate }),
     useUncancelTask: () => ({ mutate: harness.uncancelMutate }),
+    useLoggingActions: () => ({ setLoggingMode: vi.fn(), logCompleted: vi.fn() }),
     useDeleteTask: () => ({ mutate: harness.deleteMutate }),
     useRestoreTask: () => ({ mutate: harness.restoreMutate }),
     useReorderTasks: () => ({ mutate: harness.reorderMutate }),

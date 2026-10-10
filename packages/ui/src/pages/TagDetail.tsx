@@ -8,7 +8,13 @@ import type {
   ProjectResponseDto,
   TaskResponseDto,
 } from '@taskora/shared';
-import { useEffectiveTags, useProjectsQuery, useTagsQuery, useTasksQuery } from '@taskora/api';
+import {
+  useEffectiveTags,
+  useIsLogged,
+  useProjectsQuery,
+  useTagsQuery,
+  useTasksQuery,
+} from '@taskora/api';
 
 import { GroupedFeedListView } from '@/components/feed/GroupedFeedListView';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
@@ -46,17 +52,19 @@ export default function TagDetail() {
   const { data: tasks = [], isLoading, isError } = useTasksQuery({ tagId });
   const { data: projects = [] } = useProjectsQuery();
   const effectiveTags = useEffectiveTags();
+  const isLogged = useIsLogged();
 
   const items = useMemo(() => {
     const subtree = tagId ? forest.tree.descendantsOf(tagId) : new Set<string>();
     const tagged = projects.filter(
       (project) =>
-        project.status !== ProjectStatus.COMPLETED &&
+        // 已移入 Logbook 的已完成项目不显示（Logging Mode）
+        (project.status !== ProjectStatus.COMPLETED || !isLogged(project)) &&
         project.trashedAt == null &&
         effectiveTags.ofProject(project).some((id) => subtree.has(id)),
     );
     return [...tagged.map(projectFeedItem), ...tasks.map(taskFeedItem)];
-  }, [projects, tasks, tagId, forest, effectiveTags]);
+  }, [projects, tasks, tagId, forest, effectiveTags, isLogged]);
   const { visible, filtering, bar } = useTagFilter(items, effectiveTags.ofFeedItem, tagId ?? null);
 
   return (

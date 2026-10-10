@@ -4,7 +4,12 @@ import { useTranslation } from 'react-i18next';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { TaskList } from './TaskList';
-import { useCompleteTask, useReorderTasks, useUncompleteTask } from '@taskora/api';
+import {
+  useCompleteTask,
+  useReorderTasks,
+  useUncancelTask,
+  useUncompleteTask,
+} from '@taskora/api';
 import { useProjectsQuery } from '@taskora/api';
 import { useAreasQuery } from '@taskora/api';
 import { useSelectionScope } from '@taskora/api';
@@ -36,6 +41,7 @@ export function TaskListView({
     useTaskRowSelection();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
+  const uncancelTask = useUncancelTask();
   const reorderTasks = useReorderTasks();
   // 与 TaskList 的拖拽同一开关：可排序时 ⌘↑/⌘↓ 也可用。
   const reorderable = sortable ?? true;
@@ -72,7 +78,9 @@ export function TaskListView({
   );
 
   const handleToggle = (task: TaskResponseDto) => {
-    if (task.status === 'COMPLETED') uncompleteTask.mutate(task.id);
+    // 撤销了结（尚未移入 Logbook 的条目还在这里）：已取消 → 撤销取消
+    if (task.status === 'CANCELLED') uncancelTask.mutate(task.id);
+    else if (task.status === 'COMPLETED') uncompleteTask.mutate(task.id);
     else {
       completeTask.mutate(task.id, {
         onError: () => toast.error(t('common:operationFailed')),

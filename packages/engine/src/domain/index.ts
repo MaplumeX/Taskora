@@ -39,6 +39,7 @@ export {
   type ReviewFields,
   type ReviewProjectFields,
 } from './review';
+export { keepsSettledInViews, settledIsLogged, type ViewContext } from './logging';
 export {
   countProjectTasks,
   feedIncludesProjects,

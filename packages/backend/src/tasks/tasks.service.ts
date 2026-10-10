@@ -24,7 +24,7 @@ import {
   taskReopenPatch,
   taskRestorePatch,
   taskTrashPatch,
-  viewNeedsCalendar,
+  keepsSettledInViews,
   type TagParents,
   type TaskSearchOptions,
 } from '@taskora/engine';
@@ -177,6 +177,8 @@ export class TasksService {
     const where: Prisma.TaskWhereInput = { userId };
     // tagId 查询的继承来源与 Tag 树（SQL 粗筛与最终判定共用）
     const parents = query.tagId && !query.view ? await this.tagParents(userId) : undefined;
+    const context = await calendarContextFor(this.prisma, userId);
+    const keepsSettled = keepsSettledInViews(context);
 
     if (query.q) {
       where.OR = [
@@ -186,7 +188,7 @@ export class TasksService {
     }
 
     if (query.view) {
-      const viewWhere = buildTaskViewWhere(query.view);
+      const viewWhere = buildTaskViewWhere(query.view, keepsSettled);
       Object.assign(where, viewWhere);
     } else {
       if (query.projectId) where.projectId = query.projectId;
@@ -215,7 +217,8 @@ export class TasksService {
         where.status = query.completed ? { in: [...WITH_SETTLED_STATUSES] } : TaskStatus.ACTIVE;
         where.trashedAt = null;
       } else if (!query.completed) {
-        where.status = TaskStatus.ACTIVE;
+        // 非立即模式下还留着尚未移入 Logbook 的已了结任务（ADR 0022）
+        if (!keepsSettled) where.status = TaskStatus.ACTIVE;
         where.trashedAt = null;
       } else {
         // include both active and completed when explicitly requested
@@ -232,11 +235,6 @@ export class TasksService {
       include: { tags: { include: { tag: true } } },
     });
     // SQL 只是粗筛；最终过滤按 domain taskMatchesQuery（与设备同一规则）
-    const context = await calendarContextFor(
-      this.prisma,
-      userId,
-      viewNeedsCalendar(query.view) || hideLaterProjectTasks,
-    );
     // 稍后项目内的任务在 Anytime / Someday 中随父项目休眠（Later Project）。
     const hiddenProjectIds = hideLaterProjectTasks
       ? await laterProjectIds(this.prisma, userId, context, context.now)
@@ -289,10 +287,13 @@ export class TasksService {
     const contains = { contains: needle, mode: 'insensitive' as const };
     const tagIds = options?.tagIds ?? [];
     const parents = tagIds.length > 0 ? await this.tagParents(userId) : undefined;
+    // 非立即模式下默认范围还有尚未移入 Logbook 的已了结任务（ADR 0022）
+    const context = await calendarContextFor(this.prisma, userId);
+    const listed = keepsSettledInViews(context) ? {} : { status: TaskStatus.ACTIVE };
     const tasks = await this.prisma.task.findMany({
       where: {
         userId,
-        ...(options?.extended ? {} : { status: TaskStatus.ACTIVE, trashedAt: null }),
+        ...(options?.extended ? {} : { ...listed, trashedAt: null }),
         ...(needle
           ? {
               OR: [
@@ -335,6 +336,7 @@ export class TasksService {
       q,
       options,
       parents,
+      context,
     );
     return hits.map(({ task, matchedSubtasks, rank }) => ({
       // 这里的 subtasks 只是命中的那部分，不作为任务的子任务列表下发

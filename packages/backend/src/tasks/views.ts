@@ -29,17 +29,22 @@ export const WITH_SETTLED_STATUSES = WITH_SETTLED_TASK_STATUSES;
  *
  * Returns only the view-specific conditions (not userId — caller must add that).
  */
-export function buildTaskViewWhere(view: TaskView): Prisma.TaskWhereInput {
+export function buildTaskViewWhere(
+  view: TaskView,
+  keepsSettled = false,
+): Prisma.TaskWhereInput {
   const where: Prisma.TaskWhereInput = {};
+  // 非立即模式下这些视图还留着尚未移入 Logbook 的已了结任务（ADR 0022）
+  const listed = keepsSettled ? undefined : TaskStatus.ACTIVE;
   switch (view) {
     case 'inbox':
       where.bucket = TaskBucket.INBOX;
-      where.status = TaskStatus.ACTIVE;
+      where.status = listed;
       where.scheduledType = ScheduledType.NONE;
       where.trashedAt = null;
       break;
     case 'today':
-      where.status = TaskStatus.ACTIVE;
+      where.status = listed;
       // 计划日期或截止日期到了都进 Today；日历判定由调用方按账号时区做。
       // 用 AND 包一层：调用方的 where.OR（搜索词）不会被覆盖。
       where.AND = [
@@ -53,20 +58,20 @@ export function buildTaskViewWhere(view: TaskView): Prisma.TaskWhereInput {
       where.trashedAt = null;
       break;
     case 'upcoming':
-      where.status = TaskStatus.ACTIVE;
+      where.status = listed;
       where.scheduledType = ScheduledType.DATE;
       where.scheduledDate = { not: null };
       where.trashedAt = null;
       break;
     case 'anytime':
       where.bucket = TaskBucket.ANYTIME;
-      where.status = TaskStatus.ACTIVE;
+      where.status = listed;
       where.scheduledType = ScheduledType.NONE;
       where.trashedAt = null;
       break;
     case 'someday':
       where.scheduledType = ScheduledType.SOMEDAY;
-      where.status = TaskStatus.ACTIVE;
+      where.status = listed;
       where.trashedAt = null;
       break;
     case 'trash':

@@ -2,7 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { REVIEW_DEFAULT_KINDS, type ReviewDefaultKind, type ReviewInterval } from '@taskora/shared';
+import {
+  LOGGING_MODES,
+  REVIEW_DEFAULT_KINDS,
+  type LoggingMode,
+  type ReviewDefaultKind,
+  type ReviewInterval,
+} from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -10,8 +16,11 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Switch } from '@/components/ui/switch';
 import { ReviewIntervalEditor, useReviewIntervalLabel } from '@/components/review/ReviewFields';
 import ReminderReliabilitySection from './ReminderReliabilitySection';
+import { detectKeyPlatform, shortcutLabel } from '@/components/keyboard/keymap';
 import {
+  OptionButton,
   SettingsGroup,
+  SettingsOptionGroup,
   SettingsPage,
   SettingsRow,
   useSettingsNav,
@@ -21,6 +30,8 @@ import {
   currentStatusBarController,
   getClientKind,
   getNotificationShell,
+  useKeybindingsStore,
+  useLoggingActions,
   usePreferencesStore,
   useUpdatePreferences,
 } from '@taskora/api';
@@ -250,6 +261,21 @@ export default function SettingsGeneral() {
     );
   };
 
+  // 移入时机（Logging Mode）：本地乐观更新 + 失败回滚，由 useLoggingActions 负责
+  const loggingMode = usePreferencesStore((s) => s.loggingMode);
+  const { setLoggingMode } = useLoggingActions();
+  const keyOverrides = useKeybindingsStore((s) => s.overrides);
+  const logShortcut = mobileNav
+    ? null
+    : shortcutLabel('logCompleted', detectKeyPlatform(), keyOverrides);
+  const loggingHint =
+    loggingMode === 'MANUAL' && logShortcut
+      ? t('settings:loggingModeHint_MANUALShortcut', { shortcut: logShortcut })
+      : t(`settings:loggingModeHint_${loggingMode}`);
+  const handleLoggingModeChange = (mode: LoggingMode) => {
+    setLoggingMode(mode).catch(() => toast.error(t('common:saveFailed')));
+  };
+
   const handleDefaultReviewIntervalChange = (kind: ReviewDefaultKind, next: ReviewInterval) => {
     const prev = usePreferencesStore.getState().defaultReviewIntervals;
     const intervals = { ...prev, [kind]: next };
@@ -303,6 +329,17 @@ export default function SettingsGeneral() {
             }
           />
         </SettingsGroup>
+
+        <SettingsOptionGroup
+          header={t('settings:loggingMode')}
+          footer={loggingHint}
+          options={LOGGING_MODES.map((mode) => ({
+            value: mode,
+            label: t(`settings:loggingMode_${mode}`),
+          }))}
+          value={loggingMode}
+          onChange={handleLoggingModeChange}
+        />
 
         <SettingsGroup
           header={t('review:defaultInterval')}
@@ -381,6 +418,23 @@ export default function SettingsGeneral() {
           />
         </div>
         <p className="text-sm text-muted-foreground">{t('settings:groupTasksByParentHint')}</p>
+      </div>
+
+      {/* 完成的条目移入 Logbook 的时机（Logging Mode） */}
+      <div className="flex flex-col gap-2">
+        <Label>{t('settings:loggingMode')}</Label>
+        <div className="flex gap-1">
+          {LOGGING_MODES.map((mode) => (
+            <OptionButton
+              key={mode}
+              active={loggingMode === mode}
+              onClick={() => handleLoggingModeChange(mode)}
+            >
+              {t(`settings:loggingMode_${mode}`)}
+            </OptionButton>
+          ))}
+        </div>
+        <p className="text-sm text-muted-foreground">{loggingHint}</p>
       </div>
 
       {/* 默认回顾间隔（Review）：项目 / 区域两档，只决定新建时写入的间隔 */}
