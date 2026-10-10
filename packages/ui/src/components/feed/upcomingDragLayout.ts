@@ -1,6 +1,6 @@
 import type { FeedItem, TaskFeedItem } from '@taskora/shared';
 import { ScheduledType } from '@taskora/shared';
-import type { RepeatPreview, UpcomingLayout } from '@taskora/api';
+import { toDateKey, type RepeatPreview, type UpcomingLayout } from '@taskora/api';
 
 export interface UpcomingGroup {
   id: string;
@@ -14,8 +14,8 @@ export interface UpcomingDragTarget {
   edge: 'before' | 'after';
 }
 
-/** 每个可见标题是一组；月份内按 feed 的 Position 排，具体日期仍保留在行上。 */
-export function upcomingGroups(layout: UpcomingLayout, items: FeedItem[]): UpcomingGroup[] {
+/** 每个可见标题是一组；月份内按计划日期排，同一天保留 feed 的 Position 顺序。 */
+export function upcomingGroups(layout: UpcomingLayout): UpcomingGroup[] {
   return [
     ...layout.week.map((day) => ({
       id: `date:${day.dateKey}`,
@@ -25,11 +25,10 @@ export function upcomingGroups(layout: UpcomingLayout, items: FeedItem[]): Upcom
     })),
     ...layout.later.map((month) => {
       const monthKey = `${month.year}-${String(month.month).padStart(2, '0')}`;
-      const keys = new Set(month.days.flatMap((day) => day.items.map(feedKey)));
       return {
         id: `month:${monthKey}`,
         scheduledDate: `${monthKey}-${String(month.rangeStartDay ?? 1).padStart(2, '0')}`,
-        items: items.filter((item) => keys.has(feedKey(item))),
+        items: month.days.flatMap((day) => day.items),
         previews: month.days.flatMap((day) => day.previews),
       };
     }),
@@ -66,6 +65,16 @@ export function moveUpcomingTask(
     : isHeader
       ? others[0]
       : others[others.length - 1];
+  // 月份内只重排同一天的任务，跨日期移动不能覆盖按日期排列的顺序。
+  if (
+    group.id === origin.groupId &&
+    group.id.startsWith('month:') &&
+    anchor?.scheduledDate &&
+    origin.item.scheduledDate &&
+    toDateKey(anchor.scheduledDate) !== toDateKey(origin.item.scheduledDate)
+  ) {
+    return null;
+  }
   const rest = items.filter((item) => feedKey(item) !== activeKey);
   const afterAnchor = isRow ? target.edge === 'after' : !isHeader;
   const index = anchor

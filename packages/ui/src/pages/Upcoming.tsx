@@ -80,6 +80,7 @@ import {
   useFlipList,
   useHeldValue,
 } from '../lib/dnd';
+import { useLingeringExpanded } from '../lib/useLingeringExpanded';
 
 interface ScheduleDrag {
   /** 拖拽源的 dnd id：任务行为 task:<id>，Magic Plus 为 MAGIC_PLUS_ID。 */
@@ -113,8 +114,13 @@ export default function Upcoming() {
     filtering,
     bar,
   } = useTagFilter(allItems, effectiveTags.ofFeedItem);
+  // 展开中的任务改到今天 / Someday、或改到另一个未来日期时留在原日期原位，
+  // 收起后才离开 / 移到新日期。
+  const lingeringItems = useLingeringExpanded(filteredItems, feedItemIdOf, {
+    stays: sameScheduledDate,
+  });
   // 松手立即移到目标分组，等更新 hook 的乐观数据追上，避免闪回原日期。
-  const [shownItems, holdItems] = useHeldValue(filteredItems, scheduleSignature);
+  const [shownItems, holdItems] = useHeldValue(lingeringItems, scheduleSignature);
   const [drag, setDrag] = useState<ScheduleDrag | null>(null);
   const dragRef = useRef<ScheduleDrag | null>(null);
   const lastTargetRef = useRef<UpcomingDragTarget | null>(null);
@@ -164,7 +170,7 @@ export default function Upcoming() {
     () => buildUpcomingLayout(items, new Date(), filtering ? [] : previews),
     [items, previews, filtering, calendarDay],
   );
-  const groups = useMemo(() => upcomingGroups(layout, items), [layout, items]);
+  const groups = useMemo(() => upcomingGroups(layout), [layout]);
   const flip = useFlipList<HTMLDivElement>(groups);
 
   // 多项拖拽：拖拽开始那次提交之后再收起组内其余行，浮层才贴着手。
@@ -328,10 +334,7 @@ export default function Upcoming() {
 
   const applyTarget = (current: ScheduleDrag, target: UpcomingDragTarget | null): FeedItem[] => {
     if (!target) return current.items;
-    const currentGroups = upcomingGroups(
-      buildUpcomingLayout(current.items, new Date()),
-      current.items,
-    );
+    const currentGroups = upcomingGroups(buildUpcomingLayout(current.items, new Date()));
     return (
       moveUpcomingTask(
         current.items,
@@ -719,7 +722,7 @@ function withScheduleDragGroup(
   moved: TaskFeedItem,
   group: Array<{ item: TaskFeedItem; groupId: string }>,
 ): FeedItem[] {
-  const groups = upcomingGroups(buildUpcomingLayout(items, new Date()), items);
+  const groups = upcomingGroups(buildUpcomingLayout(items, new Date()));
   const finalGroupId = groups.find((entry) =>
     entry.items.some((item) => feedKey(item) === feedKey(moved)),
   )?.id;
@@ -729,4 +732,13 @@ function withScheduleDragGroup(
     return { ...item, scheduledType: ScheduledType.DATE, scheduledDate: moved.scheduledDate };
   });
   return expandDragGroup(items, feedKey(moved), placed, feedKey);
+}
+
+function feedItemIdOf(item: FeedItem) {
+  return item.id;
+}
+
+function sameScheduledDate(before: FeedItem, now: FeedItem) {
+  const key = (item: FeedItem) => (item.scheduledDate ? toDateKey(item.scheduledDate) : null);
+  return key(before) === key(now);
 }

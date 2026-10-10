@@ -73,6 +73,7 @@ import {
   type SelectionRow,
 } from '@taskora/api';
 import type { ScheduledBadgeMode } from '@/components/task/TaskDateBadge';
+import { useLingeringExpanded } from '../../lib/useLingeringExpanded';
 
 interface Props {
   items: FeedItem[];
@@ -400,7 +401,7 @@ type GroupChunk =
  * 草稿替换为新任务写回顺序。
  */
 export function GroupedFeedListView({
-  items,
+  items: sourceItems,
   emptyHint,
   showScheduledBadge,
   grouping = true,
@@ -427,6 +428,8 @@ export function GroupedFeedListView({
       retainGroupIds,
     });
 
+  // 展开中的任务编辑后离开本视图时留在原位，收起后才离开。
+  const items = useLingeringExpanded(sourceItems, feedItemIdOf);
   // 松手后的本地结果：显示顺序与任务归属追上之前一直以它渲染。
   const [shownItems, holdItems] = useHeldValue(items, (list) => feedSignature(derive(list)));
   const [drag, setDrag] = React.useState<{
@@ -1029,4 +1032,8 @@ function reassignmentDto(
   if (kind === 'project') return { projectId: containerId, areaId: null };
   if (kind === 'area') return { projectId: null, areaId: containerId };
   return null;
+}
+
+function feedItemIdOf(item: FeedItem) {
+  return item.id;
 }
