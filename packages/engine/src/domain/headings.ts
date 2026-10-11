@@ -90,6 +90,22 @@ export function planHeadingToProject(
   };
 }
 
+/**
+ * 分组移到另一个项目（对齐 Things 3 的 Move）：分组排到目标项目分组的
+ * 末尾，其下全部任务（含已了结、Trash 里的）随之换项目、保留分组归属，
+ * 其余字段不变。调用方须先写分组再写任务：合并修复 R4 按分组当前所属
+ * 项目校验任务的 headingId。
+ */
+export function planHeadingMove(targetProjectId: string): {
+  headingPatch: { projectId: string };
+  taskPatch: TaskPatch;
+} {
+  return {
+    headingPatch: { projectId: targetProjectId },
+    taskPatch: { projectId: targetProjectId, areaId: null },
+  };
+}
+
 /** 布局与当前数据不符（重复 / 缺失 / 不属于该项目）：客户端应刷新重试。 */
 export class HeadingLayoutMismatchError extends Error {
   readonly name = 'HeadingLayoutMismatchError';

@@ -118,6 +118,7 @@ export {
   planHeadingArchive,
   planHeadingDelete,
   planHeadingLayout,
+  planHeadingMove,
   planHeadingToProject,
   sortHeadings,
   type HeadingLayout,

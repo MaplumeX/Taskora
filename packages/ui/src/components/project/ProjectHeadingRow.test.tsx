@@ -10,7 +10,7 @@ import { ProjectHeadingRow } from './ProjectHeadingRow';
 
 vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
-    useUpdateProjectHeading: () => ({ mutate: mutationMocks.update }),
+  useUpdateProjectHeading: () => ({ mutate: mutationMocks.update }),
   useDeleteProjectHeading: () => ({
     mutate: mutationMocks.remove,
     isPending: false,
@@ -27,6 +27,18 @@ vi.mock('@taskora/api', async (importOriginal) => ({
     mutate: mutationMocks.unarchive,
     isPending: false,
   }),
+  useMoveProjectHeading: () => ({
+    mutate: mutationMocks.move,
+    isPending: false,
+  }),
+  useProjectsQuery: () => ({
+    data: [
+      { ...pickerProject, id: 'project-1', title: 'Launch' },
+      { ...pickerProject, id: 'project-2', title: 'Roadmap' },
+    ],
+  }),
+  useAreasQuery: () => ({ data: [] }),
+  useLaterProjectKind: () => () => null,
 }));
 
 const mutationMocks = vi.hoisted(() => ({
@@ -35,8 +47,23 @@ const mutationMocks = vi.hoisted(() => ({
   convert: vi.fn(),
   archive: vi.fn(),
   unarchive: vi.fn(),
+  move: vi.fn(),
 }));
 
+const pickerProject = vi.hoisted(() => ({
+  notes: null,
+  areaId: null,
+  status: 'ACTIVE',
+  start: 'ANYTIME',
+  scheduledDate: null,
+  dueDate: null,
+  completedAt: null,
+  trashedAt: null,
+  taskTotalCount: 0,
+  taskCompletedCount: 0,
+  createdAt: '2026-07-31T00:00:00.000Z',
+  updatedAt: '2026-07-31T00:00:00.000Z',
+}));
 
 const heading: ProjectHeadingResponseDto = {
   id: 'heading-1',
@@ -162,6 +189,34 @@ describe('ProjectHeadingRow', () => {
     );
   });
 
+  it('moves the heading to another project from the actions menu', async () => {
+    const user = userEvent.setup();
+    render(<ProjectHeadingRow heading={heading} />);
+
+    await user.click(
+      screen.getByRole('button', {
+        name: /Heading actions|项目分组标题操作/,
+      }),
+    );
+    await user.click(await screen.findByRole('menuitem', { name: /^Move$|^移动$/ }));
+
+    const current = await screen.findByRole('option', { name: 'Launch' });
+    expect(current).toHaveAttribute('aria-current', 'true');
+    // 选当前项目不写入
+    await user.click(current);
+    expect(mutationMocks.move).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole('option', { name: 'Roadmap' }));
+    expect(mutationMocks.move).toHaveBeenCalledWith(
+      { id: 'heading-1', targetProjectId: 'project-2' },
+      expect.objectContaining({
+        onSuccess: expect.any(Function),
+        onError: expect.any(Function),
+      }),
+    );
+    await waitFor(() => expect(screen.queryByRole('listbox')).not.toBeInTheDocument());
+  });
+
   it('archives the heading from the actions menu', async () => {
     const user = userEvent.setup();
     render(<ProjectHeadingRow heading={heading} />);
@@ -205,28 +260,18 @@ describe('ProjectHeadingRow', () => {
     const user = userEvent.setup();
     render(<ProjectHeadingRow heading={archivedHeading} />);
 
-    await user.click(
-      screen.getByRole('button', { name: /Heading actions|项目分组标题操作/ }),
-    );
+    await user.click(screen.getByRole('button', { name: /Heading actions|项目分组标题操作/ }));
 
-    expect(
-      await screen.findByRole('menuitem', { name: /Unarchive|取消归档/ }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole('menuitem', { name: /^Archive$|^归档$/ }),
-    ).not.toBeInTheDocument();
+    expect(await screen.findByRole('menuitem', { name: /Unarchive|取消归档/ })).toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: /^Archive$|^归档$/ })).not.toBeInTheDocument();
   });
 
   it('unarchives the heading from the actions menu', async () => {
     const user = userEvent.setup();
     render(<ProjectHeadingRow heading={archivedHeading} />);
 
-    await user.click(
-      screen.getByRole('button', { name: /Heading actions|项目分组标题操作/ }),
-    );
-    await user.click(
-      await screen.findByRole('menuitem', { name: /Unarchive|取消归档/ }),
-    );
+    await user.click(screen.getByRole('button', { name: /Heading actions|项目分组标题操作/ }));
+    await user.click(await screen.findByRole('menuitem', { name: /Unarchive|取消归档/ }));
 
     expect(mutationMocks.unarchive).toHaveBeenCalledWith(
       'heading-1',

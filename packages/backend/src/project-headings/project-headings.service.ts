@@ -8,6 +8,7 @@ import {
   planHeadingArchive,
   planHeadingDelete,
   planHeadingLayout,
+  planHeadingMove,
   planHeadingToProject,
   planReorder,
   positionAtEnd,
@@ -150,6 +151,33 @@ export class ProjectHeadingsService {
 
       const project = await batch.tx.project.findUniqueOrThrow({ where: { id: projectId } });
       return { ...project, tags: [] };
+    });
+  }
+
+  async move(userId: string, id: string, projectId: string) {
+    return this.hub.writeAsHub(userId, async (batch) => {
+      const heading = await this.requireHeading(batch, userId, id);
+      if (heading.projectId !== projectId) {
+        await this.assertProjectOwnership(userId, projectId, batch.tx);
+        const plan = planHeadingMove(projectId);
+        const siblings = await batch.tx.projectHeading.findMany({
+          where: { userId, projectId },
+          select: { id: true, position: true },
+        });
+        // 先写分组再写任务（合并修复按分组所属项目校验任务的 headingId）
+        await batch.write('project-heading', id, {
+          ...plan.headingPatch,
+          position: positionAtEnd(siblings),
+        });
+        const tasks = await batch.tx.task.findMany({
+          where: { userId, headingId: id },
+          select: { id: true },
+        });
+        for (const task of tasks) {
+          await batch.write('task', task.id, toWireFields(plan.taskPatch));
+        }
+      }
+      return batch.tx.projectHeading.findFirst({ where: { id, userId } });
     });
   }
 

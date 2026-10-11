@@ -325,6 +325,39 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     expect(await engine.get('project-heading', heading.id)).toBeNull();
   });
 
+  it('Heading move：分组排到目标项目分组末尾，其下任务（含已完成）随之换项目、保留分组', async () => {
+    const source = await projects.createProject({ title: '源项目' });
+    const target = await projects.createProject({ title: '目标项目' });
+    const existing = await headings.createProjectHeading({ projectId: target.id, title: '已有' });
+    const heading = await headings.createProjectHeading({ projectId: source.id, title: '搬家' });
+    const taskIds = await Promise.all(
+      ['ACTIVE', 'COMPLETED'].map((status) =>
+        engine.create('task', {
+          title: status,
+          status,
+          start: 'ANYTIME',
+          projectId: source.id,
+          headingId: heading.id,
+          trashedAt: null,
+          settledAt: null,
+        }),
+      ),
+    );
+
+    const moved = await headings.moveProjectHeading(heading.id, target.id);
+    expect(moved.projectId).toBe(target.id);
+    expect((await headings.getProjectHeadings(target.id)).map((h) => h.id)).toEqual([
+      existing.id,
+      heading.id,
+    ]);
+    expect(await headings.getProjectHeadings(source.id)).toEqual([]);
+    for (const taskId of taskIds) {
+      const task = await engine.get('task', taskId);
+      expect(task?.fields.projectId).toBe(target.id);
+      expect(task?.fields.headingId).toBe(heading.id);
+    }
+  });
+
   it('断网全功能 + 恢复联网收敛：两台设备经同一 hub 达到一致', async () => {
     const hub = new InMemorySyncHub();
     const open = async (name: string) =>

@@ -44,6 +44,13 @@ export function convertProjectHeadingToProject(id: string): Promise<ProjectRespo
   return currentProjectHeadingBackend().convertProjectHeadingToProject(id);
 }
 
+export function moveProjectHeading(
+  id: string,
+  projectId: string,
+): Promise<ProjectHeadingResponseDto> {
+  return currentProjectHeadingBackend().moveProjectHeading(id, projectId);
+}
+
 export function reorderProjectHeadingLayout(data: ReorderProjectHeadingLayoutDto): Promise<void> {
   return currentProjectHeadingBackend().reorderProjectHeadingLayout(data);
 }

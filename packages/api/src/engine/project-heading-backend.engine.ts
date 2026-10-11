@@ -14,6 +14,7 @@ import {
   planHeadingArchive,
   planHeadingDelete,
   planHeadingLayout,
+  planHeadingMove,
   planHeadingToProject,
   planReorder,
   positionAfter,
@@ -151,6 +152,26 @@ export function createEngineProjectHeadingBackend(
       if (!row) throw new Error(`Project not found: ${projectId}`);
       const tags = new Map((await engine.list('tag')).map((t) => [t.id, tagRowToDto(t)]));
       return projectRowToDto(row, tags, 0, 0);
+    },
+
+    async moveProjectHeading(id, projectId) {
+      const heading = await engine.get('project-heading', id);
+      if (!heading) throw new Error(`Heading not found: ${id}`);
+      if (heading.fields.projectId === projectId) return projectHeadingRowToDto(heading);
+      await assertProject(projectId);
+      const plan = planHeadingMove(projectId);
+      const siblings = await engine.list('project-heading', { where: { projectId } });
+      // 先写分组再写任务（合并修复按分组所属项目校验任务的 headingId）
+      await engine.update('project-heading', id, {
+        ...plan.headingPatch,
+        position: positionAtEnd(positionedRows(siblings)),
+      });
+      const tasks = await tasksUnderHeading(id);
+      await engine.updateMany(
+        'task',
+        tasks.map((row) => ({ id: row.id, patch: { ...plan.taskPatch } })),
+      );
+      return headingDto(id);
     },
 
     async reorderProjectHeadingLayout(data) {

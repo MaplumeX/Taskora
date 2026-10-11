@@ -13,6 +13,7 @@ import {
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import {
   CreateProjectHeadingDto,
+  MoveProjectHeadingDto,
   ProjectHeadingQueryDto,
   ReorderProjectHeadingLayoutDto,
   UpdateProjectHeadingDto,
@@ -26,11 +27,7 @@ export class ProjectHeadingsController {
 
   @Get()
   findAll(@Request() req: { user: { id: string } }, @Query() query: ProjectHeadingQueryDto) {
-    return this.headingsService.findAll(
-      req.user.id,
-      query.projectId,
-      query.includeArchived,
-    );
+    return this.headingsService.findAll(req.user.id, query.projectId, query.includeArchived);
   }
 
   @Get('active')
@@ -51,6 +48,15 @@ export class ProjectHeadingsController {
   @Post(':id/convert-to-project')
   convertToProject(@Request() req: { user: { id: string } }, @Param('id') id: string) {
     return this.headingsService.convertToProject(req.user.id, id);
+  }
+
+  @Post(':id/move')
+  move(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+    @Body() dto: MoveProjectHeadingDto,
+  ) {
+    return this.headingsService.move(req.user.id, id, dto.projectId);
   }
 
   @Post(':id/archive')

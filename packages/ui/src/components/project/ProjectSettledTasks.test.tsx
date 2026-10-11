@@ -37,6 +37,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useConvertProjectHeadingToProject: () => queryMocks.useConvertProjectHeadingToProject(),
   useArchiveProjectHeading: () => queryMocks.useArchiveProjectHeading(),
   useUnarchiveProjectHeading: () => queryMocks.useUnarchiveProjectHeading(),
+  useMoveProjectHeading: () => ({ mutate: vi.fn(), isPending: false }),
   useProjectsQuery: () => ({ data: [] }),
   useAreasQuery: () => ({ data: [] }),
   useTagsQuery: () => ({ data: [] }),
