@@ -191,7 +191,7 @@ describe('applyChangeEvents', () => {
     expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'inbox' }))).toEqual([
       inboxTask,
     ]);
-    // today requires scheduledType DATE
+    // today requires a scheduledDate
     expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'today' }))).toEqual(
       [],
     );

@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { InMemorySyncHub, openEngine } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
-import { ScheduledType, TaskStatus } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 
 import { createEngineAreaBackend } from '../engine/area-backend.engine';
 import { createEngineTaskBackend } from '../engine/task-backend.engine';
@@ -42,15 +42,12 @@ describe('UndoHistory', () => {
     const { history, tasks, rawTasks } = device;
     const task = await tasks.createTask({ title: '写周报' });
     history.boundary();
-    await tasks.updateTask(task.id, {
-      scheduledType: ScheduledType.DATE,
-      scheduledDate: '2030-01-07',
-    });
+    await tasks.updateTask(task.id, { scheduledDate: '2030-01-07' });
 
     expect(await history.peek()).toBe('schedule');
     expect(await history.undo()).toBe('schedule');
     const after = await rawTasks.getTask(task.id);
-    expect(after.scheduledType).toBe(ScheduledType.NONE);
+    expect(after.start).toBe(Start.INBOX);
     expect(after.scheduledDate).toBeNull();
     // 再撤销一步：新建的任务被删除。
     expect(await history.undo()).toBe('create');
@@ -74,7 +71,6 @@ describe('UndoHistory', () => {
     const { raw, history, tasks, rawTasks } = device;
     const task = await tasks.createTask({
       title: '浇花',
-      scheduledType: ScheduledType.DATE,
       scheduledDate: '2030-01-07',
     });
     await tasks.updateTask(task.id, {
