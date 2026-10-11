@@ -37,9 +37,14 @@ async function showMainWindow() {
 const reducedMotion = () =>
   window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 
-/** 进场：淡入并轻微下落（Web Animations，不重挂卡片，草稿不丢）。 */
+/**
+ * 进场：淡入并轻微下落（Web Animations，不重挂卡片，草稿不丢）。先撤销
+ * 出场残留的 fill，再从隐藏态起步。
+ */
 function playEnter(el: HTMLElement | null) {
-  if (!el || typeof el.animate !== 'function' || reducedMotion()) return;
+  if (!el || typeof el.animate !== 'function') return;
+  el.getAnimations().forEach((a) => a.cancel());
+  if (reducedMotion()) return;
   el.animate(
     [
       { opacity: 0, transform: 'translateY(-8px)' },
@@ -49,7 +54,10 @@ function playEnter(el: HTMLElement | null) {
   );
 }
 
-/** 出场：淡出后再隐藏窗口；动画结束即撤销，下次显示从正常状态开始。 */
+/**
+ * 出场：淡出后再隐藏窗口。fill 保留到下次进场才撤销：窗口重新显示时先
+ * 呈现的是隐藏前的旧画面，若此时卡片已复位，会先闪现在终点再跳回起点。
+ */
 async function playExit(el: HTMLElement | null) {
   if (!el || typeof el.animate !== 'function' || reducedMotion()) return;
   const animation = el.animate(
@@ -60,8 +68,6 @@ async function playExit(el: HTMLElement | null) {
     { duration: 100, easing: 'ease-in', fill: 'forwards' },
   );
   await animation.finished.catch(() => undefined);
-  // 窗口隐藏后再撤销 fill，避免隐藏前闪回一帧
-  requestAnimationFrame(() => animation.cancel());
 }
 
 /** 是否有字段选择器（Radix Popover）开着：开着时点空白处只关选择器。 */
@@ -88,13 +94,15 @@ export function QuickAddApp() {
     const unlisten = listen('quick-add://open', () => {
       // 兜底：webview 未投递 storage 事件时，每次唤出重读自定义键位。
       void useKeybindingsStore.persist.rehydrate();
+      // 窗口此刻已由 Rust 端显示：进场动画必须立即开始，等 boot 完成再播
+      // 会让卡片先停在终点、再跳回起点下落（上下抖一下）。
+      playEnter(surfaceRef.current);
       void bootQuickAdd()
         .then(async () => {
           if (!useAuthStore.getState().token) {
             await showMainWindow();
             return;
           }
-          playEnter(surfaceRef.current);
           cardRef.current?.focusTitle();
           void refreshQuickAddData(queryClient);
         })
