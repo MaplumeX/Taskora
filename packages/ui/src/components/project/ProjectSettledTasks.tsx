@@ -67,8 +67,8 @@ export function ProjectSettledTasks({ projectId }: Props) {
     [allHeadings],
   );
 
-  // 同 Things：已了结任务与已归档分组混排，按了结时间倒序（任务看 completedAt 即了结时间，
-  // 分组看归档时间）；分组下的任务跟随分组，组内同样倒序。同一时刻保持原列表顺序。
+  // 与未了结列表一致：独立任务在前，已归档分组及其任务在后。
+  // 独立任务、分组和组内任务各自按了结时间倒序，同一时刻保持原列表顺序。
   const entries = useMemo(() => {
     const archivedHeadingIds = new Set(archivedHeadings.map((h) => h.id));
     const grouped: Record<string, TaskResponseDto[]> = {};
@@ -84,7 +84,10 @@ export function ProjectSettledTasks({ projectId }: Props) {
       const tasks = (grouped[heading.id] ?? []).sort(byRecentFirst((t) => t.completedAt ?? ''));
       result.push({ kind: 'heading', heading, tasks, at: heading.completedAt ?? '' });
     }
-    return result.sort(byRecentFirst((e) => e.at));
+    return result.sort((a, b) => {
+      if (a.kind !== b.kind) return a.kind === 'task' ? -1 : 1;
+      return b.at.localeCompare(a.at);
+    });
   }, [settledTasks, archivedHeadings]);
 
   // Loading or error: silently hide (don't block the active task area).

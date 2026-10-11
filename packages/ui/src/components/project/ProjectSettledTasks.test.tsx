@@ -301,7 +301,7 @@ describe('ProjectSettledTasks', () => {
 
   /* --------------------------- archived heading grouping --------------------------- */
 
-  it('interleaves archived headings with tasks by settled time, most recent first', async () => {
+  it('places standalone tasks before archived headings, sorting each section most recent first', async () => {
     const user = userEvent.setup();
     const h1 = makeHeading({
       id: 'h-1',
@@ -354,12 +354,12 @@ describe('ProjectSettledTasks', () => {
     await user.click(screen.getByRole('button', { expanded: false }));
 
     const order = [
-      'Sprint 2',
       'Flat mid',
+      'Flat old',
+      'Sprint 2',
       'Sprint 1',
       'Grouped new',
       'Grouped old',
-      'Flat old',
     ].map((text) => screen.getByText(text));
     for (let i = 1; i < order.length; i++) {
       expect(order[i - 1].compareDocumentPosition(order[i])).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
