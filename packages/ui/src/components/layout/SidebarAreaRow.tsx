@@ -8,6 +8,7 @@ import { SortableContext } from '@dnd-kit/sortable';
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 
 import { cn } from '@/lib/utils';
+import { Collapse } from '@/components/ui/collapse';
 import { sidebarDropOverClass, sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import { SortableProjectItem } from '@/components/layout/SortableProjectItem';
 import {
@@ -55,7 +56,7 @@ export function SidebarAreaRow({
   );
 
   return (
-    <div className="mt-2 flex flex-col gap-px">
+    <div className="mt-2 flex flex-col">
       <div
         ref={drop.setNodeRef}
         {...flipId(`area-row:${area.id}`)}
@@ -101,7 +102,8 @@ export function SidebarAreaRow({
           />
         </button>
       </div>
-      {open && (
+      {/* 区域标题与项目之间的 1px 间距放在折叠区内，随高度一起收起。 */}
+      <Collapse open={open} className="pt-px">
         <SortableContext
           items={projects.map((project) => projectDndId(project.id))}
           strategy={noopSortingStrategy}
@@ -114,13 +116,13 @@ export function SidebarAreaRow({
             {projects.map(renderProject)}
           </div>
         </SortableContext>
-      )}
+      </Collapse>
       {collapsedPlaceholder && (
         <SortableContext
           items={[projectDndId(projects[0].id)]}
           strategy={noopSortingStrategy}
         >
-          <div>{renderProject(projects[0])}</div>
+          <div className="pt-px">{renderProject(projects[0])}</div>
         </SortableContext>
       )}
     </div>

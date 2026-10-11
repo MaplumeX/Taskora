@@ -63,42 +63,152 @@ export function flipId(id: string) {
   return { [FLIP_ATTR]: id };
 }
 
+/** 一次重排里进场 + 离场的行数超过它（过滤切换、整批同步）就只做位移，不逐行进出场。 */
+const MAX_ENTER_EXIT = 24;
+
+interface FlipSnapshot {
+  rects: Map<string, DOMRect>;
+  elements: Map<string, HTMLElement>;
+  /**
+   * 数据驱动的重排（改日期、删除、新建、同步）：除位移外还播放进场 / 离场。
+   * 拖拽中调用方 capture() 的重排只做位移——空位行与草稿行不该淡入淡出。
+   */
+  auto: boolean;
+}
+
+function measureRows(root: HTMLElement, auto: boolean): FlipSnapshot {
+  const rects = new Map<string, DOMRect>();
+  const elements = new Map<string, HTMLElement>();
+  root.querySelectorAll<HTMLElement>(`[${FLIP_ATTR}]`).forEach((element) => {
+    const id = element.getAttribute(FLIP_ATTR);
+    if (!id) return;
+    rects.set(id, element.getBoundingClientRect());
+    elements.set(id, element);
+  });
+  return { rects, elements, auto };
+}
+
+/** 两个矩形是否占同一位置（临时 id 换成真实 id 时，新旧行落在同一处）。 */
+function sameSlot(a: DOMRect, b: DOMRect) {
+  return Math.abs(a.top - b.top) < 1 && Math.abs(a.height - b.height) < 1;
+}
+
+/** 离场残影不能被当作真实行：去掉标识、选择、拖拽与测试用的属性。 */
+const GHOST_KEPT_DATA_ATTRS = new Set(['data-state', 'data-disabled', 'data-empty']);
+
+function stripGhostAttributes(element: Element) {
+  for (const { name } of Array.from(element.attributes)) {
+    if (
+      name === 'id' ||
+      name === 'tabindex' ||
+      name === 'role' ||
+      name.startsWith('aria-') ||
+      (name.startsWith('data-') && !GHOST_KEPT_DATA_ATTRS.has(name))
+    ) {
+      element.removeAttribute(name);
+    }
+  }
+}
+
 /**
- * 列表重排的 FLIP 动画：改布局前调用 capture() 记录各行当前视觉位置，
- * version 变化后的 layout effect 中把每行从旧位置平滑移到新位置。
- * 只有 capture 过的那次重排才会播放（服务端同步等其它重渲染不受影响）。
+ * 离场：行已被 React 移除，在原位置放一份克隆，高度收到 0 并淡出。与邻行
+ * 上移的 FLIP 同时长同曲线，残影底边与下一行顶边同步移动，二者不重叠——
+ * 看起来就是行本身收起（同完成任务的收起）。
+ */
+function playExit(root: HTMLElement, element: HTMLElement, rect: DOMRect) {
+  // 高度已为 0 的行（完成收起后才移除）不必再收一次。
+  if (rect.height < 1 || rect.width < 1) return;
+  const ghost = element.cloneNode(true) as HTMLElement;
+  [ghost, ...Array.from(ghost.querySelectorAll('*'))].forEach(stripGhostAttributes);
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.setAttribute('inert', '');
+  if (getComputedStyle(root).position === 'static') root.style.position = 'relative';
+  const rootRect = root.getBoundingClientRect();
+  Object.assign(ghost.style, {
+    position: 'absolute',
+    left: `${rect.left - rootRect.left - root.clientLeft + root.scrollLeft}px`,
+    top: `${rect.top - rootRect.top - root.clientTop + root.scrollTop}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+    margin: '0',
+    overflow: 'hidden',
+    transform: 'none',
+    pointerEvents: 'none',
+  });
+  root.appendChild(ghost);
+  const animation = ghost.animate(
+    [
+      { height: `${rect.height}px`, opacity: 1 },
+      { height: '0px', opacity: 0 },
+    ],
+    { duration: FLIP_DURATION_MS, easing: FLIP_EASING },
+  );
+  animation.onfinish = () => ghost.remove();
+  animation.oncancel = () => ghost.remove();
+}
+
+/**
+ * 进场：自上而下揭开并淡入。下方邻行同时从旧位置（向上偏一行高）FLIP 下移，
+ * 揭开的底边与邻行顶边同步，看起来就是行从 0 高度撑开。
+ */
+function playEnter(element: HTMLElement) {
+  return element.animate(
+    [
+      { clipPath: 'inset(0 0 100% 0)', opacity: 0 },
+      { clipPath: 'inset(0 0 0 0)', opacity: 1 },
+    ],
+    { duration: FLIP_DURATION_MS, easing: FLIP_EASING },
+  );
+}
+
+/**
+ * 列表行的位移 / 进场 / 离场动画（FLIP）。行用 flipId() 标记。
+ *
+ * - 拖拽：改布局前调用 capture() 记录各行当前视觉位置，version 变化后的
+ *   layout effect 中把每行从旧位置平滑移到新位置。
+ * - 数据变化（改 When 日期换了分组、删除、新建、移走、同步）：version 变化
+ *   的那次渲染时 DOM 仍是旧的，在此自动记录；提交后除位移外，新出现的行
+ *   撑开进场、消失的行收起离场（对齐 Things 3）。
+ * - 前后没有任何共同行（首次加载、切换到另一个项目）视为整体替换，不做动画。
  */
 export function useFlipList<T extends HTMLElement>(version: unknown) {
   const rootRef = React.useRef<T | null>(null);
-  const snapshotRef = React.useRef<Map<string, DOMRect> | null>(null);
+  const snapshotRef = React.useRef<FlipSnapshot | null>(null);
+  const versionRef = React.useRef(version);
   const animationsRef = React.useRef(new WeakMap<Element, Animation>());
 
   const capture = React.useCallback(() => {
     const root = rootRef.current;
     if (!root) return;
-    const rects = new Map<string, DOMRect>();
-    root.querySelectorAll<HTMLElement>(`[${FLIP_ATTR}]`).forEach((element) => {
-      const id = element.getAttribute(FLIP_ATTR);
-      if (id) rects.set(id, element.getBoundingClientRect());
-    });
-    snapshotRef.current = rects;
+    snapshotRef.current = measureRows(root, false);
   }, []);
+
+  if (versionRef.current !== version) {
+    versionRef.current = version;
+    if (!snapshotRef.current && rootRef.current) {
+      snapshotRef.current = measureRows(rootRef.current, true);
+    }
+  }
 
   React.useLayoutEffect(() => {
     const before = snapshotRef.current;
     snapshotRef.current = null;
     const root = rootRef.current;
-    if (!before || !root || prefersReducedMotion()) return;
-    root.querySelectorAll<HTMLElement>(`[${FLIP_ATTR}]`).forEach((element) => {
-      const previous = before.get(element.getAttribute(FLIP_ATTR) ?? '');
-      if (!previous || typeof element.animate !== 'function') return;
+    if (!before || !root || typeof root.animate !== 'function' || prefersReducedMotion()) return;
+    const current = measureRows(root, true);
+    const shared = [...current.elements.keys()].filter((id) => before.rects.has(id));
+    if (shared.length === 0) return;
+
+    for (const id of shared) {
+      const element = current.elements.get(id)!;
+      const previous = before.rects.get(id)!;
       // 先停掉进行中的动画再量新位置：capture 量到的是动画中的视觉位置，
       // 新动画从那里接续，连续重排也不会跳帧。
       animationsRef.current.get(element)?.cancel();
       const next = element.getBoundingClientRect();
       const dx = previous.left - next.left;
       const dy = previous.top - next.top;
-      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+      if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
       animationsRef.current.set(
         element,
         element.animate(
@@ -106,7 +216,26 @@ export function useFlipList<T extends HTMLElement>(version: unknown) {
           { duration: FLIP_DURATION_MS, easing: FLIP_EASING },
         ),
       );
-    });
+    }
+
+    if (!before.auto) return;
+    let entered = [...current.elements.keys()].filter((id) => !before.rects.has(id));
+    let exited = [...before.rects.keys()].filter((id) => !current.elements.has(id));
+    // 同一位置一出一进是同一行换了 id（乐观新建的临时 id → 服务端 id、
+    // Magic Plus 草稿 → 真实任务），不是进出场。
+    for (const id of [...exited]) {
+      const rect = before.rects.get(id)!;
+      const swap = entered.find((other) => sameSlot(rect, current.rects.get(other)!));
+      if (!swap) continue;
+      exited = exited.filter((other) => other !== id);
+      entered = entered.filter((other) => other !== swap);
+    }
+    if (entered.length + exited.length > MAX_ENTER_EXIT) return;
+    for (const id of exited) playExit(root, before.elements.get(id)!, before.rects.get(id)!);
+    for (const id of entered) {
+      const element = current.elements.get(id)!;
+      animationsRef.current.set(element, playEnter(element));
+    }
   }, [version]);
 
   return { rootRef, capture };
