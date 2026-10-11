@@ -62,4 +62,15 @@ describe('desktop-engine 冷启动首屏', () => {
     await vi.waitFor(() => expect(isLiveQueryMode()).toBe(true));
     expect(fakeEngine.sync).toHaveBeenCalledTimes(1);
   });
+
+  it('安装更新前推送 Outbox：同步挂起时不无限等待（ADR-0025）', async () => {
+    const { initDesktopEngine, flushBeforeRestart } = await import('./desktop-engine');
+    const { isLiveQueryMode } = await import('@taskora/api');
+    initDesktopEngine(new QueryClient());
+    await vi.waitFor(() => expect(isLiveQueryMode()).toBe(true));
+
+    await flushBeforeRestart(20);
+
+    expect(fakeEngine.sync).toHaveBeenCalled();
+  });
 });

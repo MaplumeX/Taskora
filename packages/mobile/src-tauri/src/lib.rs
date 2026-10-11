@@ -103,6 +103,8 @@ pub fn run() {
         .plugin(tauri_plugin_background::init())
         // 附件（ADR-0019）：交给系统里能打开该类型的应用（FileProvider）。
         .plugin(tauri_plugin_attachments::init())
+        // 更新提示（ADR-0025）：在系统浏览器里下载 APK（URL 范围见 capabilities）。
+        .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             // Local Replica 目录注册（ADR-0007）。Builder 的 setup 与
             // invoke_handler 都是「替换」语义，全部命令集中在下方唯一的

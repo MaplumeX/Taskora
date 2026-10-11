@@ -100,6 +100,12 @@ async function mount() {
   const { initDesktopEngine } = await import('./engine/desktop-engine');
   initDesktopEngine(queryClient);
 
+  // 自动更新（ADR-0025）：目标是所连服务器的版本；仅主窗口检查与提示。
+  const { setUpdateShell, initUpdateChecks } = await import('@taskora/api');
+  const { desktopUpdateShell } = await import('./updates/desktop-update-shell');
+  setUpdateShell(desktopUpdateShell);
+  initUpdateChecks();
+
   // 附件（ADR-0019）：用系统默认程序打开，而不是 webview 里的下载。
   const { setAttachmentOpener, initBlobUploads } = await import('@taskora/api');
   const { tauriAttachmentOpener } = await import('./tauri-attachment-opener');

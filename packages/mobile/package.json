@@ -22,6 +22,7 @@
     "@taskora/shared": "workspace:*",
     "@taskora/ui": "workspace:*",
     "@tauri-apps/api": "^2.9.0",
+    "@tauri-apps/plugin-opener": "^2.7.0",
     "i18next": "^26.3.6",
     "lucide-react": "^0.460.0",
     "react": "^18.3.1",

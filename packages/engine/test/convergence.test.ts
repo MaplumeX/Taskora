@@ -1336,6 +1336,7 @@ describe('旧版小数墙钟时间戳的一次性修复', () => {
       deviceId: 'A',
       clock: new LegacyOnceClock('A', () => 5_000_000_001_000),
       transport,
+      minHubProtocolVersion: 0, // 协议 2 的旧 hub
     });
     const b = await openEngine({
       storage: await createNodeSqliteStorage(':memory:'),

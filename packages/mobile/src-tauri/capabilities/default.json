@@ -8,6 +8,14 @@
     "statusbar:default",
     "reminders:default",
     "background:default",
-    "attachments:default"
+    "attachments:default",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://github.com/MaplumeX/Taskora/releases/download/*"
+        }
+      ]
+    }
   ]
 }

@@ -39,6 +39,18 @@ import type { SyncEntity } from './entities';
 export const SYNC_PROTOCOL_VERSION = 7;
 
 /**
+ * 本端认可的最低 hub 协议版本（ADR-0025），与 hub 的最低协议对称：hub
+ * 低于它时暂停同步、Outbox 保留，提示升级服务器。只在本端连上旧 hub
+ * 会把数据写坏或读错时才提高它——比本端旧但仍兼容的 hub 照常同步（按
+ * 能力降级：hub 不认识的变更逐条拒在 Outbox 里）。
+ *
+ * 7（Start，ADR 0024）：协议 6 的 hub 不认识 start，本端写的计划与
+ * Inbox / Someday 归属会永久卡在 Outbox 里；它下发的 bucket /
+ * scheduledType 本端也不再理解。
+ */
+export const MIN_HUB_PROTOCOL_VERSION = 7;
+
+/**
  * hub 完成 bucket / scheduledType → start 迁移的协议版本：副本迁移后第一次
  * 连上这样的 hub 时走一次 bootstrap（见 LocalReplica.consumeResync）。
  */
@@ -111,6 +123,22 @@ export class SyncUpgradeRequiredError extends Error {
 
   constructor(readonly minProtocolVersion?: number) {
     super('同步协议版本过旧，请升级 Taskora');
+  }
+}
+
+/**
+ * hub 的协议版本低于本端认可的最低版本（MIN_HUB_PROTOCOL_VERSION）。同步
+ * 暂停、Outbox 保留、不应用 hub 下发的数据，UI 提示升级服务器；本地读写
+ * 不受影响，hub 升级后下次同步自动恢复。
+ */
+export class SyncHubTooOldError extends Error {
+  readonly name = 'SyncHubTooOldError';
+
+  constructor(
+    readonly hubProtocolVersion: number,
+    readonly minHubProtocolVersion = MIN_HUB_PROTOCOL_VERSION,
+  ) {
+    super('服务器同步协议版本过旧，请升级 Taskora 服务器');
   }
 }
 

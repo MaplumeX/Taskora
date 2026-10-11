@@ -41,4 +41,11 @@ describe('SyncIndicator（V2：离线可见性）', () => {
     expect(status).toHaveAttribute('data-sync-status', 'upgrade-required');
     expect(status.className).toContain('pointer-events-none');
   });
+
+  it('服务器过旧：常驻提示升级服务器', () => {
+    useSyncStatusStore.setState({ status: 'hub-too-old', pendingCount: 2 });
+    render(<SyncIndicator />);
+    const status = screen.getByRole('status');
+    expect(status).toHaveAttribute('data-sync-status', 'hub-too-old');
+  });
 });
