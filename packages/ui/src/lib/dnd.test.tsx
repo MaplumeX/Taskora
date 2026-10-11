@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
 import { act, render } from '@testing-library/react';
 import * as React from 'react';
 
@@ -8,7 +8,9 @@ import {
   applyOrder,
   dragGroupOf,
   dragSelectionIds,
+  flipId,
   useCollapseAfterDragStart,
+  useFlipList,
   useHeldOrder,
 } from './dnd';
 
@@ -132,5 +134,112 @@ describe('dragSelectionIds', () => {
     expect(dragGroupOf('a', ['a', 'b', 'c'], dragSelectionIds())).toEqual(['a', 'c']);
     // 拖勾选之外的行仍是单项拖拽
     expect(dragGroupOf('b', ['a', 'b', 'c'], dragSelectionIds())).toBeNull();
+  });
+});
+
+describe('useFlipList（数据驱动的位移 / 进场 / 离场）', () => {
+  const ROW_HEIGHT = 30;
+  let calls: { element: Element; keyframes: Keyframe[]; animation: Animation }[] = [];
+
+  beforeEach(() => {
+    calls = [];
+    // jsdom 没有布局与 WAAPI：行按 DOM 顺序每行 30px 高排布。
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const rows = Array.from(document.querySelectorAll('[data-flip-id]'));
+      const index = rows.indexOf(this);
+      const top = index < 0 ? 0 : index * ROW_HEIGHT;
+      return new DOMRect(0, top, 200, index < 0 ? rows.length * ROW_HEIGHT : ROW_HEIGHT);
+    });
+    Element.prototype.animate = function (this: Element, keyframes: Keyframe[]) {
+      const animation = { cancel: vi.fn(), onfinish: null, oncancel: null } as unknown as Animation;
+      calls.push({ element: this, keyframes, animation });
+      return animation;
+    } as Element['animate'];
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    delete (Element.prototype as Partial<Element>).animate;
+  });
+
+  function List({ ids }: { ids: string[] }) {
+    const flip = useFlipList<HTMLDivElement>(ids);
+    return (
+      <div ref={flip.rootRef} data-testid="root">
+        {ids.map((id) => (
+          <div key={id} {...flipId(id)} data-row={id}>
+            {id}
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  const callsOn = (selector: string) =>
+    calls.filter(({ element }) => element.matches(selector));
+
+  it('删除：原位置留一份收起淡出的残影，下方行上移', () => {
+    const { rerender, getByTestId } = render(<List ids={['a', 'b', 'c']} />);
+    rerender(<List ids={['a', 'c']} />);
+
+    const ghost = getByTestId('root').lastElementChild as HTMLElement;
+    expect(ghost.textContent).toBe('b');
+    expect(ghost.hasAttribute('data-flip-id')).toBe(false);
+    expect(ghost.hasAttribute('data-row')).toBe(false);
+    expect(ghost.getAttribute('aria-hidden')).toBe('true');
+    expect(ghost.style.top).toBe('30px');
+    const ghostCall = calls.find(({ element }) => element === ghost)!;
+    expect(ghostCall.keyframes).toEqual([
+      { height: '30px', opacity: 1 },
+      { height: '0px', opacity: 0 },
+    ]);
+    expect(callsOn('[data-row="c"]')[0].keyframes[0]).toEqual({
+      transform: 'translate(0px, 30px)',
+    });
+
+    act(() => ghostCall.animation.onfinish?.(new Event('finish') as AnimationPlaybackEvent));
+    expect(ghost.isConnected).toBe(false);
+  });
+
+  it('新建：新行自上而下揭开，下方行下移', () => {
+    const { rerender } = render(<List ids={['a', 'c']} />);
+    rerender(<List ids={['a', 'b', 'c']} />);
+
+    expect(callsOn('[data-row="b"]')[0].keyframes[0]).toEqual({
+      clipPath: 'inset(0 0 100% 0)',
+      opacity: 0,
+    });
+    expect(callsOn('[data-row="c"]')[0].keyframes[0]).toEqual({
+      transform: 'translate(0px, -30px)',
+    });
+  });
+
+  it('换了分组 / 顺序：只做位移，没有进出场', () => {
+    const { rerender, getByTestId } = render(<List ids={['a', 'b', 'c']} />);
+    rerender(<List ids={['b', 'c', 'a']} />);
+
+    expect(callsOn('[data-row="a"]')[0].keyframes[0]).toEqual({
+      transform: 'translate(0px, -60px)',
+    });
+    expect(calls.every(({ keyframes }) => 'transform' in keyframes[0])).toBe(true);
+    expect(getByTestId('root').children).toHaveLength(3);
+  });
+
+  it('同一位置换了 id（临时 id → 服务端 id）不算进出场', () => {
+    const { rerender, getByTestId } = render(<List ids={['a', 'temp']} />);
+    rerender(<List ids={['a', 'real']} />);
+
+    expect(calls).toHaveLength(0);
+    expect(getByTestId('root').children).toHaveLength(2);
+  });
+
+  it('前后没有共同行（首次加载、换了项目）不播放', () => {
+    const { rerender } = render(<List ids={[]} />);
+    rerender(<List ids={['a', 'b']} />);
+    rerender(<List ids={['x', 'y']} />);
+
+    expect(calls).toHaveLength(0);
   });
 });

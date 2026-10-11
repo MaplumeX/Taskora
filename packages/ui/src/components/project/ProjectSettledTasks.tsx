@@ -13,6 +13,7 @@ import { useTaskRowSelection } from '@taskora/api';
 import { useProjectHeadingsQuery } from '@taskora/api';
 import { useProjectUiPrefsStore } from '@taskora/api';
 import { cn } from '@/lib/utils';
+import { Collapse } from '@/components/ui/collapse';
 import { ProjectHeadingRow } from './ProjectHeadingRow';
 
 interface Props {
@@ -120,7 +121,7 @@ export function ProjectSettledTasks({ projectId }: Props) {
   );
 
   return (
-    <div className="flex flex-col gap-1 pt-4">
+    <div className="flex flex-col pt-4">
       <button
         type="button"
         onClick={() => setCompletedPanelExpanded(projectId, !expanded)}
@@ -134,7 +135,8 @@ export function ProjectSettledTasks({ projectId }: Props) {
         <span className="text-xs">{totalCount}</span>
       </button>
 
-      {expanded && (
+      {/* 与按钮之间的间距放在折叠区内，随高度一起收起。 */}
+      <Collapse open={expanded} className="pt-1">
         <div className="flex flex-col" onClick={handleBlankClick}>
           {entries.map((entry) =>
             entry.kind === 'task' ? (
@@ -149,7 +151,7 @@ export function ProjectSettledTasks({ projectId }: Props) {
             ),
           )}
         </div>
-      )}
+      </Collapse>
     </div>
   );
 }
