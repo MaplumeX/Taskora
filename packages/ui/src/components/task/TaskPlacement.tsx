@@ -12,6 +12,7 @@ import { MenuRow } from '@/components/common/MenuRow';
 import { ProjectProgressPie } from '@/components/project/ProjectProgressRing';
 import { useIsDesktop } from '../../lib/use-media-query';
 import { MovePicker } from './fields/MovePicker';
+import { navigateOrOpenWindow } from '../../lib/newWindow';
 
 interface Props {
   current: TaskResponseDto;
@@ -116,9 +117,10 @@ export function TaskPlacement({ current }: Props) {
             <>
               <MenuRow
                 icon={ArrowRight}
-                onClick={() => {
+                onClick={(event) => {
                   close();
-                  navigate(route);
+                  // ⌥ / Alt + 点击：在新窗口打开（桌面多窗口）。
+                  navigateOrOpenWindow(navigate, route, event);
                 }}
               >
                 {t(project ? 'task:placementGoToProject' : 'task:placementGoToArea')}

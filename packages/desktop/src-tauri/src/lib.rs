@@ -5,6 +5,7 @@ mod reminder_notification;
 mod session;
 mod sqlite;
 mod tray_menu;
+mod windows;
 use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
@@ -68,14 +69,15 @@ pub fn run() {
     tauri::Builder::default()
         .manage(session::SessionLock::default())
         .manage(quick_add_shortcut::QuickAddShortcut::default())
-        // Remember main-window size/position across launches. Quick-add and
-        // the tray menu are borderless popups — denylisted so their geometry
-        // is not restored. VISIBLE is excluded: close-to-tray hides the window,
-        // and that hidden state must not leak into the next launch
-        // (fresh starts always show the main window).
+        // Remember main-window size/position across launches. Only the main
+        // window is tracked: quick-add and the tray menu are borderless popups,
+        // and secondary windows (multi-window) are not restored on relaunch.
+        // VISIBLE is excluded: close-to-tray hides the window, and that hidden
+        // state must not leak into the next launch (fresh starts always show
+        // the main window).
         .plugin(
             tauri_plugin_window_state::Builder::default()
-                .with_denylist(&["quick-add", tray_menu::WINDOW])
+                .with_filter(|label| label == "main")
                 .with_state_flags(
                     tauri_plugin_window_state::StateFlags::all()
                         & !tauri_plugin_window_state::StateFlags::VISIBLE,
@@ -181,6 +183,8 @@ pub fn run() {
                     let _ = window.hide();
                 }
             }
+            // Secondary windows (multi-window) close for real; only the main
+            // window survives a close.
             // Close hides to the tray on every platform: the global
             // quick-add shortcut must keep working after "closing" the
             // window. Re-open via tray / Dock icon / second launch; exit
@@ -209,7 +213,9 @@ pub fn run() {
             quick_add_shortcut::quick_add_shortcut_get,
             quick_add_shortcut::quick_add_shortcut_set,
             tray_menu::tray_menu_action,
-            tray_menu::tray_set_labels
+            tray_menu::tray_set_labels,
+            windows::open_window,
+            windows::close_secondary_windows
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")

@@ -1,8 +1,10 @@
 import * as React from 'react';
 import { useTranslation } from 'react-i18next';
+import { useMatch, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import {
   Archive,
+  ArrowRight,
   Check,
   Circle,
   CircleSlash,
@@ -46,6 +48,7 @@ import { MovePicker } from './fields/MovePicker';
 import { useSkipOccurrence } from './useSkipOccurrence';
 import { useDuplicate } from './useDuplicate';
 import { useLogCompleted } from './useLogCompleted';
+import { navigateOrOpenWindow } from '../../lib/newWindow';
 
 interface Props {
   task: TaskResponseDto;
@@ -68,6 +71,36 @@ function statusOfGroup(ids: string[]) {
     completed: ids.every((id) => rows.get(id)?.completed),
     cancelled: ids.every((id) => rows.get(id)?.cancelled),
   };
+}
+
+/**
+ * 在项目 / 区域中显示（Things 的 Show in Project）：已在所属页或无归属时不
+ * 显示；按住 ⌥ / Alt 点击在新窗口打开。只随打开的菜单挂载（行本身不依赖 Router）。
+ */
+function ShowInParentRow({ current, onClose }: { current: TaskResponseDto; onClose: () => void }) {
+  const { t } = useTranslation('task');
+  const navigate = useNavigate();
+  const projectMatch = useMatch('/projects/:id');
+  const areaMatch = useMatch('/areas/:id');
+  const route = current.projectId
+    ? projectMatch?.params.id === current.projectId
+      ? null
+      : `/projects/${current.projectId}`
+    : current.areaId && areaMatch?.params.id !== current.areaId
+      ? `/areas/${current.areaId}`
+      : null;
+  if (!route) return null;
+  return (
+    <MenuRow
+      icon={ArrowRight}
+      onClick={(event) => {
+        onClose();
+        navigateOrOpenWindow(navigate, route, event);
+      }}
+    >
+      {t(current.projectId ? 'showInProject' : 'showInArea')}
+    </MenuRow>
+  );
 }
 
 export function TaskContextMenu({ task, current, children, variant = 'default' }: Props) {
@@ -291,6 +324,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
           {!group && variant === 'default' && (
             <>
               <div className="-mx-1 my-1 h-px bg-muted" />
+              <ShowInParentRow current={current} onClose={closeMenu} />
               <MenuRow icon={FolderInput} onClick={handleConvertToProject}>
                 {t('convertToProject')}
               </MenuRow>

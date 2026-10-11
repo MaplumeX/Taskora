@@ -22,6 +22,7 @@ import {
   createEngineAreaBackend,
   attachLiveQueries,
   detachLiveQueries,
+  createEngineHost,
   createEngineInvalidator,
   createEngineProjectBackend,
   createEngineProjectHeadingBackend,
@@ -37,8 +38,11 @@ import {
   setSyncStatus,
   setTagBackend,
   setTaskBackend,
+  TabEngine,
   useAuthStore,
   type SyncStatus,
+  type TabChannel,
+  type TabMessage,
 } from '@taskora/api';
 import {
   openEngine,
@@ -47,7 +51,6 @@ import {
   type Engine,
 } from '@taskora/engine';
 
-import { createEngineHost, TabEngine, type TabChannel, type TabMessage } from './tab-engine';
 import type { WorkerSqlStorage } from './worker-storage';
 import { createBrowserStorageRuntime } from './browser-storage';
 

@@ -86,6 +86,8 @@ export type KeyAction =
   | { type: 'navigationPopover' }
   /** ⌘J / Ctrl+J / Alt+J：开关助手面板（`/agent` 页为「收回到面板」）。 */
   | { type: 'toggleAssistantPanel' }
+  /** ⌃⌘N / Ctrl+Alt+W：新窗口打开 Today（仅桌面壳，.scratch/multi-window）。 */
+  | { type: 'newWindow' }
   /** 回顾模式（Review Mode）：标记已回顾并进入下一个 / 跳过 / 上一个；只在回顾模式下生效。 */
   | { type: 'reviewMarkNext' }
   | { type: 'reviewPostpone' }
@@ -220,6 +222,7 @@ export type ShortcutId =
   | 'search'
   | 'toggleSidebar'
   | 'toggleAssistantPanel'
+  | 'newWindow'
   | 'reviewMarkNext'
   | 'reviewPostpone'
   | 'reviewSkip'
@@ -608,6 +611,15 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     group: 'global',
     action: { type: 'toggleAssistantPanel' },
     defaults: { mac: ['Meta+J'], windows: ['Ctrl+J'], web: ['Alt+J'] },
+  },
+  // Things 的 ⌃⌘N；Windows 没有独立的 ⌃，Ctrl+Alt+N 已归新建项目，取 W（Window）。
+  // 只有桌面壳能开窗口，Web 不绑定（设置页也不显示）。
+  {
+    id: 'newWindow',
+    scope: 'app',
+    group: 'global',
+    action: { type: 'newWindow' },
+    defaults: { mac: ['Ctrl+Meta+N'], windows: ['Ctrl+Alt+W'], web: [] },
   },
   // 回顾模式（Review Mode）：只在回顾时生效。⇧⌘R 预留给重复规则（且是
   // 强制刷新），mac 用 ⌥⌘ 系；Web 的 Alt+← 是浏览器后退，统一用 Alt+Shift 系。

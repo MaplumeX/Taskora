@@ -260,6 +260,10 @@ _Avoid_: 回滚、历史版本（不是数据版本管理）、Redo（不支持�
 桌面 / Web 指针交互中把 Task（含 Selection 多选整组）或 Project 行拖放到侧边栏行上的动作（对齐 Things 3 Mac），是对应既有动作的快捷方式，不引入新语义：Inbox / 区域 / 项目 = 移动，Today = 计划为今天，Upcoming = 条目不动、在该行旁弹出计划日期卡片（同「计划」选择器），Anytime = 清除计划（无归属的任务一并离开 Inbox），Someday = 计划为 Someday，Logbook = 完成，Trash = 删除。Project 不接收 Inbox 与项目落点。Calendar、回顾、稍后项目入口不是落点。已符合目标的条目落下即跳过；落下后停留在当前页、清空 Selection。触控交互没有 Sidebar Drop。
 _Avoid_: 拖入、投放、drop target（泛指落点时可用）
 
+**Secondary Window（副窗口）**:
+桌面端在主窗口之外打开的窗口（对齐 Things 3 Mac 的多窗口）：完整界面（含侧边栏），从打开时的列表开始，导航、Selection、展开、撤销各窗口独立，数据改动实时出现在所有窗口。入口：右上角新窗口按钮（⌥ 点击打开当前列表）、⌃⌘N、项目 / 区域 / 标签的「在新窗口中打开」、⌥ + 「在项目中显示」。没有自己的 Engine，读写经主窗口的 Engine（ADR 0025）；关闭即销毁、重启不恢复；登出时全部关闭。主窗口关闭只是隐藏到托盘，不是副窗口的一种。
+_Avoid_: 标签页（web 的浏览器标签页另有其事）、子窗口、浮窗（Quick Add 浮窗不是副窗口）
+
 ### 引擎与同步（local-first）
 
 **Engine（引擎）**:

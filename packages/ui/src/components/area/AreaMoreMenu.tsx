@@ -2,7 +2,7 @@ import * as React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { MoreHorizontal, Tag, Trash2 } from 'lucide-react';
+import { AppWindowMac, MoreHorizontal, Tag, Trash2 } from 'lucide-react';
 
 import type { AreaResponseDto, UpdateAreaDto } from '@taskora/shared';
 
@@ -20,7 +20,7 @@ import { MenuItems, type MenuItem } from '@/components/common/MenuItems';
 import { FieldPickerDialog } from '@/components/common/FieldPicker';
 import { ActionSheet, ActionSheetContent, ActionSheetTrigger } from '@/components/ui/action-sheet';
 import { useIsDesktop } from '../../lib/use-media-query';
-import { useDeleteArea, useUpdateArea } from '@taskora/api';
+import { canOpenWindows, openInNewWindow, useDeleteArea, useUpdateArea } from '@taskora/api';
 import { TagsField } from '@/components/task/fields/TagsField';
 import { ReviewPicker, useReviewMenuItem } from '@/components/review/ReviewSchedule';
 import { useInReviewMode } from '@/components/review/reviewMode';
@@ -85,6 +85,19 @@ function AreaMenu({
   const items: MenuItem[] = [
     { icon: Tag, label: t('tags'), onSelect: () => openPicker('tags') },
     ...(contextMenu ? [] : [reviewItem]),
+    ...(canOpenWindows()
+      ? [
+          {
+            icon: AppWindowMac,
+            label: tc('openInNewWindow'),
+            onSelect: () => {
+              closeMenu();
+              openInNewWindow(`/areas/${area.id}`);
+            },
+            separated: true,
+          },
+        ]
+      : []),
     {
       icon: Trash2,
       label: tc('delete'),

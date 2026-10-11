@@ -1,11 +1,12 @@
 import { pageLoaders } from '@taskora/ui/lib/page-loaders';
 import { NavigationPreloadProvider } from '@taskora/ui/lib/navigation-preload';
-import { lazy, Suspense } from 'react';
-import { MemoryRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { lazy, Suspense, useEffect } from 'react';
+import { MemoryRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 
 import { AppShell } from '@taskora/ui/components/layout/AppShell';
 import { RootRedirect } from '@taskora/ui/components/layout/RootRedirect';
 import { ProtectedRoute } from './ProtectedRoute';
+import { setCurrentRoute } from './windows/open-window';
 
 function PageFallback() {
   return (
@@ -38,14 +39,24 @@ const Today = lazy(pageLoaders.Today);
 const Trash = lazy(pageLoaders.Trash);
 const Upcoming = lazy(pageLoaders.Upcoming);
 
+/** 记下本窗口所在的列表，供 Router 之外的新窗口按钮（⌥ + 点击）读取。 */
+function RouteTracker() {
+  const { pathname } = useLocation();
+  useEffect(() => setCurrentRoute(pathname), [pathname]);
+  return null;
+}
+
 /**
  * Main window: the desktop navigation shell. The router keeps the same
  * URL shape as the web client so shared hooks (usePageTaskContext etc.)
  * work unchanged; MemoryRouter because there is no browser history here.
+ * Secondary windows (multi-window) render the same shell starting at the
+ * route they were opened with.
  */
-export function MainApp() {
+export function MainApp({ initialRoute = '/today' }: { initialRoute?: string }) {
   return (
-    <MemoryRouter initialEntries={['/today']}>
+    <MemoryRouter initialEntries={[initialRoute]}>
+      <RouteTracker />
       <NavigationPreloadProvider platform="desktop">
         <Suspense fallback={<PageFallback />}>
           <Routes>

@@ -135,6 +135,7 @@
   "shortcut_expand": "Open selected task",
   "shortcut_search": "Quick Find",
   "shortcut_toggleAssistantPanel": "Toggle assistant panel",
+  "shortcut_newWindow": "New window",
   "shortcutFixedSave": "Save and close task",
   "shortcutFixedTypeToFind": "Quick Find (type to search)",
   "shortcutFixedTypeToFindKeys": "Start typing",

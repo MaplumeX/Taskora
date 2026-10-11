@@ -64,6 +64,8 @@
   "placementGoToProject": "Go to project",
   "placementChangeProject": "Change project",
   "placementGoToArea": "Go to area",
+  "showInProject": "Show in Project",
+  "showInArea": "Show in Area",
   "placementChangeArea": "Change area",
   "moveSearchPlaceholder": "Search areas or projects",
   "moveNoResults": "No matching areas or projects",

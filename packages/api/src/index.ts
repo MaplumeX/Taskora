@@ -73,6 +73,16 @@ export {
   type ReplicaQueryResult,
 } from './hooks/useEngineQuery';
 export {
+  createEngineHost,
+  REMOTE_METHODS,
+  TabEngine,
+  type Executor,
+  type RemoteMethod,
+  type TabChannel,
+  type TabMessage,
+  type UnavailableReason,
+} from './engine/tab-engine';
+export {
   createHttpSyncTransport,
   registerSyncDevice,
   type SyncClientPlatform,
@@ -129,6 +139,7 @@ export {
   type AttachmentOpener,
 } from './attachments/attachment-files';
 export { haptic, setHaptics, type HapticKind, type HapticsImpl } from './haptics';
+export { canOpenWindows, openInNewWindow, setWindowOpener, type WindowOpener } from './windows';
 export {
   UndoHistory,
   installUndoBoundaries,

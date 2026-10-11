@@ -372,3 +372,18 @@ describe('theme side effects', () => {
     expect(fresh.getState().theme).toBe('light');
   });
 });
+
+describe('usePreferencesStore across windows', () => {
+  it('re-reads preferences another window wrote (storage event)', async () => {
+    setPersisted({ theme: 'light', language: 'en', weekStartsOn: 1 });
+    const { usePreferencesStore: fresh } = await importFresh();
+    expect(fresh.getState().weekStartsOn).toBe(1);
+
+    setPersisted({ theme: 'dark', language: 'en', weekStartsOn: 0 });
+    window.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY }));
+
+    await vi.waitFor(() => expect(fresh.getState().weekStartsOn).toBe(0));
+    expect(fresh.getState().theme).toBe('dark');
+    expect(document.documentElement.classList.contains('dark')).toBe(true);
+  });
+});

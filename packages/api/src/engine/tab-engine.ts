@@ -1,5 +1,6 @@
 /**
- * 多标签页共享一个 Local Replica（local-first-v3 issue 05）。
+ * 多标签页 / 多窗口共享一个 Local Replica（local-first-v3 issue 05；桌面
+ * 副窗口见 ADR-0025，通道换成 Tauri event、主窗口固定为 leader）。
  *
  * OPFS 的 SQLite 同时只能被一个标签页打开，Outbox 与 HLC 也必须只有一份。
  * 由 Web Locks 选出的 leader 标签页独占副本、持有唯一的 Engine 与同步
@@ -27,7 +28,7 @@ import type {
   WireRow,
 } from '@taskora/engine';
 
-import type { SyncStatus } from '@taskora/api';
+import type { SyncStatus } from '@/stores/sync-status.store';
 
 /** 可经标签页代理的 Engine 方法（close / onChange / watch 是各标签页自己的）。 */
 export const REMOTE_METHODS = [
@@ -150,7 +151,7 @@ export class TabEngine implements Engine {
   watch<T>(query: LiveQuery<T>, observer: QueryObserver<T>): QueryWatch {
     return watchQuery(this, query, observer);
   }
-  /** 只断开本标签页；副本的生命周期归 leader（见 web-engine.ts）。 */
+  /** 只断开本标签页；副本的生命周期归 leader（web-engine.ts / 桌面主窗口）。 */
   async close(): Promise<void> {
     this.channel.removeEventListener('message', this.onMessage);
     const error = new Error('Engine 已关闭');
