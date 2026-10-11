@@ -41,6 +41,9 @@ const APP_GROUPS: ShortcutGroup[] = [
   'review',
 ];
 
+/** 只在桌面壳生效的动作（新窗口）：其余端不列出。 */
+const DESKTOP_ONLY_SHORTCUTS = new Set<ShortcutId>(['newWindow']);
+
 /** 录制目标：注册表里的动作，或系统级 Quick Add 快捷键。 */
 type RecordTarget = ShortcutId | 'quickAddGlobal';
 
@@ -240,7 +243,9 @@ export default function SettingsShortcuts({ platform: platformProp, desktopShell
   const mac = platform === 'mac' || (platform === 'web' && isAppleOS());
 
   const shortcutRows = (group: ShortcutGroup) =>
-    SHORTCUTS.filter((def) => def.group === group).map((def) => (
+    SHORTCUTS.filter(
+      (def) => def.group === group && (desktop || !DESKTOP_ONLY_SHORTCUTS.has(def.id)),
+    ).map((def) => (
       <ShortcutRow
         key={def.id}
         label={actionLabel(def.id)}

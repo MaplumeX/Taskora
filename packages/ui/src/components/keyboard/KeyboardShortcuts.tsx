@@ -10,6 +10,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import {
   extendSelectionTo,
   flattenSelectionRows,
+  openInNewWindow,
   reorderedRowIds,
   scopeOfRow,
   todayDateKey,
@@ -333,6 +334,11 @@ export function KeyboardShortcuts({ platform }: Props) {
         e.preventDefault();
         if (pathname.startsWith('/agent')) dockToPanel();
         else useAssistantUiStore.getState().togglePanel();
+        return;
+      }
+      // ⌃⌘N 新窗口（Things）：输入框里同样生效；没有窗口能力的宿主不拦截。
+      if (action?.type === 'newWindow') {
+        if (openInNewWindow('/today')) e.preventDefault();
         return;
       }
       // ⇧⌘C：打开的任务里正在编辑标题 / 备注时同样生效。

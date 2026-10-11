@@ -63,6 +63,8 @@
   "placementGoToProject": "前往项目",
   "placementChangeProject": "更改项目",
   "placementGoToArea": "前往区域",
+  "showInProject": "在项目中显示",
+  "showInArea": "在区域中显示",
   "placementChangeArea": "更改区域",
   "moveSearchPlaceholder": "搜索区域或项目",
   "moveNoResults": "没有匹配的区域或项目",

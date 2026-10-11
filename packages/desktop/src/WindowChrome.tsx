@@ -3,6 +3,8 @@ import { useTranslation } from 'react-i18next';
 import { isTauri } from '@tauri-apps/api/core';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 
+import { getCurrentRoute, openWindow } from './windows/open-window';
+
 /** 自绘外壳的平台形态：macOS 保留原生红绿灯，其余平台自绘窗口按钮。 */
 export type ChromePlatform = 'mac' | 'other';
 
@@ -52,7 +54,8 @@ export function installWindowChrome(platform: ChromePlatform = detectChromePlatf
  *   会给 body 设 pointer-events:none），打开设置等弹窗时依旧能最小化 / 关闭；
  *   pointerdown 不冒泡到 document、按钮不抢焦点，避免被 Radix 当成
  *   「点击外部」而关掉弹窗；
- * - 全屏（macOS 绿灯）时没有可拖的标题栏，拖拽带收起、各栏顶部不再留白。
+ * - 全屏（macOS 绿灯）时没有可拖的标题栏，拖拽带收起、各栏顶部不再留白；
+ *   新窗口按钮随之收起（快捷键与菜单仍可用）。
  */
 export function WindowChrome({ platform = detectChromePlatform() }: { platform?: ChromePlatform }) {
   const { maximized, fullscreen } = useWindowState();
@@ -70,8 +73,55 @@ export function WindowChrome({ platform = detectChromePlatform() }: { platform?:
         data-testid="window-chrome"
         className="fixed inset-x-0 top-0 z-40 h-[var(--titlebar-h)] select-none"
       />
+      <NewWindowButton platform={platform} />
       {platform === 'other' && <WindowControls maximized={maximized} />}
     </>
+  );
+}
+
+/** 三个自绘窗口按钮的总宽（46px × 3），新窗口按钮紧贴其左。 */
+const WINDOW_CONTROLS_WIDTH = 46 * 3;
+
+/**
+ * 新窗口按钮（Things 3 Mac 右上角那个叠放的窗框，.scratch/multi-window）：
+ * 点击新窗口打开 Today，按住 ⌥ / Alt 点击新窗口打开当前列表。macOS 在窗口
+ * 最右；Windows / Linux 紧贴自绘窗口按钮左侧。层级与侧边栏账号按钮相同
+ * （z-[41]）：叠在拖拽带之上、被弹窗遮罩盖住。
+ */
+function NewWindowButton({ platform }: { platform: ChromePlatform }) {
+  const { t } = useTranslation();
+  const focused = useDocumentFocused();
+
+  return (
+    <button
+      type="button"
+      data-testid="new-window-button"
+      aria-label={t('common:newWindow')}
+      title={t('common:newWindowHint')}
+      tabIndex={-1}
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={(e) => openWindow(e.altKey ? getCurrentRoute() : '/today')}
+      style={platform === 'other' ? { right: WINDOW_CONTROLS_WIDTH } : undefined}
+      className={
+        'fixed top-0 z-[41] flex select-none items-center justify-center transition-colors duration-fast hover:text-foreground ' +
+        (platform === 'mac'
+          ? 'right-2 mt-[3px] h-[calc(var(--titlebar-h)-6px)] w-7 rounded-md hover:bg-foreground/10 '
+          : 'h-[var(--titlebar-h)] w-[40px] hover:bg-foreground/10 active:bg-foreground/15 ') +
+        (focused ? 'text-foreground/55' : 'text-foreground/30')
+      }
+    >
+      <svg
+        width="12"
+        height="12"
+        viewBox="0 0 12 12"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1"
+        aria-hidden="true"
+      >
+        <path d="M3.5 3.5V.5h8v7h-3M.5 3.5h8v8h-8z" />
+      </svg>
+    </button>
   );
 }
 

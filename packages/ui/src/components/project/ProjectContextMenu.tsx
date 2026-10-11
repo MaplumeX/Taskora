@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import {
+  AppWindowMac,
   Archive,
   MoreHorizontal,
   FolderTree,
@@ -27,7 +28,13 @@ import { FieldPickerDialog } from '@/components/common/FieldPicker';
 import { ActionSheet, ActionSheetContent, ActionSheetTrigger } from '@/components/ui/action-sheet';
 import { useIsDesktop } from '../../lib/use-media-query';
 import { isTouchContextMenu } from '../../lib/useLongPress';
-import { useDeleteProject, useRestoreProject, useUpdateProject } from '@taskora/api';
+import {
+  canOpenWindows,
+  openInNewWindow,
+  useDeleteProject,
+  useRestoreProject,
+  useUpdateProject,
+} from '@taskora/api';
 import { ScheduledDateField } from '@/components/task/fields/ScheduledDateField';
 import { DueDateField } from '@/components/task/fields/DueDateField';
 import { RepeatRuleField } from '@/components/task/fields/RepeatRuleField';
@@ -169,6 +176,19 @@ export function ProjectMenuPanel({
       ? [{ icon: Copy, label: t('duplicate'), onSelect: handleDuplicate }]
       : []),
     ...(showReview && variant === 'default' ? [reviewItem] : []),
+    ...(variant === 'default' && canOpenWindows()
+      ? [
+          {
+            icon: AppWindowMac,
+            label: tc('openInNewWindow'),
+            onSelect: () => {
+              onClose();
+              openInNewWindow(`/projects/${project.id}`);
+            },
+            separated: true,
+          },
+        ]
+      : []),
     {
       icon: variant === 'trash' ? RotateCcw : Trash2,
       label: variant === 'trash' ? tc('putBack') : tc('delete'),

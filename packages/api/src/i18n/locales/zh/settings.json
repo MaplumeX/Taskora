@@ -135,6 +135,7 @@
   "shortcut_expand": "展开选中任务",
   "shortcut_search": "快速查找",
   "shortcut_toggleAssistantPanel": "开关助手面板",
+  "shortcut_newWindow": "新窗口",
   "shortcutFixedSave": "保存并收起任务",
   "shortcutFixedTypeToFind": "快速查找（打字唤起）",
   "shortcutFixedTypeToFindKeys": "直接输入",

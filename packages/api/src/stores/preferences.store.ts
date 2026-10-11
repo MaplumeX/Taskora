@@ -326,6 +326,14 @@ export const usePreferencesStore = create<PreferencesState>()(
   ),
 );
 
+// 同源的其它窗口（桌面副窗口 / Quick Add 浮窗、web 其它标签页）改了偏好：
+// 重新读取，onRehydrateStorage 随之应用主题与语言。
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (e) => {
+    if (e.key === STORAGE_KEY) void usePreferencesStore.persist.rehydrate();
+  });
+}
+
 // Module-level matchMedia listener (registered once on module load)
 if (typeof window !== 'undefined') {
   const mql = window.matchMedia('(prefers-color-scheme: dark)');

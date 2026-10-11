@@ -103,6 +103,10 @@ vi.mock('@/components/project/ProjectItem', async () => {
   };
 });
 
+// 区域行的右键菜单（AreaContextMenu）在 AreaMoreMenu 的测试里覆盖。
+vi.mock('@/components/area/AreaMoreMenu', () => ({
+  AreaContextMenu: ({ children }: { children: React.ReactNode }) => children,
+}));
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
   initReactI18next: { type: '3rdParty', init: () => undefined },
