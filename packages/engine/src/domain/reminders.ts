@@ -50,6 +50,12 @@ export interface ReminderNotification {
 /** HH:mm 校验（00:00–23:59）。 */
 const HH_MM = /^([01]\d|2[0-3]):[0-5]\d$/;
 
+/**
+ * 到点检查晚于 fireAt 多久仍投递（桌面 runtime 模式）。超过即视为错过、
+ * 不补发：系统睡眠唤醒、WebView 后台计时器节流都会让检查大幅晚于触发时刻。
+ */
+export const REMINDER_LATE_TOLERANCE_MS = 5 * 60_000;
+
 /** 通知 key：`reminder:<taskId>`（与系统通知的数字 id 映射由 Shell 负责）。 */
 export function reminderNotificationKey(taskId: string): string {
   return `reminder:${taskId}`;
@@ -98,6 +104,36 @@ export function computeReminderPlan(
     });
   }
   return plan;
+}
+
+/** 一个仍然有效的提醒时刻。 */
+export interface LiveReminder {
+  key: string;
+  /** 当前提醒时刻（epoch ms）。 */
+  fireAt: number;
+}
+
+/**
+ * 全部仍然有效的提醒时刻，含已过时刻（不按 now 过滤）。各端据此撤回已弹出
+ * 但已失效的通知：通知的 key 不在其中（任务已了结、进 Trash、清除了提醒）
+ * 或 fireAt 不一致（已改期、改提醒、Snooze），说明它在别处已被处理。
+ */
+export function liveReminders(
+  tasks: ReminderTaskInput[],
+  zones: { timeZone: string; legacyDateTimeZone: string },
+): LiveReminder[] {
+  const live: LiveReminder[] = [];
+  for (const t of tasks) {
+    if (!isReminderEligible(t)) continue;
+    const fireAt = reminderFireAt(
+      t.scheduledDate!,
+      t.reminderTime!,
+      zones.timeZone,
+      zones.legacyDateTimeZone,
+    );
+    if (fireAt !== null) live.push({ key: reminderNotificationKey(t.id), fireAt });
+  }
+  return live;
 }
 
 /** 已注册集：key → 当前注册的 fireAt（移动端为系统注册，桌面为内存表）。 */

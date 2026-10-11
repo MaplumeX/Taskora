@@ -107,8 +107,9 @@ internal object ReminderBackground {
             }
             if (code != HttpURLConnection.HTTP_OK) return Outcome.RETRY
             val body = connection.inputStream.bufferedReader().use { it.readText() }
-            val (reminders, cursor) = parsePlan(body)
-            val applied = ReminderAlarms.applyBackgroundPlan(context, reminders, cursor, before.generation)
+            val (reminders, cursor, live) = parsePlan(body)
+            val applied =
+                ReminderAlarms.applyBackgroundPlan(context, reminders, cursor, before.generation, live)
             Log.i(TAG, "background plan: ${reminders.size} reminders at cursor $cursor, applied=$applied")
             return Outcome.DONE
         } finally {
@@ -116,7 +117,7 @@ internal object ReminderBackground {
         }
     }
 
-    private fun parsePlan(body: String): Pair<List<IncomingReminder>, Long> {
+    private fun parsePlan(body: String): Triple<List<IncomingReminder>, Long, List<LiveReminder>?> {
         val json = JSONObject(body)
         val array = json.getJSONArray("reminders")
         val reminders = (0 until array.length()).map { i ->
@@ -130,7 +131,14 @@ internal object ReminderBackground {
                 body = o.getString("body"),
             )
         }
-        return reminders to json.getLong("cursor")
+        // 旧版 hub 没有 live：不撤回已弹出的通知。
+        val live = json.optJSONArray("live")?.let { array ->
+            (0 until array.length()).map { i ->
+                val o = array.getJSONObject(i)
+                LiveReminder(key = o.getString("key"), fireAt = o.getLong("fireAt"))
+            }
+        }
+        return Triple(reminders, json.getLong("cursor"), live)
     }
 
     enum class Outcome { DONE, RETRY }

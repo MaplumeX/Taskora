@@ -31,7 +31,7 @@ export function createMobileNotificationShell(): ReminderNotificationShell {
     isSupported: () => true,
     isPermissionGranted: isNativeNotificationPermissionGranted,
     requestPermission: requestNativeNotificationPermission,
-    async sync(plan, basis) {
+    async sync(plan, basis, live) {
       await invoke('plugin:reminders|sync', {
         args: {
           reminders: plan,
@@ -39,6 +39,7 @@ export function createMobileNotificationShell(): ReminderNotificationShell {
           // 通知按钮文案（reminder-actions spec）：原生不维护翻译，随计划持久化。
           labels: reminderActionLabels(),
           basis,
+          live,
         },
       });
     },

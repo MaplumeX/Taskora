@@ -6,6 +6,7 @@ import {
   buildReminderTexts,
   computeReminderPlan,
   diffReminderRegistration,
+  liveReminders,
   planReminderDeliveries,
   reminderNotificationKey,
   type ReminderNotification,
@@ -250,5 +251,38 @@ describe('planReminderDeliveries — 设备与 hub 共用的完整交付计划',
       titles,
     );
     expect(fromStorage).toEqual(fromKey);
+  });
+});
+
+describe('liveReminders — 仍有效的提醒时刻（撤回已弹出通知的依据）', () => {
+  const ZONES = { timeZone: 'UTC', legacyDateTimeZone: 'UTC' };
+
+  it('含已过时刻，不按 now 过滤', () => {
+    expect(
+      liveReminders(
+        [
+          task({ id: 't1', scheduledDate: '2026-01-01', reminderTime: '08:00' }),
+          task({ id: 't2' }),
+        ],
+        ZONES,
+      ),
+    ).toEqual([
+      { key: reminderNotificationKey('t1'), fireAt: Date.UTC(2026, 0, 1, 8, 0) },
+      { key: reminderNotificationKey('t2'), fireAt: Date.UTC(2026, 1, 5, 9, 0) },
+    ]);
+  });
+
+  it('已了结 / 已进 Trash / 无日期 / 无提醒时刻的任务不在其中', () => {
+    expect(
+      liveReminders(
+        [
+          task({ id: 'done', status: TaskStatus.COMPLETED }),
+          task({ id: 'trashed', trashedAt: '2026-02-04T00:00:00.000Z' }),
+          task({ id: 'someday', scheduledDate: null }),
+          task({ id: 'off', reminderTime: null }),
+        ],
+        ZONES,
+      ),
+    ).toEqual([]);
   });
 });

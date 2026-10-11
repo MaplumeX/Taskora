@@ -29,15 +29,17 @@ tempfile = "3"
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security_Cryptography"] }
 winreg = "0.55"
-# Reminder 通知按钮（reminder-actions spec）：与 tauri-plugin-notification
-# 依赖树中的版本一致，直接使用以获得按钮与点击回调。
-tauri-winrt-notification = "0.7"
+# Reminder 通知（reminder-actions spec）：直接用 WinRT toast API，以获得按钮、
+# 点击回调与按 tag 撤回。版本与 tauri-plugin-notification 依赖树中的一致。
+windows = { version = "0.61", features = ["Data_Xml_Dom", "Foundation", "UI_Notifications"] }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 mac-notification-sys = "0.6"
 
 [target.'cfg(all(unix, not(target_os = "macos")))'.dependencies]
 notify-rust = "4"
+# 撤回 reminder 通知（CloseNotification）：notify-rust 的句柄被等待按钮的线程占用。
+zbus = { version = "5", default-features = false, features = ["async-io", "blocking-api"] }
 
 [profile.release]
 codegen-units = 1

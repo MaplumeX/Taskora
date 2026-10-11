@@ -203,6 +203,7 @@ pub fn run() {
             open_notification_settings,
             attachment_open::attachment_open,
             reminder_notification::show_reminder,
+            reminder_notification::withdraw_reminder,
             launch_at_login::launch_at_login_get,
             launch_at_login::launch_at_login_set,
             quick_add_shortcut::quick_add_shortcut_get,

@@ -149,6 +149,12 @@ describe('RemindersService.plan — hub 按共享规则计算完整提醒计划'
           body: '10:15 · 工作',
         },
       ],
+      // 已过去的提醒仍有效（撤回已弹出通知的依据），按当前时刻列出
+      live: [
+        { key: 'reminder:t1', fireAt: Date.parse('2026-02-05T01:00:00.000Z') },
+        { key: 'reminder:t2', fireAt: Date.parse('2026-02-05T02:15:00.000Z') },
+        { key: 'reminder:t3', fireAt: Date.parse('2026-02-04T01:00:00.000Z') },
+      ],
     });
     // 粗筛只取可能产出提醒的行
     expect(findMany.mock.calls[0][0].where).toMatchObject({

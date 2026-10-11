@@ -220,6 +220,7 @@ export {
   setNotificationShell,
   getNotificationShell,
   reminderInputFromReplicaRow,
+  type LiveReminder,
   type ReminderDelivery,
   type ReminderNotificationShell,
   type ReminderPlanBasis,

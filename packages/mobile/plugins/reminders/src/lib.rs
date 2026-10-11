@@ -82,6 +82,15 @@ pub struct PlanBasis {
     pub pending_local: bool,
 }
 
+/// 一个仍然有效的提醒时刻：已弹出的通知 key 不在其中或 fireAt 不一致时，
+/// 原生撤下它（任务已在别处了结、改期或清除提醒）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveReminder {
+    pub key: String,
+    pub fire_at: i64,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SyncArgs {
@@ -91,6 +100,8 @@ pub struct SyncArgs {
     pub channel_name: String,
     pub labels: ActionLabels,
     pub basis: PlanBasis,
+    /// 全部仍有效的提醒时刻（含已过时刻），撤回已失效的已弹出通知用。
+    pub live: Vec<LiveReminder>,
 }
 
 /// 后台同步的配置（local-first-v3 issue 09）：hub 的提醒计划地址与设备的

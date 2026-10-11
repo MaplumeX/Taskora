@@ -46,11 +46,18 @@ class SyncBasis {
 }
 
 @InvokeArg
+class SyncLive {
+    lateinit var key: String
+    var fireAt: Long = 0
+}
+
+@InvokeArg
 class SyncArgs {
     var reminders: List<SyncEntry> = listOf()
     lateinit var channelName: String
     var labels: SyncLabels? = null
     var basis: SyncBasis? = null
+    var live: List<SyncLive>? = null
 }
 
 @InvokeArg
@@ -168,7 +175,15 @@ class RemindersPlugin(private val activity: Activity) : Plugin(activity) {
                 )
             }
             val basis = args.basis?.let { PlanBasis(cursor = it.cursor, pendingLocal = it.pendingLocal) }
-            ReminderAlarms.sync(activity.applicationContext, incoming, args.channelName, labels, basis)
+            val live = args.live?.map { LiveReminder(key = it.key, fireAt = it.fireAt) }
+            ReminderAlarms.sync(
+                activity.applicationContext,
+                incoming,
+                args.channelName,
+                labels,
+                basis,
+                live,
+            )
             invoke.resolve()
         } catch (e: Exception) {
             invoke.reject("reminder sync failed: ${e.message}")

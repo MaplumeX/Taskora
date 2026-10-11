@@ -9,12 +9,17 @@
  *   持久化、设置闹钟并投递（ADR-0014）。
  */
 
-import type { ReminderDelivery, ReminderTaskInput, ReplicaRow } from '@taskora/engine';
+import type {
+  LiveReminder,
+  ReminderDelivery,
+  ReminderTaskInput,
+  ReplicaRow,
+} from '@taskora/engine';
 import { TaskStatus } from '@taskora/shared';
 
 import type { ReminderActionRequest } from './reminder-action';
 
-export type { ReminderDelivery };
+export type { LiveReminder, ReminderDelivery };
 
 /**
  * 计划所依据的副本状态（local-first-v3 issue 09）。Android 的后台同步会
@@ -55,12 +60,18 @@ export interface ReminderNotificationShell {
    */
   fireNow?(reminder: ReminderDelivery): Promise<void>;
   /**
+   * runtime 模式：撤下 fireNow 发出、但已在别处处理过的通知（任务了结、
+   * 改期、清除提醒）。通知已不在时为 no-op。
+   */
+  withdraw?(taskId: string): Promise<void>;
+  /**
    * system 模式（Android）：交付完整期望集（不是增量）。原生侧自行与
    * 持久化计划比对，调用方不维护任何注册状态。basis 是计划依据的副本
    * 状态：副本落后于后台取回的 hub 计划、又没有未推送的本地写时，原生
-   * 保留 hub 计划。
+   * 保留 hub 计划。live 是全部仍有效的提醒时刻（含已过时刻）：原生据此
+   * 撤下已弹出但已失效的通知。
    */
-  sync?(plan: ReminderDelivery[], basis: ReminderPlanBasis): Promise<void>;
+  sync?(plan: ReminderDelivery[], basis: ReminderPlanBasis, live: LiveReminder[]): Promise<void>;
   /** system 模式：注销全部提醒并清空原生计划（登出）。 */
   clear?(): Promise<void>;
   /**
