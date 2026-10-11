@@ -3817,10 +3817,11 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-single-instance",
  "tauri-plugin-window-state",
- "tauri-winrt-notification",
  "tempfile",
+ "windows",
  "windows-sys 0.61.2",
  "winreg 0.55.0",
+ "zbus",
 ]
 
 [[package]]

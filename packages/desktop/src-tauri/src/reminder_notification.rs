@@ -2,9 +2,13 @@
 //!
 //! `tauri-plugin-notification` 在桌面端既没有按钮也拿不到点击回调，因此
 //! reminder 的发送绕开插件，直接用插件依赖树里已有的平台 crate：
-//! - Windows：`tauri-winrt-notification`（toast 按钮 + `on_activated`）；
+//! - Windows：`windows` 的 WinRT toast（按钮 + `Activated`，tag 撤回）；
 //! - Linux：`notify-rust` 的 XDG actions（后台线程 `wait_for_action`）；
 //! - macOS：`mac-notification-sys`（主按钮下拉 + 后台线程阻塞 `send`）。
+//!
+//! 已发出的通知在别处被处理（任务了结、改期、清除提醒）后，前端调用
+//! `withdraw_reminder` 撤下（按 taskId 定位）。macOS 的 `mac-notification-sys`
+//! 没有撤回 API，该平台为 no-op。
 //!
 //! 用户的选择以 `reminder-action` 事件交给前端，由 JS 按 Reminder Action
 //! 规则应用（规则只在 JS）。点击正文先把主窗口带到前台，再发 `open`。
@@ -93,11 +97,28 @@ pub fn show_reminder(app: AppHandle, payload: ReminderPayload) -> Result<(), Str
     imp::show(app, payload)
 }
 
+/// 撤下该任务已发出的 reminder 通知；通知已不在时不报错。
+#[tauri::command]
+pub fn withdraw_reminder(app: AppHandle, task_id: String) -> Result<(), String> {
+    imp::withdraw(app, &task_id)
+}
+
 #[cfg(windows)]
 mod imp {
     use super::{action_from_id, dispatch, ReminderPayload};
     use tauri::AppHandle;
-    use tauri_winrt_notification::{Scenario, Sound, Toast};
+    use windows::core::{IInspectable, Interface, HSTRING};
+    use windows::Data::Xml::Dom::XmlDocument;
+    use windows::Foundation::TypedEventHandler;
+    use windows::UI::Notifications::{
+        ToastActivatedEventArgs, ToastNotification, ToastNotificationManager,
+    };
+
+    /// 未安装（`cargo run`）时借用的 AppUserModelID。
+    const POWERSHELL_APP_ID: &str =
+        "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe";
+    /// 全部 reminder toast 同一分组；tag = taskId（UUID，不超过 64 字符的上限）。
+    const GROUP: &str = "reminders";
 
     /// 与插件同一口径：安装版用 bundle identifier 作 AppUserModelID；
     /// `cargo run`（target\debug|release）下该 AUMID 未注册，借用 PowerShell 的。
@@ -112,55 +133,106 @@ mod imp {
             })
             .unwrap_or(false);
         if in_target_dir {
-            Toast::POWERSHELL_APP_ID.to_owned()
+            POWERSHELL_APP_ID.to_owned()
         } else {
             app.config().identifier.clone()
         }
     }
 
+    fn escape(text: &str) -> String {
+        text.replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;")
+            .replace('"', "&quot;")
+            .replace('\'', "&apos;")
+    }
+
+    /// 点正文时 arguments 为空；点按钮时为按钮的 arguments。
+    fn activated_arguments(args: &Option<IInspectable>) -> Option<String> {
+        let args = args.as_ref()?.cast::<ToastActivatedEventArgs>().ok()?;
+        let arguments = args.Arguments().ok()?;
+        (!arguments.is_empty()).then(|| arguments.to_string())
+    }
+
     pub fn show(app: AppHandle, payload: ReminderPayload) -> Result<(), String> {
+        show_toast(&app, payload).map_err(|e| e.to_string())
+    }
+
+    fn show_toast(app: &AppHandle, payload: ReminderPayload) -> windows::core::Result<()> {
         let mut lines = payload.body.splitn(2, '\n');
         let line1 = lines.next().unwrap_or_default();
-        let line2 = lines.next();
+        let line2 = lines
+            .next()
+            .map(|line| format!("<text>{}</text>", escape(line)))
+            .unwrap_or_default();
         let labels = &payload.labels;
+        let button = |label: &str, id: &str| {
+            format!(r#"<action content="{}" arguments="{id}"/>"#, escape(label))
+        };
+        // toast 最多 5 个按钮：四个操作全部平铺。Reminder 场景在用户处理前
+        // 一直停留在屏幕上。不写 <audio>：由系统播放默认提示音。
+        let xml = format!(
+            r#"<toast scenario="reminder"><visual><binding template="ToastGeneric"><text>{}</text><text>{}</text>{line2}</binding></visual><actions>{}{}{}{}</actions></toast>"#,
+            escape(&payload.title),
+            escape(line1),
+            button(&labels.complete, "complete"),
+            button(&labels.snooze15, "snooze15"),
+            button(&labels.snooze60, "snooze60"),
+            button(&labels.snooze_tomorrow, "snoozeTomorrow"),
+        );
+        let document = XmlDocument::new()?;
+        document.LoadXml(&HSTRING::from(xml))?;
+        let toast = ToastNotification::CreateToastNotification(&document)?;
+        toast.SetTag(&HSTRING::from(payload.task_id.as_str()))?;
+        toast.SetGroup(&HSTRING::from(GROUP))?;
 
         let handle = app.clone();
         let task_id = payload.task_id.clone();
         let fire_at = payload.fire_at;
-        // toast 最多 5 个按钮：四个操作全部平铺。Reminder 场景在用户处理前
-        // 一直停留在屏幕上。Sound::Default = 不写 <audio>，由系统播放默认
-        // 提示音；sound(None) 才是静音（旧路径经 notify-rust 走到的正是它）。
-        let mut toast = Toast::new(&app_user_model_id(&app))
-            .title(&payload.title)
-            .text1(line1)
-            .scenario(Scenario::Reminder)
-            .sound(Some(Sound::Default))
-            .add_button(&labels.complete, "complete")
-            .add_button(&labels.snooze15, "snooze15")
-            .add_button(&labels.snooze60, "snooze60")
-            .add_button(&labels.snooze_tomorrow, "snoozeTomorrow")
-            .on_activated(move |arguments| {
-                // 点正文时 arguments 为空。
-                let action = match arguments.as_deref() {
-                    None => Some("open"),
-                    Some(id) => action_from_id(id),
-                };
-                if let Some(action) = action {
-                    dispatch(&handle, &task_id, fire_at, action);
-                }
-                Ok(())
-            });
-        if let Some(line2) = line2 {
-            toast = toast.text2(line2);
-        }
-        toast.show().map_err(|e| e.to_string())
+        toast.Activated(&TypedEventHandler::new(move |_, args| {
+            let action = match activated_arguments(&args) {
+                None => Some("open"),
+                Some(id) => action_from_id(&id),
+            };
+            if let Some(action) = action {
+                dispatch(&handle, &task_id, fire_at, action);
+            }
+            Ok(())
+        }))?;
+
+        ToastNotificationManager::CreateToastNotifierWithId(&HSTRING::from(app_user_model_id(app)))?
+            .Show(&toast)
+    }
+
+    pub fn withdraw(app: AppHandle, task_id: &str) -> Result<(), String> {
+        ToastNotificationManager::History()
+            .and_then(|history| {
+                history.RemoveGroupedTagWithId(
+                    &HSTRING::from(task_id),
+                    &HSTRING::from(GROUP),
+                    &HSTRING::from(app_user_model_id(&app)),
+                )
+            })
+            .map_err(|e| e.to_string())
     }
 }
 
 #[cfg(all(unix, not(target_os = "macos")))]
 mod imp {
     use super::{action_from_id, dispatch, ReminderPayload};
+    use std::collections::HashMap;
+    use std::sync::{Mutex, MutexGuard, OnceLock};
     use tauri::AppHandle;
+
+    /// 屏幕上的 reminder 通知：taskId → 通知服务分配的 id（撤回用）。
+    static SHOWN: OnceLock<Mutex<HashMap<String, u32>>> = OnceLock::new();
+
+    fn shown() -> MutexGuard<'static, HashMap<String, u32>> {
+        SHOWN
+            .get_or_init(Default::default)
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
 
     pub fn show(app: AppHandle, payload: ReminderPayload) -> Result<(), String> {
         // wait_for_action 阻塞到通知被处理或关闭：每条通知一个线程（一天
@@ -179,20 +251,48 @@ mod imp {
                 .action("snooze60", &labels.snooze60)
                 .action("snoozeTomorrow", &labels.snooze_tomorrow);
             match notification.show() {
-                Ok(handle) => handle.wait_for_action(|id| {
-                    let action = if id == "default" {
-                        Some("open")
-                    } else {
-                        action_from_id(id)
-                    };
-                    if let Some(action) = action {
-                        dispatch(&app, &payload.task_id, payload.fire_at, action);
+                Ok(handle) => {
+                    let id = handle.id();
+                    shown().insert(payload.task_id.clone(), id);
+                    handle.wait_for_action(|action_id| {
+                        let action = if action_id == "default" {
+                            Some("open")
+                        } else {
+                            action_from_id(action_id)
+                        };
+                        if let Some(action) = action {
+                            dispatch(&app, &payload.task_id, payload.fire_at, action);
+                        }
+                    });
+                    // 已被处理或关闭；同一任务若已发出更新的通知则保留其记录。
+                    let mut shown = shown();
+                    if shown.get(&payload.task_id) == Some(&id) {
+                        shown.remove(&payload.task_id);
                     }
-                }),
+                }
                 Err(error) => eprintln!("[reminders] notification failed: {error}"),
             }
         });
         Ok(())
+    }
+
+    pub fn withdraw(_app: AppHandle, task_id: &str) -> Result<(), String> {
+        let Some(id) = shown().remove(task_id) else {
+            return Ok(());
+        };
+        // 关闭后等待中的线程收到 NotificationClosed，随之退出。
+        zbus::blocking::Connection::session()
+            .and_then(|connection| {
+                connection.call_method(
+                    Some("org.freedesktop.Notifications"),
+                    "/org/freedesktop/Notifications",
+                    Some("org.freedesktop.Notifications"),
+                    "CloseNotification",
+                    &(id,),
+                )
+            })
+            .map(|_| ())
+            .map_err(|e| e.to_string())
     }
 }
 
@@ -257,6 +357,12 @@ mod imp {
         });
         Ok(())
     }
+
+    /// NSUserNotification 的封装没有撤回 API：已失效的通知留在通知中心，
+    /// 点它的按钮会被前端按过期操作丢弃。
+    pub fn withdraw(_app: AppHandle, _task_id: &str) -> Result<(), String> {
+        Ok(())
+    }
 }
 
 #[cfg(not(any(windows, unix)))]
@@ -266,6 +372,10 @@ mod imp {
 
     pub fn show(_app: AppHandle, _payload: ReminderPayload) -> Result<(), String> {
         Err("unsupported platform".into())
+    }
+
+    pub fn withdraw(_app: AppHandle, _task_id: &str) -> Result<(), String> {
+        Ok(())
     }
 }
 

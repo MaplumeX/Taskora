@@ -8,6 +8,7 @@ import { usePreferencesStore } from '@/stores/preferences.store';
 import { createReminderCoordinator, type ReminderCoordinator } from './reminder-coordinator';
 import type { ReminderActionRequest } from './reminder-action';
 import type {
+  LiveReminder,
   ReminderDelivery,
   ReminderNotificationShell,
   ReminderPlanBasis,
@@ -21,9 +22,10 @@ function makeShell() {
     isPermissionGranted: vi.fn(async () => true),
     requestPermission: vi.fn(async () => true),
     fireNow: vi.fn<(reminder: ReminderDelivery) => Promise<void>>(async () => {}),
-    sync: vi.fn<(plan: ReminderDelivery[], basis: ReminderPlanBasis) => Promise<void>>(
-      async () => {},
-    ),
+    withdraw: vi.fn<(taskId: string) => Promise<void>>(async () => {}),
+    sync: vi.fn<
+      (plan: ReminderDelivery[], basis: ReminderPlanBasis, live: LiveReminder[]) => Promise<void>
+    >(async () => {}),
     clear: vi.fn<() => Promise<void>>(async () => {}),
     openSettings: vi.fn(async () => {}),
   } satisfies ReminderNotificationShell & Record<string, ReturnType<typeof vi.fn>>;
@@ -32,6 +34,11 @@ function makeShell() {
 /** 最近一次交付给原生的完整期望集。 */
 function lastPlan(shell: ReturnType<typeof makeShell>): ReminderDelivery[] | undefined {
   return shell.sync.mock.calls.at(-1)?.[0];
+}
+
+/** 最近一次交付给原生的仍有效提醒时刻。 */
+function lastLive(shell: ReturnType<typeof makeShell>): LiveReminder[] | undefined {
+  return shell.sync.mock.calls.at(-1)?.[2];
 }
 
 /** 可控时钟：nowMs 手动推进。 */
@@ -194,6 +201,69 @@ describe('ReminderCoordinator — runtime（桌面）模式', () => {
     coordinator.stop();
     await engine.close();
   });
+
+  it('睡眠唤醒：到点检查晚于容忍期的提醒视为错过，不补发', async () => {
+    await seedTask(engine); // 2月5日 09:00
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+    clock.advance(dayAt(5, 8, 59) - dayAt(4, 12));
+    await vi.advanceTimersByTimeAsync(30_000);
+
+    // 08:59 合盖，12:00 唤醒：期间没有 tick
+    clock.advance(dayAt(5, 12) - dayAt(5, 8, 59));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(shell.fireNow).not.toHaveBeenCalled();
+    coordinator.stop();
+    await engine.close();
+  });
+
+  it('已发出的通知：别处了结后撤下；仍有效时保留', async () => {
+    const taskId = await seedTask(engine); // 2月5日 09:00
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+    clock.advance(dayAt(5, 9) - dayAt(4, 12));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(shell.fireNow).toHaveBeenCalledTimes(1);
+
+    // 任务未变：后续 tick 不撤
+    clock.advance(10 * 60_000);
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(shell.withdraw).not.toHaveBeenCalled();
+
+    // 另一台设备上完成（经同步落进副本）
+    await engine.update('task', taskId, {
+      status: TaskStatus.COMPLETED,
+      settledAt: '2026-02-05T01:10:00.000Z',
+    });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(shell.withdraw).toHaveBeenCalledTimes(1);
+    expect(shell.withdraw).toHaveBeenCalledWith(taskId);
+
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(shell.withdraw).toHaveBeenCalledTimes(1);
+    coordinator.stop();
+    await engine.close();
+  });
+
+  it('已发出的通知：别处改期后撤下；stop（登出）撤下其余', async () => {
+    const a = await seedTask(engine, { title: 'A' });
+    const b = await seedTask(engine, { title: 'B' });
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+    clock.advance(dayAt(5, 9) - dayAt(4, 12));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(shell.fireNow).toHaveBeenCalledTimes(2);
+
+    await engine.update('task', a, { scheduledDate: '2026-02-06' });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(shell.withdraw).toHaveBeenCalledTimes(1);
+    expect(shell.withdraw).toHaveBeenCalledWith(a);
+
+    coordinator.stop();
+    expect(shell.withdraw).toHaveBeenLastCalledWith(b);
+    expect(shell.withdraw).toHaveBeenCalledTimes(2);
+    await engine.close();
+  });
 });
 
 describe('ReminderCoordinator — system（Android）模式', () => {
@@ -309,6 +379,29 @@ describe('ReminderCoordinator — system（Android）模式', () => {
     expect(lastPlan(shell)).toEqual([]);
     expect(shell.fireNow).not.toHaveBeenCalled();
     expect(shell.clear).not.toHaveBeenCalled();
+
+    coordinator.stop();
+    await engine.close();
+  });
+
+  it('随计划交付全部仍有效的提醒时刻（含已过时刻）；了结后消失，原生据此撤回通知', async () => {
+    const taskId = await seedTask(engine);
+    coordinator.start();
+    await vi.advanceTimersByTimeAsync(10);
+    expect(lastLive(shell)).toEqual([{ key: `reminder:${taskId}`, fireAt: dayAt(5, 9) }]);
+
+    // 到点后不在期望集里，但仍有效：已弹出的通知应保留
+    clock.advance(dayAt(5, 9, 0) - dayAt(4, 12) + 1_000);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(lastPlan(shell)).toEqual([]);
+    expect(lastLive(shell)).toEqual([{ key: `reminder:${taskId}`, fireAt: dayAt(5, 9) }]);
+
+    await engine.update('task', taskId, {
+      status: TaskStatus.COMPLETED,
+      settledAt: '2026-02-05T01:05:00.000Z',
+    });
+    await vi.advanceTimersByTimeAsync(10);
+    expect(lastLive(shell)).toEqual([]);
 
     coordinator.stop();
     await engine.close();

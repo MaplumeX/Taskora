@@ -4,10 +4,13 @@
  *
  * 两种模式（reminders spec）：
  * - runtime（桌面）：不注册系统级排程，由内部 tick 到点 fireNow；
- *   App 未运行期间错过的提醒静默丢弃，绝不补发。
+ *   App 未运行期间错过的提醒静默丢弃，绝不补发——睡眠唤醒后晚于
+ *   REMINDER_LATE_TOLERANCE_MS 的也算错过。已发出的通知在别处被处理
+ *   （了结、改期、清除提醒）后由 withdraw 撤下。
  * - system（Android，ADR-0014）：每次重算把完整期望集交给 shell.sync，
  *   由原生插件持久化、差量、设置闹钟与投递。协调器不保存任何注册状态
- *   ——进程会被回收，系统闹钟却持续存在，对账只能在原生侧做。
+ *   ——进程会被回收，系统闹钟却持续存在，对账只能在原生侧做。随计划
+ *   附上全部仍有效的提醒时刻（liveReminders），原生据此撤下已失效的通知。
  *
  * 触发时机：Engine 副本变更（本地写或应用远端写）+ 周期 tick（兜底
  * 跨天滚动与启动后的首次对齐）。
@@ -25,7 +28,9 @@ import {
   computeReminderPlan,
   diffReminderRegistration,
   isReminderEligible,
+  liveReminders,
   planReminderDeliveries,
+  REMINDER_LATE_TOLERANCE_MS,
   reminderFireAt,
   reminderTextContext,
   type Engine,
@@ -84,6 +89,8 @@ export function createReminderCoordinator(
   let registered = new Map<string, number>();
   /** runtime：key → 最近一次登记的完整信息（触发时要用的文案）。 */
   const meta = new Map<string, ReminderNotification>();
+  /** runtime：key → 已 fireNow 的通知（taskId 与当时的 fireAt），失效时撤下。 */
+  const shown = new Map<string, { taskId: string; fireAt: number }>();
   /**
    * system：最近一次成功交付的期望集签名。期望集未变时跳过 sync（周期
    * tick 不反复打扰原生）；交付失败不记录，下个 tick 自动重试。
@@ -120,21 +127,16 @@ export function createReminderCoordinator(
     const tasksById = new Map(tasks.map((t) => [t.id, t]));
     const titles = diff.due.length > 0 ? await parentTitles() : null;
 
-    // 自然到点：补发跨越 tick 边界的提醒——前提是任务仍符合条件且时刻
-    // 未被改动（到点后才了结/改期的不补发）。
+    // 自然到点：补发跨越 tick 边界的提醒——前提是任务仍符合条件、时刻
+    // 未被改动（到点后才了结/改期的不补发），且没有晚到算作错过（睡眠唤醒）。
     for (const key of diff.due) {
       const m = meta.get(key);
       const task = m ? tasksById.get(m.taskId) : undefined;
       if (
         m &&
         task != null &&
-        isReminderEligible(task) &&
-        reminderFireAt(
-          task.scheduledDate!,
-          task.reminderTime!,
-          currentTimeZone(),
-          currentLegacyDateTimeZone(),
-        ) === m.fireAt
+        currentFireAt(task) === m.fireAt &&
+        nowMs - m.fireAt <= REMINDER_LATE_TOLERANCE_MS
       ) {
         void shell
           .fireNow?.({
@@ -145,9 +147,18 @@ export function createReminderCoordinator(
             ...buildReminderTexts(m, reminderTextContext(task, titles!), currentTimeZone()),
           })
           .catch(noop);
+        shown.set(key, { taskId: m.taskId, fireAt: m.fireAt });
       }
       registered.delete(key);
       meta.delete(key);
+    }
+
+    // 已发出的通知：任务已了结、进 Trash、清除提醒或时刻已变 → 在别处
+    // 处理过了，撤下（Snooze 后的新时刻会另发一条新通知）。
+    for (const [key, n] of shown) {
+      if (currentFireAt(tasksById.get(n.taskId)) === n.fireAt) continue;
+      void shell.withdraw?.(n.taskId).catch(noop);
+      shown.delete(key);
     }
 
     // 先注销后登记：同一 key 改期时同时出现在 cancel 与 register。
@@ -161,23 +172,31 @@ export function createReminderCoordinator(
     }
   }
 
+  /** 任务当前的提醒时刻；任务不存在或不符合提醒条件时为 null。 */
+  function currentFireAt(task: ReminderTaskInput | undefined): number | null {
+    if (task == null || !isReminderEligible(task)) return null;
+    return reminderFireAt(
+      task.scheduledDate!,
+      task.reminderTime!,
+      currentTimeZone(),
+      currentLegacyDateTimeZone(),
+    );
+  }
+
   async function deliver(tasks: ReminderTaskInput[]): Promise<void> {
     if (!shell.sync) return;
     const titles = tasks.length > 0 ? await parentTitles() : EMPTY_TITLES;
-    const plan = planReminderDeliveries(
-      tasks,
-      now(),
-      { timeZone: currentTimeZone(), legacyDateTimeZone: currentLegacyDateTimeZone() },
-      titles,
-    );
+    const zones = { timeZone: currentTimeZone(), legacyDateTimeZone: currentLegacyDateTimeZone() };
+    const plan = planReminderDeliveries(tasks, now(), zones, titles);
+    const live = liveReminders(tasks, zones);
     // 副本基准：原生据此判断这份计划与后台取回的 hub 计划谁更新（issue 09）。
     const [cursor, pending] = await Promise.all([engine.cursor(), engine.pendingCount()]);
     const basis = { cursor, pendingLocal: pending > 0 };
     // 基准进签名：推送清空 Outbox 后计划未变也要重新交付，原生才会恢复后台同步。
-    const signature = JSON.stringify([plan, basis]);
+    const signature = JSON.stringify([plan, basis, live]);
     if (signature === lastSynced) return;
     try {
-      await shell.sync(plan, basis);
+      await shell.sync(plan, basis, live);
       lastSynced = signature;
     } catch (error) {
       console.warn('[reminders] sync failed:', error);
@@ -278,6 +297,9 @@ export function createReminderCoordinator(
       if (mode === 'system') {
         void shell.clear?.().catch(noop);
       }
+      // runtime：已发出的通知一并撤下（登出后不应再能对任务操作）。
+      for (const n of shown.values()) void shell.withdraw?.(n.taskId).catch(noop);
+      shown.clear();
       registered = new Map();
       meta.clear();
       lastSynced = null;

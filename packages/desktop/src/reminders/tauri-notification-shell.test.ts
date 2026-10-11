@@ -101,6 +101,15 @@ describe('createDesktopNotificationShell fireNow', () => {
   });
 });
 
+describe('createDesktopNotificationShell withdraw', () => {
+  it('走 withdraw_reminder 命令，按 taskId 撤下已发出的通知', async () => {
+    mocks.invoke.mockReset();
+    mocks.invoke.mockResolvedValue(undefined);
+    await createDesktopNotificationShell().withdraw!('t1');
+    expect(mocks.invoke).toHaveBeenCalledWith('withdraw_reminder', { taskId: 't1' });
+  });
+});
+
 describe('onReminderAction', () => {
   it('订阅 reminder-action 事件并交出 payload', async () => {
     const unlisten = vi.fn();

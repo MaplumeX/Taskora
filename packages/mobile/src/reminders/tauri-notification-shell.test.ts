@@ -27,7 +27,7 @@ describe('createMobileNotificationShell（reminders 插件）', () => {
     mocks.invoke.mockResolvedValue(undefined);
   });
 
-  it('sync 交付完整期望集、渠道名与通知按钮文案', async () => {
+  it('sync 交付完整期望集、渠道名、通知按钮文案与仍有效的提醒时刻', async () => {
     const plan = [
       {
         key: 'reminder:t1',
@@ -38,7 +38,11 @@ describe('createMobileNotificationShell（reminders 插件）', () => {
         body: '09:00',
       },
     ];
-    await createMobileNotificationShell().sync!(plan, { cursor: 7, pendingLocal: false });
+    const live = [
+      { key: 'reminder:t0', fireAt: 1_769_900_000_000 },
+      { key: 'reminder:t1', fireAt: 1_770_000_000_000 },
+    ];
+    await createMobileNotificationShell().sync!(plan, { cursor: 7, pendingLocal: false }, live);
     expect(mocks.invoke).toHaveBeenCalledWith('plugin:reminders|sync', {
       args: {
         reminders: plan,
@@ -52,6 +56,7 @@ describe('createMobileNotificationShell（reminders 插件）', () => {
           snoozeMore: expect.any(String),
         },
         basis: { cursor: 7, pendingLocal: false },
+        live,
       },
     });
   });
@@ -98,7 +103,7 @@ describe('createMobileNotificationShell（reminders 插件）', () => {
   it('sync 失败向上抛出，交给协调器下个 tick 重试', async () => {
     mocks.invoke.mockRejectedValue(new Error('ipc unavailable'));
     await expect(
-      createMobileNotificationShell().sync!([], { cursor: 0, pendingLocal: false }),
+      createMobileNotificationShell().sync!([], { cursor: 0, pendingLocal: false }, []),
     ).rejects.toThrow('ipc unavailable');
   });
 

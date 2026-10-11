@@ -70,6 +70,9 @@ export function createDesktopNotificationShell(): ReminderNotificationShell {
         console.warn('[reminders] fireNow failed:', error);
       }
     },
+    async withdraw(taskId) {
+      await invoke('withdraw_reminder', { taskId });
+    },
     async openSettings() {
       await invoke('open_notification_settings');
     },

@@ -27,6 +27,9 @@ data class IncomingReminder(
     val body: String,
 )
 
+/** 一个仍然有效的提醒时刻（随 JS 或 hub 计划交付，见 withdrawStale）。 */
+data class LiveReminder(val key: String, val fireAt: Long)
+
 /**
  * 提醒的调度与投递（ADR-0014）。
  *
@@ -46,6 +49,8 @@ data class IncomingReminder(
  *   套规则算好的计划，经 applyBackgroundPlan 替换计划。两个写入方按
  *   PlanSource 取较新者：副本有未推送的本地写时后台不覆盖；副本落后于
  *   后台计划（离线打开 App）时 JS 的计划不覆盖。
+ * - 撤回：计划附带全部仍有效的提醒时刻（live）。已弹出的通知在别处被
+ *   处理过（了结、改期、清除提醒）就撤下，见 withdrawStale。
  */
 internal object ReminderAlarms {
     /** 沿用 tauri-plugin-notification 时期的渠道 id：用户对该渠道的设置保留。 */
@@ -75,6 +80,8 @@ internal object ReminderAlarms {
     private const val GC_AFTER_MS = 60 * 60 * 1000L
     /** 闹钟早于记录时刻超过该值视为过期闹钟（记录已改期），只重设不投递。 */
     private const val EARLY_TOLERANCE_MS = 60 * 1000L
+    /** 通知 tag 即计划 key 的前缀（`reminder:<taskId>`）：只撤回本插件发布的通知。 */
+    private const val KEY_PREFIX = "reminder:"
 
     private val lock = Any()
 
@@ -90,6 +97,7 @@ internal object ReminderAlarms {
         channelName: String,
         labels: ActionLabels?,
         basis: PlanBasis?,
+        live: List<LiveReminder>?,
     ): Boolean {
         synchronized(lock) {
             ReminderStore.setChannelName(context, channelName)
@@ -102,7 +110,7 @@ internal object ReminderAlarms {
                 ReminderStore.savePlanSource(context, source.copy(pendingLocal = false))
                 return false
             }
-            replacePlan(context, incoming)
+            replacePlan(context, incoming, live)
             ReminderStore.savePlanSource(
                 context,
                 PlanSource(
@@ -128,13 +136,14 @@ internal object ReminderAlarms {
         incoming: List<IncomingReminder>,
         cursor: Long,
         expectedGeneration: Long,
+        live: List<LiveReminder>?,
     ): Boolean {
         synchronized(lock) {
             val channelName = ReminderStore.channelName(context) ?: return false
             val source = ReminderStore.planSource(context)
             if (source.pendingLocal || source.generation != expectedGeneration) return false
             ensureChannel(context, channelName)
-            replacePlan(context, incoming)
+            replacePlan(context, incoming, live)
             ReminderStore.savePlanSource(context, source.copy(backgroundCursor = cursor))
             return true
         }
@@ -144,8 +153,12 @@ internal object ReminderAlarms {
     fun planSource(context: Context): PlanSource =
         synchronized(lock) { ReminderStore.planSource(context) }
 
-    /** 以完整期望集替换计划；调用方持锁。 */
-    private fun replacePlan(context: Context, incoming: List<IncomingReminder>) {
+    /** 以完整期望集替换计划，并撤回已失效的通知（live 为 null 时不撤回）；调用方持锁。 */
+    private fun replacePlan(
+        context: Context,
+        incoming: List<IncomingReminder>,
+        live: List<LiveReminder>?,
+    ) {
         val now = System.currentTimeMillis()
         val plan = ReminderStore.load(context)
         val incomingKeys = incoming.mapTo(HashSet()) { it.key }
@@ -178,6 +191,23 @@ internal object ReminderAlarms {
         collectGarbage(context, plan, now)
         ReminderStore.save(context, plan)
         armWindow(context, plan.values, now)
+        if (live != null) withdrawStale(context, live, queuedKeys)
+    }
+
+    /**
+     * 撤下已弹出、但已在别处处理过的通知：key 不在 live 中（任务已了结、进
+     * Trash、清除了提醒），或 fireAt 不一致（已改期、改提醒）。通知以 key 为
+     * tag 发布、`when` 即 fireAt，通知栏本身就是「已弹出」的记录，无需另存。
+     * 有排队操作的 key 留给 JS：Snooze 后再响的通知时刻还没写回任务。
+     */
+    private fun withdrawStale(context: Context, live: List<LiveReminder>, queuedKeys: Set<String>) {
+        val current = live.associate { it.key to it.fireAt }
+        val manager = context.getSystemService(NotificationManager::class.java)
+        for (posted in manager.activeNotifications) {
+            val key = posted.tag ?: continue
+            if (!key.startsWith(KEY_PREFIX) || key in queuedKeys) continue
+            if (current[key] != posted.notification.`when`) manager.cancel(key, posted.id)
+        }
     }
 
     /** 登出：注销全部闹钟并清空计划。 */
@@ -221,7 +251,8 @@ internal object ReminderAlarms {
             }
             plan.remove(key)
             ReminderStore.save(context, plan)
-            post(context, reminder)
+            // 晚到超过回收期限（与 collectGarbage 同一口径）视为错过，不补发。
+            if (now - reminder.fireAt <= GC_AFTER_MS) post(context, reminder)
             armWindow(context, plan.values, now)
         }
     }
@@ -233,7 +264,10 @@ internal object ReminderAlarms {
      */
     fun onAction(context: Context, op: String, fired: StoredReminder, tappedAt: Long) {
         synchronized(lock) {
-            NotificationManagerCompat.from(context).cancel(fired.id)
+            val notifications = NotificationManagerCompat.from(context)
+            notifications.cancel(fired.key, fired.id)
+            // 旧版本发布的通知没有 tag。
+            notifications.cancel(fired.id)
             val now = System.currentTimeMillis()
             val plan = ReminderStore.load(context)
             val target = when (op) {
@@ -482,7 +516,8 @@ internal object ReminderAlarms {
                 .addAction(0, labels.snoozeMore, snoozeMoreIntent(context, reminder))
         }
         try {
-            NotificationManagerCompat.from(context).notify(reminder.id, builder.build())
+            // tag = key：撤回时按 key 认出本插件的通知（见 withdrawStale）。
+            NotificationManagerCompat.from(context).notify(reminder.key, reminder.id, builder.build())
         } catch (_: SecurityException) {
             // 检查与发布之间权限被收回。
         }

@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
-import { planReminderDeliveries, type ReminderTaskInput } from '@taskora/engine';
+import { liveReminders, planReminderDeliveries, type ReminderTaskInput } from '@taskora/engine';
 import { TaskStatus } from '@taskora/shared';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -10,7 +10,8 @@ import { userCalendarZones } from '../users/account-time-zone';
 /**
  * 提醒计划（local-first-v3 issue 09）：与设备上的 Reminder 协调器同一套
  * 规则（@taskora/engine 的 planReminderDeliveries），按 Postgres 计算。
- * Android 原生的后台同步取回它直接交给闹钟，不经 JS、不写副本。
+ * Android 原生的后台同步取回它直接交给闹钟，不经 JS、不写副本。`live`
+ * 是全部仍有效的提醒时刻（含已过时刻），原生据此撤下已失效的已弹出通知。
  */
 @Injectable()
 export class RemindersService {
@@ -67,6 +68,10 @@ export class RemindersService {
       if (row.areaId && row.area) titles.areas.set(row.areaId, row.area.title);
     }
 
-    return { reminders: planReminderDeliveries(tasks, now, zones, titles), cursor };
+    return {
+      reminders: planReminderDeliveries(tasks, now, zones, titles),
+      live: liveReminders(tasks, zones),
+      cursor,
+    };
   }
 }
