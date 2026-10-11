@@ -56,6 +56,7 @@ import type { SidebarDropPayload } from '@/components/layout/sidebarDrop';
 import {
   dndListProps,
   dragGroupOf,
+  dragSelectionIds,
   dragOverlayClass,
   dragOverlayWrapperClass,
   expandDragGroup,
@@ -890,7 +891,7 @@ export function ProjectTaskLayout({
     const group = dragGroupOf(
       activeId,
       orderedTaskIds(layoutRef.current),
-      useSelectionStore.getState().selectedIds,
+      dragSelectionIds(),
     );
     // 多项拖拽保留多选（松手后整组仍选中）；单项拖拽照旧清掉选中。
     if (!group) handleBlankClick();

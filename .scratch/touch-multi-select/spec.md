@@ -23,4 +23,4 @@ Status: implemented — awaiting device acceptance
 - ~~Trash 行：不可拖动，保留长按菜单（恢复的唯一触屏入口）。~~ 已被 `.scratch/trash-things3`（03）取代：Trash 行接入左滑多选，工具栏提供「放回」。
 - 子任务行：不可拖动，保留长按菜单。
 - 搜索弹窗、日历当天卡片中的任务列表：工具栏会被浮层遮住，用 `MultiSelectEnabledContext` 关闭左滑。
-- 右滑快速设计划日期、多选状态下拖动多项、拖拽时的触觉反馈。
+- ~~右滑快速设计划日期、多选状态下拖动多项、拖拽时的触觉反馈。~~ 已由 `.scratch/things-touch-gestures` 实现。

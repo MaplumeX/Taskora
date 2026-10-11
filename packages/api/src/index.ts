@@ -128,6 +128,14 @@ export {
   isPreviewableImage,
   type AttachmentOpener,
 } from './attachments/attachment-files';
+export { haptic, setHaptics, type HapticKind, type HapticsImpl } from './haptics';
+export {
+  UndoHistory,
+  installUndoBoundaries,
+  undoHistory,
+  type UndoAction,
+} from './undo/undo-history';
+export { useUndoPromptStore } from './undo/undo-prompt.store';
 export {
   BlobChannel,
   BlobUnavailableError,

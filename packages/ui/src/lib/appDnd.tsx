@@ -30,6 +30,8 @@ import {
 import { Plus } from 'lucide-react';
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable';
 
+import { haptic } from '@taskora/api';
+
 import {
   SIDEBAR_DROP_REGION_ID,
   isSidebarDropId,
@@ -317,6 +319,8 @@ export function AppDndProvider({
       setOverSidebar(false);
       setOverlaySurface(MAGIC_PLUS_OVERLAY);
       setMagicPlusDragging(true);
+      // 触感（对齐 Things 3 iPhone）：拖起与落位各一次；仅手机壳注入实现。
+      haptic('lift');
       if (!active) return;
       setAutoScroll(active.surface.current.autoScroll ?? true);
       active.surface.current.onDragStart?.(event);
@@ -331,6 +335,7 @@ export function AppDndProvider({
     activeRef.current = active;
     setOverSidebar(false);
     if (!active) return;
+    haptic('lift');
     setOverlaySurface(active.surfaceId);
     setAutoScroll(active.surface.current.autoScroll ?? true);
     active.surface.current.onDragStart?.(event);
@@ -356,6 +361,7 @@ export function AppDndProvider({
       // 落在 Inbox 目标上：列表复位，由目标打开快速添加卡片。
       active?.surface.current.onDragCancel?.();
       (event.over.data.current as MagicPlusInboxData | undefined)?.onDrop();
+      haptic('drop');
       return;
     }
     if (!active) return;
@@ -371,6 +377,7 @@ export function AppDndProvider({
     const overId = event.over ? String(event.over.id) : null;
     if (overId === null || !isSidebarDropId(overId)) {
       surface.onDragEnd?.(event);
+      if (overId !== null) haptic('drop');
       return;
     }
     // 先取载荷（含多选整组），再让列表复位（会清掉它的拖拽状态）。

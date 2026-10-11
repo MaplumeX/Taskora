@@ -7,6 +7,8 @@ import { MobileFab } from '@/components/layout/MobileFab';
 import { MagicPlusInbox } from '@/components/layout/MagicPlusInbox';
 import { MultiSelectToolbar } from '@/components/task/MultiSelectToolbar';
 import { ExpandedTaskToolbar } from '@/components/task/ExpandedTaskToolbar';
+import { SwipeWhenPicker } from '@/components/task/SwipeWhenPicker';
+import { UndoPrompt } from '@/components/common/UndoPrompt';
 import { LazyAssistantPanel, LazySettingsModal } from './LazyShellFeatures';
 import { SyncIndicator } from './SyncIndicator';
 import { SidebarDropProvider } from './SidebarDropProvider';
@@ -46,6 +48,10 @@ export function AppShell() {
         <MultiSelectToolbar />
         {/* 任务展开时替代 FAB 的「移动 / 删除 / 更多」（桌面版在 ContentBottomBar 内）。 */}
         <ExpandedTaskToolbar variant="floating" />
+        {/* 右滑任务行弹出的计划卡片（对齐 Things 3 iPhone）。 */}
+        <SwipeWhenPicker />
+        {/* 摇一摇撤销的确认（手机壳检测摇晃后请求；其余端不会弹出）。 */}
+        <UndoPrompt />
         <LazySettingsModal />
         <KeyboardShortcuts />
         {/* 同步指示器（V2）：仅在离线 / 需要升级时出现在角落，不拦操作 */}
