@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import type { RepeatRule, ScheduledType } from '@taskora/shared';
+import type { RepeatRule, Start } from '@taskora/shared';
 
 /**
  * Selection（键盘选中）跨页面全局状态（ADR-0004）。
@@ -28,8 +28,7 @@ export interface SelectionRowItem {
   /** 标题：⌘C 复制时作为剪贴板文本。 */
   title?: string;
   status: string;
-  bucket: string;
-  scheduledType: ScheduledType;
+  start: Start;
   scheduledDate: string | null;
   dueDate: string | null;
   reminderTime?: string | null;

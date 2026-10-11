@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 
 import { dropPayloads, pageDropTarget, titlesFromText } from './itemClipboard';
 
@@ -39,8 +39,7 @@ describe('pageDropTarget', () => {
 describe('dropPayloads', () => {
   const item = {
     status: TaskStatus.COMPLETED,
-    bucket: TaskBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     dueDate: null,
     projectId: 'p1',

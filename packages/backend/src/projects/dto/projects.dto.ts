@@ -1,14 +1,9 @@
-import {
-  IsArray,
-  IsDateString,
-  IsEnum,
-  IsIn,
-  IsOptional,
-  IsString,
-  ValidateNested,
-} from 'class-validator';
+import { IsArray, IsDateString, IsIn, IsOptional, IsString, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ScheduledType, ProjectBucket, type SettleRemainingTasks } from '@taskora/shared';
+import { Start, type SettleRemainingTasks } from '@taskora/shared';
+
+/** 项目的 start 只有 ANYTIME / SOMEDAY（ADR 0024）。 */
+const PROJECT_STARTS = [Start.ANYTIME, Start.SOMEDAY];
 
 import { ReviewIntervalDto } from '../../common/review-interval.dto';
 import { RepeatRuleDto } from '../../tasks/dto/tasks.dto';
@@ -30,16 +25,12 @@ export class CreateProjectDto {
   scheduledDate?: string;
 
   @IsOptional()
-  @IsEnum(ScheduledType)
-  scheduledType?: ScheduledType;
+  @IsIn(PROJECT_STARTS)
+  start?: Start;
 
   @IsOptional()
   @IsDateString()
   dueDate?: string;
-
-  @IsOptional()
-  @IsEnum(ProjectBucket)
-  bucket?: ProjectBucket;
 
   @IsOptional()
   @IsArray()
@@ -76,16 +67,12 @@ export class UpdateProjectDto {
   scheduledDate?: string | null;
 
   @IsOptional()
-  @IsEnum(ScheduledType)
-  scheduledType?: ScheduledType;
+  @IsIn(PROJECT_STARTS)
+  start?: Start;
 
   @IsOptional()
   @IsDateString()
   dueDate?: string | null;
-
-  @IsOptional()
-  @IsEnum(ProjectBucket)
-  bucket?: ProjectBucket;
 
   @IsOptional()
   @IsArray()

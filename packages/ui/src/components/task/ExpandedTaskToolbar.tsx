@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 
 import type { UpdateTaskDto } from '@taskora/shared';
-import { ScheduledType, TaskStatus } from '@taskora/shared';
+import { TaskStatus } from '@taskora/shared';
 import {
   useConvertTaskToProject,
   useDeleteTask,
@@ -91,7 +91,7 @@ export function ExpandedTaskToolbar({ variant }: Props) {
 
   const trashed = !!task.trashedAt;
   const settled = task.status !== TaskStatus.ACTIVE;
-  const canRepeat = (task.scheduledType ?? ScheduledType.NONE) === ScheduledType.DATE;
+  const canRepeat = task.scheduledDate != null;
 
   const collapse = () => {
     useUiInteractionStore.getState().setExpandedId(null);

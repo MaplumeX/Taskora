@@ -1,5 +1,5 @@
 import type { FeedItem, TaskFeedItem } from '@taskora/shared';
-import { ScheduledType } from '@taskora/shared';
+import { Start } from '@taskora/shared';
 import { toDateKey, type RepeatPreview, type UpcomingLayout } from '@taskora/api';
 
 export interface UpcomingGroup {
@@ -86,7 +86,7 @@ export function moveUpcomingTask(
   const moved =
     current.scheduledDate === scheduledDate
       ? current
-      : { ...current, scheduledType: ScheduledType.DATE, scheduledDate };
+      : { ...current, start: Start.ANYTIME, scheduledDate };
   const next = [...rest.slice(0, index), moved, ...rest.slice(index)];
   return next.every((item, i) => item === items[i]) ? null : next;
 }

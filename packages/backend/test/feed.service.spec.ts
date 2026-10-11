@@ -44,7 +44,7 @@ describe('FeedService', () => {
       expect(result).toEqual([]);
       expect(mockPrisma.project.findMany).toHaveBeenCalledTimes(1);
       expect(mockPrisma.project.findMany.mock.calls[0][0].select).toEqual(
-        expect.objectContaining({ id: true, scheduledType: true }),
+        expect.objectContaining({ id: true, start: true }),
       );
     });
 
@@ -74,10 +74,9 @@ describe('FeedService', () => {
           title: 'due',
           notes: null,
           scheduledDate: null,
-          scheduledType: 'NONE',
+          start: 'INBOX',
           dueDate: new Date('2026-01-02T00:00:00Z'),
           status: TaskStatus.ACTIVE,
-          bucket: 'INBOX',
           settledAt: null,
           trashedAt: null,
           projectId: null,
@@ -102,22 +101,21 @@ describe('FeedService', () => {
 
   describe('findAll — 稍后项目内的任务（spec: later-projects）', () => {
     const userId = 'user-1';
-    const project = (id: string, scheduledType: string, scheduledDate: Date | null = null) => ({
+    const project = (id: string, start: string, scheduledDate: Date | null = null) => ({
       id,
       status: 'ACTIVE',
       trashedAt: null,
-      scheduledType,
+      start,
       scheduledDate,
     });
-    const row = (id: string, projectId: string | null, scheduledType = 'NONE') => ({
+    const row = (id: string, projectId: string | null, start = 'ANYTIME') => ({
       id,
       title: id,
       notes: null,
       scheduledDate: null,
-      scheduledType,
+      start,
       dueDate: null,
       status: TaskStatus.ACTIVE,
-      bucket: 'ANYTIME',
       settledAt: null,
       trashedAt: null,
       projectId,
@@ -129,8 +127,8 @@ describe('FeedService', () => {
     });
     const candidates = [
       project('p-someday', 'SOMEDAY'),
-      project('p-future', 'DATE', new Date('2099-01-01T00:00:00Z')),
-      project('p-past', 'DATE', new Date('2020-01-01T00:00:00Z')),
+      project('p-future', 'ANYTIME', new Date('2099-01-01T00:00:00Z')),
+      project('p-past', 'ANYTIME', new Date('2020-01-01T00:00:00Z')),
     ];
 
     it('anytime 排除 Someday / 未来日期项目内的任务，保留日期已到项目与无项目任务', async () => {
@@ -187,9 +185,8 @@ describe('FeedService', () => {
       title: 'Task',
       notes: null,
       scheduledDate: null,
-      scheduledType: 'NONE',
+      start: 'INBOX',
       dueDate: null,
-      bucket: 'INBOX',
       trashedAt: null,
       projectId: null,
       headingId: null,
@@ -261,10 +258,9 @@ describe('FeedService', () => {
           title: 'Project',
           notes: null,
           scheduledDate: new Date('2020-01-01T00:00Z'),
-          scheduledType: 'DATE',
+          start: 'ANYTIME',
           dueDate: null,
           status: 'ACTIVE',
-          bucket: 'ANYTIME',
           completedAt: null,
           trashedAt: null,
           areaId: null,

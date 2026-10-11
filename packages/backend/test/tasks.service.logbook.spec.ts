@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TaskBucket, TaskStatus } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 
 import { PrismaService } from '../src/prisma/prisma.service';
 import { TasksService } from '../src/tasks/tasks.service';
@@ -36,7 +36,7 @@ describe('TasksService — logbook view', () => {
         title: 'Done task',
         status: TaskStatus.COMPLETED,
         settledAt: new Date('2025-07-24T10:00:00Z'),
-        bucket: TaskBucket.INBOX,
+        start: Start.INBOX,
         userId,
         repeatRule: null,
         tags: [],
@@ -46,7 +46,7 @@ describe('TasksService — logbook view', () => {
         title: 'Cancelled task',
         status: TaskStatus.CANCELLED,
         settledAt: new Date('2025-07-25T10:00:00Z'),
-        bucket: TaskBucket.INBOX,
+        start: Start.INBOX,
         userId,
         repeatRule: null,
         tags: [],
@@ -74,9 +74,7 @@ describe('TasksService — logbook view', () => {
       { ...rest0, tags: [], completedAt: settled0 },
     ]);
     expect(
-      result.every(
-        (t) => t.status === TaskStatus.COMPLETED || t.status === TaskStatus.CANCELLED,
-      ),
+      result.every((t) => t.status === TaskStatus.COMPLETED || t.status === TaskStatus.CANCELLED),
     ).toBe(true);
   });
 
@@ -116,7 +114,7 @@ describe('TasksService — logbook view', () => {
         title: 'Cancelled task',
         status: TaskStatus.CANCELLED,
         settledAt: new Date('2025-07-25T10:00:00Z'),
-        bucket: TaskBucket.INBOX,
+        start: Start.INBOX,
         userId,
         repeatRule: null,
         tags: [],

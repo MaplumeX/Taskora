@@ -15,13 +15,12 @@ import {
 } from '@taskora/api';
 import {
   HeadingStatus,
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
-  TaskStatus,
   type ProjectResponseDto,
+  ProjectStatus,
+  Start,
   type TaskResponseDto,
   type TaskSearchHit,
+  TaskStatus,
 } from '@taskora/shared';
 
 import { QuickFind } from './QuickFind';
@@ -50,8 +49,7 @@ const PROJECT: ProjectResponseDto = {
   notes: null,
   areaId: 'a1',
   status: ProjectStatus.ACTIVE,
-  bucket: ProjectBucket.ANYTIME,
-  scheduledType: ScheduledType.NONE,
+  start: Start.ANYTIME,
   scheduledDate: null,
   dueDate: null,
   completedAt: null,

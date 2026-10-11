@@ -1,8 +1,8 @@
 import { useMutation } from '@tanstack/react-query';
 
 import type { QueryCacheFacade } from '../engine/live-queries';
-import { projectUpdatePutsBack } from '@taskora/engine';
-import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
+import { projectUpdatePutsBack, resolveProjectStart } from '@taskora/engine';
+import { ProjectStatus, Start } from '@taskora/shared';
 import type {
   CreateProjectDto,
   FeedItem,
@@ -133,9 +133,8 @@ export function useCreateProject() {
         notes: data.notes ?? null,
         areaId: data.areaId ?? null,
         status: ProjectStatus.ACTIVE,
-        bucket: data.bucket ?? ProjectBucket.ANYTIME,
-        scheduledType: data.scheduledType ?? ScheduledType.NONE,
-        scheduledDate: data.scheduledDate ?? null,
+        start: resolveProjectStart(data.start),
+        scheduledDate: data.start === Start.SOMEDAY ? null : (data.scheduledDate ?? null),
         dueDate: data.dueDate ?? null,
         completedAt: null,
         trashedAt: null,

@@ -1,12 +1,11 @@
-export enum TaskBucket {
+/**
+ * Start（开始状态，ADR 0024）：对应 Things 3 数据库的 `TMTask.start`。
+ * 与计划日期一起决定 Task / Project 出现在哪个视图：有计划日期时恒为
+ * ANYTIME；INBOX 只用于无归属、无日期的 Task，Project 不取 INBOX。
+ */
+export enum Start {
   INBOX = 'INBOX',
   ANYTIME = 'ANYTIME',
-  SCHEDULED = 'SCHEDULED',
-}
-
-export enum ScheduledType {
-  NONE = 'NONE',
-  DATE = 'DATE',
   SOMEDAY = 'SOMEDAY',
 }
 

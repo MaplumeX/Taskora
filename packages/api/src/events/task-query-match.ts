@@ -1,8 +1,7 @@
 import { toDateKey, todayDateKey } from '@/utils/date';
 import {
   hidesTasksInLaterProjects,
-  ScheduledType,
-  TaskBucket,
+  Start,
   TaskStatus,
   SETTLED_TASK_STATUSES,
 } from '@taskora/shared';
@@ -47,7 +46,11 @@ export function taskMatchesQuery(
 
   if (query.view) {
     // 稍后项目内的任务在 Anytime / Someday 中随父项目休眠（Later Project）。
-    if (hidesTasksInLaterProjects(query.view) && task.projectId && isLaterProjectId(task.projectId)) {
+    if (
+      hidesTasksInLaterProjects(query.view) &&
+      task.projectId &&
+      isLaterProjectId(task.projectId)
+    ) {
       return false;
     }
     return taskMatchesView(task, query.view, now);
@@ -87,18 +90,16 @@ function taskMatchesView(
   switch (view) {
     case 'inbox':
       return (
-        task.bucket === TaskBucket.INBOX &&
+        task.start === Start.INBOX &&
         task.status === TaskStatus.ACTIVE &&
-        task.scheduledType === ScheduledType.NONE &&
+        task.scheduledDate === null &&
         task.trashedAt === null
       );
     case 'today': {
       // 计划日期或截止日期 ≤ 今天（截止日期到了也进 Today）。
       const today = todayDateKey(now);
       const scheduledReached =
-        task.scheduledType === ScheduledType.DATE &&
-        task.scheduledDate !== null &&
-        toDateKey(task.scheduledDate) <= today;
+        task.scheduledDate !== null && toDateKey(task.scheduledDate) <= today;
       const deadlineReached = task.dueDate !== null && toDateKey(task.dueDate) <= today;
       return (
         task.status === TaskStatus.ACTIVE &&
@@ -109,23 +110,21 @@ function taskMatchesView(
     case 'upcoming':
       return (
         task.status === TaskStatus.ACTIVE &&
-        task.scheduledType === ScheduledType.DATE &&
         task.scheduledDate !== null &&
         toDateKey(task.scheduledDate) > todayDateKey(now) &&
         task.trashedAt === null
       );
     case 'anytime':
+      // Today 是 Anytime 的子集（ADR 0024）：计划日期已到的也在
       return (
-        task.bucket === TaskBucket.ANYTIME &&
+        task.start === Start.ANYTIME &&
         task.status === TaskStatus.ACTIVE &&
-        task.scheduledType === ScheduledType.NONE &&
+        (task.scheduledDate === null || toDateKey(task.scheduledDate) <= todayDateKey(now)) &&
         task.trashedAt === null
       );
     case 'someday':
       return (
-        task.scheduledType === ScheduledType.SOMEDAY &&
-        task.status === TaskStatus.ACTIVE &&
-        task.trashedAt === null
+        task.start === Start.SOMEDAY && task.status === TaskStatus.ACTIVE && task.trashedAt === null
       );
     case 'trash':
       return task.trashedAt !== null;

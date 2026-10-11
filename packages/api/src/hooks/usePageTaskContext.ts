@@ -4,7 +4,7 @@ import { useLocation, useParams } from 'react-router-dom';
 
 import { reviewDetailOf } from './reviewRoute';
 
-import { ScheduledType, TaskBucket, addCalendarDays } from '@taskora/shared';
+import { Start, addCalendarDays } from '@taskora/shared';
 
 import type { CreateTaskDto } from '@taskora/shared';
 
@@ -20,26 +20,20 @@ export function usePageTaskContext(): PageTaskContext {
   const params = useParams<{ id: string; tagId: string }>();
 
   if (pathname === '/today') {
-    return {
-      scheduledType: ScheduledType.DATE,
-      scheduledDate: todayDateKey(),
-    };
+    return { scheduledDate: todayDateKey() };
   }
 
   // Upcoming / Tomorrow 新建的任务计划为明天（对齐 Things 3：Upcoming 点按 Magic Plus）
   if (pathname === '/upcoming' || pathname === '/tomorrow') {
-    return {
-      scheduledType: ScheduledType.DATE,
-      scheduledDate: addCalendarDays(todayDateKey(), 1),
-    };
+    return { scheduledDate: addCalendarDays(todayDateKey(), 1) };
   }
 
   if (pathname === '/someday') {
-    return { scheduledType: ScheduledType.SOMEDAY };
+    return { start: Start.SOMEDAY };
   }
 
   if (pathname === '/anytime') {
-    return { bucket: TaskBucket.ANYTIME };
+    return { start: Start.ANYTIME };
   }
 
   if (pathname.startsWith('/projects/') && params.id) {

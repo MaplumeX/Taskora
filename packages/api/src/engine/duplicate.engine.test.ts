@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { InMemorySyncHub, openEngine, sortByEffectivePosition } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
-import { ProjectStatus, ScheduledType, TaskStatus } from '@taskora/shared';
+import { ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 
 import { createEngineProjectBackend } from './project-backend.engine';
 import { createEngineProjectHeadingBackend } from './project-heading-backend.engine';
@@ -42,7 +42,7 @@ describe('复制（Engine 后端）', () => {
     const first = await tasks.createTask({
       title: '订机票',
       notes: '靠窗',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2030-01-07',
       dueDate: '2030-01-09',
     });
@@ -62,7 +62,7 @@ describe('复制（Engine 后端）', () => {
     expect(copy).toMatchObject({
       title: '订机票',
       notes: '靠窗',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2030-01-07',
       dueDate: '2030-01-09',
       status: TaskStatus.ACTIVE,

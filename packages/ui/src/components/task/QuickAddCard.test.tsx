@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 import { i18n } from '@taskora/api';
 import type { AreaResponseDto, ProjectResponseDto, TagResponseDto } from '@taskora/shared';
-import { ProjectStatus, ScheduledType } from '@taskora/shared';
+import { ProjectStatus, Start } from '@taskora/shared';
 
 import { mockDesktop } from '@/test/media';
 import { EMPTY_QUICK_ADD_STATE, QuickAddCard, draftFromState } from './QuickAddCard';
@@ -74,7 +74,7 @@ describe('draftFromState', () => {
         ...EMPTY_QUICK_ADD_STATE,
         title: 'Measure',
         notes: 'living room',
-        scheduledType: ScheduledType.DATE,
+        start: Start.ANYTIME,
         scheduledDate: '2026-10-03',
         reminderTime: '09:30',
         dueDate: '2026-10-10',
@@ -95,7 +95,7 @@ describe('draftFromState', () => {
       draftFromState({
         ...EMPTY_QUICK_ADD_STATE,
         title: 'Guitar',
-        scheduledType: ScheduledType.SOMEDAY,
+        start: Start.SOMEDAY,
         reminderTime: '09:00',
         areaId: 'a1',
       }),

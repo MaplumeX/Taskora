@@ -14,8 +14,8 @@ function createService() {
     tasks: {
       findAll: vi.fn().mockResolvedValue([]),
       findOne: vi.fn().mockResolvedValue({ id: 't1', title: 'Task', tags: [], subtasks: [] }),
-      create: vi.fn().mockResolvedValue({ id: 't2', title: 'New', bucket: 'INBOX' }),
-      update: vi.fn().mockResolvedValue({ id: 't1', title: 'Renamed', bucket: 'ANYTIME' }),
+      create: vi.fn().mockResolvedValue({ id: 't2', title: 'New', start: 'INBOX' }),
+      update: vi.fn().mockResolvedValue({ id: 't1', title: 'Renamed', start: 'ANYTIME' }),
       complete: vi.fn().mockResolvedValue({ id: 't1' }),
       uncomplete: vi.fn().mockResolvedValue({ id: 't1' }),
       cancel: vi.fn().mockResolvedValue({ id: 't1', status: 'CANCELLED' }),
@@ -28,7 +28,7 @@ function createService() {
     projects: {
       findAll: vi.fn().mockResolvedValue([]),
       findOne: vi.fn().mockResolvedValue({ id: 'p1', title: 'Project' }),
-      create: vi.fn().mockResolvedValue({ id: 'p2', title: 'New project', bucket: 'INBOX' }),
+      create: vi.fn().mockResolvedValue({ id: 'p2', title: 'New project', start: 'ANYTIME' }),
       update: vi.fn().mockResolvedValue({ id: 'p1', title: 'Renamed' }),
       complete: vi.fn().mockResolvedValue({ id: 'p1', status: 'COMPLETED' }),
       uncomplete: vi.fn().mockResolvedValue({ id: 'p1', status: 'ACTIVE' }),
@@ -190,13 +190,13 @@ describe('AgentToolsService', () => {
     const result = await tool('create_task').execute('call-1', {
       title: 'Buy milk',
       projectId: 'p1',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-09-16',
     } as never);
     expect(service.tasks.create).toHaveBeenCalledWith('user-1', {
       title: 'Buy milk',
       notes: undefined,
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-09-16',
       dueDate: undefined,
       projectId: 'p1',
@@ -347,12 +347,11 @@ describe('AgentToolsService', () => {
     service.tasks.update.mockResolvedValueOnce({
       id: 't2',
       title: 'Report',
-      bucket: 'SCHEDULED',
       repeatRule: { unit: 'week', interval: 2, weekdays: [3], anchor: 'scheduled' },
     });
     const result = await tool('create_task').execute('call-1', {
       title: 'Report',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-10-07',
       repeatRule: { unit: 'week', interval: 2, weekdays: [3, 3] },
     } as never);
@@ -377,11 +376,11 @@ describe('AgentToolsService', () => {
         title: 'Report',
         repeatRule: { unit: 'day', interval: 1 },
       } as never),
-    ).rejects.toThrow(/scheduledType DATE/);
+    ).rejects.toThrow(/scheduled on a date/);
     await expect(
       tool('create_task').execute('call-1', {
         title: 'Report',
-        scheduledType: 'DATE',
+        start: 'ANYTIME',
         scheduledDate: '2026-10-07',
         repeatRule: { unit: 'hour', interval: 1 },
       } as never),
@@ -390,7 +389,11 @@ describe('AgentToolsService', () => {
   });
 
   it('update_task sets a rule on a dated task, clears with null, and refuses undated tasks', async () => {
-    service.tasks.findOne.mockResolvedValueOnce({ id: 't1', scheduledType: 'DATE' });
+    service.tasks.findOne.mockResolvedValueOnce({
+      id: 't1',
+      start: 'ANYTIME',
+      scheduledDate: '2026-10-07',
+    });
     await tool('update_task').execute('call-1', {
       id: 't1',
       repeatRule: { unit: 'month', interval: 1, anchor: 'completion' },
@@ -409,13 +412,17 @@ describe('AgentToolsService', () => {
     );
 
     service.tasks.update.mockClear();
-    service.tasks.findOne.mockResolvedValueOnce({ id: 't1', scheduledType: 'NONE' });
+    service.tasks.findOne.mockResolvedValueOnce({
+      id: 't1',
+      start: 'ANYTIME',
+      scheduledDate: null,
+    });
     await expect(
       tool('update_task').execute('call-1', {
         id: 't1',
         repeatRule: { unit: 'day', interval: 1 },
       } as never),
-    ).rejects.toThrow(/scheduledType DATE/);
+    ).rejects.toThrow(/scheduled on a date/);
     expect(service.tasks.update).not.toHaveBeenCalled();
   });
 

@@ -54,8 +54,7 @@ function makeProject(id: string, title: string) {
     notes: null,
     areaId: null,
     status: 'ACTIVE',
-    bucket: 'ANYTIME',
-    scheduledType: 'NONE',
+    start: 'ANYTIME',
     scheduledDate: null,
     dueDate: null,
     completedAt: null,
@@ -75,18 +74,16 @@ function useCreateProjectLike(client: QueryClient) {
       // onMutate：乐观插入 temp
       await client.cancelQueries({ queryKey: ['projects'] });
       const tempId = 'temp-id';
-      client.setQueryData(['projects'], [
-        ...(client.getQueryData<unknown[]>(['projects']) ?? []),
-        makeProject(tempId, ''),
-      ]);
+      client.setQueryData(
+        ['projects'],
+        [...(client.getQueryData<unknown[]>(['projects']) ?? []), makeProject(tempId, '')],
+      );
       // mutationFn：本地写入（engine 即 SQLite，立即可见）
       const created = makeProject('p-1', '');
       await new Promise((r) => setTimeout(r, 10));
       // onSuccess：替换 temp 为真实值 + 写 detail 缓存
-      client.setQueryData(
-        ['projects'],
-        (old: unknown[] | undefined) =>
-          old?.map((p) => ((p as { id: string }).id === tempId ? created : p)),
+      client.setQueryData(['projects'], (old: unknown[] | undefined) =>
+        old?.map((p) => ((p as { id: string }).id === tempId ? created : p)),
       );
       client.setQueryData(['project', created.id], created);
       return created;

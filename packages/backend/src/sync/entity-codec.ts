@@ -18,10 +18,8 @@ import { Prisma } from '@prisma/client';
 import {
   HeadingStatus,
   normalizeReviewInterval,
-  ProjectBucket,
   ProjectStatus,
-  ScheduledType,
-  TaskBucket,
+  Start,
   TaskStatus,
 } from '@taskora/shared';
 
@@ -64,8 +62,7 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
       'updatedAt',
     ]),
     enumFields: {
-      bucket: new Set(Object.values(TaskBucket)),
-      scheduledType: new Set(Object.values(ScheduledType)),
+      start: new Set(Object.values(Start)),
       status: new Set(Object.values(TaskStatus)),
     },
     jsonFields: new Set(['repeatRule']),
@@ -95,8 +92,7 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     ]),
     enumFields: {
       status: new Set(Object.values(ProjectStatus)),
-      bucket: new Set(Object.values(ProjectBucket)),
-      scheduledType: new Set(Object.values(ScheduledType)),
+      start: new Set(Object.values(Start)),
     },
     jsonFields: new Set(['repeatRule', 'reviewInterval']),
     jsonNormalizers: { reviewInterval: normalizeReviewInterval },
@@ -292,7 +288,7 @@ export function wireViewOfRow(codec: EntityCodec, row: PrismaRow): Record<string
  * DMMF 派生：模型名（小写）→ 不可为 null 的列集合。
  *
  * 注册表（entities.ts）面向 SQLite 副本、字段一律可空；Prisma 侧却有
- * 不可空列（如 Task.bucket 带默认值的枚举列）。设备事件里这些列的
+ * 不可空列（如 Task.start 带默认值的枚举列）。设备事件里这些列的
  * null 值若照透传，unchecked create/update 校验会失败（错误常被
  * Prisma 报成 checked 变体的「Argument user is missing」，极具迷惑性
  * —— v0.4.2「同步后任务变 Inbox」事故的第二根因），因此 null 一律

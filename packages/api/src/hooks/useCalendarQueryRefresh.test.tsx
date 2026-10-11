@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { openEngine, type Engine } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
-import { ScheduledType } from '@taskora/shared';
+import { Start } from '@taskora/shared';
 
 import { setProjectBackend } from '@/api/project-backend';
 import { setTaskBackend } from '@/api/task-backend';
@@ -72,7 +72,7 @@ it('Today 的黄点随时区重算，进入 Today 不推进已确认日期', asy
   vi.spyOn(usersApi, 'updatePreferences').mockRejectedValue(new Error('offline'));
   const task = await tasks.createTask({
     title: '提前安排的任务',
-    scheduledType: ScheduledType.DATE,
+    start: Start.ANYTIME,
     scheduledDate: '2026-10-09',
   });
   vi.setSystemTime(new Date('2026-10-09T01:00:00Z'));
@@ -92,7 +92,7 @@ describe.each(['Engine', 'React Query'] as const)('%s 跨日刷新', (mode) => {
   it('同一天切换账号时区、任务集合不变时，仍重算新到标记', async () => {
     const task = await tasks.createTask({
       title: '提前安排的任务',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-10-09',
     });
     vi.setSystemTime(new Date('2026-10-09T01:00:00Z'));
@@ -117,7 +117,7 @@ describe.each(['Engine', 'React Query'] as const)('%s 跨日刷新', (mode) => {
     '%s：任务、重复实例和项目进入今天，计划列表、计数、新到及回顾同步更新',
     async (trigger) => {
       const dated = (title: string, scheduledDate: string) =>
-        tasks.createTask({ title, scheduledType: ScheduledType.DATE, scheduledDate });
+        tasks.createTask({ title, start: Start.ANYTIME, scheduledDate });
       const older = await dated('之前未做', '2026-10-07');
       const previous = await dated('昨天未做', '2026-10-08');
       const arriving = await dated('新一天的任务', '2026-10-09');
@@ -136,7 +136,7 @@ describe.each(['Engine', 'React Query'] as const)('%s 跨日刷新', (mode) => {
       const repeat = (await tasks.getFeed('upcoming')).find((item) => item.title === '每日重复')!;
       const project = await projects.createProject({
         title: '到日项目',
-        scheduledType: ScheduledType.DATE,
+        start: Start.ANYTIME,
         scheduledDate: '2026-10-09',
         nextReviewDate: '2026-10-09',
       });
@@ -144,7 +144,7 @@ describe.each(['Engine', 'React Query'] as const)('%s 跨日刷新', (mode) => {
       const someday = await tasks.createTask({
         title: '项目内某天任务',
         projectId: project.id,
-        scheduledType: ScheduledType.SOMEDAY,
+        start: Start.SOMEDAY,
       });
 
       vi.setSystemTime(new Date('2026-10-08T15:59:50Z'));
@@ -171,7 +171,10 @@ describe.each(['Engine', 'React Query'] as const)('%s 跨日刷新', (mode) => {
         expect(result.current.upcoming.data?.map((item) => item.id)).toEqual(
           expect.arrayContaining([arriving.id, future.id, repeat.id, project.id]),
         );
-        expect(result.current.anytime.data).toEqual([]);
+        // Today 是 Anytime 的子集（ADR 0024）
+        expect(result.current.anytime.data?.map((item) => item.id).sort()).toEqual(
+          [older.id, previous.id].sort(),
+        );
         expect(result.current.someday.data).toEqual([]);
         expect(result.current.review.data?.items).toEqual([]);
         expect(result.current.hasNew).toBe(false);
@@ -209,7 +212,9 @@ describe.each(['Engine', 'React Query'] as const)('%s 跨日刷新', (mode) => {
             repeat.id,
           ]);
           expect(result.current.upcoming.data?.map((item) => item.id)).toEqual([future.id]);
-          expect(result.current.anytime.data?.map((item) => item.id)).toEqual([anytime.id]);
+          expect(result.current.anytime.data?.map((item) => item.id).sort()).toEqual(
+            [older.id, previous.id, arriving.id, repeat.id, anytime.id].sort(),
+          );
           expect(result.current.someday.data?.map((item) => item.id)).toEqual([someday.id]);
           expect(result.current.hasNew).toBe(true);
           expect(result.current.review.data?.items).toEqual([{ kind: 'project', id: project.id }]);

@@ -3,14 +3,17 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import {
-  ScheduledType,
-  TaskBucket,
-  TaskStatus,
   type CreateTaskDto,
   type TaskFeedItem,
   type TaskResponseDto,
+  TaskStatus,
 } from '@taskora/shared';
-import { useCreateTask, useSelectionStore, useUiInteractionStore } from '@taskora/api';
+import {
+  resolveTaskStart,
+  useCreateTask,
+  useSelectionStore,
+  useUiInteractionStore,
+} from '@taskora/api';
 
 /**
  * Magic Plus（见 CONTEXT.md）：手机端添加按钮按住拖动，把一条新建的空任务
@@ -54,13 +57,17 @@ function draftFields(context: DraftContext) {
     title: '',
     notes: null,
     scheduledDate: context.scheduledDate ?? null,
-    scheduledType: context.scheduledType ?? ScheduledType.NONE,
+    start: resolveTaskStart(
+      context.start,
+      context.scheduledDate,
+      context.projectId,
+      context.areaId,
+    ),
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
     status: TaskStatus.ACTIVE,
-    bucket: context.bucket ?? TaskBucket.INBOX,
     completedAt: null,
     trashedAt: null,
     projectId: context.projectId ?? null,

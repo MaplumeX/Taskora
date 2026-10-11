@@ -251,47 +251,70 @@ describe('任务搜索（纯函数）', () => {
 
 describe('任务写入规则', () => {
   const base = {
-    scheduledType: 'DATE',
+    start: 'ANYTIME',
     scheduledDate: '2026-09-24',
-    bucket: 'SCHEDULED',
     projectId: 'p1',
     areaId: null,
     headingId: 'h1',
   };
 
-  it('新建：DATE 才带日期；bucket 按归属推导', () => {
+  it('新建：Someday 不带日期；start 按归属与日期推导', () => {
     expect(planTaskCreate({ title: 'x', projectId: 'p1' }, UTC)).toMatchObject({
-      scheduledType: 'NONE',
+      start: 'ANYTIME',
       scheduledDate: null,
-      bucket: 'ANYTIME',
       status: 'ACTIVE',
       reminderTime: null,
       repeatRule: null,
     });
     expect(
-      planTaskCreate(
-        { title: 'x', scheduledType: 'SOMEDAY' as never, scheduledDate: '2026-09-24' },
-        UTC,
-      ),
-    ).toMatchObject({ scheduledDate: null, bucket: 'SCHEDULED' });
+      planTaskCreate({ title: 'x', start: 'SOMEDAY' as never, scheduledDate: '2026-09-24' }, UTC),
+    ).toMatchObject({ scheduledDate: null, start: 'SOMEDAY' });
+    expect(planTaskCreate({ title: 'x', scheduledDate: '2026-09-24' }, UTC)).toMatchObject({
+      scheduledDate: '2026-09-24',
+      start: 'ANYTIME',
+    });
+    expect(planTaskCreate({ title: 'x' }, UTC)).toMatchObject({ start: 'INBOX' });
   });
 
-  it('离开 DATE：清除日期、提醒与重复规则，bucket 回落', () => {
-    expect(planTaskUpdate(base, { scheduledType: 'NONE' as never }, UTC)).toEqual({
-      scheduledType: 'NONE',
+  it('Clear：落 Anytime，清除日期、提醒与重复规则（对齐 Things 3）', () => {
+    const expected = {
+      start: 'ANYTIME',
       scheduledDate: null,
       reminderTime: null,
       repeatRule: null,
-      bucket: 'ANYTIME',
+    };
+    expect(planTaskUpdate(base, { start: 'ANYTIME' as never, scheduledDate: null }, UTC)).toEqual(
+      expected,
+    );
+    // 无归属的任务也不回 Inbox
+    const loose = { ...base, projectId: null, headingId: null };
+    expect(planTaskUpdate(loose, { start: 'ANYTIME' as never, scheduledDate: null }, UTC)).toEqual(
+      expected,
+    );
+  });
+
+  it('Someday：清除日期、提醒与重复规则', () => {
+    expect(planTaskUpdate(base, { start: 'SOMEDAY' as never }, UTC)).toEqual({
+      start: 'SOMEDAY',
+      scheduledDate: null,
+      reminderTime: null,
+      repeatRule: null,
     });
   });
 
-  it('换日期保留提醒；只改标题不碰 bucket', () => {
+  it('换日期保留提醒；只改标题不碰 start', () => {
     expect(planTaskUpdate(base, { scheduledDate: '2026-10-01T00:00:00.000Z' }, UTC)).toEqual({
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-10-01',
-      bucket: 'SCHEDULED',
     });
+    // Someday 任务设日期即回到 Anytime
+    expect(
+      planTaskUpdate(
+        { ...base, start: 'SOMEDAY', scheduledDate: null },
+        { scheduledDate: '2026-10-01' },
+        UTC,
+      ),
+    ).toEqual({ start: 'ANYTIME', scheduledDate: '2026-10-01' });
     expect(planTaskUpdate(base, { title: 'y' }, UTC)).toEqual({ title: 'y' });
   });
 
@@ -340,27 +363,30 @@ describe('任务写入规则', () => {
   it('Inbox（CONTEXT：Inbox）：获得归属即离开；带归属新建不落 Inbox', () => {
     const inbox = {
       ...base,
-      scheduledType: 'NONE',
+      start: 'INBOX',
       scheduledDate: null,
-      bucket: 'INBOX',
       projectId: null,
       headingId: null,
     };
     expect(planTaskUpdate(inbox, { projectId: 'p1' }, UTC)).toEqual({
       projectId: 'p1',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       reminderTime: null,
       repeatRule: null,
     });
-    expect(planTaskUpdate(inbox, { areaId: 'a1' }, UTC)).toMatchObject({ bucket: 'ANYTIME' });
+    expect(planTaskUpdate(inbox, { areaId: 'a1' }, UTC)).toMatchObject({ start: 'ANYTIME' });
+    expect(planTaskUpdate(inbox, { scheduledDate: '2026-10-01' }, UTC)).toMatchObject({
+      start: 'ANYTIME',
+      scheduledDate: '2026-10-01',
+    });
     expect(
-      planTaskCreate({ title: 'x', bucket: 'INBOX' as never, projectId: 'p1' }, UTC),
+      planTaskCreate({ title: 'x', start: 'INBOX' as never, projectId: 'p1' }, UTC),
     ).toMatchObject({
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
     });
     // 清空归属不会自动回 Inbox：Anytime 是用户选择，移入 Inbox 需显式指定
     expect(
-      planTaskUpdate({ ...inbox, bucket: 'ANYTIME', areaId: 'a1' }, { areaId: null }, UTC),
+      planTaskUpdate({ ...inbox, start: 'ANYTIME', areaId: 'a1' }, { areaId: null }, UTC),
     ).toEqual({
       areaId: null,
       reminderTime: null,
@@ -369,30 +395,23 @@ describe('任务写入规则', () => {
   });
 
   it('移入 Inbox：清除归属与计划（日期、提醒、重复规则），解除分组', () => {
-    expect(
-      planTaskUpdate(
-        base,
-        { projectId: null, areaId: null, bucket: 'INBOX' as never, scheduledType: 'NONE' as never },
-        UTC,
-      ),
-    ).toEqual({
-      scheduledType: 'NONE',
+    expect(planTaskUpdate(base, { start: 'INBOX' as never }, UTC)).toEqual({
+      start: 'INBOX',
       scheduledDate: null,
       reminderTime: null,
       repeatRule: null,
-      bucket: 'INBOX',
       projectId: null,
       areaId: null,
       headingId: null,
     });
   });
 
-  it('转项目：bucket 按计划类型推导（Inbox 任务得到 Anytime 项目）', () => {
+  it('转项目：start 按任务推导（Inbox 任务得到 Anytime 项目）', () => {
     const plan = planConvertTaskToProject(
       {
         title: 't',
         notes: null,
-        scheduledType: 'NONE',
+        start: 'INBOX',
         scheduledDate: null,
         dueDate: null,
         status: 'COMPLETED',
@@ -413,7 +432,7 @@ describe('任务写入规则', () => {
       },
     );
     expect(plan.project).toMatchObject({
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       status: 'COMPLETED',
       completedAt: '2026-09-20T00:00:00.000Z',
       areaId: 'area-parent',
@@ -425,7 +444,7 @@ describe('任务写入规则', () => {
     // 提升的任务属于新项目，不在 Inbox
     expect(plan.promotedTasks[0]).toMatchObject({
       title: 's',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       status: 'ACTIVE',
     });
   });
@@ -549,7 +568,6 @@ describe('任务写入规则', () => {
     const task = {
       status: 'ACTIVE',
       trashedAt: null,
-      scheduledType: 'DATE',
       scheduledDate: '2026-02-05',
       dueDate: '2026-02-07',
       repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' } as const,
@@ -570,7 +588,7 @@ describe('任务写入规则', () => {
     expect(planRepeatSkip({ ...task, repeatRule: null }, false, now, UTC)).toEqual({
       blocked: 'not-repeating',
     });
-    expect(planRepeatSkip({ ...task, scheduledType: 'SOMEDAY' }, false, now, UTC)).toEqual({
+    expect(planRepeatSkip({ ...task, scheduledDate: null }, false, now, UTC)).toEqual({
       blocked: 'not-repeating',
     });
     expect(planRepeatSkip({ ...task, status: 'COMPLETED' }, false, now, UTC)).toEqual({
@@ -700,7 +718,6 @@ describe('下次预告（Repeat Preview）', () => {
     title: id,
     status: 'ACTIVE',
     trashedAt: null,
-    scheduledType: 'DATE',
     scheduledDate: '2026-02-10',
     repeatRule: daily,
     repeatSourceId: null,
@@ -727,13 +744,13 @@ describe('下次预告（Repeat Preview）', () => {
     ]);
   });
 
-  it('不投影：已了结 / Trash / 非 DATE / 无规则 / completion 锚点 / 链终结 / 下一次不晚于今天', () => {
+  it('不投影：已了结 / Trash / 无计划日期 / 无规则 / completion 锚点 / 链终结 / 下一次不晚于今天', () => {
     expect(
       buildRepeatPreviews(
         [
           source('done', { status: 'COMPLETED' }),
           source('trashed', { trashedAt: '2026-02-09T00:00:00.000Z' }),
-          source('someday', { scheduledType: 'SOMEDAY' }),
+          source('someday', { scheduledDate: null }),
           source('plain', { repeatRule: null }),
           source('gap', { repeatRule: { ...daily, anchor: 'completion' } }),
           source('ended', { repeatRule: { ...daily, until: '2026-02-10' } }),

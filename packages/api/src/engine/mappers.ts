@@ -10,10 +10,8 @@ import type { Positioned, ReplicaRow } from '@taskora/engine';
 import {
   HeadingStatus,
   normalizeReviewInterval,
-  ProjectBucket,
   ProjectStatus,
-  ScheduledType,
-  TaskBucket,
+  Start,
   TaskStatus,
 } from '@taskora/shared';
 import type {
@@ -77,12 +75,11 @@ export function taskRowToDto(row: ReplicaRow, tags: Map<string, TagResponseDto>)
     title: (f.title as string) ?? '',
     notes: (f.notes as string | null) ?? null,
     scheduledDate: (f.scheduledDate as string | null) ?? null,
-    scheduledType: (f.scheduledType as ScheduledType) ?? ScheduledType.NONE,
+    start: (f.start as Start) ?? Start.INBOX,
     reminderTime: (f.reminderTime as string | null) ?? null,
     repeatRule: (f.repeatRule as RepeatRule | null) ?? null,
     repeatSourceId: (f.repeatSourceId as string | null) ?? null,
     dueDate: (f.dueDate as string | null) ?? null,
-    bucket: (f.bucket as TaskBucket) ?? TaskBucket.INBOX,
     status: (f.status as TaskStatus) ?? TaskStatus.ACTIVE,
     // DTO 字段名保留 completedAt，承载 Settled At 语义（ADR 0006）。
     completedAt: (f.settledAt as string | null) ?? null,
@@ -157,8 +154,7 @@ export function projectRowToDto(
     areaId: (f.areaId as string | null) ?? null,
     position: typeof f.position === 'string' ? f.position : null,
     status: (f.status as ProjectStatus) ?? ProjectStatus.ACTIVE,
-    bucket: (f.bucket as ProjectBucket) ?? ProjectBucket.ANYTIME,
-    scheduledType: (f.scheduledType as ScheduledType) ?? ScheduledType.NONE,
+    start: (f.start as Start) ?? Start.ANYTIME,
     scheduledDate: (f.scheduledDate as string | null) ?? null,
     dueDate: (f.dueDate as string | null) ?? null,
     repeatRule: (f.repeatRule as RepeatRule | null) ?? null,

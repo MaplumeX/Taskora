@@ -82,7 +82,7 @@ e2eDescribe('GET /reminders/plan (e2e)', () => {
         userId,
         title: '写周报',
         notes: '汇总本周进展',
-        scheduledType: 'DATE',
+        start: 'ANYTIME',
         scheduledDate: new Date('2099-01-05T00:00:00.000Z'),
         reminderTime: '09:00',
         projectId: project.id,

@@ -18,14 +18,9 @@ import {
   RotateCcw,
 } from 'lucide-react';
 
-import { ScheduledType, type ProjectResponseDto, type UpdateProjectDto } from '@taskora/shared';
+import { type ProjectResponseDto, type UpdateProjectDto } from '@taskora/shared';
 
-import {
-  Popover,
-  PopoverAnchor,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
 import { MenuItems, type MenuItem } from '@/components/common/MenuItems';
 import { FieldPickerDialog } from '@/components/common/FieldPicker';
@@ -91,7 +86,7 @@ export function ProjectMenuPanel({
   const skipOccurrence = useSkipProjectOccurrence(current, true);
 
   const completed = current.status === 'COMPLETED';
-  const isDate = (current.scheduledType ?? ScheduledType.NONE) === ScheduledType.DATE;
+  const isDate = current.scheduledDate != null;
   const canOfferSkip = variant === 'default' && skipOccurrence.available;
   const reviewItem = useReviewMenuItem(() => openPicker('review'));
   const logCompleted = useLogCompleted();
@@ -256,9 +251,7 @@ export function ProjectContextMenu({
 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const firstItemRef = React.useRef<HTMLButtonElement>(null);
-  const virtualAnchorRef = React.useRef<
-    { getBoundingClientRect: () => ClientRect } | null
-  >(null);
+  const virtualAnchorRef = React.useRef<{ getBoundingClientRect: () => ClientRect } | null>(null);
 
   const patch = useProjectPatch(project);
   const completion = useProjectCompletion();
@@ -273,17 +266,18 @@ export function ProjectContextMenu({
   /** 以坐标为锚点打开主菜单（鼠标右键）。 */
   const openMenuAt = (x: number, y: number) => {
     virtualAnchorRef.current = {
-      getBoundingClientRect: () => ({
-        width: 0,
-        height: 0,
-        x,
-        y,
-        top: y,
-        right: x,
-        bottom: y,
-        left: x,
-        toJSON: () => ({}),
-      }) as ClientRect,
+      getBoundingClientRect: () =>
+        ({
+          width: 0,
+          height: 0,
+          x,
+          y,
+          top: y,
+          right: x,
+          bottom: y,
+          left: x,
+          toJSON: () => ({}),
+        }) as ClientRect,
     };
     setActivePicker(null);
     setMenuOpen(true);
@@ -312,11 +306,7 @@ export function ProjectContextMenu({
 
       <Popover open={menuOpen} onOpenChange={setMenuOpen}>
         <PopoverAnchor virtualRef={virtualAnchorRef} />
-        <PopoverContent
-          align="start"
-          className="w-44 p-1"
-          onClick={(e) => e.stopPropagation()}
-        >
+        <PopoverContent align="start" className="w-44 p-1" onClick={(e) => e.stopPropagation()}>
           <ProjectMenuPanel
             project={project}
             current={current}
@@ -329,14 +319,16 @@ export function ProjectContextMenu({
         </PopoverContent>
       </Popover>
 
-      <Popover
-        open={activePicker !== null}
-        onOpenChange={(o) => !o && setActivePicker(null)}
-      >
+      <Popover open={activePicker !== null} onOpenChange={(o) => !o && setActivePicker(null)}>
         <PopoverAnchor virtualRef={containerRef} />
         <PopoverContent align="start" onClick={(e) => e.stopPropagation()}>
           {activePicker !== null && (
-            <PickerContent kind={activePicker} current={current} patch={patch} onClose={() => setActivePicker(null)} />
+            <PickerContent
+              kind={activePicker}
+              current={current}
+              patch={patch}
+              onClose={() => setActivePicker(null)}
+            />
           )}
         </PopoverContent>
       </Popover>
@@ -403,7 +395,12 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
     />
   );
   const pickerBody = activePicker !== null && (
-    <PickerContent kind={activePicker} current={current} patch={patch} onClose={() => setActivePicker(null)} />
+    <PickerContent
+      kind={activePicker}
+      current={current}
+      patch={patch}
+      onClose={() => setActivePicker(null)}
+    />
   );
 
   if (!isDesktop) {
@@ -452,10 +449,7 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
         </PopoverContent>
       </Popover>
 
-      <Popover
-        open={activePicker !== null}
-        onOpenChange={(o) => !o && setActivePicker(null)}
-      >
+      <Popover open={activePicker !== null} onOpenChange={(o) => !o && setActivePicker(null)}>
         <PopoverAnchor virtualRef={containerRef} />
         <PopoverContent align="end" onClick={(e) => e.stopPropagation()}>
           {pickerBody}

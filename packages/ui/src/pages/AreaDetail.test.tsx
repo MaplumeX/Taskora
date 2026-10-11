@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
+import { ProjectStatus, Start } from '@taskora/shared';
 import type { ProjectResponseDto } from '@taskora/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -76,7 +76,7 @@ function project(
   id: string,
   areaId: string | null,
   index: number,
-  scheduledType = ScheduledType.NONE,
+  start = Start.ANYTIME,
   scheduledDate: string | null = null,
 ): ProjectResponseDto {
   return {
@@ -86,8 +86,7 @@ function project(
     areaId,
     position: `a${index}`,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.ANYTIME,
-    scheduledType,
+    start,
     scheduledDate,
     dueDate: null,
     completedAt: null,
@@ -133,9 +132,9 @@ beforeEach(() => {
   harness.projects = [
     project('x', null, 0),
     project('a1', 'a', 1),
-    project('as', 'a', 2, ScheduledType.SOMEDAY),
+    project('as', 'a', 2, Start.SOMEDAY),
     project('a2', 'a', 3),
-    project('af', 'a', 4, ScheduledType.DATE, '2099-01-01'),
+    project('af', 'a', 4, Start.ANYTIME, '2099-01-01'),
   ];
 });
 
@@ -184,14 +183,21 @@ describe('AreaDetail later projects', () => {
 
 describe('AreaDetail 稍后项目拖拽', () => {
   beforeEach(() => {
-    harness.projects.push(project('as2', 'a', 5, ScheduledType.SOMEDAY));
+    harness.projects.push(project('as2', 'a', 5, Start.SOMEDAY));
   });
 
   it('Someday 项目可拖拽排序，以全量顺序写回', () => {
     renderArea();
     act(() => harness.dnd?.onDragStart({ active: { id: 'as2' } }));
     act(() => harness.dnd?.onDragEnd({ active: { id: 'as2' }, over: { id: 'as' } }));
-    expect(harness.reorderProjectsMutate).toHaveBeenCalledWith(['x', 'a1', 'as2', 'a2', 'af', 'as']);
+    expect(harness.reorderProjectsMutate).toHaveBeenCalledWith([
+      'x',
+      'a1',
+      'as2',
+      'a2',
+      'af',
+      'as',
+    ]);
     expect(renderedIds()).toEqual(['a1', 'a2', 'af', 'as2', 'as']);
   });
 
@@ -212,9 +218,7 @@ describe('AreaDetail 稍后项目拖拽', () => {
   it('计划项目可拖到侧边栏，但不在节内排序', () => {
     renderArea();
     act(() => harness.dnd?.onDragStart({ active: { id: 'af' } }));
-    act(() =>
-      harness.dnd?.onDragEnd({ active: { id: 'af' }, over: { id: 'sidebar-drop:today' } }),
-    );
+    act(() => harness.dnd?.onDragEnd({ active: { id: 'af' }, over: { id: 'sidebar-drop:today' } }));
     expect(harness.sidebarDrop).toHaveBeenCalledWith(
       { kind: 'project', project: expect.objectContaining({ id: 'af' }) },
       { kind: 'today' },

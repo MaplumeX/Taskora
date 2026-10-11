@@ -4,7 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { formatShortDate, parseCalendarDate } from '@taskora/api';
-import { ScheduledType, TaskBucket, TaskStatus, type TaskResponseDto } from '@taskora/shared';
+import { Start, type TaskResponseDto, TaskStatus } from '@taskora/shared';
 import { mockDesktop } from '@/test/media';
 import type { ScheduledBadgeMode } from './TaskDateBadge';
 import { TaskItem } from './TaskItem';
@@ -27,12 +27,11 @@ function task(scheduledDate: string): TaskResponseDto {
     title: 'Pay rent',
     notes: null,
     scheduledDate,
-    scheduledType: ScheduledType.DATE,
+    start: Start.ANYTIME,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: '2026-09-25',
-    bucket: TaskBucket.SCHEDULED,
     status: TaskStatus.ACTIVE,
     completedAt: null,
     trashedAt: null,

@@ -1,4 +1,4 @@
-import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
+import { ProjectStatus, Start } from '@taskora/shared';
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 import { describe, expect, it } from 'vitest';
 
@@ -32,8 +32,7 @@ function project(id: string, areaId: string | null): ProjectResponseDto {
     notes: null,
     areaId,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     dueDate: null,
     completedAt: null,
@@ -77,10 +76,7 @@ describe('sidebar project layout normalization', () => {
   });
 
   it('keeps a project with an unknown area visible as standalone', () => {
-    const normalized = normalizeSidebarProjectLayout(
-      [project('legacy', 'missing')],
-      areas,
-    );
+    const normalized = normalizeSidebarProjectLayout([project('legacy', 'missing')], areas);
 
     expect(normalized.containers[STANDALONE_PROJECT_CONTAINER]).toEqual(['legacy']);
   });
@@ -125,16 +121,9 @@ describe('sidebar project placement helpers', () => {
     });
 
     expect(intoArea?.containers.standalone).toEqual(['standalone-b']);
-    expect(intoArea?.containers['area-a']).toEqual([
-      'area-a-1',
-      'standalone-a',
-      'area-a-2',
-    ]);
+    expect(intoArea?.containers['area-a']).toEqual(['area-a-1', 'standalone-a', 'area-a-2']);
     expect(intoEmptyArea?.containers['area-b']).toEqual(['area-a-2']);
-    expect(backToStandalone?.containers.standalone).toEqual([
-      'standalone-b',
-      'area-a-2',
-    ]);
+    expect(backToStandalone?.containers.standalone).toEqual(['standalone-b', 'area-a-2']);
   });
 
   it('corrects insertion indexes for upward and downward movement', () => {
@@ -204,9 +193,21 @@ describe('mergeVisibleProjectOrder', () => {
   });
 
   it('可见项目按新顺序填回原槽位，隐藏项目原位不动', () => {
-    const all = [withOrder('v2', 2), withOrder('h1', 1), withOrder('v1', 0), withOrder('h3', 3), withOrder('v4', 4)];
+    const all = [
+      withOrder('v2', 2),
+      withOrder('h1', 1),
+      withOrder('v1', 0),
+      withOrder('h3', 3),
+      withOrder('v4', 4),
+    ];
     // 全量原顺序：v1 h1 v2 h3 v4；可见项重排为 v4 v1 v2
-    expect(mergeVisibleProjectOrder(all, ['v4', 'v1', 'v2'])).toEqual(['v4', 'h1', 'v1', 'h3', 'v2']);
+    expect(mergeVisibleProjectOrder(all, ['v4', 'v1', 'v2'])).toEqual([
+      'v4',
+      'h1',
+      'v1',
+      'h3',
+      'v2',
+    ]);
   });
 
   it('全部可见时等同于可见顺序', () => {

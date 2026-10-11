@@ -42,13 +42,12 @@ const task = (id: string, overrides: Record<string, unknown> = {}) => ({
   id,
   title: id,
   notes: null,
-  scheduledType: 'NONE',
+  start: 'ANYTIME',
   scheduledDate: null,
   dueDate: null,
   reminderTime: null,
   repeatRule: null,
   repeatSourceId: null,
-  bucket: 'ANYTIME',
   status: 'ACTIVE',
   trashedAt: null,
   headingId: null,
@@ -65,7 +64,7 @@ describe('重复项目派生', () => {
     expect(plan.project).toEqual({
       title: 'Weekly review',
       notes: 'checklist',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-10-12',
       dueDate: '2026-10-14',
       repeatRule: WEEKLY,
@@ -74,7 +73,6 @@ describe('重复项目派生', () => {
       reviewInterval: { unit: 'month', count: 1 },
       nextReviewDate: '2026-11-05',
       lastReviewedOn: null,
-      bucket: 'SCHEDULED',
       status: 'ACTIVE',
       completedAt: null,
       trashedAt: null,
@@ -103,24 +101,21 @@ describe('重复项目派生', () => {
         task('done', { status: 'COMPLETED', headingId: 'h1', position: 'a1' }),
         task('cancelled', { status: 'CANCELLED', position: 'a2' }),
         task('dated', {
-          scheduledType: 'DATE',
           scheduledDate: '2026-10-06',
           dueDate: '2026-10-08',
           reminderTime: '09:00',
-          bucket: 'SCHEDULED',
           repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
           position: 'a3',
         }),
         // 项目内重复链的后代：只复制源头 dated
         task('dated-next', {
           status: 'COMPLETED',
-          scheduledType: 'DATE',
           scheduledDate: '2026-10-07',
           repeatSourceId: 'dated',
           position: 'a4',
         }),
         task('trashed', { trashedAt: '2026-10-04T00:00:00.000Z' }),
-        task('someday', { scheduledType: 'SOMEDAY', bucket: 'SCHEDULED', position: 'a5' }),
+        task('someday', { start: 'SOMEDAY', position: 'a5' }),
       ],
       subtasks: [
         { id: 's1', title: 'step', taskId: 'done', position: 'a0' },
@@ -168,9 +163,9 @@ describe('重复项目派生', () => {
       dueDate: '2026-10-15',
       reminderTime: '09:00',
       repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
-      bucket: 'SCHEDULED',
+      start: 'ANYTIME',
     });
-    expect(someday).toMatchObject({ scheduledType: 'SOMEDAY', scheduledDate: null });
+    expect(someday).toMatchObject({ start: 'SOMEDAY', scheduledDate: null });
     expect(copy.subtasks).toEqual([
       {
         id: expect.any(String),
@@ -242,7 +237,6 @@ describe('重复项目跳过本次', () => {
   const project = {
     status: 'ACTIVE',
     trashedAt: null,
-    scheduledType: 'DATE',
     scheduledDate: '2026-10-05',
     dueDate: '2026-10-07',
     repeatRule: WEEKLY,
@@ -252,7 +246,6 @@ describe('重复项目跳过本次', () => {
       id: 'open',
       status: 'ACTIVE',
       trashedAt: null,
-      scheduledType: 'DATE',
       scheduledDate: '2026-10-06',
       dueDate: '2026-10-08',
     },
@@ -260,7 +253,6 @@ describe('重复项目跳过本次', () => {
       id: 'no-dates',
       status: 'ACTIVE',
       trashedAt: null,
-      scheduledType: 'NONE',
       scheduledDate: null,
       dueDate: null,
     },
@@ -268,7 +260,6 @@ describe('重复项目跳过本次', () => {
       id: 'done',
       status: 'COMPLETED',
       trashedAt: null,
-      scheduledType: 'DATE',
       scheduledDate: '2026-10-05',
       dueDate: null,
     },
@@ -304,33 +295,31 @@ describe('重复项目跳过本次', () => {
 });
 
 describe('项目的重复规则写入与修复', () => {
-  const base = { scheduledType: 'DATE', scheduledDate: '2026-10-05', bucket: 'SCHEDULED' };
+  const base = { start: 'ANYTIME', scheduledDate: '2026-10-05' };
 
-  it('DATE 项目可设规则（规范化），离开 DATE 清除', () => {
+  it('有日期的项目可设规则（规范化），清除日期即清除', () => {
     expect(
       planProjectUpdate(base, { repeatRule: { ...WEEKLY, weekdays: [3, 1, 1] } }, UTC).repeatRule,
     ).toEqual({ ...WEEKLY, weekdays: [1, 3] });
     expect(planProjectUpdate(base, { repeatRule: null }, UTC).repeatRule).toBeNull();
-    expect(
-      planProjectUpdate(base, { scheduledType: 'SOMEDAY' as never }, UTC).repeatRule,
-    ).toBeNull();
+    expect(planProjectUpdate(base, { start: 'SOMEDAY' as never }, UTC).repeatRule).toBeNull();
+    expect(planProjectUpdate(base, { scheduledDate: null }, UTC).repeatRule).toBeNull();
     expect(projectUpdatePutsBack({ repeatRule: WEEKLY })).toBe(true);
   });
 
-  it('合并后修复：非 DATE 项目上的规则被清除', () => {
+  it('合并后修复：没有日期的项目上的规则被清除', () => {
     expect(
       repairEntity('project', {
-        scheduledType: 'SOMEDAY',
+        start: 'SOMEDAY',
+        scheduledDate: null,
         repeatRule: WEEKLY,
-        bucket: 'SCHEDULED',
       }),
     ).toEqual({ repeatRule: null });
     expect(
       repairEntity('project', {
-        scheduledType: 'DATE',
+        start: 'ANYTIME',
         scheduledDate: '2026-10-05',
         repeatRule: WEEKLY,
-        bucket: 'SCHEDULED',
       }),
     ).toEqual({});
   });

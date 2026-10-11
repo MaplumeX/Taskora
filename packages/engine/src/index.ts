@@ -91,6 +91,7 @@ export {
   SYNC_LOG_RETENTION_DAYS,
   SYNC_PROTOCOL_HEADER,
   SYNC_PROTOCOL_VERSION,
+  START_MODEL_PROTOCOL,
   SyncUpgradeRequiredError,
   TAG_TREE_PROTOCOL,
   type BootstrapRequest,

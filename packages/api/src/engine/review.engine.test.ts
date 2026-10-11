@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InMemorySyncHub, openEngine, type Engine } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
-import { ScheduledType, type ReviewInterval, type ReviewIntervalDefaults } from '@taskora/shared';
+import { type ReviewInterval, type ReviewIntervalDefaults, Start } from '@taskora/shared';
 
 import { usePreferencesStore } from '@/stores/preferences.store';
 import { createEngineAreaBackend } from './area-backend.engine';
@@ -76,7 +76,7 @@ describe('Review（Engine 后端）', () => {
 
     const someday = await device.projects.createProject({
       title: 'S',
-      scheduledType: ScheduledType.SOMEDAY,
+      start: Start.SOMEDAY,
     });
     expect(someday.reviewInterval).toEqual(WEEKLY);
     expect(someday.nextReviewDate).toBe('2026-03-17');
@@ -200,12 +200,12 @@ describe('Review（Engine 后端）', () => {
     const active = await device.projects.createProject({ title: 'active', ...due });
     const someday = await device.projects.createProject({
       title: 'someday',
-      scheduledType: ScheduledType.SOMEDAY,
+      start: Start.SOMEDAY,
       ...due,
     });
     const later = await device.projects.createProject({
       title: 'later',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-09-01',
       ...due,
     });
@@ -281,7 +281,7 @@ describe('Review（Engine 后端）', () => {
   it('派生 Repeat Project Instance：沿用来源间隔，从未回顾，下次回顾日为派生日加间隔', async () => {
     const project = await device.projects.createProject({
       title: 'repeating',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-03-10',
       reviewInterval: { unit: 'day', count: 5 },
       nextReviewDate: '2026-03-01',

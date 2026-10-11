@@ -410,7 +410,7 @@ export class TasksService {
         {
           title: existing.title,
           notes: existing.notes,
-          scheduledType: existing.scheduledType,
+          start: existing.start,
           scheduledDate: existing.scheduledDate,
           dueDate: existing.dueDate,
           status: existing.status,

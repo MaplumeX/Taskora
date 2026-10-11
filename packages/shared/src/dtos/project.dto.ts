@@ -1,17 +1,17 @@
 import type { RepeatRule } from './repeat-rule.dto';
 import type { ReviewInterval } from '../review';
 import type { TagResponseDto } from './tag.dto';
-import { ScheduledType } from '../enums/task.enum';
-import { ProjectStatus, ProjectBucket } from '../enums/project.enum';
+import { Start } from '../enums/task.enum';
+import { ProjectStatus } from '../enums/project.enum';
 
 export interface CreateProjectDto {
   title: string;
   notes?: string;
   areaId?: string;
   scheduledDate?: string; // ISO 8601
-  scheduledType?: ScheduledType;
+  /** 开始状态（ANYTIME / SOMEDAY，Project 不取 INBOX）。 */
+  start?: Start;
   dueDate?: string; // ISO 8601
-  bucket?: ProjectBucket;
   tagIds?: string[];
   /** 回顾间隔（Review Interval）；缺省取该对象类型的账号默认回顾间隔。 */
   reviewInterval?: ReviewInterval;
@@ -24,11 +24,10 @@ export interface UpdateProjectDto {
   notes?: string;
   areaId?: string | null;
   scheduledDate?: string | null;
-  scheduledType?: ScheduledType;
+  start?: Start;
   dueDate?: string | null;
-  bucket?: ProjectBucket;
   tagIds?: string[];
-  /** 重复规则（recurring-projects spec）：仅 DATE 项目可设；null 清除。 */
+  /** 重复规则（recurring-projects spec）：仅有计划日期的项目可设；null 清除。 */
   repeatRule?: RepeatRule | null;
   /** 回顾间隔：只改间隔，不改写下次回顾日。 */
   reviewInterval?: ReviewInterval;
@@ -51,8 +50,7 @@ export interface ProjectResponseDto {
   /** 列表位次（fractional indexing 字符串，ADR-0007）；web 与桌面端共用的排序键。 */
   position?: string | null;
   status: ProjectStatus;
-  bucket: ProjectBucket;
-  scheduledType: ScheduledType;
+  start: Start;
   scheduledDate: string | null;
   dueDate: string | null;
   /** 重复规则（recurring-projects spec）；非重复项目为 null。 */

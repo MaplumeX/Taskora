@@ -1,7 +1,7 @@
 import type { TagResponseDto } from './tag.dto';
 import type { RepeatRule } from './repeat-rule.dto';
-import { ScheduledType, TaskStatus, TaskBucket } from '../enums/task.enum';
-import { ProjectStatus, ProjectBucket } from '../enums/project.enum';
+import { Start, TaskStatus } from '../enums/task.enum';
+import { ProjectStatus } from '../enums/project.enum';
 
 export type FeedItemType = 'task' | 'project';
 
@@ -22,7 +22,7 @@ export interface FeedItemBase {
   title: string;
   notes: string | null;
   scheduledDate: string | null;
-  scheduledType: ScheduledType;
+  start: Start;
   /** 提醒时刻（Reminder，HH:mm）；project 恒为 null（Project 不设 Reminder）。 */
   reminderTime: string | null;
   /** 重复规则（Repeat Rule，Task 与 Project 皆可设）。 */
@@ -31,7 +31,6 @@ export interface FeedItemBase {
   repeatSourceId: string | null;
   dueDate: string | null;
   status: TaskStatus | ProjectStatus;
-  bucket: TaskBucket | ProjectBucket;
   /** 了结时间（Settled At，ADR 0006）：task 的 COMPLETED/CANCELLED 与 project 的 COMPLETED 共用此字段；名称保留 completedAt 以兼容前端。 */
   completedAt: string | null;
   trashedAt: string | null;

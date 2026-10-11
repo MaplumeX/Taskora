@@ -5,7 +5,7 @@
  * 1. 设备 push 全字段 create（含 tagIds）曾在 hub 被 Prisma 拒掉——
  *    create 路径的 tagIds 物化携带 deleteMany，触发 checked 输入校验；
  * 2. 后续部分字段 update 落在不存在的行为上、被当成 create 建行，
- *    缺失字段吃 Prisma 默认值（bucket=INBOX、scheduledType=NONE）；
+ *    缺失字段吃 Prisma 默认值（bucket=INBOX、scheduledType=NONE，现为 start=INBOX）；
  * 3. 该默认值行以晚于设备原始写的基线时钟广播回设备，把 Today
  *    合并态改写成 Inbox。
  *
@@ -65,8 +65,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
       reminderTime: null,
       repeatRule: null,
       repeatSourceId: null,
-      bucket: 'SCHEDULED',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       status: 'ACTIVE',
       settledAt: null,
       trashedAt: null,
@@ -111,8 +110,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
 
     const row = await testPrisma.task.findUnique({ where: { id: 'task-today-1' } });
     expect(row).not.toBeNull();
-    expect(row!.bucket).toBe('SCHEDULED');
-    expect(row!.scheduledType).toBe('DATE');
+    expect(row!.start).toBe('ANYTIME');
     expect(row!.scheduledDate).not.toBeNull();
   });
 
@@ -139,8 +137,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     const row = await testPrisma.task.findUnique({ where: { id: 'task-today-2' } });
     expect(row).toMatchObject({
       title: '今天要做的任务',
-      bucket: 'SCHEDULED',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
     });
 
     // 3. 设备 pull 增量并合并（模拟 LocalReplica.applyRemoteEntity）
@@ -178,10 +175,8 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     // 同步后设备合并态：仍在 Today，绝不落 Inbox
     const f = deviceState!.fields;
     expect(f.title).toBe('今天要做的任务');
-    expect(f.scheduledType).toBe('DATE');
     expect(f.scheduledDate).toBeTruthy();
-    expect(f.bucket).toBe('SCHEDULED');
-    expect(f.bucket).not.toBe('INBOX');
+    expect(f.start).toBe('ANYTIME');
   });
 
   it('带 tagIds 的 create：关系物化为纯 create 且标签落库', async () => {
@@ -389,7 +384,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     });
     await device.sync();
 
-    const base = { bucket: 'INBOX', status: 'ACTIVE', scheduledType: 'NONE' };
+    const base = { start: 'INBOX', status: 'ACTIVE' };
     const early = await device.create('task', { title: '早建的任务', ...base });
     for (let index = 0; index < 600; index += 1) {
       await device.create('task', { title: `填充 ${index}`, ...base });
@@ -418,7 +413,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     const a = await open('dev-a');
     const b = await open('dev-b');
 
-    const taskId = await a.create('task', { title: '带附件', bucket: 'INBOX', status: 'ACTIVE' });
+    const taskId = await a.create('task', { title: '带附件', start: 'INBOX', status: 'ACTIVE' });
     const attachmentId = await a.create('attachment', {
       taskId,
       name: '合同.pdf',
@@ -523,9 +518,8 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     await b.sync();
     const id = await a.create('task', {
       title: 't',
-      bucket: 'INBOX',
+      start: 'INBOX',
       status: 'ACTIVE',
-      scheduledType: 'NONE',
     });
     await a.sync();
 
@@ -574,22 +568,20 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
       clock: new HybridClock('dev-b', () => Date.now() + 60_000),
     });
     await a.sync();
-    const p1 = await a.create('project', { title: 'P1', status: 'ACTIVE', bucket: 'ANYTIME' });
-    const p2 = await a.create('project', { title: 'P2', status: 'ACTIVE', bucket: 'ANYTIME' });
+    const p1 = await a.create('project', { title: 'P1', status: 'ACTIVE', start: 'ANYTIME' });
+    const p2 = await a.create('project', { title: 'P2', status: 'ACTIVE', start: 'ANYTIME' });
     const h1 = await a.create('project-heading', { title: 'H1', projectId: p1, status: 'ACTIVE' });
     const moved = await a.create('task', {
       title: 'moved',
       status: 'ACTIVE',
-      scheduledType: 'NONE',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       projectId: p1,
     });
     const someday = await a.create('task', {
       title: 'someday',
       status: 'ACTIVE',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-10-01',
-      bucket: 'SCHEDULED',
     });
     await a.sync();
     await b.sync();
@@ -597,7 +589,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     // 各自离线编辑（本地写，暂不推送）
     await a.update('task', moved, { projectId: p2, headingId: null });
     await a.update('task', someday, {
-      scheduledType: 'SOMEDAY',
+      start: 'SOMEDAY',
       scheduledDate: null,
       reminderTime: null,
       repeatRule: null,
@@ -614,7 +606,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
       expect(task.projectId).toBe(p2);
       expect(task.headingId).toBeNull();
       const other = (await device.get('task', someday))!.fields;
-      expect(other.scheduledType).toBe('SOMEDAY');
+      expect(other.start).toBe('SOMEDAY');
       expect(other.reminderTime).toBeNull();
     }
     const rows = await testPrisma.task.findMany({ where: { id: { in: [moved, someday] } } });
@@ -648,7 +640,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
     const baseline = formatHlc({ wallMs: updatedAt.getTime(), counter: 0, deviceId: '0' });
     expect(clocks.title).toBe(baseline);
     expect(clocks.notes).toBe(deviceStamp);
-    expect(clocks.bucket).toBe(baseline);
+    expect(clocks.start).toBe(baseline);
     expect(row.fieldDigests).toBeNull();
     expect(row.updatedAt).toEqual(updatedAt);
     expect(await buffer.currentSeq(USER)).toBe(seqBefore);

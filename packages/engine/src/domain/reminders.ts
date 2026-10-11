@@ -8,7 +8,7 @@
  *
  * 清理规则在本层的体现（数据层兜底见 task-backend）：
  * - 了结（COMPLETED/CANCELLED）或 Trash → 不产出（不会注册，已有注册被 cancel）；
- * - ScheduledType 离开 DATE → 不产出；
+ * - 计划日期被清除（Someday / Clear / 移入 Inbox）→ 不产出；
  * - 计划日期变化 → key 不变、fireAt 跟随新日期（时刻保留）；
  * - 过去的提醒（含错过未发的）静默丢弃，绝不补发。
  */
@@ -18,7 +18,6 @@ import {
   calendarDateKey,
   calendarTimeInstant,
   instantWallTime,
-  ScheduledType,
   TaskStatus,
 } from '@taskora/shared';
 
@@ -26,7 +25,6 @@ import {
 export interface ReminderTaskInput {
   id: string;
   title: string;
-  scheduledType: ScheduledType;
   scheduledDate: string | null;
   reminderTime: string | null;
   status: TaskStatus;
@@ -58,13 +56,12 @@ export function reminderNotificationKey(taskId: string): string {
 }
 
 /**
- * 任务是否仍符合提醒的数据条件（DATE 型、有计划日、合法 HH:mm、
+ * 任务是否仍符合提醒的数据条件（有计划日、合法 HH:mm、
  * 未了结未进 Trash）。不含时间判断——协调器用它区分「到点注销」与
  * 「数据变更注销」（后者绝不补发）。
  */
 export function isReminderEligible(task: ReminderTaskInput): boolean {
   return (
-    task.scheduledType === ScheduledType.DATE &&
     task.status === TaskStatus.ACTIVE &&
     task.trashedAt == null &&
     task.scheduledDate != null &&
@@ -76,7 +73,7 @@ export function isReminderEligible(task: ReminderTaskInput): boolean {
 /**
  * 计算期望的通知集合。
  *
- * 规则：仅 ScheduledType 为 DATE、有计划日期、有合法 HH:mm 提醒、且
+ * 规则：仅有计划日期、有合法 HH:mm 提醒、且
  * 未了结未进 Trash 的任务产出；fireAt = 计划日当天 + 提醒时刻（账号
  * 时区），fireAt <= now 的（已错过）静默丢弃——错过的提醒不补发。
  */

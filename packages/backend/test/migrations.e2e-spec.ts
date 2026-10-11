@@ -407,6 +407,202 @@ dbDescribe('historical Position migration (real PostgreSQL + Prisma CLI)', () =>
     }
   }, 60_000);
 
+  it('start model: hub migration and Local Replica 14 -> 15 convert bucket / scheduledType identically', async () => {
+    const s = await sandbox();
+    await s.copyThrough('20261010120000_calendar_subscriptions');
+    await runPrismaMigrate(['deploy'], s.options);
+    const early = '1800000000000:0:a';
+    const late = '1800000005000:0:a';
+    await s.client.query(
+      `INSERT INTO "User" (id, email, "passwordHash", "updatedAt")
+       VALUES ('start-user', 'start@example.test', 'x', TIMESTAMP '2026-10-01 00:00:00')`,
+    );
+    await s.client.query(
+      `INSERT INTO "Area" (id, title, "userId", "updatedAt") VALUES ('a1', 'A', 'start-user', TIMESTAMP '2026-10-01 00:00:00')`,
+    );
+    const projects = [
+      { id: 'p-anytime', type: 'NONE', bucket: 'ANYTIME', date: null, clocks: null },
+      {
+        id: 'p-dated',
+        type: 'DATE',
+        bucket: 'SCHEDULED',
+        date: '2026-10-20',
+        clocks: { scheduledType: late, bucket: early },
+      },
+      { id: 'p-someday', type: 'SOMEDAY', bucket: 'SCHEDULED', date: null, clocks: {} },
+    ];
+    const tasks = [
+      {
+        id: 't-inbox',
+        type: 'NONE',
+        bucket: 'INBOX',
+        date: null,
+        projectId: null,
+        areaId: null,
+        clocks: { scheduledType: early, bucket: late, title: early },
+      },
+      {
+        id: 't-loose',
+        type: 'NONE',
+        bucket: 'ANYTIME',
+        date: null,
+        projectId: null,
+        areaId: null,
+        clocks: { bucket: early },
+      },
+      {
+        id: 't-owned-inbox',
+        type: 'NONE',
+        bucket: 'INBOX',
+        date: null,
+        projectId: null,
+        areaId: 'a1',
+        clocks: null,
+      },
+      {
+        id: 't-dated',
+        type: 'DATE',
+        bucket: 'SCHEDULED',
+        date: '2026-10-12',
+        projectId: 'p-anytime',
+        areaId: null,
+        clocks: { scheduledType: late },
+      },
+      {
+        id: 't-someday-stale-date',
+        type: 'SOMEDAY',
+        bucket: 'SCHEDULED',
+        date: '2026-10-12',
+        projectId: null,
+        areaId: null,
+        clocks: { scheduledDate: early },
+      },
+    ];
+    for (const project of projects) {
+      await s.client.query(
+        `INSERT INTO "Project" (id, title, "userId", "scheduledType", bucket, "scheduledDate", "updatedAt", "fieldClocks")
+         VALUES ($1, $1, 'start-user', $2, $3, $4, TIMESTAMP '2026-10-01 00:00:00', $5)`,
+        [
+          project.id,
+          project.type,
+          project.bucket,
+          project.date,
+          project.clocks && JSON.stringify(project.clocks),
+        ],
+      );
+    }
+    for (const task of tasks) {
+      await s.client.query(
+        `INSERT INTO "Task" (id, title, "userId", "scheduledType", bucket, "scheduledDate", "projectId", "areaId", "updatedAt", "fieldClocks")
+         VALUES ($1, $1, 'start-user', $2, $3, $4, $5, $6, TIMESTAMP '2026-10-01 00:00:00', $7)`,
+        [
+          task.id,
+          task.type,
+          task.bucket,
+          task.date,
+          task.projectId,
+          task.areaId,
+          task.clocks && JSON.stringify(task.clocks),
+        ],
+      );
+    }
+
+    // 同一份数据在版本 14 的副本里（hub 下发的 wire 视图：日期为日期键、时钟为空对象而非 null）
+    const storage = await createNodeSqliteStorage(':memory:');
+    try {
+      for (const statement of schemaDdl()) await storage.exec(statement);
+      for (const table of ['task', 'project']) {
+        await storage.exec(`ALTER TABLE ${table} DROP COLUMN start`);
+        await storage.exec(`ALTER TABLE ${table} ADD COLUMN bucket TEXT`);
+        await storage.exec(`ALTER TABLE ${table} ADD COLUMN scheduledType TEXT`);
+      }
+      for (const project of projects) {
+        await storage.run(
+          'INSERT INTO project (id, title, scheduledType, bucket, scheduledDate, clocks) VALUES (?, ?, ?, ?, ?, ?)',
+          [
+            project.id,
+            project.id,
+            project.type,
+            project.bucket,
+            project.date,
+            JSON.stringify(project.clocks ?? {}),
+          ],
+        );
+      }
+      for (const task of tasks) {
+        await storage.run(
+          'INSERT INTO task (id, title, scheduledType, bucket, scheduledDate, projectId, areaId, clocks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+          [
+            task.id,
+            task.id,
+            task.type,
+            task.bucket,
+            task.date,
+            task.projectId,
+            task.areaId,
+            JSON.stringify(task.clocks ?? {}),
+          ],
+        );
+      }
+      await storage.exec('PRAGMA user_version = 14');
+      await migrateReplica(storage);
+
+      await s.copyThrough('99999999999999');
+      await deployDatabase(s.options);
+
+      for (const [table, local] of [
+        ['Task', 'task'],
+        ['Project', 'project'],
+      ] as const) {
+        const hubRows = (
+          await s.client.query<{
+            id: string;
+            start: string;
+            scheduledDate: string | null;
+            fieldClocks: Record<string, string> | null;
+          }>(
+            `SELECT id, start::text AS start, to_char("scheduledDate", 'YYYY-MM-DD') AS "scheduledDate", "fieldClocks" FROM ${quote(table)} ORDER BY id`,
+          )
+        ).rows;
+        const replicaRows = await storage.all<{
+          id: string;
+          start: string;
+          scheduledDate: string | null;
+          clocks: string;
+        }>(`SELECT id, start, scheduledDate, clocks FROM ${local} ORDER BY id`);
+        expect(replicaRows.map((row) => ({ ...row, clocks: JSON.parse(row.clocks) }))).toEqual(
+          hubRows.map(({ fieldClocks, ...row }) => ({ ...row, clocks: fieldClocks ?? {} })),
+        );
+      }
+      const hubTasks = (
+        await s.client.query<{ id: string; start: string; scheduledDate: Date | null }>(
+          'SELECT id, start::text AS start, "scheduledDate" FROM "Task" ORDER BY id',
+        )
+      ).rows;
+      expect(hubTasks.map((row) => [row.id, row.start, row.scheduledDate !== null])).toEqual([
+        ['t-dated', 'ANYTIME', true],
+        ['t-inbox', 'INBOX', false],
+        ['t-loose', 'ANYTIME', false],
+        ['t-owned-inbox', 'ANYTIME', false],
+        ['t-someday-stale-date', 'SOMEDAY', false],
+      ]);
+      expect(
+        (await s.client.query(`SELECT "fieldClocks" FROM "Task" WHERE id = 't-inbox'`)).rows[0]
+          .fieldClocks,
+      ).toEqual({ start: late, title: early });
+      expect(
+        (
+          await s.client.query(
+            `SELECT column_name FROM information_schema.columns WHERE table_schema = $1 AND column_name IN ('bucket', 'scheduledType')`,
+            [s.schema],
+          )
+        ).rows,
+      ).toHaveLength(0);
+    } finally {
+      await storage.close();
+    }
+  }, 60_000);
+
   it('fresh installation and two simultaneous bootstraps both succeed', async () => {
     const s = await sandbox();
     await s.copyThrough(CONTRACT);

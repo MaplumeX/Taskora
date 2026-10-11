@@ -32,8 +32,17 @@ import type { SyncEntity } from './entities';
  *    与 tagGroupId，这些写会被永久拒在 Outbox 里。
  * 6：新实体 attachment（Task 附件，ADR-0019）与 Blob 通道。最低协议不变：
  *    旧客户端跳过 attachment 变更，升级后迁移触发一次 bootstrap 取回。
+ * 7：Task / Project 的 bucket 与 scheduledType 合并为 start（ADR 0024）。
+ *    hub 最低协议同步升到 7：协议 6 的客户端还会写 bucket 与
+ *    scheduledType，这些写会被永久拒在 Outbox 里。
  */
-export const SYNC_PROTOCOL_VERSION = 6;
+export const SYNC_PROTOCOL_VERSION = 7;
+
+/**
+ * hub 完成 bucket / scheduledType → start 迁移的协议版本：副本迁移后第一次
+ * 连上这样的 hub 时走一次 bootstrap（见 LocalReplica.consumeResync）。
+ */
+export const START_MODEL_PROTOCOL = 7;
 
 /**
  * hub 认识 attachment 的协议版本：副本迁移后第一次连上这样的 hub 时走

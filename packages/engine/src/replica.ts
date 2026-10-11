@@ -265,7 +265,8 @@ export class LocalReplica {
    * 副本迁移之后的一次性 bootstrap：迁移留下的标记（key）存在时清除它并
    * 把游标归零，随后的 pull 走 bootstrap。只在 hub 已实现对应协议时调用——
    * 嵌套 Tag（10 → 11）要协议 5，旧 hub 的快照还是 tag-group；Attachment
-   * （11 → 12）要协议 6，旧 hub 没有附件可取。返回是否需要重取。
+   * （11 → 12）要协议 6，旧 hub 没有附件可取；Start（14 → 15）要协议 7，
+   * 旧 hub 的快照还是 bucket / scheduledType。返回是否需要重取。
    */
   async consumeResync(key: string): Promise<boolean> {
     return this.serialized(async () => {

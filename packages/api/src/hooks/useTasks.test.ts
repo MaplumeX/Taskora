@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { type ReactNode, createElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 import type {
   FeedItem,
   ProjectFeedItem,
@@ -68,12 +68,11 @@ const baseTask: TaskResponseDto = {
   title: 'My Task',
   notes: null,
   scheduledDate: null,
-  scheduledType: ScheduledType.NONE,
+  start: Start.INBOX,
   reminderTime: null,
-    repeatRule: null,
-    repeatSourceId: null,
+  repeatRule: null,
+  repeatSourceId: null,
   dueDate: null,
-  bucket: TaskBucket.INBOX,
   status: TaskStatus.ACTIVE,
   completedAt: null,
   trashedAt: null,

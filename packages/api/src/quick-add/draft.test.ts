@@ -7,7 +7,7 @@ import type {
   TagResponseDto,
   TaskResponseDto,
 } from '@taskora/shared';
-import { ProjectStatus, ScheduledType } from '@taskora/shared';
+import { ProjectStatus, Start } from '@taskora/shared';
 
 import {
   createFromQuickAddDraft,
@@ -134,7 +134,6 @@ describe('createFromQuickAddDraft', () => {
       {
         title: '量尺寸',
         notes: '客厅',
-        scheduledType: ScheduledType.DATE,
         scheduledDate: '2026-10-03',
         dueDate: '2026-10-10',
         projectId: 'p1',
@@ -151,7 +150,7 @@ describe('createFromQuickAddDraft', () => {
       { title: '学吉他', when: { type: 'someday' }, reminderTime: '09:00' },
       deps,
     );
-    expect(created[0]).toEqual({ title: '学吉他', scheduledType: ScheduledType.SOMEDAY });
+    expect(created[0]).toEqual({ title: '学吉他', start: Start.SOMEDAY });
     expect(deps.updateTask).not.toHaveBeenCalled();
   });
 

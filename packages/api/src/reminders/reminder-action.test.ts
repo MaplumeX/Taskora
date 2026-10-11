@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ScheduledType, TaskStatus } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 
 import { resolveReminderAction, type ReminderActionRequest } from './reminder-action';
 import { reminderFireAt, snoozeTomorrowAt, type ReminderTaskInput } from '@taskora/engine';
@@ -12,7 +12,6 @@ function task(partial: Partial<ReminderTaskInput> = {}): ReminderTaskInput {
   return {
     id: 't1',
     title: '任务',
-    scheduledType: ScheduledType.DATE,
     scheduledDate: '2026-02-05',
     reminderTime: '09:00',
     status: TaskStatus.ACTIVE,
@@ -119,7 +118,7 @@ describe('resolveReminderAction — 过期校验（迟到的操作不覆盖别�
     ['已完成', { status: TaskStatus.COMPLETED }],
     ['已取消', { status: TaskStatus.CANCELLED }],
     ['已进 Trash', { trashedAt: '2026-02-05T00:30:00.000Z' }],
-    ['移入 Someday', { scheduledType: ScheduledType.SOMEDAY, scheduledDate: null }],
+    ['移入 Someday', { start: Start.SOMEDAY, scheduledDate: null }],
     ['关掉提醒', { reminderTime: null }],
   ] as const)('%s → 丢弃', (_label, change) => {
     const snapshot = request(task(), 'snooze15', tapped, SHANGHAI);

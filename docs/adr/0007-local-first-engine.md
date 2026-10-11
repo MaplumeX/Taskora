@@ -32,7 +32,7 @@ Key decisions, in the order they matter:
 - **Cross-field invariants are repaired after every hub merge** (amended
   2026-09-29). Field-level LWW can combine two valid edits into an invalid
   entity (a heading from another project, a Someday task with a reminder, a
-  DATE task in the Anytime bucket). After merging and reference scrubbing,
+  dated task still in the Inbox; field names per ADR 0024). After merging and reference scrubbing,
   both hubs run the pure `repairEntity` (same rules as the REST services)
   and write its corrections with a winning virtual-device-0 clock, exactly
   like reference scrubbing, so every device converges on the repaired
@@ -150,17 +150,17 @@ Key decisions, in the order they matter:
     incompatibly; new request body fields are only sent once the hub's
     reported `protocolVersion` says it understands them. Raise the hub's
     minimum only when old clients would do harm, never just to force updates.
-  See `.scratch/local-first-v3/issues/03`.
+    See `.scratch/local-first-v3/issues/03`.
 - **The replica is bounded; bootstrap is paged** (amended 2026-09-30).
   The Local Replica no longer mirrors every settled task: tasks settled
   before a cutoff (default 365 days, `archiveAfterDays`), not in Trash and
-  not in an active project are *archived* — left out of the snapshot,
+  not in an active project are _archived_ — left out of the snapshot,
   pruned locally by `Engine.maintain` (local delete only: no Outbox entry, no
   compact registration), and read page by page from the hub when the Logbook
   is scrolled to the end (read-only). The rule lives once in
   `engine/src/archive.ts`. An archived task changed on the hub comes back
   through the log; the device then fetches its Subtasks (`POST
-  /sync/entities`). Protocol 2 pages `GET /sync/bootstrap` (stateless
+/sync/entities`). Protocol 2 pages `GET /sync/bootstrap` (stateless
   base64url token carrying the cursor fence and cutoff; older clients still
   get one response). A new device merges pages straight into the replica so
   the first page renders; an existing replica stages pages and swaps them in

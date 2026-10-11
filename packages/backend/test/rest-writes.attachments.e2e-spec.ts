@@ -106,9 +106,8 @@ dbDescribe('AttachmentsService 写路径（真实 Postgres）', () => {
         id: 'task-1',
         userId: USER,
         title: '月报',
-        scheduledType: 'DATE',
+        start: 'ANYTIME',
         scheduledDate: new Date('2026-02-05T00:00:00Z'),
-        bucket: 'SCHEDULED',
         repeatRule: JSON.stringify({ unit: 'day', interval: 1, anchor: 'scheduled' }),
       },
     });
@@ -131,14 +130,13 @@ dbDescribe('AttachmentsService 写路径（真实 Postgres）', () => {
         id: 'p-1',
         userId: USER,
         title: '周报',
-        scheduledType: 'DATE',
+        start: 'ANYTIME',
         scheduledDate: new Date('2026-02-05T00:00:00Z'),
-        bucket: 'SCHEDULED',
         repeatRule: JSON.stringify({ unit: 'week', interval: 1, anchor: 'scheduled' }),
       },
     });
     await testPrisma.task.create({
-      data: { id: 'pt-1', userId: USER, title: '汇总', projectId: 'p-1', bucket: 'ANYTIME' },
+      data: { id: 'pt-1', userId: USER, title: '汇总', projectId: 'p-1', start: 'ANYTIME' },
     });
     await h.attachments.create(USER, 'pt-1', file('数据.xlsx'));
     await h.projects.complete(USER, 'p-1');

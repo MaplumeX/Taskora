@@ -12,8 +12,7 @@ const baseRow = {
   notes: '旧备注',
   scheduledDate: null,
   dueDate: null,
-  bucket: 'INBOX',
-  scheduledType: 'NONE',
+  start: 'INBOX',
   status: 'ACTIVE',
   settledAt: null,
   trashedAt: null,
@@ -119,8 +118,8 @@ describe('toPrismaData', () => {
   it('不可空列的 null 被剔除（交给 Prisma 列默认值）', () => {
     // 回归：不可空列的 null 透传曾让 unchecked create 校验失败，错误
     // 被报成 checked 变体的「Argument user is missing」。
-    const data = toPrismaData(codec, { bucket: null, notes: null }, ['bucket', 'notes']);
-    expect(data).not.toHaveProperty('bucket');
+    const data = toPrismaData(codec, { start: null, notes: null }, ['start', 'notes']);
+    expect(data).not.toHaveProperty('start');
     expect(data.notes).toBeNull(); // 可空列的 null 照透传
   });
 
@@ -130,11 +129,11 @@ describe('toPrismaData', () => {
       {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         status: 'BOGUS' as any,
-        bucket: 'ANYTIME',
+        start: 'ANYTIME',
       },
-      ['status', 'bucket'],
+      ['status', 'start'],
     );
     expect(data).not.toHaveProperty('status');
-    expect(data.bucket).toBe('ANYTIME');
+    expect(data.start).toBe('ANYTIME');
   });
 });

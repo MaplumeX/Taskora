@@ -27,6 +27,7 @@ import {
   COMPACT_REGISTRY_RETENTION_DAYS,
   ATTACHMENT_PROTOCOL,
   NUMERIC_HLC_PROTOCOL,
+  START_MODEL_PROTOCOL,
   TAG_TREE_PROTOCOL,
   SYNC_PROTOCOL_VERSION,
   SyncUpgradeRequiredError,
@@ -35,7 +36,11 @@ import {
   type OutboxEvent,
   type SyncTransport,
 } from './protocol';
-import { ATTACHMENT_RESYNC_META_KEY, TAG_TREE_RESYNC_META_KEY } from './migrations';
+import {
+  ATTACHMENT_RESYNC_META_KEY,
+  START_MODEL_RESYNC_META_KEY,
+  TAG_TREE_RESYNC_META_KEY,
+} from './migrations';
 import type { SqlStorage } from './storage';
 import { watchQuery, type LiveQuery, type QueryObserver, type QueryWatch } from './live-query';
 
@@ -387,7 +392,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
         await flush();
         await applyPull();
       }
-      // 副本迁移后的一次性重取（见 consumeResync）：嵌套 Tag、Attachment
+      // 副本迁移后的一次性重取（见 consumeResync）：嵌套 Tag、Attachment、Start
       if (
         hubProtocol >= TAG_TREE_PROTOCOL &&
         (await replica.consumeResync(TAG_TREE_RESYNC_META_KEY))
@@ -397,6 +402,12 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
       if (
         hubProtocol >= ATTACHMENT_PROTOCOL &&
         (await replica.consumeResync(ATTACHMENT_RESYNC_META_KEY))
+      ) {
+        await applyPull();
+      }
+      if (
+        hubProtocol >= START_MODEL_PROTOCOL &&
+        (await replica.consumeResync(START_MODEL_RESYNC_META_KEY))
       ) {
         await applyPull();
       }

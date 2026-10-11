@@ -7,18 +7,9 @@ import type {
   ProjectResponseDto,
   TaskFeedItem,
 } from '@taskora/shared';
-import {
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
-  TaskBucket,
-  TaskStatus,
-} from '@taskora/shared';
+import { ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 
-import {
-  deriveGroupedFeedLayout,
-  type GroupedFeedLayout,
-} from './groupedFeedLayout';
+import { deriveGroupedFeedLayout, type GroupedFeedLayout } from './groupedFeedLayout';
 
 /** 紧凑的块序列摘要，便于断言「渲染块顺序」这一外部行为。 */
 function blockSummary(layout: GroupedFeedLayout): string[] {
@@ -46,13 +37,12 @@ function taskItem(
     title: id,
     notes: null,
     scheduledDate: null,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
     status: TaskStatus.ACTIVE,
-    bucket: TaskBucket.ANYTIME,
     completedAt: null,
     trashedAt: null,
     createdAt: '2026-07-31T00:00:00.000Z',
@@ -71,13 +61,12 @@ function projectItem(id: string, opts: { areaId?: string | null } = {}): Project
     title: id,
     notes: null,
     scheduledDate: '2026-08-01T00:00:00.000Z',
-    scheduledType: ScheduledType.DATE,
+    start: Start.ANYTIME,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.SCHEDULED,
     completedAt: null,
     trashedAt: null,
     createdAt: '2026-07-31T00:00:00.000Z',
@@ -103,8 +92,7 @@ function project(
     notes: null,
     areaId: opts.areaId ?? null,
     status: opts.status ?? ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     dueDate: null,
     completedAt: null,
@@ -347,19 +335,17 @@ describe('grouped feed layout — group visibility（组头可见性）', () => 
 
 describe('grouped feed layout — standalone project row fallback（独立项目行回退）', () => {
   it('keeps a date-matching project with zero visible tasks as a standalone row in merged feed order', () => {
-    const layout = derive(
-      [taskItem('loose-1'), projectItem('p-due'), taskItem('loose-2')],
-      { projects: [project('p-due')] },
-    );
+    const layout = derive([taskItem('loose-1'), projectItem('p-due'), taskItem('loose-2')], {
+      projects: [project('p-due')],
+    });
 
     expect(blockSummary(layout)).toEqual(['task:loose-1', 'projectRow:p-due', 'task:loose-2']);
   });
 
   it('absorbs the project feed row into the group header when the project has visible tasks', () => {
-    const layout = derive(
-      [projectItem('p1'), taskItem('in-p1', { projectId: 'p1' })],
-      { projects: [project('p1')] },
-    );
+    const layout = derive([projectItem('p1'), taskItem('in-p1', { projectId: 'p1' })], {
+      projects: [project('p1')],
+    });
 
     // 不出现独立项目行；组头按侧边栏位次出现（项目行被组头取代）。
     expect(blockSummary(layout)).toEqual(['projectHeader:p1', 'task:in-p1']);
@@ -387,28 +373,20 @@ describe('grouped feed layout — orphan tasks（孤儿任务）', () => {
   it('renders tasks of a settled in-area project as ungrouped (no area fall-through)', () => {
     // spec Rule 5：父项目已了结/已丢弃的任务是孤儿，浮于未分组区，
     // 不因任务自身的 areaId 落进 Area 组（行上保留项目标题标签）。
-    const layout = derive(
-      [taskItem('orphan', { projectId: 'p-done', areaId: 'a1' })],
-      {
-        projects: [project('p-done', { areaId: 'a1', status: ProjectStatus.COMPLETED })],
-        areas: [area('a1')],
-      },
-    );
+    const layout = derive([taskItem('orphan', { projectId: 'p-done', areaId: 'a1' })], {
+      projects: [project('p-done', { areaId: 'a1', status: ProjectStatus.COMPLETED })],
+      areas: [area('a1')],
+    });
 
     expect(blockSummary(layout)).toEqual(['task:orphan']);
     expect(layout.blocks[0]).toMatchObject({ groupHeaderId: null });
   });
 
   it('renders tasks of a trashed in-area project as ungrouped (no area fall-through)', () => {
-    const layout = derive(
-      [taskItem('orphan', { projectId: 'p-trashed', areaId: 'a1' })],
-      {
-        projects: [
-          project('p-trashed', { areaId: 'a1', trashedAt: '2026-08-01T00:00:00.000Z' }),
-        ],
-        areas: [area('a1')],
-      },
-    );
+    const layout = derive([taskItem('orphan', { projectId: 'p-trashed', areaId: 'a1' })], {
+      projects: [project('p-trashed', { areaId: 'a1', trashedAt: '2026-08-01T00:00:00.000Z' })],
+      areas: [area('a1')],
+    });
 
     expect(blockSummary(layout)).toEqual(['task:orphan']);
   });

@@ -27,12 +27,7 @@ vi.mock('@dnd-kit/core', async (importOriginal) => {
   };
 });
 
-import {
-  AppDndProvider,
-  useDndSurface,
-  useSidebarDropArea,
-  type DndSurface,
-} from './appDnd';
+import { AppDndProvider, useDndSurface, useSidebarDropArea, type DndSurface } from './appDnd';
 
 function rect(left: number, top: number, width: number, height: number) {
   return {
@@ -102,8 +97,7 @@ function collide(activeId: string, pointer: { x: number; y: number }, containers
 function taskSurface(overrides: Partial<DndSurface> = {}): DndSurface {
   return {
     owns: (id) => id.startsWith('task:'),
-    collisionDetection: ({ droppableContainers }) =>
-      droppableContainers.map(({ id }) => ({ id })),
+    collisionDetection: ({ droppableContainers }) => droppableContainers.map(({ id }) => ({ id })),
     sidebarPayload: (id) => ({
       kind: 'tasks',
       tasks: [
@@ -111,8 +105,7 @@ function taskSurface(overrides: Partial<DndSurface> = {}): DndSurface {
           id: id.slice('task:'.length),
           projectId: null,
           areaId: null,
-          bucket: 'ANYTIME',
-          scheduledType: 'NONE' as never,
+          start: 'ANYTIME' as never,
           scheduledDate: null,
           status: 'ACTIVE',
         },
@@ -167,7 +160,7 @@ describe('AppDndProvider — collision routing', () => {
             id: id.slice('project:'.length),
             areaId: null,
             status: 'ACTIVE',
-            scheduledType: 'NONE' as never,
+            start: 'ANYTIME' as never,
             scheduledDate: null,
           },
         }),
@@ -183,9 +176,7 @@ describe('AppDndProvider — collision routing', () => {
 
   it('a surface without a sidebar payload keeps its own collisions inside the sidebar', () => {
     const sidebarSort = container('proj:p1', rect(0, 300, 200, 28));
-    renderApp([
-      taskSurface({ owns: (id) => id.startsWith('proj:'), sidebarPayload: undefined }),
-    ]);
+    renderApp([taskSurface({ owns: (id) => id.startsWith('proj:'), sidebarPayload: undefined })]);
     expect(collide('proj:p2', { x: 50, y: 310 }, [sidebarSort, inbox])).toEqual([
       { id: 'proj:p1' },
     ]);
@@ -194,7 +185,10 @@ describe('AppDndProvider — collision routing', () => {
   it('touch drags never reach the sidebar', () => {
     renderApp([taskSurface()]);
     act(() =>
-      dnd().onDragStart({ active: { id: 'task:t1' }, activatorEvent: new TouchEvent('touchstart') }),
+      dnd().onDragStart({
+        active: { id: 'task:t1' },
+        activatorEvent: new TouchEvent('touchstart'),
+      }),
     );
     const listRow2 = container('task:t3', rect(0, 100, 200, 28));
     expect(collide('task:t1', { x: 50, y: 110 }, [inbox, listRow2])).toEqual([{ id: 'task:t3' }]);
@@ -274,7 +268,11 @@ describe('AppDndProvider — Magic Plus', () => {
 
     act(() => dnd().onDragStart({ active: { id: 'magic-plus' } }));
     act(() =>
-      dnd().onDragEnd({ active: { id: 'magic-plus' }, over: { id: 'feed:t1' }, delta: { x: -50, y: -300 } }),
+      dnd().onDragEnd({
+        active: { id: 'magic-plus' },
+        over: { id: 'feed:t1' },
+        delta: { x: -50, y: -300 },
+      }),
     );
 
     expect(list.onDragStart).toHaveBeenCalledTimes(1);
@@ -295,7 +293,11 @@ describe('AppDndProvider — Magic Plus', () => {
 
     act(() => dnd().onDragStart({ active: { id: 'magic-plus' } }));
     act(() =>
-      dnd().onDragEnd({ active: { id: 'magic-plus' }, over: { id: 'task:t1' }, delta: { x: 10, y: -20 } }),
+      dnd().onDragEnd({
+        active: { id: 'magic-plus' },
+        over: { id: 'task:t1' },
+        delta: { x: 10, y: -20 },
+      }),
     );
 
     expect(list.onDragCancel).toHaveBeenCalledTimes(1);
@@ -323,7 +325,9 @@ describe('AppDndProvider — Magic Plus Inbox target', () => {
     expect(collide('magic-plus', { x: 320, y: 720 }, [row, inboxTarget])).toEqual([
       { id: 'magic-plus-inbox' },
     ]);
-    expect(collide('magic-plus', { x: 320, y: 620 }, [row, inboxTarget])).toEqual([{ id: 'task:t1' }]);
+    expect(collide('magic-plus', { x: 320, y: 620 }, [row, inboxTarget])).toEqual([
+      { id: 'task:t1' },
+    ]);
     expect(collide('task:t1', { x: 320, y: 720 }, [row, inboxTarget])).toEqual([{ id: 'task:t1' }]);
   });
 

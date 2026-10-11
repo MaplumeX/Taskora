@@ -11,13 +11,7 @@ import {
   taskMatchesView,
   keepsSettledInViews,
 } from '@taskora/engine';
-import {
-  ScheduledType,
-  TaskStatus,
-  TaskBucket,
-  ProjectStatus,
-  ProjectBucket,
-} from '@taskora/shared';
+import { ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 import type {
   FeedItem,
   FeedOrderItem,
@@ -55,13 +49,12 @@ function toTaskFeedItem(t: TaskWithTags): TaskFeedItem {
     title: t.title,
     notes: t.notes,
     scheduledDate: t.scheduledDate ? t.scheduledDate.toISOString() : null,
-    scheduledType: t.scheduledType as ScheduledType,
+    start: t.start as Start,
     reminderTime: t.reminderTime,
     repeatRule: parseRepeatRule(t.repeatRule),
     repeatSourceId: t.repeatSourceId,
     dueDate: t.dueDate ? t.dueDate.toISOString() : null,
     status: t.status as TaskStatus,
-    bucket: t.bucket as TaskBucket,
     // DTO 字段名保持 completedAt，承载 Settled At 语义（ADR 0006）。
     completedAt: t.settledAt ? t.settledAt.toISOString() : null,
     trashedAt: t.trashedAt ? t.trashedAt.toISOString() : null,
@@ -246,13 +239,12 @@ export class FeedService {
         title: p.title,
         notes: p.notes,
         scheduledDate: p.scheduledDate ? p.scheduledDate.toISOString() : null,
-        scheduledType: p.scheduledType as ScheduledType,
+        start: p.start as Start,
         reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
         repeatRule: parseRepeatRule(p.repeatRule),
         repeatSourceId: p.repeatSourceId,
         dueDate: p.dueDate ? p.dueDate.toISOString() : null,
         status: p.status as ProjectStatus,
-        bucket: p.bucket as ProjectBucket,
         completedAt: p.completedAt ? p.completedAt.toISOString() : null,
         trashedAt: p.trashedAt ? p.trashedAt.toISOString() : null,
         position: p.position,

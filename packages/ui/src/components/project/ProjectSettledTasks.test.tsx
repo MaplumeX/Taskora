@@ -7,7 +7,7 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import { mockDesktop } from '@/test/media';
 
 import type { ProjectHeadingResponseDto, TaskResponseDto } from '@taskora/shared';
-import { HeadingStatus, ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { HeadingStatus, Start, TaskStatus } from '@taskora/shared';
 
 import { useProjectUiPrefsStore } from '@taskora/api';
 import { useUiInteractionStore } from '@taskora/api';
@@ -15,7 +15,7 @@ import { ProjectSettledTasks } from './ProjectSettledTasks';
 
 vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
-    useTasksQuery: (...args: unknown[]) => queryMocks.useTasksQuery(...args),
+  useTasksQuery: (...args: unknown[]) => queryMocks.useTasksQuery(...args),
   useUncompleteTask: () => queryMocks.useUncompleteTask(),
   useTaskQuery: () => ({ data: null }),
   useProjectQuery: () => ({ data: undefined }),
@@ -31,15 +31,15 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useConvertTaskToProject: () => ({ mutate: vi.fn(), isPending: false }),
   useReorderTasks: () => ({ mutate: vi.fn(), isPending: false }),
   taskKeys: { all: ['tasks'], detail: (id: string) => ['task', id] },
-    useProjectHeadingsQuery: (...args: unknown[]) => queryMocks.useProjectHeadingsQuery(...args),
+  useProjectHeadingsQuery: (...args: unknown[]) => queryMocks.useProjectHeadingsQuery(...args),
   useUpdateProjectHeading: () => queryMocks.useUpdateProjectHeading(),
   useDeleteProjectHeading: () => queryMocks.useDeleteProjectHeading(),
   useConvertProjectHeadingToProject: () => queryMocks.useConvertProjectHeadingToProject(),
   useArchiveProjectHeading: () => queryMocks.useArchiveProjectHeading(),
   useUnarchiveProjectHeading: () => queryMocks.useUnarchiveProjectHeading(),
-    useProjectsQuery: () => ({ data: [] }),
-    useAreasQuery: () => ({ data: [] }),
-    useTagsQuery: () => ({ data: [] }),
+  useProjectsQuery: () => ({ data: [] }),
+  useAreasQuery: () => ({ data: [] }),
+  useTagsQuery: () => ({ data: [] }),
 }));
 
 /* ------------- fixtures (hoisted so vi.mock can reference them) ------------- */
@@ -57,11 +57,6 @@ const queryMocks = vi.hoisted(() => ({
 
 /* ------------- mocks ------------- */
 
-
-
-
-
-
 // useTaskRowSelection delegates to the Zustand uiInteractionStore. We let it
 // run for real so that expanded-state selection logic is exercised — just
 // reset the store between tests.
@@ -74,12 +69,11 @@ function makeTask(overrides: Partial<TaskResponseDto> = {}): TaskResponseDto {
     title: 'Completed task',
     notes: null,
     scheduledDate: null,
-    scheduledType: ScheduledType.NONE,
+    start: Start.INBOX,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
-    bucket: TaskBucket.INBOX,
     status: TaskStatus.COMPLETED,
     completedAt: '2025-08-08T00:00:00.000Z',
     trashedAt: null,
@@ -105,7 +99,10 @@ function withQueryClient(ui: React.ReactElement) {
   );
 }
 
-function mockQuery(data: TaskResponseDto[], overrides: Partial<ReturnType<typeof queryMocks.useTasksQuery>> = {}) {
+function mockQuery(
+  data: TaskResponseDto[],
+  overrides: Partial<ReturnType<typeof queryMocks.useTasksQuery>> = {},
+) {
   queryMocks.useTasksQuery.mockReturnValue({
     data,
     isLoading: false,
@@ -131,7 +128,10 @@ function mockHeadings(headings: ProjectHeadingResponseDto[]) {
 function mockHeadingMutations() {
   queryMocks.useUpdateProjectHeading.mockReturnValue({ mutate: vi.fn(), isPending: false });
   queryMocks.useDeleteProjectHeading.mockReturnValue({ mutate: vi.fn(), isPending: false });
-  queryMocks.useConvertProjectHeadingToProject.mockReturnValue({ mutate: vi.fn(), isPending: false });
+  queryMocks.useConvertProjectHeadingToProject.mockReturnValue({
+    mutate: vi.fn(),
+    isPending: false,
+  });
   queryMocks.useArchiveProjectHeading.mockReturnValue({ mutate: vi.fn(), isPending: false });
   const unarchiveMutate = vi.fn();
   queryMocks.useUnarchiveProjectHeading.mockReturnValue({
@@ -141,7 +141,9 @@ function mockHeadingMutations() {
   return { unarchiveMutate };
 }
 
-function makeHeading(overrides: Partial<ProjectHeadingResponseDto> = {}): ProjectHeadingResponseDto {
+function makeHeading(
+  overrides: Partial<ProjectHeadingResponseDto> = {},
+): ProjectHeadingResponseDto {
   return {
     id: 'heading-1',
     projectId: 'project-1',
@@ -170,9 +172,7 @@ describe('ProjectSettledTasks', () => {
   it('renders nothing when there are no settled tasks', () => {
     mockQuery([]);
     mockUncomplete();
-    const { container } = withQueryClient(
-      <ProjectSettledTasks projectId="project-1" />,
-    );
+    const { container } = withQueryClient(<ProjectSettledTasks projectId="project-1" />);
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -252,18 +252,14 @@ describe('ProjectSettledTasks', () => {
   it('renders nothing while loading', () => {
     mockQuery([], { isLoading: true });
     mockUncomplete();
-    const { container } = withQueryClient(
-      <ProjectSettledTasks projectId="project-1" />,
-    );
+    const { container } = withQueryClient(<ProjectSettledTasks projectId="project-1" />);
     expect(container).toBeEmptyDOMElement();
   });
 
   it('renders nothing on error', () => {
     mockQuery([], { isError: true });
     mockUncomplete();
-    const { container } = withQueryClient(
-      <ProjectSettledTasks projectId="project-1" />,
-    );
+    const { container } = withQueryClient(<ProjectSettledTasks projectId="project-1" />);
     expect(container).toBeEmptyDOMElement();
   });
 
@@ -365,9 +361,7 @@ describe('ProjectSettledTasks', () => {
       'Flat old',
     ].map((text) => screen.getByText(text));
     for (let i = 1; i < order.length; i++) {
-      expect(order[i - 1].compareDocumentPosition(order[i])).toBe(
-        Node.DOCUMENT_POSITION_FOLLOWING,
-      );
+      expect(order[i - 1].compareDocumentPosition(order[i])).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
     }
   });
 
@@ -401,14 +395,10 @@ describe('ProjectSettledTasks', () => {
     await user.click(screen.getByRole('button', { expanded: false }));
 
     // open the archived heading's dropdown menu (now via ProjectHeadingRow)
-    await user.click(
-      screen.getByRole('button', { name: /Heading actions|项目分组标题操作/ }),
-    );
+    await user.click(screen.getByRole('button', { name: /Heading actions|项目分组标题操作/ }));
 
     // click unarchive menu item
-    await user.click(
-      await screen.findByRole('menuitem', { name: /Unarchive|取消归档/ }),
-    );
+    await user.click(await screen.findByRole('menuitem', { name: /Unarchive|取消归档/ }));
 
     expect(unarchiveMutate).toHaveBeenCalledWith(
       'h-1',
@@ -422,9 +412,7 @@ describe('ProjectSettledTasks', () => {
   it('renders nothing when there are no settled tasks and no archived headings', () => {
     mockQuery([]);
     mockUncomplete();
-    const { container } = withQueryClient(
-      <ProjectSettledTasks projectId="project-1" />,
-    );
+    const { container } = withQueryClient(<ProjectSettledTasks projectId="project-1" />);
     expect(container).toBeEmptyDOMElement();
   });
 

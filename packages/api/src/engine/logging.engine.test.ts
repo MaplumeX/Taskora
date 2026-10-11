@@ -8,7 +8,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { openEngine, type Engine } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
-import { ProjectStatus, ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 
 import { usePreferencesStore } from '@/stores/preferences.store';
 import { createEngineTaskBackend } from './task-backend.engine';
@@ -31,9 +31,8 @@ describe('移入时机 — 设备 Engine 后端', () => {
       title: 'Done project',
       status: ProjectStatus.COMPLETED,
       completedAt: SETTLED,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-10-10',
-      bucket: 'SCHEDULED',
       trashedAt: null,
       position: 'a0',
     });
@@ -41,8 +40,7 @@ describe('移入时机 — 设备 Engine 后端', () => {
       id: 'p-open',
       title: 'Open project',
       status: ProjectStatus.ACTIVE,
-      scheduledType: ScheduledType.NONE,
-      bucket: 'ANYTIME',
+      start: Start.ANYTIME,
       trashedAt: null,
       position: 'a1',
     });
@@ -51,9 +49,8 @@ describe('移入时机 — 设备 Engine 后端', () => {
       title: 'Done today',
       status: TaskStatus.COMPLETED,
       settledAt: SETTLED,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-10-10',
-      bucket: TaskBucket.SCHEDULED,
       projectId: 'p-open',
       trashedAt: null,
       position: 'a0',
@@ -62,9 +59,8 @@ describe('移入时机 — 设备 Engine 后端', () => {
       id: 't-open',
       title: 'Open',
       status: TaskStatus.ACTIVE,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-10-10',
-      bucket: TaskBucket.SCHEDULED,
       projectId: 'p-open',
       trashedAt: null,
       position: 'a1',

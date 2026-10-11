@@ -2,7 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ProjectResponseDto, TagResponseDto } from '@taskora/shared';
-import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
+import { ProjectStatus, Start } from '@taskora/shared';
 
 import { ProjectMetaRow } from './ProjectMetaRow';
 
@@ -52,8 +52,7 @@ const baseProject: ProjectResponseDto = {
   notes: null,
   areaId: null,
   status: ProjectStatus.ACTIVE,
-  bucket: ProjectBucket.ANYTIME,
-  scheduledType: ScheduledType.NONE,
+  start: Start.ANYTIME,
   scheduledDate: null,
   dueDate: null,
   completedAt: null,
@@ -73,7 +72,7 @@ describe('ProjectMetaRow', () => {
   it('renders scheduled and due badges when set, plus tag pills', () => {
     const project: ProjectResponseDto = {
       ...baseProject,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2999-01-02T00:00:00.000Z',
       dueDate: '2999-01-03T00:00:00.000Z',
     };
@@ -135,7 +134,9 @@ describe('ProjectMetaRow', () => {
   });
 
   it('hides the next review badge for projects that do not take part in review', () => {
-    render(<ProjectMetaRow project={{ ...baseProject, tags: [], status: ProjectStatus.COMPLETED }} />);
+    render(
+      <ProjectMetaRow project={{ ...baseProject, tags: [], status: ProjectStatus.COMPLETED }} />,
+    );
 
     expect(screen.queryAllByRole('button')).toHaveLength(0);
   });
@@ -161,7 +162,7 @@ describe('ProjectMetaRow', () => {
   it('does not mark an overdue scheduled date as deadline-red（When 永不逾期）', () => {
     const project: ProjectResponseDto = {
       ...baseProject,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2000-01-01T00:00:00.000Z',
     };
     const { container } = render(<ProjectMetaRow project={project} />);
@@ -185,7 +186,7 @@ describe('ProjectMetaRow', () => {
       <ProjectMetaRow
         project={{
           ...baseProject,
-          scheduledType: ScheduledType.DATE,
+          start: Start.ANYTIME,
           scheduledDate: '2999-01-02T00:00:00.000Z',
           dueDate: '2999-01-03T00:00:00.000Z',
         }}
@@ -229,7 +230,7 @@ describe('ProjectMetaRow', () => {
       <ProjectMetaRow
         project={{
           ...baseProject,
-          scheduledType: ScheduledType.DATE,
+          start: Start.ANYTIME,
           scheduledDate: '2000-01-01T00:00:00.000Z',
         }}
       />,
@@ -244,7 +245,7 @@ describe('ProjectMetaRow', () => {
       <ProjectMetaRow
         project={{
           ...baseProject,
-          scheduledType: ScheduledType.DATE,
+          start: Start.ANYTIME,
           scheduledDate: '2999-01-02T00:00:00.000Z',
           repeatRule: { unit: 'week', interval: 2, anchor: 'scheduled' },
         }}
@@ -259,7 +260,7 @@ describe('ProjectMetaRow', () => {
       <ProjectMetaRow
         project={{
           ...baseProject,
-          scheduledType: ScheduledType.DATE,
+          start: Start.ANYTIME,
           scheduledDate: '2999-01-02T00:00:00.000Z',
           repeatRule: { unit: 'week', interval: 1, weekdays: [3, 1], anchor: 'scheduled' },
         }}

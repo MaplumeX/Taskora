@@ -19,6 +19,7 @@
 
 import { ENTITIES, entityTableDdl, schemaDdl } from './entities';
 import { DEFAULT_TAG_COLOR } from './domain/tags';
+import type { FieldWrite } from './merger';
 import { synthPosition } from './position';
 import { inTransaction, type SqlStorage } from './storage';
 
@@ -40,6 +41,12 @@ export const TAG_TREE_RESYNC_META_KEY = 'tagTreeResync';
  * （_engine_meta 键）：旧版本跳过了 hub 下发的 attachment 变更。
  */
 export const ATTACHMENT_RESYNC_META_KEY = 'attachmentResync';
+
+/**
+ * 副本把 bucket / scheduledType 换成 start、等待在协议 7 的 hub 上做一次
+ * bootstrap（_engine_meta 键，ADR 0024）。
+ */
+export const START_MODEL_RESYNC_META_KEY = 'startModelResync';
 
 async function tableExists(storage: SqlStorage, table: string): Promise<boolean> {
   const rows = await storage.all<{ name: string }>(
@@ -217,6 +224,113 @@ async function addAttachments(storage: SqlStorage): Promise<void> {
   );
 }
 
+/** 两个 HLC 中较大者（规范形字符串按字典序比较，与 hub 迁移的 GREATEST 相同）。 */
+function laterClock(a: unknown, b: unknown): string | undefined {
+  const stamps = [a, b].filter((stamp): stamp is string => typeof stamp === 'string');
+  if (stamps.length === 0) return undefined;
+  return stamps.reduce((max, stamp) => (stamp > max ? stamp : max));
+}
+
+/**
+ * 旧计划类型 + bucket → start（ADR 0024）。规则与 hub 的 Prisma 迁移逐字
+ * 相同：SOMEDAY → SOMEDAY；DATE → ANYTIME；NONE 时只有无归属且 bucket
+ * 为 INBOX 的任务留在 INBOX，其余 ANYTIME。两者都缺（不完整的行）→ null。
+ */
+function legacyStart(
+  entity: 'task' | 'project',
+  scheduledType: unknown,
+  bucket: unknown,
+  owned: boolean,
+): string | null {
+  if (scheduledType == null && bucket == null) return null;
+  if (scheduledType === 'SOMEDAY') return 'SOMEDAY';
+  if (scheduledType === 'DATE') return 'ANYTIME';
+  return entity === 'task' && bucket === 'INBOX' && !owned ? 'INBOX' : 'ANYTIME';
+}
+
+/**
+ * 14 → 15：bucket / scheduledType 合并为 start（ADR 0024）。
+ * - 行：start 按 legacyStart 推导，时钟取两个旧时钟中较大者；计划类型
+ *   不是 DATE 的行清空计划日期（旧不变量下本就为空）。
+ * - Outbox：待推的写同样换算；只写了 bucket 或 scheduledType 之一时按
+ *   已有的那个推导，时钟取写里的较大者。
+ * 最后记下「需要一次 bootstrap」：设备先于 hub 升级时，期间旧 hub 下发的
+ * bucket / scheduledType 写被跳过，连上协议 7 的 hub 后整体重取一次收敛。
+ */
+async function mergeBucketIntoStart(storage: SqlStorage): Promise<void> {
+  for (const entity of ['task', 'project'] as const) {
+    await addColumnIfMissing(storage, entity, 'start', 'TEXT');
+    const columns = await columnNames(storage, entity);
+    const hasType = columns.includes('scheduledType');
+    const hasBucket = columns.includes('bucket');
+    if (hasType || hasBucket) {
+      const owner = entity === 'task' ? 'projectId, areaId' : 'NULL AS projectId, areaId';
+      const rows = await storage.all<{
+        id: string;
+        scheduledType: string | null;
+        bucket: string | null;
+        projectId: string | null;
+        areaId: string | null;
+        clocks: string;
+      }>(
+        `SELECT id, ${hasType ? 'scheduledType' : 'NULL AS scheduledType'}, ${
+          hasBucket ? 'bucket' : 'NULL AS bucket'
+        }, ${owner}, clocks FROM ${entity}`,
+      );
+      for (const row of rows) {
+        const clocks = JSON.parse(row.clocks || '{}') as Record<string, string>;
+        const clock = laterClock(clocks.bucket, clocks.scheduledType);
+        delete clocks.bucket;
+        delete clocks.scheduledType;
+        if (clock !== undefined) clocks.start = clock;
+        const start = legacyStart(
+          entity,
+          row.scheduledType,
+          row.bucket,
+          row.projectId != null || row.areaId != null,
+        );
+        const clearDate = row.scheduledType != null && row.scheduledType !== 'DATE';
+        await storage.run(
+          `UPDATE ${entity} SET start = ?, clocks = ?${
+            clearDate ? ', scheduledDate = NULL' : ''
+          } WHERE id = ?`,
+          [start, JSON.stringify(clocks), row.id],
+        );
+      }
+      if (hasType) await storage.exec(`ALTER TABLE ${entity} DROP COLUMN scheduledType`);
+      if (hasBucket) await storage.exec(`ALTER TABLE ${entity} DROP COLUMN bucket`);
+    }
+  }
+
+  const pending = await storage.all<{ id: number; entity: string; fields: string }>(
+    "SELECT id, entity, fields FROM _outbox WHERE kind = 'write' AND entity IN ('task', 'project')",
+  );
+  for (const row of pending) {
+    const fields = JSON.parse(row.fields || '{}') as Record<string, FieldWrite>;
+    const type = fields.scheduledType;
+    const bucket = fields.bucket;
+    if (!type && !bucket) continue;
+    const owned = fields.projectId?.value != null || fields.areaId?.value != null;
+    const start = legacyStart(row.entity as 'task' | 'project', type?.value, bucket?.value, owned);
+    delete fields.scheduledType;
+    delete fields.bucket;
+    const hlc = laterClock(type?.hlc, bucket?.hlc);
+    if (start !== null && hlc !== undefined) fields.start = { value: start, hlc };
+    if (type && type.value !== 'DATE' && fields.scheduledDate === undefined) {
+      fields.scheduledDate = { value: null, hlc: type.hlc };
+    }
+    await storage.run('UPDATE _outbox SET fields = ? WHERE id = ?', [
+      JSON.stringify(fields),
+      row.id,
+    ]);
+  }
+
+  await storage.run(
+    'INSERT INTO _engine_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value',
+    [START_MODEL_RESYNC_META_KEY, '1'],
+  );
+}
+
 /**
  * 迁移步骤：下标 i 把副本从版本 i 升到 i + 1。
  * 只追加；已发布的步骤不可修改。
@@ -272,6 +386,8 @@ export const REPLICA_MIGRATIONS: readonly ReplicaMigration[] = [
       await addColumnIfMissing(storage, table, 'lastReviewedOn', 'TEXT');
     }
   },
+  // 14 → 15：bucket / scheduledType 合并为 start（ADR 0024）。
+  mergeBucketIntoStart,
 ];
 
 /** 当前代码的副本 schema 版本。 */

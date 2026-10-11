@@ -3,7 +3,7 @@ import { Calendar, Flag, Inbox, Layers, Tag } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { TagResponseDto } from '@taskora/shared';
-import { ScheduledType, TaskBucket } from '@taskora/shared';
+import { Start } from '@taskora/shared';
 import {
   formatDeadlineCountdown,
   getClientKind,
@@ -39,7 +39,8 @@ import { TagsField } from './fields/TagsField';
 export interface QuickAddCardState {
   title: string;
   notes: string;
-  scheduledType: ScheduledType;
+  /** 开始状态：Someday 或其余（Inbox / Anytime 由归属与日期在数据层推导）。 */
+  start: Start;
   scheduledDate: string | null;
   reminderTime: string | null;
   dueDate: string | null;
@@ -51,7 +52,7 @@ export interface QuickAddCardState {
 export const EMPTY_QUICK_ADD_STATE: QuickAddCardState = {
   title: '',
   notes: '',
-  scheduledType: ScheduledType.NONE,
+  start: Start.INBOX,
   scheduledDate: null,
   reminderTime: null,
   dueDate: null,
@@ -67,10 +68,10 @@ export const EMPTY_QUICK_ADD_STATE: QuickAddCardState = {
 export function draftFromState(state: QuickAddCardState): QuickAddDraft {
   const draft: QuickAddDraft = { title: state.title.trim() };
   if (state.notes.trim()) draft.notes = state.notes;
-  if (state.scheduledType === ScheduledType.DATE && state.scheduledDate) {
+  if (state.scheduledDate) {
     draft.when = { type: 'date', date: state.scheduledDate.slice(0, 10) };
     if (state.reminderTime) draft.reminderTime = state.reminderTime;
-  } else if (state.scheduledType === ScheduledType.SOMEDAY) {
+  } else if (state.start === Start.SOMEDAY) {
     draft.when = { type: 'someday' };
   }
   if (state.dueDate) draft.dueDate = state.dueDate.slice(0, 10);
@@ -80,21 +81,19 @@ export function draftFromState(state: QuickAddCardState): QuickAddDraft {
   return draft;
 }
 
-/** 合并字段补丁；离开 DATE 时 Reminder 随之清空（与数据层同一口径）。 */
+/** 合并字段补丁；没有计划日期时 Reminder 随之清空（与数据层同一口径）。 */
 function applyPatch(
   state: QuickAddCardState,
   patch: ScheduledFieldPatch & DueDateFieldPatch & Partial<TagsFieldPatch>,
 ): QuickAddCardState {
   const next = { ...state };
-  if (patch.scheduledType !== undefined) next.scheduledType = patch.scheduledType;
+  if (patch.start !== undefined) next.start = patch.start;
   if (patch.scheduledDate !== undefined) next.scheduledDate = patch.scheduledDate;
   if (patch.reminderTime !== undefined) next.reminderTime = patch.reminderTime;
   if (patch.dueDate !== undefined) next.dueDate = patch.dueDate;
   if (patch.tagIds !== undefined) next.tagIds = patch.tagIds;
-  if (next.scheduledType !== ScheduledType.DATE) {
-    next.scheduledDate = null;
-    next.reminderTime = null;
-  }
+  if (next.start === Start.SOMEDAY) next.scheduledDate = null;
+  if (!next.scheduledDate) next.reminderTime = null;
   return next;
 }
 
@@ -185,7 +184,7 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
   const patch = (data: ScheduledFieldPatch & DueDateFieldPatch & Partial<TagsFieldPatch>) =>
     setState((prev) => applyPatch(prev, data));
   const scheduledCurrent = {
-    scheduledType: state.scheduledType,
+    start: state.start,
     scheduledDate: state.scheduledDate,
     reminderTime: state.reminderTime,
   };
@@ -246,12 +245,12 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
         break;
       case 'today':
         patch({
-          scheduledType: ScheduledType.DATE,
+          start: Start.ANYTIME,
           scheduledDate: toInputDateValue(startOfToday()),
         });
         break;
       case 'someday':
-        patch({ scheduledType: ScheduledType.SOMEDAY });
+        patch({ start: Start.SOMEDAY });
         break;
       default:
         setOpenField(action);
@@ -336,8 +335,7 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
                 projectId: state.projectId,
                 areaId: state.areaId,
                 // 未选归属时让 Inbox 打勾（MovePicker 按 Inbox 口径判断）。
-                bucket: TaskBucket.INBOX,
-                scheduledType: ScheduledType.NONE,
+                start: Start.INBOX,
               }}
               onSelect={(dto) => {
                 // 只取归属：草稿里的计划日期与归属是两个独立字段，选 Inbox

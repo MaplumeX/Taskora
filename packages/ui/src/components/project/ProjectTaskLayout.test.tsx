@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { act, render, screen, within } from '@testing-library/react';
 import type { ProjectHeadingResponseDto, TaskResponseDto } from '@taskora/shared';
-import { HeadingStatus, ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { HeadingStatus, Start, TaskStatus } from '@taskora/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface DndHandlers {
@@ -30,9 +30,7 @@ const harness = vi.hoisted(() => ({
   initialExpandedId: null as string | null,
   pointerCollisionIds: [] as string[],
   closestCollisionIds: [] as string[],
-  keyboardCoordinateGetter: null as
-    | null
-    | ((event: KeyboardEvent, args: unknown) => unknown),
+  keyboardCoordinateGetter: null as null | ((event: KeyboardEvent, args: unknown) => unknown),
   sidebarDrop: vi.fn(),
   createTask: vi.fn(),
 }));
@@ -136,8 +134,6 @@ vi.mock('./ProjectHeadingRow', async () => {
   };
 });
 
-
-
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
   initReactI18next: { type: '3rdParty', init: () => undefined },
@@ -217,12 +213,11 @@ function task(id: string, headingId: string | null): TaskResponseDto {
     title: id,
     notes: null,
     scheduledDate: null,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
-    bucket: TaskBucket.ANYTIME,
     status: TaskStatus.ACTIVE,
     completedAt: null,
     trashedAt: null,
@@ -447,9 +442,14 @@ describe('project task placement helpers', () => {
   });
 
   it('placeTask inserts a task that is not in the layout yet (Magic Plus draft)', () => {
-    expect(placeTask(layout, 'draft', { containerId: 'heading-1', index: 1 })?.containers).toEqual(
-      { ...layout.containers, 'heading-1': [layout.containers['heading-1'][0], 'draft', ...layout.containers['heading-1'].slice(1)] },
-    );
+    expect(placeTask(layout, 'draft', { containerId: 'heading-1', index: 1 })?.containers).toEqual({
+      ...layout.containers,
+      'heading-1': [
+        layout.containers['heading-1'][0],
+        'draft',
+        ...layout.containers['heading-1'].slice(1),
+      ],
+    });
     expect(placeTask(layout, 'draft', { containerId: 'missing', index: 0 })).toBeNull();
   });
 
@@ -741,9 +741,9 @@ describe('ProjectTaskLayout drag sessions', () => {
 
     expect(harness.saveMutate).not.toHaveBeenCalled();
     expect(
-      within(document.querySelector('[data-task-container="ungrouped"]') as HTMLElement).getAllByText(
-        /^task-u[12]$/,
-      ),
+      within(
+        document.querySelector('[data-task-container="ungrouped"]') as HTMLElement,
+      ).getAllByText(/^task-u[12]$/),
     ).toHaveLength(2);
   });
 
@@ -751,10 +751,7 @@ describe('ProjectTaskLayout drag sessions', () => {
     renderLayout();
     startTaskDrag('task-u1');
     expect(harness.keyboardCoordinateGetter).not.toBeNull();
-    harness.keyboardCoordinateGetter?.(
-      { code: 'ArrowDown' } as KeyboardEvent,
-      {},
-    );
+    harness.keyboardCoordinateGetter?.({ code: 'ArrowDown' } as KeyboardEvent, {});
     harness.closestCollisionIds = ['task:task-u2'];
 
     const detectKeyboardTarget = () =>
@@ -781,10 +778,7 @@ describe('ProjectTaskLayout drag sessions', () => {
     });
 
     expect(harness.saveMutate).toHaveBeenCalledTimes(1);
-    expect(harness.saveMutate.mock.calls[0][0].ungroupedTaskIds).toEqual([
-      'task-u2',
-      'task-u1',
-    ]);
+    expect(harness.saveMutate.mock.calls[0][0].ungroupedTaskIds).toEqual(['task-u2', 'task-u1']);
   });
 
   it('restores the snapshot without persistence on cancel', () => {
@@ -842,9 +836,9 @@ describe('ProjectTaskLayout drag sessions', () => {
       ),
     ).toBeInTheDocument();
     expect(
-      within(
-        document.querySelector('[data-task-container="heading-2"]') as HTMLElement,
-      ).getByText('task-u2'),
+      within(document.querySelector('[data-task-container="heading-2"]') as HTMLElement).getByText(
+        'task-u2',
+      ),
     ).toBeInTheDocument();
   });
 
@@ -878,9 +872,9 @@ describe('ProjectTaskLayout drag sessions', () => {
       expect.any(Object),
     );
     expect(
-      within(
-        document.querySelector('[data-task-container="heading-2"]') as HTMLElement,
-      ).getByText('task-u1'),
+      within(document.querySelector('[data-task-container="heading-2"]') as HTMLElement).getByText(
+        'task-u1',
+      ),
     ).toBeInTheDocument();
     expect(screen.queryByTestId('task-placeholder-task-u1')).not.toBeInTheDocument();
   });
@@ -913,9 +907,9 @@ describe('ProjectTaskLayout drag sessions', () => {
 
     expect(harness.saveMutate).not.toHaveBeenCalled();
     expect(
-      within(
-        document.querySelector('[data-task-container="heading-1"]') as HTMLElement,
-      ).getByText('task-a'),
+      within(document.querySelector('[data-task-container="heading-1"]') as HTMLElement).getByText(
+        'task-a',
+      ),
     ).toBeInTheDocument();
   });
 
@@ -1038,11 +1032,7 @@ describe('ProjectTaskLayout drag sessions', () => {
   it('keeps heading reordering on the existing single-persistence path', () => {
     renderLayout();
 
-    harness.closestCollisionIds = [
-      'task:task-a',
-      'container:heading-1',
-      'heading:heading-1',
-    ];
+    harness.closestCollisionIds = ['task:task-a', 'container:heading-1', 'heading:heading-1'];
     let collisions: Array<{ id: unknown }> = [];
     act(() => {
       collisions =
@@ -1226,10 +1216,9 @@ describe('ProjectTaskLayout — Magic Plus', () => {
 
   it('dropping into an empty project still has a target', async () => {
     harness.createTask.mockResolvedValue(task('new', null));
-    render(
-      <ProjectTaskLayout projectId="project-1" tasks={[]} headings={[]} emptyHint="Empty" />,
-      { wrapper: DndShell },
-    );
+    render(<ProjectTaskLayout projectId="project-1" tasks={[]} headings={[]} emptyHint="Empty" />, {
+      wrapper: DndShell,
+    });
     expect(screen.getByText('Empty')).toBeInTheDocument();
 
     await dropMagicPlus('container:ungrouped');
@@ -1284,7 +1273,12 @@ describe('ProjectTaskLayout — Magic Plus 左边缘新建 Heading', () => {
 
   function view(headings = [heading, secondHeading]) {
     return (
-      <ProjectTaskLayout projectId="project-1" tasks={tasks} headings={headings} emptyHint="Empty" />
+      <ProjectTaskLayout
+        projectId="project-1"
+        tasks={tasks}
+        headings={headings}
+        emptyHint="Empty"
+      />
     );
   }
 

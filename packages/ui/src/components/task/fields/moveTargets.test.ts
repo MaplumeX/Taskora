@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
-import { ProjectBucket, ProjectStatus, ScheduledType, TaskBucket } from '@taskora/shared';
+import { ProjectStatus, Start } from '@taskora/shared';
 
 import {
   buildMoveTargets,
@@ -24,8 +24,7 @@ function project(
     notes: null,
     areaId: null,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     dueDate: null,
     completedAt: null,
@@ -51,13 +50,13 @@ function input(fields: Partial<MoveTargetsInput> = {}): MoveTargetsInput {
     projects: [
       project('p-loose', '读书计划'),
       project('p-report', '季度报告', { areaId: work.id }),
-      project('p-someday', '学吉他', { areaId: life.id, scheduledType: ScheduledType.SOMEDAY }),
+      project('p-someday', '学吉他', { areaId: life.id, start: Start.SOMEDAY }),
       project('p-done', '已完成项目', { status: ProjectStatus.COMPLETED }),
       project('p-trash', '废弃项目', { trashedAt: NOW }),
     ],
     areas: [work, life],
     inboxNames: ['收件箱', 'Inbox'],
-    isLater: (p) => p.scheduledType === ScheduledType.SOMEDAY,
+    isLater: (p) => p.start === Start.SOMEDAY,
     ...fields,
   };
 }
@@ -113,8 +112,7 @@ describe('moveTargetDto', () => {
     expect(moveTargetDto({ kind: 'inbox', id: 'inbox' })).toEqual({
       projectId: null,
       areaId: null,
-      bucket: TaskBucket.INBOX,
-      scheduledType: ScheduledType.NONE,
+      start: Start.INBOX,
     });
   });
 });
@@ -123,18 +121,12 @@ describe('currentMoveTargetId', () => {
   it('项目优先，其次区域，未排期的 Inbox 任务在 Inbox', () => {
     expect(currentMoveTargetId({ projectId: 'p1', areaId: 'a1' })).toBe('project:p1');
     expect(currentMoveTargetId({ projectId: null, areaId: 'a1' })).toBe('area:a1');
-    expect(
-      currentMoveTargetId({ bucket: TaskBucket.INBOX, scheduledType: ScheduledType.NONE }),
-    ).toBe('inbox');
+    expect(currentMoveTargetId({ start: Start.INBOX })).toBe('inbox');
   });
 
   it('已排期 / 无归属的 Anytime / 多选（空对象）不打勾', () => {
-    expect(
-      currentMoveTargetId({ bucket: TaskBucket.SCHEDULED, scheduledType: ScheduledType.DATE }),
-    ).toBeNull();
-    expect(
-      currentMoveTargetId({ bucket: TaskBucket.ANYTIME, scheduledType: ScheduledType.NONE }),
-    ).toBeNull();
+    expect(currentMoveTargetId({ start: Start.ANYTIME })).toBeNull();
+    expect(currentMoveTargetId({ start: Start.ANYTIME })).toBeNull();
     expect(currentMoveTargetId({})).toBeNull();
   });
 });

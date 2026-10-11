@@ -18,13 +18,7 @@ import {
   type DayCalendarEvent,
   type RepeatPreview,
 } from '@taskora/api';
-import {
-  ScheduledType,
-  TaskBucket,
-  TaskStatus,
-  type FeedItem,
-  type TaskFeedItem,
-} from '@taskora/shared';
+import { type FeedItem, Start, type TaskFeedItem, TaskStatus } from '@taskora/shared';
 
 import Upcoming from './Upcoming';
 import { AppDndProvider } from '../lib/appDnd';
@@ -142,14 +136,13 @@ function task(
     type: 'task',
     title: id,
     notes: null,
-    scheduledType: ScheduledType.DATE,
+    start: Start.ANYTIME,
     scheduledDate,
     reminderTime: '09:30',
     repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
     repeatSourceId: null,
     dueDate: '2026-12-31',
     status: TaskStatus.ACTIVE,
-    bucket: TaskBucket.SCHEDULED,
     completedAt: null,
     trashedAt: null,
     createdAt: '2026-10-01T00:00:00Z',
@@ -276,7 +269,7 @@ describe('Upcoming — 复用分组列表拖动来改计划日期', () => {
     expect(harness.update).toHaveBeenCalledWith(
       {
         id: 'task-1',
-        data: { scheduledType: ScheduledType.DATE, scheduledDate: '2026-10-09' },
+        data: { start: Start.ANYTIME, scheduledDate: '2026-10-09' },
       },
       expect.anything(),
     );
@@ -528,8 +521,8 @@ describe('Upcoming — 复用分组列表拖动来改计划日期', () => {
     end('date:2026-10-10');
 
     expect(harness.update.mock.calls.map(([vars]) => vars)).toEqual([
-      { id: 'task-1', data: { scheduledType: ScheduledType.DATE, scheduledDate: '2026-10-10' } },
-      { id: 'task-2', data: { scheduledType: ScheduledType.DATE, scheduledDate: '2026-10-10' } },
+      { id: 'task-1', data: { start: Start.ANYTIME, scheduledDate: '2026-10-10' } },
+      { id: 'task-2', data: { start: Start.ANYTIME, scheduledDate: '2026-10-10' } },
     ]);
     expect(taskGroup('task-2')).toBe('date:2026-10-10');
     act(() => harness.update.mock.calls[0][1].onSuccess());
@@ -1033,7 +1026,7 @@ describe('Upcoming — Magic Plus', () => {
 
     expect(harness.createTask).toHaveBeenCalledWith({
       title: '',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-10-09',
     });
     expect(harness.update).not.toHaveBeenCalled();

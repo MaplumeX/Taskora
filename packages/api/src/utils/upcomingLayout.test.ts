@@ -1,4 +1,4 @@
-import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 import type { FeedItem } from '@taskora/shared';
 import { describe, expect, it } from 'vitest';
 
@@ -15,13 +15,12 @@ function task(id: string, scheduledDate: string | null): FeedItem {
     title: id,
     notes: null,
     scheduledDate,
-    scheduledType: scheduledDate ? ScheduledType.DATE : ScheduledType.NONE,
+    start: Start.ANYTIME,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
     status: TaskStatus.ACTIVE,
-    bucket: TaskBucket.SCHEDULED,
     completedAt: null,
     trashedAt: null,
     createdAt: '2026-08-26T00:00:00.000Z',

@@ -11,7 +11,6 @@ import {
   type SelectionRowItem,
 } from '@taskora/api';
 import type { UpdateProjectDto, UpdateTaskDto } from '@taskora/shared';
-import { ScheduledType } from '@taskora/shared';
 
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { MultiTagsField } from '@/components/task/fields/TagsField';
@@ -57,7 +56,7 @@ export function fieldPickerApplies(kind: KeyboardFieldKind, targets: FieldTarget
   if (kind === 'tags') return targets.some((target) => target.tagIds);
   if (targets.some((target) => !target.item)) return false;
   if (kind === 'repeat') {
-    return targets.length === 1 && targets[0].item!.scheduledType === ScheduledType.DATE;
+    return targets.length === 1 && targets[0].item!.scheduledDate != null;
   }
   // 多选只含任务行；项目行只会单个出现
   return true;

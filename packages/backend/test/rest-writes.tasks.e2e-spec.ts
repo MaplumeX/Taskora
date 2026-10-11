@@ -16,7 +16,7 @@ import {
   positionBetween,
   type RepeatRule,
 } from '@taskora/engine';
-import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 
 import { disconnectTestDb, testPrisma } from './db';
 import {
@@ -84,8 +84,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     expect(row).toMatchObject({
       title: '写周报',
       userId: USER,
-      bucket: TaskBucket.INBOX,
-      scheduledType: ScheduledType.NONE,
+      start: Start.INBOX,
       status: TaskStatus.ACTIVE,
       position: positionBetween('a0a', null),
     });
@@ -97,12 +96,14 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     expect(Object.values(logged!.clocks).every((hlc) => hlc.endsWith(':0'))).toBe(true);
   });
 
-  it('create：显式 bucket / areaId 推导为 ANYTIME', async () => {
+  it('create：显式 start / areaId 推导为 ANYTIME；无归属无日期落 Inbox', async () => {
     const area = await testPrisma.area.create({ data: { userId: USER, title: '工作' } });
-    const explicit = await h.tasks.create(USER, { title: 'a', bucket: TaskBucket.ANYTIME });
+    const explicit = await h.tasks.create(USER, { title: 'a', start: Start.ANYTIME });
     const inArea = await h.tasks.create(USER, { title: 'b', areaId: area.id });
-    expect(explicit.bucket).toBe(TaskBucket.ANYTIME);
-    expect(inArea.bucket).toBe(TaskBucket.ANYTIME);
+    const loose = await h.tasks.create(USER, { title: 'c' });
+    expect(explicit.start).toBe(Start.ANYTIME);
+    expect(inArea.start).toBe(Start.ANYTIME);
+    expect(loose.start).toBe(Start.INBOX);
   });
 
   // ---------- update ----------
@@ -130,7 +131,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     const heading = await testPrisma.projectHeading.create({
       data: { userId: USER, projectId: p1.id, title: 'H' },
     });
-    await seedTask('task-1', { projectId: p1.id, headingId: heading.id, bucket: 'ANYTIME' });
+    await seedTask('task-1', { projectId: p1.id, headingId: heading.id, start: 'ANYTIME' });
 
     await h.tasks.update(USER, 'task-1', { title: '改名' });
     expect((await testPrisma.task.findUnique({ where: { id: 'task-1' } }))!.headingId).toBe(
@@ -145,9 +146,8 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
 
   it('update：提醒与重复规则跟随计划类型；规则以规范形 JSON 文本落库', async () => {
     await seedTask('task-1', {
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: new Date('2026-02-05T00:00:00Z'),
-      bucket: 'SCHEDULED',
     });
 
     const dto = await h.tasks.update(USER, 'task-1', {
@@ -168,7 +168,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     expect(row.repeatRule).toBe(dailyRuleJson);
 
     // 移入 Someday 清除提醒与规则
-    await h.tasks.update(USER, 'task-1', { scheduledType: ScheduledType.SOMEDAY });
+    await h.tasks.update(USER, 'task-1', { start: Start.SOMEDAY });
     row = await testPrisma.task.findUniqueOrThrow({ where: { id: 'task-1' } });
     expect(row.reminderTime).toBeNull();
     expect(row.repeatRule).toBeNull();
@@ -240,7 +240,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     await seedTask('task-1', {
       status: 'COMPLETED',
       settledAt: new Date('2026-02-01T00:00:00Z'),
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: new Date('2026-02-05T00:00:00Z'),
       reminderTime: '09:00',
     });
@@ -281,7 +281,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
 
   it('cancel / complete 直接互改终态；uncancel / uncomplete 回 ACTIVE；了结清除提醒', async () => {
     await seedTask('task-1', {
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: new Date('2026-02-05T00:00:00Z'),
       reminderTime: '09:00',
     });
@@ -325,13 +325,13 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     });
     await testPrisma.project.create({ data: { id: 'p-plain', userId: USER, title: 'R' } });
     await seedTask('t-own', { tags: { create: [{ tagId: 'work' }] } });
-    await seedTask('t-project', { projectId: 'p-tagged', bucket: 'ANYTIME' });
-    await seedTask('t-area', { areaId: 'area-1', bucket: 'ANYTIME' });
-    await seedTask('t-project-area', { projectId: 'p-in-area', bucket: 'ANYTIME' });
+    await seedTask('t-project', { projectId: 'p-tagged', start: 'ANYTIME' });
+    await seedTask('t-area', { areaId: 'area-1', start: 'ANYTIME' });
+    await seedTask('t-project-area', { projectId: 'p-in-area', start: 'ANYTIME' });
     await seedTask('t-miss', {
       projectId: 'p-plain',
       areaId: 'area-2',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       tags: { create: [{ tagId: 'other' }] },
     });
 
@@ -359,7 +359,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     });
     await seedTask('t-life', { tags: { create: [{ tagId: 'life' }] } });
     await seedTask('t-home', { tags: { create: [{ tagId: 'home' }] } });
-    await seedTask('t-in-errand-project', { projectId: 'p-errand', bucket: 'ANYTIME' });
+    await seedTask('t-in-errand-project', { projectId: 'p-errand', start: 'ANYTIME' });
 
     const ids = async (tagId: string) =>
       (await h.tasks.findAll(USER, { tagId })).map((task) => task.id).sort();
@@ -381,7 +381,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
       title: 'Buy milk',
       tags: { create: [{ tagId: 'home' }, { tagId: 'urgent' }] },
     });
-    await seedTask('t-milk-area', { title: 'Milk run', areaId: 'area-home', bucket: 'ANYTIME' });
+    await seedTask('t-milk-area', { title: 'Milk run', areaId: 'area-home', start: 'ANYTIME' });
     await seedTask('t-milk-plain', { title: 'Milk' });
 
     const ids = async (q: string, tagIds: string[]) =>
@@ -398,9 +398,8 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     await seedTask('task-1', {
       title: '浇花',
       notes: '客厅绿植',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: new Date('2026-02-05T00:00:00Z'),
-      bucket: 'SCHEDULED',
       reminderTime: '09:00',
       repeatRule: dailyRuleJson,
       position: 'a3',
@@ -432,10 +431,9 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
       title: '浇花',
       notes: '客厅绿植',
       scheduledDate: new Date('2026-02-06T00:00:00Z'),
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       reminderTime: '09:00',
       repeatRule: dailyRuleJson,
-      bucket: TaskBucket.SCHEDULED,
       status: TaskStatus.ACTIVE,
       // 派生实例追加到列表末尾
       position: positionBetween('a3', null),
@@ -474,7 +472,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     ).toEqual(settledAt);
 
     await seedTask('expired', {
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: new Date('2026-02-05T00:00:00Z'),
       repeatRule: JSON.stringify({ ...dailyRule, until: '2026-02-05' }),
     });
@@ -482,7 +480,7 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     await seedTask('plain');
     await h.tasks.complete(USER, 'plain');
     await seedTask('to-cancel', {
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: new Date('2026-02-05T00:00:00Z'),
       repeatRule: dailyRuleJson,
     });
@@ -636,9 +634,9 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
 
     const promoted = await testPrisma.task.findMany({ where: { projectId: project.id } });
     const ordered = [...promoted].sort((a, b) => (a.position! < b.position! ? -1 : 1));
-    expect(ordered.map((task) => [task.title, task.status, task.bucket])).toEqual([
-      ['第一步', TaskStatus.ACTIVE, TaskBucket.ANYTIME],
-      ['第二步', TaskStatus.COMPLETED, TaskBucket.ANYTIME],
+    expect(ordered.map((task) => [task.title, task.status, task.start])).toEqual([
+      ['第一步', TaskStatus.ACTIVE, Start.ANYTIME],
+      ['第二步', TaskStatus.COMPLETED, Start.ANYTIME],
     ]);
     expect(await testPrisma.task.findUnique({ where: { id: 'task-1' } })).toBeNull();
     expect(await registeredCompacted('task')).toEqual(['task-1']);

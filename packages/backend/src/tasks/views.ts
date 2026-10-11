@@ -4,9 +4,8 @@ import {
   instantDateKey,
   isLaterProject,
   ProjectStatus,
-  TaskBucket,
+  Start,
   TaskStatus,
-  ScheduledType,
   SETTLED_TASK_STATUSES,
   WITH_SETTLED_TASK_STATUSES,
 } from '@taskora/shared';
@@ -43,9 +42,8 @@ export function buildTaskViewWhere(view: TaskView, keepsSettled = false): Prisma
   const listed = keepsSettled ? undefined : TaskStatus.ACTIVE;
   switch (view) {
     case 'inbox':
-      where.bucket = TaskBucket.INBOX;
+      where.start = Start.INBOX;
       where.status = listed;
-      where.scheduledType = ScheduledType.NONE;
       where.trashedAt = null;
       break;
     case 'today':
@@ -54,28 +52,24 @@ export function buildTaskViewWhere(view: TaskView, keepsSettled = false): Prisma
       // 用 AND 包一层：调用方的 where.OR（搜索词）不会被覆盖。
       where.AND = [
         {
-          OR: [
-            { scheduledType: ScheduledType.DATE, scheduledDate: { not: null } },
-            { dueDate: { not: null } },
-          ],
+          OR: [{ scheduledDate: { not: null } }, { dueDate: { not: null } }],
         },
       ];
       where.trashedAt = null;
       break;
     case 'upcoming':
       where.status = listed;
-      where.scheduledType = ScheduledType.DATE;
       where.scheduledDate = { not: null };
       where.trashedAt = null;
       break;
     case 'anytime':
-      where.bucket = TaskBucket.ANYTIME;
+      // 计划日期已到的任务也在 Anytime；未来日期由调用方按账号时区滤掉
+      where.start = Start.ANYTIME;
       where.status = listed;
-      where.scheduledType = ScheduledType.NONE;
       where.trashedAt = null;
       break;
     case 'someday':
-      where.scheduledType = ScheduledType.SOMEDAY;
+      where.start = Start.SOMEDAY;
       where.status = listed;
       where.trashedAt = null;
       break;
@@ -93,9 +87,9 @@ export function buildTaskViewWhere(view: TaskView, keepsSettled = false): Prisma
       where.trashedAt = null;
       break;
     case 'repeating':
-      // Repeat Rule 只能设在计划类型为 DATE 的条目上；规则本身由调用方判定。
+      // Repeat Rule 只能设在有计划日期的条目上；规则本身由调用方判定。
       where.status = TaskStatus.ACTIVE;
-      where.scheduledType = ScheduledType.DATE;
+      where.scheduledDate = { not: null };
       where.trashedAt = null;
       break;
   }
@@ -117,9 +111,9 @@ export async function laterProjectIds(
       userId,
       status: ProjectStatus.ACTIVE,
       trashedAt: null,
-      scheduledType: { in: [ScheduledType.SOMEDAY, ScheduledType.DATE] },
+      OR: [{ start: Start.SOMEDAY }, { scheduledDate: { not: null } }],
     },
-    select: { id: true, status: true, trashedAt: true, scheduledType: true, scheduledDate: true },
+    select: { id: true, status: true, trashedAt: true, start: true, scheduledDate: true },
   });
   const today = instantDateKey(now, zones.timeZone);
   return new Set(

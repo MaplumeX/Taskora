@@ -3,7 +3,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import type { TaskResponseDto } from '@taskora/shared';
-import { HeadingStatus, ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { HeadingStatus, Start, TaskStatus } from '@taskora/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -149,12 +149,11 @@ function task(id: string, completed = false): TaskResponseDto {
     title: id,
     notes: null,
     scheduledDate: null,
-    scheduledType: ScheduledType.NONE,
+    start: Start.INBOX,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
-    bucket: TaskBucket.INBOX,
     status: completed ? TaskStatus.COMPLETED : TaskStatus.ACTIVE,
     completedAt: null,
     trashedAt: null,
@@ -193,7 +192,11 @@ function press(key: string, mods: KeyboardEventInit = {}) {
   });
 }
 
-function renderAt(path: string, tasks: TaskResponseDto[], platform: 'mac' | 'windows' | 'web' = 'mac') {
+function renderAt(
+  path: string,
+  tasks: TaskResponseDto[],
+  platform: 'mac' | 'windows' | 'web' = 'mac',
+) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <KeyboardShortcuts platform={platform} />
@@ -472,7 +475,7 @@ describe('KeyboardShortcuts — 展开与新建', () => {
     press('ArrowDown'); // 选中 t2
     press(' ');
     expect(harness.createMutate).toHaveBeenCalledWith(
-      expect.objectContaining({ title: '', scheduledType: 'DATE' }),
+      expect.objectContaining({ title: '', scheduledDate: todayDateKey() }),
     );
     expect(harness.reorderMutate).toHaveBeenCalledWith(['t1', 't2', 'created-task', 't3']);
     expect(useUiInteractionStore.getState().expandedId).toBe('created-task');
@@ -570,26 +573,31 @@ describe('KeyboardShortcuts — Grouped View 组头行为', () => {
   beforeEach(async () => {
     // 新建任务会延后两帧释放旧焦点；先排空上个用例的回调，避免跨测试抢焦点。
     await act(async () => {
-      await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+      await new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      );
     });
   });
 
   it.each([
     ['ArrowDown', ['standalone', 'loose', 'a1', 'a2', 'b1', 'c1']],
     ['ArrowUp', ['c1', 'b1', 'a2', 'a1', 'loose', 'standalone']],
-  ] as const)('%s 逐行移动焦点时跳过 Project / Area 分组标题，但保留独立 Project 行', async (key, ids) => {
-    renderGrouped();
-    for (const id of ids) {
-      press(key);
-      expect(useSelectionStore.getState().selectedIds).toEqual([id]);
-      await waitFor(() => expect(screen.getByTestId(`row-${id}`)).toHaveFocus());
-      for (const headerId of ['p1', 'p2', 'area-1']) {
-        expect(screen.getByRole('link', { name: headerId })).not.toHaveFocus();
+  ] as const)(
+    '%s 逐行移动焦点时跳过 Project / Area 分组标题，但保留独立 Project 行',
+    async (key, ids) => {
+      renderGrouped();
+      for (const id of ids) {
+        press(key);
+        expect(useSelectionStore.getState().selectedIds).toEqual([id]);
+        await waitFor(() => expect(screen.getByTestId(`row-${id}`)).toHaveFocus());
+        for (const headerId of ['p1', 'p2', 'area-1']) {
+          expect(screen.getByRole('link', { name: headerId })).not.toHaveFocus();
+        }
       }
-    }
-    press(key);
-    expect(useSelectionStore.getState().selectedIds).toEqual([ids.at(-1)]);
-  });
+      press(key);
+      expect(useSelectionStore.getState().selectedIds).toEqual([ids.at(-1)]);
+    },
+  );
 
   it.each([
     ['k', { metaKey: true }],
@@ -792,7 +800,9 @@ describe('KeyboardShortcuts — 打字唤起 Quick Find', () => {
     document.body.appendChild(input);
     input.focus();
     act(() => {
-      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true }));
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'a', bubbles: true, cancelable: true }),
+      );
     });
     expect(search().searchOpen).toBe(false);
     input.remove();
@@ -840,7 +850,8 @@ describe('KeyboardShortcuts — 输入法打字唤起（隐藏输入框）', () 
     });
   const keydownOnSink = (init: KeyboardEventInit & { keyCode?: number }) => {
     const event = new KeyboardEvent('keydown', { bubbles: true, cancelable: true, ...init });
-    if (init.keyCode !== undefined) Object.defineProperty(event, 'keyCode', { value: init.keyCode });
+    if (init.keyCode !== undefined)
+      Object.defineProperty(event, 'keyCode', { value: init.keyCode });
     act(() => {
       sink().dispatchEvent(event);
     });
@@ -1069,19 +1080,19 @@ describe('KeyboardShortcuts — 日期（Things Edit Dates）', () => {
     press('ArrowDown');
     press('t', { metaKey: true });
     expect(harness.updateTaskMutate).toHaveBeenLastCalledWith(
-      { id: 't1', data: { scheduledType: ScheduledType.DATE, scheduledDate: todayDateKey() } },
+      { id: 't1', data: { start: Start.ANYTIME, scheduledDate: todayDateKey() } },
       expect.anything(),
     );
     press('o', { metaKey: true });
     expect(harness.updateTaskMutate).toHaveBeenLastCalledWith(
-      { id: 't1', data: { scheduledType: ScheduledType.SOMEDAY } },
+      { id: 't1', data: { start: Start.SOMEDAY } },
       expect.anything(),
     );
     press('r', { metaKey: true });
     expect(harness.updateTaskMutate).toHaveBeenLastCalledWith(
       {
         id: 't1',
-        data: { scheduledType: ScheduledType.NONE, scheduledDate: null, bucket: TaskBucket.ANYTIME },
+        data: { start: Start.ANYTIME, scheduledDate: null },
       },
       expect.anything(),
     );
@@ -1095,7 +1106,7 @@ describe('KeyboardShortcuts — 日期（Things Edit Dates）', () => {
       {
         id: 't1',
         data: {
-          scheduledType: ScheduledType.DATE,
+          start: Start.ANYTIME,
           scheduledDate: addCalendarDays(todayDateKey(), 1),
         },
       },
@@ -1214,9 +1225,7 @@ describe('KeyboardShortcuts — 剪贴板（⌘C / ⌘V / ⌥⌘V）', () => {
     press('c', { metaKey: true });
     press('v', { metaKey: true });
     await waitFor(() => expect(harness.duplicateTask).toHaveBeenCalledWith('t1'));
-    await waitFor(() =>
-      expect(useSelectionStore.getState().selectedIds).toEqual(['t1-copy']),
-    );
+    await waitFor(() => expect(useSelectionStore.getState().selectedIds).toEqual(['t1-copy']));
   });
 
   it('剪贴板是外部文字时 ⌘V 逐行建任务（去掉列表记号与空行）', async () => {
@@ -1229,7 +1238,6 @@ describe('KeyboardShortcuts — 剪贴板（⌘C / ⌘V / ⌥⌘V）', () => {
       '回邮件',
     ]);
     expect(harness.createMutate.mock.calls[0][0]).toMatchObject({
-      scheduledType: ScheduledType.DATE,
       scheduledDate: todayDateKey(),
     });
   });

@@ -2,9 +2,8 @@
  * Project Heading（分组）的写入规则（形态约定见 tasks.ts 顶部）。
  */
 
-import { HeadingStatus, ProjectStatus, ScheduledType, TaskStatus } from '@taskora/shared';
+import { HeadingStatus, ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 
-import { resolveProjectBucket } from './bucket';
 import { sortByEffectivePosition, type Positioned } from './order';
 import type { ProjectFields } from './projects';
 import { planReviewSchedule, type ReviewContext } from './review';
@@ -75,13 +74,12 @@ export function planHeadingToProject(
     project: {
       title: headingTitle,
       notes: null,
-      scheduledType: ScheduledType.NONE,
+      start: Start.ANYTIME,
       scheduledDate: null,
       dueDate: null,
       repeatRule: null,
       repeatSourceId: null,
       ...planReviewSchedule(review, 'project'),
-      bucket: resolveProjectBucket(ScheduledType.NONE),
       status: ProjectStatus.ACTIVE,
       completedAt: null,
       trashedAt: null,

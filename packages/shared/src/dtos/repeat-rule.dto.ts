@@ -4,7 +4,7 @@
  *
  * 声明该 Task / Project 完成后按规则再现：单位 × 间隔 × 周模式的星期几集合，
  * 锚点默认从计划日期（Scheduled Date）推算，可选从完成日期推算。
- * 仅 ScheduledType 为 DATE 的 Task / Project 可设。
+ * 仅有计划日期的 Task / Project 可设。
  *
  * 形状刻意与 RRULE 保持可升级（BYSETPOS 等留待未来，无数据迁移）。
  */

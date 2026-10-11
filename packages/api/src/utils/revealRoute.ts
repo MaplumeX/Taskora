@@ -1,18 +1,18 @@
 /**
  * Reveal Task 的目标路由（reminder-actions spec）：给定任务，选出最能
  * 容纳它的视图。顺序：Today 可见 → 所属 Project → 所属 Area → 按
- * Bucket 落到 Upcoming / Someday / Anytime / Inbox；已了结落 Logbook。
+ * start 与计划日期落到 Upcoming / Someday / Anytime / Inbox；已了结落 Logbook。
  * 已进 Trash 默认返回 null（通知场景：只打开 App，不导航）；allowTrash
  * （Quick Find 的继续搜索）时落 Trash。
  */
 
-import { ScheduledType, TaskBucket, TaskStatus, type TaskResponseDto } from '@taskora/shared';
+import { Start, TaskStatus, type TaskResponseDto } from '@taskora/shared';
 
 import { toDateKey, todayDateKey } from './date';
 
 export type RevealTarget = Pick<
   TaskResponseDto,
-  'status' | 'trashedAt' | 'scheduledType' | 'scheduledDate' | 'projectId' | 'areaId' | 'bucket'
+  'status' | 'trashedAt' | 'start' | 'scheduledDate' | 'projectId' | 'areaId'
 >;
 
 export interface RevealRouteOptions {
@@ -26,12 +26,12 @@ export function revealRouteFor(
 ): string | null {
   if (task.trashedAt != null) return allowTrash ? '/trash' : null;
   if (task.status !== TaskStatus.ACTIVE) return '/logbook';
-  const dated = task.scheduledType === ScheduledType.DATE && task.scheduledDate != null;
+  const dated = task.scheduledDate != null;
   if (dated && toDateKey(task.scheduledDate!) <= todayDateKey(now)) return '/today';
   if (task.projectId) return `/projects/${task.projectId}`;
   if (task.areaId) return `/areas/${task.areaId}`;
   if (dated) return '/upcoming';
-  if (task.scheduledType === ScheduledType.SOMEDAY) return '/someday';
-  if (task.bucket === TaskBucket.ANYTIME) return '/anytime';
+  if (task.start === Start.SOMEDAY) return '/someday';
+  if (task.start === Start.ANYTIME) return '/anytime';
   return '/inbox';
 }

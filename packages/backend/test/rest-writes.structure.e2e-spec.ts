@@ -151,7 +151,7 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     await seedProject('p-1');
     await seedTask('t-out', {
       projectId: 'p-1',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: createdAt(5),
       reminderTime: '09:00',
     });
@@ -237,8 +237,7 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     const rule = { unit: 'week', interval: 1, anchor: 'scheduled' } as const;
     await seedProject('p-1', {
       position: 'a0',
-      scheduledType: 'DATE',
-      bucket: 'SCHEDULED',
+      start: 'ANYTIME',
       scheduledDate: new Date('2030-01-07T00:00:00Z'),
       dueDate: new Date('2030-01-09T00:00:00Z'),
     });
@@ -248,7 +247,7 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     await seedTask('t-done', {
       projectId: 'p-1',
       headingId: 'h-1',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       status: TaskStatus.COMPLETED,
       settledAt: new Date('2030-01-07T08:00:00Z'),
     });
@@ -257,8 +256,7 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     });
     await seedTask('t-open', {
       projectId: 'p-1',
-      bucket: 'SCHEDULED',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: new Date('2030-01-08T00:00:00Z'),
     });
 
@@ -318,7 +316,7 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     await seedTask('t-done', {
       projectId: 'p-1',
       headingId: 'h-1',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       status: TaskStatus.COMPLETED,
       settledAt: new Date('2030-01-07T08:00:00Z'),
     });
@@ -564,11 +562,11 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
 
     // 删除区域：其下项目与任务进 Trash，已在 Trash 的不动
     const earlier = new Date('2026-01-01T00:00:00.000Z');
-    await seedTask('t-in-area', { areaId: first.id, bucket: 'ANYTIME' });
-    await seedTask('t-trashed', { areaId: first.id, bucket: 'ANYTIME', trashedAt: earlier });
+    await seedTask('t-in-area', { areaId: first.id, start: 'ANYTIME' });
+    await seedTask('t-trashed', { areaId: first.id, start: 'ANYTIME', trashedAt: earlier });
     await seedProject('p-in-area', { areaId: first.id });
-    await seedTask('t-in-project', { projectId: 'p-in-area', bucket: 'ANYTIME' });
-    await seedTask('t-elsewhere', { bucket: 'INBOX' });
+    await seedTask('t-in-project', { projectId: 'p-in-area', start: 'ANYTIME' });
+    await seedTask('t-elsewhere', { start: 'INBOX' });
     await h.areas.remove(USER, first.id);
     expect(await testPrisma.area.findUnique({ where: { id: first.id } })).toBeNull();
     const inArea = await testPrisma.task.findUniqueOrThrow({ where: { id: 't-in-area' } });

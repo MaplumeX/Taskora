@@ -8,13 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { InMemorySyncHub, openEngine, type Engine } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
-import {
-  HeadingStatus,
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
-  TaskStatus,
-} from '@taskora/shared';
+import { HeadingStatus, ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 
 import { createEngineProjectBackend } from './project-backend.engine';
 import { createEngineAreaBackend } from './area-backend.engine';
@@ -48,25 +42,26 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     tasks = createEngineTaskBackend({ engine });
   });
 
-  it('Project：create bucket 解析（DATE→SCHEDULED、无归属→ANYTIME），计数本地计算', async () => {
+  it('Project：create start 解析（总是 ANYTIME，带日期也是），计数本地计算', async () => {
     const p1 = await projects.createProject({ title: '普通项目' });
-    expect(p1.bucket).toBe(ProjectBucket.ANYTIME);
+    expect(p1.start).toBe(Start.ANYTIME);
     expect(p1.status).toBe(ProjectStatus.ACTIVE);
     expect(p1.taskTotalCount).toBe(0);
 
     const dated = await projects.createProject({
       title: '日程项目',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-01-02',
     });
-    expect(dated.bucket).toBe(ProjectBucket.SCHEDULED);
+    expect(dated.start).toBe(Start.ANYTIME);
+    expect(dated.scheduledDate).not.toBeNull();
 
     // 计数口径：非 trashed task 总数 / 已了结数
     const projectId = p1.id;
     await engine.create('task', {
       title: 't1',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       projectId,
       trashedAt: null,
       settledAt: null,
@@ -74,7 +69,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     await engine.create('task', {
       title: 't2',
       status: 'COMPLETED',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       projectId,
       trashedAt: null,
       settledAt: '2026-01-01T00:00:00.000Z',
@@ -82,7 +77,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     await engine.create('task', {
       title: 'trashed',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       projectId,
       trashedAt: '2026-01-01T00:00:00.000Z',
       settledAt: null,
@@ -97,7 +92,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     const taskId = await engine.create('task', {
       title: '下属任务',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       projectId: project.id,
       trashedAt: null,
       settledAt: null,
@@ -127,7 +122,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     const taskId = await engine.create('task', {
       title: '下属任务',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       projectId: project.id,
       trashedAt: null,
       settledAt: null,
@@ -174,14 +169,13 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     const projectId = await engine.create('project', {
       title: 'P',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
-      scheduledType: 'NONE',
+      start: 'ANYTIME',
       areaId: area.id,
     });
     const taskId = await engine.create('task', {
       title: 'T',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       areaId: area.id,
       trashedAt: null,
       settledAt: null,
@@ -189,7 +183,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     const projectTaskId = await engine.create('task', {
       title: 'PT',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       projectId,
       trashedAt: null,
       settledAt: null,
@@ -197,7 +191,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     const otherTaskId = await engine.create('task', {
       title: 'O',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       areaId: moved.id,
       trashedAt: null,
       settledAt: null,
@@ -279,7 +273,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     const taskId = await engine.create('task', {
       title: '归档目标',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       projectId: project.id,
       trashedAt: null,
       settledAt: null,
@@ -315,7 +309,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     const taskId = await engine.create('task', {
       title: '搬走的任务',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       projectId: project.id,
       trashedAt: null,
       settledAt: null,
@@ -395,7 +389,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     const taskId = await engine.create('task', {
       title: '在分组里的任务',
       status: TaskStatus.ACTIVE,
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       projectId: source.id,
       headingId: heading.id,
       trashedAt: null,
@@ -409,7 +403,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     const other = await engine.create('task', {
       title: '同项目任务',
       status: TaskStatus.ACTIVE,
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       projectId: source.id,
       headingId: heading.id,
       trashedAt: null,
@@ -463,7 +457,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
         projectId,
         headingId,
         status: TaskStatus.ACTIVE,
-        bucket: 'ANYTIME',
+        start: 'ANYTIME',
         trashedAt: null,
         settledAt: null,
       });
@@ -534,10 +528,10 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
   });
 
   it('Later Project：稍后项目内的任务不进 Anytime / Someday，有日期的任务照常进 Today / Upcoming', async () => {
-    const someday = await projects.createProject({ title: '某天', scheduledType: ScheduledType.SOMEDAY });
+    const someday = await projects.createProject({ title: '某天', start: Start.SOMEDAY });
     const future = await projects.createProject({
       title: '未来',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2099-01-01',
     });
     const active = await projects.createProject({ title: '活跃' });
@@ -548,12 +542,12 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     const somedayTask = await tasks.createTask({
       title: 'S2',
       projectId: someday.id,
-      scheduledType: ScheduledType.SOMEDAY,
+      start: Start.SOMEDAY,
     });
     const datedInSomeday = await tasks.createTask({
       title: 'D1',
       projectId: someday.id,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2020-01-01',
     });
 
@@ -567,7 +561,7 @@ describe('每域 Engine backends（V2：全实体离线）', () => {
     expect(ids(await tasks.getFeed('today'))).toContain(datedInSomeday.id);
 
     // 项目转为活跃后任务原样回来（任务字段未被改写）
-    await projects.updateProject(someday.id, { scheduledType: ScheduledType.NONE });
+    await projects.updateProject(someday.id, { start: Start.ANYTIME });
     const after = ids(await tasks.getFeed('anytime'));
     expect(after).toContain(inSomeday.id);
     expect(ids(await tasks.getFeed('someday'))).toContain(somedayTask.id);

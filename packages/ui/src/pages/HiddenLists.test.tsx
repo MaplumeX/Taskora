@@ -6,16 +6,14 @@ import type { ReactNode } from 'react';
 
 import { useAreasQuery, useFeedQuery, usePreferencesStore, useProjectsQuery } from '@taskora/api';
 import {
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
-  TaskBucket,
-  TaskStatus,
   type AreaResponseDto,
   type FeedItem,
   type ProjectFeedItem,
   type ProjectResponseDto,
+  ProjectStatus,
+  Start,
   type TaskFeedItem,
+  TaskStatus,
 } from '@taskora/shared';
 
 import AllProjects, { allProjectSections } from './AllProjects';
@@ -63,13 +61,12 @@ function task(id: string, fields: Partial<TaskFeedItem> = {}): TaskFeedItem {
     title: id,
     notes: null,
     scheduledDate: null,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
     status: TaskStatus.ACTIVE,
-    bucket: TaskBucket.SCHEDULED,
     completedAt: null,
     trashedAt: null,
     createdAt: NOW,
@@ -89,8 +86,7 @@ function project(id: string, fields: Partial<ProjectResponseDto> = {}): ProjectR
     notes: null,
     areaId: null,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     dueDate: null,
     completedAt: null,
@@ -149,7 +145,7 @@ afterEach(() => {
 describe('Tomorrow', () => {
   it('只收 Upcoming 中计划日期为明天的条目（截止日期在明天不算）', () => {
     const dated = (id: string, day: string, fields: Partial<TaskFeedItem> = {}) =>
-      task(id, { scheduledType: ScheduledType.DATE, scheduledDate: day, ...fields });
+      task(id, { start: Start.ANYTIME, scheduledDate: day, ...fields });
     feed([
       dated('t-tomorrow', '2026-10-11'),
       dated('t-later', '2026-10-12', { dueDate: '2026-10-11' }),
@@ -178,7 +174,7 @@ describe('All Projects', () => {
         project('p-loose'),
         project('p-done', { status: ProjectStatus.COMPLETED }),
         project('p-trashed', { trashedAt: NOW }),
-        project('p-later', { areaId: 'a1', scheduledType: ScheduledType.SOMEDAY }),
+        project('p-later', { areaId: 'a1', start: Start.SOMEDAY }),
         project('p-a1', { areaId: 'a1' }),
       ],
       [area('a1'), area('a2'), area('a-empty')],

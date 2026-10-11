@@ -9,10 +9,10 @@
  * 设备与 REST 共用。
  */
 
-import { ProjectStatus, ScheduledType, TaskStatus, type RepeatRule } from '@taskora/shared';
+import { ProjectStatus, Start, TaskStatus, type RepeatRule } from '@taskora/shared';
 
 import { deriveAttachmentId, deriveSubtaskId } from '../repeat';
-import { resolveProjectBucket, resolveTaskBucket } from './bucket';
+import { resolveProjectStart, resolveTaskStart } from './start';
 import { dateKeyOf, type CalendarZones } from './calendar';
 import { sortByEffectivePosition } from './order';
 import type { ProjectFields } from './projects';
@@ -34,13 +34,12 @@ import type { TaskFields } from './tasks';
 export interface DuplicateTaskSource {
   title: string;
   notes: string | null;
-  scheduledType: unknown;
+  start: unknown;
   scheduledDate: unknown;
   dueDate: unknown;
   reminderTime: string | null;
   /** 规范化后的规则（两端各自从存储解析）。 */
   repeatRule: RepeatRule | null;
-  bucket: unknown;
   projectId: string | null;
   headingId: string | null;
   areaId: string | null;
@@ -62,21 +61,21 @@ export function planTaskDuplicate(
   subtasksFor: (copyId: string) => RepeatSubtaskFields[];
   attachmentsFor: (copyId: string) => RepeatAttachmentFields[];
 } {
-  const scheduledType = (source.scheduledType as ScheduledType) ?? ScheduledType.NONE;
-  const dated = scheduledType === ScheduledType.DATE;
+  const scheduledDate =
+    source.start === Start.SOMEDAY ? null : dateKeyOf(source.scheduledDate, zones);
+  const dated = scheduledDate != null;
   const ordered = sortByEffectivePosition(subtasks);
   const orderedAttachments = sortByEffectivePosition(attachments);
   return {
     task: {
       title: source.title,
       notes: source.notes,
-      scheduledType,
-      scheduledDate: dated ? dateKeyOf(source.scheduledDate, zones) : null,
+      start: resolveTaskStart(source.start, scheduledDate, source.projectId, source.areaId),
+      scheduledDate,
       reminderTime: dated ? source.reminderTime : null,
       repeatRule: dated ? source.repeatRule : null,
       repeatSourceId: null,
       dueDate: dateKeyOf(source.dueDate, zones),
-      bucket: resolveTaskBucket(source.bucket, scheduledType, source.projectId, source.areaId),
       status: TaskStatus.ACTIVE,
       settledAt: null,
       trashedAt: null,
@@ -104,7 +103,7 @@ export function planTaskDuplicate(
 export interface DuplicateProjectSource {
   title: string;
   notes: string | null;
-  scheduledType: unknown;
+  start: unknown;
   scheduledDate: unknown;
   dueDate: unknown;
   /** 规范化后的规则。 */
@@ -128,19 +127,18 @@ export function planProjectDuplicate(
   project: ProjectFields;
   copyFor: (copyId: string, children: ProjectContentsSource) => RepeatProjectCopy;
 } {
-  const scheduledType = (source.scheduledType as ScheduledType) ?? ScheduledType.NONE;
-  const dated = scheduledType === ScheduledType.DATE;
+  const start = resolveProjectStart(source.start);
+  const scheduledDate = start === Start.SOMEDAY ? null : dateKeyOf(source.scheduledDate, zones);
   return {
     project: {
       title: source.title,
       notes: source.notes,
-      scheduledType,
-      scheduledDate: dated ? dateKeyOf(source.scheduledDate, zones) : null,
+      start,
+      scheduledDate,
       dueDate: dateKeyOf(source.dueDate, zones),
-      repeatRule: dated ? source.repeatRule : null,
+      repeatRule: scheduledDate != null ? source.repeatRule : null,
       repeatSourceId: null,
       ...planReviewSchedule(review, 'project', { reviewInterval: source.reviewInterval }),
-      bucket: resolveProjectBucket(scheduledType),
       status: ProjectStatus.ACTIVE,
       completedAt: null,
       trashedAt: null,

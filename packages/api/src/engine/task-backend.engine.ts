@@ -3,7 +3,7 @@
  *
  * Task/Feed/Subtask 的全部读写直接作用于 Local Replica：零网络往返、
  * 断网全功能可用；写操作进 Outbox，由调用方（desktop boot）调度
- * flush/pull 收敛。领域规则（bucket 推导、视图过滤、生命周期、重复
+ * flush/pull 收敛。领域规则（start 推导、视图过滤、生命周期、重复
  * 派生、转项目、清空 Trash）来自 @taskora/engine 的 domain 纯函数，与
  * hub 的 REST 服务共用（local-first-v3 issue 04）；这里只负责读副本、
  * 调规则、写副本，以及位次分配。
@@ -61,13 +61,7 @@ import {
   taskRestorePatch,
   taskTrashPatch,
 } from '@taskora/engine';
-import {
-  hidesTasksInLaterProjects,
-  ProjectStatus,
-  ScheduledType,
-  TaskStatus,
-  ProjectBucket,
-} from '@taskora/shared';
+import { hidesTasksInLaterProjects, ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 import type {
   AttachmentResponseDto,
   CreateAttachmentDto,
@@ -119,7 +113,7 @@ function queryFieldsOf(row: ReplicaRow) {
   const f = row.fields;
   return {
     status: f.status,
-    scheduledType: f.scheduledType,
+    start: f.start,
     scheduledDate: f.scheduledDate,
     dueDate: f.dueDate,
     trashedAt: f.trashedAt,
@@ -127,7 +121,6 @@ function queryFieldsOf(row: ReplicaRow) {
     // 了结时间：Task 行是 settledAt，Project 行是 completedAt（Logging Mode）
     settledAt: f.settledAt,
     completedAt: f.completedAt,
-    bucket: f.bucket,
     title: f.title,
     notes: f.notes,
     projectId: f.projectId,
@@ -420,9 +413,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       const f = existing.fields;
       const patch = planTaskUpdate(
         {
-          scheduledType: f.scheduledType,
+          start: f.start,
           scheduledDate: f.scheduledDate,
-          bucket: f.bucket,
           projectId: (f.projectId as string | null) ?? null,
           areaId: (f.areaId as string | null) ?? null,
           headingId: (f.headingId as string | null) ?? null,
@@ -484,7 +476,6 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         {
           status: f.status,
           trashedAt: f.trashedAt,
-          scheduledType: f.scheduledType,
           scheduledDate: f.scheduledDate,
           dueDate: f.dueDate,
           repeatRule: normalizeRepeatRule(f.repeatRule),
@@ -524,12 +515,11 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         {
           title: (f.title as string) ?? '',
           notes: (f.notes as string | null) ?? null,
-          scheduledType: f.scheduledType,
+          start: f.start,
           scheduledDate: f.scheduledDate,
           dueDate: f.dueDate,
           reminderTime: (f.reminderTime as string | null) ?? null,
           repeatRule: normalizeRepeatRule(f.repeatRule),
-          bucket: f.bucket,
           projectId: (f.projectId as string | null) ?? null,
           headingId: (f.headingId as string | null) ?? null,
           areaId: (f.areaId as string | null) ?? null,
@@ -760,7 +750,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         {
           title: (f.title as string) ?? '',
           notes: (f.notes as string | null) ?? null,
-          scheduledType: f.scheduledType,
+          start: f.start,
           scheduledDate: f.scheduledDate,
           dueDate: f.dueDate,
           status: f.status,
@@ -847,13 +837,12 @@ function projectRowToFeedItem(
     title: (f.title as string) ?? '',
     notes: (f.notes as string | null) ?? null,
     scheduledDate: (f.scheduledDate as string | null) ?? null,
-    scheduledType: (f.scheduledType as ScheduledType) ?? ScheduledType.NONE,
+    start: (f.start as Start) ?? Start.ANYTIME,
     reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
     repeatRule: (f.repeatRule as RepeatRule | null) ?? null,
     repeatSourceId: (f.repeatSourceId as string | null) ?? null,
     dueDate: (f.dueDate as string | null) ?? null,
     status: (f.status as ProjectStatus) ?? ProjectStatus.ACTIVE,
-    bucket: (f.bucket as ProjectBucket) ?? ProjectBucket.ANYTIME,
     completedAt: (f.completedAt as string | null) ?? null,
     trashedAt: (f.trashedAt as string | null) ?? null,
     position: typeof f.position === 'string' ? f.position : null,
@@ -915,7 +904,7 @@ function isLaterProjectRow(row: ReplicaRow): boolean {
     projectLaterKind({
       status: f.status as string,
       trashedAt: (f.trashedAt as string | null) ?? null,
-      scheduledType: f.scheduledType as string,
+      start: f.start as string,
       scheduledDate: (f.scheduledDate as string | null) ?? null,
     }) !== null
   );
