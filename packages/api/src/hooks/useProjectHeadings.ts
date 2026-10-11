@@ -16,6 +16,7 @@ import {
   deleteProjectHeading,
   getActiveHeadings,
   getProjectHeadings,
+  moveProjectHeading,
   reorderProjectHeadingLayout,
   unarchiveProjectHeading,
   updateProjectHeading,
@@ -118,6 +119,20 @@ export function useConvertProjectHeadingToProject(projectId: string) {
       // Heading list + tasks + feed for the source project, and the sidebar
       // project list so the newly created project appears.
       refreshProjectData(queryClient, projectId);
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
+    },
+  });
+}
+
+export function useMoveProjectHeading(projectId: string) {
+  const queryClient = useQueryCache();
+  return useMutation({
+    mutationFn: ({ id, targetProjectId }: { id: string; targetProjectId: string }) =>
+      moveProjectHeading(id, targetProjectId),
+    onSuccess: (heading) => {
+      // 源项目与目标项目的分组、任务，以及侧边栏项目的任务计数
+      refreshProjectData(queryClient, projectId);
+      refreshProjectData(queryClient, heading.projectId);
       refreshAfterWrite(queryClient, { queryKey: ['projects'] });
     },
   });

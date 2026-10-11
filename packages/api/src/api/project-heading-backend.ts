@@ -27,6 +27,8 @@ export interface ProjectHeadingBackend {
   ): Promise<ProjectHeadingResponseDto>;
   deleteProjectHeading(id: string): Promise<void>;
   convertProjectHeadingToProject(id: string): Promise<ProjectResponseDto>;
+  /** 分组连同其下任务移到另一个项目，排在目标项目分组末尾。 */
+  moveProjectHeading(id: string, projectId: string): Promise<ProjectHeadingResponseDto>;
   reorderProjectHeadingLayout(data: ReorderProjectHeadingLayoutDto): Promise<void>;
   archiveProjectHeading(id: string): Promise<ProjectHeadingResponseDto>;
   unarchiveProjectHeading(id: string): Promise<ProjectHeadingResponseDto>;

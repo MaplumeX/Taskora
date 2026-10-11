@@ -1,11 +1,5 @@
 import { Transform, Type } from 'class-transformer';
-import {
-  IsArray,
-  IsBoolean,
-  IsOptional,
-  IsString,
-  ValidateNested,
-} from 'class-validator';
+import { IsArray, IsBoolean, IsOptional, IsString, ValidateNested } from 'class-validator';
 
 export class CreateProjectHeadingDto {
   @IsString()
@@ -34,6 +28,11 @@ export class UpdateProjectHeadingDto {
   @IsOptional()
   @IsString()
   title?: string;
+}
+
+export class MoveProjectHeadingDto {
+  @IsString()
+  projectId!: string;
 }
 
 export class ProjectHeadingLayoutGroupDto {

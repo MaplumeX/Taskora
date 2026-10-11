@@ -31,7 +31,7 @@ _Avoid_: 文件、file、媒体、图片（图片只是一种附件）
 _Avoid_: 休眠项目（口语可用）、inactive project、归档
 
 **Project Heading（项目分组标题）**:
-Project 内的静态分组标题，用于组织 Project 内的 Tasks。未归档的 Heading 可在 Quick Find 中按名称搜到（所属项目须是导航目标），打开即跳到所在项目，该行成为 Selection 并滚入视野。
+Project 内的静态分组标题，用于组织 Project 内的 Tasks。可连同其下全部 Tasks 移到另一个 Project（对齐 Things 3 的 Move），排在目标项目分组末尾，Tasks 保留分组归属。未归档的 Heading 可在 Quick Find 中按名称搜到（所属项目须是导航目标），打开即跳到所在项目，该行成为 Selection 并滚入视野。
 _Avoid_: 项目标题（易与项目名称混淆）、Section、Group Header
 
 **Tag**:

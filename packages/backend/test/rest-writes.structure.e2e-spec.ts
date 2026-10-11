@@ -447,6 +447,31 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     );
   });
 
+  it('Heading：移到另一个项目，排在目标分组末尾，其下任务随之换项目并保留分组', async () => {
+    await seedProject('p-1');
+    await seedProject('p-2');
+    await seedHeading('h-target', 'p-2', { position: 'a0' });
+    await seedHeading('h-1', 'p-1', { position: 'a0' });
+    await seedTask('t-1', { projectId: 'p-1', headingId: 'h-1' });
+    await seedTask('t-trashed', { projectId: 'p-1', headingId: 'h-1', trashedAt: createdAt(1) });
+
+    const heading = await h.headings.move(USER, 'h-1', 'p-2');
+    expect(heading).toMatchObject({ projectId: 'p-2' });
+    expect((await h.headings.findAll(USER, 'p-2')).map((row) => row.id)).toEqual([
+      'h-target',
+      'h-1',
+    ]);
+    const moved = await testPrisma.task.findMany({ where: { projectId: 'p-2' } });
+    expect(moved.map((task) => [task.id, task.headingId]).sort()).toEqual([
+      ['t-1', 'h-1'],
+      ['t-trashed', 'h-1'],
+    ]);
+    await expectLoggedAsStored('project-heading', 'h-1');
+    await expectLoggedAsStored('task', 't-1');
+
+    await expect(h.headings.move(USER, 'h-1', 'missing')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('Heading：布局重排一起写分组顺序、归属与任务双排序键；与当前数据不符 → 400', async () => {
     await seedProject('p-1');
     await seedHeading('h-1', 'p-1', { position: 'a0' });

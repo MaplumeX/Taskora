@@ -1,9 +1,17 @@
 import * as React from 'react';
-import { Archive, FolderInput, GripVertical, MoreHorizontal, RotateCcw, Trash2 } from 'lucide-react';
+import {
+  Archive,
+  FolderInput,
+  FolderTree,
+  GripVertical,
+  MoreHorizontal,
+  RotateCcw,
+  Trash2,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { HeadingStatus } from '@taskora/shared';
-import type { ProjectHeadingResponseDto } from '@taskora/shared';
+import type { ProjectHeadingResponseDto, ProjectResponseDto } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -24,6 +32,7 @@ import {
   useArchiveProjectHeading,
   useConvertProjectHeadingToProject,
   useDeleteProjectHeading,
+  useMoveProjectHeading,
   useUnarchiveProjectHeading,
   useUpdateProjectHeading,
 } from '@taskora/api';
@@ -32,6 +41,9 @@ import { cn } from '@/lib/utils';
 import { useIsDesktop } from '../../lib/use-media-query';
 import { MenuItems, type MenuItem } from '@/components/common/MenuItems';
 import { ActionSheet, ActionSheetContent, ActionSheetTrigger } from '@/components/ui/action-sheet';
+import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
+import { FieldPickerDialog } from '@/components/common/FieldPicker';
+import { HeadingMovePicker } from './HeadingMovePicker';
 
 interface Props {
   heading: ProjectHeadingResponseDto;
@@ -48,6 +60,9 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
   const [editing, setEditing] = React.useState(autoEdit);
   const [draft, setDraft] = React.useState(heading.title);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [moveOpen, setMoveOpen] = React.useState(false);
+  // 菜单关闭时不把焦点还给「…」：否则刚打开的移动选择器会因失焦关闭
+  const keepMenuFocusRef = React.useRef(false);
   const inputRef = React.useRef<HTMLInputElement>(null);
   const rowRef = React.useRef<HTMLDivElement>(null);
   const archived = heading.status === HeadingStatus.COMPLETED;
@@ -56,6 +71,7 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
   const convertHeading = useConvertProjectHeadingToProject(heading.projectId);
   const archiveHeading = useArchiveProjectHeading(heading.projectId);
   const unarchiveHeading = useUnarchiveProjectHeading(heading.projectId);
+  const moveHeading = useMoveProjectHeading(heading.projectId);
   const isDesktop = useIsDesktop();
 
   React.useEffect(() => {
@@ -118,7 +134,33 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
       <MoreHorizontal className="h-4 w-4" />
     </Button>
   );
+  const moveTo = (project: ProjectResponseDto) => {
+    setMoveOpen(false);
+    moveHeading.mutate(
+      { id: heading.id, targetProjectId: project.id },
+      {
+        onSuccess: () =>
+          toast.success(
+            t('project:moveHeadingSuccess', {
+              project: project.title || t('project:newItemPlaceholder'),
+            }),
+          ),
+        onError: () => toast.error(t('project:moveHeadingFailed')),
+      },
+    );
+  };
+  const movePicker = <HeadingMovePicker currentProjectId={heading.projectId} onSelect={moveTo} />;
+
   const items: MenuItem[] = [
+    {
+      icon: FolderTree,
+      label: t('project:moveHeading'),
+      disabled: moveHeading.isPending,
+      onSelect: () => {
+        keepMenuFocusRef.current = true;
+        setMoveOpen(true);
+      },
+    },
     {
       icon: FolderInput,
       label: t('project:convertToProject'),
@@ -216,7 +258,14 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
         {isDesktop ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+            <DropdownMenuContent
+              align="end"
+              onCloseAutoFocus={(event) => {
+                if (!keepMenuFocusRef.current) return;
+                keepMenuFocusRef.current = false;
+                event.preventDefault();
+              }}
+            >
               {items.map(({ icon: Icon, label, disabled, destructive, onSelect }) => (
                 <DropdownMenuItem
                   key={label}
@@ -242,6 +291,23 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
           </ActionSheet>
         )}
       </div>
+
+      {isDesktop ? (
+        <Popover open={moveOpen} onOpenChange={setMoveOpen}>
+          <PopoverAnchor virtualRef={rowRef} />
+          <PopoverContent align="end" onClick={(event) => event.stopPropagation()}>
+            {movePicker}
+          </PopoverContent>
+        </Popover>
+      ) : (
+        <FieldPickerDialog
+          label={t('project:moveHeading')}
+          open={moveOpen}
+          onOpenChange={setMoveOpen}
+        >
+          {movePicker}
+        </FieldPickerDialog>
+      )}
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>

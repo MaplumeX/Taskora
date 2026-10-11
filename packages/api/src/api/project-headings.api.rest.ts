@@ -53,6 +53,15 @@ export function convertProjectHeadingToProject(id: string): Promise<ProjectRespo
     .then((response) => response.data);
 }
 
+export function moveProjectHeading(
+  id: string,
+  projectId: string,
+): Promise<ProjectHeadingResponseDto> {
+  return apiClient
+    .post<ProjectHeadingResponseDto>(`/project-headings/${id}/move`, { projectId })
+    .then((response) => response.data);
+}
+
 export function reorderProjectHeadingLayout(data: ReorderProjectHeadingLayoutDto): Promise<void> {
   return apiClient.post('/project-headings/reorder', data).then(() => undefined);
 }
