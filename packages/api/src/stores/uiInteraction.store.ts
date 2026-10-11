@@ -23,6 +23,11 @@ interface UiInteractionState {
    * 尚未挂载（键位同时展开任务），因此保存为待处理状态，由展开态取走。
    */
   subtaskDraftTaskId: string | null;
+  /**
+   * 右滑任务行打开的计划卡片（对齐 Things 3 iPhone：右滑弹出 When）所作用
+   * 的任务；全局只挂一张卡片，null 为关闭。
+   */
+  swipeWhenTaskId: string | null;
   settingsOpen: boolean;
   settingsTab: SettingsTab;
   /**
@@ -44,6 +49,7 @@ interface UiInteractionState {
   requestSubtaskDraft: (taskId: string) => void;
   /** 取走该任务的子任务草稿请求；有则返回 true。 */
   takeSubtaskDraft: (taskId: string) => boolean;
+  setSwipeWhenTaskId: (taskId: string | null) => void;
   openSettings: (tab?: SettingsTab) => void;
   closeSettings: () => void;
   setSettingsTab: (tab: SettingsTab) => void;
@@ -54,6 +60,7 @@ export const useUiInteractionStore = create<UiInteractionState>()((set, get) => 
   revealId: null,
   pendingAutoEditId: null,
   subtaskDraftTaskId: null,
+  swipeWhenTaskId: null,
   settingsOpen: false,
   settingsTab: 'appearance',
   settingsEntryTab: null,
@@ -77,6 +84,7 @@ export const useUiInteractionStore = create<UiInteractionState>()((set, get) => 
     set({ subtaskDraftTaskId: null });
     return true;
   },
+  setSwipeWhenTaskId: (taskId) => set({ swipeWhenTaskId: taskId }),
   openSettings: (tab) =>
     set({ settingsOpen: true, settingsTab: tab ?? 'appearance', settingsEntryTab: tab ?? null }),
   closeSettings: () => set({ settingsOpen: false }),

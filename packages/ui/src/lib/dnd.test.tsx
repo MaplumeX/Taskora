@@ -2,7 +2,15 @@ import { describe, it, expect, vi, afterEach } from 'vitest';
 import { act, render } from '@testing-library/react';
 import * as React from 'react';
 
-import { applyOrder, useCollapseAfterDragStart, useHeldOrder } from './dnd';
+import { useMultiSelectStore, useSelectionStore } from '@taskora/api';
+
+import {
+  applyOrder,
+  dragGroupOf,
+  dragSelectionIds,
+  useCollapseAfterDragStart,
+  useHeldOrder,
+} from './dnd';
 
 interface Row {
   id: string;
@@ -103,5 +111,26 @@ describe('useCollapseAfterDragStart', () => {
 
     expect(measured).toEqual([3]);
     expect(document.querySelectorAll('[data-row]')).toHaveLength(1);
+  });
+});
+
+describe('dragSelectionIds', () => {
+  afterEach(() => {
+    useMultiSelectStore.getState().exit();
+    useSelectionStore.getState().clearSelection();
+  });
+
+  it('uses the keyboard Selection outside Multi-Select Mode', () => {
+    useSelectionStore.getState().setSelection(['a', 'b']);
+    expect(dragSelectionIds()).toEqual(['a', 'b']);
+  });
+
+  it('uses the checked tasks in Multi-Select Mode, so a long-press drags them together', () => {
+    useSelectionStore.getState().setSelection(['x']);
+    useMultiSelectStore.getState().enter('c');
+    useMultiSelectStore.getState().toggle('a');
+    expect(dragGroupOf('a', ['a', 'b', 'c'], dragSelectionIds())).toEqual(['a', 'c']);
+    // 拖勾选之外的行仍是单项拖拽
+    expect(dragGroupOf('b', ['a', 'b', 'c'], dragSelectionIds())).toBeNull();
   });
 });

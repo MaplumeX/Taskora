@@ -24,7 +24,8 @@ import { useMagicPlusAvailable } from '../../lib/appDnd';
  * 手机端右下角悬浮添加按钮（对应 Things 的 Magic Plus）。
  * - 默认（可添加任务的页面）：直接点击创建任务。
  * - 首页：弹出朝上菜单选择「添加任务（落收件箱）/ 新增项目 / 新增区域」。
- * - area 详情页：弹出朝上菜单选择「添加任务 / 添加项目」。
+ * - area 详情页：直接创建任务（对齐 Things：区域里的新项目由首页把按钮
+ *   拖进该区域新建，不进菜单；桌面底栏的「添加项目」不受影响）。
  * - project 详情页：直接创建任务（对齐 Things：标题由拖到左边缘新建，
  *   不进菜单；桌面底栏的「添加标题」不受影响）。
  * - 页面无任何添加动作（calendar/logbook/trash）或处于多选模式时不渲染；
@@ -60,10 +61,10 @@ export function MobileFab({ scope = 'shell' }: { scope?: 'shell' | 'home' }) {
   const inReview = pathname.startsWith('/review/');
   const magicPlusAvailable = useMagicPlusAvailable();
 
-  // 首页与 area 详情页点击 FAB 弹出朝上菜单展示全部可用动作；
-  // 普通页面仅有一个动作时直接执行，减少一次点击
+  // 只有首页点击 FAB 弹出朝上菜单展示全部可用动作；其余页面（含区域页，
+  // 对齐 Things）点按直接新建任务
   const actionCount = (showAddTask ? 1 : 0) + (showAddProject ? 1 : 0) + (showAddArea ? 1 : 0);
-  const hasMenu = actionCount > 1;
+  const hasMenu = showAddArea && actionCount > 1;
   const pending = addTaskPending || addProjectPending || addAreaPending;
   const canDrag = magicPlusAvailable && showAddTask && !pending && !multiSelecting;
   const draggable = useDraggable({ id: MAGIC_PLUS_ID, data: magicPlusDragData, disabled: !canDrag });

@@ -38,6 +38,7 @@ import {
   attachLiveQueries,
   detachLiveQueries,
   createEngineInvalidator,
+  undoHistory,
   useReminderPermissionStore,
   requestTaskReveal,
 } from '@taskora/api';
@@ -119,12 +120,15 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
       deviceId,
       transport: createHttpSyncTransport(),
     });
-    // 全域注入（V2）：各域沿用 desktop 已验证的注入模式
-    setTaskBackend(createEngineTaskBackend({ engine }));
-    setProjectBackend(createEngineProjectBackend({ engine }));
-    setAreaBackend(createEngineAreaBackend({ engine }));
-    setTagBackend(createEngineTagBackend({ engine }));
-    setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine }));
+    // 全域注入（V2）：各域沿用 desktop 已验证的注入模式。界面上的编辑经
+    // 撤销历史包装的 Engine 写入（摇一摇撤销，见 api 包 undo-history.ts）；
+    // 提醒协调器等非界面写入仍用原 Engine，不进撤销历史。
+    const recorded = undoHistory.attach(engine);
+    setTaskBackend(createEngineTaskBackend({ engine: recorded }));
+    setProjectBackend(createEngineProjectBackend({ engine: recorded }));
+    setAreaBackend(createEngineAreaBackend({ engine: recorded }));
+    setTagBackend(createEngineTagBackend({ engine: recorded }));
+    setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine: recorded }));
     // 注册失败不阻塞本地使用；成功时启用提醒的后台同步（issue 09）
     void registerDevice(deviceId)
       .then((token) => enableBackgroundSync(token))
@@ -233,6 +237,7 @@ async function enableBackgroundSync(token: string | null): Promise<void> {
 /** 全域退回 REST（登出 / 装配失败）。 */
 function resetBackends(): void {
   detachLiveQueries();
+  undoHistory.detach();
   setTaskBackend(undefined);
   setProjectBackend(undefined);
   setAreaBackend(undefined);

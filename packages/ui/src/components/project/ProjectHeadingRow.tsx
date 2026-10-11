@@ -83,8 +83,11 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
   React.useEffect(() => {
     if (!editing) return;
     const frame = requestAnimationFrame(() => {
-      inputRef.current?.focus();
-      inputRef.current?.select();
+      const input = inputRef.current;
+      if (!input) return;
+      input.focus();
+      const end = input.value.length;
+      input.setSelectionRange(end, end);
     });
     return () => cancelAnimationFrame(frame);
   }, [editing]);

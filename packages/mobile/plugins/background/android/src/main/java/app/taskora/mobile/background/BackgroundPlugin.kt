@@ -1,7 +1,15 @@
 package app.taskora.mobile.background
 
 import android.app.Activity
+import android.content.Context
 import android.content.res.Configuration
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
+import android.os.Build
+import android.os.SystemClock
+import android.view.HapticFeedbackConstants
 import android.webkit.WebView
 import androidx.core.view.ViewCompat
 import androidx.core.view.WindowCompat
@@ -16,6 +24,11 @@ import app.tauri.plugin.Plugin
 @InvokeArg
 class SystemBarAppearanceArgs {
     var dark: Boolean = false
+}
+
+@InvokeArg
+class HapticArgs {
+    var kind: String = "tick"
 }
 
 /**
@@ -36,9 +49,25 @@ class SystemBarAppearanceArgs {
  * 系统栏图标明暗：状态栏透明，底下是 App 自身背景；图标明暗随 App 实际
  * 主题（含手动指定的亮 / 暗，与系统 DayNight 无关）由 JS 设置。
  * 系统主题：uiMode 查询 + 配置变化 / 回前台事件，供 JS 的「跟随系统」解析。
+ *
+ * 触感：窗口 View 的 performHapticFeedback，跟随系统「触摸反馈」设置，不需要
+ * VIBRATE 权限。种类与 JS（api 包 haptics.ts）一一对应，新常量在旧系统上
+ * 退回近似的旧常量。
+ *
+ * 摇一摇：前台期间（onResume ~ onPause）监听加速度计，短时间内两次超过
+ * 阈值的晃动算一次摇一摇，经 `shake` 事件推送（JS 弹出撤销确认）；推送后
+ * 冷却一段时间，避免一次连续晃动触发多次。
  */
 @TauriPlugin
-class BackgroundPlugin(private val activity: Activity) : Plugin(activity) {
+class BackgroundPlugin(private val activity: Activity) : Plugin(activity), SensorEventListener {
+
+    private val sensorManager =
+        activity.getSystemService(Context.SENSOR_SERVICE) as SensorManager?
+    private val accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER)
+    /** 上一次超过阈值的晃动时刻（elapsedRealtime 毫秒）；0 为没有。 */
+    private var lastPeakAt = 0L
+    /** 上一次推送 shake 的时刻，冷却期内不再推送。 */
+    private var lastShakeAt = 0L
 
     @Volatile
     private var insets = SafeAreaInsets(0f, 0f)
@@ -92,6 +121,51 @@ class BackgroundPlugin(private val activity: Activity) : Plugin(activity) {
     override fun onResume() {
         super.onResume()
         trigger("theme", systemTheme(activity.resources.configuration))
+        accelerometer?.let {
+            sensorManager?.registerListener(this, it, SensorManager.SENSOR_DELAY_UI)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        sensorManager?.unregisterListener(this)
+        lastPeakAt = 0L
+    }
+
+    override fun onSensorChanged(event: SensorEvent) {
+        val (x, y, z) = event.values
+        val gForce = Math.sqrt((x * x + y * y + z * z).toDouble()) / SensorManager.GRAVITY_EARTH
+        if (gForce < SHAKE_G_FORCE) return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastShakeAt < SHAKE_COOLDOWN_MS) return
+        if (lastPeakAt != 0L && now - lastPeakAt in SHAKE_MIN_GAP_MS..SHAKE_WINDOW_MS) {
+            lastPeakAt = 0L
+            lastShakeAt = now
+            trigger("shake", JSObject())
+        } else if (lastPeakAt == 0L || now - lastPeakAt > SHAKE_WINDOW_MS) {
+            lastPeakAt = now
+        }
+    }
+
+    override fun onAccuracyChanged(sensor: Sensor, accuracy: Int) = Unit
+
+    @Command
+    fun haptic(invoke: Invoke) {
+        val args = invoke.parseArgs(HapticArgs::class.java)
+        val constant = when (args.kind) {
+            "lift" -> HapticFeedbackConstants.LONG_PRESS
+            "drop" ->
+                if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.GESTURE_END
+                else HapticFeedbackConstants.VIRTUAL_KEY
+            "confirm" ->
+                if (Build.VERSION.SDK_INT >= 30) HapticFeedbackConstants.CONFIRM
+                else HapticFeedbackConstants.VIRTUAL_KEY
+            else -> HapticFeedbackConstants.CLOCK_TICK
+        }
+        activity.runOnUiThread {
+            activity.window.decorView.performHapticFeedback(constant)
+            invoke.resolve()
+        }
     }
 
     @Command
@@ -114,3 +188,9 @@ class BackgroundPlugin(private val activity: Activity) : Plugin(activity) {
         }
     }
 }
+
+private const val SHAKE_G_FORCE = 2.3
+/** 两次晃动峰值的最小间隔：同一次甩动的连续采样不算两次。 */
+private const val SHAKE_MIN_GAP_MS = 120L
+private const val SHAKE_WINDOW_MS = 700L
+private const val SHAKE_COOLDOWN_MS = 1500L

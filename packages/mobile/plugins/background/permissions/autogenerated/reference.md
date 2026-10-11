@@ -1,6 +1,6 @@
 ## Default Permission
 
-Allows moving the app task to the background (back to home) instead of exiting the process, reading / subscribing to system theme and system bar safe-area insets, and matching the system bar icon appearance to the app theme.
+Allows moving the app task to the background (back to home) instead of exiting the process, reading / subscribing to system theme and system bar safe-area insets, matching the system bar icon appearance to the app theme, gesture haptics, and shake events.
 
 #### This default permission set includes the following:
 
@@ -8,6 +8,7 @@ Allows moving the app task to the background (back to home) instead of exiting t
 - `allow-safe-area-insets`
 - `allow-set-system-bar-appearance`
 - `allow-system-theme`
+- `allow-haptic`
 - `allow-register-listener`
 - `allow-remove-listener`
 
@@ -19,6 +20,32 @@ Allows moving the app task to the background (back to home) instead of exiting t
 <th>Description</th>
 </tr>
 
+
+<tr>
+<td>
+
+`background:allow-haptic`
+
+</td>
+<td>
+
+Enables the haptic command without any pre-configured scope.
+
+</td>
+</tr>
+
+<tr>
+<td>
+
+`background:deny-haptic`
+
+</td>
+<td>
+
+Denies the haptic command without any pre-configured scope.
+
+</td>
+</tr>
 
 <tr>
 <td>

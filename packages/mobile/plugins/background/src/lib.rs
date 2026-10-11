@@ -13,6 +13,10 @@
 //! 插件拿 `Activity`：`ndk-context` 由 tao 以 Application Context 初始化
 //! （tao PR #1266），而 `moveTaskToBack` 是 `Activity` 的方法。结构同
 //! `tauri-plugin-statusbar`：桌面端（测试编译）为 no-op。
+//!
+//! 触感与摇一摇（对齐 Things 3 iPhone 的手势触感与摇一摇撤销）：`haptic`
+//! 经窗口 View 的 performHapticFeedback 触发（跟随系统触感设置，无需
+//! VIBRATE 权限）；前台期间监听加速度计，检测到摇晃经 `shake` 事件推送。
 
 use serde::{Deserialize, Serialize};
 use tauri::{
@@ -37,6 +41,12 @@ pub struct SafeAreaInsets {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub struct SystemBarAppearanceArgs {
     pub dark: bool,
+}
+
+/// `haptic` 的参数：触感种类（tick / lift / drop / confirm，见 api 包 haptics.ts）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct HapticArgs {
+    pub kind: String,
 }
 
 /// Android 系统的 uiMode；与 App 手动选择的主题独立。
@@ -96,6 +106,20 @@ impl<R: Runtime> Background<R> {
         }
     }
 
+    pub fn haptic(&self, kind: String) -> Result<(), String> {
+        #[cfg(mobile)]
+        {
+            self.handle
+                .run_mobile_plugin::<()>("haptic", HapticArgs { kind })
+                .map_err(|e| e.to_string())
+        }
+        #[cfg(desktop)]
+        {
+            let _ = kind;
+            Ok(())
+        }
+    }
+
     pub fn system_theme(&self) -> Result<SystemTheme, String> {
         #[cfg(mobile)]
         {
@@ -143,13 +167,19 @@ async fn set_system_bar_appearance<R: Runtime>(
     app.background().set_system_bar_appearance(dark)
 }
 
+#[tauri::command]
+async fn haptic<R: Runtime>(app: tauri::AppHandle<R>, kind: String) -> Result<(), String> {
+    app.background().haptic(kind)
+}
+
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     Builder::new("background")
         .invoke_handler(tauri::generate_handler![
             move_to_back,
             safe_area_insets,
             system_theme,
-            set_system_bar_appearance
+            set_system_bar_appearance,
+            haptic
         ])
         .setup(|app, _api| {
             #[cfg(target_os = "android")]

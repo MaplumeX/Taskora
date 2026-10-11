@@ -2,6 +2,8 @@ import * as React from 'react';
 import { defaultDropAnimationSideEffects, type DropAnimation } from '@dnd-kit/core';
 import type { AnimateLayoutChanges, SortingStrategy } from '@dnd-kit/sortable';
 
+import { useMultiSelectStore, useSelectionStore } from '@taskora/api';
+
 /**
  * 拖拽排序的共享约定（Things 式「让位」模型）：
  *
@@ -184,6 +186,15 @@ function identity(id: string) {
 
 function joinIds(ids: string[]) {
   return ids.join('\u0000');
+}
+
+/**
+ * 多项拖拽的选中集合：触控多选模式中为勾选集合（对齐 Things 3 iPhone：
+ * 按住勾选中的一项，其余勾选项一起拖动），否则为键盘 Selection。
+ */
+export function dragSelectionIds(): readonly string[] {
+  const multiSelect = useMultiSelectStore.getState();
+  return multiSelect.active ? multiSelect.ids : useSelectionStore.getState().selectedIds;
 }
 
 /**

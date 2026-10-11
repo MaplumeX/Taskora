@@ -73,15 +73,13 @@ describe('MobileFab', () => {
     await waitFor(() => expect(baseActions.handleAddTask).toHaveBeenCalled());
   });
 
-  it('multiple actions: opens an upward menu listing all actions', async () => {
-    mockHook.mockReturnValue({
-      ...baseActions,
-      showAddProject: true,
-    } as never);
-    renderFab();
+  it('area page: clicking FAB adds a task directly (project is not offered)', async () => {
+    mockHook.mockReturnValue({ ...baseActions, showAddProject: true } as never);
+    renderFab({ path: '/areas/a1' });
     await userEvent.click(screen.getByRole('button'));
-    const items = await screen.findAllByRole('menuitem');
-    expect(items).toHaveLength(2);
+    expect(baseActions.handleAddTask).toHaveBeenCalled();
+    expect(screen.queryByRole('menuitem')).toBeNull();
+    expect(baseActions.handleAddProject).not.toHaveBeenCalled();
   });
 
   it('project page: clicking FAB adds a task directly (heading is not offered)', async () => {
@@ -106,11 +104,11 @@ describe('MobileFab', () => {
   });
 
   it('a menu page with an accepting list still opens the menu on tap', async () => {
-    mockHook.mockReturnValue({ ...baseActions, showAddProject: true } as never);
+    mockHook.mockReturnValue({ ...baseActions, showAddProject: true, showAddArea: true } as never);
     renderFab({ acceptingList: true });
     expect(screen.getByRole('button')).toHaveClass('touch-none');
     await userEvent.click(screen.getByRole('button'));
-    expect(await screen.findAllByRole('menuitem')).toHaveLength(2);
+    expect(await screen.findAllByRole('menuitem')).toHaveLength(3);
   });
 
   it('on /home only the home-scoped button renders', () => {

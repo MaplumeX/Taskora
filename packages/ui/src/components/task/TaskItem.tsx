@@ -14,7 +14,7 @@ import {
 import * as React from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { ListChecks } from 'lucide-react';
+import { CalendarDays, ListChecks } from 'lucide-react';
 
 import type { TaskResponseDto } from '@taskora/shared';
 
@@ -140,7 +140,15 @@ export function TaskItem({
       }
       multiSelect.enter(task.id);
     },
-    { enabled: multiSelectEnabled && !expanded },
+    {
+      enabled: multiSelectEnabled && !expanded,
+      // 右滑弹出计划卡片（对齐 Things 3 iPhone 的右滑 When）；多选模式中、
+      // 展开态与 Trash 中的行不响应。
+      onSwipeRight:
+        expanded || selectMode || current.trashedAt != null
+          ? undefined
+          : () => useUiInteractionStore.getState().setSwipeWhenTaskId(task.id),
+    },
   );
 
   // Keep local title in sync with the server value when it changes externally.
@@ -255,6 +263,19 @@ export function TaskItem({
                 useMultiSelectStore.getState().toggle(task.id);
               }}
             >
+              {/* 右滑露出的计划指示：宽度跟随位移，越过阈值后高亮。 */}
+              {swipe.offset > 0 && (
+                <div
+                  aria-hidden
+                  className={cn(
+                    'absolute inset-y-0 left-0 flex items-center justify-center overflow-hidden transition-colors',
+                    swipe.armed ? 'text-primary' : 'text-muted-foreground',
+                  )}
+                  style={{ width: swipe.offset }}
+                >
+                  <CalendarDays className="h-5 w-5 shrink-0" />
+                </div>
+              )}
               {/* 左滑露出的多选指示：宽度跟随位移，越过阈值后高亮。 */}
               {swipe.offset < 0 && (
                 <div
@@ -282,7 +303,7 @@ export function TaskItem({
                   'focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
                   selectionState !== 'idle' && 'focus-visible:ring-0',
                   !expanded && selectionState === 'idle' && !selectMode && 'hover:bg-accent/60',
-                  // 横向手势交给左滑，纵向仍由浏览器滚动列表。
+                  // 横向手势交给左滑 / 右滑，纵向仍由浏览器滚动列表。
                   'touch-pan-y',
                   multiSelected && 'bg-selection',
                   swipe.offset === 0 && 'transition-[background-color,transform] duration-fast',
