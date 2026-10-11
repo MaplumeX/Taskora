@@ -2,6 +2,7 @@
 // safe_area_insets：系统栏安全区（WindowInsets 兜底 env()）。
 // set_system_bar_appearance：系统栏图标明暗跟随 App 主题。
 // system_theme：读取 Android 系统主题（uiMode）。
+// haptic：手势触感（performHapticFeedback）；摇一摇经 `shake` 事件推送，无命令。
 // register_listener / remove_listener：JS `addPluginListener` 订阅 `insets` / `theme`
 // 事件的内建命令，不列出就不生成权限，订阅会被 ACL 拒绝（同 statusbar）。
 const COMMANDS: &[&str] = &[
@@ -9,6 +10,7 @@ const COMMANDS: &[&str] = &[
     "safe_area_insets",
     "set_system_bar_appearance",
     "system_theme",
+    "haptic",
     "register_listener",
     "remove_listener",
 ];

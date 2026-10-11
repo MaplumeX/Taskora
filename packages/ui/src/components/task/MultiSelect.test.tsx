@@ -7,10 +7,11 @@ import React from 'react';
 
 import type { TaskResponseDto } from '@taskora/shared';
 import { TaskStatus, TaskBucket, ScheduledType } from '@taskora/shared';
-import { useMultiSelectStore, useSelectionStore } from '@taskora/api';
+import { useMultiSelectStore, useSelectionStore, useUiInteractionStore } from '@taskora/api';
 
 import { TaskItem } from './TaskItem';
 import { MultiSelectToolbar } from './MultiSelectToolbar';
+import { SwipeWhenPicker } from './SwipeWhenPicker';
 
 const mocks = vi.hoisted(() => ({
   update: vi.fn(),
@@ -110,10 +111,69 @@ function swipeLeft(target: Element) {
   fireEvent.click(target);
 }
 
+function swipeRight(target: Element) {
+  touch(target, 'pointerdown', 100);
+  touch(target, 'pointermove', 150);
+  touch(target, 'pointermove', 200);
+  touch(target, 'pointerup', 200);
+  fireEvent.click(target);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.task = null;
+  useUiInteractionStore.setState({ swipeWhenTaskId: null });
   useMultiSelectStore.setState({ active: false, ids: [] });
   useSelectionStore.setState({ scopes: {}, scopeOrder: [] });
+});
+
+describe('TaskItem — 右滑计划', () => {
+  it('右滑弹出该任务的计划卡片，不展开、不进入多选', async () => {
+    mocks.task = baseTask;
+    const onRowClick = vi.fn();
+    renderWithProviders(
+      <>
+        <TaskItem task={baseTask} onToggleComplete={() => {}} onRowClick={onRowClick} />
+        <SwipeWhenPicker />
+      </>,
+    );
+
+    swipeRight(screen.getByText('My task'));
+
+    expect(useUiInteractionStore.getState().swipeWhenTaskId).toBe('task-1');
+    expect(await screen.findByRole('dialog')).toBeInTheDocument();
+    expect(onRowClick).not.toHaveBeenCalled();
+    expect(useMultiSelectStore.getState().active).toBe(false);
+
+    // 卡片里选「某天」即写入该任务并关闭。
+    await userEvent.click(screen.getByRole('button', { name: /someday|某天/i }));
+    expect(mocks.update).toHaveBeenCalledWith(
+      { id: 'task-1', data: expect.objectContaining({ scheduledType: ScheduledType.SOMEDAY }) },
+      expect.anything(),
+    );
+    expect(useUiInteractionStore.getState().swipeWhenTaskId).toBeNull();
+  });
+
+  it('多选模式中与 Trash 里的行不响应右滑', () => {
+    useMultiSelectStore.setState({ active: true, ids: [] });
+    const { unmount } = renderWithProviders(
+      <TaskItem task={baseTask} onToggleComplete={() => {}} onRowClick={() => {}} />,
+    );
+    swipeRight(screen.getByText('My task'));
+    expect(useUiInteractionStore.getState().swipeWhenTaskId).toBeNull();
+    unmount();
+
+    useMultiSelectStore.setState({ active: false, ids: [] });
+    renderWithProviders(
+      <TaskItem
+        task={{ ...baseTask, trashedAt: '2025-08-01T00:00:00.000Z' }}
+        onToggleComplete={() => {}}
+        onRowClick={() => {}}
+      />,
+    );
+    swipeRight(screen.getByText('My task'));
+    expect(useUiInteractionStore.getState().swipeWhenTaskId).toBeNull();
+  });
 });
 
 describe('TaskItem — 左滑多选', () => {

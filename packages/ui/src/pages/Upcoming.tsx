@@ -17,7 +17,6 @@ import {
   useReorderFeed,
   useMultiSelectStore,
   usePageTaskContext,
-  useSelectionStore,
 } from '@taskora/api';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -73,6 +72,7 @@ import type { SidebarDropPayload } from '@/components/layout/sidebarDrop';
 import {
   dndListProps,
   dragGroupOf,
+  dragSelectionIds,
   dragOverlayClass,
   dragOverlayWrapperClass,
   expandDragGroup,
@@ -314,7 +314,7 @@ export default function Upcoming() {
     const groupIds = dragGroupOf(
       item.id,
       shownTasks.map((entry) => entry.item.id),
-      useSelectionStore.getState().selectedIds,
+      dragSelectionIds(),
     );
     // 多项拖拽保留多选（松手后整组仍选中）；单项拖拽照旧清掉选中。
     if (!groupIds) handleBlankClick();

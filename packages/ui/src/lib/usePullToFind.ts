@@ -1,5 +1,7 @@
 import * as React from 'react';
 
+import { haptic } from '@taskora/api';
+
 export interface PullToFindOptions {
   /** 为 false 时不响应手势。默认 true。 */
   enabled?: boolean;
@@ -47,6 +49,8 @@ export function usePullToFind(
     let gesture: { x: number; y: number; t: number; pulling: boolean } | null = null;
     let current = 0;
     const move = (next: number) => {
+      // 越过触发阈值的那一刻给一次轻触感（同左滑 / 右滑）。
+      if (current < threshold && next >= threshold) haptic('tick');
       current = next;
       setDistance(next);
     };

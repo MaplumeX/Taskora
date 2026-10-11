@@ -35,6 +35,7 @@ import type { SidebarDropPayload } from '@/components/layout/sidebarDrop';
 import {
   dndListProps,
   dragGroupOf,
+  dragSelectionIds,
   dragOverlayClass,
   dragOverlayWrapperClass,
   expandDragGroup,
@@ -639,7 +640,7 @@ export function GroupedFeedListView({
         ? dragGroupOf(
             item.id,
             feedOrderOf(layout).flatMap((row) => (row.type === 'task' ? [row.id] : [])),
-            useSelectionStore.getState().selectedIds,
+            dragSelectionIds(),
           )
         : null;
     // 多项拖拽保留多选（松手后整组仍选中）；单项拖拽照旧清掉选中。

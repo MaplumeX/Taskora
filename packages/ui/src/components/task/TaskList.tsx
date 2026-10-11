@@ -12,13 +12,14 @@ import { CSS } from '@dnd-kit/utilities';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { TaskItem } from './TaskItem';
-import { selectionStateOf, useSelectionStore, type SelectionState } from '@taskora/api';
+import { selectionStateOf, type SelectionState } from '@taskora/api';
 import { EmptyState } from '@/components/common/EmptyState';
 import { cn } from '@/lib/utils';
 import { DragCountBadge } from '@/components/common/DragCountBadge';
 import {
   dndListProps,
   dragGroupOf,
+  dragSelectionIds,
   dragOverlayClass,
   dragOverlayWrapperClass,
   expandDragGroup,
@@ -145,7 +146,7 @@ onReorder,
     const group = dragGroupOf(
       id,
       heldTasks.map((t) => t.id),
-      useSelectionStore.getState().selectedIds,
+      dragSelectionIds(),
     );
     if (group) setDrag({ activeId: id, group, collapsed: false });
   };
@@ -175,7 +176,7 @@ onReorder,
   /** 拖到侧边栏的载荷：被拖任务，多选时为整组（按显示顺序）。 */
   const sidebarPayload = (id: string): SidebarDropPayload | null => {
     const ids = heldTasks.map((t) => t.id);
-    const group = dragGroupOf(id, ids, useSelectionStore.getState().selectedIds) ?? [id];
+    const group = dragGroupOf(id, ids, dragSelectionIds()) ?? [id];
     const tasks = heldTasks.filter((t) => group.includes(t.id));
     return tasks.length > 0 ? { kind: 'tasks', tasks } : null;
   };

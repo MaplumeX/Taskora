@@ -1,18 +1,22 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
+import { setHaptics } from '@taskora/api';
+
 import { useSwipeToSelect } from './useSwipeToSelect';
 
 function Harness({
   onSwipe,
+  onSwipeRight,
   onClick,
   enabled,
 }: {
   onSwipe: () => void;
+  onSwipeRight?: () => void;
   onClick?: () => void;
   enabled?: boolean;
 }) {
-  const { handlers, offset, armed } = useSwipeToSelect(onSwipe, { enabled });
+  const { handlers, offset, armed } = useSwipeToSelect(onSwipe, { enabled, onSwipeRight });
   return (
     <div data-testid="row" data-offset={offset} data-armed={armed} {...handlers} onClick={onClick}>
       row
@@ -136,5 +140,57 @@ describe('useSwipeToSelect', () => {
     pointer('pointerup', { x: 200, elapsed: 30 });
     fireEvent.click(row());
     expect(onClick).toHaveBeenCalledTimes(1);
+  });
+
+  it('有右滑回调时右滑越过阈值松手触发右滑，不触发左滑', () => {
+    const onSwipe = vi.fn();
+    const onSwipeRight = vi.fn();
+    render(<Harness onSwipe={onSwipe} onSwipeRight={onSwipeRight} />);
+
+    pointer('pointerdown', { x: 100, y: 10 });
+    pointer('pointermove', { x: 300, y: 12, elapsed: 30 });
+    expect(row().dataset.offset).toBe('88');
+    expect(row().dataset.armed).toBe('true');
+    pointer('pointerup', { x: 300, y: 12, elapsed: 30 });
+
+    expect(onSwipeRight).toHaveBeenCalledTimes(1);
+    expect(onSwipe).not.toHaveBeenCalled();
+    expect(row().dataset.offset).toBe('0');
+  });
+
+  it('左滑禁用时右滑仍可用', () => {
+    const onSwipe = vi.fn();
+    const onSwipeRight = vi.fn();
+    render(<Harness onSwipe={onSwipe} onSwipeRight={onSwipeRight} enabled={false} />);
+
+    pointer('pointerdown', { x: 200 });
+    pointer('pointermove', { x: 100, elapsed: 30 });
+    pointer('pointerup', { x: 100, elapsed: 30 });
+    pointer('pointerdown', { x: 100 });
+    pointer('pointermove', { x: 200, elapsed: 30 });
+    pointer('pointerup', { x: 200, elapsed: 30 });
+
+    expect(onSwipe).not.toHaveBeenCalled();
+    expect(onSwipeRight).toHaveBeenCalledTimes(1);
+  });
+
+  it('越过阈值的那一刻给一次轻触感，来回越过各一次', () => {
+    const impl = vi.fn();
+    setHaptics(impl);
+    try {
+      render(<Harness onSwipe={vi.fn()} />);
+      pointer('pointerdown', { x: 200 });
+      pointer('pointermove', { x: 150, elapsed: 30 });
+      expect(impl).not.toHaveBeenCalled();
+      pointer('pointermove', { x: 120, elapsed: 30 });
+      pointer('pointermove', { x: 110, elapsed: 30 });
+      expect(impl).toHaveBeenCalledTimes(1);
+      expect(impl).toHaveBeenCalledWith('tick');
+      pointer('pointermove', { x: 160, elapsed: 30 });
+      pointer('pointermove', { x: 120, elapsed: 30 });
+      expect(impl).toHaveBeenCalledTimes(2);
+    } finally {
+      setHaptics(null);
+    }
   });
 });
