@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import type { TaskResponseDto } from '@taskora/shared';
-import { ScheduledType, TaskStatus } from '@taskora/shared';
+import { TaskStatus } from '@taskora/shared';
 import {
   currentLegacyDateTimeZone,
   i18n,
@@ -29,7 +29,7 @@ export function useSkipOccurrence(task: TaskResponseDto | null, enabled: boolean
 
   const available =
     !!task &&
-    (task.scheduledType ?? ScheduledType.NONE) === ScheduledType.DATE &&
+    task.scheduledDate != null &&
     !!task.repeatRule &&
     task.status === TaskStatus.ACTIVE &&
     !task.trashedAt;

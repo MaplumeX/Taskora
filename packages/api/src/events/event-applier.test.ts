@@ -1,12 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import {
-  HeadingStatus,
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
-  TaskBucket,
-  TaskStatus,
-} from '@taskora/shared';
+import { HeadingStatus, ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 import type {
   AreaResponseDto,
   ChangeEvent,
@@ -28,12 +21,11 @@ function makeTask(overrides: Partial<TaskResponseDto> = {}): TaskResponseDto {
     title: 'Task',
     notes: null,
     scheduledDate: null,
-    scheduledType: ScheduledType.NONE,
+    start: Start.INBOX,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
-    bucket: TaskBucket.INBOX,
     status: TaskStatus.ACTIVE,
     completedAt: null,
     trashedAt: null,
@@ -104,7 +96,7 @@ describe('applyChangeEvents — CANCELLED 口径（spec: task-cancelled）', () 
 
   it('a cancelled task leaves every active view and lands in logbook', () => {
     const todayTask = makeTask({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-01-01T00:00:00.000Z',
     });
     queryClient.setQueryData(taskKeys.list({ view: 'today' }), [todayTask]);
@@ -120,21 +112,21 @@ describe('applyChangeEvents — CANCELLED 口径（spec: task-cancelled）', () 
     };
     applyChangeEvents(queryClient, [event('task', 'task-1', 'updated', cancelled)]);
 
-    expect(
-      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'today' })),
-    ).toEqual([]);
-    expect(
-      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'inbox' })),
-    ).toEqual([]);
-    expect(
-      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'anytime' })),
-    ).toEqual([]);
-    expect(
-      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'someday' })),
-    ).toEqual([]);
-    expect(
-      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'logbook' })),
-    ).toEqual([cancelled]);
+    expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'today' }))).toEqual(
+      [],
+    );
+    expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'inbox' }))).toEqual(
+      [],
+    );
+    expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'anytime' }))).toEqual(
+      [],
+    );
+    expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'someday' }))).toEqual(
+      [],
+    );
+    expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'logbook' }))).toEqual(
+      [cancelled],
+    );
   });
 
   it('a cancelled task matches the q + completed=true search list (settled whitelist)', () => {
@@ -154,9 +146,9 @@ describe('applyChangeEvents — CANCELLED 口径（spec: task-cancelled）', () 
         taskKeys.list({ q: 'japanese', completed: true }),
       ),
     ).toEqual([cancelled]);
-    expect(
-      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ q: 'japanese' })),
-    ).toEqual([]);
+    expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ q: 'japanese' }))).toEqual(
+      [],
+    );
   });
 
   it('an uncancelled task leaves logbook and re-enters the active view', () => {
@@ -170,12 +162,12 @@ describe('applyChangeEvents — CANCELLED 口径（spec: task-cancelled）', () 
     const active = makeTask({ status: TaskStatus.ACTIVE, completedAt: null });
     applyChangeEvents(queryClient, [event('task', 'task-1', 'updated', active)]);
 
-    expect(
-      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'logbook' })),
-    ).toEqual([]);
-    expect(
-      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'inbox' })),
-    ).toEqual([active]);
+    expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'logbook' }))).toEqual(
+      [],
+    );
+    expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'inbox' }))).toEqual([
+      active,
+    ]);
   });
 });
 
@@ -199,7 +191,7 @@ describe('applyChangeEvents', () => {
     expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'inbox' }))).toEqual([
       inboxTask,
     ]);
-    // today requires scheduledType DATE
+    // today requires a scheduledDate
     expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ view: 'today' }))).toEqual(
       [],
     );
@@ -208,7 +200,7 @@ describe('applyChangeEvents', () => {
   it('moves a task between lists when its fields change (complete → logbook)', () => {
     const todayTask = makeTask({
       id: 'task-1',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-01-01T00:00:00.000Z',
     });
     queryClient.setQueryData(taskKeys.list({ view: 'today' }), [todayTask]);
@@ -332,10 +324,9 @@ describe('applyChangeEvents', () => {
       notes: null,
       areaId: null,
       status: ProjectStatus.ACTIVE,
-      bucket: ProjectBucket.ANYTIME,
+      start: Start.ANYTIME,
       taskTotalCount: 0,
       taskCompletedCount: 0,
-      scheduledType: ScheduledType.NONE,
       scheduledDate: null,
       dueDate: null,
       completedAt: null,
@@ -513,10 +504,9 @@ describe('applyChangeEvents — 稍后项目（spec: later-projects）', () => {
     notes: null,
     areaId: null,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.SCHEDULED,
+    start: Start.SOMEDAY,
     taskTotalCount: 0,
     taskCompletedCount: 0,
-    scheduledType: ScheduledType.SOMEDAY,
     scheduledDate: null,
     dueDate: null,
     completedAt: null,
@@ -533,11 +523,13 @@ describe('applyChangeEvents — 稍后项目（spec: later-projects）', () => {
     queryClient.setQueryData(taskKeys.list({ projectId: 'p1' }), []);
 
     applyChangeEvents(queryClient, [
-      event('task', 't1', 'created', makeTask({ id: 't1', projectId: 'p1', bucket: TaskBucket.ANYTIME })),
+      event('task', 't1', 'created', makeTask({ id: 't1', projectId: 'p1', start: Start.ANYTIME })),
     ]);
 
     expect(queryClient.getQueryData(taskKeys.list({ view: 'anytime' }))).toEqual([]);
-    expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ projectId: 'p1' }))).toHaveLength(1);
+    expect(
+      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ projectId: 'p1' })),
+    ).toHaveLength(1);
   });
 
   it('项目变更使 Anytime / Someday 任务列表失效，其他任务列表不受影响', () => {
@@ -573,10 +565,12 @@ describe('applyChangeEvents — 有效 Tag（ADR 0015）', () => {
     queryClient.setQueryData(taskKeys.list({ tagId: 'work' }), []);
 
     applyChangeEvents(queryClient, [
-      event('task', 't1', 'created', makeTask({ id: 't1', projectId: 'p1', bucket: TaskBucket.ANYTIME })),
+      event('task', 't1', 'created', makeTask({ id: 't1', projectId: 'p1', start: Start.ANYTIME })),
     ]);
 
-    expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ tagId: 'work' }))).toHaveLength(1);
+    expect(
+      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ tagId: 'work' })),
+    ).toHaveLength(1);
   });
 
   it('任务继承所属 Area 的 Tag', () => {
@@ -584,10 +578,12 @@ describe('applyChangeEvents — 有效 Tag（ADR 0015）', () => {
     queryClient.setQueryData(taskKeys.list({ tagId: 'work' }), []);
 
     applyChangeEvents(queryClient, [
-      event('task', 't1', 'created', makeTask({ id: 't1', areaId: 'a1', bucket: TaskBucket.ANYTIME })),
+      event('task', 't1', 'created', makeTask({ id: 't1', areaId: 'a1', start: Start.ANYTIME })),
     ]);
 
-    expect(queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ tagId: 'work' }))).toHaveLength(1);
+    expect(
+      queryClient.getQueryData<TaskResponseDto[]>(taskKeys.list({ tagId: 'work' })),
+    ).toHaveLength(1);
   });
 
   it('Project / Area 变更使 tagId 任务列表失效', () => {

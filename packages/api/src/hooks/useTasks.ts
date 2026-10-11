@@ -2,8 +2,8 @@ import { useMemo } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import type { QueryCacheFacade } from '../engine/live-queries';
-import { taskUpdatePutsBack } from '@taskora/engine';
-import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { resolveTaskStart, taskUpdatePutsBack } from '@taskora/engine';
+import { Start, TaskStatus } from '@taskora/shared';
 import type {
   CreateSubtaskDto,
   CreateTaskDto,
@@ -204,7 +204,9 @@ function findCachedTask(queryClient: QueryCacheFacade, taskId: string): CountedT
 }
 
 function bumpProjectProgress(queryClient: QueryCacheFacade, projectId: string, delta: number) {
-  const bump = <T extends { taskTotalCount: number; taskCompletedCount: number }>(project: T): T => ({
+  const bump = <T extends { taskTotalCount: number; taskCompletedCount: number }>(
+    project: T,
+  ): T => ({
     ...project,
     taskCompletedCount: Math.min(
       project.taskTotalCount,
@@ -353,13 +355,12 @@ export function useCreateTask() {
         id: tempId,
         title: data.title,
         notes: data.notes ?? null,
-        scheduledDate: data.scheduledDate ?? null,
-        scheduledType: data.scheduledType ?? ScheduledType.NONE,
+        scheduledDate: data.start === Start.SOMEDAY ? null : (data.scheduledDate ?? null),
+        start: resolveTaskStart(data.start, data.scheduledDate, data.projectId, data.areaId),
         reminderTime: null,
         repeatRule: null,
         repeatSourceId: null,
         dueDate: data.dueDate ?? null,
-        bucket: data.bucket ?? TaskBucket.INBOX,
         status: TaskStatus.ACTIVE,
         completedAt: null,
         trashedAt: null,
@@ -417,11 +418,11 @@ export function useUpdateTask() {
       // Trash 中改日期 / 归属 / 标签等即放回（同 planTaskUpdate）
       const putBack = taskUpdatePutsBack(data) ? { trashedAt: null } : {};
       patchTaskInLists(queryClient, id, (task) => ({
-          ...task,
-          ...data,
-          ...putBack,
-          updatedAt: now,
-        }));
+        ...task,
+        ...data,
+        ...putBack,
+        updatedAt: now,
+      }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, ...data, ...putBack, updatedAt: now } : old,
       );
@@ -478,10 +479,10 @@ export function useCompleteTask() {
       const previewed = patchProjectProgress(queryClient, id, TaskStatus.COMPLETED);
       const now = new Date().toISOString();
       patchTaskInLists(queryClient, id, (task) => ({
-          ...task,
-          status: TaskStatus.COMPLETED,
-          completedAt: now,
-        }));
+        ...task,
+        status: TaskStatus.COMPLETED,
+        completedAt: now,
+      }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, status: TaskStatus.COMPLETED, completedAt: now } : old,
       );
@@ -517,10 +518,10 @@ export function useUncompleteTask() {
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
       patchProjectProgress(queryClient, id, TaskStatus.ACTIVE);
       patchTaskInLists(queryClient, id, (task) => ({
-          ...task,
-          status: TaskStatus.ACTIVE,
-          completedAt: null,
-        }));
+        ...task,
+        status: TaskStatus.ACTIVE,
+        completedAt: null,
+      }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, status: TaskStatus.ACTIVE, completedAt: null } : old,
       );
@@ -554,10 +555,10 @@ export function useCancelTask() {
       patchProjectProgress(queryClient, id, TaskStatus.CANCELLED);
       const now = new Date().toISOString();
       patchTaskInLists(queryClient, id, (task) => ({
-          ...task,
-          status: TaskStatus.CANCELLED,
-          completedAt: now,
-        }));
+        ...task,
+        status: TaskStatus.CANCELLED,
+        completedAt: now,
+      }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, status: TaskStatus.CANCELLED, completedAt: now } : old,
       );
@@ -590,10 +591,10 @@ export function useUncancelTask() {
       const detailSnapshot = queryClient.getQueryData<TaskResponseDto>(taskKeys.detail(id));
       patchProjectProgress(queryClient, id, TaskStatus.ACTIVE);
       patchTaskInLists(queryClient, id, (task) => ({
-          ...task,
-          status: TaskStatus.ACTIVE,
-          completedAt: null,
-        }));
+        ...task,
+        status: TaskStatus.ACTIVE,
+        completedAt: null,
+      }));
       queryClient.setQueryData<TaskResponseDto>(taskKeys.detail(id), (old) =>
         old ? { ...old, status: TaskStatus.ACTIVE, completedAt: null } : old,
       );

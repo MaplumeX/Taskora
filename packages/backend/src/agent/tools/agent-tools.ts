@@ -1,7 +1,7 @@
 import { Type } from 'typebox';
 import { ConflictException, Injectable } from '@nestjs/common';
 import { normalizeRepeatRule } from '@taskora/engine';
-import { ScheduledType, TaskStatus, ProjectBucket, type RepeatRule } from '@taskora/shared';
+import { Start, TaskStatus, type RepeatRule } from '@taskora/shared';
 
 import { TasksService } from '../../tasks/tasks.service';
 import { ProjectsService } from '../../projects/projects.service';
@@ -43,11 +43,17 @@ const taskViewSchema = Type.Union([
   Type.Literal('logbook'),
 ]);
 
-const scheduledTypeSchema = Type.Union([
-  Type.Literal('NONE'),
-  Type.Literal('DATE'),
-  Type.Literal('SOMEDAY'),
-]);
+const startSchema = Type.Union(
+  [Type.Literal('INBOX'), Type.Literal('ANYTIME'), Type.Literal('SOMEDAY')],
+  {
+    description:
+      'Where the item lives (ADR 0024): INBOX (tasks only, not yet organized), ANYTIME (can be started any time; a scheduledDate makes it Today/Upcoming), SOMEDAY (on hold, clears the date). Setting a scheduledDate implies ANYTIME.',
+  },
+);
+
+const projectStartSchema = Type.Union([Type.Literal('ANYTIME'), Type.Literal('SOMEDAY')], {
+  description: 'ANYTIME (active; a scheduledDate defers it) or SOMEDAY (on hold, clears the date).',
+});
 
 const repeatRuleSchema = Type.Object(
   {
@@ -75,7 +81,7 @@ const repeatRuleSchema = Type.Object(
   },
   {
     description:
-      'Repeat rule: when the task is completed, the next occurrence is created automatically. Requires the task to be scheduled on a date (scheduledType DATE).',
+      'Repeat rule: when the task is completed, the next occurrence is created automatically. Requires the task to have a scheduledDate.',
   },
 );
 
@@ -91,7 +97,7 @@ function parseRepeatRuleParam(value: unknown): RepeatRule {
 }
 
 const REPEAT_NEEDS_DATE =
-  'repeatRule requires the task to be scheduled on a date: pass scheduledType DATE with a scheduledDate.';
+  'repeatRule requires the task to be scheduled on a date: pass a scheduledDate.';
 
 /** 跳过本次不可用的原因 → 给模型的解释（RepeatSkipBlock）。 */
 const SKIP_BLOCK_MESSAGES: Record<string, string> = {
@@ -206,7 +212,7 @@ export class AgentToolsService {
                 title: p.title,
                 areaId: p.areaId,
                 status: p.status,
-                bucket: p.bucket,
+                start: p.start,
                 scheduledDate: p.scheduledDate,
                 dueDate: p.dueDate,
                 taskTotalCount: p.taskTotalCount,
@@ -232,7 +238,7 @@ export class AgentToolsService {
               notes: project.notes,
               areaId: project.areaId,
               status: project.status,
-              bucket: project.bucket,
+              start: project.start,
               scheduledDate: project.scheduledDate,
               dueDate: project.dueDate,
             }),
@@ -280,7 +286,7 @@ export class AgentToolsService {
                 title: t.title,
                 projectId: t.projectId,
                 areaId: t.areaId,
-                scheduledType: t.scheduledType,
+                start: t.start,
                 scheduledDate: t.scheduledDate,
                 dueDate: t.dueDate,
                 repeatRule: t.repeatRule,
@@ -305,8 +311,7 @@ export class AgentToolsService {
               notes: task.notes,
               projectId: task.projectId,
               areaId: task.areaId,
-              bucket: task.bucket,
-              scheduledType: task.scheduledType,
+              start: task.start,
               scheduledDate: task.scheduledDate,
               dueDate: task.dueDate,
               repeatRule: task.repeatRule,
@@ -402,14 +407,12 @@ export class AgentToolsService {
         name: 'create_task',
         label: 'Create task',
         description:
-          'Create a new task. Use scheduledType DATE + scheduledDate (ISO date) to schedule it, or SOMEDAY for someday. Assign it to a project and/or area to move it out of the inbox. tagIds attaches existing tags. repeatRule makes it a repeating task (requires scheduledType DATE).',
+          'Create a new task. Pass scheduledDate (ISO date) to schedule it, or start SOMEDAY for someday; start ANYTIME keeps an unassigned task out of the inbox. Assigning a project and/or area also moves it out of the inbox. tagIds attaches existing tags. repeatRule makes it a repeating task (requires scheduledDate).',
         parameters: Type.Object({
           title: Type.String(),
           notes: Type.Optional(Type.String()),
-          scheduledType: Type.Optional(scheduledTypeSchema),
-          scheduledDate: Type.Optional(
-            Type.String({ description: 'ISO date (YYYY-MM-DD). Requires scheduledType DATE.' }),
-          ),
+          start: Type.Optional(startSchema),
+          scheduledDate: Type.Optional(Type.String({ description: 'ISO date (YYYY-MM-DD)' })),
           dueDate: Type.Optional(Type.String({ description: 'ISO date (YYYY-MM-DD) deadline' })),
           projectId: Type.Optional(Type.String()),
           areaId: Type.Optional(Type.String()),
@@ -419,13 +422,13 @@ export class AgentToolsService {
         execute: async (_id, params) => {
           const repeatRule =
             params.repeatRule !== undefined ? parseRepeatRuleParam(params.repeatRule) : undefined;
-          if (repeatRule && (params.scheduledType !== 'DATE' || !params.scheduledDate)) {
+          if (repeatRule && (params.start === 'SOMEDAY' || !params.scheduledDate)) {
             throw new Error(REPEAT_NEEDS_DATE);
           }
           let task = await this.tasks.create(userId, {
             title: params.title,
             notes: params.notes,
-            scheduledType: params.scheduledType as ScheduledType | undefined,
+            start: params.start as Start | undefined,
             scheduledDate: params.scheduledDate,
             dueDate: params.dueDate,
             projectId: params.projectId,
@@ -438,7 +441,7 @@ export class AgentToolsService {
             compact({
               id: task.id,
               title: task.title,
-              bucket: task.bucket,
+              start: task.start,
               repeatRule: repeatRule ? task.repeatRule : undefined,
             }),
           );
@@ -448,12 +451,12 @@ export class AgentToolsService {
         name: 'update_task',
         label: 'Update task',
         description:
-          'Update a task: rename, edit notes, change dates (scheduledDate/dueDate), move it to another project or area (null clears), complete/reopen, cancel/uncancel, set its tags (tagIds replaces all tags), set or clear (null) its repeat rule, or skip the current occurrence of a repeating task (skipOccurrence moves it to the next date without completing it).',
+          'Update a task: rename, edit notes, change dates (scheduledDate/dueDate; scheduledDate null with start ANYTIME clears the schedule), move it to the inbox (start INBOX, which also clears project, area and schedule) or to someday (start SOMEDAY), move it to another project or area (null clears), complete/reopen, cancel/uncancel, set its tags (tagIds replaces all tags), set or clear (null) its repeat rule, or skip the current occurrence of a repeating task (skipOccurrence moves it to the next date without completing it).',
         parameters: Type.Object({
           id: Type.String(),
           title: Type.Optional(Type.String()),
           notes: Type.Optional(Type.String()),
-          scheduledType: Type.Optional(scheduledTypeSchema),
+          start: Type.Optional(startSchema),
           scheduledDate: Type.Optional(
             Type.Union([Type.String({ description: 'ISO date (YYYY-MM-DD)' }), Type.Null()]),
           ),
@@ -489,9 +492,13 @@ export class AgentToolsService {
           const repeatRule =
             params.repeatRule == null ? params.repeatRule : parseRepeatRuleParam(params.repeatRule);
           if (repeatRule) {
-            const scheduledType =
-              params.scheduledType ?? (await this.tasks.findOne(userId, params.id)).scheduledType;
-            if (scheduledType !== 'DATE') throw new Error(REPEAT_NEEDS_DATE);
+            const scheduledDate =
+              params.start === 'SOMEDAY' || params.start === 'INBOX'
+                ? null
+                : params.scheduledDate !== undefined
+                  ? params.scheduledDate
+                  : (await this.tasks.findOne(userId, params.id)).scheduledDate;
+            if (!scheduledDate) throw new Error(REPEAT_NEEDS_DATE);
           }
           if (params.completed !== undefined) {
             if (params.completed) {
@@ -510,7 +517,7 @@ export class AgentToolsService {
           let task = await this.tasks.update(userId, params.id, {
             title: params.title,
             notes: params.notes,
-            scheduledType: params.scheduledType as ScheduledType | undefined,
+            start: params.start as Start | undefined,
             scheduledDate: params.scheduledDate,
             dueDate: params.dueDate,
             projectId: params.projectId,
@@ -534,7 +541,7 @@ export class AgentToolsService {
             compact({
               id: task.id,
               title: task.title,
-              bucket: task.bucket,
+              start: task.start,
               scheduledDate: params.skipOccurrence ? task.scheduledDate : undefined,
               repeatRule: params.repeatRule !== undefined ? task.repeatRule : undefined,
             }),
@@ -570,7 +577,8 @@ export class AgentToolsService {
           ),
           cancelled: Type.Optional(
             Type.Boolean({
-              description: 'true cancels the subtask (gives up on it, reversible), false uncancels it',
+              description:
+                'true cancels the subtask (gives up on it, reversible), false uncancels it',
             }),
           ),
         }),
@@ -838,7 +846,7 @@ export class AgentToolsService {
           title: Type.String(),
           notes: Type.Optional(Type.String()),
           areaId: Type.Optional(Type.String()),
-          scheduledType: Type.Optional(scheduledTypeSchema),
+          start: Type.Optional(projectStartSchema),
           scheduledDate: Type.Optional(Type.String()),
           dueDate: Type.Optional(Type.String()),
         }),
@@ -847,12 +855,12 @@ export class AgentToolsService {
             title: params.title,
             notes: params.notes,
             areaId: params.areaId,
-            scheduledType: params.scheduledType as ScheduledType | undefined,
+            start: params.start as Start | undefined,
             scheduledDate: params.scheduledDate,
             dueDate: params.dueDate,
           });
           return textResult(
-            compact({ id: project.id, title: project.title, bucket: project.bucket }),
+            compact({ id: project.id, title: project.title, start: project.start }),
           );
         },
       }),
@@ -868,24 +876,22 @@ export class AgentToolsService {
           areaId: Type.Optional(
             Type.Union([Type.String({ description: 'Target area id' }), Type.Null()]),
           ),
-          scheduledType: Type.Optional(scheduledTypeSchema),
+          start: Type.Optional(projectStartSchema),
           scheduledDate: Type.Optional(
             Type.Union([Type.String({ description: 'ISO date' }), Type.Null()]),
           ),
           dueDate: Type.Optional(
             Type.Union([Type.String({ description: 'ISO date' }), Type.Null()]),
           ),
-          bucket: Type.Optional(Type.Union([Type.Literal('ANYTIME'), Type.Literal('SCHEDULED')])),
         }),
         execute: async (_id, params) => {
           const project = await this.projects.update(userId, params.id, {
             title: params.title,
             notes: params.notes,
             areaId: params.areaId,
-            scheduledType: params.scheduledType as ScheduledType | undefined,
+            start: params.start as Start | undefined,
             scheduledDate: params.scheduledDate,
             dueDate: params.dueDate,
-            bucket: params.bucket as ProjectBucket | undefined,
           });
           return textResult(compact({ id: project.id, title: project.title }));
         },

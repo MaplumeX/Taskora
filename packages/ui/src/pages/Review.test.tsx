@@ -12,9 +12,9 @@ import {
 } from '@taskora/api';
 import {
   addReviewInterval,
-  ProjectStatus,
   type AreaResponseDto,
   type ProjectResponseDto,
+  ProjectStatus,
   type ReviewQueue,
 } from '@taskora/shared';
 

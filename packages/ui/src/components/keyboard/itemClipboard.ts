@@ -5,7 +5,7 @@
  * 条目的副本；否则是外部文字 → 每行建一个任务。
  */
 
-import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 import type { SelectionRowItem } from '@taskora/api';
 
 import type { SidebarDropPayload, SidebarDropTarget } from '@/components/layout/sidebarDrop';
@@ -101,8 +101,7 @@ export function dropPayloads(
               id,
               projectId: item.projectId ?? null,
               areaId: item.areaId,
-              bucket: item.bucket ?? TaskBucket.INBOX,
-              scheduledType: item.scheduledType ?? ScheduledType.NONE,
+              start: item.start ?? Start.INBOX,
               scheduledDate: item.scheduledDate,
               status,
             })),
@@ -115,7 +114,7 @@ export function dropPayloads(
         id,
         areaId: item.areaId,
         status,
-        scheduledType: item.scheduledType,
+        start: item.start,
         scheduledDate: item.scheduledDate,
       },
     })),

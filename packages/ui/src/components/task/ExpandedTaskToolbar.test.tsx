@@ -6,13 +6,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 
 import type { TaskResponseDto } from '@taskora/shared';
-import { TaskStatus, TaskBucket, ScheduledType } from '@taskora/shared';
-import {
-  i18n,
-  useSelectionStore,
-  useTaskRowSelection,
-  useUiInteractionStore,
-} from '@taskora/api';
+import { Start, TaskStatus } from '@taskora/shared';
+import { i18n, useSelectionStore, useTaskRowSelection, useUiInteractionStore } from '@taskora/api';
 
 import { ExpandedTaskToolbar } from './ExpandedTaskToolbar';
 
@@ -47,12 +42,11 @@ const baseTask: TaskResponseDto = {
   title: 'My task',
   notes: null,
   scheduledDate: null,
-  scheduledType: ScheduledType.NONE,
+  start: Start.INBOX,
   reminderTime: null,
   repeatRule: null,
   repeatSourceId: null,
   dueDate: null,
-  bucket: TaskBucket.INBOX,
   status: TaskStatus.ACTIVE,
   completedAt: null,
   trashedAt: null,

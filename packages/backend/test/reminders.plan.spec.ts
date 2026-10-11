@@ -85,7 +85,7 @@ describe('RemindersService.plan — hub 按共享规则计算完整提醒计划'
     return {
       title: '任务',
       notes: null,
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       // Postgres 存 UTC 零点的 DateTime
       scheduledDate: new Date('2026-02-05T00:00:00.000Z'),
       reminderTime: '09:00',
@@ -154,7 +154,7 @@ describe('RemindersService.plan — hub 按共享规则计算完整提醒计划'
     expect(findMany.mock.calls[0][0].where).toMatchObject({
       userId: USER,
       reminderTime: { not: null },
-      scheduledType: 'DATE',
+      scheduledDate: { not: null },
       status: 'ACTIVE',
       trashedAt: null,
     });

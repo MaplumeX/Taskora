@@ -1,7 +1,7 @@
 import * as React from 'react';
 import { render, screen, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
+import { ProjectStatus, Start } from '@taskora/shared';
 import type { ProjectResponseDto } from '@taskora/shared';
 import { describe, expect, it, vi } from 'vitest';
 
@@ -39,7 +39,7 @@ import { groupLaterProjects } from './laterProjectLayout';
 
 function project(
   id: string,
-  scheduledType: ScheduledType,
+  start: Start,
   scheduledDate: string | null = null,
   position: string | null = null,
 ): ProjectResponseDto {
@@ -50,8 +50,7 @@ function project(
     areaId: null,
     position,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.SCHEDULED,
-    scheduledType,
+    start,
     scheduledDate,
     dueDate: null,
     completedAt: null,
@@ -90,12 +89,12 @@ describe('groupLaterProjects', () => {
     };
     const groups = groupLaterProjects(
       [
-        project('late', ScheduledType.DATE, '2099-03-01'),
-        project('early2', ScheduledType.DATE, '2099-01-01', 'a2'),
-        project('s2', ScheduledType.SOMEDAY, null, 'a5'),
-        project('active', ScheduledType.NONE),
-        project('early1', ScheduledType.DATE, '2099-01-01', 'a1'),
-        project('s1', ScheduledType.SOMEDAY, null, 'a3'),
+        project('late', Start.ANYTIME, '2099-03-01'),
+        project('early2', Start.ANYTIME, '2099-01-01', 'a2'),
+        project('s2', Start.SOMEDAY, null, 'a5'),
+        project('active', Start.ANYTIME),
+        project('early1', Start.ANYTIME, '2099-01-01', 'a1'),
+        project('s1', Start.SOMEDAY, null, 'a3'),
       ],
       (p) => kinds[p.id],
     );
@@ -107,10 +106,10 @@ describe('groupLaterProjects', () => {
 describe('LaterProjectSections', () => {
   it('按「计划」/「Someday」分节，计划行带日期 chip', () => {
     renderSections([
-      project('some', ScheduledType.SOMEDAY),
-      project('future', ScheduledType.DATE, '2099-01-01'),
-      project('active', ScheduledType.NONE),
-      project('past', ScheduledType.DATE, '2020-01-01'),
+      project('some', Start.SOMEDAY),
+      project('future', Start.ANYTIME, '2099-01-01'),
+      project('active', Start.ANYTIME),
+      project('past', Start.ANYTIME, '2020-01-01'),
     ]);
     const scheduled = screen.getByRole('region', { name: 'nav:upcoming' });
     const someday = screen.getByRole('region', { name: 'nav:someday' });
@@ -123,7 +122,7 @@ describe('LaterProjectSections', () => {
   });
 
   it('空小节不显示标题', () => {
-    renderSections([project('some', ScheduledType.SOMEDAY)]);
+    renderSections([project('some', Start.SOMEDAY)]);
     expect(screen.queryByRole('region', { name: 'nav:upcoming' })).not.toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'nav:someday' })).toBeInTheDocument();
   });

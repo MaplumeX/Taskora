@@ -4,13 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useFeedQuery, useSelectionStore, useUiInteractionStore } from '@taskora/api';
-import {
-  ScheduledType,
-  TaskBucket,
-  TaskStatus,
-  type FeedItem,
-  type TaskFeedItem,
-} from '@taskora/shared';
+import { type FeedItem, Start, type TaskFeedItem, TaskStatus } from '@taskora/shared';
 
 import Trash from './Trash';
 
@@ -32,13 +26,12 @@ function trashedTask(id: string, overrides: Partial<TaskFeedItem> = {}): TaskFee
     title: id,
     notes: null,
     scheduledDate: null,
-    scheduledType: ScheduledType.NONE,
+    start: Start.INBOX,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
     status: TaskStatus.ACTIVE,
-    bucket: TaskBucket.INBOX,
     completedAt: null,
     trashedAt: NOW,
     createdAt: NOW,

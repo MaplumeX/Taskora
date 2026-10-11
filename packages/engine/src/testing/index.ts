@@ -17,11 +17,10 @@ export interface ContractTask {
   title: string;
   notes: string | null;
   status: 'ACTIVE' | 'COMPLETED' | 'CANCELLED';
-  scheduledType: 'NONE' | 'DATE' | 'SOMEDAY';
+  start: 'INBOX' | 'ANYTIME' | 'SOMEDAY';
   scheduledDate: string | null;
   dueDate: string | null;
   repeatRule: RepeatRule | null;
-  bucket: 'INBOX' | 'ANYTIME' | 'SCHEDULED';
   settledAt: string | null;
   trashedAt: string | null;
   projectId: string | null;
@@ -35,11 +34,10 @@ export interface ContractProject {
   id: string;
   title: string;
   status: 'ACTIVE' | 'COMPLETED';
-  scheduledType: 'NONE' | 'DATE' | 'SOMEDAY';
+  start: 'ANYTIME' | 'SOMEDAY';
   scheduledDate: string | null;
   dueDate: string | null;
   repeatRule: RepeatRule | null;
-  bucket: 'ANYTIME' | 'SCHEDULED';
   completedAt: string | null;
   trashedAt: string | null;
   areaId: string | null;
@@ -66,11 +64,10 @@ function task(id: string, position: string, fields: Partial<ContractTask> = {}):
     title: id,
     notes: null,
     status: 'ACTIVE',
-    scheduledType: 'NONE',
+    start: 'INBOX',
     scheduledDate: null,
     dueDate: null,
     repeatRule: null,
-    bucket: 'INBOX',
     settledAt: null,
     trashedAt: null,
     projectId: null,
@@ -91,11 +88,10 @@ function project(
     id,
     title: id,
     status: 'ACTIVE',
-    scheduledType: 'NONE',
+    start: 'ANYTIME',
     scheduledDate: null,
     dueDate: null,
     repeatRule: null,
-    bucket: 'ANYTIME',
     completedAt: null,
     trashedAt: null,
     areaId: null,
@@ -123,27 +119,23 @@ export const VIEW_CONTRACT = {
   ] satisfies ContractArea[],
   tasks: [
     task('t-inbox', 'a0'),
-    task('t-anytime', 'a1', { bucket: 'ANYTIME', projectId: 'p-active', tagIds: ['tag-1'] }),
+    task('t-anytime', 'a1', { start: 'ANYTIME', projectId: 'p-active', tagIds: ['tag-1'] }),
     task('t-today', 'a2', {
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-09-24',
-      bucket: 'SCHEDULED',
     }),
     task('t-overdue', 'a3', {
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-09-20',
-      bucket: 'SCHEDULED',
       repeatRule: WEEKLY,
     }),
     task('t-upcoming', 'a4', {
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-09-25',
-      bucket: 'SCHEDULED',
       repeatRule: WEEKLY,
     }),
     task('t-someday', 'a5', {
-      scheduledType: 'SOMEDAY',
-      bucket: 'SCHEDULED',
+      start: 'SOMEDAY',
       areaId: 'area-1',
       notes: 'search in notes',
     }),
@@ -151,7 +143,7 @@ export const VIEW_CONTRACT = {
       status: 'COMPLETED',
       dueDate: '2026-09-20',
       settledAt: '2026-09-22T10:00:00.000Z',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       projectId: 'p-active',
     }),
     task('t-cancelled', 'a7', {
@@ -160,29 +152,26 @@ export const VIEW_CONTRACT = {
       settledAt: '2026-09-23T10:00:00.000Z',
     }),
     task('t-trashed', 'a8', { trashedAt: '2026-09-21T00:00:00.000Z', dueDate: '2026-09-20' }),
-    task('t-in-p-today', 'a9', { bucket: 'ANYTIME', projectId: 'p-today' }),
+    task('t-in-p-today', 'a9', { start: 'ANYTIME', projectId: 'p-today' }),
     // 截止日期 ≤ 今天也进 Today，同时留在原视图
     task('t-due-inbox', 'b0', { dueDate: '2026-09-24' }),
     task('t-due-someday', 'b1', {
-      scheduledType: 'SOMEDAY',
-      bucket: 'SCHEDULED',
+      start: 'SOMEDAY',
       dueDate: '2026-09-22',
     }),
     task('t-due-later', 'b2', {
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-09-30',
-      bucket: 'SCHEDULED',
       dueDate: '2026-09-24',
     }),
-    task('t-due-tomorrow', 'b3', { bucket: 'ANYTIME', dueDate: '2026-09-25' }),
+    task('t-due-tomorrow', 'b3', { start: 'ANYTIME', dueDate: '2026-09-25' }),
   ],
   projects: [
     project('p-active', 'a0', { tagIds: ['tag-2'] }),
     project('p-today', 'a1', {
       areaId: 'area-1',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-09-24',
-      bucket: 'SCHEDULED',
       repeatRule: WEEKLY,
     }),
     project('p-trashed', 'a2', { trashedAt: '2026-09-21T00:00:00.000Z' }),
@@ -192,7 +181,8 @@ export const VIEW_CONTRACT = {
   /** feed 视图 → 期望的行（任务与项目混排，带顺序）。 */
   feeds: {
     inbox: ['t-inbox', 't-due-inbox'],
-    anytime: ['t-anytime', 't-in-p-today', 't-due-tomorrow'],
+    // Today 是 Anytime 的子集：计划日期已到的任务也在（ADR 0024）
+    anytime: ['t-anytime', 't-today', 't-overdue', 't-in-p-today', 't-due-tomorrow'],
     today: [
       'p-today',
       't-today',
@@ -307,7 +297,7 @@ export const SEARCH_CONTRACT = {
   tasks: [
     task('s-prefix', 'a5', { title: 'Milk the cow', tagIds: ['st-kitchen'] }),
     task('s-prefix-2', 'a0', { title: 'milkshake' }),
-    task('s-title', 'a1', { title: 'Buy milk', areaId: 'sa-house', bucket: 'ANYTIME' }),
+    task('s-title', 'a1', { title: 'Buy milk', areaId: 'sa-house', start: 'ANYTIME' }),
     task('s-title-2', 'a3', { title: 'Oat MILK recipe' }),
     task('s-notes', 'a0', {
       title: 'Groceries',

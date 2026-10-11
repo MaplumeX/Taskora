@@ -1,6 +1,6 @@
 import { calendarDateKey } from './calendar-date';
 import { ProjectStatus } from './enums/project.enum';
-import { ScheduledType } from './enums/task.enum';
+import { Start } from './enums/task.enum';
 
 /** Later Project 的两种状态：未来计划日期（「计划」）与 Someday。 */
 export type LaterProjectKind = 'scheduled' | 'someday';
@@ -8,7 +8,7 @@ export type LaterProjectKind = 'scheduled' | 'someday';
 export interface LaterProjectFields {
   status: ProjectStatus | string;
   trashedAt: string | Date | null;
-  scheduledType: ScheduledType | string;
+  start: Start | string;
   scheduledDate: string | Date | null;
 }
 
@@ -24,8 +24,8 @@ export function laterProjectKind(
   legacyTimeZone = 'UTC',
 ): LaterProjectKind | null {
   if (project.status !== ProjectStatus.ACTIVE || project.trashedAt != null) return null;
-  if (project.scheduledType === ScheduledType.SOMEDAY) return 'someday';
-  if (project.scheduledType !== ScheduledType.DATE || project.scheduledDate == null) return null;
+  if (project.start === Start.SOMEDAY) return 'someday';
+  if (project.scheduledDate == null) return null;
   return calendarDateKey(project.scheduledDate, legacyTimeZone) > todayKey ? 'scheduled' : null;
 }
 

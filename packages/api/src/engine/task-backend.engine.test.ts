@@ -2,13 +2,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { InMemorySyncHub, deriveRepeatInstanceId, openEngine, type Engine } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
-import {
-  ScheduledType,
-  ProjectBucket,
-  ProjectStatus,
-  TaskBucket,
-  TaskStatus,
-} from '@taskora/shared';
+import { ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 
 import { createEngineTaskBackend } from './task-backend.engine';
 import { setTaskBackend } from '../api/task-backend';
@@ -31,19 +25,19 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     setTaskBackend(backend);
   });
 
-  it('createTask：默认进 Inbox（无归属），带日期则落 SCHEDULED，新任务追加到末尾', async () => {
+  it('createTask：默认进 Inbox（无归属），带日期则为 Anytime + 日期，新任务追加到末尾', async () => {
     const first = await backend.createTask({ title: '第一条' });
     await backend.createTask({ title: '第二条' });
-    expect(first.bucket).toBe(TaskBucket.INBOX);
+    expect(first.start).toBe(Start.INBOX);
     expect(first.status).toBe(TaskStatus.ACTIVE);
     expect(first.completedAt).toBeNull();
 
     const scheduled = await backend.createTask({
       title: '日程',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-01-02',
     });
-    expect(scheduled.bucket).toBe(TaskBucket.SCHEDULED);
+    expect(scheduled.start).toBe(Start.ANYTIME);
 
     await backend.createTask({ title: '第三条' });
 
@@ -70,7 +64,7 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     const before = Date.now();
     const task = await backend.createTask({
       title: '过去排的',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-01-01',
     });
     const [item] = await backend.getFeed('today');
@@ -79,10 +73,10 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     expect(setAt).toBeGreaterThanOrEqual(before - 1);
     expect(setAt).toBeLessThanOrEqual(Date.now() + 1);
 
-    await backend.updateTask(task.id, { scheduledType: ScheduledType.NONE });
-    const [inbox] = await backend.getFeed('inbox');
-    expect(inbox.id).toBe(task.id);
-    expect(inbox).not.toHaveProperty('scheduledSetAt');
+    await backend.updateTask(task.id, { start: Start.ANYTIME, scheduledDate: null });
+    const [anytime] = await backend.getFeed('anytime');
+    expect(anytime.id).toBe(task.id);
+    expect(anytime).not.toHaveProperty('scheduledSetAt');
   });
 
   it('Today feed 带出截止日期的写入时刻；只有截止日期到了的任务也在 Today', async () => {
@@ -98,7 +92,7 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
   it('完成 → Today 视图消失；取消与恢复语义（Settled At，ADR 0006）', async () => {
     const task = await backend.createTask({
       title: '今天的任务',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-01-01',
     });
     expect((await backend.getFeed('today')).map((i) => i.title)).toEqual(['今天的任务']);
@@ -118,19 +112,29 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     expect(cancelled.completedAt).not.toBeNull();
   });
 
-  it('updateTask：scheduledType/归属变化触发 bucket 解析（对齐 REST 语义）', async () => {
+  it('updateTask：计划 / 归属变化触发 start 解析（对齐 REST 语义）', async () => {
     const task = await backend.createTask({ title: '整理' });
-    // 加日期 → SCHEDULED
-    await backend.updateTask(task.id, {
-      scheduledType: ScheduledType.DATE,
-      scheduledDate: '2026-03-01',
-    });
-    expect((await backend.getTask(task.id)).bucket).toBe(TaskBucket.SCHEDULED);
-    // 去掉日期、无归属 → 回 INBOX
-    await backend.updateTask(task.id, { scheduledType: ScheduledType.NONE });
+    // 加日期 → 离开 Inbox
+    await backend.updateTask(task.id, { scheduledDate: '2026-03-01' });
+    expect((await backend.getTask(task.id)).start).toBe(Start.ANYTIME);
+    // Clear：去掉日期、无归属 → 留在 Anytime，不回 Inbox（对齐 Things 3）
+    await backend.updateTask(task.id, { start: Start.ANYTIME, scheduledDate: null });
     const after = await backend.getTask(task.id);
-    expect(after.bucket).toBe(TaskBucket.INBOX);
+    expect(after.start).toBe(Start.ANYTIME);
     expect(after.scheduledDate).toBeNull();
+    // 移入 Inbox
+    await backend.updateTask(task.id, { start: Start.INBOX });
+    expect((await backend.getTask(task.id)).start).toBe(Start.INBOX);
+  });
+
+  it('Anytime 含计划日期已到的任务（Today 是 Anytime 的子集），不含未来日期', async () => {
+    await backend.createTask({ title: '今天的', scheduledDate: '2026-01-01' });
+    await backend.createTask({ title: '将来的', scheduledDate: '2999-01-01' });
+    await backend.createTask({ title: '随时', start: Start.ANYTIME });
+    await backend.createTask({ title: '收件箱' });
+    expect((await backend.getFeed('anytime')).map((item) => item.title).sort()).toEqual(
+      ['今天的', '随时'].sort(),
+    );
   });
 
   it('Trash / 放回：放回保留了结状态；改日期放回，完成 / 改标题不放回', async () => {
@@ -192,7 +196,7 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
   });
 
   it('feed 拖拽重排：项目行写 Feed Position、不动侧边栏 Position，并同步到 hub', async () => {
-    const someday = { status: 'ACTIVE', bucket: 'SOMEDAY', scheduledType: 'SOMEDAY', trashedAt: null };
+    const someday = { status: 'ACTIVE', start: 'SOMEDAY', trashedAt: null };
     const t1 = await engine.create('task', { ...someday, title: 'T1', position: 'a1' });
     const t2 = await engine.create('task', { ...someday, title: 'T2', position: 'a2' });
     const p = await engine.create('project', { ...someday, title: 'P', position: 'a5' });
@@ -223,16 +227,14 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     await engine.create('task', {
       title: 'A',
       status: 'ACTIVE',
-      bucket: 'SOMEDAY',
-      scheduledType: 'SOMEDAY',
+      start: 'SOMEDAY',
       trashedAt: null,
       position: long('a0'),
     });
     await engine.create('project', {
       title: 'P',
       status: 'ACTIVE',
-      bucket: 'SOMEDAY',
-      scheduledType: 'SOMEDAY',
+      start: 'SOMEDAY',
       trashedAt: null,
       position: 'a5',
       feedPosition: long('a0') + 'V',
@@ -240,8 +242,7 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     await engine.create('task', {
       title: 'B',
       status: 'ACTIVE',
-      bucket: 'SOMEDAY',
-      scheduledType: 'SOMEDAY',
+      start: 'SOMEDAY',
       trashedAt: null,
       position: long('a0') + 'W',
     });
@@ -274,7 +275,7 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     await backend.createTask({ title: '写文档' });
     await backend.createTask({
       title: '看牙医',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-01-05',
     });
 
@@ -292,14 +293,13 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
   it('feed：today 含任务与项目，项目计数本地计算', async () => {
     await backend.createTask({
       title: '今日任务',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-01-01',
     });
     const hubTask = await engine.create('project', {
       title: '装修',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-01-01',
       trashedAt: null,
       completedAt: null,
@@ -309,7 +309,7 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     await engine.create('task', {
       title: '量尺寸',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       projectId: hubTask,
       trashedAt: null,
       settledAt: null,
@@ -427,7 +427,7 @@ describe('EngineTaskBackend（V2：Subtask / convert / emptyTrash 全离线）',
     const task = await backend.createTask({
       title: '重新装修',
       notes: '含木工',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-06-01',
       dueDate: '2026-07-01',
       areaId,
@@ -460,7 +460,7 @@ describe('EngineTaskBackend（V2：Subtask / convert / emptyTrash 全离线）',
     const settledRow = promotedRows.find((r) => r.fields.title === '定方案');
     expect(settledRow?.fields.status).toBe(TaskStatus.COMPLETED);
     expect(settledRow?.fields.settledAt).not.toBeNull();
-    expect(promotedRows.every((r) => r.fields.bucket === TaskBucket.ANYTIME)).toBe(true);
+    expect(promotedRows.every((r) => r.fields.start === Start.ANYTIME)).toBe(true);
     // 原 Subtask 行不残留
     expect(await engine.get('subtask', done.id)).toBeNull();
 
@@ -527,13 +527,12 @@ describe('EngineTaskBackend（V2：Subtask / convert / emptyTrash 全离线）',
     const projectId = await a.create('project', {
       title: '废弃项目',
       status: 'ACTIVE',
-      bucket: ProjectBucket.ANYTIME,
-      scheduledType: 'NONE',
+      start: Start.ANYTIME,
     });
     const taskInProject = await a.create('task', {
       title: '项目内任务',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
+      start: 'ANYTIME',
       projectId,
       trashedAt: null,
       settledAt: null,
@@ -581,7 +580,7 @@ describe('EngineTaskBackend — Reminder 清理规则（reminders spec）', () =
   it('DATE 任务可设置/修改/关闭提醒；换日期保留提醒时刻', async () => {
     const task = await backend.createTask({
       title: '看牙医',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-01',
     });
     expect(task.reminderTime).toBeNull();
@@ -602,27 +601,26 @@ describe('EngineTaskBackend — Reminder 清理规则（reminders spec）', () =
     expect(off.reminderTime).toBeNull();
   });
 
-  it('ScheduledType 离开 DATE（Someday / NONE）自动清除提醒', async () => {
+  it('清除计划日期（Someday / Clear）自动清除提醒', async () => {
     const task = await backend.createTask({
       title: '整理书架',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-01',
     });
     await backend.updateTask(task.id, { reminderTime: '09:00' });
 
     const someday = await backend.updateTask(task.id, {
-      scheduledType: ScheduledType.SOMEDAY,
+      start: Start.SOMEDAY,
     });
     expect(someday.reminderTime).toBeNull();
 
     // 重新设回 DATE + 提醒，再走 NONE
     await backend.updateTask(task.id, {
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-02',
     });
     await backend.updateTask(task.id, { reminderTime: '08:00' });
     const cleared = await backend.updateTask(task.id, {
-      scheduledType: ScheduledType.NONE,
       scheduledDate: null,
     });
     expect(cleared.reminderTime).toBeNull();
@@ -631,7 +629,7 @@ describe('EngineTaskBackend — Reminder 清理规则（reminders spec）', () =
   it('了结（完成/取消）与移入 Trash 清除提醒', async () => {
     const task = await backend.createTask({
       title: '缴水电费',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-01',
     });
     await backend.updateTask(task.id, { reminderTime: '09:00' });
@@ -667,7 +665,7 @@ describe('EngineTaskBackend — Reminder 清理规则（reminders spec）', () =
     const backendA = createEngineTaskBackend({ engine: a });
     const task = await backendA.createTask({
       title: '跨设备提醒',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-01',
     });
     await a.update('task', task.id, { reminderTime: '09:00' });
@@ -709,7 +707,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
   it('DATE 任务可设置/修改/清除规则；写入归一化为规范形；换日期保留规则', async () => {
     const task = await backend.createTask({
       title: '浇花',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-01',
     });
     expect(task.repeatRule).toBeNull();
@@ -734,28 +732,27 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     expect(off.repeatRule).toBeNull();
   });
 
-  it('ScheduledType 离开 DATE（Someday / NONE）自动清除规则（规则无锚即无意义）', async () => {
+  it('清除计划日期（Someday / Clear）自动清除规则（规则无锚即无意义）', async () => {
     const task = await backend.createTask({
       title: '月度备份',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-01',
     });
     await backend.updateTask(task.id, {
       repeatRule: { unit: 'month', interval: 1, anchor: 'completion' },
     });
 
-    const someday = await backend.updateTask(task.id, { scheduledType: ScheduledType.SOMEDAY });
+    const someday = await backend.updateTask(task.id, { start: Start.SOMEDAY });
     expect(someday.repeatRule).toBeNull();
 
     await backend.updateTask(task.id, {
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-02',
     });
     await backend.updateTask(task.id, {
       repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
     });
     const cleared = await backend.updateTask(task.id, {
-      scheduledType: ScheduledType.NONE,
       scheduledDate: null,
     });
     expect(cleared.repeatRule).toBeNull();
@@ -766,7 +763,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     const task = await backend.createTask({
       title: '浇花',
       notes: '客厅绿植',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(-2),
       tagIds: [tagId],
     });
@@ -793,8 +790,8 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     expect(instance.title).toBe('浇花');
     expect(instance.notes).toBe('客厅绿植');
     expect(instance.scheduledDate).toBe(utcDay(-1));
-    expect(instance.scheduledType).toBe(ScheduledType.DATE);
-    expect(instance.bucket).toBe(TaskBucket.SCHEDULED);
+    expect(instance.start).toBe(Start.ANYTIME);
+    expect(instance.scheduledDate).not.toBeNull();
     expect(instance.status).toBe(TaskStatus.ACTIVE);
     expect(instance.reminderTime).toBe('09:00'); // 提醒随实例延续
     expect(instance.repeatRule).toEqual({ unit: 'day', interval: 1, anchor: 'scheduled' });
@@ -817,7 +814,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     // anchor=scheduled：明天的任务完成后天出现 → Upcoming
     const fixed = await backend.createTask({
       title: '例会',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(1),
     });
     await backend.updateTask(fixed.id, {
@@ -832,7 +829,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     // anchor=completion：30 天前的任务，今天完成 → 明天出现
     const gap = await backend.createTask({
       title: '换床单',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(-30),
     });
     await backend.updateTask(gap.id, {
@@ -848,7 +845,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
   it('到达 until 日期链自动终结：完成后不派生实例', async () => {
     const task = await backend.createTask({
       title: '短期项目同步',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(-5),
     });
     await backend.updateTask(task.id, {
@@ -861,7 +858,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     // until 早于下一次出现 → 链终结，不派生
     const last = await backend.createTask({
       title: '已到期的承诺',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(-5),
     });
     await backend.updateTask(last.id, {
@@ -876,7 +873,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
   it('取消不派生实例；取消后重开（uncancel）无副作用', async () => {
     const task = await backend.createTask({
       title: '戒掉的习惯',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(-1),
     });
     await backend.updateTask(task.id, {
@@ -895,7 +892,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
   it('重开不删除派生实例：实例上的编辑保留，再完成不重复派生（recurring-tasks-v2）', async () => {
     const task = await backend.createTask({
       title: '浇花',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(-2),
     });
     await backend.updateTask(task.id, {
@@ -923,7 +920,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
   it('anchor=completion：重开后隔天再完成不产生第二个实例', async () => {
     const task = await backend.createTask({
       title: '换床单',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(-3),
     });
     await backend.updateTask(task.id, {
@@ -941,7 +938,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
   it('完成 → 取消 → 重开：派生实例保留', async () => {
     const task = await backend.createTask({
       title: '晨跑',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(-1),
     });
     await backend.updateTask(task.id, {
@@ -958,7 +955,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
   it('幂等派生：Logbook 恢复（Trash restore）后重新完成不产生重复实例', async () => {
     const task = await backend.createTask({
       title: '每周汇报',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(-1),
     });
     await backend.updateTask(task.id, {
@@ -999,7 +996,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
 
     const task = await backendA.createTask({
       title: '跨设备重复',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(-1),
     });
     await backendA.updateTask(task.id, {
@@ -1052,7 +1049,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
   it('跳过本次：逾期多轮落到今天、截止日平移、Subtask 重置；不新建实体', async () => {
     const task = await backend.createTask({
       title: '背单词',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(-3),
       dueDate: utcDay(-1),
     });
@@ -1078,7 +1075,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
   it('跳过本次不可用：已到最后一次 / 下一次已存在 / 已了结', async () => {
     const last = await backend.createTask({
       title: '最后一次',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(1),
     });
     await backend.updateTask(last.id, {
@@ -1088,7 +1085,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
 
     const task = await backend.createTask({
       title: '手滑',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(-1),
     });
     await backend.updateTask(task.id, {
@@ -1117,7 +1114,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     const backendB = createEngineTaskBackend({ engine: b });
     const task = await backendA.createTask({
       title: '周报',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(-1),
     });
     await backendA.updateTask(task.id, {
@@ -1147,7 +1144,7 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     const rule = { unit: 'day', interval: 1, anchor: 'scheduled' } as const;
     const task = await backend.createTask({
       title: '手滑党',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: utcDay(-2),
     });
     await backend.updateTask(task.id, { repeatRule: rule });

@@ -55,7 +55,7 @@ Task/Project 上必须完成的日期，可逾期（Overdue）；与计划日期
 _Avoid_: due date（一词两义）、通知日期、DDL
 
 **Reminder**:
-Task 上的一个时刻（HH:mm），依附于计划日期（Scheduled Date），到账号时区对应时刻由各客户端触发系统通知；仅 ScheduledType 为 DATE 的 Task 可设。Project 不设 Reminder。按存储的计划日期一次性触发，错过不补发、不随 Today 顺延；在计划日期已过的 Task 上开启或修改 Reminder 时，计划日期一并改写为今天（参考 Things 3：提醒经 When 设置）。
+Task 上的一个时刻（HH:mm），依附于计划日期（Scheduled Date），到账号时区对应时刻由各客户端触发系统通知；仅有计划日期的 Task 可设。Project 不设 Reminder。按存储的计划日期一次性触发，错过不补发、不随 Today 顺延；在计划日期已过的 Task 上开启或修改 Reminder 时，计划日期一并改写为今天（参考 Things 3：提醒经 When 设置）。
 _Avoid_: 闹钟、alarm、通知时间（Reminder 是数据，通知是其触发效果）
 
 **Snooze（稍后提醒）**:
@@ -63,7 +63,7 @@ _Avoid_: 闹钟、alarm、通知时间（Reminder 是数据，通知是其触发
 _Avoid_: 延后、推迟提醒（口语可用）、本机临时推迟（Snooze 不是设备本地状态）
 
 **Repeat Rule（重复规则）**:
-Task 或 Project 上的一个结构化规则字段（单位 × 间隔 × 周模式的星期几集合），声明该 Task / Project 完成后按规则再现；锚点默认从计划日期推算，可选从完成日期推算。仅 ScheduledType 为 DATE 的 Task / Project 可设；移入 Someday/NONE 时自动清除。
+Task 或 Project 上的一个结构化规则字段（单位 × 间隔 × 周模式的星期几集合），声明该 Task / Project 完成后按规则再现；锚点默认从计划日期推算，可选从完成日期推算。仅有计划日期的 Task / Project 可设；移入 Someday 或清除计划日期时自动清除。
 _Avoid_: 循环、周期任务、RRULE、模板（无独立模板实体）
 
 **Repeat Instance（重复实例）**:
@@ -98,23 +98,24 @@ _Avoid_: 日历账号、日历集成（泛称可用）、calendar sync（并不�
 Calendar Subscription 中的一次出现，只读显示在 Today（任务之前）、Upcoming（按天分组与月份分组，均在任务之前；月份分组行上带日期）与 Calendar（格内先于任务的色块、当天面板顶部）。不是 Task：没有复选框、不能拖动或编辑、不进 Selection，按 Tag 过滤时隐藏；不存储、不同步，离线时不显示。定时日程按账号时区归到它覆盖的每一天，全天日程按日期。
 _Avoid_: 事件（与 Change Event 混淆）、会议、日历任务
 
+**Start（开始状态）**:
+Task / Project 上的字段，取值 INBOX / ANYTIME / SOMEDAY（对应 Things 3 数据库的 `TMTask.start`），与计划日期一起决定条目出现在哪个 Bucket（ADR 0024）。有计划日期时恒为 ANYTIME（是 Today 还是 Upcoming 由日期推导）；INBOX 只用于无归属、无日期的 Task；Project 不取 INBOX。
+_Avoid_: bucket、scheduledType（已退役的旧字段）、计划类型
+
 **Bucket**:
-按状态/时间过滤出的任务视图：Inbox、Anytime、Scheduled、Someday、Today、Upcoming、Logbook、Trash。不是存储位置。
+按 Start 与计划日期过滤出的任务视图：Inbox、Anytime、Someday、Today、Upcoming、Logbook、Trash。不是存储位置，也不是字段。
 _Avoid_: 收纳桶、列表、filter、缓存
 
 **Upcoming（计划）**:
-按未来计划日期组织 Task / Project 的任务视图，与表示已安排计划的 Scheduled 不同。
+按未来计划日期组织 Task / Project 的任务视图。
 _Avoid_: 即将
 
-**Scheduled（已计划）**:
-Task / Project 设置了具体日期或 Someday 的 Bucket；Upcoming（计划）是按未来日期展示的视图，两者不是同义词。
-
 **Anytime（随时）**:
-可随时着手的任务视图。
+可随时着手的任务视图：Start 为 ANYTIME、没有计划日期或计划日期已到（≤ 今天）的任务，不含稍后项目内的任务。Today 是它的子集（对齐 Things 3），今天的任务行上带黄色星星。计划卡片的「清除」把任务放进 Anytime，无归属的也不回 Inbox。
 _Avoid_: 任意时间
 
 **Someday（某天）**:
-暂不指定具体计划日期的计划类型及其任务视图；Later Project（稍后项目）还包含未来日期项目。
+暂不指定具体计划日期的 Start 取值（SOMEDAY，没有计划日期）及其任务视图；Later Project（稍后项目）还包含未来日期项目。
 _Avoid_: 稍后（不可用来指 Someday）
 
 **Deadlines（截止日期列表）**:
@@ -142,7 +143,7 @@ Logbook 中的 Project 的隐藏列表，按了结时间分组（规则同 Logbo
 _Avoid_: 归档项目（「归档」专指 Archived Logbook）
 
 **Inbox**:
-「尚未整理」的 Bucket：无归属（Project / Area）、无计划（计划类型为 NONE）的未了结任务。任何整理动作都会让任务离开 Inbox：获得归属转入 Anytime，获得计划转入 Scheduled。移入 Inbox 时同时清除归属与计划（计划日期、提醒、重复规则随之清除），截止日期保留（参考 Things 3）。不是 Project，也不是存储位置。
+「尚未整理」的 Bucket：Start 为 INBOX 的未了结任务，它们没有归属（Project / Area）、没有计划日期。任何整理动作都会让任务离开 Inbox：获得归属或计划日期转入 Anytime，选 Someday 转入 Someday。移入 Inbox 时同时清除归属与计划（计划日期、提醒、重复规则随之清除），截止日期保留（参考 Things 3）。不是 Project，也不是存储位置。
 _Avoid_: 收件箱项目、默认项目
 
 **New in Today（新到）**:

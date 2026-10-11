@@ -3,20 +3,20 @@
  *
  * 字段级 LWW 逐字段裁决：两台设备分别改了相关字段时，合并结果每个
  * 字段都「合法」、组合却可能违反业务规则（别的项目的分组、Someday
- * 任务带提醒、DATE 任务落在 Anytime……）。Sync Hub 在每次合并之后调用
+ * 任务带日期、有归属的任务还在 Inbox……）。Sync Hub 在每次合并之后调用
  * repairEntity，把违反规则的字段纠正为规则允许的值，并以虚拟设备 0 的
  * 必胜时钟下发（与引用清洗同一机制），所有设备收敛到同一结果。
  *
  * 规则与写入路径共用 domain/ 的推导（Engine 后端与 REST 服务都调用）：
- * 冲突时「把状态收紧」的一方获胜——换项目清空分组、离开 DATE 清空提醒
- * 与重复规则（任务与项目）。一致的状态返回空：修复只在真的冲突
+ * 冲突时「把状态收紧」的一方获胜——换项目清空分组、Someday 清空日期、
+ * 没有日期清空提醒与重复规则（任务与项目）、整理过的任务离开 Inbox。一致的状态返回空：修复只在真的冲突
  * 时发生。纯函数，设备与 hub 共用。
  */
 
-import { ProjectStatus, ScheduledType, TaskStatus } from '@taskora/shared';
+import { ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 
 import type { SyncEntity } from './entities';
-import { resolveProjectBucket, resolveTaskBucket } from './domain/bucket';
+import { resolveProjectStart, resolveTaskStart } from './domain/start';
 import { tagParentCreatesCycle } from './domain/tags';
 
 /** 分组归属探针：返回分组所属项目 id；未知（尚未到达 / 已删除）返回 undefined。 */
@@ -36,6 +36,11 @@ export interface RepairProbes {
  * 字段：部分字段集（如 hub 上缺列的旧数据）不会被凭空补全。id 是被
  * 修复行自己的 id（Tag 断环用）。
  */
+/** Someday 优先：start 为 SOMEDAY 时日期清空，否则保留。 */
+function scheduledDateAfterStart(fields: Record<string, unknown>): unknown {
+  return fields.start === Start.SOMEDAY ? null : (fields.scheduledDate ?? null);
+}
+
 export function repairEntity(
   entity: SyncEntity,
   fields: Record<string, unknown>,
@@ -53,21 +58,20 @@ export function repairEntity(
 
   switch (entity) {
     case 'task': {
-      const type = fields.scheduledType;
-      if (has('scheduledType')) {
-        // R1：仅 DATE 任务可设提醒与重复规则（CONTEXT：Reminder / Repeat Rule）
-        if (type !== ScheduledType.DATE) {
+      // 字段集里没有 scheduledDate 时不推断日期：按「未知」处理，不修
+      const date = has('scheduledDate') ? scheduledDateAfterStart(fields) : undefined;
+      if (date !== undefined) {
+        // R1：Someday 没有计划日期（ADR 0024）
+        fix('scheduledDate', date);
+        // R2：仅有计划日期的任务可设提醒与重复规则（CONTEXT：Reminder / Repeat Rule）
+        if (date === null) {
           fix('repeatRule', null);
           fix('reminderTime', null);
         }
-        // R2：NONE / SOMEDAY 没有计划日期
-        if (type === ScheduledType.NONE || type === ScheduledType.SOMEDAY) {
-          fix('scheduledDate', null);
-        }
-        // R3：Bucket 由计划类型与归属推导
-        if (has('bucket')) {
-          fix('bucket', resolveTaskBucket(fields.bucket, type, fields.projectId, fields.areaId));
-        }
+      }
+      // R3：Inbox 只收无归属、无日期的任务；整理过即 Anytime
+      if (has('start') && date !== undefined) {
+        fix('start', resolveTaskStart(fields.start, date, fields.projectId, fields.areaId));
       }
       // R4：分组必须属于任务所在项目（换项目清空分组）
       if (typeof fields.headingId === 'string' && has('projectId')) {
@@ -79,15 +83,14 @@ export function repairEntity(
       break;
     }
     case 'project': {
-      const type = fields.scheduledType;
-      if (has('scheduledType')) {
-        // R1：仅 DATE 项目可设重复规则（recurring-projects spec）
-        if (type !== ScheduledType.DATE) fix('repeatRule', null);
-        if (type === ScheduledType.NONE || type === ScheduledType.SOMEDAY) {
-          fix('scheduledDate', null);
-        }
-        if (has('bucket')) fix('bucket', resolveProjectBucket(type));
+      const date = has('scheduledDate') ? scheduledDateAfterStart(fields) : undefined;
+      if (date !== undefined) {
+        fix('scheduledDate', date);
+        // R1：仅有计划日期的项目可设重复规则（recurring-projects spec）
+        if (date === null) fix('repeatRule', null);
       }
+      // 项目不停留在 Inbox
+      if (has('start')) fix('start', resolveProjectStart(fields.start));
       if (fields.status === ProjectStatus.ACTIVE) fix('completedAt', null);
       break;
     }

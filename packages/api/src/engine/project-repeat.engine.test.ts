@@ -8,7 +8,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 
 import { InMemorySyncHub, openEngine, RepeatSkipBlockedError } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
-import { HeadingStatus, ProjectStatus, ScheduledType, TaskStatus } from '@taskora/shared';
+import { HeadingStatus, ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 
 import { createEngineProjectBackend } from './project-backend.engine';
 import { createEngineProjectHeadingBackend } from './project-heading-backend.engine';
@@ -36,7 +36,7 @@ async function seedRepeatingProject(device: Awaited<ReturnType<typeof open>>) {
   const { engine, projects, headings, tasks } = device;
   const project = await projects.createProject({
     title: '每周复盘',
-    scheduledType: ScheduledType.DATE,
+    start: Start.ANYTIME,
     scheduledDate: '2030-01-07',
     dueDate: '2030-01-09',
   });
@@ -49,7 +49,7 @@ async function seedRepeatingProject(device: Awaited<ReturnType<typeof open>>) {
   const open = await tasks.createTask({
     title: '写总结',
     projectId: project.id,
-    scheduledType: ScheduledType.DATE,
+    start: Start.ANYTIME,
     scheduledDate: '2030-01-08',
   });
   return { project, heading, done, open };
@@ -68,7 +68,7 @@ describe('重复项目（Engine 后端）', () => {
     const { project } = await seedRepeatingProject(device);
     expect((await device.projects.getProject(project.id)).repeatRule).toEqual(WEEKLY);
     const someday = await device.projects.updateProject(project.id, {
-      scheduledType: ScheduledType.SOMEDAY,
+      start: Start.SOMEDAY,
     });
     expect(someday.repeatRule).toBeNull();
   });

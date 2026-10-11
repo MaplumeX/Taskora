@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Star } from 'lucide-react';
 import type { TFunction } from 'i18next';
 
-import { ScheduledType } from '@taskora/shared';
+import { Start } from '@taskora/shared';
 import { formatShortDate, parseCalendarDate, startOfTomorrow } from '@taskora/api';
 
 import { Button } from '@/components/ui/button';
@@ -29,9 +29,8 @@ export function scheduledChipOf(
   current: ScheduledFieldCurrent,
   t: TFunction,
 ): { text: string; icon?: React.ReactNode } | null {
-  const scheduledType = current.scheduledType ?? ScheduledType.NONE;
-  if (scheduledType === ScheduledType.SOMEDAY) return { text: t('nav:someday') };
-  if (scheduledType !== ScheduledType.DATE || !current.scheduledDate) return null;
+  if (current.start === Start.SOMEDAY) return { text: t('nav:someday') };
+  if (!current.scheduledDate) return null;
   const date = parseCalendarDate(current.scheduledDate);
   const onOrBeforeToday = date < startOfTomorrow();
   const label = onOrBeforeToday ? t('common:today') : formatShortDate(date);

@@ -128,7 +128,7 @@ integrationDescribe('Change Events (service-level integration)', () => {
     // 重复规则编辑器 normalizeRepeatRule 判 null、开关永不勾选。
     const task = await tasks.create(userId, {
       title: 'Recurring',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-09-25T00:00:00.000Z',
     });
     await drain();

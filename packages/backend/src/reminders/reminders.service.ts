@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { planReminderDeliveries, type ReminderTaskInput } from '@taskora/engine';
-import { ScheduledType, TaskStatus } from '@taskora/shared';
+import { TaskStatus } from '@taskora/shared';
 
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncChangeLog } from '../sync/sync-change-log';
@@ -30,7 +30,7 @@ export class RemindersService {
         where: {
           userId,
           reminderTime: { not: null },
-          scheduledType: ScheduledType.DATE,
+          scheduledDate: { not: null },
           status: TaskStatus.ACTIVE,
           trashedAt: null,
         },
@@ -38,7 +38,6 @@ export class RemindersService {
           id: true,
           title: true,
           notes: true,
-          scheduledType: true,
           scheduledDate: true,
           reminderTime: true,
           status: true,
@@ -55,7 +54,6 @@ export class RemindersService {
       id: row.id,
       title: row.title,
       notes: row.notes,
-      scheduledType: row.scheduledType as ScheduledType,
       scheduledDate: row.scheduledDate?.toISOString() ?? null,
       reminderTime: row.reminderTime,
       status: row.status as TaskStatus,

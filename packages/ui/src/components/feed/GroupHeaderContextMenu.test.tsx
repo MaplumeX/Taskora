@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
-import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
+import { ProjectStatus, Start } from '@taskora/shared';
 
 import { ProjectGroupHeaderRow } from './ProjectGroupHeaderRow';
 import { AreaGroupHeaderRow } from './AreaGroupHeaderRow';
@@ -46,8 +46,7 @@ const project: ProjectResponseDto = {
   title: 'Vacation in Rome',
   areaId: null,
   status: ProjectStatus.ACTIVE,
-  bucket: ProjectBucket.ANYTIME,
-  scheduledType: ScheduledType.NONE,
+  start: Start.ANYTIME,
   scheduledDate: null,
   dueDate: null,
   completedAt: null,
@@ -138,7 +137,9 @@ describe('Group Header context menus', () => {
   it.each(['detail', 'header'] as const)(
     'does not delete from the Area %s when confirmation is canceled',
     async (entry) => {
-      renderHeader(entry === 'detail' ? <AreaMoreMenu area={area} /> : <AreaGroupHeaderRow area={area} />);
+      renderHeader(
+        entry === 'detail' ? <AreaMoreMenu area={area} /> : <AreaGroupHeaderRow area={area} />,
+      );
       const openMenu = () => {
         if (entry === 'detail') fireEvent.click(screen.getByRole('button', { name: 'More' }));
         else fireEvent.contextMenu(screen.getByRole('heading', { name: area.title }));

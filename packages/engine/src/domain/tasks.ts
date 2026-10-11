@@ -9,9 +9,8 @@
 
 import {
   ProjectStatus,
-  ScheduledType,
   SETTLED_TASK_STATUSES,
-  TaskBucket,
+  Start,
   TaskStatus,
   type CreateTaskDto,
   type RepeatRule,
@@ -20,22 +19,21 @@ import {
 } from '@taskora/shared';
 
 import { normalizeRepeatRule } from '../repeat';
-import { resolveProjectBucket, resolveTaskBucket } from './bucket';
 import { dateKeyOf, type CalendarZones } from './calendar';
 import { planReviewSchedule, type ReviewContext } from './review';
+import { resolveProjectStart, resolveTaskStart } from './start';
 
 /** Task 的领域字段（wire 形态）。 */
 export interface TaskFields {
   title: string;
   notes: string | null;
-  scheduledType: ScheduledType;
+  start: Start;
   scheduledDate: string | null;
   reminderTime: string | null;
   repeatRule: RepeatRule | null;
   /** 派生来源：派生出本实例的重复任务 id（recurring-tasks-v2）；非派生为 null。 */
   repeatSourceId: string | null;
   dueDate: string | null;
-  bucket: TaskBucket;
   status: TaskStatus;
   settledAt: string | null;
   trashedAt: string | null;
@@ -47,20 +45,22 @@ export interface TaskFields {
 
 export type TaskPatch = Partial<TaskFields>;
 
-/** 新建任务：未指定计划类型为 NONE；只有 DATE 带计划日期；无提醒与重复。 */
+/**
+ * 新建任务：Someday 不带计划日期；未指定 start 时无归属、无日期落 Inbox，
+ * 否则 Anytime（resolveTaskStart）；无提醒与重复。
+ */
 export function planTaskCreate(input: CreateTaskDto, zones: CalendarZones): TaskFields {
-  const scheduledType = input.scheduledType ?? ScheduledType.NONE;
+  const scheduledDate =
+    input.start === Start.SOMEDAY ? null : dateKeyOf(input.scheduledDate, zones);
   return {
     title: input.title,
     notes: input.notes ?? null,
-    scheduledType,
-    scheduledDate:
-      scheduledType === ScheduledType.DATE ? dateKeyOf(input.scheduledDate, zones) : null,
+    start: resolveTaskStart(input.start, scheduledDate, input.projectId, input.areaId),
+    scheduledDate,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: dateKeyOf(input.dueDate, zones),
-    bucket: resolveTaskBucket(input.bucket, scheduledType, input.projectId, input.areaId),
     status: TaskStatus.ACTIVE,
     settledAt: null,
     trashedAt: null,
@@ -73,9 +73,8 @@ export function planTaskCreate(input: CreateTaskDto, zones: CalendarZones): Task
 
 /** planTaskUpdate 需要的现有字段（日期可为存储形态）。 */
 export interface TaskUpdateBase {
-  scheduledType: unknown;
+  start: unknown;
   scheduledDate: unknown;
-  bucket: unknown;
   projectId: string | null;
   areaId: string | null;
   headingId: string | null;
@@ -84,18 +83,17 @@ export interface TaskUpdateBase {
 }
 
 /**
- * 在 Trash 中编辑时是否隐式放回：改计划、提醒、重复、截止日期、Bucket、
+ * 在 Trash 中编辑时是否隐式放回：改计划（start / 日期）、提醒、重复、截止日期、
  * 归属或标签即放回；只改标题 / 备注不放回（状态与子任务走各自的写入，
  * 同样不放回）。
  */
 export function taskUpdatePutsBack(input: UpdateTaskDto): boolean {
   return (
-    input.scheduledType !== undefined ||
+    input.start !== undefined ||
     input.scheduledDate !== undefined ||
     input.reminderTime !== undefined ||
     input.repeatRule !== undefined ||
     input.dueDate !== undefined ||
-    input.bucket !== undefined ||
     input.projectId !== undefined ||
     input.areaId !== undefined ||
     input.tagIds !== undefined
@@ -103,12 +101,14 @@ export function taskUpdatePutsBack(input: UpdateTaskDto): boolean {
 }
 
 /**
- * 编辑任务：
- * - 改计划（类型或日期）时两者一起写；NONE / SOMEDAY 没有计划日期，
- *   换成 DATE 而未给日期时沿用原日期。
- * - 离开 DATE 清除提醒与重复规则（无锚即无意义，reminders / recurring-tasks
- *   spec）；DATE 下按输入写，重复规则写入前规范化，非法对象忽略。
- * - Bucket 按新的计划类型与归属重新推导，有变化或显式改计划 / Bucket 时写。
+ * 编辑任务（ADR 0024）：
+ * - 改计划（start 或日期）时两者一起写。设日期即 ANYTIME；SOMEDAY 清除
+ *   日期；ANYTIME 未给日期时沿用原日期（Clear 显式给 null）。
+ * - 移入 Inbox（start 为 INBOX）同时清除归属与计划，截止日期保留；同一次
+ *   编辑给了归属或日期时整理优先，落 Anytime（resolveTaskStart）。
+ * - 没有计划日期时清除提醒与重复规则（无锚即无意义，reminders / recurring-tasks
+ *   spec）；有日期时按输入写，重复规则写入前规范化，非法对象忽略。
+ * - 归属变化时 start 按归属重新推导（Inbox 任务获得归属转入 Anytime）。
  * - 换项目解除分组归属（分组只属于原项目）。
  * - 在 Trash 中时，taskUpdatePutsBack 的编辑同时放回（清 trashedAt）。
  */
@@ -118,21 +118,33 @@ export function planTaskUpdate(
   zones: CalendarZones,
 ): TaskPatch {
   const patch: TaskPatch = {};
-  const scheduledType = (input.scheduledType ?? existing.scheduledType) as ScheduledType;
-  const schedulingChanged = input.scheduledType !== undefined || input.scheduledDate !== undefined;
+  const toInbox = input.start === Start.INBOX;
+  const schedulingChanged = input.start !== undefined || input.scheduledDate !== undefined;
 
   if (input.title !== undefined) patch.title = input.title;
   if (input.notes !== undefined) patch.notes = input.notes;
-  if (schedulingChanged) {
-    patch.scheduledType = scheduledType;
-    patch.scheduledDate =
-      scheduledType !== ScheduledType.DATE
-        ? null
-        : input.scheduledDate !== undefined
-          ? dateKeyOf(input.scheduledDate, zones)
-          : dateKeyOf(existing.scheduledDate, zones);
+
+  let scheduledDate =
+    input.start === Start.SOMEDAY || toInbox ? null : dateKeyOf(existing.scheduledDate, zones);
+  if (input.scheduledDate !== undefined && input.start !== Start.SOMEDAY) {
+    scheduledDate = dateKeyOf(input.scheduledDate, zones);
   }
-  if (scheduledType !== ScheduledType.DATE) {
+  const projectId =
+    input.projectId !== undefined ? input.projectId : toInbox ? null : existing.projectId;
+  const areaId = input.areaId !== undefined ? input.areaId : toInbox ? null : existing.areaId;
+  const start = resolveTaskStart(
+    input.start ?? (scheduledDate != null ? Start.ANYTIME : existing.start),
+    scheduledDate,
+    projectId,
+    areaId,
+  );
+  if (schedulingChanged) {
+    patch.start = start;
+    patch.scheduledDate = scheduledDate;
+  } else if (start !== existing.start) {
+    patch.start = start;
+  }
+  if (scheduledDate == null) {
     patch.reminderTime = null;
     patch.repeatRule = null;
   } else {
@@ -144,32 +156,10 @@ export function planTaskUpdate(
   }
   if (input.dueDate !== undefined) patch.dueDate = dateKeyOf(input.dueDate, zones);
 
-  const projectId = input.projectId !== undefined ? input.projectId : existing.projectId;
-  const areaId = input.areaId !== undefined ? input.areaId : existing.areaId;
-  if (
-    schedulingChanged ||
-    input.bucket !== undefined ||
-    input.projectId !== undefined ||
-    input.areaId !== undefined
-  ) {
-    const bucket = resolveTaskBucket(
-      input.bucket ?? existing.bucket,
-      scheduledType,
-      projectId,
-      areaId,
-    );
-    if (schedulingChanged || input.bucket !== undefined || bucket !== existing.bucket) {
-      patch.bucket = bucket;
-    }
-  }
-  if (input.projectId !== undefined) patch.projectId = input.projectId;
-  if (input.areaId !== undefined) patch.areaId = input.areaId;
+  if (input.projectId !== undefined || toInbox) patch.projectId = projectId;
+  if (input.areaId !== undefined || toInbox) patch.areaId = areaId;
   if (input.tagIds !== undefined) patch.tagIds = input.tagIds;
-  if (
-    input.projectId !== undefined &&
-    input.projectId !== existing.projectId &&
-    existing.headingId != null
-  ) {
+  if (projectId !== (existing.projectId ?? null) && existing.headingId != null) {
     patch.headingId = null;
   }
   if (existing.trashedAt != null && taskUpdatePutsBack(input)) patch.trashedAt = null;
@@ -230,7 +220,7 @@ export function subtaskStatusPatch(
 export interface ConvertibleTask {
   title: string;
   notes: string | null;
-  scheduledType: unknown;
+  start: unknown;
   scheduledDate: unknown;
   dueDate: unknown;
   status: unknown;
@@ -249,13 +239,12 @@ export interface ConvertibleSubtask {
 export interface ConvertedProjectFields {
   title: string;
   notes: string | null;
-  scheduledType: ScheduledType;
+  start: Start;
   scheduledDate: string | null;
   dueDate: string | null;
   reviewInterval: ReviewInterval;
   nextReviewDate: string;
   lastReviewedOn: null;
-  bucket: ReturnType<typeof resolveProjectBucket>;
   status: ProjectStatus;
   completedAt: string | null;
   trashedAt: string | null;
@@ -278,16 +267,14 @@ export function planConvertTaskToProject(
   review: ReviewContext,
 ): { project: ConvertedProjectFields; promotedTasks: TaskFields[] } {
   const completed = task.status === TaskStatus.COMPLETED;
-  const scheduledType = (task.scheduledType as ScheduledType) ?? ScheduledType.NONE;
+  const start = resolveProjectStart(task.start);
   const project: ConvertedProjectFields = {
     title: task.title,
     notes: task.notes,
-    scheduledType,
-    scheduledDate:
-      scheduledType === ScheduledType.DATE ? dateKeyOf(task.scheduledDate, zones) : null,
+    start,
+    scheduledDate: start === Start.SOMEDAY ? null : dateKeyOf(task.scheduledDate, zones),
     dueDate: dateKeyOf(task.dueDate, zones),
     ...planReviewSchedule(review, 'project'),
-    bucket: resolveProjectBucket(scheduledType),
     status: completed ? ProjectStatus.COMPLETED : ProjectStatus.ACTIVE,
     completedAt: completed ? task.settledAt : null,
     trashedAt: task.trashedAt,
@@ -297,13 +284,12 @@ export function planConvertTaskToProject(
   const promotedTasks = subtasks.map((subtask): TaskFields => ({
     title: subtask.title,
     notes: null,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
-    bucket: TaskBucket.ANYTIME,
     status: (subtask.status as TaskStatus) ?? TaskStatus.ACTIVE,
     settledAt: subtask.settledAt,
     trashedAt: null,

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { ScheduledType, TaskStatus } from '@taskora/shared';
+import { TaskStatus } from '@taskora/shared';
 
 import {
   buildReminderTexts,
@@ -18,7 +18,6 @@ const SCHEDULED_DATE = '2026-02-05';
 function task(partial: Partial<ReminderTaskInput> & { id: string }): ReminderTaskInput {
   return {
     title: partial.title ?? '任务',
-    scheduledType: ScheduledType.DATE,
     scheduledDate: partial.scheduledDate ?? SCHEDULED_DATE,
     reminderTime: partial.reminderTime ?? '09:00',
     status: TaskStatus.ACTIVE,
@@ -45,11 +44,9 @@ describe('computeReminderPlan — 纯调度计算（reminders spec 新 seam）',
     });
   });
 
-  it('过滤：非 DATE / 无日期 / 无提醒时刻 / 已了结 / 已进 Trash 的任务不产出', () => {
+  it('过滤：无日期 / 无提醒时刻 / 已了结 / 已进 Trash 的任务不产出', () => {
     const plan = computeReminderPlan(
       [
-        task({ id: 'a', scheduledType: ScheduledType.SOMEDAY }),
-        task({ id: 'b', scheduledType: ScheduledType.NONE }),
         task({ id: 'c', scheduledDate: null }),
         task({ id: 'd', reminderTime: null }),
         task({ id: 'e', status: TaskStatus.COMPLETED }),

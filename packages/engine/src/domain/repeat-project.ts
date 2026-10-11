@@ -5,16 +5,10 @@
  * 确定性 id 与字段，两端并发派生经 LWW 收敛（ADR-0012）。
  */
 
-import {
-  HeadingStatus,
-  ProjectStatus,
-  ScheduledType,
-  TaskStatus,
-  type RepeatRule,
-} from '@taskora/shared';
+import { HeadingStatus, ProjectStatus, Start, TaskStatus, type RepeatRule } from '@taskora/shared';
 
 import { deriveRepeatCopyId, deriveRepeatProjectId, nextOccurrenceDate } from '../repeat';
-import { resolveProjectBucket, resolveTaskBucket } from './bucket';
+import { resolveTaskStart } from './start';
 import { dateKeyOf, daysBetweenKeys, shiftDateKey, type CalendarZones } from './calendar';
 import { sortByEffectivePosition, type Positioned } from './order';
 import type { ProjectFields, ProjectPatch } from './projects';
@@ -49,14 +43,13 @@ export interface RepeatProjectHeading extends Positioned {
 export interface RepeatProjectTask extends Positioned {
   title: string;
   notes: string | null;
-  scheduledType: unknown;
+  start: unknown;
   scheduledDate: unknown;
   dueDate: unknown;
   reminderTime: string | null;
   /** 规范化后的规则。 */
   repeatRule: RepeatRule | null;
   repeatSourceId: string | null;
-  bucket: unknown;
   trashedAt: unknown;
   headingId: string | null;
   areaId: string | null;
@@ -157,14 +150,13 @@ export function planRepeatProjectInstance(
     project: {
       title: parent.title,
       notes: parent.notes,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: target.occurrence,
       dueDate: shifted(parent.dueDate, delta, zones),
       repeatRule: parent.repeatRule,
       repeatSourceId: parent.id,
       // 沿用来源的回顾间隔，排期从派生日（今天）重新计，从未回顾
       ...planReviewSchedule(review, 'project', { reviewInterval: parent.reviewInterval }),
-      bucket: resolveProjectBucket(ScheduledType.DATE),
       status: ProjectStatus.ACTIVE,
       completedAt: null,
       trashedAt: null,
@@ -219,20 +211,20 @@ export function copyProjectContents(
     templates.map((task) => [task.id, deriveRepeatCopyId(instanceId, 'task', task.id)]),
   );
   const tasks = templates.map((task) => {
-    const scheduledType = (task.scheduledType as ScheduledType) ?? ScheduledType.NONE;
-    const dated = scheduledType === ScheduledType.DATE;
+    const scheduledDate =
+      task.start === Start.SOMEDAY ? null : shifted(task.scheduledDate, delta, zones);
+    const dated = scheduledDate != null;
     return {
       id: taskIds.get(task.id)!,
       position: task.position ?? null,
       title: task.title,
       notes: task.notes,
-      scheduledType,
-      scheduledDate: dated ? shifted(task.scheduledDate, delta, zones) : null,
+      start: resolveTaskStart(task.start, scheduledDate, instanceId, task.areaId),
+      scheduledDate,
       reminderTime: dated ? task.reminderTime : null,
       repeatRule: dated ? task.repeatRule : null,
       repeatSourceId: null,
       dueDate: shifted(task.dueDate, delta, zones),
-      bucket: resolveTaskBucket(task.bucket, scheduledType, instanceId, task.areaId),
       status: TaskStatus.ACTIVE,
       settledAt: null,
       trashedAt: null,
@@ -272,7 +264,6 @@ export function copyProjectContents(
 export interface RepeatProjectSkipSource {
   status: unknown;
   trashedAt: unknown;
-  scheduledType: unknown;
   scheduledDate: unknown;
   dueDate: unknown;
   /** 规范化后的规则。 */
@@ -283,14 +274,13 @@ export interface RepeatProjectSkipTask {
   id: string;
   status: unknown;
   trashedAt: unknown;
-  scheduledType: unknown;
   scheduledDate: unknown;
   dueDate: unknown;
 }
 
 /**
  * 项目跳过本次：项目计划日期按 planRepeatSkip 同一规则推进、截止日期
- * 平移；项目内未了结、未进 Trash 的任务，计划日期（DATE）与截止日期按
+ * 平移；项目内未了结、未进 Trash 的任务，计划日期与截止日期按
  * 同一天数平移。已了结的任务不动（不复活这一轮的记录）。不新建实体。
  * 项目没有取消态：未完成即 ACTIVE。
  */
@@ -319,10 +309,8 @@ export function planProjectRepeatSkip(
     .filter((task) => task.status === TaskStatus.ACTIVE && task.trashedAt == null)
     .flatMap((task) => {
       const patch: TaskPatch = {};
-      if (task.scheduledType === ScheduledType.DATE) {
-        const scheduledDate = shifted(task.scheduledDate, delta, zones);
-        if (scheduledDate !== null) patch.scheduledDate = scheduledDate;
-      }
+      const scheduledDate = shifted(task.scheduledDate, delta, zones);
+      if (scheduledDate !== null) patch.scheduledDate = scheduledDate;
       const dueDate = shifted(task.dueDate, delta, zones);
       if (dueDate !== null) patch.dueDate = dueDate;
       return Object.keys(patch).length > 0 ? [{ id: task.id, patch }] : [];

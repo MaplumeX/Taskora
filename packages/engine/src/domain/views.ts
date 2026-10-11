@@ -9,9 +9,8 @@
 
 import {
   ProjectStatus,
-  ScheduledType,
   SETTLED_TASK_STATUSES,
-  TaskBucket,
+  Start,
   TaskStatus,
   WITH_SETTLED_TASK_STATUSES,
 } from '@taskora/shared';
@@ -46,7 +45,8 @@ export type ListView =
 /** 视图判定用到的字段（两端存储形态：日期可为 Date 或字符串）。 */
 export interface ViewFields {
   status: unknown;
-  scheduledType: unknown;
+  /** 开始状态（ADR 0024）。 */
+  start: unknown;
   scheduledDate: unknown;
   /** 截止日期 ≤ 今天的未了结条目也进 Today（对齐 Things 3）。 */
   dueDate: unknown;
@@ -61,16 +61,21 @@ export interface ViewFields {
   completedAt?: unknown;
 }
 
-export interface TaskViewFields extends ViewFields {
-  bucket: unknown;
-}
+export type TaskViewFields = ViewFields;
 
 /**
- * 只有 Today / Upcoming 依赖「今天」，Deadlines / Repeating 按截止日期 /
- * 计划日期的日历日排序；其余视图不必查账号时区。
+ * Today / Upcoming / Anytime 依赖「今天」（Anytime 含计划日期已到的条目），
+ * Deadlines / Repeating 按截止日期 / 计划日期的日历日排序；其余视图不必查
+ * 账号时区。
  */
 export function viewNeedsCalendar(view: string | undefined): boolean {
-  return view === 'today' || view === 'upcoming' || view === 'deadlines' || view === 'repeating';
+  return (
+    view === 'today' ||
+    view === 'upcoming' ||
+    view === 'anytime' ||
+    view === 'deadlines' ||
+    view === 'repeating'
+  );
 }
 
 function isSettledTask(status: unknown): boolean {
@@ -99,9 +104,9 @@ function listedProject(project: ViewFields, context: ViewContext): boolean {
   );
 }
 
-/** DATE 计划相对「今天」的位置：today（今天及以前）/ upcoming / null（不适用）。 */
+/** 计划日期相对「今天」的位置：today（今天及以前）/ upcoming / null（没有日期）。 */
 function datePlacement(fields: ViewFields, context: CalendarContext): 'today' | 'upcoming' | null {
-  if (fields.scheduledType !== ScheduledType.DATE) return null;
+  if (fields.start === Start.SOMEDAY) return null;
   const day = dateKeyOf(fields.scheduledDate, context);
   if (day === null) return null;
   return day <= todayKey(context) ? 'today' : 'upcoming';
@@ -131,19 +136,16 @@ export function taskMatchesView(
   const listed = listedTask(task, context);
   switch (view) {
     case 'inbox':
-      return (
-        listed && task.bucket === TaskBucket.INBOX && task.scheduledType === ScheduledType.NONE
-      );
+      return listed && task.start === Start.INBOX && datePlacement(task, context) === null;
     case 'anytime':
-      return (
-        listed && task.bucket === TaskBucket.ANYTIME && task.scheduledType === ScheduledType.NONE
-      );
+      // Today 是 Anytime 的子集（Things 3）：计划日期已到的条目也在
+      return listed && task.start === Start.ANYTIME && datePlacement(task, context) !== 'upcoming';
     case 'today':
       return listed && inToday(task, context);
     case 'upcoming':
       return listed && datePlacement(task, context) === 'upcoming';
     case 'someday':
-      return listed && task.scheduledType === ScheduledType.SOMEDAY;
+      return listed && task.start === Start.SOMEDAY;
     case 'trash':
       return task.trashedAt != null;
     case 'logbook':
@@ -175,7 +177,7 @@ export function projectMatchesView(
     case 'upcoming':
       return listed && datePlacement(project, context) === 'upcoming';
     case 'someday':
-      return listed && project.scheduledType === ScheduledType.SOMEDAY;
+      return listed && project.start === Start.SOMEDAY;
     case 'trash':
       return project.trashedAt != null;
     case 'logbook':

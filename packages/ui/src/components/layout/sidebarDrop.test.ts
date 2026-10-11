@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import type { ProjectResponseDto } from '@taskora/shared';
-import {
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
-  TaskBucket,
-  TaskStatus,
-} from '@taskora/shared';
+import { ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 
 import {
   SIDEBAR_DROP_REGION_ID,
@@ -29,8 +23,7 @@ function task(id: string, fields: Partial<DropTask> = {}): DropTask {
     id,
     projectId: null,
     areaId: null,
-    bucket: TaskBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     status: TaskStatus.ACTIVE,
     ...fields,
@@ -44,8 +37,7 @@ function project(id: string, fields: Partial<ProjectResponseDto> = {}): ProjectR
     notes: null,
     areaId: null,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     dueDate: null,
     completedAt: null,
@@ -112,8 +104,7 @@ describe('planSidebarDrop: tasks', () => {
         data: {
           projectId: null,
           areaId: null,
-          bucket: TaskBucket.INBOX,
-          scheduledType: ScheduledType.NONE,
+          start: Start.INBOX,
         },
       },
     ],
@@ -123,13 +114,13 @@ describe('planSidebarDrop: tasks', () => {
       {
         type: 'updateTask',
         id: 't1',
-        data: { scheduledType: ScheduledType.DATE, scheduledDate: TODAY },
+        data: { start: Start.ANYTIME, scheduledDate: TODAY },
       },
     ],
     [
       'Someday parks it',
       { kind: 'someday' },
-      { type: 'updateTask', id: 't1', data: { scheduledType: ScheduledType.SOMEDAY } },
+      { type: 'updateTask', id: 't1', data: { start: Start.SOMEDAY } },
     ],
     [
       'Anytime clears the schedule',
@@ -138,9 +129,8 @@ describe('planSidebarDrop: tasks', () => {
         type: 'updateTask',
         id: 't1',
         data: {
-          scheduledType: ScheduledType.NONE,
+          start: Start.ANYTIME,
           scheduledDate: null,
-          bucket: TaskBucket.ANYTIME,
         },
       },
     ],
@@ -160,20 +150,20 @@ describe('planSidebarDrop: tasks', () => {
   ])('%s', (_name, target, action) => {
     const source = task('t1', {
       projectId: 'p-other',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-10-20',
     });
     expect(planSidebarDrop(tasks(source), target, TODAY)).toEqual([action]);
   });
 
   it.each<[string, DropTask, SidebarDropTarget]>([
-    ['already in Inbox', task('t1', { bucket: TaskBucket.INBOX }), { kind: 'inbox' }],
+    ['already in Inbox', task('t1', { start: Start.INBOX }), { kind: 'inbox' }],
     [
       'already scheduled today',
-      task('t1', { scheduledType: ScheduledType.DATE, scheduledDate: TODAY }),
+      task('t1', { start: Start.ANYTIME, scheduledDate: TODAY }),
       { kind: 'today' },
     ],
-    ['already Someday', task('t1', { scheduledType: ScheduledType.SOMEDAY }), { kind: 'someday' }],
+    ['already Someday', task('t1', { start: Start.SOMEDAY }), { kind: 'someday' }],
     ['already in Anytime', task('t1'), { kind: 'anytime' }],
     ['already completed', task('t1', { status: TaskStatus.COMPLETED }), { kind: 'logbook' }],
     ['already cancelled', task('t1', { status: TaskStatus.CANCELLED }), { kind: 'logbook' }],
@@ -188,29 +178,28 @@ describe('planSidebarDrop: tasks', () => {
   });
 
   it('takes an Inbox task to Anytime', () => {
-    const source = task('t1', { bucket: TaskBucket.INBOX });
+    const source = task('t1', { start: Start.INBOX });
     expect(planSidebarDrop(tasks(source), { kind: 'anytime' }, TODAY)).toEqual([
       {
         type: 'updateTask',
         id: 't1',
         data: {
-          scheduledType: ScheduledType.NONE,
+          start: Start.ANYTIME,
           scheduledDate: null,
-          bucket: TaskBucket.ANYTIME,
         },
       },
     ]);
   });
 
   it('asks for one date for the whole group on Upcoming', () => {
-    const group = tasks(task('t1'), task('t2', { scheduledType: ScheduledType.SOMEDAY }));
+    const group = tasks(task('t1'), task('t2', { start: Start.SOMEDAY }));
     expect(planSidebarDrop(group, { kind: 'upcoming' }, TODAY)).toEqual([
       { type: 'pickTaskSchedule', ids: ['t1', 't2'] },
     ]);
   });
 
   it('reschedules an overdue task to today', () => {
-    const source = task('t1', { scheduledType: ScheduledType.DATE, scheduledDate: '2026-10-01' });
+    const source = task('t1', { start: Start.ANYTIME, scheduledDate: '2026-10-01' });
     expect(planSidebarDrop(tasks(source), { kind: 'today' }, TODAY)).toHaveLength(1);
   });
 
@@ -251,13 +240,13 @@ describe('planSidebarDrop: project', () => {
       {
         type: 'updateProject',
         id: 'p1',
-        data: { scheduledType: ScheduledType.DATE, scheduledDate: TODAY },
+        data: { start: Start.ANYTIME, scheduledDate: TODAY },
       },
     ],
     [
       'Someday makes it a Later Project',
       { kind: 'someday' },
-      { type: 'updateProject', id: 'p1', data: { scheduledType: ScheduledType.SOMEDAY } },
+      { type: 'updateProject', id: 'p1', data: { start: Start.SOMEDAY } },
     ],
     ['Upcoming asks for a date', { kind: 'upcoming' }, { type: 'pickProjectSchedule', id: 'p1' }],
     [
@@ -266,7 +255,7 @@ describe('planSidebarDrop: project', () => {
       {
         type: 'updateProject',
         id: 'p1',
-        data: { scheduledType: ScheduledType.NONE, scheduledDate: null },
+        data: { start: Start.ANYTIME, scheduledDate: null },
       },
     ],
     ['Logbook completes', { kind: 'logbook' }, { type: 'completeProject', id: 'p1' }],
@@ -274,7 +263,7 @@ describe('planSidebarDrop: project', () => {
   ])('%s', (_name, target, action) => {
     const source = project('p1', {
       areaId: 'a1',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-10-20',
     });
     expect(planSidebarDrop(proj(source), target, TODAY)).toEqual([action]);
@@ -289,12 +278,8 @@ describe('planSidebarDrop: project', () => {
 
   it.each<[string, Partial<ProjectResponseDto>, SidebarDropTarget]>([
     ['already in the area', { areaId: 'a1' }, { kind: 'area', areaId: 'a1' }],
-    [
-      'already scheduled today',
-      { scheduledType: ScheduledType.DATE, scheduledDate: TODAY },
-      { kind: 'today' },
-    ],
-    ['already Someday', { scheduledType: ScheduledType.SOMEDAY }, { kind: 'someday' }],
+    ['already scheduled today', { start: Start.ANYTIME, scheduledDate: TODAY }, { kind: 'today' }],
+    ['already Someday', { start: Start.SOMEDAY }, { kind: 'someday' }],
     ['already unscheduled', {}, { kind: 'anytime' }],
     ['already completed', { status: ProjectStatus.COMPLETED }, { kind: 'logbook' }],
   ])('skips a project %s', (_name, fields, target) => {

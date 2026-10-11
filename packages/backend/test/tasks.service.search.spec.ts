@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TaskBucket, TaskStatus } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 
 import { plainToInstance } from 'class-transformer';
 import { validate } from 'class-validator';
@@ -89,7 +89,7 @@ describe('TasksService — search (q param)', () => {
       id: 'task-1',
       title: 'Test task',
       status: TaskStatus.ACTIVE,
-      bucket: TaskBucket.INBOX,
+      start: Start.INBOX,
       userId,
       tags: [{ tag: { id: 'tag-1', name: 'urgent', color: '#ff0000' } }],
     };

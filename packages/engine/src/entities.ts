@@ -53,8 +53,8 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('reminderTime'),
       f('repeatRule', { json: true }),
       f('repeatSourceId'),
-      f('bucket'),
-      f('scheduledType'),
+      // 开始状态（INBOX / ANYTIME / SOMEDAY，ADR 0024）
+      f('start'),
       f('status'),
       f('settledAt'),
       f('trashedAt'),
@@ -87,8 +87,8 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('title'),
       f('notes'),
       f('status'),
-      f('bucket'),
-      f('scheduledType'),
+      // 开始状态（ANYTIME / SOMEDAY，ADR 0024）
+      f('start'),
       f('scheduledDate'),
       f('dueDate'),
       f('repeatRule', { json: true }),

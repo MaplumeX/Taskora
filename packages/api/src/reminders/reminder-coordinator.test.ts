@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { InMemorySyncHub, openEngine, type Engine } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
-import { ScheduledType, TaskStatus } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 
 import { usePreferencesStore } from '@/stores/preferences.store';
 import { createReminderCoordinator, type ReminderCoordinator } from './reminder-coordinator';
@@ -62,10 +62,9 @@ async function seedTask(
     title: partial.title ?? '提醒任务',
     notes: null,
     scheduledDate: `2026-02-${String(partial.day ?? 5).padStart(2, '0')}`,
-    scheduledType: ScheduledType.DATE,
+    start: Start.ANYTIME,
     reminderTime: partial.time === undefined ? '09:00' : partial.time,
     dueDate: null,
-    bucket: 'SCHEDULED',
     status: TaskStatus.ACTIVE,
     settledAt: null,
     trashedAt: null,

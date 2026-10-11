@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { Archive, Star, Sunrise } from 'lucide-react';
 
 import type { ScheduledFieldCurrent, ScheduledFieldPatch } from './fieldProps';
-import { ScheduledType, type WhenCandidate } from '@taskora/shared';
+import { Start, type WhenCandidate } from '@taskora/shared';
 
 import { Button } from '@/components/ui/button';
 import { Calendar } from '@/components/ui/calendar';
@@ -55,11 +55,9 @@ export function ScheduledDateField({
   const refreshPermission = useReminderPermissionStore((s) => s.refresh);
   const openNotificationSettings = useReminderPermissionStore((s) => s.openSettings);
 
-  const scheduledType = current.scheduledType ?? ScheduledType.NONE;
+  const someday = current.start === Start.SOMEDAY;
   const storedDate =
-    scheduledType === ScheduledType.DATE && current.scheduledDate
-      ? parseCalendarDate(current.scheduledDate)
-      : undefined;
+    !someday && current.scheduledDate ? parseCalendarDate(current.scheduledDate) : undefined;
   // 参考 Things 3：计划日期已过按「今天」对待——卡片选中今天，数据层
   // 日期不改写；只有在卡片里写提醒时才把计划日期一并落为今天。
   const pastDate = storedDate !== undefined && storedDate < startOfToday();
@@ -67,8 +65,8 @@ export function ScheduledDateField({
 
   const locale = getCalendarLocale(i18n.language);
 
-  // 提醒区只在 DATE 型任务上出现（Someday / 无计划任务的提醒无法成立）。
-  const reminderVisible = showReminder && scheduledType === ScheduledType.DATE;
+  // 提醒区只在有计划日期的任务上出现（Someday / 无计划任务的提醒无法成立）。
+  const reminderVisible = showReminder && storedDate !== undefined;
 
   // 提醒区打开时对齐一次系统授权状态（拒绝过的会话要能展示禁用提示）。
   React.useEffect(() => {
@@ -84,43 +82,35 @@ export function ScheduledDateField({
 
   const handleDaySelect = (date: Date | undefined) => {
     if (!date) return;
-    onPatch({
-      scheduledType: ScheduledType.DATE,
-      scheduledDate: toInputDateValue(date),
-    });
+    onPatch({ start: Start.ANYTIME, scheduledDate: toInputDateValue(date) });
     closeAfterDate();
   };
 
   const handleToday = () => {
-    onPatch({
-      scheduledType: ScheduledType.DATE,
-      scheduledDate: toInputDateValue(startOfToday()),
-    });
+    onPatch({ start: Start.ANYTIME, scheduledDate: toInputDateValue(startOfToday()) });
     closeAfterDate();
   };
 
   const handleTomorrow = () => {
-    onPatch({
-      scheduledType: ScheduledType.DATE,
-      scheduledDate: toInputDateValue(startOfTomorrow()),
-    });
+    onPatch({ start: Start.ANYTIME, scheduledDate: toInputDateValue(startOfTomorrow()) });
     closeAfterDate();
   };
 
   const handleSomeday = () => {
-    // 离开 DATE 时清理（reminderTime / repeatRule）由数据层强制；
+    // 清除日期时的清理（reminderTime / repeatRule）由数据层强制；
     // Task 上下文显式携带 reminderTime null 让提醒语义即时生效，
     // repeatRule 由独立的 RepeatRuleField 入口负责（数据层兜底清除）。
     const clear: ScheduledFieldPatch = {};
     if (showReminder) clear.reminderTime = null;
-    onPatch({ scheduledType: ScheduledType.SOMEDAY, ...clear });
+    onPatch({ start: Start.SOMEDAY, ...clear });
     onClose?.();
   };
 
+  // 清除：落 Anytime（对齐 Things 3 的 Clear），无归属的任务也不回 Inbox。
   const handleClear = () => {
     const clear: ScheduledFieldPatch = {};
     if (showReminder) clear.reminderTime = null;
-    onPatch({ scheduledType: ScheduledType.NONE, scheduledDate: null, ...clear });
+    onPatch({ start: Start.ANYTIME, scheduledDate: null, ...clear });
     onClose?.();
   };
 
@@ -153,10 +143,7 @@ export function ScheduledDateField({
   const handleQuerySelect = (candidate: WhenCandidate) => {
     if (candidate.kind === 'someday') return handleSomeday();
     if (candidate.kind === 'clear') return handleClear();
-    const patch: ScheduledFieldPatch = {
-      scheduledType: ScheduledType.DATE,
-      scheduledDate: candidate.date,
-    };
+    const patch: ScheduledFieldPatch = { start: Start.ANYTIME, scheduledDate: candidate.date };
     if (showReminder && candidate.time) {
       void requestPermission();
       patch.reminderTime = candidate.time;
@@ -193,13 +180,13 @@ export function ScheduledDateField({
             key: 'someday',
             label: t('task:somedayLabel'),
             icon: <Archive className="text-nav-someday" />,
-            active: scheduledType === ScheduledType.SOMEDAY,
+            active: someday,
             onSelect: handleSomeday,
           },
         ]}
         clear={{
           label: t('common:clear'),
-          disabled: scheduledType === ScheduledType.NONE,
+          disabled: !someday && storedDate === undefined,
           onClear: handleClear,
         }}
       />

@@ -12,14 +12,13 @@ import {
   useTaskSearchQuery,
 } from '@taskora/api';
 import {
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
-  TaskStatus,
   type FeedItem,
   type ProjectResponseDto,
+  ProjectStatus,
+  Start,
   type TaskResponseDto,
   type TaskSearchHit,
+  TaskStatus,
 } from '@taskora/shared';
 
 import Search from './Search';
@@ -46,8 +45,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   // 有效 Tag：测试数据里 Project / Area 不带 Tag，直接用自身 Tag
   useEffectiveTags: () => ({
     ofTask: (task: { tags?: { id: string }[] }) => (task.tags ?? []).map((tag) => tag.id),
-    ofProject: (project: { tags?: { id: string }[] }) =>
-      (project.tags ?? []).map((tag) => tag.id),
+    ofProject: (project: { tags?: { id: string }[] }) => (project.tags ?? []).map((tag) => tag.id),
     ofFeedItem: (item: { tags?: { id: string }[] }) => (item.tags ?? []).map((tag) => tag.id),
   }),
 }));
@@ -71,8 +69,7 @@ const PROJECT: ProjectResponseDto = {
   notes: null,
   areaId: null,
   status: ProjectStatus.ACTIVE,
-  bucket: ProjectBucket.ANYTIME,
-  scheduledType: ScheduledType.NONE,
+  start: Start.ANYTIME,
   scheduledDate: null,
   dueDate: null,
   completedAt: null,

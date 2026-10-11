@@ -16,7 +16,7 @@ import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-ki
 
 import { NavLink, useNavigate } from 'react-router-dom';
 
-import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
+import { ProjectStatus, Start } from '@taskora/shared';
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 
 import { SortableProjectItem } from '@/components/layout/SortableProjectItem';
@@ -88,8 +88,7 @@ function draftProjectOf(): ProjectResponseDto {
     notes: null,
     areaId: null,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     dueDate: null,
     completedAt: null,

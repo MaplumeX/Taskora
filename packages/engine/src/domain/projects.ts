@@ -4,10 +4,9 @@
 
 import {
   ProjectStatus,
-  ScheduledType,
+  Start,
   TaskStatus,
   type CreateProjectDto,
-  type ProjectBucket,
   type RepeatRule,
   type ReviewInterval,
   type SettleRemainingTasks,
@@ -15,7 +14,6 @@ import {
 } from '@taskora/shared';
 
 import { normalizeRepeatRule } from '../repeat';
-import { resolveProjectBucket } from './bucket';
 import { dateKeyOf, instantMs, type CalendarZones } from './calendar';
 import {
   planReviewSchedule,
@@ -23,15 +21,16 @@ import {
   type ReviewContext,
   type ReviewUpdateBase,
 } from './review';
+import { resolveProjectStart } from './start';
 import { taskTrashPatch, type TaskPatch } from './tasks';
 
 export interface ProjectFields {
   title: string;
   notes: string | null;
-  scheduledType: ScheduledType;
+  start: Start;
   scheduledDate: string | null;
   dueDate: string | null;
-  /** 重复规则（recurring-projects spec）：仅 DATE 项目可设。 */
+  /** 重复规则（recurring-projects spec）：仅有计划日期的项目可设。 */
   repeatRule: RepeatRule | null;
   /** 派生来源：派生出本项目的重复项目 id；非派生为 null。 */
   repeatSourceId: string | null;
@@ -41,7 +40,6 @@ export interface ProjectFields {
   nextReviewDate: string | null;
   /** 上次回顾日（日期键）；null 为从未回顾。 */
   lastReviewedOn: string | null;
-  bucket: ProjectBucket;
   status: ProjectStatus;
   completedAt: string | null;
   trashedAt: string | null;
@@ -56,18 +54,16 @@ export function planProjectCreate(
   zones: CalendarZones,
   review: ReviewContext,
 ): ProjectFields {
-  const scheduledType = input.scheduledType ?? ScheduledType.NONE;
+  const start = resolveProjectStart(input.start);
   return {
     title: input.title,
     notes: input.notes ?? null,
-    scheduledType,
-    scheduledDate:
-      scheduledType === ScheduledType.DATE ? dateKeyOf(input.scheduledDate, zones) : null,
+    start,
+    scheduledDate: start === Start.SOMEDAY ? null : dateKeyOf(input.scheduledDate, zones),
     dueDate: dateKeyOf(input.dueDate, zones),
     repeatRule: null,
     repeatSourceId: null,
     ...planReviewSchedule(review, 'project', input, zones),
-    bucket: resolveProjectBucket(scheduledType),
     status: ProjectStatus.ACTIVE,
     completedAt: null,
     trashedAt: null,
@@ -77,15 +73,14 @@ export function planProjectCreate(
 }
 
 export interface ProjectUpdateBase extends ReviewUpdateBase {
-  scheduledType: unknown;
+  start: unknown;
   scheduledDate: unknown;
-  bucket: unknown;
 }
 
 /**
- * 编辑项目：计划规则同任务（无提醒）——离开 DATE 清除重复规则，DATE 下
- * 规则写入前规范化、非法对象忽略；Bucket 只由计划类型决定。回顾设置见
- * planReviewUpdate。
+ * 编辑项目：计划规则同任务（无提醒、无 Inbox）——设日期即 ANYTIME，SOMEDAY
+ * 清除日期；没有日期时清除重复规则，有日期时规则写入前规范化、非法对象
+ * 忽略。回顾设置见 planReviewUpdate。
  */
 export function planProjectUpdate(
   existing: ProjectUpdateBase,
@@ -94,31 +89,30 @@ export function planProjectUpdate(
   review: ReviewContext,
 ): ProjectPatch {
   const patch: ProjectPatch = {};
-  const scheduledType = (input.scheduledType ?? existing.scheduledType) as ScheduledType;
-  const schedulingChanged = input.scheduledType !== undefined || input.scheduledDate !== undefined;
+  const schedulingChanged = input.start !== undefined || input.scheduledDate !== undefined;
 
   if (input.title !== undefined) patch.title = input.title;
   if (input.notes !== undefined) patch.notes = input.notes;
-  if (schedulingChanged) {
-    patch.scheduledType = scheduledType;
-    patch.scheduledDate =
-      scheduledType !== ScheduledType.DATE
-        ? null
-        : input.scheduledDate !== undefined
-          ? dateKeyOf(input.scheduledDate, zones)
-          : dateKeyOf(existing.scheduledDate, zones);
+  let scheduledDate =
+    input.start === Start.SOMEDAY ? null : dateKeyOf(existing.scheduledDate, zones);
+  if (input.scheduledDate !== undefined && input.start !== Start.SOMEDAY) {
+    scheduledDate = dateKeyOf(input.scheduledDate, zones);
   }
-  if (scheduledType !== ScheduledType.DATE) {
+  const start =
+    scheduledDate != null ? Start.ANYTIME : resolveProjectStart(input.start ?? existing.start);
+  if (schedulingChanged) {
+    patch.start = start;
+    patch.scheduledDate = scheduledDate;
+  } else if (start !== existing.start) {
+    patch.start = start;
+  }
+  if (scheduledDate == null) {
     patch.repeatRule = null;
   } else if (input.repeatRule !== undefined) {
     const normalized = normalizeRepeatRule(input.repeatRule);
     if (input.repeatRule === null || normalized !== null) patch.repeatRule = normalized;
   }
   if (input.dueDate !== undefined) patch.dueDate = dateKeyOf(input.dueDate, zones);
-  const bucket = resolveProjectBucket(scheduledType);
-  if (schedulingChanged || input.bucket !== undefined || bucket !== existing.bucket) {
-    patch.bucket = bucket;
-  }
   if (input.areaId !== undefined) patch.areaId = input.areaId;
   if (input.tagIds !== undefined) patch.tagIds = input.tagIds;
   Object.assign(patch, planReviewUpdate(existing, input, 'project', review, zones));
@@ -127,16 +121,15 @@ export function planProjectUpdate(
 
 /**
  * 在 Trash 中编辑项目时是否隐式放回（规则同 taskUpdatePutsBack）：改计划、
- * 重复规则、截止日期、Bucket、区域或标签即放回，调用方按 planProjectRestore 级联；
+ * 重复规则、截止日期、区域或标签即放回，调用方按 planProjectRestore 级联；
  * 只改标题 / 备注不放回。
  */
 export function projectUpdatePutsBack(input: UpdateProjectDto): boolean {
   return (
-    input.scheduledType !== undefined ||
+    input.start !== undefined ||
     input.scheduledDate !== undefined ||
     input.repeatRule !== undefined ||
     input.dueDate !== undefined ||
-    input.bucket !== undefined ||
     input.areaId !== undefined ||
     input.tagIds !== undefined
   );

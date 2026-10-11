@@ -5,9 +5,8 @@ import {
   calendarTimeInstant,
   instantDateKey,
   isValidTimeZone,
-  ScheduledType,
+  Start,
   TaskStatus,
-  TaskBucket,
 } from '@taskora/shared';
 import { usePreferencesStore } from '@/stores/preferences.store';
 import { todayDateKey, parseCalendarDate, toInputDateValue, formatDeadlineCountdown } from './date';
@@ -57,16 +56,15 @@ describe('日历日期与账号时区（不依赖测试进程 TZ）', () => {
     expect(formatDeadlineCountdown(parseCalendarDate('2026-09-24'))).toBe(i18n.t('common:today'));
     const task = {
       status: TaskStatus.ACTIVE,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-09-24',
       dueDate: null,
       trashedAt: null,
-      bucket: TaskBucket.SCHEDULED,
     } as Parameters<typeof taskMatchesQuery>[0];
     // 截止日期到了也进 Today，与计划类型、Bucket 无关
     const deadlineOnly = {
       ...task,
-      scheduledType: ScheduledType.SOMEDAY,
+      start: Start.SOMEDAY,
       scheduledDate: null,
       dueDate: '2026-09-24',
     };
@@ -102,7 +100,7 @@ describe('日历日期与账号时区（不依赖测试进程 TZ）', () => {
     const task = {
       id: 't',
       title: '提醒',
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-09-24',
       reminderTime: '09:00',
       status: TaskStatus.ACTIVE,

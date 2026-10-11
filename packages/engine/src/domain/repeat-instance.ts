@@ -5,7 +5,7 @@
  * 同一个确定性 id 与同一组字段，两端并发派生经 LWW 收敛。
  */
 
-import { ScheduledType, TaskBucket, TaskStatus, type RepeatRule } from '@taskora/shared';
+import { Start, TaskStatus, type RepeatRule } from '@taskora/shared';
 
 import {
   deriveAttachmentId,
@@ -138,13 +138,12 @@ export function planRepeatInstance(
     task: {
       title: parent.title,
       notes: parent.notes,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: target.occurrence,
       reminderTime: parent.reminderTime,
       repeatRule: parent.repeatRule,
       repeatSourceId: parent.id,
       dueDate,
-      bucket: TaskBucket.SCHEDULED,
       status: TaskStatus.ACTIVE,
       settledAt: null,
       trashedAt: null,
@@ -196,7 +195,7 @@ export function repeatDerivationTarget(input: {
 
 /**
  * 不可跳过的原因：
- * - not-repeating：无规则或非 DATE 型；
+ * - not-repeating：无规则或没有计划日期；
  * - not-active：已了结或在 Trash；
  * - no-next：链在下一次之前终结（until）；
  * - next-exists：该任务已有未进 Trash 的派生实例（撤销完成后留下的），
@@ -215,7 +214,6 @@ export class RepeatSkipBlockedError extends Error {
 export interface RepeatSkipSource {
   status: unknown;
   trashedAt: unknown;
-  scheduledType: unknown;
   scheduledDate: unknown;
   dueDate: unknown;
   /** 规范化后的规则。 */
@@ -235,7 +233,7 @@ export function planRepeatSkip(
 ): { patch: TaskPatch } | { blocked: RepeatSkipBlock } {
   const rule = task.repeatRule;
   const scheduledKey = dateKeyOf(task.scheduledDate, zones);
-  if (!rule || task.scheduledType !== ScheduledType.DATE || scheduledKey === null) {
+  if (!rule || scheduledKey === null) {
     return { blocked: 'not-repeating' };
   }
   if (task.status !== TaskStatus.ACTIVE || task.trashedAt) return { blocked: 'not-active' };

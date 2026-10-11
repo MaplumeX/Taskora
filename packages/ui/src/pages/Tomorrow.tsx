@@ -9,7 +9,6 @@ import {
   useEffectiveTags,
   useFeedQuery,
 } from '@taskora/api';
-import { ScheduledType } from '@taskora/shared';
 
 import { TimeViewFeedList } from '@/components/feed/TimeViewFeedList';
 import { PageHeading } from '@/components/layout/PageHeading';
@@ -28,7 +27,7 @@ export default function Tomorrow() {
     const tomorrow = toInputDateValue(startOfTomorrow());
     return upcoming.filter(
       (item) =>
-        item.scheduledType === ScheduledType.DATE &&
+        item.scheduledDate != null &&
         item.scheduledDate !== null &&
         toDateKey(item.scheduledDate) === tomorrow,
     );

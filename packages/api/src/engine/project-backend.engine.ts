@@ -2,7 +2,7 @@
  * Engine 实现的 Project 传输层 — 桌面端完全体（V2 spec，ADR-0007）。
  *
  * Project 的全部读写直接作用于 Local Replica：断网全功能可用；写操作
- * 进 Outbox。领域规则（bucket、计划、完成、Trash 级联、进度计数）来自
+ * 进 Outbox。领域规则（start、计划、完成、Trash 级联、进度计数）来自
  * @taskora/engine 的 domain 纯函数，与 REST 服务共用（local-first-v3
  * issue 04）；排序位次沿 Position（新项目追加末尾）。
  */
@@ -167,13 +167,12 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
           ...task,
           title: (t.title as string) ?? '',
           notes: (t.notes as string | null) ?? null,
-          scheduledType: t.scheduledType,
+          start: t.start,
           scheduledDate: t.scheduledDate,
           dueDate: t.dueDate,
           reminderTime: (t.reminderTime as string | null) ?? null,
           repeatRule: normalizeRepeatRule(t.repeatRule),
           repeatSourceId: (t.repeatSourceId as string | null) ?? null,
-          bucket: t.bucket,
           trashedAt: t.trashedAt,
           headingId: (t.headingId as string | null) ?? null,
           areaId: (t.areaId as string | null) ?? null,
@@ -231,7 +230,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
       if (!existing) throw new Error(`Project not found: ${id}`);
       const f = existing.fields;
       const patch = planProjectUpdate(
-        { ...f, scheduledType: f.scheduledType, scheduledDate: f.scheduledDate, bucket: f.bucket },
+        { ...f, start: f.start, scheduledDate: f.scheduledDate },
         data,
         zones(),
         currentReviewContext(),
@@ -327,7 +326,6 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
         {
           status: f.status,
           trashedAt: f.trashedAt,
-          scheduledType: f.scheduledType,
           scheduledDate: f.scheduledDate,
           dueDate: f.dueDate,
           repeatRule: normalizeRepeatRule(f.repeatRule),
@@ -336,7 +334,6 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
           id: row.id,
           status: row.fields.status,
           trashedAt: row.fields.trashedAt,
-          scheduledType: row.fields.scheduledType,
           scheduledDate: row.fields.scheduledDate,
           dueDate: row.fields.dueDate,
         })),
@@ -361,7 +358,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
         {
           title: (f.title as string) ?? '',
           notes: (f.notes as string | null) ?? null,
-          scheduledType: f.scheduledType,
+          start: f.start,
           scheduledDate: f.scheduledDate,
           dueDate: f.dueDate,
           repeatRule: normalizeRepeatRule(f.repeatRule),

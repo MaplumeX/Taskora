@@ -10,9 +10,8 @@ describe('Account time zone', () => {
     const now = new Date('2026-09-23T17:00Z');
     const dated = (scheduledDate: Date) => ({
       status: 'ACTIVE',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate,
-      bucket: 'SCHEDULED',
       trashedAt: null,
     });
     const matches = (date: Date, view: ListView, zone: string) =>

@@ -2,7 +2,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ScheduledType } from '@taskora/shared';
+import { Start } from '@taskora/shared';
 
 import { useReminderPermissionStore, usePreferencesStore, nextOccurrenceDate } from '@taskora/api';
 
@@ -14,7 +14,7 @@ const now = new Date(2026, 1, 4); // 2026-02-04，日历渲染稳定
 
 function renderField(
   current: {
-    scheduledType: ScheduledType;
+    start: Start;
     scheduledDate?: string | null;
     reminderTime?: string | null;
   },
@@ -53,10 +53,10 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
     vi.setSystemTime(new Date('2026-09-23T17:00:00Z'));
     usePreferencesStore.getState().setTimeZone('Asia/Shanghai');
     try {
-      const { onPatch } = renderField({ scheduledType: ScheduledType.NONE });
+      const { onPatch } = renderField({ start: Start.ANYTIME });
       fireEvent.click(screen.getByRole('button', { name: /^(Today|今天)$/ }));
       expect(onPatch).toHaveBeenCalledWith({
-        scheduledType: ScheduledType.DATE,
+        start: Start.ANYTIME,
         scheduledDate: '2026-09-24',
       });
       expect(
@@ -80,7 +80,7 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
     useReminderPermissionStore.setState({ request });
 
     const { onPatch } = renderField(
-      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-05' },
+      { start: Start.ANYTIME, scheduledDate: '2026-02-05' },
       { showReminder: true },
     );
     expect(screen.getByRole('switch', { name: /Reminder|提醒/ })).toBeInTheDocument();
@@ -93,7 +93,7 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
   it('改时间 → patch 新时刻；关闭开关 → patch null（清提醒）', async () => {
     const user = userEvent.setup();
     const { onPatch } = renderField(
-      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-05', reminderTime: '09:00' },
+      { start: Start.ANYTIME, scheduledDate: '2026-02-05', reminderTime: '09:00' },
       { showReminder: true },
     );
 
@@ -123,7 +123,7 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
   it('计划日期已过：卡片选中今天；开提醒 / 改时刻时一并把计划日期写成今天', async () => {
     const user = userEvent.setup();
     const { onPatch } = renderField(
-      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-01' },
+      { start: Start.ANYTIME, scheduledDate: '2026-02-01' },
       { showReminder: true },
     );
 
@@ -141,7 +141,7 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
   it('计划日期已过且已有提醒：改时刻时一并把计划日期写成今天；关提醒不改日期', async () => {
     const user = userEvent.setup();
     const { onPatch } = renderField(
-      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-01', reminderTime: '09:00' },
+      { start: Start.ANYTIME, scheduledDate: '2026-02-01', reminderTime: '09:00' },
       { showReminder: true },
     );
 
@@ -161,37 +161,26 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
   });
 
   it('未开提醒时时间输入禁用', () => {
-    renderField(
-      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-05' },
-      { showReminder: true },
-    );
+    renderField({ start: Start.ANYTIME, scheduledDate: '2026-02-05' }, { showReminder: true });
     expect(screen.getByLabelText(/Reminder time|提醒时间/)).toBeDisabled();
   });
 
   it('Someday / 无日期任务、以及 showReminder=false（Project / web）不渲染提醒区', () => {
     const { rerender } = render(
-      <ScheduledDateField
-        current={{ scheduledType: ScheduledType.SOMEDAY }}
-        onPatch={vi.fn()}
-        showReminder
-      />,
+      <ScheduledDateField current={{ start: Start.SOMEDAY }} onPatch={vi.fn()} showReminder />,
     );
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/Reminder time|提醒时间/)).not.toBeInTheDocument();
 
     rerender(
-      <ScheduledDateField
-        current={{ scheduledType: ScheduledType.NONE }}
-        onPatch={vi.fn()}
-        showReminder
-      />,
+      <ScheduledDateField current={{ start: Start.ANYTIME }} onPatch={vi.fn()} showReminder />,
     );
     expect(screen.queryByRole('switch')).not.toBeInTheDocument();
 
     // DATE 型但未启用提醒区（Project / web）→ 依旧隐藏
     rerender(
       <ScheduledDateField
-        current={{ scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-05' }}
+        current={{ start: Start.ANYTIME, scheduledDate: '2026-02-05' }}
         onPatch={vi.fn()}
       />,
     );
@@ -209,7 +198,7 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
     });
 
     renderField(
-      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-05', reminderTime: '09:00' },
+      { start: Start.ANYTIME, scheduledDate: '2026-02-05', reminderTime: '09:00' },
       { showReminder: true },
     );
 
@@ -226,19 +215,19 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
     const user = userEvent.setup();
     vi.setSystemTime(now);
     const { onPatch } = renderField(
-      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-05', reminderTime: '09:00' },
+      { start: Start.ANYTIME, scheduledDate: '2026-02-05', reminderTime: '09:00' },
       { showReminder: true },
     );
 
     await user.click(screen.getByRole('button', { name: /^Someday$/ }));
     expect(onPatch).toHaveBeenCalledWith({
-      scheduledType: ScheduledType.SOMEDAY,
+      start: Start.SOMEDAY,
       reminderTime: null,
     });
 
     await user.click(screen.getByRole('button', { name: /Clear|清除/ }));
     expect(onPatch).toHaveBeenCalledWith({
-      scheduledType: ScheduledType.NONE,
+      start: Start.ANYTIME,
       scheduledDate: null,
       reminderTime: null,
     });
@@ -251,7 +240,7 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
       refresh: vi.fn(async () => undefined),
     });
     renderField(
-      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-05', reminderTime: '09:00' },
+      { start: Start.ANYTIME, scheduledDate: '2026-02-05', reminderTime: '09:00' },
       { showReminder: true },
     );
     expect(screen.queryByText(/Notifications are disabled|系统通知已禁用/)).not.toBeInTheDocument();
@@ -263,11 +252,11 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
   it('点击「明天」→ patch 明天的日期（DATE 型）', async () => {
     const user = userEvent.setup();
     vi.setSystemTime(now);
-    const { onPatch } = renderField({ scheduledType: ScheduledType.NONE }, { showReminder: true });
+    const { onPatch } = renderField({ start: Start.ANYTIME }, { showReminder: true });
 
     await user.click(screen.getByRole('button', { name: /^Tomorrow|明天$/ }));
     expect(onPatch).toHaveBeenCalledWith({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-05',
     });
   });
@@ -276,10 +265,7 @@ describe('ScheduledDateField — Reminder 提醒区（reminders spec）', () => 
     const refresh = vi.fn(async () => undefined);
     useReminderPermissionStore.setState({ refresh });
 
-    renderField(
-      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-05' },
-      { showReminder: true },
-    );
+    renderField({ start: Start.ANYTIME, scheduledDate: '2026-02-05' }, { showReminder: true });
     await waitFor(() => expect(refresh).toHaveBeenCalled());
   });
 });
@@ -292,10 +278,7 @@ describe('ScheduledDateField — 选定日期后是否关闭', () => {
 
   it('可设提醒（showReminder）：选今天 / 明天后不关闭，留给提醒区', async () => {
     const user = userEvent.setup();
-    const { onPatch, onClose } = renderField(
-      { scheduledType: ScheduledType.NONE },
-      { showReminder: true },
-    );
+    const { onPatch, onClose } = renderField({ start: Start.ANYTIME }, { showReminder: true });
 
     await user.click(screen.getByRole('button', { name: /^(Today|今天)$/ }));
     await user.click(screen.getByRole('button', { name: /^(Tomorrow|明天)$/ }));
@@ -306,7 +289,7 @@ describe('ScheduledDateField — 选定日期后是否关闭', () => {
 
   it('无提醒上下文（web / Project）：选今天后立即关闭', async () => {
     const user = userEvent.setup();
-    const { onClose } = renderField({ scheduledType: ScheduledType.NONE });
+    const { onClose } = renderField({ start: Start.ANYTIME });
 
     await user.click(screen.getByRole('button', { name: /^(Today|今天)$/ }));
 
@@ -316,7 +299,7 @@ describe('ScheduledDateField — 选定日期后是否关闭', () => {
   it('某天 / 清除不涉及提醒：即使可设提醒也关闭', async () => {
     const user = userEvent.setup();
     const { onClose } = renderField(
-      { scheduledType: ScheduledType.DATE, scheduledDate: '2026-02-05' },
+      { start: Start.ANYTIME, scheduledDate: '2026-02-05' },
       { showReminder: true },
     );
 

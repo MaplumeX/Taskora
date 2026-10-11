@@ -204,7 +204,7 @@ e2eDescribe('数据增长（真实 Postgres）', () => {
 
     // 另一端（REST，虚拟设备 0）重开归档任务
     await hub.writeAsHub(USER, (batch) =>
-      batch.write('task', 'archived', { status: 'ACTIVE', settledAt: null, bucket: 'INBOX' }),
+      batch.write('task', 'archived', { status: 'ACTIVE', settledAt: null, start: 'INBOX' }),
     );
     await device.sync();
     expect((await device.get('task', 'archived'))?.fields.status).toBe('ACTIVE');

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import React from 'react';
 
-import { ScheduledType } from '@taskora/shared';
+import { Start } from '@taskora/shared';
 import type { ScheduledFieldPatch } from './fieldProps';
 
 import { RepeatRuleField } from './RepeatRuleField';
@@ -16,7 +16,7 @@ import { RepeatRuleField } from './RepeatRuleField';
  */
 function renderField(
   initial: {
-    scheduledType: ScheduledType;
+    start: Start;
     scheduledDate?: string | null;
     repeatRule?: unknown;
   },
@@ -41,7 +41,7 @@ describe('RepeatRuleField — 独立重复规则编辑字段（recurring-tasks s
   it('开启开关 → 默认每周规则（从计划日期算）；关闭 → 清除规则', async () => {
     const user = userEvent.setup();
     const { onPatch } = renderField({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-05',
     });
     expect(screen.getByRole('switch', { name: /Repeat|重复/ })).toBeInTheDocument();
@@ -56,7 +56,7 @@ describe('RepeatRuleField — 独立重复规则编辑字段（recurring-tasks s
   it('已有规则时关闭开关 → 清除规则（patch null）', async () => {
     const user = userEvent.setup();
     const { onPatch } = renderField({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-05',
       repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
     });
@@ -67,7 +67,7 @@ describe('RepeatRuleField — 独立重复规则编辑字段（recurring-tasks s
   it('已有规则：改单位 / 调间隔 / 切星期 / 锚点 / until 各自 patch 完整规则', async () => {
     const user = userEvent.setup();
     const { onPatch } = renderField({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-05',
       repeatRule: { unit: 'day', interval: 2, anchor: 'scheduled' },
     });
@@ -121,7 +121,7 @@ describe('RepeatRuleField — 独立重复规则编辑字段（recurring-tasks s
 
   it('实时预览显示下一次出现日期（纯函数计算）', () => {
     renderField({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-05',
       repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
     });
@@ -132,7 +132,7 @@ describe('RepeatRuleField — 独立重复规则编辑字段（recurring-tasks s
 
   it('until 已过：预览显示链终结', () => {
     renderField({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-05',
       repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled', until: '2026-02-04' },
     });

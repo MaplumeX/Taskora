@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 
 import { usePreferencesStore } from '@/stores/preferences.store';
 import { revealRouteFor, type RevealTarget } from './revealRoute';
@@ -11,11 +11,10 @@ function target(partial: Partial<RevealTarget> = {}): RevealTarget {
   return {
     status: TaskStatus.ACTIVE,
     trashedAt: null,
-    scheduledType: ScheduledType.DATE,
+    start: Start.ANYTIME,
     scheduledDate: '2026-02-05',
     projectId: null,
     areaId: null,
-    bucket: TaskBucket.SCHEDULED,
     ...partial,
   };
 }
@@ -43,18 +42,18 @@ describe('revealRouteFor', () => {
     expect(revealRouteFor(target({ ...future, areaId: 'a1' }), { now: NOW })).toBe('/areas/a1');
   });
 
-  it('无归属时按 Bucket 落位', () => {
+  it('无归属时按 start 与计划日期落位', () => {
     expect(revealRouteFor(target({ scheduledDate: '2026-02-06' }), { now: NOW })).toBe('/upcoming');
     expect(
-      revealRouteFor(target({ scheduledType: ScheduledType.SOMEDAY, scheduledDate: null }), {
+      revealRouteFor(target({ start: Start.SOMEDAY, scheduledDate: null }), {
         now: NOW,
       }),
     ).toBe('/someday');
-    const unscheduled = { scheduledType: ScheduledType.NONE, scheduledDate: null };
-    expect(
-      revealRouteFor(target({ ...unscheduled, bucket: TaskBucket.ANYTIME }), { now: NOW }),
-    ).toBe('/anytime');
-    expect(revealRouteFor(target({ ...unscheduled, bucket: TaskBucket.INBOX }), { now: NOW })).toBe(
+    const unscheduled = { scheduledDate: null };
+    expect(revealRouteFor(target({ ...unscheduled, start: Start.ANYTIME }), { now: NOW })).toBe(
+      '/anytime',
+    );
+    expect(revealRouteFor(target({ ...unscheduled, start: Start.INBOX }), { now: NOW })).toBe(
       '/inbox',
     );
   });

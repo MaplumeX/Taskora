@@ -4,7 +4,7 @@
  * Task、不落库、不同步；web 的 Engine 路径与 REST 回退路径同一口径。
  */
 
-import { ScheduledType, TaskStatus } from '@taskora/shared';
+import { TaskStatus } from '@taskora/shared';
 
 import { deriveRepeatInstanceId, nextOccurrenceDate, normalizeRepeatRule } from '../repeat';
 import { dateKeyOf, todayKey, type CalendarContext } from './calendar';
@@ -15,7 +15,6 @@ export interface RepeatPreviewSource {
   title: string;
   status: unknown;
   trashedAt: unknown;
-  scheduledType: unknown;
   scheduledDate: unknown;
   repeatRule: unknown;
   repeatSourceId?: string | null;
@@ -37,7 +36,7 @@ export interface RepeatPreview {
  * 每条链只投影下一次。tasks 应包含全部未进 Trash、带计划日期的任务
  * （含已了结）——既是来源，也用于判定「下一次已派生」。
  *
- * 不投影：未了结以外 / Trash / 非 DATE / 无规则；anchor=completion（下一次
+ * 不投影：未了结以外 / Trash / 无计划日期 / 无规则；anchor=completion（下一次
  * 取决于实际完成日，无法预告）；下一次不晚于今天（计划日期已过的来源任务，其下一次可能
  * 仍在过去，过去格子里的预告会被误读）；链已终结（until）；下一次已派生
  * ——按 repeatSourceId，或（repeatSourceId 之前的存量实例）按确定性 id。
@@ -55,7 +54,7 @@ export function buildRepeatPreviews(
 
   const previews: RepeatPreview[] = [];
   for (const task of live) {
-    if (task.status !== TaskStatus.ACTIVE || task.scheduledType !== ScheduledType.DATE) continue;
+    if (task.status !== TaskStatus.ACTIVE || task.scheduledDate == null) continue;
     const rule = normalizeRepeatRule(task.repeatRule);
     if (!rule || rule.anchor !== 'scheduled' || linkedSources.has(task.id)) continue;
     const next = nextOccurrenceDate(rule, {

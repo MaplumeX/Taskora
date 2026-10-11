@@ -330,6 +330,143 @@ describe('副本 schema 版本', () => {
     await engine.close();
   });
 
+  it('14 → 15：bucket / scheduledType 合并为 start，时钟取较大者，Outbox 一并换算', async () => {
+    const storage = await createNodeSqliteStorage(':memory:');
+    for (const statement of schemaDdl()) await storage.exec(statement);
+    for (const table of ['task', 'project']) {
+      await storage.exec(`ALTER TABLE ${table} DROP COLUMN start`);
+      await storage.exec(`ALTER TABLE ${table} ADD COLUMN bucket TEXT`);
+      await storage.exec(`ALTER TABLE ${table} ADD COLUMN scheduledType TEXT`);
+    }
+    const early = '0000000001000:0000:a';
+    const late = '0000000002000:0000:a';
+    const insertTask = (
+      id: string,
+      scheduledType: string,
+      bucket: string,
+      scheduledDate: string | null,
+      projectId: string | null = null,
+    ) =>
+      storage.run(
+        'INSERT INTO task (id, title, scheduledType, bucket, scheduledDate, projectId, clocks) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [
+          id,
+          id,
+          scheduledType,
+          bucket,
+          scheduledDate,
+          projectId,
+          JSON.stringify({ scheduledType: early, bucket: late }),
+        ],
+      );
+    await insertTask('inbox', 'NONE', 'INBOX', null);
+    await insertTask('loose', 'NONE', 'ANYTIME', null);
+    // 有归属却还标着 INBOX 的旧数据：按整理过处理
+    await insertTask('owned', 'NONE', 'INBOX', null, 'p-anytime');
+    await insertTask('dated', 'DATE', 'SCHEDULED', '2026-10-01');
+    // 旧不变量之外的残留日期随计划类型清掉
+    await insertTask('someday', 'SOMEDAY', 'SCHEDULED', '2026-10-01');
+    await storage.run(
+      "INSERT INTO project (id, title, scheduledType, bucket, clocks) VALUES ('p-anytime', 'p', 'NONE', 'ANYTIME', '{}'), ('p-someday', 'p', 'SOMEDAY', 'SCHEDULED', '{}')",
+    );
+    await storage.run(
+      "INSERT INTO _outbox (entity, entity_id, fields) VALUES ('task', 'inbox', ?)",
+      [
+        JSON.stringify({
+          scheduledType: { value: 'NONE', hlc: late },
+          bucket: { value: 'INBOX', hlc: early },
+          projectId: { value: null, hlc: late },
+        }),
+      ],
+    );
+    await storage.run(
+      "INSERT INTO _outbox (entity, entity_id, fields) VALUES ('project', 'p-someday', ?)",
+      [JSON.stringify({ scheduledType: { value: 'SOMEDAY', hlc: early } })],
+    );
+    await storage.exec('PRAGMA user_version = 14');
+
+    const engine = await open(storage);
+
+    expect(await readSchemaVersion(storage)).toBe(REPLICA_SCHEMA_VERSION);
+    for (const table of ['task', 'project']) {
+      expect(await columnsOf(storage, table)).not.toEqual(expect.arrayContaining(['bucket']));
+      expect(await columnsOf(storage, table)).not.toContain('scheduledType');
+    }
+    const start = async (entity: SyncEntity, id: string) => (await engine.get(entity, id))?.fields;
+    expect(await start('task', 'inbox')).toMatchObject({ start: 'INBOX', scheduledDate: null });
+    expect(await start('task', 'loose')).toMatchObject({ start: 'ANYTIME' });
+    expect(await start('task', 'owned')).toMatchObject({ start: 'ANYTIME' });
+    expect(await start('task', 'dated')).toMatchObject({
+      start: 'ANYTIME',
+      scheduledDate: '2026-10-01',
+    });
+    expect(await start('task', 'someday')).toMatchObject({
+      start: 'SOMEDAY',
+      scheduledDate: null,
+    });
+    expect(await start('project', 'p-anytime')).toMatchObject({ start: 'ANYTIME' });
+    expect(await start('project', 'p-someday')).toMatchObject({ start: 'SOMEDAY' });
+    const [clocks] = await storage.all<{ clocks: string }>(
+      "SELECT clocks FROM task WHERE id = 'inbox'",
+    );
+    expect(JSON.parse(clocks.clocks)).toEqual({ start: late });
+
+    const outbox = await storage.all<{ entity_id: string; fields: string }>(
+      'SELECT entity_id, fields FROM _outbox ORDER BY id',
+    );
+    expect(outbox.map((row) => [row.entity_id, JSON.parse(row.fields)])).toEqual([
+      [
+        'inbox',
+        {
+          start: { value: 'INBOX', hlc: late },
+          projectId: { value: null, hlc: late },
+          scheduledDate: { value: null, hlc: late },
+        },
+      ],
+      [
+        'p-someday',
+        {
+          start: { value: 'SOMEDAY', hlc: early },
+          scheduledDate: { value: null, hlc: early },
+        },
+      ],
+    ]);
+    expect(
+      await storage.all("SELECT value FROM _engine_meta WHERE key = 'startModelResync'"),
+    ).toHaveLength(1);
+    await engine.close();
+  });
+
+  it('14 → 15 之后：连上协议 7 的 hub 才做一次 bootstrap', async () => {
+    let protocol = 6;
+    const hub = new InMemorySyncHub({ protocolVersion: () => protocol });
+    const storage = await createNodeSqliteStorage(':memory:');
+    for (const statement of schemaDdl()) await storage.exec(statement);
+    await storage.run("INSERT INTO _engine_meta (key, value) VALUES ('syncCursor', ?)", [
+      String(hub.currentSeq(USER)),
+    ]);
+    await storage.exec('PRAGMA user_version = 14');
+    const bootstraps: number[] = [];
+    const transport = hub.transportFor(USER);
+    const engine = await open(storage, {
+      ...transport,
+      bootstrap: async (request) => {
+        bootstraps.push(protocol);
+        return transport.bootstrap(request);
+      },
+    });
+    const flag = () => storage.all("SELECT value FROM _engine_meta WHERE key = 'startModelResync'");
+
+    await engine.sync();
+    expect(await flag()).toHaveLength(1); // 旧 hub：标记留着
+    protocol = 7; // hub 升级
+    await engine.sync();
+    expect(await flag()).toHaveLength(0);
+    await engine.sync();
+    expect(bootstraps).toEqual([7]);
+    await engine.close();
+  });
+
   it('已是最新版本：重开不再迁移', async () => {
     const storage = await createNodeSqliteStorage(':memory:');
     await migrateReplica(storage);

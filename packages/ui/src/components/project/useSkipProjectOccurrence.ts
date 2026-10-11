@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import type { ProjectResponseDto } from '@taskora/shared';
-import { ProjectStatus, ScheduledType } from '@taskora/shared';
+import { ProjectStatus } from '@taskora/shared';
 import {
   currentLegacyDateTimeZone,
   i18n,
@@ -29,7 +29,7 @@ export function useSkipProjectOccurrence(project: ProjectResponseDto, enabled: b
   const timeZone = usePreferencesStore((s) => s.timeZone);
 
   const available =
-    (project.scheduledType ?? ScheduledType.NONE) === ScheduledType.DATE &&
+    project.scheduledDate != null &&
     !!project.repeatRule &&
     project.status === ProjectStatus.ACTIVE &&
     !project.trashedAt;

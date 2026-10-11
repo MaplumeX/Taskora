@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { InMemorySyncHub, openEngine, deriveRepeatInstanceId } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
-import { ScheduledType } from '@taskora/shared';
+import { Start } from '@taskora/shared';
 import { usePreferencesStore } from '@/stores/preferences.store';
 import { createEngineTaskBackend } from './task-backend.engine';
 import { createEngineProjectBackend } from './project-backend.engine';
@@ -34,7 +34,7 @@ describe('账号时区 Engine 行为', () => {
       const rule = { unit: 'day', interval: 1, anchor: 'scheduled' } as const;
       const parent = await tasks.createTask({
         title: '浇花',
-        scheduledType: ScheduledType.DATE,
+        start: Start.ANYTIME,
         scheduledDate: '2026-09-24',
       });
       await tasks.updateTask(parent.id, { repeatRule: rule });
@@ -45,7 +45,7 @@ describe('账号时区 Engine 行为', () => {
       expect((await tasks.getFeed('upcoming')).map((t) => t.id)).toContain(expectedId);
       const project = await projects.createProject({
         title: '项目',
-        scheduledType: ScheduledType.DATE,
+        start: Start.ANYTIME,
         scheduledDate: '2026-09-24',
       });
       expect((await tasks.getFeed('today')).map((t) => t.id)).toContain(project.id);
@@ -58,7 +58,7 @@ describe('账号时区 Engine 行为', () => {
       // 另起一个任务：重开的 parent 已有派生实例，再完成不会重复派生
       const gap = await tasks.createTask({
         title: '换床单',
-        scheduledType: ScheduledType.DATE,
+        start: Start.ANYTIME,
         scheduledDate: '2026-09-24',
       });
       await engine.update('task', gap.id, { scheduledDate: '2026-09-24T00:00:00.000Z' });

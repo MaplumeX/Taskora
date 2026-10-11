@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 
 import type { TaskResponseDto } from '@taskora/shared';
-import { TaskStatus, TaskBucket, ScheduledType } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 import { useMultiSelectStore, useSelectionStore, useUiInteractionStore } from '@taskora/api';
 
 import { TaskItem } from './TaskItem';
@@ -58,12 +58,11 @@ const baseTask: TaskResponseDto = {
   title: 'My task',
   notes: null,
   scheduledDate: null,
-  scheduledType: ScheduledType.NONE,
+  start: Start.INBOX,
   reminderTime: null,
   repeatRule: null,
   repeatSourceId: null,
   dueDate: null,
-  bucket: TaskBucket.INBOX,
   status: TaskStatus.ACTIVE,
   completedAt: null,
   trashedAt: null,
@@ -148,7 +147,7 @@ describe('TaskItem — 右滑计划', () => {
     // 卡片里选「某天」即写入该任务并关闭。
     await userEvent.click(screen.getByRole('button', { name: /someday|某天/i }));
     expect(mocks.update).toHaveBeenCalledWith(
-      { id: 'task-1', data: expect.objectContaining({ scheduledType: ScheduledType.SOMEDAY }) },
+      { id: 'task-1', data: expect.objectContaining({ start: Start.SOMEDAY }) },
       expect.anything(),
     );
     expect(useUiInteractionStore.getState().swipeWhenTaskId).toBeNull();
@@ -405,9 +404,8 @@ describe('MultiSelectToolbar', () => {
     const user = userEvent.setup();
     mocks.task = {
       ...baseTask,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-02-05',
-      bucket: TaskBucket.SCHEDULED,
       repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
     };
     useMultiSelectStore.setState({ active: true, ids: ['task-1'] });

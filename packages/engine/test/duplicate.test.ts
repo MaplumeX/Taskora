@@ -25,12 +25,11 @@ const REVIEW = {
 const source = {
   title: 'Pack bags',
   notes: 'passport',
-  scheduledType: 'DATE',
+  start: 'ANYTIME',
   scheduledDate: '2026-10-08',
   dueDate: '2026-10-09',
   reminderTime: '09:00',
   repeatRule: WEEKLY,
-  bucket: 'SCHEDULED',
   projectId: 'project-1',
   headingId: 'heading-1',
   areaId: null,
@@ -43,13 +42,12 @@ describe('复制任务', () => {
     expect(plan.task).toEqual({
       title: 'Pack bags',
       notes: 'passport',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-10-08',
       reminderTime: '09:00',
       repeatRule: WEEKLY,
       repeatSourceId: null,
       dueDate: '2026-10-09',
-      bucket: 'SCHEDULED',
       status: 'ACTIVE',
       settledAt: null,
       trashedAt: null,
@@ -60,12 +58,18 @@ describe('复制任务', () => {
     });
   });
 
-  it('非 DATE 任务不带计划日期、提醒与规则；Inbox 任务留在 Inbox', () => {
+  it('Someday 任务不带计划日期、提醒与规则；Inbox 任务留在 Inbox', () => {
+    expect(planTaskDuplicate({ ...source, start: 'SOMEDAY' }, [], [], UTC).task).toMatchObject({
+      start: 'SOMEDAY',
+      scheduledDate: null,
+      reminderTime: null,
+      repeatRule: null,
+    });
     const plan = planTaskDuplicate(
       {
         ...source,
-        scheduledType: 'NONE',
-        bucket: 'INBOX',
+        start: 'INBOX',
+        scheduledDate: null,
         projectId: null,
         headingId: null,
       },
@@ -74,11 +78,10 @@ describe('复制任务', () => {
       UTC,
     );
     expect(plan.task).toMatchObject({
-      scheduledType: 'NONE',
+      start: 'INBOX',
       scheduledDate: null,
       reminderTime: null,
       repeatRule: null,
-      bucket: 'INBOX',
     });
   });
 
@@ -137,7 +140,7 @@ describe('复制项目', () => {
   const project = {
     title: 'Trip',
     notes: null,
-    scheduledType: 'SOMEDAY',
+    start: 'SOMEDAY',
     scheduledDate: null,
     dueDate: '2026-11-01',
     repeatRule: null,
@@ -151,7 +154,7 @@ describe('复制项目', () => {
     expect(plan.project).toEqual({
       title: 'Trip',
       notes: null,
-      scheduledType: 'SOMEDAY',
+      start: 'SOMEDAY',
       scheduledDate: null,
       dueDate: '2026-11-01',
       repeatRule: null,
@@ -159,7 +162,6 @@ describe('复制项目', () => {
       reviewInterval: { unit: 'month', count: 1 },
       nextReviewDate: '2026-11-05',
       lastReviewedOn: null,
-      bucket: 'SCHEDULED',
       status: 'ACTIVE',
       completedAt: null,
       trashedAt: null,
@@ -173,13 +175,12 @@ describe('复制项目', () => {
       id,
       title: id,
       notes: null,
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-10-08',
       dueDate: null,
       reminderTime: null,
       repeatRule: null,
       repeatSourceId: null,
-      bucket: 'SCHEDULED',
       status: 'COMPLETED',
       trashedAt: null,
       headingId: 'h1',

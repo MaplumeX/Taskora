@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 
 import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
-import { ScheduledType } from '@taskora/shared';
 
 import { Popover, PopoverAnchor, PopoverContent } from '@/components/ui/popover';
 import { MenuRow } from '@/components/common/MenuRow';
@@ -100,7 +99,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const groupStatus = group ? statusOfGroup(group) : null;
   const completed = groupStatus ? groupStatus.completed : current.status === 'COMPLETED';
   const cancelled = groupStatus ? groupStatus.cancelled : current.status === 'CANCELLED';
-  const isDate = (current.scheduledType ?? ScheduledType.NONE) === ScheduledType.DATE;
+  const isDate = current.scheduledDate != null;
 
   // 跳过本次：链已到头（until）时禁用。
   const skipOccurrence = useSkipOccurrence(current, menuOpen);

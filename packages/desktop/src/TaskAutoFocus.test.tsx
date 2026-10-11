@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { MemoryRouter, Outlet, Route, Routes } from 'react-router-dom';
 import { describe, expect, it, beforeEach, vi } from 'vitest';
 
-import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
 
 // eager import：lazy + Suspense 在 CI 共享 runner 上首次模块转换可能超过
@@ -63,12 +63,11 @@ function makeTaskDto(id: string, title: string, projectId: string | null): TaskR
     title,
     notes: null,
     scheduledDate: null,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
-    bucket: TaskBucket.ANYTIME,
     status: TaskStatus.ACTIVE,
     completedAt: null,
     trashedAt: null,
@@ -209,8 +208,7 @@ function makeProject(id: string, title: string) {
     notes: null,
     areaId: null,
     status: 'ACTIVE',
-    bucket: 'ANYTIME',
-    scheduledType: 'NONE',
+    start: 'ANYTIME',
     scheduledDate: null,
     dueDate: null,
     completedAt: null,
@@ -256,8 +254,7 @@ describe('desktop: auto-focus task title input after new task (project page)', (
 
     // 详情页挂载
     await waitFor(
-      () =>
-        expect(screen.getByRole('heading', { name: 'Existing' })).toBeInTheDocument(),
+      () => expect(screen.getByRole('heading', { name: 'Existing' })).toBeInTheDocument(),
       { timeout: 5000 },
     );
 

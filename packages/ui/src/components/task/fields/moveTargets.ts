@@ -4,7 +4,7 @@ import type {
   TaskResponseDto,
   UpdateTaskDto,
 } from '@taskora/shared';
-import { ScheduledType, TaskBucket } from '@taskora/shared';
+import { Start } from '@taskora/shared';
 
 import { flatParentOrder } from '@/components/feed/groupedFeedLayout';
 import { isOpenProject } from '@/components/search/quickFindResults';
@@ -77,19 +77,14 @@ export function buildMoveTargets(input: MoveTargetsInput): MoveTarget[] {
 }
 
 /**
- * 目标 → 写入 DTO。区域与项目互斥；Area / Project 的 bucket 由数据层
- * 推导（获得归属即离开 Inbox），计划不变。移入 Inbox 同时清除计划
- * （CONTEXT：Inbox），提醒与重复规则随计划类型离开 DATE 一并清除。
+ * 目标 → 写入 DTO。区域与项目互斥；Area / Project 的 start 由数据层
+ * 推导（获得归属即离开 Inbox），计划不变。移入 Inbox 由数据层同时清除
+ * 归属与计划（CONTEXT：Inbox），提醒与重复规则随日期一并清除。
  */
 export function moveTargetDto(target: MoveTarget): UpdateTaskDto {
   switch (target.kind) {
     case 'inbox':
-      return {
-        projectId: null,
-        areaId: null,
-        bucket: TaskBucket.INBOX,
-        scheduledType: ScheduledType.NONE,
-      };
+      return { projectId: null, areaId: null, start: Start.INBOX };
     case 'area':
       return { projectId: null, areaId: target.area.id };
     case 'project':
@@ -97,16 +92,12 @@ export function moveTargetDto(target: MoveTarget): UpdateTaskDto {
   }
 }
 
-export type MoveCurrent = Partial<
-  Pick<TaskResponseDto, 'projectId' | 'areaId' | 'bucket' | 'scheduledType'>
->;
+export type MoveCurrent = Partial<Pick<TaskResponseDto, 'projectId' | 'areaId' | 'start'>>;
 
 /** 任务当前所在的目标 id；不在任何目标里（如无归属的 Anytime / 已排期）或多选时为 null。 */
 export function currentMoveTargetId(current: MoveCurrent): string | null {
   if (current.projectId) return `project:${current.projectId}`;
   if (current.areaId) return `area:${current.areaId}`;
-  if (current.bucket === TaskBucket.INBOX && current.scheduledType === ScheduledType.NONE) {
-    return 'inbox';
-  }
+  if (current.start === Start.INBOX) return 'inbox';
   return null;
 }

@@ -2,7 +2,7 @@ import * as React from 'react';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ProjectHeadingResponseDto, TaskResponseDto } from '@taskora/shared';
-import { HeadingStatus, ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { HeadingStatus, Start, TaskStatus } from '@taskora/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 /**
@@ -91,12 +91,11 @@ function task(id: string): TaskResponseDto {
     title: id,
     notes: null,
     scheduledDate: null,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
-    bucket: TaskBucket.ANYTIME,
     status: TaskStatus.ACTIVE,
     completedAt: null,
     trashedAt: null,

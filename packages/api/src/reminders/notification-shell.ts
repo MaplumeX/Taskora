@@ -10,7 +10,7 @@
  */
 
 import type { ReminderDelivery, ReminderTaskInput, ReplicaRow } from '@taskora/engine';
-import { ScheduledType, TaskStatus } from '@taskora/shared';
+import { TaskStatus } from '@taskora/shared';
 
 import type { ReminderActionRequest } from './reminder-action';
 
@@ -98,7 +98,6 @@ export function reminderInputFromReplicaRow(row: ReplicaRow): ReminderTaskInput 
   return {
     id: row.id,
     title: typeof f.title === 'string' ? f.title : '',
-    scheduledType: (f.scheduledType as ReminderTaskInput['scheduledType']) ?? ScheduledType.NONE,
     scheduledDate: typeof f.scheduledDate === 'string' ? f.scheduledDate : null,
     reminderTime: typeof f.reminderTime === 'string' ? f.reminderTime : null,
     status: (f.status as ReminderTaskInput['status']) ?? TaskStatus.ACTIVE,

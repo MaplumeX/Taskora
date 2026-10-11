@@ -1,14 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { resolveTaskBucket } from './domain/bucket';
+import { resolveProjectStart, resolveTaskStart } from './domain/start';
 import { repairEntity } from './invariants';
 
 const task = (overrides: Record<string, unknown> = {}) => ({
-  scheduledType: 'NONE',
+  start: 'INBOX',
   scheduledDate: null,
   repeatRule: null,
   reminderTime: null,
-  bucket: 'INBOX',
   projectId: null,
   areaId: null,
   headingId: null,
@@ -18,56 +17,53 @@ const task = (overrides: Record<string, unknown> = {}) => ({
 });
 
 describe('repairEntity — task', () => {
-  it('一致的状态返回空（包括 NONE 下的 INBOX / ANYTIME、DATE 无日期）', () => {
+  it('一致的状态返回空（包括无归属的 INBOX / ANYTIME、有日期的 ANYTIME）', () => {
     expect(repairEntity('task', task())).toEqual({});
-    expect(repairEntity('task', task({ bucket: 'ANYTIME' }))).toEqual({});
-    expect(repairEntity('task', task({ bucket: 'ANYTIME', projectId: 'p1' }))).toEqual({});
+    expect(repairEntity('task', task({ start: 'ANYTIME' }))).toEqual({});
+    expect(repairEntity('task', task({ start: 'ANYTIME', projectId: 'p1' }))).toEqual({});
     expect(
       repairEntity(
         'task',
         task({
-          scheduledType: 'DATE',
+          start: 'ANYTIME',
           scheduledDate: '2026-10-01',
-          bucket: 'SCHEDULED',
           reminderTime: '09:00',
           repeatRule: { unit: 'day', interval: 1 },
         }),
       ),
     ).toEqual({});
-    expect(repairEntity('task', task({ scheduledType: 'DATE', bucket: 'SCHEDULED' }))).toEqual({});
+    expect(repairEntity('task', task({ start: 'SOMEDAY', areaId: 'a1' }))).toEqual({});
     expect(
       repairEntity('task', task({ status: 'COMPLETED', settledAt: '2026-09-01T00:00:00Z' })),
     ).toEqual({});
   });
 
-  it('R1/R2：离开 DATE 清空提醒、重复规则；NONE/SOMEDAY 没有日期', () => {
+  it('R1/R2：Someday 没有日期；没有日期就没有提醒、重复规则', () => {
     expect(
       repairEntity(
         'task',
         task({
-          scheduledType: 'SOMEDAY',
-          bucket: 'SCHEDULED',
+          start: 'SOMEDAY',
           scheduledDate: '2026-10-01',
           reminderTime: '09:00',
           repeatRule: { unit: 'day', interval: 1 },
         }),
       ),
     ).toEqual({ scheduledDate: null, reminderTime: null, repeatRule: null });
+    expect(repairEntity('task', task({ start: 'ANYTIME', reminderTime: '09:00' }))).toEqual({
+      reminderTime: null,
+    });
   });
 
-  it('R3：Bucket 与计划类型一致', () => {
-    expect(
-      repairEntity(
-        'task',
-        task({ scheduledType: 'DATE', scheduledDate: '2026-10-01', bucket: 'ANYTIME' }),
-      ),
-    ).toEqual({ bucket: 'SCHEDULED' });
-    expect(repairEntity('task', task({ bucket: 'SCHEDULED' }))).toEqual({ bucket: 'INBOX' });
-    expect(repairEntity('task', task({ bucket: 'INBOX', projectId: 'p1' }))).toEqual({
-      bucket: 'ANYTIME',
+  it('R3：有归属或日期的任务离开 Inbox', () => {
+    expect(repairEntity('task', task({ start: 'INBOX', scheduledDate: '2026-10-01' }))).toEqual({
+      start: 'ANYTIME',
     });
-    expect(repairEntity('task', task({ bucket: 'SCHEDULED', areaId: 'a1' }))).toEqual({
-      bucket: 'ANYTIME',
+    expect(repairEntity('task', task({ start: 'INBOX', projectId: 'p1' }))).toEqual({
+      start: 'ANYTIME',
+    });
+    expect(repairEntity('task', task({ start: 'INBOX', areaId: 'a1' }))).toEqual({
+      start: 'ANYTIME',
     });
   });
 
@@ -75,7 +71,7 @@ describe('repairEntity — task', () => {
     const owners: Record<string, string> = { h1: 'p1' };
     const probe = { headingProject: (id: string) => owners[id] };
     const inProject = (projectId: string, headingId: string) =>
-      task({ bucket: 'ANYTIME', projectId, headingId });
+      task({ start: 'ANYTIME', projectId, headingId });
     expect(repairEntity('task', inProject('p2', 'h1'), probe)).toEqual({ headingId: null });
     expect(repairEntity('task', inProject('p1', 'h1'), probe)).toEqual({});
     expect(repairEntity('task', inProject('p2', 'unknown'), probe)).toEqual({});
@@ -88,31 +84,31 @@ describe('repairEntity — task', () => {
   });
 
   it('只看出现的字段：部分字段集不会被凭空补全', () => {
-    expect(repairEntity('task', { scheduledType: 'SOMEDAY' })).toEqual({});
+    expect(repairEntity('task', { start: 'SOMEDAY' })).toEqual({});
+    expect(repairEntity('task', { start: 'INBOX', projectId: 'p1' })).toEqual({});
     expect(repairEntity('task', { title: 'x' })).toEqual({});
   });
 });
 
 describe('repairEntity — project / subtask', () => {
-  it('项目：NONE 下只能在 Anytime，DATE/SOMEDAY 在 Scheduled，重开没有完成时间', () => {
+  it('项目：不停留在 Inbox，Someday 没有日期，重开没有完成时间', () => {
     expect(
       repairEntity('project', {
-        scheduledType: 'NONE',
+        start: 'INBOX',
         scheduledDate: null,
-        bucket: 'INBOX',
         status: 'ACTIVE',
         completedAt: null,
       }),
-    ).toEqual({ bucket: 'ANYTIME' });
+    ).toEqual({ start: 'ANYTIME' });
     expect(
       repairEntity('project', {
-        scheduledType: 'SOMEDAY',
+        start: 'SOMEDAY',
         scheduledDate: '2026-10-01',
-        bucket: 'ANYTIME',
+        repeatRule: { unit: 'day', interval: 1 },
         status: 'ACTIVE',
         completedAt: '2026-09-01T00:00:00Z',
       }),
-    ).toEqual({ scheduledDate: null, bucket: 'SCHEDULED', completedAt: null });
+    ).toEqual({ scheduledDate: null, repeatRule: null, completedAt: null });
   });
 
   it('子任务：未了结没有了结时间', () => {
@@ -123,19 +119,26 @@ describe('repairEntity — project / subtask', () => {
   });
 });
 
-describe('resolveTaskBucket', () => {
+describe('resolveTaskStart / resolveProjectStart', () => {
   it('写入路径与合并修复同一推导', () => {
-    expect(resolveTaskBucket('INBOX', 'DATE', null, null)).toBe('SCHEDULED');
-    expect(resolveTaskBucket('ANYTIME', 'NONE', null, null)).toBe('ANYTIME');
-    expect(resolveTaskBucket(undefined, 'NONE', 'p1', null)).toBe('ANYTIME');
-    expect(resolveTaskBucket(undefined, 'NONE', null, null)).toBe('INBOX');
+    expect(resolveTaskStart('ANYTIME', null, null, null)).toBe('ANYTIME');
+    expect(resolveTaskStart('SOMEDAY', null, 'p1', null)).toBe('SOMEDAY');
+    expect(resolveTaskStart(undefined, null, 'p1', null)).toBe('ANYTIME');
+    expect(resolveTaskStart(undefined, '2026-10-01', null, null)).toBe('ANYTIME');
+    expect(resolveTaskStart(undefined, null, null, null)).toBe('INBOX');
   });
 
-  it('Inbox 不能有归属：有项目 / 区域即离开 Inbox', () => {
-    expect(resolveTaskBucket('INBOX', 'NONE', 'p1', null)).toBe('ANYTIME');
-    expect(resolveTaskBucket('INBOX', 'NONE', null, 'a1')).toBe('ANYTIME');
-    expect(resolveTaskBucket('INBOX', 'NONE', null, null)).toBe('INBOX');
-    expect(resolveTaskBucket('INBOX', 'SOMEDAY', 'p1', null)).toBe('SCHEDULED');
+  it('Inbox 不能有归属或日期：整理过即 Anytime', () => {
+    expect(resolveTaskStart('INBOX', null, 'p1', null)).toBe('ANYTIME');
+    expect(resolveTaskStart('INBOX', null, null, 'a1')).toBe('ANYTIME');
+    expect(resolveTaskStart('INBOX', '2026-10-01', null, null)).toBe('ANYTIME');
+    expect(resolveTaskStart('INBOX', null, null, null)).toBe('INBOX');
+  });
+
+  it('项目只有 Anytime / Someday', () => {
+    expect(resolveProjectStart('INBOX')).toBe('ANYTIME');
+    expect(resolveProjectStart(undefined)).toBe('ANYTIME');
+    expect(resolveProjectStart('SOMEDAY')).toBe('SOMEDAY');
   });
 });
 

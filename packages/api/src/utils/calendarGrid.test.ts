@@ -1,4 +1,4 @@
-import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -20,12 +20,11 @@ function task(id: string, scheduledDate: string | null): TaskResponseDto {
     title: id,
     notes: null,
     scheduledDate,
-    scheduledType: ScheduledType.DATE,
+    start: Start.ANYTIME,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
-    bucket: TaskBucket.INBOX,
     status: TaskStatus.ACTIVE,
     completedAt: null,
     trashedAt: null,
@@ -98,8 +97,7 @@ describe('buildMonthCells', () => {
   it('cells are consecutive days', () => {
     const cells = buildMonthCells(new Date(2025, 1, 10));
     for (let i = 1; i < cells.length; i++) {
-      const diff =
-        (cells[i].getTime() - cells[i - 1].getTime()) / 86_400_000;
+      const diff = (cells[i].getTime() - cells[i - 1].getTime()) / 86_400_000;
       expect(diff).toBe(1);
     }
   });

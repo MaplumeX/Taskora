@@ -4,7 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
 import type { DayCalendarEvent, RepeatPreview } from '@taskora/api';
 
@@ -24,12 +24,11 @@ function task(id: string, scheduledDate: string, status = TaskStatus.ACTIVE): Ta
     title: id,
     notes: null,
     scheduledDate,
-    scheduledType: ScheduledType.DATE,
+    start: Start.ANYTIME,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
-    bucket: TaskBucket.ANYTIME,
     status,
     completedAt: null,
     trashedAt: null,

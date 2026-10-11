@@ -1,11 +1,7 @@
 import * as React from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import {
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
-} from '@taskora/shared';
+import { ProjectStatus, Start } from '@taskora/shared';
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -33,9 +29,9 @@ const harness = vi.hoisted(() => ({
   dndProps: null as DndHandlers | null,
   pointerCollisionIds: [] as string[],
   closestCollisionIds: [] as string[],
-  sensorOptionsList: [] as Array<
-    { activationConstraint?: { distance?: number; delay?: number; tolerance?: number } } | null
-  >,
+  sensorOptionsList: [] as Array<{
+    activationConstraint?: { distance?: number; delay?: number; tolerance?: number };
+  } | null>,
   reorderProjectsMutate: vi.fn(),
   updateProjectMutate: vi.fn(),
   reorderAreasMutate: vi.fn(),
@@ -57,20 +53,18 @@ vi.mock('@dnd-kit/core', async () => {
       ReactModule.createElement('div', { 'data-testid': 'drag-overlay' }, children),
     closestCenter: ({ droppableContainers }: { droppableContainers: Array<{ id: string }> }) => {
       const candidates = new Set(droppableContainers.map(({ id }) => id));
-      return harness.closestCollisionIds
-        .filter((id) => candidates.has(id))
-        .map((id) => ({ id }));
+      return harness.closestCollisionIds.filter((id) => candidates.has(id)).map((id) => ({ id }));
     },
     pointerWithin: ({ droppableContainers }: { droppableContainers: Array<{ id: string }> }) => {
       const candidates = new Set(droppableContainers.map(({ id }) => id));
-      return harness.pointerCollisionIds
-        .filter((id) => candidates.has(id))
-        .map((id) => ({ id }));
+      return harness.pointerCollisionIds.filter((id) => candidates.has(id)).map((id) => ({ id }));
     },
     useDroppable: () => ({ setNodeRef: () => undefined }),
     useSensor: (
       _sensor: unknown,
-      options?: { activationConstraint?: { distance?: number; delay?: number; tolerance?: number } },
+      options?: {
+        activationConstraint?: { distance?: number; delay?: number; tolerance?: number };
+      },
     ) => {
       harness.sensorOptionsList.push(options ?? null);
       return {};
@@ -144,8 +138,7 @@ function project(id: string, areaId: string | null): ProjectResponseDto {
     notes: null,
     areaId,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     dueDate: null,
     completedAt: null,
@@ -159,21 +152,14 @@ function project(id: string, areaId: string | null): ProjectResponseDto {
 }
 
 const areas = [area('a'), area('b')];
-const projects = [
-  project('s', null),
-  project('a1', 'a'),
-  project('a2', 'a'),
-  project('b1', 'b'),
-];
+const projects = [project('s', null), project('a1', 'a'), project('a2', 'a'), project('b1', 'b')];
 
 function renderSection(
   currentProjects: ProjectResponseDto[] = projects,
   currentAreas: AreaResponseDto[] = areas,
 ) {
   return render(
-    <MemoryRouter
-      future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-    >
+    <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <SidebarProjectSection projects={currentProjects} areas={currentAreas} />
     </MemoryRouter>,
     // 侧边栏排序登记在应用壳的共享拖拽上下文里（ADR 0018）。
@@ -249,18 +235,12 @@ describe('SidebarProjectSection project drag preview', () => {
     expect(harness.reorderProjectsMutate).not.toHaveBeenCalled();
     expect(harness.updateProjectMutate).not.toHaveBeenCalled();
     expect(screen.getByTestId('project-placeholder-s')).toBeInTheDocument();
-    expect(
-      within(screen.getByTestId('drag-overlay')).getByText('Project s'),
-    ).toBeInTheDocument();
+    expect(within(screen.getByTestId('drag-overlay')).getByText('Project s')).toBeInTheDocument();
     expect(screen.getByTestId('drag-overlay').firstElementChild).toHaveAttribute('inert');
-    const target = document.querySelector(
-      '[data-project-container="a"]',
-    ) as HTMLElement;
+    const target = document.querySelector('[data-project-container="a"]') as HTMLElement;
     expect(within(target).getByTestId('project-placeholder-s')).toBeInTheDocument();
     expect(
-      Array.from(target.children).map(
-        (child) => (child as HTMLElement).dataset.sortableProjectId,
-      ),
+      Array.from(target.children).map((child) => (child as HTMLElement).dataset.sortableProjectId),
     ).toEqual(['a1', 's', 'a2']);
   });
 
@@ -269,35 +249,23 @@ describe('SidebarProjectSection project drag preview', () => {
     startProjectDrag('s');
 
     expect(
-      detectProjectTarget(
-        's',
-        ['area:a', 'project-container:a', 'proj:a2'],
-        20,
-        [['proj:a2', { top: 10, height: 40 }]],
-      ),
+      detectProjectTarget('s', ['area:a', 'project-container:a', 'proj:a2'], 20, [
+        ['proj:a2', { top: 10, height: 40 }],
+      ]),
     ).toEqual(['proj:a2']);
     dragOver('s', 'proj:a2');
 
-    const target = document.querySelector(
-      '[data-project-container="a"]',
-    ) as HTMLElement;
+    const target = document.querySelector('[data-project-container="a"]') as HTMLElement;
     expect(
-      Array.from(target.children).map(
-        (child) => (child as HTMLElement).dataset.sortableProjectId,
-      ),
+      Array.from(target.children).map((child) => (child as HTMLElement).dataset.sortableProjectId),
     ).toEqual(['a1', 's', 'a2']);
 
-    detectProjectTarget(
-      's',
-      ['area:a', 'project-container:a', 'proj:a2'],
-      31,
-      [['proj:a2', { top: 10, height: 40 }]],
-    );
+    detectProjectTarget('s', ['area:a', 'project-container:a', 'proj:a2'], 31, [
+      ['proj:a2', { top: 10, height: 40 }],
+    ]);
     act(() => handlers().onDragMove?.({ active: { id: 'proj:s' } }));
     expect(
-      Array.from(target.children).map(
-        (child) => (child as HTMLElement).dataset.sortableProjectId,
-      ),
+      Array.from(target.children).map((child) => (child as HTMLElement).dataset.sortableProjectId),
     ).toEqual(['a1', 'a2', 's']);
 
     endProjectDrag('s', 'proj:a2');
@@ -312,12 +280,7 @@ describe('SidebarProjectSection project drag preview', () => {
   it('keeps same-container persistence to one reorder and skips a no-op', () => {
     renderSection();
     startProjectDrag('a1');
-    detectProjectTarget(
-      'a1',
-      ['proj:a2'],
-      31,
-      [['proj:a2', { top: 10, height: 40 }]],
-    );
+    detectProjectTarget('a1', ['proj:a2'], 31, [['proj:a2', { top: 10, height: 40 }]]);
     dragOver('a1', 'proj:a2');
     endProjectDrag('a1', 'proj:a2');
 
@@ -377,8 +340,9 @@ describe('SidebarProjectSection project drag preview', () => {
     dragOver('s', 'project-container:b');
 
     expect(
-      within(document.querySelector('[data-project-container="b"]') as HTMLElement)
-        .getByTestId('project-placeholder-s'),
+      within(document.querySelector('[data-project-container="b"]') as HTMLElement).getByTestId(
+        'project-placeholder-s',
+      ),
     ).toBeInTheDocument();
   });
 
@@ -407,8 +371,9 @@ describe('SidebarProjectSection project drag preview', () => {
     detectProjectTarget('s', []);
     act(() => handlers().onDragOver?.({ active: { id: 'proj:s' }, over: null }));
     expect(
-      within(document.querySelector('[data-project-container="b"]') as HTMLElement)
-        .getByTestId('project-placeholder-s'),
+      within(document.querySelector('[data-project-container="b"]') as HTMLElement).getByTestId(
+        'project-placeholder-s',
+      ),
     ).toBeInTheDocument();
 
     dragOver('s', 'area:a');
@@ -430,8 +395,9 @@ describe('SidebarProjectSection project drag preview', () => {
     expect(harness.updateProjectMutate).not.toHaveBeenCalled();
     expect(harness.reorderProjectsMutate).not.toHaveBeenCalled();
     expect(
-      within(document.querySelector('[data-project-container="standalone"]') as HTMLElement)
-        .getByText('Project s'),
+      within(
+        document.querySelector('[data-project-container="standalone"]') as HTMLElement,
+      ).getByText('Project s'),
     ).toBeInTheDocument();
   });
 
@@ -447,27 +413,28 @@ describe('SidebarProjectSection project drag preview', () => {
       project('b1', 'b'),
     ];
     view.rerender(
-      <MemoryRouter
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-      >
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <SidebarProjectSection projects={remoteProjects} areas={areas} />
       </MemoryRouter>,
     );
     expect(
-      within(document.querySelector('[data-project-container="b"]') as HTMLElement)
-        .getByTestId('project-placeholder-s'),
+      within(document.querySelector('[data-project-container="b"]') as HTMLElement).getByTestId(
+        'project-placeholder-s',
+      ),
     ).toBeInTheDocument();
 
     act(() => handlers().onDragCancel?.());
     expect(harness.updateProjectMutate).not.toHaveBeenCalled();
     expect(harness.reorderProjectsMutate).not.toHaveBeenCalled();
     expect(
-      within(document.querySelector('[data-project-container="standalone"]') as HTMLElement)
-        .getByText('Project s'),
+      within(
+        document.querySelector('[data-project-container="standalone"]') as HTMLElement,
+      ).getByText('Project s'),
     ).toBeInTheDocument();
     expect(
-      within(document.querySelector('[data-project-container="b"]') as HTMLElement)
-        .getByText('Project a2'),
+      within(document.querySelector('[data-project-container="b"]') as HTMLElement).getByText(
+        'Project a2',
+      ),
     ).toBeInTheDocument();
   });
 });
@@ -483,8 +450,9 @@ describe('SidebarProjectSection persistence and area isolation', () => {
     expect(harness.reorderProjectsMutate).not.toHaveBeenCalled();
     expect(harness.toastError).toHaveBeenCalledWith('common:saveFailed');
     expect(
-      within(document.querySelector('[data-project-container="standalone"]') as HTMLElement)
-        .getByText('Project s'),
+      within(
+        document.querySelector('[data-project-container="standalone"]') as HTMLElement,
+      ).getByText('Project s'),
     ).toBeInTheDocument();
   });
 
@@ -496,16 +464,9 @@ describe('SidebarProjectSection persistence and area isolation', () => {
     act(() => harness.updateProjectMutate.mock.calls[0][1].onSuccess());
 
     view.rerender(
-      <MemoryRouter
-        future={{ v7_startTransition: true, v7_relativeSplatPath: true }}
-      >
+      <MemoryRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
         <SidebarProjectSection
-          projects={[
-            project('s', 'b'),
-            project('a1', 'a'),
-            project('a2', 'a'),
-            project('b1', 'b'),
-          ]}
+          projects={[project('s', 'b'), project('a1', 'a'), project('a2', 'a'), project('b1', 'b')]}
           areas={areas}
         />
       </MemoryRouter>,
@@ -513,8 +474,9 @@ describe('SidebarProjectSection persistence and area isolation', () => {
     act(() => harness.reorderProjectsMutate.mock.calls[0][1].onError());
 
     expect(
-      within(document.querySelector('[data-project-container="standalone"]') as HTMLElement)
-        .getByText('Project s'),
+      within(
+        document.querySelector('[data-project-container="standalone"]') as HTMLElement,
+      ).getByText('Project s'),
     ).toBeInTheDocument();
     expect(harness.toastError).toHaveBeenCalledWith('common:saveFailed');
   });
@@ -522,21 +484,16 @@ describe('SidebarProjectSection persistence and area isolation', () => {
   it('restores the server layout and toasts when reorder fails', () => {
     renderSection();
     startProjectDrag('a1');
-    detectProjectTarget(
-      'a1',
-      ['proj:a2'],
-      31,
-      [['proj:a2', { top: 10, height: 40 }]],
-    );
+    detectProjectTarget('a1', ['proj:a2'], 31, [['proj:a2', { top: 10, height: 40 }]]);
     dragOver('a1', 'proj:a2');
     endProjectDrag('a1', 'proj:a2');
 
     act(() => harness.reorderProjectsMutate.mock.calls[0][1].onError());
-    const areaContainer = document.querySelector(
-      '[data-project-container="a"]',
-    ) as HTMLElement;
+    const areaContainer = document.querySelector('[data-project-container="a"]') as HTMLElement;
     expect(
-      within(areaContainer).getAllByText(/^Project a[12]$/).map((node) => node.textContent),
+      within(areaContainer)
+        .getAllByText(/^Project a[12]$/)
+        .map((node) => node.textContent),
     ).toEqual(['Project a1', 'Project a2']);
     expect(harness.toastError).toHaveBeenCalledWith('common:saveFailed');
   });
@@ -577,10 +534,7 @@ describe('SidebarProjectSection persistence and area isolation', () => {
     document.querySelectorAll('[data-project-container]').forEach((container) => {
       expect(container).not.toHaveClass('bg-muted/60');
     });
-    expect(screen.getByRole('link', { name: /Area a/ })).toHaveAttribute(
-      'href',
-      '/areas/a',
-    );
+    expect(screen.getByRole('link', { name: /Area a/ })).toHaveAttribute('href', '/areas/a');
   });
 
   it('tames auto-scroll so edge drags do not run away', () => {
@@ -603,16 +557,16 @@ describe('SidebarProjectSection later projects', () => {
   const later = (
     id: string,
     areaId: string | null,
-    scheduledType: ScheduledType,
+    start: Start,
     scheduledDate: string | null = null,
-  ): ProjectResponseDto => ({ ...project(id, areaId), scheduledType, scheduledDate });
+  ): ProjectResponseDto => ({ ...project(id, areaId), start, scheduledDate });
 
   it('隐藏稍后项目；无区域稍后项目汇总为列表末尾的入口', () => {
     renderSection([
       project('s', null),
-      later('ls', null, ScheduledType.SOMEDAY),
-      later('lf', null, ScheduledType.DATE, '2099-01-01'),
-      later('la', 'a', ScheduledType.SOMEDAY),
+      later('ls', null, Start.SOMEDAY),
+      later('lf', null, Start.ANYTIME, '2099-01-01'),
+      later('la', 'a', Start.SOMEDAY),
       project('a1', 'a'),
     ]);
 
@@ -622,26 +576,30 @@ describe('SidebarProjectSection later projects', () => {
     const entry = screen.getByRole('link', { name: 'project:laterProjectCount' });
     expect(entry).toHaveAttribute('href', '/later-projects');
     // 紧跟在无区域项目容器之后、区域之前；不在可排序容器里
-    const standalone = document.querySelector('[data-project-container="standalone"]') as HTMLElement;
+    const standalone = document.querySelector(
+      '[data-project-container="standalone"]',
+    ) as HTMLElement;
     expect(standalone.nextElementSibling).toBe(entry);
     expect(within(standalone).queryByRole('link')).not.toBeInTheDocument();
   });
 
   it('日期已到的项目、已完成项目不计入；没有无区域稍后项目时不显示入口', () => {
     renderSection([
-      later('past', null, ScheduledType.DATE, '2020-01-01'),
-      { ...later('done', null, ScheduledType.SOMEDAY), status: ProjectStatus.COMPLETED },
-      later('la', 'a', ScheduledType.SOMEDAY),
+      later('past', null, Start.ANYTIME, '2020-01-01'),
+      { ...later('done', null, Start.SOMEDAY), status: ProjectStatus.COMPLETED },
+      later('la', 'a', Start.SOMEDAY),
     ]);
     expect(screen.getByText('Project past')).toBeInTheDocument();
     expect(screen.queryByText('Project done')).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'project:laterProjectCount' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('link', { name: 'project:laterProjectCount' }),
+    ).not.toBeInTheDocument();
   });
 
   it('排序持久化保留隐藏项目的槽位', () => {
     renderSection([
       { ...project('s', null), position: 'a0' },
-      { ...later('ls', null, ScheduledType.SOMEDAY), position: 'a1' },
+      { ...later('ls', null, Start.SOMEDAY), position: 'a1' },
       { ...project('t', null), position: 'a2' },
     ]);
     startProjectDrag('t');
@@ -649,7 +607,10 @@ describe('SidebarProjectSection later projects', () => {
     dragOver('t', 'proj:s');
     endProjectDrag('t', 'proj:s');
 
-    expect(harness.reorderProjectsMutate).toHaveBeenCalledWith(['t', 'ls', 's'], expect.any(Object));
+    expect(harness.reorderProjectsMutate).toHaveBeenCalledWith(
+      ['t', 'ls', 's'],
+      expect.any(Object),
+    );
   });
 });
 

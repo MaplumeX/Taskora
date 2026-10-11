@@ -4,11 +4,10 @@ import userEvent from '@testing-library/user-event';
 
 import { i18n, useAreasQuery, useLaterProjectKind, useProjectsQuery } from '@taskora/api';
 import {
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
   type AreaResponseDto,
   type ProjectResponseDto,
+  ProjectStatus,
+  Start,
 } from '@taskora/shared';
 
 import { NavigationPopover } from './NavigationPopover';
@@ -29,8 +28,7 @@ function project(id: string, title: string, areaId: string | null = null): Proje
     notes: null,
     areaId,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     dueDate: null,
     completedAt: null,

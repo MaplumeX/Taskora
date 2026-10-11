@@ -9,13 +9,7 @@ import type {
   ProjectResponseDto,
   TaskFeedItem,
 } from '@taskora/shared';
-import {
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
-  TaskBucket,
-  TaskStatus,
-} from '@taskora/shared';
+import { ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface DndHandlers {
@@ -166,12 +160,7 @@ vi.mock('@/components/project/ProjectContextMenu', async () => {
     }: {
       project: { id: string };
       children: React.ReactNode;
-    }) =>
-      ReactModule.createElement(
-        'div',
-        { 'data-project-context-menu': project.id },
-        children,
-      ),
+    }) => ReactModule.createElement('div', { 'data-project-context-menu': project.id }, children),
   };
 });
 
@@ -223,13 +212,12 @@ function taskItem(
     title: id,
     notes: null,
     scheduledDate: null,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
     status: TaskStatus.ACTIVE,
-    bucket: TaskBucket.ANYTIME,
     completedAt: null,
     trashedAt: null,
     createdAt: '2026-07-31T00:00:00.000Z',
@@ -248,13 +236,12 @@ function projectItem(id: string): ProjectFeedItem {
     title: id,
     notes: null,
     scheduledDate: '2026-08-01T00:00:00.000Z',
-    scheduledType: ScheduledType.DATE,
+    start: Start.ANYTIME,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.SCHEDULED,
     completedAt: null,
     trashedAt: null,
     createdAt: '2026-07-31T00:00:00.000Z',
@@ -282,8 +269,7 @@ function project(
     notes: null,
     areaId: opts.areaId ?? null,
     status: opts.status ?? ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: opts.scheduledDate ?? null,
     dueDate: null,
     completedAt: null,
@@ -328,14 +314,8 @@ function renderView(
           path="/today"
           element={<GroupedFeedListView items={items} emptyHint="empty" freshKeys={freshKeys} />}
         />
-        <Route
-          path="/anytime"
-          element={<GroupedFeedListView items={items} emptyHint="empty" />}
-        />
-        <Route
-          path="/someday"
-          element={<GroupedFeedListView items={items} emptyHint="empty" />}
-        />
+        <Route path="/anytime" element={<GroupedFeedListView items={items} emptyHint="empty" />} />
+        <Route path="/someday" element={<GroupedFeedListView items={items} emptyHint="empty" />} />
         <Route path="/projects/:id" element={<div data-testid="project-detail" />} />
         <Route path="/areas/:id" element={<div data-testid="area-detail" />} />
       </Routes>
@@ -408,23 +388,28 @@ describe('GroupedFeedListView — 组头渲染', () => {
   it.each(['today', 'anytime', 'someday'] as const)(
     '%s renders Project and Area headings with icons and neutral navigation titles',
     (view) => {
-      harness.projects = [{
-        ...project('p1', {
-          taskTotalCount: 3,
-          taskCompletedCount: 1,
-          scheduledDate: '2999-08-01T00:00:00.000Z',
-        }),
-        scheduledType: ScheduledType.DATE,
-        dueDate: '2999-08-10T00:00:00.000Z',
-        repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
-      }];
+      harness.projects = [
+        {
+          ...project('p1', {
+            taskTotalCount: 3,
+            taskCompletedCount: 1,
+            scheduledDate: '2999-08-01T00:00:00.000Z',
+          }),
+          start: Start.ANYTIME,
+          dueDate: '2999-08-10T00:00:00.000Z',
+          repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+        },
+      ];
       harness.areas = [area('a1')];
-      renderView([
-        taskItem('direct', { areaId: 'a1' }),
-        taskItem('in-p1', { projectId: 'p1' }),
-      ], view);
+      renderView(
+        [taskItem('direct', { areaId: 'a1' }), taskItem('in-p1', { projectId: 'p1' })],
+        view,
+      );
 
-      for (const [id, to] of [['p1', '/projects/p1'], ['a1', '/areas/a1']]) {
+      for (const [id, to] of [
+        ['p1', '/projects/p1'],
+        ['a1', '/areas/a1'],
+      ]) {
         const heading = screen.getByRole('heading', { level: 2, name: id });
         expect(heading).toBe(headerOf(id));
         expect(within(heading).getByRole('link', { name: id }).textContent).toBe(id);
@@ -441,7 +426,13 @@ describe('GroupedFeedListView — 组头渲染', () => {
         }
         const link = within(heading).getByRole('link', { name: id });
         expect(link).toHaveAttribute('href', to);
-        expect(link).toHaveClass('text-body', 'font-semibold', 'text-foreground', 'hover:text-primary', 'no-underline');
+        expect(link).toHaveClass(
+          'text-body',
+          'font-semibold',
+          'text-foreground',
+          'hover:text-primary',
+          'no-underline',
+        );
         expect(link).not.toHaveClass('hover:underline', 'text-primary');
         expect(link.className).not.toMatch(/hover:bg-/);
         const arrow = link.querySelector('.lucide-chevron-right');
@@ -455,20 +446,23 @@ describe('GroupedFeedListView — 组头渲染', () => {
     ['future', '2999-08-10', 'text-muted-foreground'],
     ['today', null, 'text-deadline'],
     ['overdue', '2000-01-01', 'text-deadline'],
-  ])('keeps the %s Project deadline flag and countdown outside the hover link', (_state, date, color) => {
-    const dueDate = date ?? todayDateKey();
-    harness.projects = [{ ...project('p1'), dueDate }];
-    renderView([taskItem('in-project', { projectId: 'p1' })]);
-    const heading = headerOf('p1');
-    const badge = within(heading).getByText(formatDeadlineCountdown(parseCalendarDate(dueDate)));
-    const link = within(heading).getByRole('link', { name: 'p1' });
+  ])(
+    'keeps the %s Project deadline flag and countdown outside the hover link',
+    (_state, date, color) => {
+      const dueDate = date ?? todayDateKey();
+      harness.projects = [{ ...project('p1'), dueDate }];
+      renderView([taskItem('in-project', { projectId: 'p1' })]);
+      const heading = headerOf('p1');
+      const badge = within(heading).getByText(formatDeadlineCountdown(parseCalendarDate(dueDate)));
+      const link = within(heading).getByRole('link', { name: 'p1' });
 
-    expect(badge).toBeVisible();
-    expect(badge).toHaveClass(color);
-    expect(badge.querySelector('.lucide-flag')).not.toBeNull();
-    expect(link).not.toContainElement(badge);
-    expect(badge.parentElement).toHaveClass('ml-auto', 'shrink-0', 'whitespace-nowrap');
-  });
+      expect(badge).toBeVisible();
+      expect(badge).toHaveClass(color);
+      expect(badge.querySelector('.lucide-flag')).not.toBeNull();
+      expect(link).not.toContainElement(badge);
+      expect(badge.parentElement).toHaveClass('ml-auto', 'shrink-0', 'whitespace-nowrap');
+    },
+  );
 
   it('does not show a deadline badge for a Project without a deadline or for an Area', () => {
     harness.projects = [project('p1')];
@@ -816,7 +810,11 @@ describe('GroupedFeedListView — 拖拽语义', () => {
   it('多项拖拽：整组按显示顺序落位，而非 feed 数组顺序', () => {
     harness.projects = [project('p1')];
     // feed 数组里 a1 在前，但显示时未分组的 loose 排在 p1 组之前。
-    renderView([taskItem('a1', { projectId: 'p1' }), taskItem('loose'), taskItem('a2', { projectId: 'p1' })]);
+    renderView([
+      taskItem('a1', { projectId: 'p1' }),
+      taskItem('loose'),
+      taskItem('a2', { projectId: 'p1' }),
+    ]);
     useSelectionStore.getState().setSelection(['loose', 'a1']);
 
     dragEnd('task:a1', 'task:a2', 'task:a2');
@@ -859,7 +857,9 @@ describe('GroupedFeedListView — 拖拽语义', () => {
     useSelectionStore.getState().setSelection(['a1', 'a2', 'a3']);
     const order = () =>
       Array.from(
-        document.querySelectorAll<HTMLElement>('[data-task-container="p1"] [data-sortable-task-id]'),
+        document.querySelectorAll<HTMLElement>(
+          '[data-task-container="p1"] [data-sortable-task-id]',
+        ),
       ).map((node) => node.dataset.sortableTaskId);
 
     act(() => {
@@ -961,7 +961,11 @@ describe('GroupedFeedListView — 拖拽语义', () => {
     renderDnd(
       <MemoryRouter>
         <GroupedFeedListView
-          items={[taskItem('loose'), taskItem('a1', { projectId: 'p1' }), taskItem('a2', { projectId: 'p1' })]}
+          items={[
+            taskItem('loose'),
+            taskItem('a1', { projectId: 'p1' }),
+            taskItem('a2', { projectId: 'p1' }),
+          ]}
           grouping={false}
         />
       </MemoryRouter>,
@@ -1119,7 +1123,10 @@ describe('GroupedFeedListView — 拖拽语义', () => {
         handlers().onDragStart?.({ active: { id: 'project:pr' } });
       });
       act(() => {
-        handlers().onDragEnd?.({ active: { id: 'project:pr' }, over: { id: 'sidebar-drop:today' } });
+        handlers().onDragEnd?.({
+          active: { id: 'project:pr' },
+          over: { id: 'sidebar-drop:today' },
+        });
       });
 
       const [payload, target] = harness.sidebarDrop.mock.calls[0];
@@ -1186,7 +1193,6 @@ describe('GroupedFeedListView — New in Today', () => {
   });
 });
 
-
 describe('GroupedFeedListView — Magic Plus', () => {
   /** 拖动 Magic Plus：可选地在 overId 上预览（edge 按指针在行下半），再松手。 */
   async function dropMagicPlus(overId: string | null, delta = { x: -40, y: -300 }) {
@@ -1227,7 +1233,6 @@ describe('GroupedFeedListView — Magic Plus', () => {
 
     expect(harness.createTask).toHaveBeenCalledWith({
       title: '',
-      scheduledType: ScheduledType.DATE,
       scheduledDate: todayDateKey(),
     });
     expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('t1', 'new', 't2'));
@@ -1241,9 +1246,7 @@ describe('GroupedFeedListView — Magic Plus', () => {
 
     await dropMagicPlus('header:p1');
 
-    expect(harness.createTask).toHaveBeenCalledWith(
-      expect.objectContaining({ projectId: 'p1' }),
-    );
+    expect(harness.createTask).toHaveBeenCalledWith(expect.objectContaining({ projectId: 'p1' }));
     expect(harness.reorderFeedMutate).toHaveBeenCalledWith(feedOrder('loose', 'in-p1', 'new'));
   });
 

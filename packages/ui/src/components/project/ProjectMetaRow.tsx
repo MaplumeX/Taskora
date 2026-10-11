@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { CalendarDays, CloudSun, Flag, Repeat, Star } from 'lucide-react';
 
-import { ScheduledType } from '@taskora/shared';
+import { Start } from '@taskora/shared';
 import type { ProjectResponseDto, UpdateProjectDto } from '@taskora/shared';
 import {
   formatDateLabel,
@@ -17,7 +17,13 @@ import {
   useUpdateProject,
 } from '@taskora/api';
 
-import { MetaBadge, MetaDivider, MetaPopover, MetaRowLayout, MetaTagPills } from '@/components/common/MetaBadge';
+import {
+  MetaBadge,
+  MetaDivider,
+  MetaPopover,
+  MetaRowLayout,
+  MetaTagPills,
+} from '@/components/common/MetaBadge';
 import { ReviewMetaBadge } from '@/components/review/ReviewSchedule';
 import { ScheduledDateField } from '@/components/task/fields/ScheduledDateField';
 import { DueDateField } from '@/components/task/fields/DueDateField';
@@ -51,7 +57,7 @@ export function ProjectMetaRow({ project }: Props) {
       },
     );
 
-  const scheduledType = project.scheduledType ?? ScheduledType.NONE;
+  const someday = project.start === Start.SOMEDAY;
   const tags = project.tags ?? [];
 
   const scheduledDate = project.scheduledDate ? parseCalendarDate(project.scheduledDate) : null;
@@ -67,11 +73,11 @@ export function ProjectMetaRow({ project }: Props) {
             </MetaPopover>
           ) : null}
 
-          {scheduledType !== ScheduledType.NONE ? (
+          {someday || scheduledDate ? (
             <MetaPopover
               label={t('scheduledDate')}
               trigger={
-                scheduledType === ScheduledType.SOMEDAY ? (
+                someday ? (
                   <MetaBadge
                     icon={<CloudSun className="h-3 w-3 text-nav-someday" />}
                     text={t('somedayLabel')}

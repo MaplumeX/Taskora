@@ -2,7 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { ScheduledType, TaskBucket, TaskStatus, type TaskResponseDto } from '@taskora/shared';
+import { Start, type TaskResponseDto, TaskStatus } from '@taskora/shared';
 
 import { setTaskBackend, type TaskBackend } from '@/api/task-backend';
 import { requestTaskReveal, useTaskRevealStore } from '@/stores/taskReveal.store';
@@ -14,12 +14,11 @@ function dto(partial: Partial<TaskResponseDto> & { id: string }): TaskResponseDt
     title: '任务',
     notes: null,
     scheduledDate: null,
-    scheduledType: ScheduledType.NONE,
+    start: Start.INBOX,
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
     dueDate: null,
-    bucket: TaskBucket.INBOX,
     status: TaskStatus.ACTIVE,
     completedAt: null,
     trashedAt: null,
@@ -70,7 +69,7 @@ describe('useTaskRevealListener — 点通知定位任务', () => {
   afterEach(() => setTaskBackend(undefined));
 
   it('导航到任务所属视图、展开并请求滚入视野，关闭遮挡的浮层', async () => {
-    useFakeTasks([dto({ id: 't1', projectId: 'p1', bucket: TaskBucket.ANYTIME })]);
+    useFakeTasks([dto({ id: 't1', projectId: 'p1', start: Start.ANYTIME })]);
     renderShell();
     act(() => requestTaskReveal('t1'));
 
@@ -85,7 +84,7 @@ describe('useTaskRevealListener — 点通知定位任务', () => {
   });
 
   it('请求早于挂载（从通知冷启动）：挂载后仍会执行', async () => {
-    useFakeTasks([dto({ id: 't1', bucket: TaskBucket.ANYTIME })]);
+    useFakeTasks([dto({ id: 't1', start: Start.ANYTIME })]);
     requestTaskReveal('t1');
     renderShell();
     await waitFor(() => expect(screen.getByTestId('path').textContent).toBe('/anytime'));

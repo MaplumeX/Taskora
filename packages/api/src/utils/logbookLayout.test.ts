@@ -12,7 +12,6 @@ function settledTask(id: string, settledAt: Date): TaskFeedItem {
     title: id,
     notes: null,
     scheduledDate: null,
-    scheduledType: 'NONE',
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
@@ -55,10 +54,7 @@ describe('groupLogbookItems（渐进粒度：近期逐日、远期收拢）', ()
       ],
       NOW,
     );
-    expect(groups.map((g) => g.label)).toEqual([
-      i18n.t('common:today'),
-      i18n.t('task:yesterday'),
-    ]);
+    expect(groups.map((g) => g.label)).toEqual([i18n.t('common:today'), i18n.t('task:yesterday')]);
     expect(groups[0].items.map((i) => i.id)).toEqual(['a']);
   });
 

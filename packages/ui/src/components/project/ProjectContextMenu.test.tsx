@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 import React from 'react';
 
 import type { ProjectResponseDto } from '@taskora/shared';
-import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
+import { ProjectStatus, Start } from '@taskora/shared';
 
 import { i18n } from '@taskora/api';
 
@@ -16,11 +16,13 @@ import { ProjectContextMenu, ProjectMoreMenu } from './ProjectContextMenu';
 vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
   useLoggingActions: () => ({ setLoggingMode: vi.fn(), logCompleted: vi.fn() }),
-  useAreasQuery: () => ({ data: [
-    { id: 'work', title: 'Work' },
-    { id: 'home', title: 'Home' },
-    { id: 'homework', title: 'Homework' },
-  ] }),
+  useAreasQuery: () => ({
+    data: [
+      { id: 'work', title: 'Work' },
+      { id: 'home', title: 'Home' },
+      { id: 'homework', title: 'Homework' },
+    ],
+  }),
   useUpdateProject: () => ({ mutate: updateMock, isPending: false }),
   useCompleteProject: () => ({ mutate: completeMock, isPending: false }),
   useUncompleteProject: () => ({ mutate: vi.fn(), isPending: false }),
@@ -42,8 +44,7 @@ const baseProject: ProjectResponseDto = {
   notes: null,
   areaId: null,
   status: ProjectStatus.ACTIVE,
-  bucket: ProjectBucket.ANYTIME,
-  scheduledType: ScheduledType.NONE,
+  start: Start.ANYTIME,
   scheduledDate: null,
   dueDate: null,
   repeatRule: null,
@@ -88,9 +89,8 @@ describe('ProjectContextMenu — 重复项目（recurring-projects）', () => {
   it('DATE 项目提供「重复」；带规则时提供「跳过本次」', async () => {
     renderMenu({
       ...baseProject,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2030-01-07',
-      bucket: ProjectBucket.SCHEDULED,
       repeatRule: { unit: 'week', interval: 1, anchor: 'scheduled' },
     });
     expect(await screen.findByRole('button', { name: /^(Repeat|重复)$/ })).toBeInTheDocument();
@@ -112,7 +112,6 @@ describe('ProjectContextMenu — 重复项目（recurring-projects）', () => {
   });
 });
 
-
 describe('项目移动', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -128,7 +127,10 @@ describe('项目移动', () => {
   it('右键入口只列无区域与各区域，当前位置打勾并高亮', async () => {
     await openMove({ ...baseProject, areaId: 'work' });
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
-      'No Area', 'Work', 'Home', 'Homework',
+      'No Area',
+      'Work',
+      'Home',
+      'Homework',
     ]);
     const work = screen.getByRole('option', { name: 'Work' });
     expect(work).toHaveAttribute('aria-current', 'true');
@@ -140,18 +142,20 @@ describe('项目移动', () => {
   it('搜索按前缀优先，键盘选中后仅修改区域并关闭', async () => {
     const input = await openMove({
       ...baseProject,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2030-01-07',
       repeatRule: { unit: 'week', interval: 1, anchor: 'scheduled' },
     });
     fireEvent.change(input, { target: { value: 'work' } });
     expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
-      'Work', 'Homework',
+      'Work',
+      'Homework',
     ]);
     fireEvent.keyDown(input, { key: 'ArrowDown' });
     fireEvent.keyDown(input, { key: 'Enter' });
     expect(updateMock).toHaveBeenCalledWith(
-      { id: 'project-1', data: { areaId: 'homework' } }, expect.anything(),
+      { id: 'project-1', data: { areaId: 'homework' } },
+      expect.anything(),
     );
     expect(screen.queryByRole('combobox')).toBeNull();
   });
@@ -160,7 +164,8 @@ describe('项目移动', () => {
     await openMove({ ...baseProject, areaId: 'work' });
     fireEvent.click(screen.getByRole('option', { name: 'No Area' }));
     expect(updateMock).toHaveBeenCalledWith(
-      { id: 'project-1', data: { areaId: null } }, expect.anything(),
+      { id: 'project-1', data: { areaId: null } },
+      expect.anything(),
     );
     expect(screen.queryByRole('combobox')).toBeNull();
   });
@@ -179,19 +184,28 @@ describe('项目移动', () => {
   });
 
   it('详情页更多菜单使用相同移动选择器', async () => {
-    render(<MemoryRouter><ProjectMoreMenu project={baseProject} current={baseProject} /></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <ProjectMoreMenu project={baseProject} current={baseProject} />
+      </MemoryRouter>,
+    );
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'More' }));
     await user.click(await screen.findByRole('button', { name: 'Move' }));
     await user.click(await screen.findByRole('option', { name: 'Home' }));
     expect(updateMock).toHaveBeenCalledWith(
-      { id: 'project-1', data: { areaId: 'home' } }, expect.anything(),
+      { id: 'project-1', data: { areaId: 'home' } },
+      expect.anything(),
     );
     expect(screen.queryByRole('combobox')).toBeNull();
   });
 
   it('窄屏更多菜单为底部动作面板，选择器为字段卡片', async () => {
-    render(<MemoryRouter><ProjectMoreMenu project={baseProject} current={baseProject} /></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <ProjectMoreMenu project={baseProject} current={baseProject} />
+      </MemoryRouter>,
+    );
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'More' }));
     await screen.findByRole('dialog', { name: baseProject.title });
@@ -202,13 +216,18 @@ describe('项目移动', () => {
 
   it('桌面更多菜单仍为浮层', async () => {
     onTestFinished(mockDesktop(true));
-    render(<MemoryRouter><ProjectMoreMenu project={baseProject} current={baseProject} /></MemoryRouter>);
+    render(
+      <MemoryRouter>
+        <ProjectMoreMenu project={baseProject} current={baseProject} />
+      </MemoryRouter>,
+    );
     const user = userEvent.setup();
     await user.click(screen.getByRole('button', { name: 'More' }));
     await user.click(await screen.findByRole('button', { name: 'Move' }));
     await user.click(await screen.findByRole('option', { name: 'Home' }));
     expect(updateMock).toHaveBeenCalledWith(
-      { id: 'project-1', data: { areaId: 'home' } }, expect.anything(),
+      { id: 'project-1', data: { areaId: 'home' } },
+      expect.anything(),
     );
     expect(screen.queryByRole('dialog')).toBeNull();
   });

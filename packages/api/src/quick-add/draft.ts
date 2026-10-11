@@ -15,7 +15,7 @@ import type {
   TaskResponseDto,
   UpdateTaskDto,
 } from '@taskora/shared';
-import { ProjectStatus, ScheduledType } from '@taskora/shared';
+import { ProjectStatus, Start } from '@taskora/shared';
 
 import { getAreas } from '@/api/areas.api';
 import { getProjects } from '@/api/projects.api';
@@ -152,10 +152,9 @@ export async function createFromQuickAddDraft(
   const dto: CreateTaskDto = { title };
   if (draft.notes?.trim()) dto.notes = draft.notes;
   if (draft.when?.type === 'date') {
-    dto.scheduledType = ScheduledType.DATE;
     dto.scheduledDate = draft.when.date;
   } else if (draft.when?.type === 'someday') {
-    dto.scheduledType = ScheduledType.SOMEDAY;
+    dto.start = Start.SOMEDAY;
   }
   if (draft.dueDate) dto.dueDate = draft.dueDate;
 
@@ -184,7 +183,7 @@ export async function createFromQuickAddDraft(
 
   const task = await deps.createTask(dto);
   // CreateTaskDto 不收 Reminder：建好后补写（同为本地写，进同一 Outbox）。
-  if (draft.reminderTime && dto.scheduledType === ScheduledType.DATE) {
+  if (draft.reminderTime && dto.scheduledDate) {
     await deps.updateTask(task.id, { reminderTime: draft.reminderTime });
   }
   return { taskId: task.id, placedIn };

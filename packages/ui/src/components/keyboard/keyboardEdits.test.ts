@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addCalendarDays, ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { addCalendarDays, Start, TaskStatus } from '@taskora/shared';
 import type { SelectionRowItem } from '@taskora/api';
 
 import { parentRouteFor, shiftedDeadline, shiftedStart } from './keyboardEdits';
@@ -9,8 +9,7 @@ const today = '2026-10-09';
 function item(fields: Partial<SelectionRowItem> = {}): SelectionRowItem {
   return {
     status: TaskStatus.ACTIVE,
-    bucket: TaskBucket.INBOX,
-    scheduledType: ScheduledType.NONE,
+    start: Start.INBOX,
     scheduledDate: null,
     dueDate: null,
     projectId: null,
@@ -19,7 +18,7 @@ function item(fields: Partial<SelectionRowItem> = {}): SelectionRowItem {
   };
 }
 
-const dated = (date: string) => item({ scheduledType: ScheduledType.DATE, scheduledDate: date });
+const dated = (date: string) => item({ start: Start.ANYTIME, scheduledDate: date });
 
 describe('shiftedStart', () => {
   it('在原计划日期上加减', () => {
@@ -29,12 +28,12 @@ describe('shiftedStart', () => {
 
   it('无计划 / Someday / 已过的日期从今天起算，结果不早于今天', () => {
     expect(shiftedStart(item(), 1, today)).toEqual({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: addCalendarDays(today, 1),
     });
-    expect(
-      shiftedStart(item({ scheduledType: ScheduledType.SOMEDAY }), 7, today)?.scheduledDate,
-    ).toBe('2026-10-16');
+    expect(shiftedStart(item({ start: Start.SOMEDAY }), 7, today)?.scheduledDate).toBe(
+      '2026-10-16',
+    );
     expect(shiftedStart(dated('2026-10-01'), 1, today)?.scheduledDate).toBe('2026-10-10');
     expect(shiftedStart(dated('2026-10-11'), -7, today)?.scheduledDate).toBe(today);
   });
@@ -65,10 +64,8 @@ describe('parentRouteFor', () => {
     expect(parentRouteFor('task', item({ areaId: 'a' }), today)).toBe('/areas/a');
     expect(parentRouteFor('task', dated(today), today)).toBe('/today');
     expect(parentRouteFor('task', dated('2026-12-01'), today)).toBe('/upcoming');
-    expect(parentRouteFor('task', item({ scheduledType: ScheduledType.SOMEDAY }), today)).toBe(
-      '/someday',
-    );
-    expect(parentRouteFor('task', item({ bucket: TaskBucket.ANYTIME }), today)).toBe('/anytime');
+    expect(parentRouteFor('task', item({ start: Start.SOMEDAY }), today)).toBe('/someday');
+    expect(parentRouteFor('task', item({ start: Start.ANYTIME }), today)).toBe('/anytime');
     expect(parentRouteFor('task', item(), today)).toBe('/inbox');
   });
 

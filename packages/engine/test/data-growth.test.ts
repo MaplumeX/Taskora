@@ -44,11 +44,11 @@ async function device(hub: InMemorySyncHub, name: string, options: DeviceOptions
 }
 
 function task(engine: Engine, title: string, extra: WireRow = {}): Promise<string> {
-  return engine.create('task', { title, bucket: 'INBOX', status: 'ACTIVE', ...extra });
+  return engine.create('task', { title, start: 'INBOX', status: 'ACTIVE', ...extra });
 }
 
 function settled(extra: WireRow = {}): WireRow {
-  return { status: 'COMPLETED', settledAt: OLD, bucket: 'LOGBOOK', ...extra };
+  return { status: 'COMPLETED', settledAt: OLD, ...extra };
 }
 
 async function taskTitles(engine: Engine): Promise<string[]> {
@@ -325,7 +325,7 @@ describe('Logbook 归档', () => {
     expect(await b.list('task')).toHaveLength(0);
 
     // A 重开旧任务；另一个旧任务只改了子任务
-    await a.update('task', archived, { status: 'ACTIVE', settledAt: null, bucket: 'INBOX' });
+    await a.update('task', archived, { status: 'ACTIVE', settledAt: null, start: 'INBOX' });
     await a.update('subtask', otherSubtask, { title: '另一个的步骤（改）' });
     await a.sync();
     await b.sync();

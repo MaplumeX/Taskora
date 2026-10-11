@@ -30,7 +30,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 
-import { addCalendarDays, ScheduledType, type FeedItem, type TaskFeedItem } from '@taskora/shared';
+import { addCalendarDays, type FeedItem, Start, type TaskFeedItem } from '@taskora/shared';
 import type { RepeatPreview } from '@taskora/api';
 
 import { FeedItemRow } from '@/components/feed/FeedItemRow';
@@ -250,9 +250,7 @@ export default function Upcoming() {
         const rowRects = (group?.items ?? []).flatMap((item) => {
           const id = feedKey(item);
           const rect = visibleRects.get(id);
-          return item.type === 'task' && id !== activeKey && rect
-            ? [{ id, rect }]
-            : [];
+          return item.type === 'task' && id !== activeKey && rect ? [{ id, rect }] : [];
         });
         const nextRow = rowRects.find(({ rect }) => placementY < rect.top + rect.height / 2);
         const anchor = nextRow ?? rowRects[rowRects.length - 1];
@@ -447,7 +445,7 @@ export default function Upcoming() {
     let pending = dated.length;
     for (const { id, scheduledDate } of dated) {
       updateTask.mutate(
-        { id, data: { scheduledType: ScheduledType.DATE, scheduledDate } },
+        { id, data: { start: Start.ANYTIME, scheduledDate } },
         {
           onError,
           onSuccess: () => {
@@ -478,7 +476,7 @@ export default function Upcoming() {
     if (!draft?.scheduledDate) return;
     holdItems(droppedItems);
     void magicPlus
-      .create({ scheduledType: ScheduledType.DATE, scheduledDate: toDateKey(draft.scheduledDate) })
+      .create({ start: Start.ANYTIME, scheduledDate: toDateKey(draft.scheduledDate) })
       .then((created) => {
         if (!created) {
           holdItems(filteredItems);
@@ -534,9 +532,12 @@ export default function Upcoming() {
     () => ({
       reorder: (ids: string[]) => {
         const kindById = new Map(rowsRef.current.map((row) => [row.id, row.kind]));
-        reorderFeedMutate(ids.map((id) => ({ type: kindById.get(id) ?? 'task', id })), {
-          onError: () => toast.error(t('common:operationFailed')),
-        });
+        reorderFeedMutate(
+          ids.map((id) => ({ type: kindById.get(id) ?? 'task', id })),
+          {
+            onError: () => toast.error(t('common:operationFailed')),
+          },
+        );
       },
     }),
     [reorderFeedMutate, t],
@@ -693,18 +694,18 @@ export default function Upcoming() {
             })}
           </div>
           {surface.overlayActive && (
-          <DragOverlay className={dragOverlayWrapperClass} dropAnimation={surface.dropAnimation}>
-            {activeTask && (
-              <div
-                className={`${dragOverlayClass} relative bg-card`}
-                aria-hidden="true"
-                {...{ inert: '' }}
-              >
-                {renderItem(activeTask, overlayShowsDate, true)}
-                <DragCountBadge count={drag?.group?.length ?? 0} />
-              </div>
-            )}
-          </DragOverlay>
+            <DragOverlay className={dragOverlayWrapperClass} dropAnimation={surface.dropAnimation}>
+              {activeTask && (
+                <div
+                  className={`${dragOverlayClass} relative bg-card`}
+                  aria-hidden="true"
+                  {...{ inert: '' }}
+                >
+                  {renderItem(activeTask, overlayShowsDate, true)}
+                  <DragCountBadge count={drag?.group?.length ?? 0} />
+                </div>
+              )}
+            </DragOverlay>
           )}
         </>
       )}
@@ -729,7 +730,7 @@ function withScheduleDragGroup(
   const placed = group.map(({ item, groupId }): FeedItem => {
     if (item.id === moved.id) return moved;
     if (groupId === finalGroupId || item.scheduledDate === moved.scheduledDate) return item;
-    return { ...item, scheduledType: ScheduledType.DATE, scheduledDate: moved.scheduledDate };
+    return { ...item, start: Start.ANYTIME, scheduledDate: moved.scheduledDate };
   });
   return expandDragGroup(items, feedKey(moved), placed, feedKey);
 }

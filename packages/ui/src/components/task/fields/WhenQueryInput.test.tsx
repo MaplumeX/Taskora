@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ScheduledType } from '@taskora/shared';
+import { Start } from '@taskora/shared';
 import { usePreferencesStore, useReminderPermissionStore } from '@taskora/api';
 
 import { DueDateField } from './DueDateField';
@@ -24,14 +24,14 @@ afterEach(() => {
 });
 
 function renderScheduled(
-  options: { showReminder?: boolean; scheduledType?: ScheduledType; reminderTime?: string } = {},
+  options: { showReminder?: boolean; start?: Start; reminderTime?: string } = {},
 ) {
   const onPatch = vi.fn();
   const onClose = vi.fn();
   render(
     <ScheduledDateField
       current={{
-        scheduledType: options.scheduledType ?? ScheduledType.NONE,
+        start: options.start ?? Start.INBOX,
         reminderTime: options.reminderTime ?? null,
       }}
       onPatch={onPatch}
@@ -61,7 +61,7 @@ describe('ScheduledDateField — 自然语言输入', () => {
     const { input, onPatch, onClose } = renderScheduled({ showReminder: true });
     await user.type(input, '下周五{Enter}');
     expect(onPatch).toHaveBeenCalledWith({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-10-16',
     });
     expect(onClose).toHaveBeenCalled();
@@ -75,7 +75,7 @@ describe('ScheduledDateField — 自然语言输入', () => {
     expect(options[0]).toHaveAttribute('aria-selected', 'true');
     await user.keyboard('{ArrowDown}{Enter}');
     expect(onPatch).toHaveBeenCalledWith({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2027-01-01',
     });
   });
@@ -86,7 +86,7 @@ describe('ScheduledDateField — 自然语言输入', () => {
     await user.type(input, '12');
     await user.click(screen.getAllByRole('option')[0]);
     expect(onPatch).toHaveBeenCalledWith({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-10-12',
     });
   });
@@ -100,7 +100,7 @@ describe('ScheduledDateField — 自然语言输入', () => {
     expect(screen.getByRole('option')).toHaveTextContent('15:00');
     await user.keyboard('{Enter}');
     expect(onPatch).toHaveBeenCalledWith({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-10-06',
       reminderTime: '15:00',
     });
@@ -114,7 +114,7 @@ describe('ScheduledDateField — 自然语言输入', () => {
     expect(screen.getByRole('option')).not.toHaveTextContent('15:00');
     await user.keyboard('{Enter}');
     expect(onPatch).toHaveBeenCalledWith({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-10-06',
     });
   });
@@ -123,12 +123,12 @@ describe('ScheduledDateField — 自然语言输入', () => {
     const user = userEvent.setup();
     const { input, onPatch } = renderScheduled({
       showReminder: true,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       reminderTime: '08:00',
     });
     await user.type(input, 'fri{Enter}');
     expect(onPatch).toHaveBeenCalledWith({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-10-09',
     });
   });
@@ -137,17 +137,17 @@ describe('ScheduledDateField — 自然语言输入', () => {
     const user = userEvent.setup();
     const { input, onPatch } = renderScheduled({
       showReminder: true,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
     });
     await user.type(input, 'someday{Enter}');
     expect(onPatch).toHaveBeenLastCalledWith({
-      scheduledType: ScheduledType.SOMEDAY,
+      start: Start.SOMEDAY,
       reminderTime: null,
     });
     await user.clear(input);
     await user.type(input, '清除{Enter}');
     expect(onPatch).toHaveBeenLastCalledWith({
-      scheduledType: ScheduledType.NONE,
+      start: Start.ANYTIME,
       scheduledDate: null,
       reminderTime: null,
     });

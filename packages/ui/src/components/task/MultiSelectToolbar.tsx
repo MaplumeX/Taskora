@@ -21,7 +21,7 @@ import {
 } from 'lucide-react';
 
 import type { UpdateTaskDto } from '@taskora/shared';
-import { ScheduledType } from '@taskora/shared';
+
 import {
   flattenSelectionRows,
   getClientKind,
@@ -195,7 +195,7 @@ export function MultiSelectToolbar() {
     tags: t('task:tags'),
     repeat: t('task:repeat'),
   };
-  const canRepeat = !!single && (single.scheduledType ?? ScheduledType.NONE) === ScheduledType.DATE;
+  const canRepeat = !!single && single.scheduledDate != null;
 
   return (
     <div

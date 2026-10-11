@@ -4,12 +4,11 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 
 import {
-  ProjectStatus,
-  TaskStatus,
-  type ProjectBucket,
   type ProjectResponseDto,
+  ProjectStatus,
   type TaskResponseDto,
   type TaskSearchHit,
+  TaskStatus,
 } from '@taskora/shared';
 import {
   useAreasQuery,
@@ -62,7 +61,6 @@ export default function Search() {
               {
                 ...item,
                 status: item.status as ProjectStatus,
-                bucket: item.bucket as ProjectBucket,
               },
             ]
           : [],

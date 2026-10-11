@@ -15,7 +15,7 @@ import {
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import type { TaskResponseDto } from '@taskora/shared';
-import { TaskStatus, TaskBucket, ScheduledType } from '@taskora/shared';
+import { Start, TaskStatus } from '@taskora/shared';
 
 import { useUiInteractionStore } from '@taskora/api';
 import { TaskItem } from './TaskItem';
@@ -55,12 +55,11 @@ const baseTask = vi.hoisted(() => ({
   title: 'My task',
   notes: null,
   scheduledDate: null,
-  scheduledType: 'NONE' as const,
   reminderTime: null,
   repeatRule: null,
   repeatSourceId: null,
   dueDate: null,
-  bucket: 'INBOX' as const,
+  start: 'INBOX' as const,
   status: 'ACTIVE' as const,
   completedAt: null,
   trashedAt: null,
@@ -85,8 +84,7 @@ const mutationMocks = vi.hoisted(() => ({
 
 const renderTask: TaskResponseDto = {
   ...baseTask,
-  scheduledType: ScheduledType.NONE,
-  bucket: TaskBucket.INBOX,
+  start: Start.INBOX,
   status: TaskStatus.ACTIVE,
 };
 
@@ -212,7 +210,11 @@ describe('TaskRowExpanded — icon button hints', () => {
     // 三个字段图标按钮（日期/到期/标签）hover 后应浮出 hint 文案。
     // Hint 为真实 400ms 延迟（非 fake timers），逐个 hover/unhover
     // 在 CI 慢环境下可能超过默认 5s，这里放宽单测超时。
-    const labelPatterns: RegExp[] = [/^(Scheduled date|计划日期)$/, /^(Deadline|截止日期)$/, /^(Tags|标签)$/];
+    const labelPatterns: RegExp[] = [
+      /^(Scheduled date|计划日期)$/,
+      /^(Deadline|截止日期)$/,
+      /^(Tags|标签)$/,
+    ];
     for (const pattern of labelPatterns) {
       const btn = screen.getByRole('button', { name: pattern });
       await user.hover(btn);
@@ -232,7 +234,7 @@ describe('TaskRowExpanded — 今天 chip 图标色', () => {
     const user = userEvent.setup();
     const task: TaskResponseDto = {
       ...renderTask,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2020-01-01',
     };
     withQueryClient(<DndList task={task} />);

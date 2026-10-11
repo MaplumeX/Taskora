@@ -8,8 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   loggedThroughAfterModeChange,
   ProjectStatus,
-  ScheduledType,
-  TaskBucket,
+  Start,
   TaskStatus,
   type LoggingPreferences,
 } from '@taskora/shared';
@@ -102,11 +101,10 @@ describe('视图里的 Unlogged Item', () => {
   const task = {
     status: TaskStatus.COMPLETED,
     settledAt: settledToday,
-    scheduledType: ScheduledType.DATE,
+    start: Start.ANYTIME,
     scheduledDate: '2026-10-09',
     dueDate: '2026-10-10',
     trashedAt: null,
-    bucket: TaskBucket.SCHEDULED,
   };
 
   it('立即模式：已了结的只在 Logbook', () => {
@@ -137,16 +135,14 @@ describe('视图里的 Unlogged Item', () => {
 
   it('收纳视图（Inbox / Anytime / Someday）同样留下', () => {
     const context = manual();
-    const unscheduled = { ...task, scheduledType: ScheduledType.NONE, scheduledDate: null };
-    expect(taskMatchesView({ ...unscheduled, bucket: TaskBucket.INBOX }, 'inbox', context)).toBe(
+    const unscheduled = { ...task, scheduledDate: null };
+    expect(taskMatchesView({ ...unscheduled, start: Start.INBOX }, 'inbox', context)).toBe(true);
+    expect(taskMatchesView({ ...unscheduled, start: Start.ANYTIME }, 'anytime', context)).toBe(
       true,
     );
-    expect(
-      taskMatchesView({ ...unscheduled, bucket: TaskBucket.ANYTIME }, 'anytime', context),
-    ).toBe(true);
-    expect(
-      taskMatchesView({ ...task, scheduledType: ScheduledType.SOMEDAY }, 'someday', context),
-    ).toBe(true);
+    expect(taskMatchesView({ ...unscheduled, start: Start.SOMEDAY }, 'someday', context)).toBe(
+      true,
+    );
   });
 
   it('Trash 里的已了结任务不留在原视图', () => {
@@ -163,7 +159,7 @@ describe('视图里的 Unlogged Item', () => {
     const project = {
       status: ProjectStatus.COMPLETED,
       completedAt: settledToday,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-10-10',
       dueDate: null,
       trashedAt: null,

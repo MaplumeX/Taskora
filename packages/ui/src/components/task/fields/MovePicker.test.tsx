@@ -3,13 +3,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { i18n, useAreasQuery, useLaterProjectKind, useProjectsQuery } from '@taskora/api';
-import {
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
-  TaskBucket,
-  type ProjectResponseDto,
-} from '@taskora/shared';
+import { type ProjectResponseDto, ProjectStatus, Start } from '@taskora/shared';
 
 import { MovePicker } from './MovePicker';
 import type { MoveCurrent } from './moveTargets';
@@ -30,8 +24,7 @@ function project(id: string, title: string, areaId: string | null = null): Proje
     notes: null,
     areaId,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     dueDate: null,
     completedAt: null,
@@ -95,15 +88,13 @@ describe('MovePicker', () => {
     expect(onSelect).toHaveBeenCalledWith({
       projectId: null,
       areaId: null,
-      bucket: TaskBucket.INBOX,
-      scheduledType: ScheduledType.NONE,
+      start: Start.INBOX,
     });
   });
 
   it('选中当前位置不写入', async () => {
     const { onSelect, input } = renderPicker({
-      bucket: TaskBucket.INBOX,
-      scheduledType: ScheduledType.NONE,
+      start: Start.INBOX,
     });
     await user.click(input);
     await user.keyboard('{Enter}');

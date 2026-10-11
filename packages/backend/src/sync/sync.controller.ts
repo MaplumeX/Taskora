@@ -27,8 +27,12 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
  * 5（嵌套 Tag，ADR-0016）：协议 4 的客户端还会写 tag-group 实体与 Tag 的
  * tagGroupId 字段，hub 已不认识它们；这些写会被永久拒在 Outbox 里，Tag
  * 层级在其他设备上静默丢失。
+ *
+ * 7（Start，ADR 0024）：协议 6 的客户端还会写 Task / Project 的 bucket 与
+ * scheduledType，hub 已不认识它们；这些写会被永久拒在 Outbox 里，计划与
+ * Inbox / Someday 归属在其他设备上静默丢失。
  */
-export const MIN_SYNC_PROTOCOL_VERSION = 5;
+export const MIN_SYNC_PROTOCOL_VERSION = 7;
 
 /** HTTP 426 Upgrade Required（Nest 的 HttpStatus 未收录）。 */
 const UPGRADE_REQUIRED = 426;

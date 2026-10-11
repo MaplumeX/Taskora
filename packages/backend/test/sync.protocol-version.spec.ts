@@ -7,8 +7,10 @@ import { MIN_SYNC_PROTOCOL_VERSION, assertSyncProtocol } from '../src/sync/sync.
 
 /** 同步协议版本（local-first-v3 issue 03，ADR-0007「协议版本」）。 */
 describe('assertSyncProtocol', () => {
-  it('最低版本 5（嵌套 Tag）：协议 4 及更早与不带版本头的旧客户端得到 426', () => {
-    expect(MIN_SYNC_PROTOCOL_VERSION).toBe(5);
+  it('最低版本 7（Start，ADR 0024）：协议 6 及更早与不带版本头的旧客户端得到 426', () => {
+    expect(MIN_SYNC_PROTOCOL_VERSION).toBe(7);
+    expect(() => assertSyncProtocol('6')).toThrow(HttpException);
+    expect(() => assertSyncProtocol('5')).toThrow(HttpException);
     expect(() => assertSyncProtocol(undefined)).toThrow(HttpException);
     expect(() => assertSyncProtocol('3')).toThrow(HttpException);
     expect(() => assertSyncProtocol('4')).toThrow(HttpException);

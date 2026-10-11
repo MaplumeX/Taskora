@@ -7,14 +7,12 @@ import { toast } from 'sonner';
 
 import { i18n } from '@taskora/api';
 import {
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
-  TaskBucket,
-  TaskStatus,
   type AreaResponseDto,
   type ProjectResponseDto,
+  ProjectStatus,
+  Start,
   type TaskResponseDto,
+  TaskStatus,
 } from '@taskora/shared';
 import { mockDesktop } from '@/test/media';
 import { TaskItem } from './TaskItem';
@@ -43,12 +41,11 @@ const task: TaskResponseDto = {
   title: 'Write report',
   notes: null,
   scheduledDate: null,
-  scheduledType: ScheduledType.NONE,
+  start: Start.ANYTIME,
   reminderTime: null,
   repeatRule: null,
   repeatSourceId: null,
   dueDate: null,
-  bucket: TaskBucket.ANYTIME,
   status: TaskStatus.ACTIVE,
   completedAt: null,
   trashedAt: null,
@@ -117,8 +114,7 @@ beforeEach(async () => {
       notes: null,
       areaId: 'area-1',
       status: ProjectStatus.ACTIVE,
-      bucket: ProjectBucket.ANYTIME,
-      scheduledType: ScheduledType.NONE,
+      start: Start.ANYTIME,
       scheduledDate: null,
       dueDate: null,
       completedAt: null,
@@ -149,7 +145,9 @@ describe('展开任务的归属入口', () => {
     expect(trigger.closest('.bg-card')).toBeNull();
     expect(trigger.closest('.shadow-row-lift')).toBeNull();
     expect(card).not.toHaveTextContent('Report');
-    expect(screen.getByRole('button', { name: 'Scheduled date' }).parentElement).toHaveClass('ml-auto');
+    expect(screen.getByRole('button', { name: 'Scheduled date' }).parentElement).toHaveClass(
+      'ml-auto',
+    );
   });
 
   it.each([
@@ -243,10 +241,10 @@ describe('展开任务的归属入口', () => {
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
-  it.each([TaskBucket.INBOX, TaskBucket.ANYTIME, TaskBucket.SCHEDULED])(
-    '无归属时不把 %s Bucket 当作归属',
-    async (bucket) => {
-      await setup({ ...task, projectId: null, bucket });
+  it.each([Start.INBOX, Start.ANYTIME, Start.SOMEDAY])(
+    '无归属时不把 %s 当作归属',
+    async (start) => {
+      await setup({ ...task, projectId: null, start });
       expect(screen.queryByRole('button', { name: /Located in/ })).not.toBeInTheDocument();
     },
   );
@@ -265,7 +263,7 @@ describe('展开任务的归属入口', () => {
     refresh();
     expect(placement('Work')).toBeInTheDocument();
     expect(screen.queryByText('Report')).not.toBeInTheDocument();
-    state.current = { ...task, projectId: null, areaId: null, bucket: TaskBucket.INBOX };
+    state.current = { ...task, projectId: null, areaId: null, start: Start.INBOX };
     refresh();
     expect(screen.queryByRole('button', { name: /Located in/ })).not.toBeInTheDocument();
   });
@@ -314,7 +312,7 @@ describe('展开任务的归属入口', () => {
     state.update.mockImplementationOnce((_data, options) => options.onError());
     const { user } = await setup({
       ...task,
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
       scheduledDate: '2026-10-08',
     });
     await user.click(placement());
@@ -326,8 +324,7 @@ describe('展开任务的归属入口', () => {
         data: {
           projectId: null,
           areaId: null,
-          bucket: TaskBucket.INBOX,
-          scheduledType: ScheduledType.NONE,
+          start: Start.INBOX,
         },
       },
       expect.anything(),

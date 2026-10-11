@@ -2,13 +2,7 @@ import * as React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 import type { ProjectResponseDto } from '@taskora/shared';
-import {
-  ProjectBucket,
-  ProjectStatus,
-  ScheduledType,
-  TaskBucket,
-  TaskStatus,
-} from '@taskora/shared';
+import { ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 interface DndHandlers {
@@ -73,8 +67,7 @@ function task(id: string, fields: Partial<DropTask> = {}): DropTask {
     id,
     projectId: null,
     areaId: null,
-    bucket: TaskBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     status: TaskStatus.ACTIVE,
     ...fields,
@@ -88,8 +81,7 @@ function project(id: string, fields: Partial<ProjectResponseDto> = {}): ProjectR
     notes: null,
     areaId: null,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     dueDate: null,
     completedAt: null,
@@ -205,14 +197,14 @@ describe('SidebarDropProvider — tasks', () => {
 
     expect(harness.updateTask.mock.calls.map(([args]) => args.id)).toEqual(['t1', 't2']);
     expect(harness.updateTask.mock.calls[0][0].data).toMatchObject({
-      scheduledType: ScheduledType.DATE,
+      start: Start.ANYTIME,
     });
     expect(screen.queryByText('common:tomorrow')).not.toBeInTheDocument();
   });
 
   it('clears the schedule on Anytime', () => {
     dropOn(
-      { kind: 'tasks', tasks: [task('t1', { scheduledType: ScheduledType.SOMEDAY })] },
+      { kind: 'tasks', tasks: [task('t1', { start: Start.SOMEDAY })] },
       'sidebar-drop:anytime',
     );
 
@@ -220,9 +212,8 @@ describe('SidebarDropProvider — tasks', () => {
       {
         id: 't1',
         data: {
-          scheduledType: ScheduledType.NONE,
+          start: Start.ANYTIME,
           scheduledDate: null,
-          bucket: TaskBucket.ANYTIME,
         },
       },
       expect.anything(),
@@ -233,17 +224,14 @@ describe('SidebarDropProvider — tasks', () => {
     dropOn(
       {
         kind: 'tasks',
-        tasks: [
-          task('t1'),
-          task('t2', { scheduledType: ScheduledType.DATE, scheduledDate: '2026-10-07' }),
-        ],
+        tasks: [task('t1'), task('t2', { start: Start.ANYTIME, scheduledDate: '2026-10-07' })],
       },
       'sidebar-drop:today',
     );
 
     expect(harness.updateTask).toHaveBeenCalledTimes(1);
     expect(harness.updateTask).toHaveBeenCalledWith(
-      { id: 't1', data: { scheduledType: ScheduledType.DATE, scheduledDate: '2026-10-07' } },
+      { id: 't1', data: { start: Start.ANYTIME, scheduledDate: '2026-10-07' } },
       expect.anything(),
     );
   });
@@ -277,9 +265,9 @@ describe('SidebarDropProvider — project', () => {
   it('asks what to do with the remaining tasks before completing', () => {
     harness.projects = [project('p1', { taskTotalCount: 3, taskCompletedCount: 1 })];
     // 载荷只带列表行的字段；进度计数取自最新的项目数据。
-    const { id, areaId, status, scheduledType, scheduledDate } = harness.projects[0];
+    const { id, areaId, status, start, scheduledDate } = harness.projects[0];
     dropOn(
-      { kind: 'project', project: { id, areaId, status, scheduledType, scheduledDate } },
+      { kind: 'project', project: { id, areaId, status, start, scheduledDate } },
       'sidebar-drop:logbook',
     );
 
@@ -295,7 +283,7 @@ describe('SidebarDropProvider — project', () => {
     expect(harness.updateProject).not.toHaveBeenCalled();
     act(() => screen.getByText('task:somedayLabel').click());
     expect(harness.updateProject).toHaveBeenCalledWith(
-      { id: 'p1', data: { scheduledType: ScheduledType.SOMEDAY } },
+      { id: 'p1', data: { start: Start.SOMEDAY } },
       expect.anything(),
     );
   });

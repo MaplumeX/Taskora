@@ -8,7 +8,7 @@ import type {
   TaskResponseDto,
   TaskSearchHit,
 } from '@taskora/shared';
-import { HeadingStatus, ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
+import { HeadingStatus, ProjectStatus, Start } from '@taskora/shared';
 
 import {
   buildQuickFindGroups,
@@ -32,8 +32,7 @@ function project(
     notes: null,
     areaId: null,
     status: ProjectStatus.ACTIVE,
-    bucket: ProjectBucket.ANYTIME,
-    scheduledType: ScheduledType.NONE,
+    start: Start.ANYTIME,
     scheduledDate: null,
     dueDate: null,
     completedAt: null,
@@ -162,7 +161,7 @@ describe('buildQuickFindGroups', () => {
           project('p-done', 'Plan A', { status: ProjectStatus.COMPLETED }),
           project('p-trash', 'Plan B', { trashedAt: NOW }),
           project('p-later', 'Plan C', {
-            scheduledType: ScheduledType.SOMEDAY,
+            start: Start.SOMEDAY,
           }),
         ],
       }),

@@ -102,7 +102,7 @@ async function taskByTitle(
 }
 
 async function createTask(engine: Engine, title: string, extra: WireRow = {}): Promise<string> {
-  return engine.create('task', { title, bucket: 'INBOX', status: 'ACTIVE', ...extra });
+  return engine.create('task', { title, start: 'INBOX', status: 'ACTIVE', ...extra });
 }
 
 describe('Engine 端到端收敛（主接缝）', () => {
@@ -182,8 +182,7 @@ describe('Engine 端到端收敛（主接缝）', () => {
     const b = await h.device('dev-b');
 
     const id = await createTask(a, '写周报', {
-      bucket: 'ANYTIME',
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-01-02',
     });
     await a.sync();
@@ -647,8 +646,7 @@ describe('Delete Request（ADR-0008：设备发起删除）', () => {
       title: '装修',
       notes: '新房',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
-      scheduledType: 'NONE',
+      start: 'ANYTIME',
       areaId,
       tagIds: [tagId],
       trashedAt: null,
@@ -740,8 +738,7 @@ describe('Delete Request（ADR-0008：设备发起删除）', () => {
     const projectId = await a.create('project', {
       title: '领域内项目',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
-      scheduledType: 'NONE',
+      start: 'ANYTIME',
       areaId,
     });
     await a.sync();
@@ -770,8 +767,7 @@ describe('Delete Request（ADR-0008：设备发起删除）', () => {
     const projectId = await a.create('project', {
       title: '废弃项目',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
-      scheduledType: 'NONE',
+      start: 'ANYTIME',
     });
     const orphanTaskId = await createTask(a, '项目内任务', { projectId });
     await a.create('subtask', { title: '级联子步骤', taskId: orphanTaskId, status: 'ACTIVE' });
@@ -803,7 +799,7 @@ describe('Delete Request（ADR-0008：设备发起删除）', () => {
     const b = await h.device('dev-b');
 
     // 模拟 convert 分解：先对原 Task 字段写，再建新 Project + Task，最后删除原 Task
-    const taskId = await createTask(a, '原任务', { bucket: 'ANYTIME' });
+    const taskId = await createTask(a, '原任务', { start: 'ANYTIME' });
     const subId = await a.create('subtask', {
       title: '子步骤',
       taskId,
@@ -815,10 +811,9 @@ describe('Delete Request（ADR-0008：设备发起删除）', () => {
       title: '新项目',
       notes: '转换前的最后编辑',
       status: 'ACTIVE',
-      bucket: 'ANYTIME',
-      scheduledType: 'NONE',
+      start: 'ANYTIME',
     });
-    const promotedId = await createTask(a, '子步骤', { bucket: 'INBOX', projectId });
+    const promotedId = await createTask(a, '子步骤', { start: 'ANYTIME', projectId });
     await a.delete('task', [taskId]);
     await a.sync();
     await b.sync();
@@ -1437,10 +1432,10 @@ describe('跨字段不变量：并发编辑合并后确定性修复（local-firs
     let h1 = '';
     const { fieldsA, fieldsB, hub } = await concurrently(
       async (a) => {
-        const p1 = await a.create('project', { title: 'P1', status: 'ACTIVE', bucket: 'ANYTIME' });
-        p2 = await a.create('project', { title: 'P2', status: 'ACTIVE', bucket: 'ANYTIME' });
+        const p1 = await a.create('project', { title: 'P1', status: 'ACTIVE', start: 'ANYTIME' });
+        p2 = await a.create('project', { title: 'P2', status: 'ACTIVE', start: 'ANYTIME' });
         h1 = await a.create('project-heading', { title: 'H1', projectId: p1, status: 'ACTIVE' });
-        return createTask(a, 't', { projectId: p1, bucket: 'ANYTIME', scheduledType: 'NONE' });
+        return createTask(a, 't', { projectId: p1, start: 'ANYTIME' });
       },
       (a, id) => a.update('task', id, { projectId: p2, headingId: null }),
       (b, id) => b.update('task', id, { headingId: h1 }),
@@ -1455,40 +1450,37 @@ describe('跨字段不变量：并发编辑合并后确定性修复（local-firs
     const { fieldsA, fieldsB, hub } = await concurrently(
       (a) =>
         createTask(a, 't', {
-          scheduledType: 'DATE',
+          start: 'ANYTIME',
           scheduledDate: '2026-10-01',
-          bucket: 'SCHEDULED',
         }),
       (a, id) =>
         a.update('task', id, {
-          scheduledType: 'SOMEDAY',
+          start: 'SOMEDAY',
           scheduledDate: null,
           reminderTime: null,
           repeatRule: null,
-          bucket: 'SCHEDULED',
         }),
       (b, id) => b.update('task', id, { reminderTime: '09:00' }),
     );
     for (const fields of [fieldsA, fieldsB, hub]) {
-      expect(fields.scheduledType).toBe('SOMEDAY');
+      expect(fields.start).toBe('SOMEDAY');
       expect(fields.reminderTime).toBeNull();
     }
   });
 
-  it('A 设日期、B 把任务移到 Anytime → 落在 Scheduled', async () => {
+  it('A 设日期、B 只写了 start = INBOX → 有日期的任务离开 Inbox', async () => {
     const { fieldsA, fieldsB, hub } = await concurrently(
-      (a) => createTask(a, 't', { scheduledType: 'NONE', bucket: 'INBOX' }),
+      (a) => createTask(a, 't', { start: 'ANYTIME' }),
       (a, id) =>
         a.update('task', id, {
-          scheduledType: 'DATE',
+          start: 'ANYTIME',
           scheduledDate: '2026-10-01',
-          bucket: 'SCHEDULED',
         }),
-      (b, id) => b.update('task', id, { bucket: 'ANYTIME' }),
+      (b, id) => b.update('task', id, { start: 'INBOX' }),
     );
     for (const fields of [fieldsA, fieldsB, hub]) {
-      expect(fields.scheduledType).toBe('DATE');
-      expect(fields.bucket).toBe('SCHEDULED');
+      expect(fields.scheduledDate).toBe('2026-10-01');
+      expect(fields.start).toBe('ANYTIME');
     }
   });
 
@@ -1496,7 +1488,6 @@ describe('跨字段不变量：并发编辑合并后确定性修复（local-firs
     const { fieldsA, fieldsB, hub } = await concurrently(
       (a) =>
         createTask(a, 't', {
-          scheduledType: 'NONE',
           status: 'COMPLETED',
           settledAt: '2026-09-01T00:00:00.000Z',
         }),
@@ -1513,16 +1504,15 @@ describe('跨字段不变量：并发编辑合并后确定性修复（local-firs
     const h = await makeHarness();
     const a = await h.device('A');
     await a.sync();
-    const id = await createTask(a, 't', { scheduledType: 'NONE', bucket: 'INBOX' });
+    const id = await createTask(a, 't', { start: 'INBOX' });
     await a.sync();
     const remote: string[] = [];
     a.onChange((change) => {
       if (change.origin === 'remote') remote.push('remote');
     });
     await a.update('task', id, {
-      scheduledType: 'DATE',
+      start: 'ANYTIME',
       scheduledDate: '2026-10-01',
-      bucket: 'SCHEDULED',
       reminderTime: '09:00',
     });
     await a.sync();

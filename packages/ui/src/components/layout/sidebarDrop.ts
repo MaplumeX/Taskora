@@ -1,5 +1,5 @@
 import type { ProjectResponseDto, UpdateProjectDto, UpdateTaskDto } from '@taskora/shared';
-import { ProjectStatus, ScheduledType, TaskBucket, TaskStatus } from '@taskora/shared';
+import { ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 import { sortByEffectivePosition, toDateKey } from '@taskora/api';
 
 import { currentMoveTargetId, moveTargetDto } from '@/components/task/fields/moveTargets';
@@ -28,8 +28,7 @@ export interface DropTask {
   id: string;
   projectId: string | null;
   areaId: string | null;
-  bucket: string;
-  scheduledType: ScheduledType;
+  start: Start;
   scheduledDate: string | null;
   status: string;
 }
@@ -39,14 +38,13 @@ export interface DropProject {
   id: string;
   areaId: string | null;
   status: string;
-  scheduledType: ScheduledType;
+  start: Start;
   scheduledDate: string | null;
 }
 
 /** 被拖的条目：一个任务或多选整组（按显示顺序），或一个项目。 */
 export type SidebarDropPayload =
-  | { kind: 'tasks'; tasks: DropTask[] }
-  | { kind: 'project'; project: DropProject };
+  { kind: 'tasks'; tasks: DropTask[] } | { kind: 'project'; project: DropProject };
 
 export type SidebarDropAction =
   | { type: 'updateTask'; id: string; data: UpdateTaskDto }
@@ -109,29 +107,30 @@ export function sidebarDropAccepts(
   return targetKind !== 'inbox' && targetKind !== 'project';
 }
 
-function scheduledOn(item: Pick<DropTask, 'scheduledType' | 'scheduledDate'>, dateKey: string) {
-  return (
-    item.scheduledType === ScheduledType.DATE &&
-    !!item.scheduledDate &&
-    toDateKey(item.scheduledDate) === dateKey
-  );
+function scheduledOn(item: Pick<DropTask, 'scheduledDate'>, dateKey: string) {
+  return !!item.scheduledDate && toDateKey(item.scheduledDate) === dateKey;
+}
+
+/** 已在 Anytime 且没有计划日期（拖到 Anytime 即「清除」，对齐 Things 3 的 When: Anytime）。 */
+function undatedAnytime(item: Pick<DropTask, 'start' | 'scheduledDate'>) {
+  return item.start === Start.ANYTIME && !item.scheduledDate;
 }
 
 /** 计划为今天：同 When 卡片选「今天」（提醒 HH:mm 由数据层保留）。 */
 function todayDto(today: string) {
-  return { scheduledType: ScheduledType.DATE, scheduledDate: today };
+  return { start: Start.ANYTIME, scheduledDate: today };
 }
 
-const SOMEDAY_DTO = { scheduledType: ScheduledType.SOMEDAY };
+const SOMEDAY_DTO = { start: Start.SOMEDAY };
 
-/** 无计划（同计划卡片「清除」）；提醒与重复规则由数据层随之清除。 */
-const NO_SCHEDULE_DTO = { scheduledType: ScheduledType.NONE, scheduledDate: null };
+/** 无计划（同计划卡片「清除」，落 Anytime）；提醒与重复规则由数据层随之清除。 */
+const NO_SCHEDULE_DTO = { start: Start.ANYTIME, scheduledDate: null };
 
 function planTask(task: DropTask, target: SidebarDropTarget, today: string): SidebarDropAction[] {
   const update = (data: UpdateTaskDto): SidebarDropAction[] => [
     { type: 'updateTask', id: task.id, data },
   ];
-  const current = currentMoveTargetId({ ...task, bucket: task.bucket as TaskBucket });
+  const current = currentMoveTargetId(task);
   switch (target.kind) {
     case 'inbox':
       return current === 'inbox' ? [] : update(moveTargetDto({ kind: 'inbox', id: 'inbox' }));
@@ -146,12 +145,9 @@ function planTask(task: DropTask, target: SidebarDropTarget, today: string): Sid
     case 'today':
       return scheduledOn(task, today) ? [] : update(todayDto(today));
     case 'anytime':
-      // 无计划、且已离开 Inbox（有归属，或无归属时选择了 Anytime）即已在 Anytime。
-      return task.scheduledType === ScheduledType.NONE && task.bucket === TaskBucket.ANYTIME
-        ? []
-        : update({ ...NO_SCHEDULE_DTO, bucket: TaskBucket.ANYTIME });
+      return undatedAnytime(task) ? [] : update(NO_SCHEDULE_DTO);
     case 'someday':
-      return task.scheduledType === ScheduledType.SOMEDAY ? [] : update(SOMEDAY_DTO);
+      return task.start === Start.SOMEDAY ? [] : update(SOMEDAY_DTO);
     case 'upcoming':
       return [];
     case 'logbook':
@@ -179,11 +175,9 @@ function planProject(
     case 'upcoming':
       return [{ type: 'pickProjectSchedule', id }];
     case 'anytime':
-      return project.scheduledType === ScheduledType.NONE
-        ? []
-        : [{ type: 'updateProject', id, data: NO_SCHEDULE_DTO }];
+      return undatedAnytime(project) ? [] : [{ type: 'updateProject', id, data: NO_SCHEDULE_DTO }];
     case 'someday':
-      return project.scheduledType === ScheduledType.SOMEDAY
+      return project.start === Start.SOMEDAY
         ? []
         : [{ type: 'updateProject', id, data: SOMEDAY_DTO }];
     case 'logbook':

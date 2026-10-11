@@ -3,7 +3,7 @@ import { renderHook, waitFor } from '@testing-library/react';
 import { type ReactNode, createElement } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ProjectBucket, ProjectStatus, ScheduledType } from '@taskora/shared';
+import { ProjectStatus, Start } from '@taskora/shared';
 import type { ProjectResponseDto } from '@taskora/shared';
 
 // Mock the projects API module
@@ -41,8 +41,7 @@ const baseProject: ProjectResponseDto = {
   notes: null,
   areaId: null,
   status: ProjectStatus.ACTIVE,
-  bucket: ProjectBucket.ANYTIME,
-  scheduledType: ScheduledType.NONE,
+  start: Start.ANYTIME,
   scheduledDate: null,
   dueDate: null,
   completedAt: null,

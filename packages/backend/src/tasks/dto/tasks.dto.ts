@@ -13,7 +13,7 @@ import {
   ValidateNested,
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { TaskBucket, ScheduledType } from '@taskora/shared';
+import { Start } from '@taskora/shared';
 
 /**
  * Repeat Rule（recurring-tasks spec）：结构化规则对象的入参校验。
@@ -55,16 +55,12 @@ export class CreateTaskDto {
   scheduledDate?: string;
 
   @IsOptional()
-  @IsEnum(ScheduledType)
-  scheduledType?: ScheduledType;
+  @IsEnum(Start)
+  start?: Start;
 
   @IsOptional()
   @IsDateString()
   dueDate?: string; // 截止日期
-
-  @IsOptional()
-  @IsEnum(TaskBucket)
-  bucket?: TaskBucket;
 
   @IsOptional()
   @IsString()
@@ -94,8 +90,8 @@ export class UpdateTaskDto {
   scheduledDate?: string | null;
 
   @IsOptional()
-  @IsEnum(ScheduledType)
-  scheduledType?: ScheduledType;
+  @IsEnum(Start)
+  start?: Start;
 
   @IsOptional()
   @Matches(/^([01]\d|2[0-3]):[0-5]\d$/, {
@@ -112,10 +108,6 @@ export class UpdateTaskDto {
   @IsOptional()
   @IsDateString()
   dueDate?: string | null; // 截止日期
-
-  @IsOptional()
-  @IsEnum(TaskBucket)
-  bucket?: TaskBucket;
 
   @IsOptional()
   @IsString()
