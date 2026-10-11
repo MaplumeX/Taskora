@@ -33,6 +33,18 @@ export function Collapse({ open, className, children }: CollapseProps) {
   const [present, setPresent] = React.useState(open);
   if (open && !present) setPresent(true);
 
+  React.useLayoutEffect(
+    () => () => {
+      const animation = animationRef.current;
+      if (animation) {
+        animation.onfinish = null;
+        animation.cancel();
+        animationRef.current = null;
+      }
+    },
+    [present],
+  );
+
   React.useLayoutEffect(() => {
     if (!mountedRef.current) {
       mountedRef.current = true;
@@ -45,7 +57,10 @@ export function Collapse({ open, className, children }: CollapseProps) {
     }
     const running = animationRef.current;
     const visible = element.getBoundingClientRect().height;
-    running?.cancel();
+    if (running) {
+      running.onfinish = null;
+      running.cancel();
+    }
     const natural = element.getBoundingClientRect().height;
     const from = running ? visible : open ? 0 : natural;
     const to = open ? natural : 0;
@@ -55,13 +70,18 @@ export function Collapse({ open, className, children }: CollapseProps) {
         { height: `${from}px`, opacity: open ? 0 : 1 },
         { height: `${to}px`, opacity: open ? 1 : 0 },
       ],
-      { duration: EXPAND_MS, easing: EXPAND_EASING },
+      { duration: EXPAND_MS, easing: EXPAND_EASING, fill: 'forwards' },
     );
     animationRef.current = animation;
     animation.onfinish = () => {
-      animationRef.current = null;
-      element.style.overflow = '';
-      if (!open) setPresent(false);
+      if (open) {
+        animationRef.current = null;
+        animation.cancel();
+        element.style.overflow = '';
+      } else {
+        // 保持末帧及裁剪直到 React 卸载，避免动画结束后恢复自然高度而闪现。
+        setPresent(false);
+      }
     };
   }, [open]);
 
