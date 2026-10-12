@@ -3,11 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 
 import type { TaskResponseDto } from '@taskora/shared';
 import { Start, TaskStatus } from '@taskora/shared';
 
-import { useSelectionStore } from '@taskora/api';
+import { setWindowOpener, useSelectionStore } from '@taskora/api';
 
 import { TaskItem } from './TaskItem';
 
@@ -63,11 +64,31 @@ const baseTask: TaskResponseDto = {
   updatedAt: '2025-07-31T00:00:00.000Z',
 };
 
-function withQueryClient(ui: React.ReactElement) {
+function withQueryClient(ui: React.ReactElement, route = '/inbox') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[route]}>
+        <Routes>
+          <Route
+            path="*"
+            element={
+              <>
+                {ui}
+                <LocationProbe />
+              </>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  );
+}
+
+function LocationProbe() {
+  return <div data-testid="location">{useLocation().pathname}</div>;
 }
 
 describe('TaskContextMenu — move picker', () => {
@@ -269,5 +290,65 @@ describe('TaskContextMenu — 多选整组', () => {
     await user.click(await screen.findByRole('button', { name: /^(Delete|删除)/ }));
     expect(deleteMock.mock.calls.map(([id]) => id)).toEqual(['task-3']);
     expect(useSelectionStore.getState().selectedIds).toEqual(['task-3']);
+  });
+});
+
+describe('TaskContextMenu — 在项目中显示', () => {
+  const projectTask = { ...baseTask, projectId: 'project-1' };
+  const openWindow = vi.fn();
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useSelectionStore.getState().clearSelection();
+    setWindowOpener(null);
+  });
+
+  const renderRow = (task: TaskResponseDto, route?: string) =>
+    withQueryClient(
+      <TaskItem task={task} onToggleComplete={() => {}} onRowClick={() => {}} />,
+      route,
+    );
+
+  it('有归属的任务：在当前窗口打开所属项目', async () => {
+    const user = userEvent.setup();
+    renderRow(projectTask);
+    fireEvent.contextMenu(screen.getByText('My task'));
+    await user.click(await screen.findByRole('button', { name: /Show in Project|在项目中显示/ }));
+    expect(screen.getByTestId('location')).toHaveTextContent('/projects/project-1');
+  });
+
+  it('区域任务显示「在区域中显示」；已在所属页或无归属时不显示', async () => {
+    renderRow({ ...baseTask, areaId: 'area-1' });
+    fireEvent.contextMenu(screen.getByText('My task'));
+    expect(
+      await screen.findByRole('button', { name: /Show in Area|在区域中显示/ }),
+    ).toBeInTheDocument();
+  });
+
+  it('已在所属项目页时不显示', async () => {
+    renderRow(projectTask, '/projects/project-1');
+    fireEvent.contextMenu(screen.getByText('My task'));
+    await screen.findByRole('button', { name: /^(Delete|删除)/ });
+    expect(screen.queryByRole('button', { name: /Show in Project|在项目中显示/ })).toBeNull();
+  });
+
+  it('按住 ⌥ 点击：宿主能开窗口时在新窗口打开，当前窗口不动', async () => {
+    setWindowOpener(openWindow);
+    renderRow(projectTask);
+    fireEvent.contextMenu(screen.getByText('My task'));
+    fireEvent.click(await screen.findByRole('button', { name: /Show in Project|在项目中显示/ }), {
+      altKey: true,
+    });
+    expect(openWindow).toHaveBeenCalledWith('/projects/project-1');
+    expect(screen.getByTestId('location')).toHaveTextContent('/inbox');
+  });
+
+  it('宿主不能开窗口时 ⌥ 点击退化为当前窗口导航', async () => {
+    renderRow(projectTask);
+    fireEvent.contextMenu(screen.getByText('My task'));
+    fireEvent.click(await screen.findByRole('button', { name: /Show in Project|在项目中显示/ }), {
+      altKey: true,
+    });
+    expect(screen.getByTestId('location')).toHaveTextContent('/projects/project-1');
   });
 });

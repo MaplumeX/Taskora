@@ -8,7 +8,7 @@ import React from 'react';
 import type { ProjectResponseDto } from '@taskora/shared';
 import { ProjectStatus, Start } from '@taskora/shared';
 
-import { i18n } from '@taskora/api';
+import { i18n, setWindowOpener } from '@taskora/api';
 
 import { mockDesktop } from '@/test/media';
 import { ProjectContextMenu, ProjectMoreMenu } from './ProjectContextMenu';
@@ -109,6 +109,31 @@ describe('ProjectContextMenu — 重复项目（recurring-projects）', () => {
       { id: 'project-1', settleRemaining: 'completed' },
       expect.anything(),
     );
+  });
+});
+
+describe('ProjectContextMenu — 在新窗口中打开（multi-window）', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    setWindowOpener(null);
+  });
+
+  it('宿主不能开窗口时不显示', async () => {
+    renderMenu(baseProject);
+    await screen.findByRole('button', { name: /^(Mark Complete|标记完成)/ });
+    expect(screen.queryByRole('button', { name: /Open in New Window|在新窗口中打开/ })).toBeNull();
+  });
+
+  it('桌面壳：在新窗口打开该项目并关闭菜单', async () => {
+    const openWindow = vi.fn();
+    setWindowOpener(openWindow);
+    onTestFinished(() => setWindowOpener(null));
+    renderMenu(baseProject);
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Open in New Window|在新窗口中打开/ }),
+    );
+    expect(openWindow).toHaveBeenCalledWith('/projects/project-1');
+    expect(screen.queryByRole('button', { name: /Open in New Window|在新窗口中打开/ })).toBeNull();
   });
 });
 

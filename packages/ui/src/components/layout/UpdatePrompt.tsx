@@ -7,7 +7,7 @@ import { getUpdateShell, selectPendingUpdate, useUpdateStore } from '@taskora/ap
 import { Button } from '@/components/ui/button';
 
 /**
- * 更新提示（ADR-0025）：平台壳准备好所连服务器的版本后出现在角落，不拦截
+ * 更新提示（ADR-0026）：平台壳准备好所连服务器的版本后出现在角落，不拦截
  * 操作。「稍后」只在本次运行内收起该版本；「跳过此版本」记住，自动检查
  * 不再提示；必须更新（客户端协议过旧、同步已停）没有跳过。
  * 未注册平台壳的 web 端不渲染。

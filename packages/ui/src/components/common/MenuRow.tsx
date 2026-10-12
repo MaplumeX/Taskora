@@ -9,7 +9,7 @@ interface MenuRowProps {
   /** 不可用：保留可聚焦与 title 提示（原生 disabled 按钮不显示 title），点击无效。 */
   disabled?: boolean;
   title?: string;
-  onClick: () => void;
+  onClick: (event: React.MouseEvent<HTMLButtonElement>) => void;
   children: React.ReactNode;
 }
 

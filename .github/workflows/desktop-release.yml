@@ -58,7 +58,7 @@ jobs:
       - name: Test native session storage
         run: 'cargo test --locked --lib --manifest-path packages/desktop/src-tauri/Cargo.toml session::'
 
-      # 自动更新（ADR-0025）：createUpdaterArtifacts 为每个安装包生成 .sig，
+      # 自动更新（ADR-0026）：createUpdaterArtifacts 为每个安装包生成 .sig，
       # tauri-action 把三平台合并进本 tag 的 latest.json。客户端按所连 hub
       # 的版本取 releases/download/v<hub>/latest.json，不追 latest。私钥只在
       # secrets 中（另有离线备份）；丢失后已安装的客户端再也收不到更新。

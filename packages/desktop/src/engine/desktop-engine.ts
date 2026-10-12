@@ -47,6 +47,7 @@ import {
   onReminderAction,
   type DesktopReminderAction,
 } from '../reminders/tauri-notification-shell';
+import { serveEngine, stopServing } from '../windows/engine-host';
 
 const DEVICE_ID_KEY = 'taskora.deviceId';
 const SYNC_INTERVAL_MS = 30_000;
@@ -121,6 +122,9 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     // 界面读改由 Engine 的响应式查询提供（local-first-v3 issue 06）：装配
     // 期间按 REST 渲染的视图随之切到本地副本，之后只在依赖的数据变更时重跑。
     attachLiveQueries(engine);
+    // 副窗口（多窗口，ADR-0025）经主窗口的这个 Engine 读写；它们的 sync
+    // 也走这里的同步调度。
+    serveEngine(engine, () => syncNow());
 
     // 仅本地写需要防抖调度同步——远端写应用后无新 Outbox，再拉是空转。
     engine.onChange((change) => {
@@ -165,7 +169,9 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
   } catch (error) {
     console.error('[desktop-engine] 装配失败，退回 REST 后端', error);
     stopReminderCoordinator();
-    resetBackends();
+    resetEngineBackends();
+    // 副窗口随之退回 REST
+    stopServing(error instanceof ReplicaSchemaTooNewError ? 'upgrade-required' : 'error');
     // React Query 里留着的是装配前的结果
     createEngineInvalidator(queryClient)();
     setEventStreamCacheSurgery(true);
@@ -176,8 +182,8 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
   }
 }
 
-/** 全域退回 REST（登出 / 装配失败）。 */
-function resetBackends(): void {
+/** 全域退回 REST（登出 / 装配失败；副窗口退回 REST 时同用）。 */
+export function resetEngineBackends(): void {
   detachLiveQueries();
   setTaskBackend(undefined);
   setProjectBackend(undefined);
@@ -188,7 +194,8 @@ function resetBackends(): void {
 
 function stopEngine(): void {
   stopReminderCoordinator();
-  resetBackends();
+  stopServing();
+  resetEngineBackends();
   // 退回 REST 后端：恢复 SSE 缓存手术（web 同款失效路径）
   setEventStreamCacheSurgery(true);
   setSyncStatus('idle');
@@ -255,7 +262,7 @@ function syncNow(): Promise<boolean> {
         return false;
       }
       if (error instanceof SyncHubTooOldError) {
-        // 服务器过旧（ADR-0025）：不停调度，服务器升级后下次同步自动恢复
+        // 服务器过旧（ADR-0026）：不停调度，服务器升级后下次同步自动恢复
         setSyncStatus('hub-too-old', await engine!.pendingCount());
         return false;
       }
@@ -275,7 +282,7 @@ function syncNow(): Promise<boolean> {
 }
 
 /**
- * 安装更新、重启之前（ADR-0025）：尽量把 Outbox 推给 hub，最多等 timeoutMs。
+ * 安装更新、重启之前（ADR-0026）：尽量把 Outbox 推给 hub，最多等 timeoutMs。
  * 断网或 hub 不可用时照常继续——本地写入已落在 SQLite 里，重启后再同步。
  */
 export async function flushBeforeRestart(timeoutMs = 5_000): Promise<void> {
@@ -311,6 +318,11 @@ function scheduleSync(delayMs: number): void {
     debounceTimer = null;
     void syncNow();
   }, delayMs);
+}
+
+/** 副窗口读主窗口登记的 device id（同源 localStorage）；尚未登记时为空串。 */
+export function readDeviceId(): string {
+  return globalThis.localStorage?.getItem(DEVICE_ID_KEY) ?? '';
 }
 
 function ensureDeviceId(): string {

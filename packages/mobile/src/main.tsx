@@ -70,7 +70,7 @@ async function mount() {
   const { initMobileEngine } = await import('./engine/mobile-engine');
   initMobileEngine(queryClient);
 
-  // 更新提示（ADR-0025）：目标是所连服务器的版本，只提示、去浏览器下载 APK。
+  // 更新提示（ADR-0026）：目标是所连服务器的版本，只提示、去浏览器下载 APK。
   const { setUpdateShell, initUpdateChecks } = await import('@taskora/api');
   const { androidUpdateShell } = await import('./updates/android-update-shell');
   setUpdateShell(androidUpdateShell);

@@ -36,7 +36,7 @@ beforeEach(() => {
 
 afterEach(() => setUpdateShell(null));
 
-describe('SettingsAbout 更新（ADR-0025）', () => {
+describe('SettingsAbout 更新（ADR-0026）', () => {
   it('未注册平台壳（web）：不显示更新设置', () => {
     render(<SettingsAbout />);
     expect(screen.queryByRole('switch', { name: /check for updates/i })).toBeNull();

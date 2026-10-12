@@ -306,7 +306,7 @@ export function syncNow(): Promise<boolean> {
         return false;
       }
       if (error instanceof SyncHubTooOldError) {
-        // 服务器过旧（ADR-0025）：不停调度，服务器升级后下次同步自动恢复
+        // 服务器过旧（ADR-0026）：不停调度，服务器升级后下次同步自动恢复
         setSyncStatus('hub-too-old', await engine!.pendingCount());
         return false;
       }

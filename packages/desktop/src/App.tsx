@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { getCurrentWindow } from '@tauri-apps/api/window';
 import { useAuthStore, withSessionLock } from '@taskora/api';
 import { Button } from '@taskora/ui/components/ui/button';
 import { bootDesktop, resetDesktopSession } from './boot';
@@ -12,9 +13,11 @@ import { useServerSettings } from './server-settings';
  * Desktop app bootstrap: server setup → login → main window.
  *
  * Startup restores the session once through bootDesktop; this component
- * routes between setup, login and the main window.
+ * routes between setup, login and the main window. A secondary window
+ * (multi-window) shares the main window's session and never shows setup
+ * or login: without a session it closes itself.
  */
-export function App() {
+export function App({ secondary }: { secondary?: { initialRoute: string } } = {}) {
   const serverUrl = useServerSettings((s) => s.serverUrl);
   const setServerUrl = useServerSettings((s) => s.setServerUrl);
 
@@ -27,6 +30,10 @@ export function App() {
 
   if (readyServer !== serverUrl) {
     return <Boot key={serverUrl ?? ''} onReady={onReady} />;
+  }
+
+  if (secondary && (!serverUrl || (!token && !user))) {
+    return <CloseWindow />;
   }
 
   if (!serverUrl) {
@@ -52,7 +59,16 @@ export function App() {
   // A rejected 401 refresh clears the store and falls through to Login.
   if (refreshing && !user) return null;
 
-  return <MainApp />;
+  return <MainApp initialRoute={secondary?.initialRoute} />;
+}
+
+function CloseWindow() {
+  useEffect(() => {
+    void getCurrentWindow()
+      .close()
+      .catch(() => undefined);
+  }, []);
+  return null;
 }
 
 /** Startup failures are retryable; they never masquerade as a fresh login. */

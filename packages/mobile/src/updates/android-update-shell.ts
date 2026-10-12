@@ -8,7 +8,7 @@ const tag = (version: string) => `v${encodeURIComponent(version)}`;
 const apkName = (version: string) => `Taskora-v${version}.apk`;
 
 /**
- * Android 更新平台壳（ADR-0025）：只检测和提示，不在应用内安装。目标版本
+ * Android 更新平台壳（ADR-0026）：只检测和提示，不在应用内安装。目标版本
  * 由所连 hub 决定。可用性查 GitHub API：webview 直接 HEAD 下载地址会被
  * CORS 拦下，api.github.com 允许跨域（未认证每小时 60 次，按天检查足够）。
  */

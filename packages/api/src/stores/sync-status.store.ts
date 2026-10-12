@@ -11,7 +11,7 @@ import { create } from 'zustand';
  * 版本（HTTP 426），或本地副本由更新版本的 Taskora 写入。同步停止、
  * Outbox 保留，直到安装新版本。
  *
- * hub-too-old（ADR-0025）：hub 的同步协议低于本端认可的最低版本。同步
+ * hub-too-old（ADR-0026）：hub 的同步协议低于本端认可的最低版本。同步
  * 暂停、Outbox 保留，但调度不停：服务器升级后下次同步自动恢复。
  */
 

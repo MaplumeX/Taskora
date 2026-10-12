@@ -321,6 +321,31 @@ describe('resolveAction — 助手面板（assistant-panel issue 03）', () => {
   });
 });
 
+describe('resolveAction — 新窗口（multi-window）', () => {
+  const newWindow = { type: 'newWindow' };
+
+  it('mac ⌃⌘N（⌥⌘N 仍是新建项目）', () => {
+    expect(resolveAction(key('n', { ctrlKey: true, metaKey: true }), 'mac')).toEqual(newWindow);
+    expect(resolveAction(key('n', { altKey: true, metaKey: true }), 'mac')?.type).toBe(
+      'newProject',
+    );
+  });
+
+  it('Windows 桌面 Ctrl+Alt+W（Ctrl+Alt+N 仍是新建项目）', () => {
+    expect(resolveAction(key('w', { ctrlKey: true, altKey: true }), 'windows')).toEqual(newWindow);
+    expect(resolveAction(key('n', { ctrlKey: true, altKey: true }), 'windows')?.type).toBe(
+      'newProject',
+    );
+  });
+
+  it('Web 不绑定', () => {
+    expect(resolveAction(key('w', { ctrlKey: true, altKey: true }), 'web')).toBeNull();
+    expect(resolveAction(key('n', { ctrlKey: true, metaKey: true }), 'web')?.type).not.toBe(
+      'newWindow',
+    );
+  });
+});
+
 describe('shortcutLabel — 按钮 hint 键位文案', () => {
   it.each([
     ['search', { mac: '⌘F', windows: 'Ctrl+F', web: 'Ctrl+F' }],

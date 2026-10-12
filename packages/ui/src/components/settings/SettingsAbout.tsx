@@ -44,7 +44,7 @@ function useUpdateStatusText(): string | null {
 }
 
 /**
- * 更新设置（ADR-0025）：仅注册了平台壳的客户端（桌面端 / Android）渲染。
+ * 更新设置（ADR-0026）：仅注册了平台壳的客户端（桌面端 / Android）渲染。
  * 更新目标是所连服务器的版本，所以同时显示服务器版本。
  */
 function useUpdateSettings(shell: UpdateShell) {

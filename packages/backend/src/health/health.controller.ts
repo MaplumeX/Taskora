@@ -19,7 +19,7 @@ const HUB_VERSION = (
 /**
  * Unauthenticated liveness probe used by clients and container healthchecks.
  * Also reports the hub version and accepted sync protocol range: clients
- * update up to this version and judge compatibility by the range (ADR-0025).
+ * update up to this version and judge compatibility by the range (ADR-0026).
  */
 @Controller('health')
 export class HealthController {

@@ -1,9 +1,9 @@
 /**
- * 客户端更新判定（ADR-0025）：更新目标是所连 Sync Hub 的版本，兼容范围按
+ * 客户端更新判定（ADR-0026）：更新目标是所连 Sync Hub 的版本，兼容范围按
  * 同步协议版本判定。纯函数，桌面端与 Android 共用。
  */
 
-/** hub 的 `GET /health` 响应；ADR-0025 之前的 hub 只有 status。 */
+/** hub 的 `GET /health` 响应；ADR-0026 之前的 hub 只有 status。 */
 export interface HubHealth {
   status?: string;
   version?: string;

@@ -76,5 +76,8 @@
   "undoActionChange": "修改",
   "windowMinimize": "最小化",
   "windowMaximize": "最大化",
-  "windowRestore": "向下还原"
+  "windowRestore": "向下还原",
+  "newWindow": "新窗口",
+  "newWindowHint": "新窗口（按住 ⌥ / Alt 点击：在新窗口打开当前列表）",
+  "openInNewWindow": "在新窗口中打开"
 }

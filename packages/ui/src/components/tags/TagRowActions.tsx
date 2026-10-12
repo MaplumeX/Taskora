@@ -1,6 +1,8 @@
 import * as React from 'react';
-import { ArrowLeft, CornerDownRight, Plus, Trash2 } from 'lucide-react';
+import { AppWindowMac, ArrowLeft, CornerDownRight, Plus, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+
+import { canOpenWindows, openInNewWindow } from '@taskora/api';
 
 import { MenuRow } from '@/components/common/MenuRow';
 import { ActionSheet, ActionSheetContent, ActionSheetItem } from '@/components/ui/action-sheet';
@@ -148,6 +150,17 @@ export function TagContextMenu({
               <MenuRow icon={CornerDownRight} onClick={() => setMoving(true)}>
                 {t('tag:moveTo')}
               </MenuRow>
+              {canOpenWindows() && (
+                <>
+                  <div className="-mx-1 my-1 h-px bg-muted" />
+                  <MenuRow
+                    icon={AppWindowMac}
+                    onClick={() => run(() => openInNewWindow(`/tags/${tagId}`))}
+                  >
+                    {t('common:openInNewWindow')}
+                  </MenuRow>
+                </>
+              )}
               <div className="-mx-1 my-1 h-px bg-muted" />
               <MenuRow icon={Trash2} destructive onClick={() => run(actions.onDelete)}>
                 {t('common:delete')}

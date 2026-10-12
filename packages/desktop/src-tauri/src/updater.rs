@@ -1,4 +1,4 @@
-//! 自动更新（ADR-0025）：更新目标是所连 Sync Hub 的版本，不是 GitHub latest。
+//! 自动更新（ADR-0026）：更新目标是所连 Sync Hub 的版本，不是 GitHub latest。
 //!
 //! 前端判定后传入 hub 版本：`update_prepare` 取该 tag 的 `latest.json`，
 //! 版本高于当前时在后台下载并验签，暂存在内存里；`update_apply` 安装并重启。

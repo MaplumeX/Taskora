@@ -39,7 +39,7 @@ import type { SyncEntity } from './entities';
 export const SYNC_PROTOCOL_VERSION = 7;
 
 /**
- * 本端认可的最低 hub 协议版本（ADR-0025），与 hub 的最低协议对称：hub
+ * 本端认可的最低 hub 协议版本（ADR-0026），与 hub 的最低协议对称：hub
  * 低于它时暂停同步、Outbox 保留，提示升级服务器。只在本端连上旧 hub
  * 会把数据写坏或读错时才提高它——比本端旧但仍兼容的 hub 照常同步（按
  * 能力降级：hub 不认识的变更逐条拒在 Outbox 里）。

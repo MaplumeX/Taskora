@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const win = vi.hoisted(() => {
@@ -17,10 +17,13 @@ const win = vi.hoisted(() => {
   };
 });
 
-vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => true }));
+const invoke = vi.hoisted(() => vi.fn(() => Promise.resolve()));
+
+vi.mock('@tauri-apps/api/core', () => ({ isTauri: () => true, invoke }));
 vi.mock('@tauri-apps/api/window', () => ({ getCurrentWindow: () => win }));
 
 const { WindowChrome, installWindowChrome } = await import('./WindowChrome');
+const { setCurrentRoute } = await import('./windows/open-window');
 
 const titlebarHeight = () => document.documentElement.style.getPropertyValue('--titlebar-h');
 const sidebarInset = () => document.documentElement.style.getPropertyValue('--sidebar-inset-top');
@@ -45,7 +48,7 @@ afterEach(() => {
 describe('WindowChrome', () => {
   it('draws minimize / maximize / close on Windows and Linux', () => {
     render(<WindowChrome platform="other" />);
-    const buttons = screen.getAllByRole('button');
+    const buttons = within(screen.getByTestId('window-controls')).getAllByRole('button');
     expect(buttons).toHaveLength(3);
 
     for (const button of buttons) fireEvent.click(button);
@@ -57,7 +60,25 @@ describe('WindowChrome', () => {
   it('leaves the window buttons to the native traffic lights on macOS', () => {
     render(<WindowChrome platform="mac" />);
     expect(screen.getByTestId('window-chrome')).toHaveAttribute('data-tauri-drag-region');
-    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(screen.queryByTestId('window-controls')).toBeNull();
+    expect(screen.getAllByRole('button')).toEqual([screen.getByTestId('new-window-button')]);
+  });
+
+  it('new window button opens Today; ⌥-click opens the current list', () => {
+    setCurrentRoute('/projects/p1');
+    render(<WindowChrome platform="mac" />);
+    const button = screen.getByRole('button', { name: /New Window|新窗口/ });
+
+    fireEvent.click(button);
+    expect(invoke).toHaveBeenLastCalledWith('open_window', { route: '/today' });
+
+    fireEvent.click(button, { altKey: true });
+    expect(invoke).toHaveBeenLastCalledWith('open_window', { route: '/projects/p1' });
+  });
+
+  it('puts the new window button left of the window buttons on Windows and Linux', () => {
+    render(<WindowChrome platform="other" />);
+    expect(screen.getByTestId('new-window-button')).toHaveStyle({ right: '138px' });
   });
 
   it('keeps window-button pointerdown from reaching document (Radix outside-click dismiss)', () => {
@@ -84,6 +105,7 @@ describe('WindowChrome', () => {
 
     await resizeTo({ fullscreen: true });
     expect(screen.queryByTestId('window-chrome')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('new-window-button')).not.toBeInTheDocument();
     expect(titlebarHeight()).toBe('0px');
     expect(sidebarInset()).toBe('0px');
 

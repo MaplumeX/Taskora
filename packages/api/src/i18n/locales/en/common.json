@@ -76,5 +76,8 @@
   "undoActionChange": "Change",
   "windowMinimize": "Minimize",
   "windowMaximize": "Maximize",
-  "windowRestore": "Restore Down"
+  "windowRestore": "Restore Down",
+  "newWindow": "New Window",
+  "newWindowHint": "New window (⌥/Alt-click: open the current list in a new window)",
+  "openInNewWindow": "Open in New Window"
 }

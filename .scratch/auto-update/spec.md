@@ -1,6 +1,6 @@
 # 客户端自动检测更新
 
-决策见 [ADR-0025](../../docs/adr/0025-client-updates-follow-hub-version.md)：客户端更新以所连 Sync Hub 的版本为目标，兼容范围按同步协议版本判定。
+决策见 [ADR-0026](../../docs/adr/0026-client-updates-follow-hub-version.md)：客户端更新以所连 Sync Hub 的版本为目标，兼容范围按同步协议版本判定。
 
 ## 目标
 

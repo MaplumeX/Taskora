@@ -12,7 +12,7 @@ import { cn } from '@/lib/utils';
  * 状态由各端 Engine 同步调度（syncNow）的成败驱动；正常态（idle / 同步中 /
  * 已同步）不渲染，避免遮挡内容。离线时显示 Outbox 中未同步的写操作条数。需要升级（hub 要求
  * 更高的同步协议版本，或副本来自更新版本）时常驻提示，直到安装新版本；
- * 服务器过旧（ADR-0025）时常驻提示升级服务器，直到服务器升级后同步恢复。
+ * 服务器过旧（ADR-0026）时常驻提示升级服务器，直到服务器升级后同步恢复。
  */
 export function SyncIndicator() {
   const { t } = useTranslation();

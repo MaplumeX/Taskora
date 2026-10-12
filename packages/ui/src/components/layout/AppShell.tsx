@@ -57,7 +57,7 @@ export function AppShell() {
         <KeyboardShortcuts />
         {/* 同步指示器（V2）：仅在离线 / 需要升级时出现在角落，不拦操作 */}
         <SyncIndicator />
-        {/* 更新提示（ADR-0025）：仅桌面端 / Android 准备好服务器版本的安装包后出现 */}
+        {/* 更新提示（ADR-0026）：仅桌面端 / Android 准备好服务器版本的安装包后出现 */}
         <UpdatePrompt />
       </div>
     </SidebarDropProvider>

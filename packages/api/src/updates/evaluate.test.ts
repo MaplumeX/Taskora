@@ -29,7 +29,7 @@ describe('compareVersions', () => {
   });
 });
 
-describe('evaluateUpdate（ADR-0025 判定表）', () => {
+describe('evaluateUpdate（ADR-0026 判定表）', () => {
   it('同版本：up-to-date', () => {
     expect(evaluateUpdate(local, hub)).toEqual({ kind: 'up-to-date', hubVersion: '0.9.0' });
   });
@@ -79,7 +79,7 @@ describe('evaluateUpdate（ADR-0025 判定表）', () => {
     ).toBe('update-available');
   });
 
-  it('ADR-0025 之前的 hub（health 只有 status）：up-to-date，不报错', () => {
+  it('ADR-0026 之前的 hub（health 只有 status）：up-to-date，不报错', () => {
     expect(evaluateUpdate(local, { status: 'ok' })).toEqual({ kind: 'up-to-date' });
   });
 

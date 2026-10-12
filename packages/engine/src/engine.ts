@@ -191,7 +191,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
       throw new SyncUpgradeRequiredError(response.minProtocolVersion);
     }
     hubProtocol = response.protocolVersion ?? 0;
-    // 对称的另一侧（ADR-0025）：在应用响应之前拦下，旧 hub 的数据不进副本；
+    // 对称的另一侧（ADR-0026）：在应用响应之前拦下，旧 hub 的数据不进副本；
     // 已送达的 push 只是旧 hub 认识的部分，未删出 Outbox 的条目下次重推。
     if (hubProtocol < minHubProtocol) {
       throw new SyncHubTooOldError(hubProtocol, minHubProtocol);

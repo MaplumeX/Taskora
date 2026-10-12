@@ -12,7 +12,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe('desktopUpdateShell（ADR-0025）', () => {
+describe('desktopUpdateShell（ADR-0026）', () => {
   it('准备：交给壳层按 hub 版本下载', async () => {
     invoke.mockResolvedValueOnce(true);
     await expect(desktopUpdateShell.prepare('0.10.0')).resolves.toBe(true);

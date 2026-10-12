@@ -40,7 +40,7 @@ describe('GET /health (e2e)', () => {
     const res = await request(app.getHttpServer()).get('/api/v1/health').expect(200);
 
     // Clients target this version for updates and judge compatibility by the
-    // same protocol range the sync endpoints enforce (ADR-0025).
+    // same protocol range the sync endpoints enforce (ADR-0026).
     expect(res.body).toEqual({
       status: 'ok',
       version: packageJson.version,

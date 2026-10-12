@@ -9,12 +9,10 @@ import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
 
 import { cn } from '@/lib/utils';
 import { Collapse } from '@/components/ui/collapse';
+import { AreaContextMenu } from '@/components/area/AreaMoreMenu';
 import { sidebarDropOverClass, sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import { SortableProjectItem } from '@/components/layout/SortableProjectItem';
-import {
-  projectContainerDndId,
-  projectDndId,
-} from '@/components/layout/sidebarProjectLayout';
+import { projectContainerDndId, projectDndId } from '@/components/layout/sidebarProjectLayout';
 import { flipId, noopSortingStrategy } from '../../lib/dnd';
 import { useSidebarDropTarget } from '../../lib/appDnd';
 
@@ -27,15 +25,11 @@ interface Props {
 }
 
 /**
- * 侧边栏合并后的区域条目。主体点击进入区域详情；右侧 chevron 仅切换展开/收起。
+ * 侧边栏合并后的区域条目。主体点击进入区域详情；右侧 chevron 仅切换展开/收起；
+ * 右键打开区域菜单。
  * 展开的项目列表和区域标题都可作为项目放置目标。
  */
-export function SidebarAreaRow({
-  area,
-  projects,
-  activeProjectId,
-  dropTargets,
-}: Props) {
+export function SidebarAreaRow({ area, projects, activeProjectId, dropTargets }: Props) {
   const { t } = useTranslation();
   const [open, setOpen] = React.useState(true);
   const { setNodeRef: setProjectContainerRef } = useDroppable({
@@ -57,51 +51,44 @@ export function SidebarAreaRow({
 
   return (
     <div className="mt-2 flex flex-col">
-      <div
-        ref={drop.setNodeRef}
-        {...flipId(`area-row:${area.id}`)}
-        className="group/area relative flex items-center"
-      >
-        <NavLink
-          to={`/areas/${area.id}`}
-          data-sidebar-nav={`/areas/${area.id}`}
-          className={({ isActive }) =>
-            sidebarRowClass(
-              isActive,
-              cn('flex-1 font-semibold', drop.isOver && sidebarDropOverClass),
-            )
-          }
+      {/* 右键：在新窗口中打开 / 标签 / 删除（与区域分组头同一菜单）。 */}
+      <AreaContextMenu area={area}>
+        <div
+          ref={drop.setNodeRef}
+          {...flipId(`area-row:${area.id}`)}
+          className="group/area relative flex items-center"
         >
-          <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
-          <span
-            className={cn(
-              'flex-1 truncate',
-              !area.title && 'text-muted-foreground',
-            )}
+          <NavLink
+            to={`/areas/${area.id}`}
+            data-sidebar-nav={`/areas/${area.id}`}
+            className={({ isActive }) =>
+              sidebarRowClass(
+                isActive,
+                cn('flex-1 font-semibold', drop.isOver && sidebarDropOverClass),
+              )
+            }
           >
-            {label}
-          </span>
-        </NavLink>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            e.preventDefault();
-            setOpen((value) => !value);
-          }}
-          aria-label={
-            open ? t('nav:collapse', { label }) : t('nav:expand', { label })
-          }
-          className="absolute right-1 flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-0 hover:bg-sidebar-accent focus-visible:opacity-100 group-hover/area:opacity-100 max-md:opacity-100"
-        >
-          <ChevronDown
-            className={cn(
-              'h-3.5 w-3.5 transition-transform',
-              !open && '-rotate-90',
-            )}
-          />
-        </button>
-      </div>
+            <Layers className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <span className={cn('flex-1 truncate', !area.title && 'text-muted-foreground')}>
+              {label}
+            </span>
+          </NavLink>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              setOpen((value) => !value);
+            }}
+            aria-label={open ? t('nav:collapse', { label }) : t('nav:expand', { label })}
+            className="absolute right-1 flex h-5 w-5 items-center justify-center rounded text-muted-foreground opacity-0 hover:bg-sidebar-accent focus-visible:opacity-100 group-hover/area:opacity-100 max-md:opacity-100"
+          >
+            <ChevronDown
+              className={cn('h-3.5 w-3.5 transition-transform', !open && '-rotate-90')}
+            />
+          </button>
+        </div>
+      </AreaContextMenu>
       {/* 区域标题与项目之间的 1px 间距放在折叠区内，随高度一起收起。 */}
       <Collapse open={open} className="pt-px">
         <SortableContext
@@ -118,10 +105,7 @@ export function SidebarAreaRow({
         </SortableContext>
       </Collapse>
       {collapsedPlaceholder && (
-        <SortableContext
-          items={[projectDndId(projects[0].id)]}
-          strategy={noopSortingStrategy}
-        >
+        <SortableContext items={[projectDndId(projects[0].id)]} strategy={noopSortingStrategy}>
           <div className="pt-px">{renderProject(projects[0])}</div>
         </SortableContext>
       )}

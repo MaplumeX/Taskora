@@ -22,6 +22,7 @@ import {
   createEngineAreaBackend,
   attachLiveQueries,
   detachLiveQueries,
+  createEngineHost,
   createEngineInvalidator,
   createEngineProjectBackend,
   createEngineProjectHeadingBackend,
@@ -37,8 +38,11 @@ import {
   setSyncStatus,
   setTagBackend,
   setTaskBackend,
+  TabEngine,
   useAuthStore,
   type SyncStatus,
+  type TabChannel,
+  type TabMessage,
 } from '@taskora/api';
 import {
   openEngine,
@@ -48,7 +52,6 @@ import {
   type Engine,
 } from '@taskora/engine';
 
-import { createEngineHost, TabEngine, type TabChannel, type TabMessage } from './tab-engine';
 import type { WorkerSqlStorage } from './worker-storage';
 import { createBrowserStorageRuntime } from './browser-storage';
 
@@ -259,7 +262,7 @@ async function becomeLeader(
           return false;
         }
         if (error instanceof SyncHubTooOldError) {
-          // 服务器过旧（ADR-0025）：不停调度，服务器升级后下次同步自动恢复
+          // 服务器过旧（ADR-0026）：不停调度，服务器升级后下次同步自动恢复
           publishStatus('hub-too-old', await engine.pendingCount().catch(() => 0));
           return false;
         }

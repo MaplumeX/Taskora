@@ -23,7 +23,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe('androidUpdateShell（ADR-0025）', () => {
+describe('androidUpdateShell（ADR-0026）', () => {
   it('准备：查询 hub 版本对应的 Release，带 APK 才算可用', async () => {
     release(['Taskora-v0.10.0.apk', 'Taskora_0.10.0_amd64.AppImage']);
 

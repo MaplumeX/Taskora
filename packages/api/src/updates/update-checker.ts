@@ -1,5 +1,5 @@
 /**
- * 客户端更新检查（ADR-0025）：查询所连 hub 的 `/health`，按 evaluateUpdate
+ * 客户端更新检查（ADR-0026）：查询所连 hub 的 `/health`，按 evaluateUpdate
  * 判定，再让平台壳准备 hub 版本的安装包。
  *
  * 平台相关的部分收敛在 UpdateShell 后面，由桌面端 / Android 在 boot 时注册

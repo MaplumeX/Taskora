@@ -32,7 +32,7 @@ beforeEach(() => {
 
 afterEach(() => setUpdateShell(null));
 
-describe('UpdatePrompt（ADR-0025）', () => {
+describe('UpdatePrompt（ADR-0026）', () => {
   it('没有已准备好的更新：不渲染', () => {
     const { container } = render(<UpdatePrompt />);
     expect(container).toBeEmptyDOMElement();

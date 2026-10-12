@@ -5,7 +5,7 @@ import type { UpdateShell } from '@taskora/api';
 import { flushBeforeRestart } from '../engine/desktop-engine';
 
 /**
- * 桌面端更新平台壳（ADR-0025）：下载、验签与安装在壳层（src-tauri/src/updater.rs），
+ * 桌面端更新平台壳（ADR-0026）：下载、验签与安装在壳层（src-tauri/src/updater.rs），
  * 目标版本由所连 hub 决定。
  */
 export const desktopUpdateShell: UpdateShell = {
