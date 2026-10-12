@@ -10,6 +10,161 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > Android 小节，端专属改动标注 `(desktop)` / `(android)`。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [1.0.0] - 2026-10-12
+
+本版把同步协议升到 7（Start + 计划日期取代 Bucket + ScheduledType，见
+`docs/adr/0024-things-start-model.md`），并让桌面端与 Android 端按所连服务器的
+版本自动更新（见 ADR-0026）。
+
+### Added
+
+- **api/ui**: Magic Plus：可拖放的添加按钮 (#207) —
+  手机端右下角的 `MobileFab` 从「只能点」升级为对齐 Things 3 iPhone 的 Magic Plus：点按新建，按住拖动
+  越过 8px 即把新条目放到列表的任意落点，一次手势同时决定位置与归属。项目页点按不再弹「添加任务 /
+  添加标题」菜单而是直接新建任务，Heading 改由拖到屏幕左边缘新建（落点之后、同组内的任务随之移入新
+  Heading）；Upcoming 首次出现 FAB，点按新建计划日期为账号时区明天的任务；首页点按菜单不变，但把
+  FAB 拖进某个区域即在该区域里新建项目。拖动沿用现有行拖拽的语义——「一条新建的空任务被拖到这里」：
+  行间落点写 Position、分组视图跨组落点获得该组的归属、Upcoming 的日落点写计划日期，实时占位与贴边
+  自动滚动一致，不支持排序的列表（Deadlines / Repeating / Logbook 等）不出现空位、松手即取消；Inbox
+  页之外开始拖动时左下角浮现 Inbox 目标，落在其上就地弹出 `QuickAddCard`（归属 Inbox）而不离开当前
+  页。拖拽源以固定 id 接入全局 DndContext（ADR-0018），由当前页面的列表 surface 认领，落点 →「新建
+  DTO + 插入位置」的翻译落在 `packages/ui/src/lib/magicPlus.ts` 纯函数（`CreateTaskDto` 没有位置
+  字段，按 ⌘V 粘贴的做法先带上下文新建、成功后 reorder）。FAB 用 `distance: 8` 的独立传感器，不与
+  列表行的 300ms 长按抢手势；多选模式中不显示 FAB，有任务展开时仍缩小淡出，桌面端不受影响。
+  `CONTEXT.md` 新增 Magic Plus 词条。
+
+- **api/mobile/ui**: 触控手势对齐 Things 3 iPhone (#208) — 补上五处差距。**右滑弹出计划卡片**：
+  `useSwipeToSelect` 增加 `onSwipeRight`（与左滑同样的锁定、阈值与互斥规则），任务行右滑越过阈值后
+  打开全局唯一的 `SwipeWhenPicker`（`FieldPickerDialog` + `ScheduledDateField`），行左侧随位移露出
+  日历图标；多选模式中、展开态与 Trash 里的行不响应。**摇一摇撤销**：新增 `UndoHistory`（api 包）
+  包装 Engine 的写入方法，以用户输入为界划分步骤，撤销时写回旧值（ADR 0024
+  `undo-recorded-at-engine-writes`）；Android `background` 插件监听加速度计（阈值 2.3g、两次峰值
+  间隔 120–700ms、冷却 1.5s），摇一摇后由 `UndoPrompt` 弹「撤销「完成」？」确认，已有弹层或没有可
+  撤销的步骤时不打扰。**多选拖拽**：`dragSelectionIds()` 在多选模式中返回勾选集合、否则返回键盘
+  Selection，四个任务列表（TaskList / 分组 feed / 项目 / Upcoming）的多项拖拽因此直接适用于触控
+  多选，长按勾选行可整组拖走。**触感**：`haptic(kind)` 注入点（api 包，默认 no-op）在 Android 经
+  `performHapticFeedback` 实现，越过横滑 / 下拉查找阈值 `tick`、长按拖起与拖出 Magic Plus
+  `lift`、在列表或 Inbox 目标上落位 `drop`、摇一摇撤销完成 `confirm`，跟随系统触感设置、不需要
+  权限。**区域页 +**：只有首页弹菜单，区域页点按直接新建任务。`CONTEXT.md` 跟进相关词条。
+
+- **ui**: 列表进出场动画与可复用的 Collapse (#211) — 行不再「瞬间换位」。新增 `Collapse` 组件：用 Web
+  Animations 做高度 + 透明度过渡（同任务详情展开的 `--dur-expand` 时长与曲线），展开时从 0 撑开、
+  收起时收回 0 后才卸载内容（折叠区可能很长，也不该残留拖拽放置目标）；动画中途反向时从当前可见
+  高度接续，jsdom 或 reduced-motion 下立即切换；区块与上方之间的间距要放进 `className` 的 padding，
+  随高度一起收起，避免外层 flex gap 在卸载瞬间跳一下——侧边栏区域展开（`SidebarAreaRow`）与项目
+  「已了结」面板（`ProjectSettledTasks`）据此改写。FLIP 侧：数据变化（改 When 换了分组、删除、新建、
+  移走、同步）时自动记录旧位置，除位移外新出现的行自上而下揭开进场、消失的行在原位留一份克隆收起
+  离场（去掉 id / aria / data 标识并置 `inert`，与邻行的位移同长同曲线，看起来就是行本身收起）；同一
+  位置一出一进视为同一行换了 id（乐观新建的临时 id → 服务端 id、Magic Plus 草稿 → 真实任务），不算
+  进出场；一次重排里进出场超过 24 行（过滤切换、整批同步）就只做位移，前后没有任何共同行（首次加载、
+  切换到另一个项目）视为整批替换、不做动画。拖拽中的重排仍只做位移，空位行与草稿行不淡入淡出。
+
+- **engine/api/backend/ui**: 把项目分组标题移到另一个项目 (#212) —
+  分组标题的「…」菜单与右键菜单新增「移动」（对齐 Things 3），弹出 `HeadingMovePicker`：候选与任务的
+  移动选择器同源（未了结、未进 Trash 的项目，与侧边栏同序），去掉 Inbox 与区域行，行尾灰字标出所属
+  区域。移动后分组排到目标项目分组的末尾，其下全部任务（含已了结与 Trash 里的）一起换项目、保留分组
+  归属，其余字段不变；engine 新增纯函数 `planHeadingMove`，后端新增
+  `POST /project-headings/:id/move`（`MoveProjectHeadingDto`），服务端先写分组再写任务——合并修复按
+  分组当前所属项目校验任务的 `headingId`。
+
+- **api/ui/desktop/frontend**: 桌面端多窗口 (#217) —
+  对齐 Things 3 Mac：同一份数据可同时开多个窗口，每个窗口有完整侧边栏，导航、Selection、展开、撤销栈
+  与助手面板互相独立，数据改动实时出现在所有窗口。入口有窗口右上角拖拽带里的新窗口按钮（点击打开
+  Today，⌥ / Alt + 点击则打开当前列表）、快捷键 `newWindow`（mac ⌃⌘N、Windows / Linux
+  Ctrl+Alt+W，可在设置里改绑；Web 不绑定、设置页不显示）、项目 / 区域 / 标签的行菜单「在新窗口中
+  打开」，以及任务右键菜单新增的「在项目中显示 / 在区域中显示」（⌥ / Alt + 点击走新窗口）；窗口能力
+  由宿主经 `setWindowOpener` 注入，Web 与 Android 不注册，菜单项不出现、⌥ + 点击退化为普通导航。主
+  窗口行为不变（关闭即隐藏到托盘，托盘 / Dock / 二次启动唤出的都是它）；副窗口（label `window-<n>`）
+  用同样的融合式外壳（ADR-0021）与最小尺寸，尺寸取发起窗口、位置相对发起窗口层叠错开，关闭即销毁、
+  不记几何（重启只有主窗口），登出时全部关闭。数据侧见 ADR-0025：Engine、Outbox、HLC、同步循环、
+  提醒调度、quick-add 中继与托盘只存在于主窗口，副窗口的 UI 读写一个 `TabEngine`（与 Web 多标签页
+  同一实现，从 frontend 移到 `@taskora/api`），通道换成 Tauri event——调用发给主窗口执行，主窗口
+  广播变更（响应式查询据此重跑）与同步状态（同步指示器）；主窗口 Engine 不可用时副窗口随之退回
+  REST。跨窗口共享会话（Web Locks 串行化刷新）、偏好与键位（localStorage + `storage` 事件重读）。
+  `docs/keyboard-shortcuts.md` 与 `CONTEXT.md` 跟进。
+
+- **engine/api/backend/ui/desktop/mobile/frontend**: 客户端按所连服务器版本自动更新 (#218) —
+  桌面端与 Android 端不再要求手动去 GitHub Releases 下载，但更新目标不是 GitHub latest 而是**当前
+  连接的服务器**（ADR-0026）：`GET /health` 新增回报 `version`（app semver，读 backend 的
+  `package.json`，镜像 runtime 阶段一并复制）、`protocolVersion` 与 `minProtocolVersion`，客户端最多
+  升到 `v{hub version}`。兼容范围以同步协议表达、不维护 semver 范围：
+  `packages/api/src/updates/evaluate.ts` 的纯函数把「本机版本 + 本机 `SYNC_PROTOCOL_VERSION` /
+  `MIN_HUB_PROTOCOL_VERSION` + hub health」判成 `client-too-old`（必须更新）、`hub-too-old`（提示
+  升级服务器）、`update-available` / `up-to-date`，与同步路径的 426 结论一致；客户端新增
+  `MIN_HUB_PROTOCOL_VERSION`，初始值 7，低于它时暂停同步、保留 Outbox 并常驻提示（沿用
+  `SyncIndicator`）。检查在启动后延迟一次、之后每 24 小时一次，切换服务器立即检查；设置 → 关于新增
+  「自动检查更新」开关与「立即检查」，可选更新只给一个非模态提示、可「跳过此版本」，不兼容则无法
+  跳过。桌面端用 `tauri-plugin-updater` 后台下载、提示「重启并更新 / 稍后」（重启前等 Engine 的写入
+  落盘），updater endpoint 在运行时拼成该 tag 的 `latest.json`，tag 缺少当前平台的安装包时视为暂无
+  更新；Android 只提示，点击后用系统浏览器打开该 tag 的 APK（APK 是否存在经 GitHub API 查询，webview
+  直接 HEAD 下载地址会被 CORS 拦下），不做应用内安装。`desktop-release.yml` 相应产出签名与
+  `latest.json`；Web 始终随 hub 镜像更新、不参与。`docs/versioning-and-deployment.md` 与 ADR-0001 的
+  「V1 无自动更新」结论被取代。
+
+- **shared/engine/api/backend/ui**: Hide Later Items (#219) — 项目页与区域页底部新增「隐藏稍后项」
+  按钮（对齐 Things 3），把 Someday 与计划日期晚于今天的条目从视线里收起来，默认显示、状态按列表
+  记住并跨端同步；列表没有稍后项时按钮不渲染，快捷键 ⇧⌘E（Windows `Ctrl+Shift+E`、Web
+  `Alt+Shift+E`）可改绑，作用于当前列表与打开的 Move 选择器。shared 新增 `isLaterTask` 与
+  `laterTaskKind`（与 `laterProjectKind` 同口径：未了结、未进 Trash，Start 为 SOMEDAY 或计划日期晚于
+  `todayKey`），页面禁止手写判定；Project 与 Area 新增可同步字段 `hideLaterItems`（默认 false，字段级
+  LWW，链路同 `lastReviewedOn`：Prisma schema + migration、engine 实体与迁移、`entity-codec`、
+  mappers、shared DTO），Move 选择器用账号偏好 `hideLaterItemsInMovePicker`；引擎副本为此新增布尔列
+  类型（SQLite 存 0 / 1），hub codec 新增 `boolFields`。项目页隐藏时只从传给列表的任务里滤掉稍后
+  任务，Heading 一律保留（即使变空），可见任务之间拖拽排序仍写回全量顺序，展开中的任务被改成稍后项
+  时留在原位直到收起（Expanded Linger）；区域页改为把区域直属的稍后任务与稍后项目一起放进页面底部的
+  「计划」/「某天」小节（`LaterItemSections`，计划按日期升序、某天在最后），隐藏时两节整块去掉。
+  从 Quick Find 打开的目标若正被隐藏，先把该列表的 `hideLaterItems` 写回 false 再导航定位；切换与
+  其他字段一样经引擎写入、进撤销栈。`CONTEXT.md` 与 `docs/keyboard-shortcuts.md` 跟进。
+
+### Changed
+
+- **engine/shared/api/backend/ui/desktop**: 同步协议 7：Start + 计划日期取代 Bucket + ScheduledType
+  (#210) — 删掉互相重叠的 `bucket` / `scheduledType` 与 `TaskBucket` / `ProjectBucket` /
+  `ScheduledType`，Task 与 Project 改为 Things 3 那样的三态 `start ∈ {INBOX, ANYTIME, SOMEDAY}`
+  加一个可空的 `scheduledDate`（ADR 0024）。旧模型下 Anytime 要求无计划日期，于是「日期已过按今天
+  对待」只能靠打补丁，`SCHEDULED` 也不是 Things 的概念、日期过了仍留在原桶，文档与实现还互相矛盾；
+  改后 Inbox = `start=INBOX`，Anytime = `start=ANYTIME` 且无日期或日期 ≤ 今天（并去掉稍后项目内的
+  任务），Upcoming = 日期 > 今天，Someday = `start=SOMEDAY`，不变量为「有日期 ⇒ ANYTIME」「INBOX ⇒
+  无项目、无区域、无日期」，提醒与重复规则只依附日期。写入语义随之统一：设日期 → ANYTIME，Someday →
+  SOMEDAY 并清日期，Clear 不再回到 Inbox 而是放进 Anytime，移入 Inbox 清归属与计划、Inbox 任务获得
+  归属后变 ANYTIME；`repairEntity` 里为维持两个字段一致而写的修补逻辑随之消失。迁移规则在 hub 的
+  Prisma 迁移与设备副本迁移中逐字相同（SOMEDAY → SOMEDAY；DATE → ANYTIME；NONE → 无归属且原为
+  INBOX 时 INBOX，否则 ANYTIME；项目除 SOMEDAY 外都是 ANYTIME；`start` 的时钟取旧两个字段时钟中
+  较大者），Outbox 逐条改写，副本记下「需要一次 bootstrap」并在连上协议 7 的 hub 后重取一次。协议
+  版本升到 7，`CONTEXT.md` 与 ADR-0007 跟进。
+
+### Fixed
+
+- **ui**: 编辑项目分组标题时光标落在末尾 (#209) — 此前进入编辑会选中全部文字，想接着改就得先按一下
+  方向键；现在聚焦后把光标放到标题末尾。
+
+- **desktop**: 快速添加窗口复用时不再闪一下 (#213) — 快速添加窗口隐藏时保留出场动画的 `fill`，重新
+  唤出时窗口先呈现的是隐藏前的旧画面，此时若卡片已复位就会闪现在终点再跳回起点；改为出场保留
+  `fill` 到下次进场才撤销，进场在 `quick-add://open` 事件里立即开始（不再等 `bootQuickAdd()` 完成，
+  否则卡片会先停在终点、再跳回起点下落）。
+
+- **ui**: 已了结任务排到已归档分组之前 (#214) — 项目「已了结」面板与未了结列表保持一致：独立任务
+  在前、已归档分组及其任务在后，各自按了结时间倒序、同一时刻保持原列表顺序；此前两类混在一起按时间
+  倒序，归档分组会插在任务中间。
+
+- **ui**: Collapse 收起动画结束不再闪一帧 (#215) — 收起动画结束后元素的自然高度会立刻恢复，末帧与
+  自然状态之间闪一下；改为动画带 `fill: forwards`，收起时保持末帧与裁剪直到 React 卸载，展开时主动
+  取消。同时修掉动画的清理：卸载或重启动画前先把 `onfinish` 置空再 `cancel()`，避免已作废的回调去改
+  overflow 或卸载内容。
+
+- **engine/api/backend/desktop/mobile**: 撤回已失效的提醒通知 (#216) —
+  提醒在每台设备上各自触发，通知弹出后任务可能在别处被了结、改期或清除提醒，通知却留在通知中心。
+  现在每份提醒计划都带 `live`——全部仍有效的提醒时刻、含已经过去的时刻（engine 的 `liveReminders`
+  纯函数），JS `sync` 与 hub 的 `GET /reminders/plan` 都带；通知的 key 不在其中或 `fireAt` 不一致
+  即撤下（早于本版的 hub 不下发 `live`，则什么都不撤回）。桌面端由协调器记住已发出的通知、失效时调
+  `withdraw(taskId)`（Windows 用 `ToastNotificationHistory`、Linux 用 `CloseNotification`，macOS
+  的 `mac-notification-sys` 没有撤回 API、仍是 no-op）；Android 以计划 key 作通知 tag、`fireAt` 作
+  `when`，每次替换计划时遍历 `activeNotifications` 撤下失效的（队列里有待处理动作的 key 跳过，
+  因为 Snooze 的重发要等 JS 落地），通知栏本身就是已发出记录的账本、不额外持久化。另外「错过的
+  提醒不补发」现在也约束迟到：桌面端晚于 `REMINDER_LATE_TOLERANCE_MS`（5 分钟，系统睡眠唤醒 /
+  WebView 计时器节流）不再投递，Android 晚于 `GC_AFTER_MS`（1 小时，与回收丢失闹钟同一阈值）丢弃。
+  ADR-0014 追加 amendment 记录以上取舍。
+
 ## [0.9.0] - 2026-10-10
 
 ### Added
