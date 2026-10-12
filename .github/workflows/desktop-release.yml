@@ -19,7 +19,8 @@ jobs:
           - platform: ubuntu-22.04
             args: '--bundles appimage'
           - platform: macos-latest
-            args: '--bundles dmg'
+            # app 生成 updater 的 .app.tar.gz 与 .sig；dmg 用于手动安装。
+            args: '--bundles app,dmg'
           - platform: windows-latest
             args: '--bundles nsis'
 
@@ -58,7 +59,8 @@ jobs:
       - name: Test native session storage
         run: 'cargo test --locked --lib --manifest-path packages/desktop/src-tauri/Cargo.toml session::'
 
-      # 自动更新（ADR-0026）：createUpdaterArtifacts 为每个安装包生成 .sig，
+      # 自动更新（ADR-0026）：createUpdaterArtifacts 为更新包生成 .sig，
+      # macOS 使用 app 的 .app.tar.gz，Linux / Windows 复用安装包。
       # tauri-action 把三平台合并进本 tag 的 latest.json。客户端按所连 hub
       # 的版本取 releases/download/v<hub>/latest.json，不追 latest。私钥只在
       # secrets 中（另有离线备份）；丢失后已安装的客户端再也收不到更新。

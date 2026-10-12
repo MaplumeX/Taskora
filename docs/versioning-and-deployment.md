@@ -66,6 +66,7 @@ CI 按 tag 自动接管：`v*` 同时触发 `release.yml`（推双镜像）、
 
 - **平台**：三平台出包，主力开发平台为 Linux，Linux 构建质量优先保证。
 - **安装包格式**：macOS `.dmg`、Windows NSIS `.exe`、Linux AppImage。`.deb` 等后续有需求再加。
+- **macOS 更新包**：同时构建 `app` 和 `dmg`；`app` 生成自动更新所需的 `.app.tar.gz` 与 `.app.tar.gz.sig`，`dmg` 用于手动安装。Release 的 `latest.json` 必须包含对应构建架构的 `darwin-*` 条目；仅构建 `dmg` 不会生成 macOS updater 产物。
 - **CI 策略**：PR / main CI 运行 desktop 的 typecheck、单测、Linux Rust 编译检查和 Windows 原生会话测试；三平台安装包仅在 tag `v*` 时构建发布（与镜像发布同一 tag 触发，两条流水线各自独立）。
 - **自动更新**（[ADR-0026](adr/0026-client-updates-follow-hub-version.md)）：`tauri-plugin-updater`，目标是所连服务器的版本，不追 GitHub latest。CI 用 secrets `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 签名，每个 tag 的 Release 带 `.sig` 与 `latest.json`；公钥在 `tauri.conf.json`。私钥另有离线备份，丢失后已安装的客户端再也收不到更新。本地 `tauri build` 同样需要这两个环境变量（`createUpdaterArtifacts`）。
 - **V1 不签名**：macOS 需右键打开绕过 Gatekeeper，Windows 会触发 SmartScreen 警告；README 需写清绕过方法。待有真实用户后购证书。
