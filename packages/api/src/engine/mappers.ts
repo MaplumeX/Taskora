@@ -185,16 +185,21 @@ export function areaRowToDto(row: ReplicaRow, tags: Map<string, TagResponseDto>)
   };
 }
 
-/** Project / Area 的回顾字段（间隔 null 为跟随默认，上次回顾日 null 为从未回顾）。 */
+/**
+ * Project / Area 的回顾字段（间隔 null 为跟随默认，上次回顾日 null 为从未回顾）
+ * 与隐藏稍后项（空即显示）。
+ */
 function reviewFieldsOf(f: ReplicaRow['fields']): {
   reviewInterval: ReviewInterval | null;
   nextReviewDate: string | null;
   lastReviewedOn: string | null;
+  hideLaterItems: boolean;
 } {
   return {
     reviewInterval: normalizeReviewInterval(f.reviewInterval),
     nextReviewDate: (f.nextReviewDate as string | null) ?? null,
     lastReviewedOn: (f.lastReviewedOn as string | null) ?? null,
+    hideLaterItems: f.hideLaterItems === true,
   };
 }
 

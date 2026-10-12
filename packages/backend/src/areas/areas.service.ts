@@ -81,6 +81,7 @@ export class AreasService {
     if (dto.title !== undefined) fields.title = dto.title;
     if (dto.notes !== undefined) fields.notes = dto.notes;
     if (dto.tagIds !== undefined) fields.tagIds = dto.tagIds;
+    if (dto.hideLaterItems !== undefined) fields.hideLaterItems = dto.hideLaterItems;
     const { zones, review } = await userReviewSettings(this.prisma, userId);
     Object.assign(fields, planReviewUpdate(area, dto, 'area', review, zones));
     return this.write(userId, id, fields);

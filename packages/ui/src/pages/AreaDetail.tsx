@@ -7,7 +7,7 @@ import { DragOverlay, type DragEndEvent, type DragStartEvent } from '@dnd-kit/co
 import { SortableContext, verticalListSortingStrategy, arrayMove } from '@dnd-kit/sortable';
 
 import { ProjectStatus } from '@taskora/shared';
-import type { ProjectResponseDto } from '@taskora/shared';
+import type { FeedItem, ProjectResponseDto } from '@taskora/shared';
 
 import {
   useAreasQuery,
@@ -20,6 +20,7 @@ import {
   selectionStateOf,
   useIsLogged,
   useLaterProjectKind,
+  useLaterTaskKind,
   useProjectsQuery,
   useReorderProjects,
 } from '@taskora/api';
@@ -27,7 +28,9 @@ import { useUiInteractionStore } from '@taskora/api';
 import { useTasksQuery } from '@taskora/api';
 import { ProjectFeedRow } from '@/components/feed/ProjectFeedRow';
 import { SortableProjectRow } from '@/components/project/DraggableProjectRow';
-import { LaterProjectSections } from '@/components/project/LaterProjectSections';
+import { LaterItemSections } from '@/components/project/LaterItemSections';
+import { projectFeedItem, taskFeedItem } from '@/components/feed/feedItems';
+import { LaterItemsToggle } from '@/components/common/LaterItemsToggle';
 import { mergeVisibleProjectOrder } from '@/components/layout/sidebarProjectLayout';
 import { TaskListView } from '@/components/task/TaskListView';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -58,6 +61,7 @@ export default function AreaDetail() {
   const area = areas.find((a) => a.id === id);
   const { data: allProjects = [] } = useProjectsQuery();
   const kindOf = useLaterProjectKind();
+  const taskKindOf = useLaterTaskKind();
   const isLogged = useIsLogged();
   // 已移入 Logbook 的已完成项目不显示；尚未移入的留在原位（Logging Mode）
   const shownProject = React.useCallback(
@@ -94,6 +98,22 @@ export default function AreaDetail() {
     [visible],
   );
   const shownAreaProjects = filtering ? visibleProjects : areaProjects;
+  // 区域直属的稍后任务不在「任务」段，与稍后项目一起混排在下方「计划」/「某天」小节。
+  const activeTasks = useMemo(
+    () => visibleTasks.filter((task) => taskKindOf(task) === null),
+    [visibleTasks, taskKindOf],
+  );
+  const laterItems = useMemo(
+    () => [
+      ...shownAreaProjects.filter((p) => kindOf(p) !== null).map(projectFeedItem),
+      ...visibleTasks.filter((task) => taskKindOf(task) !== null).map(taskFeedItem),
+    ],
+    [shownAreaProjects, visibleTasks, kindOf, taskKindOf],
+  );
+  const laterItemKind = React.useCallback(
+    (item: FeedItem) => (item.type === 'project' ? kindOf(item) : taskKindOf(item)),
+    [kindOf, taskKindOf],
+  );
   // 活跃项目可拖拽排序；稍后项目放在下方「计划」/「Someday」小节，已移入 Logbook 的
   // 已完成项目不显示。
   const projects = useMemo(
@@ -104,6 +124,14 @@ export default function AreaDetail() {
   const [orderedProjects, holdProjectOrder] = useHeldOrder(projects, projectKey);
   const reorderProjects = useReorderProjects();
   const updateArea = useUpdateArea();
+  const hideLater = area?.hideLaterItems === true;
+  const toggleLaterItems = () => {
+    if (!area) return;
+    updateArea.mutate(
+      { id: area.id, data: { hideLaterItems: !hideLater } },
+      { onError: () => toast.error(t('common:saveFailed')) },
+    );
+  };
   const { selectedIds, expandedId } = useTaskRowSelection();
 
   const [activeProjectId, setActiveProjectId] = React.useState<string | null>(null);
@@ -212,11 +240,16 @@ export default function AreaDetail() {
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
         // 页头已表达区域归属，行上不再重复归属小字。
-        <TaskListView tasks={visibleTasks} hideEmptyState hideOwnership selectionRank={1} />
+        <TaskListView tasks={activeTasks} hideEmptyState hideOwnership selectionRank={1} />
       )}
 
-      {/* 稍后项目放在页面最下方（活跃项目与任务之后）。 */}
-      <LaterProjectSections projects={shownAreaProjects} selectionRank={2} />
+      {/* 稍后项放在页面最下方（活跃项目与任务之后），可整块隐藏（Hide Later Items）。 */}
+      {!hideLater && (
+        <LaterItemSections items={laterItems} kindOf={laterItemKind} selectionRank={2} />
+      )}
+      {area && !isLoading && !isError ? (
+        <LaterItemsToggle count={laterItems.length} hidden={hideLater} onToggle={toggleLaterItems} />
+      ) : null}
 
       </div>
   );

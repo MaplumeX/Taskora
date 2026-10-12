@@ -33,6 +33,8 @@ export interface UpdateProjectDto {
   reviewInterval?: ReviewInterval;
   /** 下次回顾日（YYYY-MM-DD）。 */
   nextReviewDate?: string;
+  /** Hide Later Items：是否隐藏稍后项（列表页的显示状态）。 */
+  hideLaterItems?: boolean;
 }
 
 /** 完成项目时一并了结剩余（未了结、未进 Trash）任务的方式；缺省不动任务。 */
@@ -63,6 +65,8 @@ export interface ProjectResponseDto {
   nextReviewDate?: string | null;
   /** 上次回顾日（YYYY-MM-DD），只由标记已回顾写入；null 为从未回顾。 */
   lastReviewedOn?: string | null;
+  /** Hide Later Items：是否隐藏稍后项；缺省为显示。 */
+  hideLaterItems?: boolean;
   completedAt: string | null;
   trashedAt: string | null;
   tags?: TagResponseDto[];

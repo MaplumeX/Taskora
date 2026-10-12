@@ -31,6 +31,19 @@ const navItem = (to: string) => mainNav.find((item) => item.to === to) as NavIte
 const SCHEDULED_NAV = navItem('/upcoming');
 const SOMEDAY_NAV = navItem('/someday');
 
+/** 稍后小节的标题：「计划」/「某天」（Later Projects 页与区域页共用）。 */
+export function LaterSectionHeading({ kind }: { kind: 'scheduled' | 'someday' }) {
+  const { t } = useTranslation();
+  const nav = kind === 'scheduled' ? SCHEDULED_NAV : SOMEDAY_NAV;
+  const Icon = nav.icon;
+  return (
+    <h2 className="flex items-center gap-1.5 border-b border-border pb-1 text-section font-bold text-foreground">
+      <Icon aria-hidden className={cn('h-4 w-4 shrink-0', nav.colorClass)} />
+      {t(nav.labelKey)}
+    </h2>
+  );
+}
+
 interface Props {
   /** 候选项目；非稍后项目会被忽略。 */
   projects: ProjectResponseDto[];
@@ -111,14 +124,10 @@ export function LaterProjectSections({ projects, selectionRank }: Props) {
   return (
     <>
       {sections.map((section) => {
-        const Icon = section.nav.icon;
         const title = t(section.nav.labelKey);
         return (
           <section key={section.key} aria-label={title} className="flex flex-col">
-            <h2 className="flex items-center gap-1.5 border-b border-border pb-1 text-section font-bold text-foreground">
-              <Icon aria-hidden className={cn('h-4 w-4 shrink-0', section.nav.colorClass)} />
-              {title}
-            </h2>
+            <LaterSectionHeading kind={section.key === 'scheduled' ? 'scheduled' : 'someday'} />
             {section.key === 'scheduled' ? (
               <div className="flex flex-col pt-1">
                 {section.items.map((p) => (

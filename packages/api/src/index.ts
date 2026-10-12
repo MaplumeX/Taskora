@@ -158,6 +158,7 @@ export { MemoryBlobCache, type BlobCache } from './attachments/blob-cache';
 export * from './hooks/useScheduledTasksQuery';
 export * from './hooks/useRepeatPreviews';
 export * from './hooks/useUsers';
+export * from './hooks/useHideLaterItemsPreference';
 export * from './hooks/useCalendarDay';
 export * from './hooks/useCalendarEvents';
 export * from './hooks/useNewInToday';
@@ -295,7 +296,7 @@ export {
 // Utilities
 export * from './utils/date';
 // 列表顺序（ADR-0007 Position）：UI 与两种后端同一口径。
-export { sortByEffectivePosition } from '@taskora/engine';
+export { feedSortKey, sortByEffectivePosition } from '@taskora/engine';
 /** Start 推导（ADR 0024）：乐观 / 草稿行与数据层同一口径。 */
 export { resolveTaskStart } from '@taskora/engine';
 // 侧边栏同序的扁平父级顺序：Move Picker、Quick Find、分组视图与回顾队列共用。

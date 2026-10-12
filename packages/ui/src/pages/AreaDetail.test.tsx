@@ -1,14 +1,20 @@
 import * as React from 'react';
 import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter, Route, Routes } from 'react-router-dom';
-import { ProjectStatus, Start } from '@taskora/shared';
-import type { ProjectResponseDto } from '@taskora/shared';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ProjectStatus, Start, TaskStatus } from '@taskora/shared';
+import type { AreaResponseDto, ProjectResponseDto, TaskResponseDto } from '@taskora/shared';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const harness = vi.hoisted(() => ({
   projects: [] as ProjectResponseDto[],
+  tasks: [] as TaskResponseDto[],
+  area: null as AreaResponseDto | null,
+  reorderFeedMutate: vi.fn(),
+  updateAreaMutate: vi.fn(),
   dnd: null as {
     onDragStart: (event: unknown) => void;
+    onDragOver?: (event: unknown) => void;
     onDragEnd: (event: unknown) => void;
   } | null,
   sidebarDrop: vi.fn(),
@@ -54,10 +60,11 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
-  useAreasQuery: () => ({ data: [] }),
+  useAreasQuery: () => ({ data: harness.area ? [harness.area] : [] }),
   useProjectsQuery: () => ({ data: harness.projects }),
-  useTasksQuery: () => ({ data: [], isLoading: false, isError: false }),
-  useUpdateArea: () => ({ mutate: vi.fn() }),
+  useTasksQuery: () => ({ data: harness.tasks, isLoading: false, isError: false }),
+  useUpdateArea: () => ({ mutate: harness.updateAreaMutate }),
+  useReorderFeed: () => ({ mutate: harness.reorderFeedMutate }),
   useReorderProjects: () => ({ mutate: harness.reorderProjectsMutate }),
   useTagsQuery: () => ({ data: [] }),
   useEffectiveTags: () => effectiveTags,
@@ -112,7 +119,9 @@ function renderArea() {
     // 列表登记在应用壳的共享拖拽上下文里（ADR 0018）。
     {
       wrapper: ({ children }) => (
-        <AppDndProvider onSidebarDrop={harness.sidebarDrop}>{children}</AppDndProvider>
+        <QueryClientProvider client={new QueryClient()}>
+          <AppDndProvider onSidebarDrop={harness.sidebarDrop}>{children}</AppDndProvider>
+        </QueryClientProvider>
       ),
     },
   );
@@ -129,6 +138,10 @@ beforeEach(() => {
   harness.sidebarDrop.mockReset();
   harness.reorderProjectsMutate.mockReset();
   harness.taskListViewProps = null;
+  harness.reorderFeedMutate.mockReset();
+  harness.updateAreaMutate.mockReset();
+  harness.tasks = [];
+  harness.area = null;
   harness.projects = [
     project('x', null, 0),
     project('a1', 'a', 1),
@@ -186,26 +199,27 @@ describe('AreaDetail 稍后项目拖拽', () => {
     harness.projects.push(project('as2', 'a', 5, Start.SOMEDAY));
   });
 
-  it('Someday 项目可拖拽排序，以全量顺序写回', () => {
+  it('某天小节同 Someday 视图：拖拽写回 feed 顺序，不改侧边栏顺序', () => {
     renderArea();
-    act(() => harness.dnd?.onDragStart({ active: { id: 'as2' } }));
-    act(() => harness.dnd?.onDragEnd({ active: { id: 'as2' }, over: { id: 'as' } }));
-    expect(harness.reorderProjectsMutate).toHaveBeenCalledWith([
-      'x',
-      'a1',
-      'as2',
-      'a2',
-      'af',
-      'as',
+    act(() => harness.dnd?.onDragStart({ active: { id: 'project:as2' } }));
+    act(() =>
+      harness.dnd?.onDragOver?.({ active: { id: 'project:as2' }, over: { id: 'project:as' } }),
+    );
+    act(() =>
+      harness.dnd?.onDragEnd({ active: { id: 'project:as2' }, over: { id: 'project:as' } }),
+    );
+    expect(harness.reorderFeedMutate).toHaveBeenCalledWith([
+      { type: 'project', id: 'as2' },
+      { type: 'project', id: 'as' },
     ]);
-    expect(renderedIds()).toEqual(['a1', 'a2', 'af', 'as2', 'as']);
+    expect(harness.reorderProjectsMutate).not.toHaveBeenCalled();
   });
 
   it('Someday 项目可拖到侧边栏', () => {
     renderArea();
-    act(() => harness.dnd?.onDragStart({ active: { id: 'as' } }));
+    act(() => harness.dnd?.onDragStart({ active: { id: 'project:as' } }));
     act(() =>
-      harness.dnd?.onDragEnd({ active: { id: 'as' }, over: { id: 'sidebar-drop:area:b' } }),
+      harness.dnd?.onDragEnd({ active: { id: 'project:as' }, over: { id: 'sidebar-drop:area:b' } }),
     );
     expect(harness.sidebarDrop).toHaveBeenCalledWith(
       { kind: 'project', project: expect.objectContaining({ id: 'as' }) },
@@ -227,6 +241,81 @@ describe('AreaDetail 稍后项目拖拽', () => {
     act(() => harness.dnd?.onDragStart({ active: { id: 'af' } }));
     act(() => harness.dnd?.onDragEnd({ active: { id: 'af' }, over: { id: 'as' } }));
     expect(harness.reorderProjectsMutate).not.toHaveBeenCalled();
+  });
+});
+
+function task(id: string, start: Start, scheduledDate: string | null = null): TaskResponseDto {
+  return {
+    id,
+    title: `Task ${id}`,
+    notes: null,
+    scheduledDate,
+    start,
+    reminderTime: null,
+    repeatRule: null,
+    repeatSourceId: null,
+    dueDate: null,
+    status: TaskStatus.ACTIVE,
+    completedAt: null,
+    trashedAt: null,
+    position: `b${id}`,
+    projectId: null,
+    headingId: null,
+    areaId: 'a',
+    tags: [],
+    createdAt: '2026-08-09T00:00:00.000Z',
+    updatedAt: '2026-08-09T00:00:00.000Z',
+  };
+}
+
+const area: AreaResponseDto = {
+  id: 'a',
+  title: 'Area',
+  notes: null,
+  hideLaterItems: false,
+  createdAt: '2026-08-09T00:00:00.000Z',
+  updatedAt: '2026-08-09T00:00:00.000Z',
+};
+
+describe('AreaDetail 稍后项（Hide Later Items）', () => {
+  beforeEach(() => {
+    harness.tasks = [
+      task('t-now', Start.ANYTIME),
+      task('t-some', Start.SOMEDAY),
+      task('t-early', Start.ANYTIME, '2098-06-01'),
+    ];
+  });
+
+  it('直属稍后任务不在「任务」段，与稍后项目混排在计划 / 某天小节', () => {
+    renderArea();
+    expect((harness.taskListViewProps?.tasks as TaskResponseDto[]).map((t) => t.id)).toEqual([
+      't-now',
+    ]);
+    const scheduled = screen.getByRole('region', { name: 'nav:upcoming' });
+    // 计划按日期：任务 2098-06-01 在项目 2099-01-01 之前
+    expect(scheduled.textContent!.indexOf('Task t-early')).toBeLessThan(
+      scheduled.textContent!.indexOf('Project af'),
+    );
+    const someday = screen.getByRole('region', { name: 'nav:someday' });
+    expect(someday).toHaveTextContent('Project as');
+    expect(someday).toHaveTextContent('Task t-some');
+  });
+
+  it('按钮切换区域的 hideLaterItems；隐藏时两个小节都不渲染', () => {
+    harness.area = area;
+    const { unmount } = renderArea();
+    act(() => screen.getByTestId('later-items-toggle').click());
+    expect(harness.updateAreaMutate).toHaveBeenCalledWith(
+      { id: 'a', data: { hideLaterItems: true } },
+      expect.any(Object),
+    );
+    unmount();
+
+    harness.area = { ...area, hideLaterItems: true };
+    renderArea();
+    expect(screen.queryByRole('region', { name: 'nav:upcoming' })).toBeNull();
+    expect(screen.queryByRole('region', { name: 'nav:someday' })).toBeNull();
+    expect(screen.getByTestId('later-items-toggle')).toHaveTextContent('showLaterItems');
   });
 });
 

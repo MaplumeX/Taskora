@@ -1,7 +1,12 @@
 import { useCallback, useEffect, useSyncExternalStore } from 'react';
 import { usePreferencesStore } from '@/stores/preferences.store';
-import type { LaterProjectFields, LaterProjectKind } from '@taskora/shared';
-import { projectLaterKind, todayDateKey } from '@/utils/date';
+import type {
+  LaterItemKind,
+  LaterProjectFields,
+  LaterProjectKind,
+  LaterTaskFields,
+} from '@taskora/shared';
+import { projectLaterKind, taskLaterKind, todayDateKey } from '@/utils/date';
 import { currentStatusBarController } from '../status-bar/controller';
 import { useQueryCache } from './cache-patches';
 
@@ -55,4 +60,10 @@ export function useLaterProjectKind(): (project: LaterProjectFields) => LaterPro
   const day = useCalendarDay();
   // 依赖 day：跨天 / 换时区时换新引用，让下游 useMemo 重新分组。
   return useCallback((project: LaterProjectFields) => projectLaterKind(project), [day]);
+}
+
+/** 客户端稍后任务判定（`taskLaterKind`），跨天 / 换时区后返回新的函数引用。 */
+export function useLaterTaskKind(): (task: LaterTaskFields) => LaterItemKind | null {
+  const day = useCalendarDay();
+  return useCallback((task: LaterTaskFields) => taskLaterKind(task), [day]);
 }

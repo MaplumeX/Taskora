@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Check, Search } from 'lucide-react';
 
@@ -17,6 +17,10 @@ interface Props<T extends { id: string }> {
   isNested?: (target: T) => boolean;
   /** 列表的无障碍名称（默认「移动」）。 */
   listLabel?: string;
+  /** 列表下方的附加内容（如隐藏稍后项按钮）。 */
+  footer?: ReactNode;
+  /** 输入框按键的前置处理（如 ⇧⌘E 切换稍后项）；返回 true 表示已处理。 */
+  onInputKeyDown?: (e: KeyboardEvent<HTMLInputElement>) => boolean;
 }
 
 /** 任务与项目共用移动列表的外观、当前位置标记和键盘交互。 */
@@ -31,6 +35,8 @@ export function MovePickerList<T extends { id: string }>({
   renderTarget,
   isNested,
   listLabel,
+  footer,
+  onInputKeyDown,
 }: Props<T>) {
   const { t } = useTranslation('task');
   const select = (target: T) => {
@@ -66,7 +72,9 @@ export function MovePickerList<T extends { id: string }>({
           placeholder={searchPlaceholder}
           value={query}
           onChange={(e) => onQueryChange(e.target.value)}
-          onKeyDown={onKeyDown}
+          onKeyDown={(e) => {
+            if (!onInputKeyDown?.(e)) onKeyDown(e);
+          }}
           className="h-7 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
         />
       </div>
@@ -109,6 +117,7 @@ export function MovePickerList<T extends { id: string }>({
           );
         })}
       </div>
+      {footer}
     </div>
   );
 }

@@ -43,6 +43,8 @@ export interface UserPreferences {
    * 推进它，撤销把它退回原值；LWW，不取较晚者。
    */
   loggedThrough?: string | null;
+  /** Move 选择器是否隐藏稍后项目（Hide Later Items）；缺省显示。LWW。 */
+  hideLaterItemsInMovePicker?: boolean;
 }
 
 export interface UpdatePreferencesDto {
@@ -56,6 +58,7 @@ export interface UpdatePreferencesDto {
   defaultReviewIntervals?: ReviewIntervalDefaults;
   loggingMode?: LoggingMode;
   loggedThrough?: string | null;
+  hideLaterItemsInMovePicker?: boolean;
 }
 
 export interface DeleteAccountDto {

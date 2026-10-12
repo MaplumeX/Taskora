@@ -76,6 +76,8 @@ export type KeyAction =
   | { type: 'newChecklistItem' }
   /** ⌘/：显示 / 隐藏侧边栏。 */
   | { type: 'toggleSidebar' }
+  /** ⇧⌘E：当前项目页 / 区域页显示或隐藏稍后项（Hide Later Items）。 */
+  | { type: 'toggleLaterItems' }
   /** ⌘C：复制选中的任务 / 项目（无条目选中时让给原生复制）。 */
   | { type: 'copy' }
   /** ⌘V：粘贴复制的条目副本，或把剪贴板文字逐行建成任务。 */
@@ -221,6 +223,7 @@ export type ShortcutId =
   | 'reorderBottom'
   | 'search'
   | 'toggleSidebar'
+  | 'toggleLaterItems'
   | 'toggleAssistantPanel'
   | 'newWindow'
   | 'reviewMarkNext'
@@ -604,6 +607,12 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     defaults: primaryDefaults('F'),
   },
   appDef('toggleSidebar', 'global', { type: 'toggleSidebar' }, primaryDefaults('/')),
+  appDef(
+    'toggleLaterItems',
+    'global',
+    { type: 'toggleLaterItems' },
+    shiftAltOnWebDefaults('E'),
+  ),
   // Web 的 Ctrl+J 是浏览器下载页。
   {
     id: 'toggleAssistantPanel',

@@ -76,6 +76,7 @@ export function createEngineAreaBackend(options: EngineAreaBackendOptions): Area
       if (data.title !== undefined) patch.title = data.title;
       if (data.notes !== undefined) patch.notes = data.notes;
       if (data.tagIds !== undefined) patch.tagIds = data.tagIds;
+      if (data.hideLaterItems !== undefined) patch.hideLaterItems = data.hideLaterItems;
       Object.assign(
         patch,
         planReviewUpdate(existing.fields, data, 'area', currentReviewContext(), zones()),

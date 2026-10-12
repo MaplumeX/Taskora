@@ -1,5 +1,5 @@
 import { Type } from 'class-transformer';
-import { IsArray, IsDateString, IsOptional, IsString, ValidateNested } from 'class-validator';
+import { IsArray, IsBoolean, IsDateString, IsOptional, IsString, ValidateNested } from 'class-validator';
 
 import { ReviewIntervalDto } from '../../common/review-interval.dto';
 
@@ -52,6 +52,11 @@ export class UpdateAreaDto {
   @IsOptional()
   @IsDateString()
   nextReviewDate?: string;
+
+  /** Hide Later Items：是否隐藏稍后项。 */
+  @IsOptional()
+  @IsBoolean()
+  hideLaterItems?: boolean;
 }
 
 export class ReorderDto {

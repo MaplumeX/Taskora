@@ -30,6 +30,14 @@ _Avoid_: 文件、file、媒体、图片（图片只是一种附件）
 处于休眠的 Project：未了结、未进废纸篓，且计划为 Someday，或计划日期晚于账号时区的今天（日期为今天或已过即恢复活跃）。按状态细分为「计划」（未来日期）与「某天」（Someday）。侧边栏不显示稍后项目：无区域的汇总为无区域项目列表末尾一个不可排序的「N 个稍后项目」入口（N ≥ 1 才出现），进入 Later Projects 页；有区域的只在区域页的「计划」/「某天」小节下出现。其内任务不出现在 Anytime / Someday 等汇总视图。纯推导状态，不改写 Project 或 Task 字段。
 _Avoid_: 休眠项目（口语可用）、inactive project、归档
 
+**Later Item（稍后项）**:
+某个列表里暂不可着手的条目（对齐 Things 3 的 later items）：未了结、未进 Trash，且 Start 为 SOMEDAY 或计划日期晚于账号时区今天的 Task，以及 Later Project。项目页的稍后项只有任务（按任务自身判定，不看项目本身是否休眠），留在原位；区域页的稍后项是该区域的稍后项目与直属稍后任务，混排在页面最下方的「计划」/「某天」小节；Move 选择器的稍后项是稍后项目。Quick Find 不区分稍后项。纯推导，不改写字段。
+_Avoid_: 休眠任务、inactive item、稍后（单用时易与 Snooze 混淆）
+
+**Hide Later Items（隐藏稍后项）**:
+列表底部一个按钮切换的显示状态：显示时为「隐藏稍后项」，隐藏时为「显示 N 个稍后项」，列表没有稍后项时不出现；另有快捷键 ⇧⌘E，没有菜单项。默认显示。项目页、区域页的状态是 Project / Area 的普通字段 `hideLaterItems`（字段级 LWW、跨端同步）；Move 选择器是一个账号偏好。Quick Find 没有这个开关。隐藏只影响渲染，被隐藏的条目照常出现在 Today / Upcoming 等其他视图；从 Quick Find 跳到被隐藏的条目时，目标列表自动切回显示。
+_Avoid_: 折叠（不是折叠成一个组，而是把条目从列表里去掉）
+
 **Project Heading（项目分组标题）**:
 Project 内的静态分组标题，用于组织 Project 内的 Tasks。可连同其下全部 Tasks 移到另一个 Project（对齐 Things 3 的 Move），排在目标项目分组末尾，Tasks 保留分组归属。未归档的 Heading 可在 Quick Find 中按名称搜到（所属项目须是导航目标），打开即跳到所在项目，该行成为 Selection 并滚入视野。
 _Avoid_: 项目标题（易与项目名称混淆）、Section、Group Header

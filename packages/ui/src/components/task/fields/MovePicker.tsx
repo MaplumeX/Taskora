@@ -1,12 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Inbox, Layers } from 'lucide-react';
 
 import type { UpdateTaskDto } from '@taskora/shared';
-import { useAreasQuery, useLaterProjectKind, useProjectsQuery } from '@taskora/api';
+import {
+  useAreasQuery,
+  useHideLaterItemsPreference,
+  useLaterProjectKind,
+  useProjectsQuery,
+} from '@taskora/api';
 
 import { ProjectProgressPie } from '@/components/project/ProjectProgressRing';
 import { MovePickerList } from '@/components/common/MovePickerList';
+import { LaterItemsToggle } from '@/components/common/LaterItemsToggle';
+import { isToggleLaterItemsKey } from '@/components/keyboard/laterItemsShortcut';
 import { cn } from '@/lib/utils';
 import {
   buildMoveTargets,
@@ -49,10 +56,11 @@ export function MovePicker({ current, onSelect }: Props) {
     [query, projects, areas, inboxNames, kindOf],
   );
   const currentId = currentMoveTargetId(current);
+  const later = useHiddenLaterTargets(targets, currentId);
 
   return (
     <MovePickerList
-      targets={targets}
+      targets={later.targets}
       currentId={currentId}
       query={query}
       onQueryChange={setQuery}
@@ -61,8 +69,38 @@ export function MovePicker({ current, onSelect }: Props) {
       emptyMessage={t('task:moveNoResults')}
       renderTarget={(target) => <MoveTargetRow target={target} />}
       isNested={(target) => target.kind === 'project' && target.nested}
+      footer={later.footer}
+      onInputKeyDown={later.onInputKeyDown}
     />
   );
+}
+
+/**
+ * Move 选择器的 Hide Later Items（账号偏好，任务与 Heading 的移动选择器共用）：
+ * 隐藏时去掉稍后项目，当前所在位置保留。
+ */
+export function useHiddenLaterTargets<T extends MoveTarget>(
+  targets: T[],
+  currentId: string | null,
+): {
+  targets: T[];
+  footer: ReactNode;
+  onInputKeyDown: (e: KeyboardEvent<HTMLInputElement>) => boolean;
+} {
+  const { hidden, toggle } = useHideLaterItemsPreference('hideLaterItemsInMovePicker');
+  const isHidable = (target: T) =>
+    target.kind === 'project' && target.later && target.id !== currentId;
+  const count = targets.filter(isHidable).length;
+  return {
+    targets: hidden ? targets.filter((target) => !isHidable(target)) : targets,
+    footer: <LaterItemsToggle count={count} hidden={hidden} onToggle={toggle} className="mt-0.5" />,
+    onInputKeyDown: (e) => {
+      if (!isToggleLaterItemsKey(e)) return false;
+      e.preventDefault();
+      toggle();
+      return true;
+    },
+  };
 }
 
 export function MoveTargetRow({ target }: { target: MoveTarget }) {

@@ -1,4 +1,12 @@
-import { IsArray, IsDateString, IsIn, IsOptional, IsString, ValidateNested } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsDateString,
+  IsIn,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { Start, type SettleRemainingTasks } from '@taskora/shared';
 
@@ -95,6 +103,11 @@ export class UpdateProjectDto {
   @IsOptional()
   @IsDateString()
   nextReviewDate?: string;
+
+  /** Hide Later Items：是否隐藏稍后项。 */
+  @IsOptional()
+  @IsBoolean()
+  hideLaterItems?: boolean;
 }
 
 /** 完成项目：settleRemaining 给出时一并了结剩余任务（recurring-projects spec）。 */

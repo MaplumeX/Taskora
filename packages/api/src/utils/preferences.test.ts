@@ -38,6 +38,7 @@ describe('normalizePreferences', () => {
       defaultReviewIntervals: INITIAL_INTERVALS,
       loggingMode: 'IMMEDIATE',
       loggedThrough: null,
+      hideLaterItemsInMovePicker: false,
     });
   });
 
@@ -66,6 +67,7 @@ describe('normalizePreferences', () => {
       defaultReviewIntervals: INITIAL_INTERVALS,
       loggingMode: 'IMMEDIATE',
       loggedThrough: null,
+      hideLaterItemsInMovePicker: false,
     });
   });
 
@@ -82,6 +84,7 @@ describe('normalizePreferences', () => {
         defaultReviewIntervals: INITIAL_INTERVALS,
         loggingMode: 'IMMEDIATE',
         loggedThrough: null,
+        hideLaterItemsInMovePicker: false,
       });
     }
   });
@@ -98,6 +101,7 @@ describe('normalizePreferences', () => {
       defaultReviewIntervals: INITIAL_INTERVALS,
       loggingMode: 'IMMEDIATE',
       loggedThrough: null,
+      hideLaterItemsInMovePicker: false,
     });
     expect(normalizePreferences({ language: 'zh' }, defaults)).toEqual({
       timeZone: 'UTC',
@@ -110,6 +114,7 @@ describe('normalizePreferences', () => {
       defaultReviewIntervals: INITIAL_INTERVALS,
       loggingMode: 'IMMEDIATE',
       loggedThrough: null,
+      hideLaterItemsInMovePicker: false,
     });
   });
 
@@ -126,6 +131,7 @@ describe('normalizePreferences', () => {
       defaultReviewIntervals: INITIAL_INTERVALS,
       loggingMode: 'IMMEDIATE',
       loggedThrough: null,
+      hideLaterItemsInMovePicker: false,
     });
   });
 
@@ -161,7 +167,6 @@ describe('normalizePreferences', () => {
       'task:a@2026-10-08',
     ]);
   });
-
 
   it('accepts only real booleans for bucketGrouping (invalid/missing → default)', () => {
     expect(normalizePreferences({ bucketGrouping: false }, defaults).bucketGrouping).toBe(false);
@@ -245,5 +250,18 @@ describe('normalizePreferences', () => {
         loggedThrough: null,
       });
     });
+  });
+
+  it('Hide Later Items 偏好只接受布尔值，缺省为显示', () => {
+    expect(
+      normalizePreferences(
+        { hideLaterItemsInMovePicker: 'yes' },
+        defaults,
+      ),
+    ).toMatchObject({ hideLaterItemsInMovePicker: false });
+    expect(
+      normalizePreferences({}, { ...defaults, hideLaterItemsInMovePicker: true })
+        .hideLaterItemsInMovePicker,
+    ).toBe(true);
   });
 });

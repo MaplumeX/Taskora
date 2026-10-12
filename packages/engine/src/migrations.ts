@@ -388,6 +388,12 @@ export const REPLICA_MIGRATIONS: readonly ReplicaMigration[] = [
   },
   // 14 → 15：bucket / scheduledType 合并为 start（ADR 0024）。
   mergeBucketIntoStart,
+  // 15 → 16：project / area 增加 hideLaterItems（隐藏稍后项）；存量行留空即显示。
+  async (storage) => {
+    for (const table of ['project', 'area']) {
+      await addColumnIfMissing(storage, table, 'hideLaterItems', 'INTEGER');
+    }
+  },
 ];
 
 /** 当前代码的副本 schema 版本。 */

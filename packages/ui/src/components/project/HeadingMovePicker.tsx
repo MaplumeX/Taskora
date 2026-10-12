@@ -5,7 +5,7 @@ import { useAreasQuery, useLaterProjectKind, useProjectsQuery } from '@taskora/a
 import type { ProjectResponseDto } from '@taskora/shared';
 
 import { MovePickerList } from '@/components/common/MovePickerList';
-import { MoveTargetRow } from '@/components/task/fields/MovePicker';
+import { MoveTargetRow, useHiddenLaterTargets } from '@/components/task/fields/MovePicker';
 import { buildMoveTargets, type MoveTarget } from '@/components/task/fields/moveTargets';
 
 type ProjectTarget = Extract<MoveTarget, { kind: 'project' }>;
@@ -44,17 +44,21 @@ export function HeadingMovePicker({ currentProjectId, onSelect }: Props) {
         areaTitle: target.project.areaId ? (areaTitle.get(target.project.areaId) ?? null) : null,
       }));
   }, [query, projects, areas, kindOf]);
+  const currentId = `project:${currentProjectId}`;
+  const later = useHiddenLaterTargets(targets, currentId);
 
   return (
     <MovePickerList
-      targets={targets}
-      currentId={`project:${currentProjectId}`}
+      targets={later.targets}
+      currentId={currentId}
       query={query}
       onQueryChange={setQuery}
       onSelect={(target) => onSelect(target.project)}
       searchPlaceholder={t('project:moveHeadingSearchPlaceholder')}
       emptyMessage={t('project:moveHeadingNoResults')}
       renderTarget={(target) => <MoveTargetRow target={target} />}
+      footer={later.footer}
+      onInputKeyDown={later.onInputKeyDown}
     />
   );
 }

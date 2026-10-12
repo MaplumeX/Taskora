@@ -97,6 +97,11 @@ interface Props {
   visibleTaskIds?: ReadonlySet<string> | null;
   /** 过滤后没有任何可见任务时的提示。 */
   filteredEmptyHint?: string;
+  /**
+   * Hide Later Items：不显示的稍后任务。与 Tag 过滤不同，Heading 照常显示、
+   * 拖拽照常可用：写回布局时隐藏任务按原位合并回去（mergeHiddenTasks）。
+   */
+  hiddenTaskIds?: ReadonlySet<string> | null;
 }
 
 function normalizeLayout(
@@ -126,6 +131,26 @@ function filterLayout(layout: LayoutState, visible: ReadonlySet<string>): Layout
     headingIds: layout.headingIds.filter((id) => (containers[id] ?? []).length > 0),
     containers,
   };
+}
+
+/**
+ * 把只含可见任务的布局合并回全量布局（Hide Later Items）：Heading 顺序取
+ * `visible`；每个容器里隐藏任务（`full` 有、`visible` 没有的）留在原槽位，
+ * 可见任务按新顺序依次填回可见槽位，多出的接在末尾。
+ */
+function mergeHiddenTasks(full: LayoutState, visible: LayoutState): LayoutState {
+  const shown = new Set(Object.values(visible.containers).flat());
+  const containers: Record<ContainerId, string[]> = {};
+  for (const id of [UNGROUPED, ...visible.headingIds]) {
+    const queue = [...(visible.containers[id] ?? [])];
+    const merged: string[] = [];
+    for (const taskId of full.containers[id] ?? []) {
+      if (!shown.has(taskId)) merged.push(taskId);
+      else if (queue.length > 0) merged.push(queue.shift()!);
+    }
+    containers[id] = [...merged, ...queue];
+  }
+  return { headingIds: visible.headingIds, containers };
 }
 
 function serializeLayout(projectId: string, layout: LayoutState): ReorderProjectHeadingLayoutDto {
@@ -608,10 +633,22 @@ export function ProjectTaskLayout({
   emptyHint,
   visibleTaskIds = null,
   filteredEmptyHint,
+  hiddenTaskIds = null,
 }: Props) {
   const { t } = useTranslation();
-  // 展开中的任务编辑后离开本项目视图（如立即模式下完成）时留在原位，收起后才离开。
-  const tasks = useLingeringExpanded(sourceTasks, taskIdOf);
+  const unhiddenTasks = React.useMemo(
+    () => (hiddenTaskIds ? sourceTasks.filter((task) => !hiddenTaskIds.has(task.id)) : sourceTasks),
+    [sourceTasks, hiddenTaskIds],
+  );
+  // 展开中的任务编辑后离开本项目视图（如立即模式下完成、隐藏稍后项时改为
+  // Someday）时留在原位，收起后才离开。
+  const tasks = useLingeringExpanded(unhiddenTasks, taskIdOf);
+  // 含隐藏稍后任务的全量布局：写回时把隐藏任务合并回原位。
+  const fullLayoutRef = React.useRef<LayoutState | null>(null);
+  fullLayoutRef.current = React.useMemo(
+    () => (hiddenTaskIds ? normalizeLayout(sourceTasks, headings) : null),
+    [hiddenTaskIds, sourceTasks, headings],
+  );
   const serverLayout = React.useMemo(() => normalizeLayout(tasks, headings), [tasks, headings]);
   const [layout, setLayout] = React.useState(serverLayout);
   const [activeTask, setActiveTask] = React.useState<TaskResponseDto | null>(null);
@@ -770,7 +807,9 @@ export function ProjectTaskLayout({
     // feeds the submitted layout back through props.
     const rollbackLayout = cloneLayout(serverLayoutRef.current);
     updateRenderedLayout(next);
-    saveLayout.mutate(serializeLayout(projectId, next), {
+    const full = fullLayoutRef.current;
+    const submitted = full ? mergeHiddenTasks(full, next) : next;
+    saveLayout.mutate(serializeLayout(projectId, submitted), {
       onError: () => {
         updateRenderedLayout(rollbackLayout);
         toast.error(t('common:saveFailed'));
@@ -1235,7 +1274,7 @@ export function ProjectTaskLayout({
   );
 }
 
-export { applyLayoutDrag, filterLayout, normalizeLayout, serializeLayout };
+export { applyLayoutDrag, filterLayout, mergeHiddenTasks, normalizeLayout, serializeLayout };
 
 function taskIdOf(task: TaskResponseDto) {
   return task.id;

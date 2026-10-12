@@ -27,6 +27,10 @@ const harness = vi.hoisted(() => ({
   updateHeadingMutate: vi.fn(),
   duplicateTask: vi.fn(async (id: string) => ({ id: `${id}-copy` })),
   duplicateProject: vi.fn(async (id: string) => ({ id: `${id}-copy` })),
+  updateProjectMutate: vi.fn(),
+  updateAreaMutate: vi.fn(),
+  projects: [] as Array<{ id: string; hideLaterItems?: boolean }>,
+  areas: [] as Array<{ id: string; hideLaterItems?: boolean }>,
 }));
 
 vi.mock('react-i18next', () => ({
@@ -66,14 +70,15 @@ vi.mock('@taskora/api', async (importOriginal) => {
     useArchiveProjectHeading: () => ({ mutate: vi.fn(), isPending: false }),
     useUnarchiveProjectHeading: () => ({ mutate: vi.fn(), isPending: false }),
     useMoveProjectHeading: () => ({ mutate: vi.fn(), isPending: false }),
-    useProjectsQuery: () => ({ data: [] }),
-    useAreasQuery: () => ({ data: [] }),
+    useProjectsQuery: () => ({ data: harness.projects }),
+    useAreasQuery: () => ({ data: harness.areas }),
     useTagsQuery: () => ({
       data: [{ id: 'urgent', title: 'Urgent', color: '#EF4444', parentId: null }],
     }),
     useCreateTag: () => ({ mutate: vi.fn(), isPending: false }),
     useUpdateTask: () => ({ mutate: harness.updateTaskMutate }),
-    useUpdateProject: () => ({ mutate: vi.fn() }),
+    useUpdateProject: () => ({ mutate: harness.updateProjectMutate }),
+    useUpdateArea: () => ({ mutate: harness.updateAreaMutate }),
     useContentBottomActionsForRoute: () => ({
       showAddTask: true,
       showAddProject: false,
@@ -227,6 +232,10 @@ beforeEach(() => {
   harness.updateHeadingMutate.mockReset();
   harness.duplicateTask.mockClear();
   harness.duplicateProject.mockClear();
+  harness.updateProjectMutate.mockReset();
+  harness.updateAreaMutate.mockReset();
+  harness.projects = [];
+  harness.areas = [];
   useSelectionStore.getState().setSelection([]);
   useSelectionStore.getState().clearSelection();
   useUiInteractionStore.setState({ expandedId: null, searchOpen: false, searchSeed: null });
@@ -1260,5 +1269,34 @@ describe('KeyboardShortcuts — 导航弹窗（⇧⌘O）', () => {
     await userEvent.type(input, 'nav:inbox');
     await userEvent.keyboard('{Enter}');
     expect(await screen.findByTestId('inbox-page')).toBeInTheDocument();
+  });
+});
+
+describe('⇧⌘E 显示 / 隐藏稍后项', () => {
+  it('项目页：切换该项目的 hideLaterItems', () => {
+    harness.projects = [{ id: 'p1', hideLaterItems: false }];
+    renderAt('/projects/p1', []);
+    press('E', { metaKey: true, shiftKey: true });
+    expect(harness.updateProjectMutate).toHaveBeenCalledWith({
+      id: 'p1',
+      data: { hideLaterItems: true },
+    });
+  });
+
+  it('区域页：切换该区域的 hideLaterItems（Windows Ctrl+Shift+E）', () => {
+    harness.areas = [{ id: 'a1', hideLaterItems: true }];
+    renderAt('/areas/a1', [], 'windows');
+    press('E', { ctrlKey: true, shiftKey: true });
+    expect(harness.updateAreaMutate).toHaveBeenCalledWith({
+      id: 'a1',
+      data: { hideLaterItems: false },
+    });
+  });
+
+  it('其他页面不响应', () => {
+    renderAt('/today', tasks);
+    press('E', { metaKey: true, shiftKey: true });
+    expect(harness.updateProjectMutate).not.toHaveBeenCalled();
+    expect(harness.updateAreaMutate).not.toHaveBeenCalled();
   });
 });
