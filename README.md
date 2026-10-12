@@ -89,7 +89,7 @@ On first launch, the desktop and Android apps ask for your **server address**: t
 > - **Linux**: `chmod +x Taskora_*.AppImage`, then run it.
 > - **Android**: allow your browser or file manager to install unknown apps.
 >
-> There is no auto-update yet. To upgrade, download the new version and install it over the old one; your data stays.
+> The desktop and Android apps update themselves from the server you connect them to: the desktop app downloads the new version in the background and offers to restart, and Android opens the download page for the matching APK. Apps never go past the version of their server, so upgrade the server first.
 
 ## Self-host the server
 
@@ -129,6 +129,8 @@ docker compose pull && docker compose up -d
 ```
 
 To stay on a specific version, set `IMAGE_TAG=v0.8.0` (for example) in `.env`.
+
+The desktop and Android apps notice the new server version and prompt you to update.
 
 **Backups**
 
