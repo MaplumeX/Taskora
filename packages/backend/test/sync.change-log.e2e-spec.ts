@@ -4,12 +4,13 @@
  */
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 
-import { formatHlc, openEngine, type OutboxEvent, type SyncTransport } from '@taskora/engine';
+import { formatHlc, openEngine, type OutboxEvent } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
 
 import { PrismaSyncChangeLog } from '../src/sync/prisma-sync-change-log.service';
 import { SYNC_LOG_RETENTION_DAYS, SYNC_PULL_PAGE_SIZE } from '../src/sync/sync-change-log';
 import { SyncHubService } from '../src/sync/sync-hub.service';
+import { viaController } from './hub-transport';
 import { disconnectTestDb, resetDb, testPrisma, testPrismaService } from './db';
 
 const hasTestDb = !!process.env.TEST_DATABASE_URL;
@@ -77,11 +78,11 @@ e2eDescribe('PrismaSyncChangeLog（真实 Postgres）', () => {
 
   it('超过一页时 hasMore，真实引擎设备循环拉取直到追平', async () => {
     const { hub, log } = newHub();
-    const transport: SyncTransport = {
+    const transport = viaController({
       push: (request) => hub.push(USER, request.events, request.deletes),
       pull: (request) => hub.pull(USER, request.cursor),
       bootstrap: () => hub.bootstrap(USER),
-    };
+    });
     const device = await openEngine({
       storage: await createNodeSqliteStorage(':memory:'),
       deviceId: 'dev-page',

@@ -121,7 +121,8 @@ export class SyncController {
   }
 }
 
-function withHubInfo<T extends object>(
+/** 同步响应的版本信封：服务器时间与协议范围（设备据此校时、判断兼容，ADR-0026）。 */
+export function withHubInfo<T extends object>(
   response: T,
 ): T & { serverTime: number; protocolVersion: number; minProtocolVersion: number } {
   return {
