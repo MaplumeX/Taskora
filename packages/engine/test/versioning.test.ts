@@ -3,15 +3,19 @@
  *
  * 副本：新建、旧库升级、降级安装三条路径，以及迁移中途失败后重开。
  * 协议：旧 hub 逐条拒绝不认识的实体（留在 Outbox、hub 升级后送达），
- * 本端跳过不认识的远端实体，hub 要求更高协议版本时停止同步。
+ * 本端跳过不认识的远端实体，hub 要求更高协议版本时停止同步；hub 低于
+ * 本端认可的最低协议时暂停同步（ADR-0026）。
  */
 
 import { describe, expect, it } from 'vitest';
 
 import {
   DEFAULT_TAG_COLOR,
+  MIN_HUB_PROTOCOL_VERSION,
   REPLICA_SCHEMA_VERSION,
   ReplicaSchemaTooNewError,
+  SYNC_PROTOCOL_VERSION,
+  SyncHubTooOldError,
   SyncUpgradeRequiredError,
   migrateReplica,
   openEngine,
@@ -65,14 +69,22 @@ async function legacyTagGroups(storage: SqlStorage): Promise<void> {
   await storage.exec('CREATE INDEX tag_group_member ON tag (tagGroupId)');
 }
 
-function open(storage: SqlStorage, transport?: SyncTransport) {
+function open(
+  storage: SqlStorage,
+  transport?: SyncTransport,
+  options: { minHubProtocolVersion?: number } = {},
+) {
   return openEngine({
     storage,
     deviceId: 'device-a',
     clock: new HybridClock('device-a', () => 1_000_000),
     transport,
+    ...options,
   });
 }
+
+/** 覆盖连上比 MIN_HUB_PROTOCOL_VERSION 更旧的 hub 的路径。 */
+const ANY_HUB = { minHubProtocolVersion: 0 };
 
 describe('副本 schema 版本', () => {
   it('新建副本：直接建到最新版本', async () => {
@@ -268,13 +280,17 @@ describe('副本 schema 版本', () => {
     await storage.exec('PRAGMA user_version = 10');
     const bootstraps: number[] = [];
     const transport = hub.transportFor(USER);
-    const engine = await open(storage, {
-      ...transport,
-      bootstrap: async (request) => {
-        bootstraps.push(protocol);
-        return transport.bootstrap(request);
+    const engine = await open(
+      storage,
+      {
+        ...transport,
+        bootstrap: async (request) => {
+          bootstraps.push(protocol);
+          return transport.bootstrap(request);
+        },
       },
-    });
+      ANY_HUB,
+    );
     const flag = () => storage.all("SELECT value FROM _engine_meta WHERE key = 'tagTreeResync'");
 
     await engine.sync();
@@ -292,7 +308,11 @@ describe('副本 schema 版本', () => {
     let protocol = 5;
     const hub = new InMemorySyncHub({ protocolVersion: () => protocol });
     // 新版设备已经建了任务与附件
-    const writer = await open(await createNodeSqliteStorage(':memory:'), hub.transportFor(USER));
+    const writer = await open(
+      await createNodeSqliteStorage(':memory:'),
+      hub.transportFor(USER),
+      ANY_HUB,
+    );
     const taskId = await writer.create('task', { title: '带附件', status: 'ACTIVE' });
     const attachmentId = await writer.create('attachment', {
       taskId,
@@ -311,7 +331,7 @@ describe('副本 schema 版本', () => {
       String(hub.currentSeq(USER)),
     ]);
     await storage.exec('PRAGMA user_version = 11');
-    const engine = await open(storage, hub.transportFor(USER));
+    const engine = await open(storage, hub.transportFor(USER), ANY_HUB);
     expect(await readSchemaVersion(storage)).toBe(REPLICA_SCHEMA_VERSION);
     const flag = () => storage.all("SELECT value FROM _engine_meta WHERE key = 'attachmentResync'");
 
@@ -448,13 +468,17 @@ describe('副本 schema 版本', () => {
     await storage.exec('PRAGMA user_version = 14');
     const bootstraps: number[] = [];
     const transport = hub.transportFor(USER);
-    const engine = await open(storage, {
-      ...transport,
-      bootstrap: async (request) => {
-        bootstraps.push(protocol);
-        return transport.bootstrap(request);
+    const engine = await open(
+      storage,
+      {
+        ...transport,
+        bootstrap: async (request) => {
+          bootstraps.push(protocol);
+          return transport.bootstrap(request);
+        },
       },
-    });
+      ANY_HUB,
+    );
     const flag = () => storage.all("SELECT value FROM _engine_meta WHERE key = 'startModelResync'");
 
     await engine.sync();
@@ -543,9 +567,10 @@ describe('同步协议版本', () => {
     };
     const widget = { entity: 'widget', id: 'w1', fields: { name: 'x' }, clocks: {} };
     const transport: SyncTransport = {
-      push: async () => ({ acked: 0 }),
+      push: async () => ({ acked: 0, protocolVersion: SYNC_PROTOCOL_VERSION }),
       pull: async () =>
         ({
+          protocolVersion: SYNC_PROTOCOL_VERSION,
           changes: [
             { kind: 'entity', seq: 1, ...widget },
             { kind: 'compact', seq: 2, entity: 'widget', ids: ['w2'] },
@@ -556,6 +581,7 @@ describe('同步协议版本', () => {
         }) as never,
       bootstrap: async () =>
         ({
+          protocolVersion: SYNC_PROTOCOL_VERSION,
           snapshot: [widget, task],
           cursor: 3,
           compacted: [{ entity: 'widget', ids: ['w3'] }],
@@ -583,6 +609,34 @@ describe('同步协议版本', () => {
 
     await expect(engine.sync()).rejects.toBeInstanceOf(SyncUpgradeRequiredError);
     expect(await engine.pendingCount()).toBe(1);
+    await engine.close();
+  });
+
+  it('hub 低于本端认可的最低协议：不应用 hub 的数据，Outbox 保留；hub 升级后恢复', async () => {
+    let hubProtocol = MIN_HUB_PROTOCOL_VERSION;
+    const hub = new InMemorySyncHub({ protocolVersion: () => hubProtocol });
+    const other = await open(await createNodeSqliteStorage(':memory:'), hub.transportFor(USER));
+    const remoteId = await other.create('task', { title: 'From another device' });
+    await other.sync();
+    await other.close();
+    hubProtocol = MIN_HUB_PROTOCOL_VERSION - 1; // hub 回滚到旧版本
+
+    const engine = await open(await createNodeSqliteStorage(':memory:'), hub.transportFor(USER));
+    await engine.create('task', { title: 'Offline edit' });
+
+    const error = await engine.sync().catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(SyncHubTooOldError);
+    expect(error).toMatchObject({
+      hubProtocolVersion: MIN_HUB_PROTOCOL_VERSION - 1,
+      minHubProtocolVersion: MIN_HUB_PROTOCOL_VERSION,
+    });
+    expect(await engine.pendingCount()).toBe(1);
+    expect(await engine.get('task', remoteId)).toBeFalsy();
+
+    hubProtocol = MIN_HUB_PROTOCOL_VERSION; // hub 升级
+    await engine.sync();
+    expect(await engine.pendingCount()).toBe(0);
+    expect((await engine.get('task', remoteId))?.fields.title).toBe('From another device');
     await engine.close();
   });
 });

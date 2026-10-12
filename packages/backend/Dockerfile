@@ -50,6 +50,8 @@ COPY --from=build /app/packages/engine/package.json ./packages/engine/package.js
 COPY --from=build /app/packages/backend/node_modules ./packages/backend/node_modules
 COPY --from=build /app/packages/backend/dist ./packages/backend/dist
 COPY --from=build /app/packages/backend/prisma ./packages/backend/prisma
+# /health 读取它回报 hub 版本（ADR-0026）。
+COPY --from=build /app/packages/backend/package.json ./packages/backend/package.json
 
 WORKDIR /app/packages/backend
 

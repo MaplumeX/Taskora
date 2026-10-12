@@ -34,6 +34,7 @@ import {
 import {
   openEngine,
   ReplicaSchemaTooNewError,
+  SyncHubTooOldError,
   SyncUpgradeRequiredError,
   type Engine,
 } from '@taskora/engine';
@@ -260,6 +261,11 @@ function syncNow(): Promise<boolean> {
         setSyncStatus('upgrade-required', await engine!.pendingCount());
         return false;
       }
+      if (error instanceof SyncHubTooOldError) {
+        // 服务器过旧（ADR-0026）：不停调度，服务器升级后下次同步自动恢复
+        setSyncStatus('hub-too-old', await engine!.pendingCount());
+        return false;
+      }
       // 断网/服务器维护：静默退避，等下个时机；离线·N 条待同步。
       // 不用 navigator.onLine：服务器不可达不应被假在线掩盖。
       setSyncStatus('offline', await engine!.pendingCount());
@@ -273,6 +279,22 @@ function syncNow(): Promise<boolean> {
       }
     });
   return syncInFlight;
+}
+
+/**
+ * 安装更新、重启之前（ADR-0026）：尽量把 Outbox 推给 hub，最多等 timeoutMs。
+ * 断网或 hub 不可用时照常继续——本地写入已落在 SQLite 里，重启后再同步。
+ */
+export async function flushBeforeRestart(timeoutMs = 5_000): Promise<void> {
+  if (!engine) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([
+    syncNow(),
+    new Promise((resolve) => {
+      timer = setTimeout(resolve, timeoutMs);
+    }),
+  ]);
+  clearTimeout(timer);
 }
 
 /**

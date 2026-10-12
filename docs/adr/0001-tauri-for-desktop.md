@@ -1,5 +1,7 @@
 # 桌面端采用 Tauri 2
 
+> **Note (2026-10-11)**: 「V1 无自动更新」已由 [ADR-0026](./0026-client-updates-follow-hub-version.md) 取代：桌面端接入 `tauri-plugin-updater`，更新目标为所连 Sync Hub 的版本。
+
 Taskora 需要一个桌面客户端，与现有 web 前端功能对齐但拥有独立导航壳与原生能力（全局快捷键快速添加等）。我们选择 Tauri 2 而非 Electron：Taskora 是轻量任务管理器，Tauri 的安装体积（~10MB vs ~150MB）和内存优势明显，且三平台 CI 出包方案成熟；代价是遇到原生能力需写 Rust 代码。
 
 ## Considered Options

@@ -28,6 +28,8 @@ tauri-plugin-background = { path = "../plugins/background" }
 tauri-plugin-reminders = { path = "../plugins/reminders" }
 # 附件用系统程序打开（ADR-0019）：写入缓存目录，FileProvider + ACTION_VIEW。
 tauri-plugin-attachments = { path = "../plugins/attachments" }
+# 更新提示（ADR-0026）：用系统浏览器打开 hub 版本的 APK。
+tauri-plugin-opener = "2"
 
 # 通知设置页跳转（Reminders spec）：经 tao 初始化的 ndk-context 拿
 # Application Context，JNI 发 APP_NOTIFICATION_SETTINGS intent。

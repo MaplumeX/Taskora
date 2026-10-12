@@ -70,6 +70,12 @@ async function mount() {
   const { initMobileEngine } = await import('./engine/mobile-engine');
   initMobileEngine(queryClient);
 
+  // 更新提示（ADR-0026）：目标是所连服务器的版本，只提示、去浏览器下载 APK。
+  const { setUpdateShell, initUpdateChecks } = await import('@taskora/api');
+  const { androidUpdateShell } = await import('./updates/android-update-shell');
+  setUpdateShell(androidUpdateShell);
+  initUpdateChecks();
+
   // Reminders（reminders spec）：注册通知薄壳，UI 提醒区据此获得授权
   // 状态与跳转系统设置能力（web 前端不注册 → 提醒区隐藏）。
   const { setNotificationShell } = await import('@taskora/api');

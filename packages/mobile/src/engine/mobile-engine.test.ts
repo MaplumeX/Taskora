@@ -246,6 +246,24 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
     expect(fakeEngine.close).not.toHaveBeenCalled(); // 本地读写照常
   });
 
+  it('服务器协议过旧：提示升级服务器，同步不停，服务器升级后恢复', async () => {
+    const { useSyncStatusStore } = await import('@taskora/api');
+    const { SyncHubTooOldError } = await import('@taskora/engine');
+    const { initMobileEngine, syncNow } = await loadEngine();
+    fakeEngine.sync.mockRejectedValueOnce(new SyncHubTooOldError(6, 7));
+    fakeEngine.pendingCount.mockResolvedValueOnce(3);
+
+    initMobileEngine(renderQueryClient());
+
+    await vi.waitFor(() => {
+      expect(useSyncStatusStore.getState().status).toBe('hub-too-old');
+    });
+    expect(useSyncStatusStore.getState().pendingCount).toBe(3);
+    // 与 426 不同：服务器随时可能升级，下次同步照常发起
+    await expect(syncNow()).resolves.toBe(true);
+    expect(useSyncStatusStore.getState().status).toBe('synced');
+  });
+
   it('副本来自更新版本（降级安装）：不打开副本，退回 REST 并提示升级', async () => {
     const { useSyncStatusStore } = await import('@taskora/api');
     const engineModule = await import('@taskora/engine');

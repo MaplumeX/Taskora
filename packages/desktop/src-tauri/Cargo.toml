@@ -20,6 +20,8 @@ tauri-plugin-global-shortcut = "2"
 tauri-plugin-window-state = "2"
 tauri-plugin-notification = "2"
 tauri-plugin-clipboard-manager = "2"
+# 自动更新（ADR-0026）：目标版本由所连 hub 决定，endpoint 在运行时拼出。
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rusqlite = { version = "0.32", features = ["bundled"] }

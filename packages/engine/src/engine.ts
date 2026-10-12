@@ -30,6 +30,8 @@ import {
   START_MODEL_PROTOCOL,
   TAG_TREE_PROTOCOL,
   SYNC_PROTOCOL_VERSION,
+  MIN_HUB_PROTOCOL_VERSION,
+  SyncHubTooOldError,
   SyncUpgradeRequiredError,
   type DeleteRequest,
   type HubVersionInfo,
@@ -59,6 +61,11 @@ export interface EngineOptions {
   archiveAfterDays?: number | null;
   /** 墙钟（毫秒；归档截止与登记过期，测试确定性）。 */
   now?: () => number;
+  /**
+   * 本端认可的最低 hub 协议（缺省 MIN_HUB_PROTOCOL_VERSION）。测试用它
+   * 覆盖连上更旧 hub 时的按能力降级与一次性 resync 路径。
+   */
+  minHubProtocolVersion?: number;
 }
 
 export interface Engine {
@@ -159,6 +166,7 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
     archiveAfterDays === null ? undefined : archiveCutoff(now(), archiveAfterDays);
   /** hub 上次回报的协议版本（新端点只在 hub 声明支持后调用）。 */
   let hubProtocol = 0;
+  const minHubProtocol = options.minHubProtocolVersion ?? MIN_HUB_PROTOCOL_VERSION;
   let lastMaintenance = Number.NEGATIVE_INFINITY;
 
   const requireTransport = (): SyncTransport => {
@@ -183,6 +191,11 @@ export async function openEngine(options: EngineOptions): Promise<Engine> {
       throw new SyncUpgradeRequiredError(response.minProtocolVersion);
     }
     hubProtocol = response.protocolVersion ?? 0;
+    // 对称的另一侧（ADR-0026）：在应用响应之前拦下，旧 hub 的数据不进副本；
+    // 已送达的 push 只是旧 hub 认识的部分，未删出 Outbox 的条目下次重推。
+    if (hubProtocol < minHubProtocol) {
+      throw new SyncHubTooOldError(hubProtocol, minHubProtocol);
+    }
     const receivedAt = replica.rawWallMs();
     if (typeof response.serverTime === 'number' && receivedAt - sentAt <= MAX_CALIBRATION_RTT_MS) {
       await replica.calibrateWall(response.serverTime - (sentAt + receivedAt) / 2);

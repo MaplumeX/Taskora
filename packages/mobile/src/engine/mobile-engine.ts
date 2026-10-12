@@ -45,6 +45,7 @@ import {
 import {
   openEngine,
   ReplicaSchemaTooNewError,
+  SyncHubTooOldError,
   SyncUpgradeRequiredError,
   type Engine,
 } from '@taskora/engine';
@@ -302,6 +303,11 @@ export function syncNow(): Promise<boolean> {
         upgradeRequired = true;
         stopSyncTriggers();
         setSyncStatus('upgrade-required', await engine!.pendingCount());
+        return false;
+      }
+      if (error instanceof SyncHubTooOldError) {
+        // 服务器过旧（ADR-0026）：不停调度，服务器升级后下次同步自动恢复
+        setSyncStatus('hub-too-old', await engine!.pendingCount());
         return false;
       }
       // 断网/服务器维护：静默退避，等下个前台时机；离线·N 条待同步。

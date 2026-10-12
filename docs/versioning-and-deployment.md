@@ -67,7 +67,7 @@ CI 按 tag 自动接管：`v*` 同时触发 `release.yml`（推双镜像）、
 - **平台**：三平台出包，主力开发平台为 Linux，Linux 构建质量优先保证。
 - **安装包格式**：macOS `.dmg`、Windows NSIS `.exe`、Linux AppImage。`.deb` 等后续有需求再加。
 - **CI 策略**：PR / main CI 运行 desktop 的 typecheck、单测、Linux Rust 编译检查和 Windows 原生会话测试；三平台安装包仅在 tag `v*` 时构建发布（与镜像发布同一 tag 触发，两条流水线各自独立）。
-- **V1 无自动更新**：用户手动从 GitHub Releases 下载新版；后续再上 `tauri-plugin-updater`（需 updater 签名密钥）。
+- **自动更新**（[ADR-0026](adr/0026-client-updates-follow-hub-version.md)）：`tauri-plugin-updater`，目标是所连服务器的版本，不追 GitHub latest。CI 用 secrets `TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` 签名，每个 tag 的 Release 带 `.sig` 与 `latest.json`；公钥在 `tauri.conf.json`。私钥另有离线备份，丢失后已安装的客户端再也收不到更新。本地 `tauri build` 同样需要这两个环境变量（`createUpdaterArtifacts`）。
 - **V1 不签名**：macOS 需右键打开绕过 Gatekeeper，Windows 会触发 SmartScreen 警告；README 需写清绕过方法。待有真实用户后购证书。
 - **Token 存储**：Windows 使用当前用户 DPAPI 加密的本地 `session.dpapi` 文件；macOS Keychain / Linux Secret Service 保存完整会话条目。不用 WebView localStorage 保存令牌。旧凭据自动迁移，详见 [ADR-0002](adr/0002-windows-dpapi-session-file.md)。
 
@@ -77,7 +77,7 @@ CI 按 tag 自动接管：`v*` 同时触发 `release.yml`（推双镜像）、
 - **产物**：签名的 arm64 release APK（`Taskora-vX.Y.Z.apk`），附在与桌面端同一个 `v*` Release 上。
 - **构建**：`android-release.yml` 在 `v*` tag 触发，release keystore 经 secrets 注入；签名密钥不轮换（轮换会迫使所有用户卸载重装、丢失本地 Local Replica）。
 - **版本号**：沿用 monorepo 单轨版本号；Android `versionCode` 由 Tauri 从 version 派生（`major*1000000+minor*1000+patch`），随版本单调递增，无需手动维护。
-- **无自动更新**：与桌面端一致，用户手动下载新 APK 覆盖安装（依赖同一签名密钥）。
+- **更新提示**（ADR-0026）：检测所连服务器的版本，有对应 APK 时提示，点击用系统浏览器下载，用户覆盖安装（依赖同一签名密钥）。不做应用内安装。
 - **构建回归**：PR / main CI 除 Rust 检查外，生成真实 Tauri Android 工程并构建 arm64 未签名 release APK，覆盖插件 Manifest 合并、Kotlin 编译及打包，不使用发布密钥。
 - **缺失 APK 的补发**：若某版本只有 Android 构建失败，先将同版本的最小修复通过 PR / CI 合入 `main`，再执行 `gh workflow run android-release.yml --ref main -f release_tag=vX.Y.Z`。仅允许 `main` 上版本一致、旧 tag 为当前提交祖先且现有 Release 没有 APK 时运行；不移动 tag、不覆盖已有 APK、不重发桌面或镜像。附件 `Taskora-vX.Y.Z-android-build.json` 记录 tag 提交、实际构建提交和 Actions 链接，明确补发 APK 的源码出处。已有 APK 或版本已经升级时走正常新版本发布，不使用此入口替换。
 
@@ -292,5 +292,5 @@ docker compose up -d --wait
 2. 拆分 CI pipeline 为每客户端一条（当前仍共用 `ci.yml`）
 3. ~~设计增量同步协议（`updated_at` + `deleted_at` + 客户端 ID）~~ ✅ 已落地（local-first engine，见 [ADR-0007](adr/0007-local-first-engine.md)）
 4. ~~移动端 EAS Update / Submit 管道对接 git tag~~ ✅ 未采用：Tauri Android + GitHub Releases 侧载
-5. 桌面端 / 移动端自更新通道
+5. ~~桌面端 / 移动端自更新通道~~ ✅ 已落地（ADR-0026：以所连服务器版本为目标）
 6. 桌面端 / 移动端需要独立发版节奏时，恢复独立轨道（发版脚本需扩展回多轨）

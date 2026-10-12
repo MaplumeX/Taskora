@@ -5,6 +5,7 @@ mod reminder_notification;
 mod session;
 mod sqlite;
 mod tray_menu;
+mod updater;
 mod windows;
 use tauri::{
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
@@ -69,6 +70,7 @@ pub fn run() {
     tauri::Builder::default()
         .manage(session::SessionLock::default())
         .manage(quick_add_shortcut::QuickAddShortcut::default())
+        .manage(updater::PendingUpdate::default())
         // Remember main-window size/position across launches. Only the main
         // window is tracked: quick-add and the tray menu are borderless popups,
         // and secondary windows (multi-window) are not restored on relaunch.
@@ -117,6 +119,8 @@ pub fn run() {
         // 系统剪贴板（⌘C / ⌘V 复制粘贴任务）：WKWebView 的 navigator.clipboard
         // 读其他应用写入的内容会弹系统「粘贴」确认，改走原生剪贴板。
         .plugin(tauri_plugin_clipboard_manager::init())
+        // 自动更新（ADR-0026）：插件只提供验签与安装，检查与 endpoint 见 updater.rs。
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // System tray (desktop shell hardening): re-entry point for a
             // hidden main window + the explicit quit path. Without it, the
@@ -214,6 +218,8 @@ pub fn run() {
             quick_add_shortcut::quick_add_shortcut_set,
             tray_menu::tray_menu_action,
             tray_menu::tray_set_labels,
+            updater::update_prepare,
+            updater::update_apply,
             windows::open_window,
             windows::close_secondary_windows
         ])

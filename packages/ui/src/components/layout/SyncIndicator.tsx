@@ -1,6 +1,6 @@
 import type { CSSProperties } from 'react';
 import { useTranslation } from 'react-i18next';
-import { CircleArrowUp, CloudOff } from 'lucide-react';
+import { CircleArrowUp, CloudOff, ServerCrash } from 'lucide-react';
 
 import { useAssistantUiStore, useSyncStatusStore } from '@taskora/api';
 import { cn } from '@/lib/utils';
@@ -11,7 +11,8 @@ import { cn } from '@/lib/utils';
  * 只在异常时出现在角落、不拦截任何操作（无阻塞式 UI、无逐任务标注）。
  * 状态由各端 Engine 同步调度（syncNow）的成败驱动；正常态（idle / 同步中 /
  * 已同步）不渲染，避免遮挡内容。离线时显示 Outbox 中未同步的写操作条数。需要升级（hub 要求
- * 更高的同步协议版本，或副本来自更新版本）时常驻提示，直到安装新版本。
+ * 更高的同步协议版本，或副本来自更新版本）时常驻提示，直到安装新版本；
+ * 服务器过旧（ADR-0026）时常驻提示升级服务器，直到服务器升级后同步恢复。
  */
 export function SyncIndicator() {
   const { t } = useTranslation();
@@ -40,6 +41,15 @@ export function SyncIndicator() {
       <div role="status" data-sync-status="upgrade-required" className={className} style={style}>
         <CircleArrowUp className="h-3.5 w-3.5" />
         <span>{t('common:syncStatusUpgradeRequired')}</span>
+      </div>
+    );
+  }
+
+  if (status === 'hub-too-old') {
+    return (
+      <div role="status" data-sync-status="hub-too-old" className={className} style={style}>
+        <ServerCrash className="h-3.5 w-3.5" />
+        <span>{t('common:syncStatusHubTooOld')}</span>
       </div>
     );
   }

@@ -20,12 +20,12 @@ import {
   mergeEntityState,
   openEngine,
   type EntityMergeState,
-  type SyncTransport,
 } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
 
 import { PrismaSyncChangeLog } from '../src/sync/prisma-sync-change-log.service';
 import { SyncHubService } from '../src/sync/sync-hub.service';
+import { viaController } from './hub-transport';
 import { materializeLegacyClocks } from '../src/sync/legacy-clock-backfill';
 import { disconnectTestDb, resetDb, testPrisma, testPrismaService } from './db';
 
@@ -372,11 +372,11 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
   });
 
   it('真实引擎设备：离线积压超过一批且含前向引用时，推送不会被 FK 永久卡死', async () => {
-    const transport: SyncTransport = {
+    const transport = viaController({
       push: (request) => hub.push(USER, request.events, request.deletes),
       pull: async (request) => await buffer.pull(USER, request.cursor),
       bootstrap: () => hub.bootstrap(USER),
-    };
+    });
     const device = await openEngine({
       storage: await createNodeSqliteStorage(':memory:'),
       deviceId: 'dev-real',
@@ -403,11 +403,11 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
   }, 120_000);
 
   it('Attachment：经父 Task 认领落库、到达另一台设备；删除 Task 级联登记并广播 Compact', async () => {
-    const transport: SyncTransport = {
+    const transport = viaController({
       push: (request) => hub.push(USER, request.events, request.deletes),
       pull: async (request) => await buffer.pull(USER, request.cursor),
       bootstrap: () => hub.bootstrap(USER),
-    };
+    });
     const open = async (deviceId: string) =>
       openEngine({ storage: await createNodeSqliteStorage(':memory:'), deviceId, transport });
     const a = await open('dev-a');
@@ -462,11 +462,11 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
   });
 
   it('嵌套 Tag：两台设备离线互设父 Tag，hub 合并后断环，两端收敛到同一棵树', async () => {
-    const transport: SyncTransport = {
+    const transport = viaController({
       push: (request) => hub.push(USER, request.events, request.deletes),
       pull: async (request) => await buffer.pull(USER, request.cursor),
       bootstrap: () => hub.bootstrap(USER),
-    };
+    });
     const a = await openEngine({
       storage: await createNodeSqliteStorage(':memory:'),
       deviceId: 'dev-a',
@@ -505,11 +505,11 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
   });
 
   it('hub 剔除的字段值（未知枚举等）以必胜时钟下发实际值，推送方收敛不分叉', async () => {
-    const transport: SyncTransport = {
+    const transport = viaController({
       push: (request) => hub.push(USER, request.events, request.deletes),
       pull: (request) => buffer.pull(USER, request.cursor),
       bootstrap: () => hub.bootstrap(USER),
-    };
+    });
     const open = async (deviceId: string) =>
       openEngine({ storage: await createNodeSqliteStorage(':memory:'), deviceId, transport });
     const a = await open('dev-a');
@@ -550,11 +550,11 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
   });
 
   it('并发编辑合并出违反业务规则的组合时，hub 纠正并让两台设备收敛', async () => {
-    const transport: SyncTransport = {
+    const transport = viaController({
       push: (request) => hub.push(USER, request.events, request.deletes),
       pull: (request) => buffer.pull(USER, request.cursor),
       bootstrap: () => hub.bootstrap(USER),
-    };
+    });
     const a = await openEngine({
       storage: await createNodeSqliteStorage(':memory:'),
       deviceId: 'dev-a',
