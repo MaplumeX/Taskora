@@ -1273,7 +1273,8 @@ export class LocalReplica {
     const fields: WireRow = {};
     for (const field of def.fields) {
       const value = row[field.name];
-      fields[field.name] = field.json && typeof value === 'string' ? JSON.parse(value) : value;
+      if (field.bool) fields[field.name] = value == null ? null : value === 1 || value === true;
+      else fields[field.name] = field.json && typeof value === 'string' ? JSON.parse(value) : value;
     }
     return fields;
   }
@@ -1290,7 +1291,8 @@ export class LocalReplica {
     const columns: unknown[] = [];
     for (const field of def.fields) {
       const value = fields[field.name] ?? null;
-      columns.push(field.json ? JSON.stringify(value ?? null) : value);
+      if (field.bool) columns.push(value == null ? null : value === true ? 1 : 0);
+      else columns.push(field.json ? JSON.stringify(value ?? null) : value);
     }
     const allColumns = ['id', ...def.fields.map((field) => field.name), 'clocks'];
     const allValues: unknown[] = [id, ...columns, JSON.stringify(clocks)];

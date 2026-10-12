@@ -533,6 +533,31 @@ describe('副本 schema 版本', () => {
     expect(await readSchemaVersion(storage)).toBe(2);
     expect(await columnsOf(storage, 'step_two')).toEqual(['id']);
   });
+
+  it('15 → 16：project / area 增加 hideLaterItems，存量行读出空，布尔值往返', async () => {
+    const storage = await createNodeSqliteStorage(':memory:');
+    for (const statement of schemaDdl()) await storage.exec(statement);
+    for (const table of ['project', 'area']) {
+      await storage.exec(`ALTER TABLE ${table} DROP COLUMN hideLaterItems`);
+    }
+    await storage.run("INSERT INTO project (id, title, clocks) VALUES ('p1', 'p', '{}')");
+    await storage.run("INSERT INTO area (id, title, clocks) VALUES ('a1', 'a', '{}')");
+    await storage.exec('PRAGMA user_version = 15');
+
+    const engine = await open(storage);
+
+    expect(await readSchemaVersion(storage)).toBe(REPLICA_SCHEMA_VERSION);
+    expect((await engine.get('project', 'p1'))?.fields.hideLaterItems).toBeNull();
+    await engine.update('project', 'p1', { hideLaterItems: true });
+    await engine.update('area', 'a1', { hideLaterItems: false });
+    expect((await engine.get('project', 'p1'))?.fields.hideLaterItems).toBe(true);
+    expect((await engine.get('area', 'a1'))?.fields.hideLaterItems).toBe(false);
+    const [row] = await storage.all<{ hideLaterItems: number }>(
+      "SELECT hideLaterItems FROM project WHERE id = 'p1'",
+    );
+    expect(row.hideLaterItems).toBe(1);
+    await engine.close();
+  });
 });
 
 describe('同步协议版本', () => {

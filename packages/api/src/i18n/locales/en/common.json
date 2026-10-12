@@ -79,5 +79,8 @@
   "windowRestore": "Restore Down",
   "newWindow": "New Window",
   "newWindowHint": "New window (⌥/Alt-click: open the current list in a new window)",
-  "openInNewWindow": "Open in New Window"
+  "openInNewWindow": "Open in New Window",
+  "hideLaterItems": "Hide Later Items",
+  "showLaterItems_one": "Show {{count}} Later Item",
+  "showLaterItems_other": "Show {{count}} Later Items"
 }

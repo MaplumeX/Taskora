@@ -17,10 +17,13 @@ import {
   useActiveHeadingsQuery,
   useAreasQuery,
   useIsLogged,
+  useLaterTaskKind,
   useProjectsQuery,
   useRevealTask,
   useTaskSearchQuery,
   useUiInteractionStore,
+  useUpdateArea,
+  useUpdateProject,
 } from '@taskora/api';
 
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
@@ -121,6 +124,10 @@ export function QuickFind({ open, onOpenChange }: Props) {
     }));
   }, [t, i18n]);
 
+  const taskKindOf = useLaterTaskKind();
+  const updateProject = useUpdateProject();
+  const updateArea = useUpdateArea();
+
   // 导航目标与任务结果都按防抖后的搜索词推导，两者同步更新
   const groups = useMemo(
     () =>
@@ -214,8 +221,27 @@ export function QuickFind({ open, onOpenChange }: Props) {
       ui.setExpandedId(null);
       ui.setRevealId(item.heading.id);
     }
+    if (item.kind === 'task') revealHiddenLater(item.hit.task);
     if (route !== null) navigate(route);
     else if (item.kind === 'task') void reveal(item.hit.task.id, { allowTrash: true });
+  };
+
+  /**
+   * 打开的稍后任务在所属项目 / 区域页被隐藏（Hide Later Items）时，先把该页切回
+   * 显示，Reveal 才能定位到它（对齐 Things 3）。Reveal 去往项目 / 区域页的口径
+   * 见 revealRouteFor：有项目去项目页，否则有区域去区域页。
+   */
+  const revealHiddenLater = (task: TaskSearchHit['task']) => {
+    if (task.trashedAt != null || taskKindOf(task) === null) return;
+    if (task.projectId) {
+      const project = projects.find((p) => p.id === task.projectId);
+      if (project?.hideLaterItems) {
+        updateProject.mutate({ id: project.id, data: { hideLaterItems: false } });
+      }
+    } else if (task.areaId) {
+      const area = areas.find((a) => a.id === task.areaId);
+      if (area?.hideLaterItems) updateArea.mutate({ id: area.id, data: { hideLaterItems: false } });
+    }
   };
 
   const onChange = (e: ChangeEvent<HTMLInputElement>) => {

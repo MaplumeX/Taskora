@@ -174,6 +174,7 @@ import {
   ProjectTaskLayout,
   applyLayoutDrag,
   filterLayout,
+  mergeHiddenTasks,
   moveTaskToPlacement,
   normalizeLayout,
   resolveTaskPlacement,
@@ -264,6 +265,36 @@ describe('project task layout tag filter', () => {
     expect(filterLayout(layout, new Set(['c']))).toEqual({
       headingIds: ['heading-2'],
       containers: { ungrouped: [], 'heading-1': [], 'heading-2': ['c'] },
+    });
+  });
+});
+
+describe('project task layout hidden later tasks', () => {
+  const full: LayoutState = {
+    headingIds: ['h1', 'h2'],
+    containers: { ungrouped: ['a', 'x', 'b'], h1: ['y', 'c'], h2: ['d', 'z'] },
+  };
+
+  it('隐藏任务留在原槽位，可见任务按新顺序填回', () => {
+    const visible: LayoutState = {
+      headingIds: ['h1', 'h2'],
+      containers: { ungrouped: ['b', 'a'], h1: ['c'], h2: ['d'] },
+    };
+    expect(mergeHiddenTasks(full, visible).containers).toEqual({
+      ungrouped: ['b', 'x', 'a'],
+      h1: ['y', 'c'],
+      h2: ['d', 'z'],
+    });
+  });
+
+  it('跨容器移动：源容器空出的可见槽位去掉，目标容器多出的接在末尾', () => {
+    const visible: LayoutState = {
+      headingIds: ['h2', 'h1'],
+      containers: { ungrouped: ['a'], h1: ['c', 'b'], h2: ['d'] },
+    };
+    expect(mergeHiddenTasks(full, visible)).toEqual({
+      headingIds: ['h2', 'h1'],
+      containers: { ungrouped: ['a', 'x'], h1: ['y', 'c', 'b'], h2: ['d', 'z'] },
     });
   });
 });
@@ -609,6 +640,39 @@ describe('ProjectTaskLayout drag sessions', () => {
         ungroupedTaskIds: ['task-u2'],
         groups: [
           { headingId: 'heading-1', taskIds: ['task-u1', 'task-a', 'task-b'] },
+          { headingId: 'heading-2', taskIds: [] },
+        ],
+      },
+      expect.any(Object),
+    );
+  });
+
+  it('隐藏稍后任务：Heading 照常显示，拖拽写回时隐藏任务留在原位', () => {
+    render(
+      <ProjectTaskLayout
+        projectId="project-1"
+        tasks={tasks}
+        headings={[heading, secondHeading]}
+        emptyHint="Empty"
+        hiddenTaskIds={new Set(['task-u2'])}
+      />,
+      { wrapper: DndShell },
+    );
+    expect(document.querySelector('[data-mock-task-id="task-u2"]')).toBeNull();
+    expect(document.querySelector('[data-task-container="heading-2"]')).not.toBeNull();
+
+    startTaskDrag('task-a');
+    dragOver('task:task-a', 'task:task-u1');
+    act(() => {
+      handlers().onDragEnd?.({ active: { id: 'task:task-a' }, over: { id: 'task:task-u1' } });
+    });
+
+    expect(harness.saveMutate).toHaveBeenCalledWith(
+      {
+        projectId: 'project-1',
+        ungroupedTaskIds: ['task-a', 'task-u2', 'task-u1'],
+        groups: [
+          { headingId: 'heading-1', taskIds: ['task-b'] },
           { headingId: 'heading-2', taskIds: [] },
         ],
       },

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { laterProjectKind, ProjectStatus, Start } from '@taskora/shared';
+import { laterProjectKind, laterTaskKind, ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 import { usePreferencesStore } from '@/stores/preferences.store';
-import { projectLaterKind } from './date';
+import { projectLaterKind, taskLaterKind } from './date';
 
 const base = {
   status: ProjectStatus.ACTIVE,
@@ -61,5 +61,54 @@ describe('laterProjectKind', () => {
       legacyDateTimeZone: 'Asia/Shanghai',
     });
     expect(projectLaterKind(project)).toBeNull();
+  });
+});
+
+describe('laterTaskKind', () => {
+  const today = '2026-09-28';
+  const task = {
+    status: TaskStatus.ACTIVE,
+    trashedAt: null,
+    start: Start.ANYTIME,
+    scheduledDate: null,
+  };
+
+  it('Someday → someday；未来日期 → scheduled', () => {
+    expect(laterTaskKind({ ...task, start: Start.SOMEDAY }, today)).toBe('someday');
+    expect(laterTaskKind({ ...task, scheduledDate: '2026-09-29' }, today)).toBe('scheduled');
+  });
+
+  it('日期为今天或已过、未设日期、Inbox 均不是稍后任务', () => {
+    for (const scheduledDate of ['2026-09-28', '2026-09-01']) {
+      expect(laterTaskKind({ ...task, scheduledDate }, today)).toBeNull();
+    }
+    expect(laterTaskKind(task, today)).toBeNull();
+    expect(laterTaskKind({ ...task, start: Start.INBOX }, today)).toBeNull();
+  });
+
+  it('已了结或在废纸篓的任务不是稍后任务', () => {
+    const someday = { ...task, start: Start.SOMEDAY };
+    expect(laterTaskKind({ ...someday, status: TaskStatus.COMPLETED }, today)).toBeNull();
+    expect(laterTaskKind({ ...someday, status: TaskStatus.CANCELLED }, today)).toBeNull();
+    expect(laterTaskKind({ ...someday, trashedAt: '2026-09-27T00:00:00.000Z' }, today)).toBeNull();
+  });
+
+  it('旧的非零点时间戳按 legacy 时区解码', () => {
+    const legacy = { ...task, scheduledDate: '2026-09-28T16:00:00.000Z' };
+    expect(laterTaskKind(legacy, today, 'Asia/Shanghai')).toBe('scheduled');
+    expect(laterTaskKind(legacy, today, 'UTC')).toBeNull();
+  });
+
+  it('客户端按账号时区的今天判定', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-28T20:00:00.000Z'));
+    const tomorrow = { ...task, scheduledDate: '2026-09-29' };
+    usePreferencesStore.setState({ timeZone: 'UTC', legacyDateTimeZone: 'UTC' });
+    expect(taskLaterKind(tomorrow)).toBe('scheduled');
+    usePreferencesStore.setState({
+      timeZone: 'Asia/Shanghai',
+      legacyDateTimeZone: 'Asia/Shanghai',
+    });
+    expect(taskLaterKind(tomorrow)).toBeNull();
   });
 });

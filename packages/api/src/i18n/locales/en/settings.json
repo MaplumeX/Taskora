@@ -202,6 +202,7 @@
   "shortcut_reorderTop": "Move to top",
   "shortcut_reorderBottom": "Move to bottom",
   "shortcut_toggleSidebar": "Show/hide sidebar",
+  "shortcut_toggleLaterItems": "Show/hide later items",
   "shortcut_navigationPopover": "Show navigation popover",
   "shortcut_copy": "Copy selected items",
   "shortcut_paste": "Paste",

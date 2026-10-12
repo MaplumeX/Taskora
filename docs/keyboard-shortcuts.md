@@ -207,8 +207,11 @@ Quick Add 从 `Cmd/Ctrl+Space` 改为 `Cmd/Ctrl+Shift+Space`：Windows 上 Ctrl+
 | 动作 | macOS | Windows | Web |
 |---|---|---|---|
 | 显示 / 隐藏侧边栏 | ⌘/ | Ctrl+/ | Ctrl+/ |
+| 显示 / 隐藏稍后项 | ⇧⌘E | Ctrl+Shift+E | Alt+Shift+E |
 
-仅桌面宽度生效。
+显示 / 隐藏侧边栏仅桌面宽度生效。
+
+显示 / 隐藏稍后项（Hide Later Items，对齐 Things 3）：在项目页、区域页切换该列表底部「隐藏稍后项 / 显示 N 个稍后项」按钮的状态；移动选择器打开时切换它自己的开关。其他页面（含快速查找）不响应。
 
 ## 暂缓（域模型/API 缺失，功能落地时一并补键）
 

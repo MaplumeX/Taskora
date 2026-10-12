@@ -91,6 +91,8 @@ interface PreferencesState {
   loggingMode: LoggingMode;
   /** 移入水位线（见 UserPreferences.loggedThrough）。 */
   loggedThrough: string | null;
+  /** Move 选择器隐藏稍后项目（Hide Later Items），默认显示。 */
+  hideLaterItemsInMovePicker: boolean;
   resolved: 'light' | 'dark';
   setTheme: (m: ThemeMode) => void;
   setLanguage: (l: Language) => void;
@@ -99,6 +101,7 @@ interface PreferencesState {
   setDefaultReviewIntervals: (v: ReviewIntervalDefaults) => void;
   /** 原样写入移入时机与水位线（规则在 useLogging，这里不推导）。 */
   setLogging: (v: LoggingPreferences) => void;
+  setHideLaterItems: (v: Partial<Pick<UserPreferences, 'hideLaterItemsInMovePicker'>>) => void;
   /** 记下已确认 Today 新到（只进不退，同时剔除被覆盖的单条已读）；返回是否推进了基线。 */
   markTodayReviewed: (dateKey: string) => boolean;
   /** 记下单条已读；返回是否有新增。 */
@@ -170,6 +173,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       defaultReviewIntervals: DEFAULT_REVIEW_INTERVALS,
       loggingMode: DEFAULT_LOGGING_MODE,
       loggedThrough: null,
+      hideLaterItemsInMovePicker: false,
       resolved: resolveTheme('system'),
       setTheme: (m) => {
         applyTheme(m);
@@ -183,6 +187,7 @@ export const usePreferencesStore = create<PreferencesState>()(
       setBucketGrouping: (v) => set({ bucketGrouping: v }),
       setDefaultReviewIntervals: (v) => set({ defaultReviewIntervals: v }),
       setLogging: (v) => set({ loggingMode: v.mode, loggedThrough: v.loggedThrough }),
+      setHideLaterItems: (v) => set(v),
       markTodayReviewed: (dateKey) => {
         const current = get().todayReviewedOn;
         if (laterDateKey(current, dateKey) === current) return false;
@@ -222,6 +227,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           defaultReviewIntervals,
           loggingMode,
           loggedThrough,
+          hideLaterItemsInMovePicker,
         } = normalizePreferences(prefs, {
           timeZone: get().timeZone,
           theme: get().theme,
@@ -233,6 +239,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           defaultReviewIntervals: get().defaultReviewIntervals,
           loggingMode: get().loggingMode,
           loggedThrough: get().loggedThrough,
+          hideLaterItemsInMovePicker: get().hideLaterItemsInMovePicker,
         });
         applyTheme(theme);
         applyLanguageSideEffect(language);
@@ -251,6 +258,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           defaultReviewIntervals,
           loggingMode,
           loggedThrough,
+          hideLaterItemsInMovePicker,
           timeZone,
           legacyDateTimeZone: legacyZone,
           resolved: resolveTheme(theme),
@@ -271,6 +279,7 @@ export const usePreferencesStore = create<PreferencesState>()(
         defaultReviewIntervals: state.defaultReviewIntervals,
         loggingMode: state.loggingMode,
         loggedThrough: state.loggedThrough,
+        hideLaterItemsInMovePicker: state.hideLaterItemsInMovePicker,
       }),
       merge: (persisted, current) => {
         // When the unified key is absent (first load after upgrade), fall back
@@ -287,6 +296,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           defaultReviewIntervals,
           loggingMode,
           loggedThrough,
+          hideLaterItemsInMovePicker,
         } = normalizePreferences(raw, {
           timeZone: current.timeZone,
           theme: current.theme,
@@ -298,6 +308,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           defaultReviewIntervals: current.defaultReviewIntervals,
           loggingMode: current.loggingMode,
           loggedThrough: current.loggedThrough,
+          hideLaterItemsInMovePicker: current.hideLaterItemsInMovePicker,
         });
         return {
           ...current,
@@ -314,6 +325,7 @@ export const usePreferencesStore = create<PreferencesState>()(
           defaultReviewIntervals,
           loggingMode,
           loggedThrough,
+          hideLaterItemsInMovePicker,
           resolved: resolveTheme(theme),
         };
       },

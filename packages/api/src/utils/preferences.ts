@@ -24,6 +24,7 @@ export interface ValidPreferences {
   defaultReviewIntervals: ReviewIntervalDefaults;
   loggingMode: LoggingMode;
   loggedThrough: string | null;
+  hideLaterItemsInMovePicker: boolean;
 }
 
 export interface PreferencesDefaults {
@@ -37,6 +38,7 @@ export interface PreferencesDefaults {
   defaultReviewIntervals?: ReviewIntervalDefaults;
   loggingMode?: LoggingMode;
   loggedThrough?: string | null;
+  hideLaterItemsInMovePicker?: boolean;
 }
 
 const THEME_MODES: readonly ThemeMode[] = ['light', 'dark', 'system'];
@@ -107,6 +109,11 @@ export function normalizePreferences(
     obj.loggedThrough === null || isInstant(obj.loggedThrough)
       ? (obj.loggedThrough as string | null)
       : (defaults.loggedThrough ?? null);
+  // Hide Later Items（Move 选择器）：只接受真布尔值，缺省显示。
+  const hideLaterItemsInMovePicker =
+    typeof obj.hideLaterItemsInMovePicker === 'boolean'
+      ? obj.hideLaterItemsInMovePicker
+      : (defaults.hideLaterItemsInMovePicker ?? false);
   return {
     theme,
     language,
@@ -118,6 +125,7 @@ export function normalizePreferences(
     defaultReviewIntervals,
     loggingMode,
     loggedThrough,
+    hideLaterItemsInMovePicker,
   };
 }
 

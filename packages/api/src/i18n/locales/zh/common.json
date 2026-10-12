@@ -79,5 +79,7 @@
   "windowRestore": "向下还原",
   "newWindow": "新窗口",
   "newWindowHint": "新窗口（按住 ⌥ / Alt 点击：在新窗口打开当前列表）",
-  "openInNewWindow": "在新窗口中打开"
+  "openInNewWindow": "在新窗口中打开",
+  "hideLaterItems": "隐藏稍后项",
+  "showLaterItems": "显示 {{count}} 个稍后项"
 }

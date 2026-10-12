@@ -13,7 +13,10 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useProjectsQuery: vi.fn(),
   useAreasQuery: vi.fn(),
   useLaterProjectKind: vi.fn(),
+  useHideLaterItemsPreference: () => laterPref,
 }));
+
+const laterPref = vi.hoisted(() => ({ hidden: false, toggle: vi.fn() }));
 
 const NOW = '2026-09-01T00:00:00.000Z';
 
@@ -56,6 +59,7 @@ beforeEach(() => {
     data: [{ id: 'a-work', title: 'Work', notes: null, createdAt: NOW, updatedAt: NOW }],
   } as never);
   vi.mocked(useLaterProjectKind).mockReturnValue(() => null);
+  laterPref.hidden = false;
 });
 
 describe('MovePicker', () => {
@@ -106,5 +110,34 @@ describe('MovePicker', () => {
     await user.type(input, 'zzz');
     expect(optionNames()).toEqual([]);
     expect(screen.getByText('No matching areas or projects')).toBeInTheDocument();
+  });
+});
+
+describe('MovePicker — Hide Later Items', () => {
+  beforeEach(() => {
+    // 示例数据里的 Reading / Report 都是 Someday 项目
+    vi.mocked(useLaterProjectKind).mockReturnValue(() => 'someday');
+  });
+
+  it('隐藏时去掉稍后项目，当前所在位置保留；按钮给出条数', () => {
+    laterPref.hidden = true;
+    renderPicker({ projectId: 'p-report' });
+    expect(optionNames()).toEqual(['Inbox', 'Work', 'Report']);
+    expect(screen.getByTestId('later-items-toggle')).toHaveTextContent('Show 1 Later Item');
+  });
+
+  it('显示时按钮为「隐藏稍后项」，点按切换偏好', async () => {
+    renderPicker();
+    expect(optionNames()).toEqual(['Inbox', 'Reading', 'Work', 'Report']);
+    await user.click(screen.getByTestId('later-items-toggle'));
+    expect(laterPref.toggle).toHaveBeenCalled();
+  });
+
+  it('输入框里 ⇧⌘E（Web 为 Alt+Shift+E）切换偏好，不写入移动', async () => {
+    const { onSelect, input } = renderPicker();
+    await user.click(input);
+    await user.keyboard('{Alt>}{Shift>}E{/Shift}{/Alt}');
+    expect(laterPref.toggle).toHaveBeenCalled();
+    expect(onSelect).not.toHaveBeenCalled();
   });
 });

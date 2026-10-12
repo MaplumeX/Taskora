@@ -4,7 +4,10 @@ import {
   instantDateKey,
   instantWallTime,
   laterProjectKind,
+  laterTaskKind,
+  type LaterItemKind,
   type LaterProjectFields,
+  type LaterTaskFields,
   type LaterProjectKind,
   type ReviewIntervalDefaults,
 } from '@taskora/shared';
@@ -44,6 +47,11 @@ export function projectLaterKind(
   now = new Date(),
 ): LaterProjectKind | null {
   return laterProjectKind(project, todayDateKey(now), currentLegacyDateTimeZone());
+}
+
+/** 客户端稍后任务判定（Later Item）：按账号时区的今天（见 CONTEXT.md）。 */
+export function taskLaterKind(task: LaterTaskFields, now = new Date()): LaterItemKind | null {
+  return laterTaskKind(task, todayDateKey(now), currentLegacyDateTimeZone());
 }
 
 /** UI calendar carrier: local Date components encode a day, not an instant. */

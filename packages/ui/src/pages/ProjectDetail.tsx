@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import {
   markNewInTodaySeen,
+  useLaterTaskKind,
   useProjectQuery,
   useProjectsQuery,
   useUpdateProject,
@@ -19,6 +20,7 @@ import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
 import { ProjectMoreMenu } from '@/components/project/ProjectContextMenu';
 import { useProjectCompletion } from '@/components/project/useProjectCompletion';
 import { MarkdownNotesEditor } from '@/components/common/MarkdownNotesEditor';
+import { LaterItemsToggle } from '@/components/common/LaterItemsToggle';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
 import { toast } from 'sonner';
 
@@ -37,7 +39,11 @@ export default function ProjectDetail() {
   }, [id]);
   const { data: projects = [] } = useProjectsQuery();
   const foundInList = projects.find((p) => p.id === id);
-  const { data: detail, isLoading: detailLoading, isError: detailError } = useProjectQuery(id ?? '', {
+  const {
+    data: detail,
+    isLoading: detailLoading,
+    isError: detailError,
+  } = useProjectQuery(id ?? '', {
     enabled: !foundInList,
   });
   const project = foundInList ?? detail;
@@ -55,6 +61,25 @@ export default function ProjectDetail() {
   } = useProjectHeadingsQuery(id);
   const updateProject = useUpdateProject();
   const completion = useProjectCompletion();
+
+  // Hide Later Items：稍后任务留在原位，隐藏时从列表里去掉；按钮计数跟随 Tag 过滤。
+  const laterKindOf = useLaterTaskKind();
+  const laterTaskIds = useMemo(
+    () => new Set(tasks.filter((task) => laterKindOf(task) !== null).map((task) => task.id)),
+    [tasks, laterKindOf],
+  );
+  const laterCount = useMemo(
+    () => (filtering ? visible : tasks).filter((task) => laterTaskIds.has(task.id)).length,
+    [filtering, visible, tasks, laterTaskIds],
+  );
+  const hideLater = project?.hideLaterItems === true;
+  const toggleLaterItems = () => {
+    if (!project) return;
+    updateProject.mutate(
+      { id: project.id, data: { hideLaterItems: !hideLater } },
+      { onError: () => toast.error(t('common:saveFailed')) },
+    );
+  };
 
   const [notes, setNotes] = useState(project?.notes ?? '');
   useEffect(() => setNotes(project?.notes ?? ''), [project?.notes]);
@@ -134,8 +159,13 @@ export default function ProjectDetail() {
           emptyHint={t('project:noTasks')}
           visibleTaskIds={visibleTaskIds}
           filteredEmptyHint={t('tag:filterEmpty')}
+          hiddenTaskIds={hideLater ? laterTaskIds : null}
         />
       )}
+
+      {project && !isLoading && !isError ? (
+        <LaterItemsToggle count={laterCount} hidden={hideLater} onToggle={toggleLaterItems} />
+      ) : null}
 
       <ProjectSettledTasks projectId={id ?? ''} />
       {completion.dialog}

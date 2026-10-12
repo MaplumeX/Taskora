@@ -65,6 +65,8 @@ model Area {
   nextReviewDate DateTime?
   /// Last Reviewed Date（上次回顾日）：日历日（UTC 零点编码）；为空即从未回顾。
   lastReviewedOn DateTime?
+  /// Hide Later Items（隐藏稍后项）：列表页是否隐藏稍后项；默认显示。
+  hideLaterItems Boolean   @default(false)
   fieldClocks    Json?
   /// 字段值摘要（ADR-0007）：REST 写绕过合并器时用于判定哪个字段被改动、只重置该字段的时钟。
   fieldDigests   Json?
@@ -105,6 +107,8 @@ model Project {
   nextReviewDate DateTime?
   /// Last Reviewed Date（上次回顾日）：日历日（UTC 零点编码）；为空即从未回顾。
   lastReviewedOn DateTime?
+  /// Hide Later Items（隐藏稍后项）：列表页是否隐藏稍后项；默认显示。
+  hideLaterItems Boolean       @default(false)
   completedAt    DateTime?
   trashedAt      DateTime?
 

@@ -136,4 +136,25 @@ describe('toPrismaData', () => {
     expect(data).not.toHaveProperty('status');
     expect(data.start).toBe('ANYTIME');
   });
+
+  it('布尔字段：真布尔透传，非布尔剔除（hideLaterItems）', () => {
+    const project = codecFor('project');
+    const rejected: string[] = [];
+    expect(toPrismaData(project, { hideLaterItems: true }, ['hideLaterItems'])).toEqual({
+      hideLaterItems: true,
+    });
+    const data = toPrismaData(
+      project,
+      { hideLaterItems: 1 },
+      ['hideLaterItems'],
+      'update',
+      rejected,
+    );
+    expect(data).not.toHaveProperty('hideLaterItems');
+    expect(rejected).toEqual(['hideLaterItems']);
+    // 不可空列的 null 交给列默认值（显示）
+    expect(toPrismaData(codecFor('area'), { hideLaterItems: null }, ['hideLaterItems'])).toEqual(
+      {},
+    );
+  });
 });

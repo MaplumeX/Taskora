@@ -3,6 +3,8 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter, useLocation } from 'react-router-dom';
 
+const updateProjectMutate = vi.hoisted(() => vi.fn());
+
 import {
   i18n,
   useActiveHeadingsQuery,
@@ -33,6 +35,8 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useTagsQuery: vi.fn(),
   useTaskSearchQuery: vi.fn(),
   useRevealTask: vi.fn(),
+  useUpdateProject: () => ({ mutate: updateProjectMutate }),
+  useUpdateArea: () => ({ mutate: vi.fn() }),
   // 有效 Tag：测试数据里 Project / Area 不带 Tag，直接用自身 Tag
   useEffectiveTags: () => ({
     ofTask: (task: { tags?: { id: string }[] }) => (task.tags ?? []).map((tag) => tag.id),
@@ -369,5 +373,26 @@ describe('QuickFind', () => {
       await user.keyboard('{ArrowUp}{Enter}');
       expect(screen.getByTestId('path')).toHaveTextContent('/search?q=milk&tag=g1');
     });
+  });
+});
+
+describe('QuickFind — 被隐藏的稍后项', () => {
+  const someday = (id: string, title: string) =>
+    hit(id, title, {
+      task: { ...hit(id, title).task, start: Start.SOMEDAY, scheduledDate: null },
+    });
+
+  it('打开在项目页被隐藏的稍后任务：先把项目切回显示', async () => {
+    vi.mocked(useProjectsQuery).mockReturnValue({
+      data: [{ ...PROJECT, hideLaterItems: true }],
+    } as never);
+    hitsByQuery.bake = [someday('t2', 'Bake bread')];
+    const { input } = renderQuickFind();
+    await user.type(input, 'bake{Enter}');
+    expect(updateProjectMutate).toHaveBeenCalledWith({
+      id: 'p1',
+      data: { hideLaterItems: false },
+    });
+    expect(reveal).toHaveBeenCalledWith('t2', { allowTrash: true });
   });
 });

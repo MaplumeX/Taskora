@@ -69,7 +69,7 @@ describe('Engine SQL schema ↔ Prisma schema 契约', () => {
         case 'TEXT':
           return ['String', 'DateTime', 'Json'].includes(prisma.type);
         case 'INTEGER':
-          return ['Int', 'Float', 'Json'].includes(prisma.type);
+          return ['Int', 'Float', 'Boolean', 'Json'].includes(prisma.type);
         default:
           return false;
       }

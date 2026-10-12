@@ -24,6 +24,8 @@ export interface FieldDef {
   nullable: boolean;
   /** 以 JSON 文本存储（如 tagIds）。 */
   json?: boolean;
+  /** 布尔字段：SQLite 存 0 / 1，wire 上为 true / false。 */
+  bool?: boolean;
 }
 
 export interface EntityDef {
@@ -97,6 +99,8 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('reviewInterval', { json: true }),
       f('nextReviewDate'),
       f('lastReviewedOn'),
+      // Hide Later Items（隐藏稍后项）：项目页的显示状态。
+      f('hideLaterItems', { sql: 'INTEGER', bool: true }),
       f('completedAt'),
       f('trashedAt'),
       f('position'),
@@ -131,6 +135,8 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('reviewInterval', { json: true }),
       f('nextReviewDate'),
       f('lastReviewedOn'),
+      // Hide Later Items（隐藏稍后项）：区域页的显示状态。
+      f('hideLaterItems', { sql: 'INTEGER', bool: true }),
       f('createdAt'),
       f('updatedAt'),
     ],

@@ -3,11 +3,6 @@ import { Link, useParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
 import { ProjectStatus } from '@taskora/shared';
-import type {
-  FeedItem,
-  ProjectResponseDto,
-  TaskResponseDto,
-} from '@taskora/shared';
 import {
   useEffectiveTags,
   useIsLogged,
@@ -17,24 +12,9 @@ import {
 } from '@taskora/api';
 
 import { GroupedFeedListView } from '@/components/feed/GroupedFeedListView';
+import { projectFeedItem, taskFeedItem } from '@/components/feed/feedItems';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
 import { tagAncestors, tagForest } from '@/components/tags/tagTree';
-
-function taskFeedItem(task: TaskResponseDto): FeedItem {
-  return { ...task, type: 'task', tags: task.tags ?? [] };
-}
-
-function projectFeedItem(project: ProjectResponseDto): FeedItem {
-  return {
-    ...project,
-    type: 'project',
-    // Project 不设 Reminder / Repeat Rule（CONTEXT.md）
-    reminderTime: null,
-    repeatRule: null,
-    repeatSourceId: null,
-    tags: project.tags ?? [],
-  };
-}
 
 /**
  * Tag 详情（tags-things3 issue 06）：按有效 Tag（ADR 0015）列出带这个 Tag

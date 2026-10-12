@@ -44,6 +44,8 @@ export interface EntityCodec {
   jsonNormalizers?: Record<string, (value: unknown) => object | null>;
   /** wire 字段中的整数列（如 Attachment.size）；非整数剔除。 */
   intFields?: Set<string>;
+  /** wire 字段中的布尔列（如 hideLaterItems）；非布尔剔除。 */
+  boolFields?: Set<string>;
   /** tagIds 物化关系（无则 tagIds 不存在）。 */
   tagRelation?: { model: string; fk: string; relation: string };
 }
@@ -96,6 +98,7 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     },
     jsonFields: new Set(['repeatRule', 'reviewInterval']),
     jsonNormalizers: { reviewInterval: normalizeReviewInterval },
+    boolFields: new Set(['hideLaterItems']),
     tagRelation: { model: 'projectTag', fk: 'projectId', relation: 'tags' },
   },
   'project-heading': {
@@ -114,6 +117,7 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     enumFields: {},
     jsonFields: new Set(['reviewInterval']),
     jsonNormalizers: { reviewInterval: normalizeReviewInterval },
+    boolFields: new Set(['hideLaterItems']),
     tagRelation: { model: 'areaTag', fk: 'areaId', relation: 'tags' },
   },
   tag: {
@@ -381,6 +385,11 @@ export function toPrismaData(
       } else {
         rejected.push(fieldName);
       }
+      continue;
+    }
+    if (codec.boolFields?.has(fieldName)) {
+      if (typeof value === 'boolean') data[fieldName] = value;
+      else rejected.push(fieldName);
       continue;
     }
     const enumValues = codec.enumFields[fieldName];

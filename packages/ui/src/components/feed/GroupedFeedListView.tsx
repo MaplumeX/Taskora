@@ -91,6 +91,12 @@ interface Props {
    * 行首带黄点；拖拽排序即已读。
    */
   freshKeys?: ReadonlySet<string>;
+  /** 同页多个列表时，本列表在键盘遍历中的先后（见 useSelectionScope）。 */
+  selectionRank?: number;
+  /** 是否接收 Magic Plus 落点（默认接收）；同页另有新建入口时关闭。 */
+  magicPlus?: boolean;
+  /** 页头已表达归属时省略行上的项目 / 区域小字（如区域页）。 */
+  hideOwnership?: boolean;
 }
 
 const UNGROUPED = 'ungrouped';
@@ -407,6 +413,9 @@ export function GroupedFeedListView({
   showScheduledBadge,
   grouping = true,
   freshKeys,
+  selectionRank = 0,
+  magicPlus: acceptsMagicPlus = true,
+  hideOwnership = false,
 }: Props) {
   const { t } = useTranslation();
   const { handleRowClick, handleBlankClick, selectedIds, expandedId } =
@@ -547,7 +556,7 @@ export function GroupedFeedListView({
     }),
     [reorderFeedMutate],
   );
-  useSelectionScope(rows, 0, scopeActions);
+  useSelectionScope(rows, selectionRank, scopeActions);
 
   const projectMap = React.useMemo(
     () => Object.fromEntries(projects.map((p) => [p.id, p.title])),
@@ -828,7 +837,7 @@ export function GroupedFeedListView({
 
   const surface = useDndSurface({
     owns: isFeedKey,
-    magicPlus: true,
+    magicPlus: acceptsMagicPlus,
     collisionDetection,
     sidebarPayload,
     onDragStart: handleDragStart,
@@ -869,8 +878,9 @@ export function GroupedFeedListView({
     const ungrouped = containerId === UNGROUPED;
     if (item.type !== 'task') return {};
     return {
-      projectTitle: ungrouped && item.projectId ? projectMap[item.projectId] : undefined,
-      areaTitle: ungrouped && item.areaId ? areaMap[item.areaId] : undefined,
+      projectTitle:
+        ungrouped && !hideOwnership && item.projectId ? projectMap[item.projectId] : undefined,
+      areaTitle: ungrouped && !hideOwnership && item.areaId ? areaMap[item.areaId] : undefined,
     };
   };
 

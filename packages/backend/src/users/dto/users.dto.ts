@@ -96,6 +96,10 @@ export class UpdatePreferencesDto implements IUpdatePreferencesDto {
   @ValidateIf((_, value) => value !== undefined && value !== null)
   @IsISO8601({ strict: true })
   loggedThrough?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  hideLaterItemsInMovePicker?: boolean;
 }
 
 export class DeleteAccountDto implements IDeleteAccountDto {

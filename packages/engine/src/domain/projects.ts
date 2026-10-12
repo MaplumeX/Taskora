@@ -40,6 +40,8 @@ export interface ProjectFields {
   nextReviewDate: string | null;
   /** 上次回顾日（日期键）；null 为从未回顾。 */
   lastReviewedOn: string | null;
+  /** Hide Later Items：项目页是否隐藏稍后项；新建不写（空即显示）。 */
+  hideLaterItems?: boolean;
   status: ProjectStatus;
   completedAt: string | null;
   trashedAt: string | null;
@@ -115,6 +117,7 @@ export function planProjectUpdate(
   if (input.dueDate !== undefined) patch.dueDate = dateKeyOf(input.dueDate, zones);
   if (input.areaId !== undefined) patch.areaId = input.areaId;
   if (input.tagIds !== undefined) patch.tagIds = input.tagIds;
+  if (input.hideLaterItems !== undefined) patch.hideLaterItems = input.hideLaterItems;
   Object.assign(patch, planReviewUpdate(existing, input, 'project', review, zones));
   return patch;
 }

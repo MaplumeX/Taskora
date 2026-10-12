@@ -19,6 +19,9 @@ import {
   useSelectionStore,
   useSidebarUiStore,
   useUpdateProject,
+  useUpdateArea,
+  useProjectsQuery,
+  useAreasQuery,
   useUpdateTask,
   type SelectionRow,
 } from '@taskora/api';
@@ -199,6 +202,9 @@ export function KeyboardShortcuts({ platform }: Props) {
   const logCompleted = useLogCompleted();
   const updateTask = useUpdateTask();
   const updateProject = useUpdateProject();
+  const updateArea = useUpdateArea();
+  const { data: projects = [] } = useProjectsQuery();
+  const { data: areas = [] } = useAreasQuery();
   const executeDrop = useSidebarDropExecutor();
   /** ⇧⌘O 导航弹窗是否打开。 */
   const [navigationOpen, setNavigationOpen] = useState(false);
@@ -398,6 +404,24 @@ export function KeyboardShortcuts({ platform }: Props) {
       if (action.type === 'paste') {
         e.preventDefault();
         void pasteFromClipboard();
+        return;
+      }
+      // ⇧⌘E 显示 / 隐藏稍后项：只在项目页、区域页生效，其他页面不拦截
+      if (action.type === 'toggleLaterItems') {
+        const projectId = /^\/projects\/([^/]+)$/.exec(pathname)?.[1];
+        const areaId = /^\/areas\/([^/]+)$/.exec(pathname)?.[1];
+        const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
+        const area = areaId ? areas.find((a) => a.id === areaId) : undefined;
+        if (project) {
+          e.preventDefault();
+          updateProject.mutate({
+            id: project.id,
+            data: { hideLaterItems: !project.hideLaterItems },
+          });
+        } else if (area) {
+          e.preventDefault();
+          updateArea.mutate({ id: area.id, data: { hideLaterItems: !area.hideLaterItems } });
+        }
         return;
       }
       // 回顾模式的键位：不在回顾模式时不拦截
@@ -899,6 +923,9 @@ export function KeyboardShortcuts({ platform }: Props) {
     logCompleted,
     updateTask,
     updateProject,
+    updateArea,
+    projects,
+    areas,
     executeDrop,
     createTaskContext,
     dockToPanel,
