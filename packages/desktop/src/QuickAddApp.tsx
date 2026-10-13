@@ -68,7 +68,13 @@ async function playExit(el: HTMLElement | null) {
     { duration: 100, easing: 'ease-in', fill: 'forwards' },
   );
   await animation.finished.catch(() => undefined);
+  // finished 只表示末帧已算出，不代表已上屏；等透明末帧真正呈现再隐藏，
+  // 否则系统留存的旧画面里卡片仍半透明可见。
+  await nextFrame();
+  await nextFrame();
 }
+
+const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
 /** 是否有字段选择器（Radix Popover）开着：开着时点空白处只关选择器。 */
 const pickerOpen = () => !!document.querySelector('[data-radix-popper-content-wrapper]');
@@ -84,16 +90,29 @@ export function QuickAddApp() {
   const authToken = useAuthStore((s) => s.token);
   const queryClient = useQueryClient();
 
+  /** 每次唤出递增：出场途中被重新唤出时，旧的出场不得再隐藏窗口。 */
+  const openGeneration = useRef(0);
+  /** 正在出场或已隐藏：隐藏引发的失焦等重复触发不再重播出场（会从不透明起步闪一帧）。 */
+  const hidden = useRef(false);
+
   const hideWindow = async () => {
+    if (hidden.current) return;
+    hidden.current = true;
+    const generation = openGeneration.current;
     await playExit(surfaceRef.current);
+    if (generation !== openGeneration.current) return;
     await getCurrentWindow().hide();
   };
+  const hideWindowRef = useRef(hideWindow);
+  hideWindowRef.current = hideWindow;
 
   // Focus the title whenever the shortcut re-opens the window.
   useEffect(() => {
     const unlisten = listen('quick-add://open', () => {
       // 兜底：webview 未投递 storage 事件时，每次唤出重读自定义键位。
       void useKeybindingsStore.persist.rehydrate();
+      openGeneration.current += 1;
+      hidden.current = false;
       // 窗口此刻已由 Rust 端显示：进场动画必须立即开始，等 boot 完成再播
       // 会让卡片先停在终点、再跳回起点下落（上下抖一下）。
       playEnter(surfaceRef.current);
@@ -118,6 +137,18 @@ export function QuickAddApp() {
       void unlisten.then((fn) => fn());
     };
   }, [queryClient]);
+
+  // 失焦隐藏（点到窗外）。由 webview 而非 Rust 端处理：Rust 直接 hide 会
+  // 跳过出场，卡片以不透明状态留在系统旧画面里，下次唤出先闪现在终点再
+  // 跳回起点下落（开机后首次唤出无旧画面，所以只有第二次起才抖）。
+  useEffect(() => {
+    const unlisten = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (!focused) void hideWindowRef.current();
+    });
+    return () => {
+      void unlisten.then((fn) => fn());
+    };
+  }, []);
 
   // 主窗口回执：只呈现「添加并继续」的提交（其余提交时窗口已隐藏，
   // 失败由主窗口以 toast + 系统通知呈现）。
