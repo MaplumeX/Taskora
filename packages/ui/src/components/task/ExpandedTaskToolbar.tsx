@@ -123,7 +123,6 @@ export function ExpandedTaskToolbar({ variant }: Props) {
     const id = task.id;
     void convertGuard.guard(id, () => {
       convertToProject.mutate(id, {
-        onSuccess: () => toast.success(t('task:convertSuccess')),
         onError: () => toast.error(t('task:convertFailed')),
       });
       collapse();

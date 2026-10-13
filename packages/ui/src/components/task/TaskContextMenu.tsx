@@ -203,7 +203,6 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
     closeMenu();
     void convertGuard.guard(task.id, () =>
       convertToProjectTask.mutate(task.id, {
-        onSuccess: () => toast.success(t('convertSuccess')),
         onError: () => toast.error(t('convertFailed')),
       }),
     );

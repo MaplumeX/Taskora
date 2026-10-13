@@ -5,7 +5,8 @@
   "titlePlaceholder": "Tag name",
   "deleteConfirm": "Delete tag \"{{name}}\"?",
   "defaultTitle": "Tag",
-  "deleted": "Tag deleted",
+  "deleteDescription": "The tag will be removed from all items. This can't be undone.",
+  "deleteDescriptionWithChildren": "The tag will be removed from all items and its child tags moved to the top level. This can't be undone.",
   "created": "Tag created",
   "selectColor": "Select color {{color}}",
   "noTasks": "No tasks with this tag",
@@ -23,6 +24,5 @@
   "moveToTop": "Top level",
   "expand": "Expand",
   "collapse": "Collapse",
-  "deletedChildrenPromoted": "Tag deleted; its child tags moved to the top level",
   "parentPath": "Parent tags"
 }

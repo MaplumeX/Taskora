@@ -404,7 +404,6 @@ describe('ProjectSettledTasks', () => {
     expect(unarchiveMutate).toHaveBeenCalledWith(
       'h-1',
       expect.objectContaining({
-        onSuccess: expect.any(Function),
         onError: expect.any(Function),
       }),
     );

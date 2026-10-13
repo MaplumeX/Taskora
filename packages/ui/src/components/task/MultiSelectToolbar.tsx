@@ -179,7 +179,6 @@ export function MultiSelectToolbar() {
     const id = single.id;
     void convertGuard.guard(id, () => {
       convertToProject.mutate(id, {
-        onSuccess: () => toast.success(t('task:convertSuccess')),
         onError: () => toast.error(t('task:convertFailed')),
       });
       exit();

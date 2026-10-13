@@ -134,10 +134,7 @@ export default function Trash() {
               disabled={emptyTrashMutation.isPending}
               onClick={() => {
                 emptyTrashMutation.mutate(undefined, {
-                  onSuccess: () => {
-                    setConfirmOpen(false);
-                    toast.success(t('common:emptyTrashSuccess'));
-                  },
+                  onSuccess: () => setConfirmOpen(false),
                   onError: () => toast.error(t('common:emptyTrashFailed')),
                 });
               }}

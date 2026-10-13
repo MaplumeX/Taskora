@@ -138,15 +138,7 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
     setMoveOpen(false);
     moveHeading.mutate(
       { id: heading.id, targetProjectId: project.id },
-      {
-        onSuccess: () =>
-          toast.success(
-            t('project:moveHeadingSuccess', {
-              project: project.title || t('project:newItemPlaceholder'),
-            }),
-          ),
-        onError: () => toast.error(t('project:moveHeadingFailed')),
-      },
+      { onError: () => toast.error(t('project:moveHeadingFailed')) },
     );
   };
   const movePicker = <HeadingMovePicker currentProjectId={heading.projectId} onSelect={moveTo} />;
@@ -167,7 +159,6 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
       disabled: convertHeading.isPending,
       onSelect: () =>
         convertHeading.mutate(heading.id, {
-          onSuccess: () => toast.success(t('project:convertSuccess')),
           onError: () => toast.error(t('project:convertFailed')),
         }),
     },
@@ -178,7 +169,6 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
           disabled: unarchiveHeading.isPending,
           onSelect: () =>
             unarchiveHeading.mutate(heading.id, {
-              onSuccess: () => toast.success(t('project:unarchiveSuccess')),
               onError: () => toast.error(t('project:unarchiveFailed')),
             }),
         }
@@ -188,7 +178,6 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
           disabled: archiveHeading.isPending,
           onSelect: () =>
             archiveHeading.mutate(heading.id, {
-              onSuccess: () => toast.success(t('project:archiveSuccess')),
               onError: () => toast.error(t('project:archiveFailed')),
             }),
         },

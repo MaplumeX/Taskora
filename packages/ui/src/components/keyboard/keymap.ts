@@ -78,6 +78,8 @@ export type KeyAction =
   | { type: 'toggleSidebar' }
   /** ⇧⌘E：当前项目页 / 区域页显示或隐藏稍后项（Hide Later Items）。 */
   | { type: 'toggleLaterItems' }
+  /** ⌘Z / Ctrl+Z：撤销最近一步（撤销历史）；输入框里是原生文字撤销。 */
+  | { type: 'undo' }
   /** ⌘C：复制选中的任务 / 项目（无条目选中时让给原生复制）。 */
   | { type: 'copy' }
   /** ⌘V：粘贴复制的条目副本，或把剪贴板文字逐行建成任务。 */
@@ -198,6 +200,7 @@ export type ShortcutId =
   | 'logCompleted'
   | 'tags'
   | 'duplicate'
+  | 'undo'
   | 'copy'
   | 'paste'
   | 'pasteMove'
@@ -509,6 +512,8 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     action: { type: 'duplicate' },
     defaults: primaryDefaults('D'),
   },
+  // Web 的 Ctrl+Z 可以拦截（焦点在输入框里时本就让给原生文字撤销）。
+  appDef('undo', 'edit', { type: 'undo' }, primaryDefaults('Z')),
   // 剪贴板：焦点在输入框里或页面上有选中文字时让给原生复制 / 粘贴。
   appDef('copy', 'edit', { type: 'copy' }, primaryDefaults('C')),
   appDef('paste', 'edit', { type: 'paste' }, primaryDefaults('V')),
@@ -607,12 +612,7 @@ export const SHORTCUTS: readonly ShortcutDef[] = [
     defaults: primaryDefaults('F'),
   },
   appDef('toggleSidebar', 'global', { type: 'toggleSidebar' }, primaryDefaults('/')),
-  appDef(
-    'toggleLaterItems',
-    'global',
-    { type: 'toggleLaterItems' },
-    shiftAltOnWebDefaults('E'),
-  ),
+  appDef('toggleLaterItems', 'global', { type: 'toggleLaterItems' }, shiftAltOnWebDefaults('E')),
   // Web 的 Ctrl+J 是浏览器下载页。
   {
     id: 'toggleAssistantPanel',

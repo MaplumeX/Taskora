@@ -16,7 +16,6 @@
   "subscriptionNamePlaceholder": "Defaults to the calendar's own name",
   "addSubscription": "Add",
   "addingSubscription": "Fetching calendar…",
-  "subscriptionAdded": "Added calendar \"{{name}}\"",
   "noSubscriptions": "No calendars subscribed yet",
   "subscriptionEnabled": "Show events from this calendar",
   "subscriptionColor": "Color",

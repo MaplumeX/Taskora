@@ -9,14 +9,16 @@
  *   installUndoBoundaries）之间发起的全部写入。一个动作内部的多次写入
  *   （完成并派生重复实例、多选批量改期、拖拽整组）因此合成一步撤销。
  * - **逆操作**：update 记下被改字段的旧值；create 的逆是删除该条目
- *   （Delete Request）；删除 Subtask 的逆是按原字段重建（新 id）。
+ *   （Delete Request）；删除 Subtask 的逆是按原字段重建（新 id）。Engine
+ *   之外的写入（Log Completed 推进账号偏好里的水位线）经 record 自带逆操作。
  * - **不可撤销**：其余物理删除（清空 Trash、删除区域 / 标签 / Heading /
  *   附件、转换为项目）无法还原，发生时清空撤销历史，免得更早的步骤
  *   作用在已不存在的条目上。
  * - **撤销**：逆序回写，只回写当前值仍等于当时写入值的字段（之后被别的
  *   编辑或其他设备改过的字段保持不动）；回写是普通的本地写入，照常同步。
  *
- * 不做重做（Redo）；撤销历史只在内存里，重启 / 登出即清空。
+ * 不做重做（Redo）；撤销历史只在内存里，重启 / 登出即清空。各端把界面用的
+ * Engine 交给 attach：手机端摇一摇（UndoPrompt）、桌面端与 Web ⌘Z 直接撤销。
  */
 
 import type { Engine, SyncEntity, WireRow } from '@taskora/engine';
@@ -35,12 +37,14 @@ export type UndoAction =
   | 'tags'
   | 'edit'
   | 'reorder'
-  | 'change';
+  | 'change'
+  | 'logCompleted';
 
 type InverseOp =
   | { kind: 'revert'; entity: SyncEntity; id: string; before: WireRow; after: WireRow }
   | { kind: 'remove'; entity: SyncEntity; id: string }
-  | { kind: 'recreate'; entity: SyncEntity; fields: WireRow };
+  | { kind: 'recreate'; entity: SyncEntity; fields: WireRow }
+  | { kind: 'custom'; action: UndoAction; undo: () => Promise<void> };
 
 interface UndoStep {
   ops: InverseOp[];
@@ -93,6 +97,19 @@ export class UndoHistory {
     }
     this.steps.push(step);
     if (this.steps.length > this.limit) this.steps.shift();
+  }
+
+  /**
+   * 记录一次 Engine 之外的写入：run 执行写入并返回其逆操作，与 Engine 写入
+   * 同样归入当前步。未接入 Engine（REST 模式）时照常执行，不记录。
+   */
+  record(action: UndoAction, run: () => Promise<() => Promise<void>>): Promise<void> {
+    if (!this.engine) return run().then(() => undefined);
+    const step = this.stepForWrite();
+    return this.serialize(async () => {
+      const undo = await run();
+      step.ops.push({ kind: 'custom', action, undo });
+    });
   }
 
   /** 最近一步可撤销的动作；没有则为 null。会先等进行中的写入记录完毕。 */
@@ -220,6 +237,9 @@ async function applyInverse(engine: Engine, op: InverseOp): Promise<void> {
     case 'recreate':
       await engine.create(op.entity, op.fields);
       return;
+    case 'custom':
+      await op.undo();
+      return;
   }
 }
 
@@ -238,6 +258,8 @@ function stableJson(value: unknown): string {
 
 /** 一步撤销的动作名：按「最能代表这一步」的优先级取第一个命中的。 */
 export function actionOf(ops: readonly InverseOp[]): UndoAction {
+  const custom = ops.find((op) => op.kind === 'custom');
+  if (custom) return custom.action;
   const reverts = ops.flatMap((op) => (op.kind === 'revert' ? [op] : []));
   const changed = (keys: string[]) =>
     reverts.some((op) =>

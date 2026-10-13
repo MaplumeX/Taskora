@@ -528,10 +528,9 @@ export function ProjectMoreMenu({ project, current, variant = 'default' }: Proje
   const onDeleted = () => {
     if (!inReview) navigate('/today');
   };
-  // 项目页里复制：打开副本；回顾中留在回顾会话，只提示。
+  // 项目页里复制：打开副本；回顾中留在回顾会话。
   const onDuplicated = (copyId: string) => {
-    if (inReview) toast.success(t('duplicateProjectDone'));
-    else navigate(`/projects/${copyId}`);
+    if (!inReview) navigate(`/projects/${copyId}`);
   };
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);

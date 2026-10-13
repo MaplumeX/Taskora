@@ -92,10 +92,9 @@ export default function Review() {
         navigate(reviewPath(item), { replace: true });
         return;
       }
-      toast.success(t('doneTitle'));
       exit();
     },
-    [navigate, exit, t],
+    [navigate, exit],
   );
 
   const { mutate: mutateProject } = markProject;

@@ -120,10 +120,9 @@ export default function SettingsCalendars() {
     create.mutate(
       { url: url.trim(), ...(name.trim() ? { name: name.trim() } : {}) },
       {
-        onSuccess: (subscription) => {
+        onSuccess: () => {
           setUrl('');
           setName('');
-          toast.success(t('calendar:subscriptionAdded', { name: subscription.name }));
         },
         onError: (error) => setAddError(fetchErrorText(requestErrorCode(error), t)),
       },

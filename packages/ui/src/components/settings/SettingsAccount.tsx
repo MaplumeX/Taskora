@@ -67,7 +67,6 @@ export default function SettingsAccount() {
         avatarUrl: avatarUrl || null,
       },
       {
-        onSuccess: () => toast.success(t('auth:profileSaved')),
         onError: () => toast.error(t('common:saveFailed')),
       },
     );
@@ -83,7 +82,6 @@ export default function SettingsAccount() {
       { currentPassword, newPassword },
       {
         onSuccess: () => {
-          toast.success(t('auth:passwordSaved'));
           setCurrentPassword('');
           setNewPassword('');
           setConfirmPassword('');

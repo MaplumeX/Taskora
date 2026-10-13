@@ -24,7 +24,6 @@
   "everySingle_year": "Every year",
   "every_year": "Every {{count}} years",
   "emptyTitle": "Nothing to review",
-  "doneTitle": "Review finished",
   "upcoming_one": "Next review on {{date}} — {{count}} item",
   "upcoming_other": "Next review on {{date}} — {{count}} items",
   "noUpcoming": "Nothing is scheduled for review.",
