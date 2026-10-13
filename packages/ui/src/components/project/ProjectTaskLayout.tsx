@@ -682,10 +682,13 @@ export function ProjectTaskLayout({
   } | null>(null);
   serverLayoutRef.current = serverLayout;
   const taskMap = React.useMemo(() => {
-    const map = new Map(tasks.map((task) => [task.id, task]));
+    // 含隐藏的稍后任务：切换隐藏的那次渲染里布局 state 还没跟上，行要留到
+    // 布局更新时再由 FLIP 播离场，不能先一步从 DOM 里消失。
+    const map = new Map(sourceTasks.map((task) => [task.id, task]));
+    for (const task of tasks) map.set(task.id, task);
     if (draftTask) map.set(draftTask.id, draftTask);
     return map;
-  }, [tasks, draftTask]);
+  }, [sourceTasks, tasks, draftTask]);
   const headingMap = React.useMemo(() => {
     const map = new Map(headings.map((heading) => [heading.id, heading]));
     if (draftHeading) map.set(draftHeading.id, draftHeading);
@@ -780,14 +783,21 @@ export function ProjectTaskLayout({
     updateRenderedLayout(withoutTasks(layoutRef.current, companions));
   });
 
+  const hidingLater = hiddenTaskIds !== null;
+  const hidingLaterRef = React.useRef(hidingLater);
+  const captureReveal = flip.captureReveal;
   React.useEffect(() => {
+    const toggledLater = hidingLaterRef.current !== hidingLater;
+    hidingLaterRef.current = hidingLater;
     if (activeTaskIdRef.current !== null || draftPendingRef.current) {
       pendingServerLayoutRef.current = serverLayout;
       return;
     }
     pendingServerLayoutRef.current = null;
+    // Hide Later Items 切换：稍后任务按显隐节奏收起 / 揭开（DOM 此刻仍是切换前）。
+    if (toggledLater && !layoutsEqual(serverLayout, layoutRef.current)) captureReveal();
     updateRenderedLayout(serverLayout);
-  }, [serverLayout, updateRenderedLayout]);
+  }, [serverLayout, hidingLater, updateRenderedLayout, captureReveal]);
 
   const toggleComplete = (task: TaskResponseDto) => {
     // 撤销了结（尚未移入 Logbook 的条目还在这里）：已取消 → 撤销取消
@@ -1211,8 +1221,8 @@ export function ProjectTaskLayout({
     onRowClick: handleRowClick,
     onToggleComplete: toggleComplete,
   };
-  // taskMap 含 Magic Plus 草稿：空项目里拖动时也渲染投放面。
-  const hasContent = taskMap.size > 0 || headings.length > 0;
+  // 含 Magic Plus 草稿：空项目里拖动时也渲染投放面。稍后任务全部隐藏时同空项目。
+  const hasContent = tasks.length > 0 || draftTask !== null || headings.length > 0;
   const filteredEmpty =
     !!visibleTaskIds && Object.values(shown.containers).every((ids) => ids.length === 0);
 

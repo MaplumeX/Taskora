@@ -31,7 +31,10 @@ export function LaterItemsToggle({ count, hidden, onToggle, className }: Props) 
         className,
       )}
     >
-      {hidden ? t('showLaterItems', { count }) : t('hideLaterItems')}
+      {/* 切换时新文案淡入（按状态换 key 重新挂载）。 */}
+      <span key={hidden ? 'show' : 'hide'} className="block duration-fast animate-in fade-in-0">
+        {hidden ? t('showLaterItems', { count }) : t('hideLaterItems')}
+      </span>
     </button>
   );
 }
