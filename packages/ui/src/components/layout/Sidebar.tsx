@@ -188,7 +188,7 @@ export function Sidebar() {
         </DropdownMenu>
       </div>
 
-      <ScrollArea className="flex-1 px-2">
+      <ScrollArea type="scroll" className="flex-1 px-2">
         {/* 拖拽中侧边栏不响应指针（同可拖拽列表，见 styles/tokens.css）：不接收
             被拖条目的行没有任何反应，可接收的行只显示落点高亮。 */}
         <div ref={dropArea.setContentRef} {...dndListProps}>
