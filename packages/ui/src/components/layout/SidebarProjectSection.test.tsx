@@ -121,6 +121,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useCreateProject: () => ({ mutate: harness.createProjectMutate }),
 }));
 
+import { useSidebarSelectionStore } from '@taskora/api';
 import { SidebarProjectSection } from './SidebarProjectSection';
 import { AppDndProvider } from '../../lib/appDnd';
 
@@ -228,6 +229,7 @@ beforeEach(() => {
   harness.reorderAreasMutate.mockReset();
   harness.toastError.mockReset();
   harness.createProjectMutate.mockReset();
+  useSidebarSelectionStore.setState({ ids: [], anchorId: null, order: [] });
 });
 
 describe('SidebarProjectSection project drag preview', () => {
@@ -695,5 +697,56 @@ describe('SidebarProjectSection — Magic Plus（手机首页）', () => {
     renderSection();
     act(() => handlers().onDragStart?.({ active: { id: 'magic-plus' } }));
     expect(screen.queryByTestId('project-placeholder-magic-plus-draft')).toBeNull();
+  });
+});
+
+describe('SidebarProjectSection — 多选整组拖拽', () => {
+  function containerTexts(id: string) {
+    const container = document.querySelector(`[data-project-container="${id}"]`) as HTMLElement;
+    return within(container)
+      .queryAllByText(/^Project /)
+      .map((node) => node.textContent);
+  }
+
+  it('拖动多选中的项目：组员收起，松手后整组按顺序落在落点并各自改归属', () => {
+    renderSection();
+    act(() => useSidebarSelectionStore.setState({ ids: ['a1', 's'] }));
+    startProjectDrag('a1');
+
+    // 拖拽开始之后的 effect 里收起组员 s
+    expect(containerTexts('standalone')).toEqual([]);
+    expect(screen.getByTestId('drag-count-badge')).toHaveTextContent('2');
+
+    dragOver('a1', 'area:b');
+    endProjectDrag('a1', 'area:b');
+
+    expect(containerTexts('b')).toEqual(['Project s', 'Project a1', 'Project b1']);
+    expect(harness.updateProjectMutate.mock.calls.map(([arg]) => arg)).toEqual([
+      { id: 's', data: { areaId: 'b' } },
+      { id: 'a1', data: { areaId: 'b' } },
+    ]);
+    // 归属都写完才写顺序
+    act(() => harness.updateProjectMutate.mock.calls[0][1].onSuccess());
+    expect(harness.reorderProjectsMutate).not.toHaveBeenCalled();
+    act(() => harness.updateProjectMutate.mock.calls[1][1].onSuccess());
+    expect(harness.reorderProjectsMutate).toHaveBeenCalledTimes(1);
+    expect(harness.reorderProjectsMutate.mock.calls[0][0]).toEqual(['a2', 's', 'a1', 'b1']);
+  });
+
+  it('取消拖拽复原组员', () => {
+    renderSection();
+    act(() => useSidebarSelectionStore.setState({ ids: ['a1', 's'] }));
+    startProjectDrag('a1');
+    act(() => handlers().onDragCancel?.());
+    expect(containerTexts('standalone')).toEqual(['Project s']);
+    expect(containerTexts('a')).toEqual(['Project a1', 'Project a2']);
+  });
+
+  it('拖动多选之外的项目只拖它自己', () => {
+    renderSection();
+    act(() => useSidebarSelectionStore.setState({ ids: ['a1', 's'] }));
+    startProjectDrag('b1');
+    expect(containerTexts('standalone')).toEqual(['Project s']);
+    expect(screen.queryByTestId('drag-count-badge')).toBeNull();
   });
 });

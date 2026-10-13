@@ -195,6 +195,11 @@ export {
   type SelectionRowGroupHeader,
 } from './stores/selection.store';
 export { useMultiSelectStore } from './stores/multiSelect.store';
+export {
+  useSidebarSelectionStore,
+  sidebarSelectionGroup,
+  sidebarContextMenuTargets,
+} from './stores/sidebarSelection.store';
 export { useProjectUiPrefsStore } from './stores/projectUiPrefs.store';
 export { useKeybindingsStore } from './stores/keybindings.store';
 export {

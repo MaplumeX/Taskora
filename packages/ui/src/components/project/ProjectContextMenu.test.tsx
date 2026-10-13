@@ -26,7 +26,8 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useUpdateProject: () => ({ mutate: updateMock, isPending: false }),
   useCompleteProject: () => ({ mutate: completeMock, isPending: false }),
   useUncompleteProject: () => ({ mutate: vi.fn(), isPending: false }),
-  useDeleteProject: () => ({ mutate: vi.fn(), isPending: false }),
+  useDeleteProject: () => ({ mutate: deleteMock, isPending: false }),
+  useProjectsQuery: () => ({ data: groupProjects.current }),
   useRestoreProject: () => ({ mutate: vi.fn(), isPending: false }),
   useSkipProject: () => ({ mutate: skipMock, isPending: false }),
   useDuplicateTask: () => ({ mutateAsync: vi.fn() }),
@@ -35,6 +36,8 @@ vi.mock('@taskora/api', async (importOriginal) => ({
 
 const updateMock = vi.hoisted(() => vi.fn());
 const completeMock = vi.hoisted(() => vi.fn());
+const deleteMock = vi.hoisted(() => vi.fn());
+const groupProjects = vi.hoisted(() => ({ current: [] as ProjectResponseDto[] }));
 const skipMock = vi.hoisted(() => vi.fn());
 const duplicateMock = vi.hoisted(() => vi.fn(async (id: string) => ({ id: `${id}-copy` })));
 
@@ -306,5 +309,71 @@ describe('复制项目（Duplicate）', () => {
     await user.click(screen.getByRole('button', { name: 'More' }));
     await user.click(await screen.findByRole('button', { name: 'Duplicate' }));
     expect(await screen.findByText('opened project-1-copy')).toBeInTheDocument();
+  });
+});
+
+describe('侧边栏多选的整组菜单', () => {
+  const projects = [
+    { ...baseProject, id: 'p1', title: 'P1', taskTotalCount: 2, taskCompletedCount: 0 },
+    { ...baseProject, id: 'p2', title: 'P2', tags: [{ id: 'tag-1' } as never] },
+  ];
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    groupProjects.current = projects;
+  });
+
+  function renderGroupMenu() {
+    const client = new QueryClient();
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter>
+          <ProjectContextMenu
+            project={projects[0]}
+            current={projects[0]}
+            targetsOf={() => ['p1', 'p2']}
+          >
+            <span>P1</span>
+          </ProjectContextMenu>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    );
+    fireEvent.contextMenu(screen.getByText('P1'));
+  }
+
+  it('显示件数，单项专属的动作不出现', async () => {
+    renderGroupMenu();
+    expect(await screen.findByText(/2 selected|已选择 2 项/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^(Duplicate|复制)$/ })).toBeNull();
+  });
+
+  it('删除作用于整组', async () => {
+    renderGroupMenu();
+    fireEvent.click(await screen.findByRole('button', { name: /^(Delete|删除)$/ }));
+    expect(deleteMock.mock.calls.map(([id]) => id)).toEqual(['p1', 'p2']);
+  });
+
+  it('完成：没有剩余任务的直接完成，有剩余任务的合并询问一次', async () => {
+    renderGroupMenu();
+    fireEvent.click(await screen.findByRole('button', { name: /^(Mark Complete|标记完成)/ }));
+    expect(completeMock).toHaveBeenCalledTimes(1);
+    expect(completeMock).toHaveBeenCalledWith('p2', expect.anything());
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Mark All as Completed|全部标记为完成/ }),
+    );
+    expect(completeMock).toHaveBeenLastCalledWith(
+      { id: 'p1', settleRemaining: 'completed' },
+      expect.anything(),
+    );
+  });
+
+  it('移动作用于整组且不标记当前位置', async () => {
+    renderGroupMenu();
+    fireEvent.click(await screen.findByRole('button', { name: /^(Move|移动)/ }));
+    fireEvent.click(await screen.findByText('Work'));
+    expect(updateMock.mock.calls.map(([arg]) => arg)).toEqual([
+      { id: 'p1', data: { areaId: 'work' } },
+      { id: 'p2', data: { areaId: 'work' } },
+    ]);
   });
 });

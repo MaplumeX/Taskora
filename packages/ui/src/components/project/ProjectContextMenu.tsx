@@ -32,13 +32,15 @@ import {
   canOpenWindows,
   openInNewWindow,
   useDeleteProject,
+  useProjectsQuery,
   useRestoreProject,
+  useSidebarSelectionStore,
   useUpdateProject,
 } from '@taskora/api';
 import { ScheduledDateField } from '@/components/task/fields/ScheduledDateField';
 import { DueDateField } from '@/components/task/fields/DueDateField';
 import { RepeatRuleField } from '@/components/task/fields/RepeatRuleField';
-import { TagsField } from '@/components/task/fields/TagsField';
+import { MultiTagsField, TagsField } from '@/components/task/fields/TagsField';
 import { useDuplicate } from '@/components/task/useDuplicate';
 import { useLogCompleted } from '@/components/task/useLogCompleted';
 
@@ -255,8 +257,141 @@ function PickerContent({
   return <TagsField current={current} onPatch={patch} />;
 }
 
+/** 整组的项目数据（随查询刷新，动作与三态标签取最新值）；已不存在的项目略过。 */
+function useGroupProjects(ids: string[]): ProjectResponseDto[] {
+  const { data: projects = [] } = useProjectsQuery();
+  return React.useMemo(() => {
+    const byId = new Map(projects.map((project) => [project.id, project]));
+    return ids.flatMap((id) => byId.get(id) ?? []);
+  }, [projects, ids]);
+}
+
+/**
+ * 侧边栏多选的整组菜单：完成 / 取消完成、计划、截止日期、标签、移动、删除。
+ * 重复、跳过本次、复制、在新窗口中打开只在单个项目的菜单里。
+ */
+function ProjectGroupMenuPanel({
+  ids,
+  onClose,
+  openPicker,
+  onToggleComplete,
+  firstItemRef,
+}: {
+  ids: string[];
+  onClose: () => void;
+  openPicker: (kind: Exclude<PickerKind, null>) => void;
+  onToggleComplete: (projects: ProjectResponseDto[]) => void;
+  firstItemRef?: React.RefObject<HTMLButtonElement>;
+}) {
+  const { t } = useTranslation('task');
+  const { t: tc } = useTranslation('common');
+  const deleteProject = useDeleteProject();
+  const projects = useGroupProjects(ids);
+  const completed = projects.every((project) => project.status === 'COMPLETED');
+
+  const handleDelete = () => {
+    onClose();
+    for (const project of projects) {
+      deleteProject.mutate(project.id, { onError: () => toast.error(tc('deleteFailed')) });
+    }
+    useSidebarSelectionStore.getState().clear();
+  };
+
+  const items: MenuItem[] = [
+    {
+      icon: completed ? Circle : Check,
+      label: completed ? t('markIncomplete') : t('markComplete'),
+      onSelect: () => {
+        onClose();
+        onToggleComplete(projects);
+      },
+    },
+    {
+      icon: CalendarClock,
+      label: t('scheduledDate'),
+      onSelect: () => openPicker('scheduled'),
+      separated: true,
+    },
+    { icon: CalendarDays, label: t('dueDate'), onSelect: () => openPicker('due') },
+    { icon: Tag, label: t('tags'), onSelect: () => openPicker('tags') },
+    { icon: FolderTree, label: t('move'), onSelect: () => openPicker('move') },
+    {
+      icon: Trash2,
+      label: tc('delete'),
+      onSelect: handleDelete,
+      destructive: true,
+      separated: true,
+    },
+  ];
+
+  return (
+    <div className="flex flex-col" onClick={(e) => e.stopPropagation()}>
+      <div className="px-2 pb-1 pt-0.5 text-xs text-muted-foreground">
+        {t('multiSelectCount', { count: ids.length })}
+      </div>
+      <MenuItems items={items} firstItemRef={firstItemRef} />
+    </div>
+  );
+}
+
+/** 整组的字段卡片：不预选任何值（各项目取值不一），写入作用于每个项目。 */
+function GroupPickerContent({
+  kind,
+  ids,
+  onClose,
+}: {
+  kind: Exclude<PickerKind, 'repeat' | 'review' | null>;
+  ids: string[];
+  onClose: () => void;
+}) {
+  const { t: tc } = useTranslation('common');
+  const updateProject = useUpdateProject();
+  const projects = useGroupProjects(ids);
+  const onError = () => toast.error(tc('saveFailed'));
+  const patch = (data: UpdateProjectDto) => {
+    for (const project of projects) updateProject.mutate({ id: project.id, data }, { onError });
+  };
+
+  if (kind === 'move') {
+    return (
+      <ProjectMovePicker
+        current={{}}
+        onSelect={(data) => {
+          patch(data);
+          onClose();
+        }}
+      />
+    );
+  }
+  if (kind === 'scheduled') {
+    return <ScheduledDateField current={{}} onPatch={patch} onClose={onClose} />;
+  }
+  if (kind === 'due') {
+    return <DueDateField current={{}} onPatch={patch} onClose={onClose} />;
+  }
+  // 三态：各项目在自己原有的标签上增减。
+  return (
+    <MultiTagsField
+      items={projects.map((project) => ({
+        id: project.id,
+        tagIds: project.tags?.map((tag) => tag.id) ?? [],
+      }))}
+      onChanges={(changes) => {
+        for (const { id, tagIds } of changes) {
+          updateProject.mutate({ id, data: { tagIds } }, { onError });
+        }
+      }}
+    />
+  );
+}
+
 interface ProjectContextMenuProps extends ProjectMenuProps {
   children: React.ReactNode;
+  /**
+   * 右键时取菜单的作用对象（侧边栏多选，见 sidebarContextMenuTargets）：
+   * 多于一个即整组菜单；缺省只作用于本项目。
+   */
+  targetsOf?: (id: string) => string[];
 }
 
 /** 右键版：包裹 children，右键打开菜单 + picker。 */
@@ -265,9 +400,12 @@ export function ProjectContextMenu({
   current,
   variant = 'default',
   children,
+  targetsOf,
 }: ProjectContextMenuProps) {
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [activePicker, setActivePicker] = React.useState<PickerKind>(null);
+  // 右键在多选之中时作用于整组（打开菜单时取快照），否则为 null、只作用于本项目。
+  const [group, setGroup] = React.useState<string[] | null>(null);
 
   const containerRef = React.useRef<HTMLDivElement>(null);
   const firstItemRef = React.useRef<HTMLButtonElement>(null);
@@ -309,6 +447,8 @@ export function ProjectContextMenu({
     // 触屏长按只负责拖动（对齐 Things 3），不开菜单；项目操作在项目页的
     // 更多菜单里。
     if (isTouchContextMenu(e)) return;
+    const ids = targetsOf?.(project.id) ?? [project.id];
+    setGroup(ids.length > 1 ? ids : null);
     openMenuAt(e.clientX, e.clientY);
   };
 
@@ -327,29 +467,46 @@ export function ProjectContextMenu({
       <Popover open={menuOpen} onOpenChange={setMenuOpen}>
         <PopoverAnchor virtualRef={virtualAnchorRef} />
         <PopoverContent align="start" className="w-44 p-1" onClick={(e) => e.stopPropagation()}>
-          <ProjectMenuPanel
-            project={project}
-            current={current}
-            variant={variant}
-            onClose={closeMenu}
-            openPicker={openPicker}
-            onToggleComplete={completion.toggle}
-            firstItemRef={firstItemRef}
-          />
+          {group ? (
+            <ProjectGroupMenuPanel
+              ids={group}
+              onClose={closeMenu}
+              openPicker={openPicker}
+              onToggleComplete={completion.toggleGroup}
+              firstItemRef={firstItemRef}
+            />
+          ) : (
+            <ProjectMenuPanel
+              project={project}
+              current={current}
+              variant={variant}
+              onClose={closeMenu}
+              openPicker={openPicker}
+              onToggleComplete={completion.toggle}
+              firstItemRef={firstItemRef}
+            />
+          )}
         </PopoverContent>
       </Popover>
 
       <Popover open={activePicker !== null} onOpenChange={(o) => !o && setActivePicker(null)}>
         <PopoverAnchor virtualRef={containerRef} />
         <PopoverContent align="start" onClick={(e) => e.stopPropagation()}>
-          {activePicker !== null && (
-            <PickerContent
-              kind={activePicker}
-              current={current}
-              patch={patch}
-              onClose={() => setActivePicker(null)}
-            />
-          )}
+          {activePicker !== null &&
+            (group && activePicker !== 'repeat' && activePicker !== 'review' ? (
+              <GroupPickerContent
+                kind={activePicker}
+                ids={group}
+                onClose={() => setActivePicker(null)}
+              />
+            ) : (
+              <PickerContent
+                kind={activePicker}
+                current={current}
+                patch={patch}
+                onClose={() => setActivePicker(null)}
+              />
+            ))}
         </PopoverContent>
       </Popover>
       {completion.dialog}
