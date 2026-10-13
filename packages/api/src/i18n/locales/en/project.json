@@ -21,6 +21,7 @@
   "createHeadingFailed": "Failed to create heading",
   "deleteHeadingFailed": "Failed to delete heading",
   "convertToProject": "Convert to Project",
+  "convertHeadingConfirm": "The heading will become a new project, and its tasks will move into it. This cannot be undone.",
   "moveHeading": "Move",
   "moveHeadingSearchPlaceholder": "Search projects…",
   "moveHeadingNoResults": "No matching projects",

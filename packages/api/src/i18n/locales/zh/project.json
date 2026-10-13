@@ -21,6 +21,7 @@
   "createHeadingFailed": "项目分组标题创建失败",
   "deleteHeadingFailed": "项目分组标题删除失败",
   "convertToProject": "转换为项目",
+  "convertHeadingConfirm": "分组标题会变成一个新项目，其下的任务会移入新项目。此操作无法撤销。",
   "moveHeading": "移动",
   "moveHeadingSearchPlaceholder": "搜索项目…",
   "moveHeadingNoResults": "没有匹配的项目",
