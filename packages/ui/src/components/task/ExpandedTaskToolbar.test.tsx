@@ -135,7 +135,7 @@ describe('ExpandedTaskToolbar', () => {
     expect(mocks.del).not.toHaveBeenCalled();
   });
 
-  it('移动：选择项目后改写归属并收起', async () => {
+  it('移动：选择项目后改写归属，保持展开（Expanded Linger）', async () => {
     renderToolbar();
     await user.click(screen.getByRole('button', { name: 'Move' }));
     await user.click(await screen.findByRole('option', { name: /Project Alpha/ }));
@@ -143,7 +143,8 @@ describe('ExpandedTaskToolbar', () => {
       { id: 'task-1', data: { projectId: 'project-1', areaId: null } },
       expect.anything(),
     );
-    await waitFor(() => expect(useUiInteractionStore.getState().expandedId).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('option', { name: /Project Alpha/ })).toBeNull());
+    expect(useUiInteractionStore.getState().expandedId).toBe('task-1');
   });
 
   it('更多：复制展开的任务', async () => {
