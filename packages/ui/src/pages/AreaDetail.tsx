@@ -32,7 +32,7 @@ import { LaterItemSections } from '@/components/project/LaterItemSections';
 import { projectFeedItem, taskFeedItem } from '@/components/feed/feedItems';
 import { LaterItemsToggle } from '@/components/common/LaterItemsToggle';
 import { Collapse } from '@/components/ui/collapse';
-import { flashRevealedRows } from '@/lib/laterReveal';
+import { flashRevealedRows } from '../lib/laterReveal';
 import { mergeVisibleProjectOrder } from '@/components/layout/sidebarProjectLayout';
 import { TaskListView } from '@/components/task/TaskListView';
 import { EmptyState } from '@/components/common/EmptyState';

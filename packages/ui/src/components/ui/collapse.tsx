@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { revealEnterOpacity, revealExitOpacity } from '@/lib/laterReveal';
+import { revealEnterOpacity, revealExitOpacity } from '../../lib/laterReveal';
 
 /** 与 tokens.css 的 --dur-expand / --ease-expand 一致（同任务详情展开）。 */
 const EXPAND_MS = 200;
