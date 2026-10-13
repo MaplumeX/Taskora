@@ -235,6 +235,58 @@ describe('useFlipList（数据驱动的位移 / 进场 / 离场）', () => {
     expect(getByTestId('root').children).toHaveLength(2);
   });
 
+  function RevealList({ ids }: { ids: string[] }) {
+    const flip = useFlipList<HTMLDivElement>(ids);
+    const idsRef = React.useRef(ids);
+    // 同 ProjectTaskLayout：DOM 仍是切换前时 captureReveal，再换布局。
+    if (idsRef.current !== ids) {
+      idsRef.current = ids;
+      flip.captureReveal();
+    }
+    return (
+      <div ref={flip.rootRef} data-testid="root">
+        {ids.map((id) => (
+          <div key={id} {...flipId(id)} data-row={id}>
+            <span data-selection-row={id}>{id}</span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  it('显隐稍后项（captureReveal）：残影先淡出完，新行稍后才浮现并高亮', () => {
+    document.documentElement.style.setProperty('--primary', '213 94% 48%');
+    const { rerender, getByTestId } = render(<RevealList ids={['a', 'b', 'c']} />);
+    rerender(<RevealList ids={['a', 'c']} />);
+
+    const ghost = getByTestId('root').lastElementChild as HTMLElement;
+    expect(calls.find(({ element }) => element === ghost)!.keyframes).toEqual([
+      { height: '30px', opacity: 1 },
+      { opacity: 0, offset: 0.6 },
+      { height: '0px', opacity: 0 },
+    ]);
+
+    calls = [];
+    rerender(<RevealList ids={['a', 'b', 'c']} />);
+    expect(callsOn('[data-row="b"]')[0].keyframes).toEqual([
+      { clipPath: 'inset(0 0 100% 0)', opacity: 0 },
+      { opacity: 0, offset: 0.3 },
+      { clipPath: 'inset(0 0 0 0)', opacity: 1 },
+    ]);
+    expect(callsOn('[data-selection-row="b"]')[0].keyframes[0]).toEqual({
+      backgroundColor: 'hsl(213 94% 48% / 0.1)',
+    });
+    expect(callsOn('[data-selection-row="a"]')).toHaveLength(0);
+    document.documentElement.style.removeProperty('--primary');
+  });
+
+  it('显隐稍后项不受进出场行数上限', () => {
+    const many = Array.from({ length: 30 }, (_, i) => `later-${i}`);
+    const { rerender } = render(<RevealList ids={['a', ...many]} />);
+    rerender(<RevealList ids={['a']} />);
+    expect(calls.filter(({ keyframes }) => 'height' in keyframes[0])).toHaveLength(30);
+  });
+
   it('前后没有共同行（首次加载、换了项目）不播放', () => {
     const { rerender } = render(<List ids={[]} />);
     rerender(<List ids={['a', 'b']} />);

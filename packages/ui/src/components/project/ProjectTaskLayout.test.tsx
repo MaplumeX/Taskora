@@ -680,6 +680,46 @@ describe('ProjectTaskLayout drag sessions', () => {
     );
   });
 
+  it('切换隐藏稍后任务：按显隐节奏收起残影、揭开新行', () => {
+    const keyframesOf: { element: Element; keyframes: Keyframe[] }[] = [];
+    // jsdom 没有布局与 WAAPI：行按 DOM 顺序每行 30px 高排布。
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      const rows = Array.from(document.querySelectorAll('[data-flip-id]'));
+      const index = rows.indexOf(this);
+      return new DOMRect(0, Math.max(index, 0) * 30, 200, 30);
+    });
+    Element.prototype.animate = function (this: Element, keyframes: Keyframe[]) {
+      keyframesOf.push({ element: this, keyframes });
+      return { cancel: vi.fn(), onfinish: null, oncancel: null } as unknown as Animation;
+    } as Element['animate'];
+    const layout = (hiddenTaskIds: ReadonlySet<string> | null) => (
+      <ProjectTaskLayout
+        projectId="project-1"
+        tasks={tasks}
+        headings={[heading, secondHeading]}
+        emptyHint="Empty"
+        hiddenTaskIds={hiddenTaskIds}
+      />
+    );
+    try {
+      const { rerender } = render(layout(null), { wrapper: DndShell });
+      rerender(layout(new Set(['task-u2'])));
+      expect(keyframesOf.some(({ keyframes }) => keyframes[1]?.offset === 0.6)).toBe(true);
+
+      keyframesOf.length = 0;
+      rerender(layout(null));
+      const entered = keyframesOf.find(({ element }) =>
+        element.matches('[data-sortable-task-id="task-u2"]'),
+      );
+      expect(entered?.keyframes[1]).toEqual({ opacity: 0, offset: 0.3 });
+    } finally {
+      vi.restoreAllMocks();
+      delete (Element.prototype as Partial<Element>).animate;
+    }
+  });
+
   it('previews locally and persists one complete layout on a changed drop', () => {
     renderLayout();
     startTaskDrag('task-u1');

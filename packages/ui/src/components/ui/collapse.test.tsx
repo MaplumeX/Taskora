@@ -102,6 +102,43 @@ describe('Collapse', () => {
     expect(calls[0].animation.onfinish).toBeNull();
   });
 
+  it('reveal：收起时先淡出完，展开时先腾出空间再浮现，并在展开开始时回调', () => {
+    const calls = mockAnimate();
+    const onOpen = vi.fn();
+    const { rerender } = render(
+      <Collapse open reveal onOpen={onOpen}>
+        内容
+      </Collapse>,
+    );
+    expect(onOpen).not.toHaveBeenCalled();
+
+    rerender(
+      <Collapse open={false} reveal onOpen={onOpen}>
+        内容
+      </Collapse>,
+    );
+    expect(calls[0].keyframes).toEqual([
+      { height: '120px', opacity: 1 },
+      { opacity: 0, offset: 0.6 },
+      { height: '0px', opacity: 0 },
+    ]);
+    expect(onOpen).not.toHaveBeenCalled();
+    act(() => calls[0].animation.onfinish?.(new Event('finish') as AnimationPlaybackEvent));
+
+    rerender(
+      <Collapse open reveal onOpen={onOpen}>
+        内容
+      </Collapse>,
+    );
+    expect(calls[1].keyframes).toEqual([
+      { height: '0px', opacity: 0 },
+      { opacity: 0, offset: 0.3 },
+      { height: '120px', opacity: 1 },
+    ]);
+    expect(onOpen).toHaveBeenCalledOnce();
+    expect(onOpen.mock.calls[0][0]).toHaveTextContent('内容');
+  });
+
   it('不支持 WAAPI 时立即切换', () => {
     const { rerender } = render(<Collapse open>内容</Collapse>);
     rerender(<Collapse open={false}>内容</Collapse>);

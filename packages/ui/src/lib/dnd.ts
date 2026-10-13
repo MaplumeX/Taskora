@@ -4,6 +4,8 @@ import type { AnimateLayoutChanges, SortingStrategy } from '@dnd-kit/sortable';
 
 import { useMultiSelectStore, useSelectionStore } from '@taskora/api';
 
+import { flashRevealedRows, revealEnterOpacity, revealExitOpacity } from './laterReveal';
+
 /**
  * 拖拽排序的共享约定（Things 式「让位」模型）：
  *
@@ -74,6 +76,11 @@ interface FlipSnapshot {
    * 拖拽中调用方 capture() 的重排只做位移——空位行与草稿行不该淡入淡出。
    */
   auto: boolean;
+  /**
+   * Hide Later Items 切换（captureReveal）：进出场按 laterReveal 的节奏淡入
+   * 淡出、新行高亮，且不受 MAX_ENTER_EXIT 限制——一次显隐的就是这批行。
+   */
+  reveal?: boolean;
 }
 
 function measureRows(root: HTMLElement, auto: boolean): FlipSnapshot {
@@ -115,7 +122,7 @@ function stripGhostAttributes(element: Element) {
  * 上移的 FLIP 同时长同曲线，残影底边与下一行顶边同步移动，二者不重叠——
  * 看起来就是行本身收起（同完成任务的收起）。
  */
-function playExit(root: HTMLElement, element: HTMLElement, rect: DOMRect) {
+function playExit(root: HTMLElement, element: HTMLElement, rect: DOMRect, reveal: boolean) {
   // 高度已为 0 的行（完成收起后才移除）不必再收一次。
   if (rect.height < 1 || rect.width < 1) return;
   const ghost = element.cloneNode(true) as HTMLElement;
@@ -139,6 +146,7 @@ function playExit(root: HTMLElement, element: HTMLElement, rect: DOMRect) {
   const animation = ghost.animate(
     [
       { height: `${rect.height}px`, opacity: 1 },
+      ...(reveal ? [revealExitOpacity()] : []),
       { height: '0px', opacity: 0 },
     ],
     { duration: FLIP_DURATION_MS, easing: FLIP_EASING },
@@ -151,10 +159,12 @@ function playExit(root: HTMLElement, element: HTMLElement, rect: DOMRect) {
  * 进场：自上而下揭开并淡入。下方邻行同时从旧位置（向上偏一行高）FLIP 下移，
  * 揭开的底边与邻行顶边同步，看起来就是行从 0 高度撑开。
  */
-function playEnter(element: HTMLElement) {
+function playEnter(element: HTMLElement, reveal: boolean) {
+  if (reveal) flashRevealedRows(element);
   return element.animate(
     [
       { clipPath: 'inset(0 0 100% 0)', opacity: 0 },
+      ...(reveal ? [revealEnterOpacity()] : []),
       { clipPath: 'inset(0 0 0 0)', opacity: 1 },
     ],
     { duration: FLIP_DURATION_MS, easing: FLIP_EASING },
@@ -169,6 +179,8 @@ function playEnter(element: HTMLElement) {
  * - 数据变化（改 When 日期换了分组、删除、新建、移走、同步）：version 变化
  *   的那次渲染时 DOM 仍是旧的，在此自动记录；提交后除位移外，新出现的行
  *   撑开进场、消失的行收起离场（对齐 Things 3）。
+ * - Hide Later Items 切换：改布局前调用 captureReveal()，进出场换成显隐
+ *   稍后项的节奏（见 lib/laterReveal.ts），不受行数上限。
  * - 前后没有任何共同行（首次加载、切换到另一个项目）视为整体替换，不做动画。
  */
 export function useFlipList<T extends HTMLElement>(version: unknown) {
@@ -181,6 +193,12 @@ export function useFlipList<T extends HTMLElement>(version: unknown) {
     const root = rootRef.current;
     if (!root) return;
     snapshotRef.current = measureRows(root, false);
+  }, []);
+
+  const captureReveal = React.useCallback(() => {
+    const root = rootRef.current;
+    if (!root) return;
+    snapshotRef.current = { ...measureRows(root, true), reveal: true };
   }, []);
 
   if (versionRef.current !== version) {
@@ -230,15 +248,18 @@ export function useFlipList<T extends HTMLElement>(version: unknown) {
       exited = exited.filter((other) => other !== id);
       entered = entered.filter((other) => other !== swap);
     }
-    if (entered.length + exited.length > MAX_ENTER_EXIT) return;
-    for (const id of exited) playExit(root, before.elements.get(id)!, before.rects.get(id)!);
+    const reveal = before.reveal === true;
+    if (!reveal && entered.length + exited.length > MAX_ENTER_EXIT) return;
+    for (const id of exited) {
+      playExit(root, before.elements.get(id)!, before.rects.get(id)!, reveal);
+    }
     for (const id of entered) {
       const element = current.elements.get(id)!;
-      animationsRef.current.set(element, playEnter(element));
+      animationsRef.current.set(element, playEnter(element, reveal));
     }
   }, [version]);
 
-  return { rootRef, capture };
+  return { rootRef, capture, captureReveal };
 }
 
 const HOLD_TIMEOUT_MS = 2000;

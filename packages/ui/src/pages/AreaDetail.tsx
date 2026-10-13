@@ -31,6 +31,8 @@ import { SortableProjectRow } from '@/components/project/DraggableProjectRow';
 import { LaterItemSections } from '@/components/project/LaterItemSections';
 import { projectFeedItem, taskFeedItem } from '@/components/feed/feedItems';
 import { LaterItemsToggle } from '@/components/common/LaterItemsToggle';
+import { Collapse } from '@/components/ui/collapse';
+import { flashRevealedRows } from '@/lib/laterReveal';
 import { mergeVisibleProjectOrder } from '@/components/layout/sidebarProjectLayout';
 import { TaskListView } from '@/components/task/TaskListView';
 import { EmptyState } from '@/components/common/EmptyState';
@@ -243,9 +245,19 @@ export default function AreaDetail() {
         <TaskListView tasks={activeTasks} hideEmptyState hideOwnership selectionRank={1} />
       )}
 
-      {/* 稍后项放在页面最下方（活跃项目与任务之后），可整块隐藏（Hide Later Items）。 */}
-      {!hideLater && (
-        <LaterItemSections items={laterItems} kindOf={laterItemKind} selectionRank={2} />
+      {/* 稍后项放在页面最下方（活跃项目与任务之后），可整块隐藏（Hide Later Items）。
+          与上方的间距放进 pt 随高度一起收起（-mt 抵掉外层 gap），卸载时不跳；
+          按区域 key，切换区域不播放。 */}
+      {laterItems.length > 0 && (
+        <Collapse
+          key={id}
+          open={!hideLater}
+          reveal
+          onOpen={flashRevealedRows}
+          className="-mt-4 flex flex-col gap-4 pt-4"
+        >
+          <LaterItemSections items={laterItems} kindOf={laterItemKind} selectionRank={2} />
+        </Collapse>
       )}
       {area && !isLoading && !isError ? (
         <LaterItemsToggle count={laterItems.length} hidden={hideLater} onToggle={toggleLaterItems} />
