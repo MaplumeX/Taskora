@@ -45,8 +45,29 @@ export function TimePicker({
   className,
 }: TimePickerProps) {
   const [open, setOpen] = React.useState(false);
+  const triggerRef = React.useRef<HTMLButtonElement>(null);
   const contentRef = React.useRef<HTMLDivElement>(null);
+  const closedByOutsideClickRef = React.useRef(false);
   const parsed = parseTime(value);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const ownerDocument = triggerRef.current?.ownerDocument;
+    if (!ownerDocument) return;
+
+    // 外层日期卡片会截断 click 冒泡，Radix 延迟到 click 的外部关闭
+    // 因而被跳过。在捕获阶段判断实际 DOM 边界，兼容 Portal 和触屏点击。
+    const onClickCapture = (event: MouseEvent) => {
+      const target = event.target as Node | null;
+      if (!target || contentRef.current?.contains(target) || triggerRef.current?.contains(target)) {
+        return;
+      }
+      closedByOutsideClickRef.current = true;
+      setOpen(false);
+    };
+    ownerDocument.addEventListener('click', onClickCapture, true);
+    return () => ownerDocument.removeEventListener('click', onClickCapture, true);
+  }, [open]);
 
   const pickHour = (hour: number) => {
     onChange(`${pad(hour)}:${pad(parsed?.minute ?? 0)}`);
@@ -60,6 +81,7 @@ export function TimePicker({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
+          ref={triggerRef}
           type="button"
           aria-label={ariaLabel}
           disabled={disabled}
@@ -75,6 +97,11 @@ export function TimePicker({
         ref={contentRef}
         align="end"
         className="flex w-auto items-stretch gap-1 bg-popover p-1.5 backdrop-blur-none max-md:w-auto max-md:p-1.5"
+        onCloseAutoFocus={(e) => {
+          // 外部点击后保留点击目标的焦点；Escape / trigger 关闭仍由 Radix 恢复焦点。
+          if (closedByOutsideClickRef.current) e.preventDefault();
+          closedByOutsideClickRef.current = false;
+        }}
         // 打开时把两列的选中项滚到中央，并聚焦小时列
         onOpenAutoFocus={(e) => {
           const selected =
