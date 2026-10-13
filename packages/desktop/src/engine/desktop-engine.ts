@@ -30,6 +30,7 @@ import {
   detachLiveQueries,
   createEngineInvalidator,
   requestTaskReveal,
+  undoHistory,
 } from '@taskora/api';
 import {
   openEngine,
@@ -108,12 +109,15 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
       deviceId,
       transport: createHttpSyncTransport(),
     });
-    // 全域注入（V2）：各域沿用 TaskBackend 已验证的注入模式
-    setTaskBackend(createEngineTaskBackend({ engine }));
-    setProjectBackend(createEngineProjectBackend({ engine }));
-    setAreaBackend(createEngineAreaBackend({ engine }));
-    setTagBackend(createEngineTagBackend({ engine }));
-    setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine }));
+    // 全域注入（V2）：各域沿用 TaskBackend 已验证的注入模式。界面上的编辑经
+    // 撤销历史包装的 Engine 写入（⌘Z，ADR-0024）；副窗口、quick-add 与提醒
+    // 协调器等其余写入仍用原 Engine，不进本窗口的撤销历史。
+    const recorded = undoHistory.attach(engine);
+    setTaskBackend(createEngineTaskBackend({ engine: recorded }));
+    setProjectBackend(createEngineProjectBackend({ engine: recorded }));
+    setAreaBackend(createEngineAreaBackend({ engine: recorded }));
+    setTagBackend(createEngineTagBackend({ engine: recorded }));
+    setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine: recorded }));
     registerDevice(deviceId).catch(() => undefined); // 注册失败不阻塞本地使用
     // Engine 激活：SSE 只作「触发 engine pull」的提示通道（ADR-0007），
     // 停用 EventStreamApplier 的缓存手术——界面由响应式查询驱动，
@@ -185,6 +189,7 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
 /** 全域退回 REST（登出 / 装配失败；副窗口退回 REST 时同用）。 */
 export function resetEngineBackends(): void {
   detachLiveQueries();
+  undoHistory.detach();
   setTaskBackend(undefined);
   setProjectBackend(undefined);
   setAreaBackend(undefined);

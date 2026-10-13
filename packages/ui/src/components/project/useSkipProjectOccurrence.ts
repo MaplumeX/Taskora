@@ -6,8 +6,6 @@ import type { ProjectResponseDto } from '@taskora/shared';
 import { ProjectStatus } from '@taskora/shared';
 import {
   currentLegacyDateTimeZone,
-  i18n,
-  parseCalendarDate,
   RepeatSkipBlockedError,
   skipOccurrenceDate,
   usePreferencesStore,
@@ -50,15 +48,6 @@ export function useSkipProjectOccurrence(project: ProjectResponseDto, enabled: b
 
   const skip = () => {
     skipProject.mutate(project.id, {
-      onSuccess: (skipped) => {
-        if (!skipped.scheduledDate) return;
-        const date = new Intl.DateTimeFormat(i18n.language, {
-          month: 'short',
-          day: 'numeric',
-          weekday: 'short',
-        }).format(parseCalendarDate(skipped.scheduledDate));
-        toast.success(t('skipOccurrenceDone', { date }));
-      },
       onError: (error) =>
         toast.error(
           error instanceof RepeatSkipBlockedError && error.reason === 'next-exists'

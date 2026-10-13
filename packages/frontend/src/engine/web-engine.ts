@@ -39,6 +39,7 @@ import {
   setTagBackend,
   setTaskBackend,
   TabEngine,
+  undoHistory,
   useAuthStore,
   type SyncStatus,
   type TabChannel,
@@ -161,12 +162,14 @@ function startSession(queryClient: QueryClient, runtime: WebEngineRuntime, userI
   };
   session = current;
 
-  // 全域注入：hooks 读写本标签页的 TabEngine
-  setTaskBackend(createEngineTaskBackend({ engine: tab }));
-  setProjectBackend(createEngineProjectBackend({ engine: tab }));
-  setAreaBackend(createEngineAreaBackend({ engine: tab }));
-  setTagBackend(createEngineTagBackend({ engine: tab }));
-  setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine: tab }));
+  // 全域注入：hooks 读写本标签页的 TabEngine，经撤销历史包装（⌘Z，ADR-0024；
+  // 每个标签页各有一份历史）
+  const recorded = undoHistory.attach(tab);
+  setTaskBackend(createEngineTaskBackend({ engine: recorded }));
+  setProjectBackend(createEngineProjectBackend({ engine: recorded }));
+  setAreaBackend(createEngineAreaBackend({ engine: recorded }));
+  setTagBackend(createEngineTagBackend({ engine: recorded }));
+  setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine: recorded }));
   // SSE 只作「远端有变更」的提示（leader 据此 pull），界面由响应式查询驱动
   setEventStreamCacheSurgery(false);
   // 读写都是本地的：浏览器报告离线时 React Query 默认暂停查询与 mutation
@@ -369,6 +372,7 @@ function runQueriesWhileOffline(queryClient: QueryClient): () => void {
 
 function resetBackends(): void {
   detachLiveQueries();
+  undoHistory.detach();
   setTaskBackend(undefined);
   setProjectBackend(undefined);
   setAreaBackend(undefined);

@@ -51,6 +51,9 @@ group drag.
 - Writes that bypass the wrapper, such as the reminder coordinator (notification
   actions) and sync merges, never become undo steps. A new non-UI writer must
   use the raw Engine for the same reason.
-- History lives in memory only and has no Redo. Today only the Android shell
-  attaches it (shake to undo). Desktop and web can attach the same wrapper
-  later for ⌘Z.
+- History lives in memory only and has no Redo. Every shell attaches it: shake
+  to undo on Android, ⌘Z on desktop and web. Each desktop window and each web
+  tab keeps its own history, attached to that window's `TabEngine` or Engine.
+- A write outside the Engine (Log Completed advances the `loggedThrough`
+  account preference) brings its own inverse through `UndoHistory.record` and
+  joins the current step like any Engine write.

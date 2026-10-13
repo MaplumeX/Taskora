@@ -24,6 +24,7 @@ import {
   setTagBackend,
   setTaskBackend,
   TabEngine,
+  undoHistory,
   useAuthStore,
   type UnavailableReason,
 } from '@taskora/api';
@@ -59,11 +60,13 @@ function startSession(queryClient: QueryClient): void {
   const channel = createWindowChannel(getCurrentWindow().label);
   const tab = new TabEngine(channel, readDeviceId());
 
-  setTaskBackend(createEngineTaskBackend({ engine: tab }));
-  setProjectBackend(createEngineProjectBackend({ engine: tab }));
-  setAreaBackend(createEngineAreaBackend({ engine: tab }));
-  setTagBackend(createEngineTagBackend({ engine: tab }));
-  setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine: tab }));
+  // 每个窗口有自己的撤销历史（⌘Z 只撤销本窗口里的编辑）。
+  const recorded = undoHistory.attach(tab);
+  setTaskBackend(createEngineTaskBackend({ engine: recorded }));
+  setProjectBackend(createEngineProjectBackend({ engine: recorded }));
+  setAreaBackend(createEngineAreaBackend({ engine: recorded }));
+  setTagBackend(createEngineTagBackend({ engine: recorded }));
+  setProjectHeadingBackend(createEngineProjectHeadingBackend({ engine: recorded }));
   // SSE 只作远端变更提示（主窗口据此 pull），界面由响应式查询驱动。
   setEventStreamCacheSurgery(false);
   attachLiveQueries(tab);

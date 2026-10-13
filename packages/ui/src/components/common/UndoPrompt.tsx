@@ -27,6 +27,7 @@ const ACTION_KEYS: Record<UndoAction, string> = {
   edit: 'undoActionEdit',
   reorder: 'undoActionReorder',
   change: 'undoActionChange',
+  logCompleted: 'undoActionLogCompleted',
 };
 
 /**

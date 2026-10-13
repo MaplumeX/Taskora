@@ -12,7 +12,6 @@ const harness = vi.hoisted(() => ({
   droppableData: null as null | { onDrop: () => void },
   createFromQuickAddDraft: vi.fn(),
   createTask: vi.fn(),
-  toastSuccess: vi.fn(),
 }));
 
 vi.mock('@dnd-kit/core', async (importOriginal) => {
@@ -38,7 +37,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useUpdateTask: () => ({ mutateAsync: vi.fn() }),
 }));
 
-vi.mock('sonner', () => ({ toast: { success: harness.toastSuccess, error: vi.fn() } }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 // 卡片本身另有测试；这里只要能提交一份草稿。
 vi.mock('@/components/task/QuickAddCard', async () => {
@@ -79,7 +78,6 @@ beforeEach(() => {
   harness.dnd = null;
   harness.droppableData = null;
   harness.createFromQuickAddDraft.mockReset();
-  harness.toastSuccess.mockReset();
 });
 
 describe('MagicPlusInbox', () => {
@@ -117,7 +115,6 @@ describe('MagicPlusInbox', () => {
       { title: '买牛奶' },
       expect.objectContaining({ createTask: expect.any(Function) }),
     );
-    expect(harness.toastSuccess).toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: 'submit-draft' })).toBeNull();
   });
 });

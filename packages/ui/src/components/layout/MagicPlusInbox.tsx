@@ -53,9 +53,6 @@ export function MagicPlusInbox() {
     try {
       const result = await createFromQuickAddDraft(draft, deps);
       if (!result) return;
-      const place =
-        result.placedIn.kind === 'inbox' ? t('nav:inbox') : result.placedIn.title;
-      toast.success(t('task:quickAddAddedTo', { place }));
       if (!keepOpen) setOpen(false);
     } catch (error) {
       toast.error(t('task:quickAddFailed'));

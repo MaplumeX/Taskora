@@ -24,7 +24,6 @@
   "everySingle_year": "每年",
   "every_year": "每 {{count}} 年",
   "emptyTitle": "没有待回顾的项目或区域",
-  "doneTitle": "本轮回顾已结束",
   "upcoming_one": "下次回顾：{{date}}，共 {{count}} 个",
   "upcoming_other": "下次回顾：{{date}}，共 {{count}} 个",
   "noUpcoming": "暂无排定的回顾。",

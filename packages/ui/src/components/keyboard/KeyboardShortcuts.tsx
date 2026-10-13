@@ -14,6 +14,7 @@ import {
   reorderedRowIds,
   scopeOfRow,
   todayDateKey,
+  undoHistory,
   useAssistantUiStore,
   useKeybindingsStore,
   useSelectionStore,
@@ -131,9 +132,7 @@ function hasTextSelection(): boolean {
 /** 侧边栏中的列表行（[data-sidebar-nav] 为其路由），按显示顺序。 */
 function sidebarRoutes(): string[] {
   const rows = document.querySelectorAll<HTMLElement>('[data-sidebar] [data-sidebar-nav]');
-  return Array.from(rows).flatMap(
-    (el) => (el.dataset.sidebarNav ? [el.dataset.sidebarNav] : []),
-  );
+  return Array.from(rows).flatMap((el) => (el.dataset.sidebarNav ? [el.dataset.sidebarNav] : []));
 }
 
 /** 打字唤起 Quick Find 的前提（事件级前提 isEditableTarget / hasOpenOverlay 已在前面判过）。 */
@@ -396,7 +395,12 @@ export function KeyboardShortcuts({ platform }: Props) {
         if (targets.length === 0) return;
         e.preventDefault();
         const copied = setCopiedItems(
-          targets.map(({ id, kind, item, tagIds }) => ({ id, kind, item: item!, tagIds: tagIds ?? [] })),
+          targets.map(({ id, kind, item, tagIds }) => ({
+            id,
+            kind,
+            item: item!,
+            tagIds: tagIds ?? [],
+          })),
         );
         void writeClipboardText(copied.text);
         return;
@@ -404,6 +408,12 @@ export function KeyboardShortcuts({ platform }: Props) {
       if (action.type === 'paste') {
         e.preventDefault();
         void pasteFromClipboard();
+        return;
+      }
+      // ⌘Z：直接撤销最近一步（对齐 Things Mac；手机端是摇一摇加确认）。
+      if (action.type === 'undo') {
+        e.preventDefault();
+        undoHistory.undo().catch(() => toast.error(t('common:operationFailed')));
         return;
       }
       // ⇧⌘E 显示 / 隐藏稍后项：只在项目页、区域页生效，其他页面不拦截
@@ -452,9 +462,7 @@ export function KeyboardShortcuts({ platform }: Props) {
       const yieldFocusToNewRow = (id: string) => {
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
-            const newRow = document.querySelector<HTMLElement>(
-              `[data-selection-row="${id}"]`,
-            );
+            const newRow = document.querySelector<HTMLElement>(`[data-selection-row="${id}"]`);
             if (
               newRow &&
               document.activeElement instanceof Node &&
@@ -718,9 +726,7 @@ export function KeyboardShortcuts({ platform }: Props) {
             });
             return;
           }
-          const anchorIndex = anchor
-            ? taskRows.findIndex((r) => r.id === anchor.id)
-            : -1;
+          const anchorIndex = anchor ? taskRows.findIndex((r) => r.id === anchor.id) : -1;
           // 选中 task 行时，创建后把新任务排到选中项下方（跟随现有
           // reorderTasks 部分排序语义）；否则等同普通新建。
           if (anchor?.kind === 'task' && anchorIndex >= 0) {
@@ -1056,9 +1062,7 @@ function TypeToFindSink({ pathname }: { pathname: string }) {
   // input 始终是同一个节点，切换外观不打断组字。
   return (
     <>
-      {composing && (
-        <div aria-hidden className="fixed inset-0 z-50 bg-black/20 dark:bg-black/50" />
-      )}
+      {composing && <div aria-hidden className="fixed inset-0 z-50 bg-black/20 dark:bg-black/50" />}
       <div
         aria-hidden={!composing}
         className={cn(

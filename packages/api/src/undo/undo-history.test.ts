@@ -140,6 +140,39 @@ describe('UndoHistory', () => {
     expect(await history.undo()).toBe('create');
   });
 
+  it('Engine 之外的写入经 record 自带逆操作，与同一输入里的 Engine 写入合成一步', async () => {
+    const { history, tasks, rawTasks } = device;
+    let watermark = 'before';
+    const task = await tasks.createTask({ title: 'A' });
+    history.boundary();
+    await Promise.all([
+      history.record('logCompleted', async () => {
+        watermark = 'after';
+        return async () => {
+          watermark = 'before';
+        };
+      }),
+      tasks.updateTask(task.id, { title: 'B' }),
+    ]);
+
+    expect(await history.peek()).toBe('logCompleted');
+    expect(await history.undo()).toBe('logCompleted');
+    expect(watermark).toBe('before');
+    expect((await rawTasks.getTask(task.id)).title).toBe('A');
+  });
+
+  it('未接入 Engine 时 record 照常写入但不记录', async () => {
+    const { history } = device;
+    history.detach();
+    let ran = false;
+    await history.record('logCompleted', async () => {
+      ran = true;
+      return async () => undefined;
+    });
+    expect(ran).toBe(true);
+    expect(await history.peek()).toBeNull();
+  });
+
   it('detach 后撤销为空操作', async () => {
     const { history, tasks } = device;
     await tasks.createTask({ title: 'A' });

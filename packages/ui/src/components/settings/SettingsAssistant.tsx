@@ -71,10 +71,7 @@ export default function SettingsAssistant() {
         ...(apiKey.trim() ? { apiKey: apiKey.trim() } : {}),
       },
       {
-        onSuccess: () => {
-          setApiKey('');
-          toast.success(t('settings:assistantSaved'));
-        },
+        onSuccess: () => setApiKey(''),
         onError: () => toast.error(t('settings:assistantSaveFailed')),
       },
     );
@@ -89,11 +86,8 @@ export default function SettingsAssistant() {
         ...(modelId.trim() ? { modelId: modelId.trim() } : {}),
       },
       {
-        onSuccess: (result) => {
-          setTestResult(result);
-          if (result.ok) toast.success(t('settings:assistantTestOk'));
-          else toast.error(t('settings:assistantTestFailed'), { description: result.message });
-        },
+        // 结果（成功或失败原因）显示在测试按钮旁。
+        onSuccess: setTestResult,
         onError: () => toast.error(t('settings:assistantTestFailed')),
       },
     );
@@ -109,8 +103,7 @@ export default function SettingsAssistant() {
 
   if (mobileNav) {
     // 窄屏：服务商推入 ✓ 选项页；输入框为单元格，说明作分组脚注
-    const providerLabel =
-      AGENT_PROVIDER_PRESETS.find((p) => p.id === provider)?.label ?? provider;
+    const providerLabel = AGENT_PROVIDER_PRESETS.find((p) => p.id === provider)?.label ?? provider;
     return (
       <SettingsPage>
         <SettingsGroup>

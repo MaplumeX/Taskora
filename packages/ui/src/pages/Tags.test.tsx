@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MemoryRouter } from 'react-router-dom';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -10,14 +10,13 @@ const harness = vi.hoisted(() => ({
   updateTag: vi.fn(),
   deleteTag: vi.fn(),
   reorderTags: vi.fn(),
-  toast: vi.fn(),
 }));
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
   initReactI18next: { type: '3rdParty', init: () => undefined },
 }));
-vi.mock('sonner', () => ({ toast: Object.assign(harness.toast, { error: vi.fn() }) }));
+vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));
 
 const NOW = '2026-09-01T00:00:00.000Z';
 function tag(id: string, title: string, parentId: string | null = null): TagResponseDto {
@@ -156,29 +155,26 @@ describe('Tags 管理页', () => {
     );
   });
 
-  it('删除先隐藏，撤销即恢复且不提交；toast 关闭后才删除', async () => {
+  it('删除先确认：取消不提交，确认后删除', async () => {
     renderTags();
     await menuAction('urgent', 'common:delete');
-    expect(document.querySelector('[data-tag-row="urgent"]')).toBeNull();
-
-    const options = harness.toast.mock.calls[0][1];
-    act(() => options.action.onClick());
-    act(() => options.onDismiss());
-    expect(document.querySelector('[data-tag-row="urgent"]')).not.toBeNull();
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('tag:deleteDescription')).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'common:cancel' }));
     expect(harness.deleteTag).not.toHaveBeenCalled();
 
     await menuAction('urgent', 'common:delete');
-    const second = harness.toast.mock.calls[1][1];
-    act(() => second.onAutoClose());
-    act(() => second.onDismiss());
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', { name: 'common:delete' }),
+    );
     expect(harness.deleteTag).toHaveBeenCalledTimes(1);
     expect(harness.deleteTag).toHaveBeenCalledWith('urgent', expect.anything());
   });
 
-  it('删除父 Tag：等待提交期间子 Tag 即显示到顶层', async () => {
+  it('删除父 Tag：确认框说明子 Tag 会移到顶层', async () => {
     renderTags();
     await menuAction('place', 'common:delete');
-    expect(rowIds()).toEqual(['office', 'urgent']);
-    expect(harness.toast.mock.calls[0][0]).toBe('tag:deletedChildrenPromoted');
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('tag:deleteDescriptionWithChildren')).toBeInTheDocument();
   });
 });

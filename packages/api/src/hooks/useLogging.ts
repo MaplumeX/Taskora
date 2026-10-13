@@ -11,6 +11,7 @@ import { updatePreferences } from '@/api/users.api';
 import { hydrateFromServer, usePreferencesStore } from '@/stores/preferences.store';
 import { currentLegacyDateTimeZone, currentTimeZone } from '@/utils/date';
 import { currentLogging } from '@/utils/logging';
+import { undoHistory } from '../undo/undo-history';
 import type { QueryCacheFacade } from '../engine/live-queries';
 import { refreshAfterWrite, useQueryCache } from './cache-patches';
 import { useCalendarDay } from './useCalendarDay';
@@ -43,10 +44,10 @@ export interface LoggingActions {
   /** 切换移入时机；水位线按 loggedThroughAfterModeChange 推进。 */
   setLoggingMode: (mode: LoggingMode) => Promise<void>;
   /**
-   * Log Completed：水位线推进到现在，所有 Unlogged Item 移入 Logbook。返回
-   * 撤销函数（把水位线写回执行前的值）；立即模式下无操作，返回 null。
+   * Log Completed：水位线推进到现在，所有 Unlogged Item 移入 Logbook。记入
+   * 撤销历史，撤销即把水位线写回执行前的值；立即模式下无操作。
    */
-  logCompleted: () => Promise<(() => Promise<void>) | null>;
+  logCompleted: () => Promise<void>;
 }
 
 export function useLoggingActions(): LoggingActions {
@@ -67,10 +68,12 @@ export function useLoggingActions(): LoggingActions {
   );
   const logCompleted = useCallback(async () => {
     const before = currentLogging();
-    if (before.mode === 'IMMEDIATE') return null;
-    await persistLogging({ ...before, loggedThrough: new Date().toISOString() }, cache);
-    return () =>
-      persistLogging({ ...currentLogging(), loggedThrough: before.loggedThrough }, cache);
+    if (before.mode === 'IMMEDIATE') return;
+    await undoHistory.record('logCompleted', async () => {
+      await persistLogging({ ...before, loggedThrough: new Date().toISOString() }, cache);
+      return () =>
+        persistLogging({ ...currentLogging(), loggedThrough: before.loggedThrough }, cache);
+    });
   }, [cache]);
   return { setLoggingMode, logCompleted };
 }

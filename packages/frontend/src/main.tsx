@@ -13,6 +13,7 @@ import {
   hydrateAuthSnapshot,
   initBlobUploads,
   initEventStream,
+  installUndoBoundaries,
   readLegacyAuthSnapshot,
   setAppVersion,
   setUnauthorizedHandler,
@@ -60,6 +61,8 @@ initBlobUploads();
 // Local-first Engine（local-first-v3 issue 05）：登录后实体读写切到 OPFS
 // 里的本地副本，多标签页由 leader 独占副本；浏览器不支持时保持 REST。
 initWebEngine(queryClient);
+// ⌘Z 撤销：以用户输入划分撤销步骤（ADR-0024）。
+installUndoBoundaries();
 
 // Web wiring: localStorage-backed token store + API base URL from env.
 configureTokenStore(createLocalTokenStore());

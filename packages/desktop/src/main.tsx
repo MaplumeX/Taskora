@@ -97,8 +97,10 @@ async function mount() {
   });
 
   // Event Stream singleton: connects after login, disconnects on logout.
-  const { initEventStream } = await import('@taskora/api');
+  const { initEventStream, installUndoBoundaries } = await import('@taskora/api');
   initEventStream(queryClient);
+  // ⌘Z 撤销：以用户输入划分撤销步骤（ADR-0024）。
+  installUndoBoundaries();
 
   if (secondary) {
     // 副窗口：UI 读写经主窗口的 Engine；登出时关闭自己。

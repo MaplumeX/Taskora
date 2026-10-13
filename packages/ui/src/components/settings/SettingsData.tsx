@@ -24,7 +24,6 @@ export default function SettingsData() {
       a.download = `taskora-export-${todayDateKey()}.json`;
       a.click();
       URL.revokeObjectURL(url);
-      toast.success(t('settings:exportSuccess'));
     } catch {
       toast.error(t('settings:exportFailed'));
     }

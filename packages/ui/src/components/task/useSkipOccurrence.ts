@@ -6,8 +6,6 @@ import type { TaskResponseDto } from '@taskora/shared';
 import { TaskStatus } from '@taskora/shared';
 import {
   currentLegacyDateTimeZone,
-  i18n,
-  parseCalendarDate,
   RepeatSkipBlockedError,
   skipOccurrenceDate,
   usePreferencesStore,
@@ -51,15 +49,6 @@ export function useSkipOccurrence(task: TaskResponseDto | null, enabled: boolean
   const skip = () => {
     if (!task) return;
     skipTask.mutate(task.id, {
-      onSuccess: (skipped) => {
-        if (!skipped.scheduledDate) return;
-        const date = new Intl.DateTimeFormat(i18n.language, {
-          month: 'short',
-          day: 'numeric',
-          weekday: 'short',
-        }).format(parseCalendarDate(skipped.scheduledDate));
-        toast.success(t('skipOccurrenceDone', { date }));
-      },
       onError: (error) =>
         toast.error(
           error instanceof RepeatSkipBlockedError && error.reason === 'next-exists'

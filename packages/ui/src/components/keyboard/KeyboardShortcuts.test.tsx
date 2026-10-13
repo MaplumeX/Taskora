@@ -103,7 +103,7 @@ import { useUiInteractionStore } from '@taskora/api';
 import { useKeybindingsStore } from '@taskora/api';
 import { useAssistantUiStore } from '@taskora/api';
 import { mockDesktop } from '@/test/media';
-import { useSelectionScope, useSidebarUiStore, todayDateKey } from '@taskora/api';
+import { useSelectionScope, useSidebarUiStore, todayDateKey, undoHistory } from '@taskora/api';
 import { addCalendarDays } from '@taskora/shared';
 import { toast } from 'sonner';
 import { resetCopiedItems } from './itemClipboard';
@@ -1258,6 +1258,24 @@ describe('KeyboardShortcuts — 剪贴板（⌘C / ⌘V / ⌥⌘V）', () => {
     press('c', { metaKey: true });
     press('v', { metaKey: true, altKey: true, code: 'KeyV' });
     expect(toast).toHaveBeenCalledWith('task:pasteMoveUnavailable');
+  });
+
+  it('⌘Z 撤销最近一步；焦点在输入框里时让给原生文字撤销', () => {
+    const undo = vi.spyOn(undoHistory, 'undo').mockResolvedValue(null);
+    renderAt('/today', tasks);
+    press('z', { metaKey: true });
+    expect(undo).toHaveBeenCalledTimes(1);
+
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    act(() => {
+      input.dispatchEvent(
+        new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }),
+      );
+    });
+    expect(undo).toHaveBeenCalledTimes(1);
+    input.remove();
+    undo.mockRestore();
   });
 });
 

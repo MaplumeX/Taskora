@@ -28,6 +28,14 @@ import {
 } from '@taskora/api';
 
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import {
@@ -122,8 +130,8 @@ interface DragState {
  * Tags 管理页（tags-things3-v2 issue 05）：Tag 树的大纲，层级缩进、可折叠。
  * 拖拽沿用 `lib/dnd.ts` 的让位约定（浮层跟手、空位跟随、FLIP 滑动、松手
  * 后本地占位），上下决定位置、左右决定层级（见 tagsLayout）；「移到…」
- * 不拖拽也能改层级；点名称直接改名、点色点换色。删除先隐藏，toast 关闭后才提交，
- * 期间可撤销；删除父 Tag 时子 Tag 提升为顶层。
+ * 不拖拽也能改层级；点名称直接改名、点色点换色。删除先确认（不可撤销）；
+ * 删除父 Tag 时子 Tag 提升为顶层。
  */
 export default function Tags() {
   const { t } = useTranslation();
@@ -135,18 +143,15 @@ export default function Tags() {
   const reorderTags = useReorderTags();
 
   const [pending, setPending] = React.useState<Pending>(null);
-  // 待提交的删除：先从页面隐藏，撤销即恢复（子 Tag 在等待期间即显示到顶层）
-  const [hidden, setHidden] = React.useState<ReadonlySet<string>>(new Set());
+  // 待确认删除的 Tag
+  const [deleting, setDeleting] = React.useState<TagResponseDto | null>(null);
   const [collapsed, setCollapsed] = useCollapsedTags();
   const [drag, setDrag] = React.useState<DragState | null>(null);
   const dragRef = React.useRef<DragState | null>(null);
   // 碰撞检测里记下的目标行与指针所在半边（onDragMove 每次都读）
   const targetRef = React.useRef<{ tagId: string; edge: RowEdge } | null>(null);
 
-  const forest = React.useMemo(
-    () => tagForest(tags.filter((tag) => !hidden.has(tag.id))),
-    [tags, hidden],
-  );
+  const forest = React.useMemo(() => tagForest(tags), [tags]);
   const rows = React.useMemo(() => buildTagsRows(forest, collapsed), [forest, collapsed]);
   const displayRows = drag?.rows ?? rows;
   const flip = useFlipList<HTMLDivElement>(displayRows);
@@ -228,31 +233,11 @@ export default function Tags() {
 
   const draggedTag = drag ? forest.byId.get(drag.tagId) : undefined;
 
-  /** 隐藏后弹出可撤销的 toast，toast 关闭（自动或手动）时才真正删除。 */
-  const removeTag = (tag: TagResponseDto) => {
-    const hasChildren = forest.tree.childrenOf(tag.id).length > 0;
-    setHidden((prev) => new Set(prev).add(tag.id));
-    let undone = false;
-    let committed = false;
-    const finish = () => {
-      if (undone || committed) return;
-      committed = true;
-      deleteTag.mutate(tag.id, { onError: () => toast.error(t('common:deleteFailed')) });
-    };
-    toast(hasChildren ? t('tag:deletedChildrenPromoted') : t('tag:deleted'), {
-      action: {
-        label: t('common:undo'),
-        onClick: () => {
-          undone = true;
-          setHidden((prev) => {
-            const next = new Set(prev);
-            next.delete(tag.id);
-            return next;
-          });
-        },
-      },
-      onAutoClose: finish,
-      onDismiss: finish,
+  const confirmDelete = () => {
+    if (!deleting) return;
+    deleteTag.mutate(deleting.id, {
+      onSuccess: () => setDeleting(null),
+      onError: () => toast.error(t('common:deleteFailed')),
     });
   };
 
@@ -315,7 +300,7 @@ export default function Tags() {
                   onRecolor={(color) =>
                     updateTag.mutate({ id: row.tag.id, data: { color } }, { onError: onSaveError })
                   }
-                  onDelete={() => removeTag(row.tag)}
+                  onDelete={() => setDeleting(row.tag)}
                   onAddChild={() => addChild(row.tag.id)}
                   onMove={(parentId) => applyDrop(resolveTagsMove(forest, row.tag.id, parentId))}
                 />
@@ -345,6 +330,34 @@ export default function Tags() {
           </DragOverlay>
         </DndContext>
       )}
+
+      <Dialog open={deleting !== null} onOpenChange={(open) => !open && setDeleting(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t('tag:deleteConfirm', { name: deleting?.title || t('tag:defaultTitle') })}
+            </DialogTitle>
+            <DialogDescription>
+              {deleting && forest.tree.childrenOf(deleting.id).length > 0
+                ? t('tag:deleteDescriptionWithChildren')
+                : t('tag:deleteDescription')}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setDeleting(null)}>
+              {t('common:cancel')}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deleteTag.isPending}
+              onClick={confirmDelete}
+            >
+              {t('common:delete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

@@ -183,7 +183,6 @@ describe('ProjectHeadingRow', () => {
     expect(mutationMocks.convert).toHaveBeenCalledWith(
       'heading-1',
       expect.objectContaining({
-        onSuccess: expect.any(Function),
         onError: expect.any(Function),
       }),
     );
@@ -210,7 +209,6 @@ describe('ProjectHeadingRow', () => {
     expect(mutationMocks.move).toHaveBeenCalledWith(
       { id: 'heading-1', targetProjectId: 'project-2' },
       expect.objectContaining({
-        onSuccess: expect.any(Function),
         onError: expect.any(Function),
       }),
     );
@@ -235,7 +233,6 @@ describe('ProjectHeadingRow', () => {
     expect(mutationMocks.archive).toHaveBeenCalledWith(
       'heading-1',
       expect.objectContaining({
-        onSuccess: expect.any(Function),
         onError: expect.any(Function),
       }),
     );
@@ -276,7 +273,6 @@ describe('ProjectHeadingRow', () => {
     expect(mutationMocks.unarchive).toHaveBeenCalledWith(
       'heading-1',
       expect.objectContaining({
-        onSuccess: expect.any(Function),
         onError: expect.any(Function),
       }),
     );
