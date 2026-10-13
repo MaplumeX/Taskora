@@ -23,9 +23,21 @@ export const apiClient = axios.create({
   withCredentials: true,
 });
 
+const baseUrlListeners = new Set<() => void>();
+
+/** Subscribe to server changes made through setApiBaseUrl. */
+export function onApiBaseUrlChange(listener: () => void): () => void {
+  baseUrlListeners.add(listener);
+  return () => {
+    baseUrlListeners.delete(listener);
+  };
+}
+
 /** Point the client at another server (desktop: configured base URL). */
 export function setApiBaseUrl(url: string): void {
+  if (apiClient.defaults.baseURL === url) return;
   apiClient.defaults.baseURL = url;
+  for (const listener of baseUrlListeners) listener();
 }
 
 /** Client kind reported to the server via the `X-Client` header. */

@@ -11,7 +11,7 @@ import { persist } from 'zustand/middleware';
 
 import { MIN_HUB_PROTOCOL_VERSION, SYNC_PROTOCOL_VERSION } from '@taskora/engine';
 
-import { apiClient } from '@/api/client';
+import { apiClient, onApiBaseUrlChange } from '@/api/client';
 import { useSyncStatusStore } from '@/stores/sync-status.store';
 import { getAppVersion } from '@/utils/appInfo';
 
@@ -30,9 +30,11 @@ export interface UpdateShell {
 }
 
 let shell: UpdateShell | null = null;
+let preparedVersion: string | null = null;
 
 /** 注册/注销平台壳。桌面端 / Android 在 boot 时调用。 */
 export function setUpdateShell(next: UpdateShell | null): void {
+  if (next !== shell) preparedVersion = null;
   shell = next;
 }
 
@@ -96,6 +98,7 @@ export function selectPendingUpdate(
 }
 
 let inFlight: Promise<UpdateVerdict | null> | null = null;
+let serverGeneration = 0;
 
 /**
  * 检查一次。manual：设置页「立即检查」，会清掉「跳过此版本」。并发调用
@@ -103,14 +106,21 @@ let inFlight: Promise<UpdateVerdict | null> | null = null;
  */
 export function checkForUpdates({ manual = false } = {}): Promise<UpdateVerdict | null> {
   if (!shell) return Promise.resolve(null);
-  if (inFlight) return inFlight;
   const store = useUpdateStore;
   if (manual) store.setState({ skippedVersion: null });
+  if (inFlight) return inFlight;
   store.setState({ checking: true });
   inFlight = (async () => {
     const current = shell;
+    const baseURL = apiClient.defaults.baseURL;
+    const generation = serverGeneration;
+    const isCurrent = () =>
+      generation === serverGeneration &&
+      baseURL === apiClient.defaults.baseURL &&
+      current === shell;
     try {
-      const { data } = await apiClient.get<HubHealth>('/health');
+      const { data } = await apiClient.get<HubHealth>('/health', { baseURL, timeout: 15_000 });
+      if (!isCurrent()) return null;
       const verdict = evaluateUpdate(
         {
           appVersion: getAppVersion(),
@@ -126,11 +136,17 @@ export function checkForUpdates({ manual = false } = {}): Promise<UpdateVerdict 
       const skipped =
         verdict.kind === 'update-available' && store.getState().skippedVersion === target;
       if (target && !skipped && current) {
-        readyVersion = (await current.prepare(target)) ? target : null;
+        if (preparedVersion !== target) {
+          const prepared = await current.prepare(target);
+          if (current === shell) preparedVersion = prepared ? target : null;
+        }
+        readyVersion = preparedVersion === target ? target : null;
       }
+      if (!isCurrent()) return null;
       store.setState({ verdict, readyVersion, failed: false, lastCheckedAt: Date.now() });
       return verdict;
     } catch (error) {
+      if (!isCurrent()) return null;
       console.warn('[updates] 检查更新失败', error);
       store.setState({ failed: true });
       return null;
@@ -142,34 +158,62 @@ export function checkForUpdates({ manual = false } = {}): Promise<UpdateVerdict 
   return inFlight;
 }
 
-const DAY_MS = 24 * 60 * 60_000;
 const TICK_MS = 60 * 60_000;
+const FOREGROUND_THROTTLE_MS = 5 * 60_000;
 
 /**
- * 调度自动检查：启动延迟后查一次，之后每小时看一眼、距上次满 24 小时再查
- * （按墙钟而不是 24 小时定时器，休眠唤醒后不会漂移）；同步被 hub 以 426
- * 拒绝时立即查，拿到必须更新的目标版本。关闭自动检查时都不查。返回停止函数。
+ * 启动 10 秒后检查，运行期间每小时检查。回前台 / 恢复网络按 5 分钟节流，
+ * 切换服务器 / 同步被 hub 以 426 拒绝时立即检查。关闭自动检查时都不查。
+ * 返回停止函数，清理定时器与监听。
  */
 export function initUpdateChecks({ startDelayMs = 10_000 } = {}): () => void {
   const autoCheck = () => useUpdateStore.getState().autoCheck;
-  const due = () => {
-    const last = useUpdateStore.getState().lastCheckedAt;
-    return last === null || Date.now() - last >= DAY_MS;
+  let stopped = false;
+  let lastAttemptAt: number | null = null;
+  const check = () => {
+    if (stopped || !autoCheck()) return;
+    lastAttemptAt = Date.now();
+    void checkForUpdates();
   };
-  const startTimer = setTimeout(() => {
-    if (autoCheck()) void checkForUpdates();
-  }, startDelayMs);
-  const tickTimer = setInterval(() => {
-    if (autoCheck() && due()) void checkForUpdates();
-  }, TICK_MS);
+  const checkAfterResume = () => {
+    const last = Math.max(lastAttemptAt ?? 0, useUpdateStore.getState().lastCheckedAt ?? 0);
+    if (Date.now() - last >= FOREGROUND_THROTTLE_MS) check();
+  };
+  const onVisible = () => {
+    if (document.visibilityState === 'visible') checkAfterResume();
+  };
+  const startTimer = setTimeout(check, startDelayMs);
+  const tickTimer = setInterval(check, TICK_MS);
+  document.addEventListener('visibilitychange', onVisible);
+  window.addEventListener('focus', onVisible);
+  window.addEventListener('online', checkAfterResume);
+  const unsubscribeServer = onApiBaseUrlChange(() => {
+    serverGeneration++;
+    lastAttemptAt = null;
+    useUpdateStore.setState({
+      verdict: null,
+      readyVersion: null,
+      lastCheckedAt: null,
+      failed: false,
+    });
+    // 串行准备安装包：旧服务器的结果失效，等它完成后再查当前服务器，
+    // 避免两个下载互相覆盖原生壳保存的待安装版本。
+    if (inFlight) void inFlight.then(check);
+    else check();
+  });
   const unsubscribe = useSyncStatusStore.subscribe((state, prev) => {
     if (state.status === 'upgrade-required' && prev.status !== 'upgrade-required' && autoCheck()) {
-      void checkForUpdates();
+      check();
     }
   });
   return () => {
+    stopped = true;
     clearTimeout(startTimer);
     clearInterval(tickTimer);
     unsubscribe();
+    unsubscribeServer();
+    document.removeEventListener('visibilitychange', onVisible);
+    window.removeEventListener('focus', onVisible);
+    window.removeEventListener('online', checkAfterResume);
   };
 }
