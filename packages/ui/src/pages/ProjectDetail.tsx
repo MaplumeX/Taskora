@@ -103,6 +103,7 @@ export default function ProjectDetail() {
               total={project.taskTotalCount}
               completed={project.taskCompletedCount}
               projectStatus={project.status}
+              start={project.start}
               onToggle={() => completion.toggle(project)}
             />
           ) : null}

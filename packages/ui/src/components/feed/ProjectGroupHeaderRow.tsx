@@ -38,6 +38,7 @@ export function ProjectGroupHeaderRow({
             total={project.taskTotalCount}
             completed={project.taskCompletedCount}
             projectStatus={project.status}
+            start={project.start}
             onToggle={() => completion.toggle(project)}
           />
         }

@@ -11,6 +11,18 @@ describe('TaskCheckbox', () => {
     expect(checkbox).toHaveAttribute('aria-checked', 'false');
   });
 
+  it('draws a dashed border for an unchecked Someday task', () => {
+    render(<TaskCheckbox checked={false} someday onToggle={() => {}} />);
+
+    expect(screen.getByRole('checkbox')).toHaveClass('border-dashed');
+  });
+
+  it('drops the dashed border once a Someday task is checked', () => {
+    render(<TaskCheckbox checked={true} someday onToggle={() => {}} />);
+
+    expect(screen.getByRole('checkbox')).not.toHaveClass('border-dashed');
+  });
+
   it('should render checked state', () => {
     render(<TaskCheckbox checked={true} onToggle={() => {}} />);
 

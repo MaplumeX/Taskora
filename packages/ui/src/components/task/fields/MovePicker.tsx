@@ -130,6 +130,7 @@ export function MoveTargetRow({ target }: { target: MoveTarget }) {
               total={target.project.taskTotalCount}
               completed={target.project.taskCompletedCount}
               projectStatus={target.project.status}
+              start={target.project.start}
               size={16}
             />
           </span>

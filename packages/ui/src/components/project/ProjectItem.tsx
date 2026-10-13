@@ -61,6 +61,7 @@ export function ProjectItem({ project, dropOver = false }: Props) {
           total={project.taskTotalCount}
           completed={project.taskCompletedCount}
           projectStatus={project.status}
+          start={project.start}
           onToggle={handleToggle}
         />
         <span
