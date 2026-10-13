@@ -9,7 +9,8 @@ import { MovePickerList } from '@/components/common/MovePickerList';
 import { needleOf, rankByName } from '../../lib/nameMatch';
 
 interface Props {
-  current: Pick<ProjectResponseDto, 'areaId'>;
+  /** 整组移动时为 {}：各项目归属不一，不标记当前位置。 */
+  current: Partial<Pick<ProjectResponseDto, 'areaId'>>;
   onSelect: (data: UpdateProjectDto) => void;
 }
 
@@ -40,7 +41,9 @@ export function ProjectMovePicker({ current, onSelect }: Props) {
   return (
     <MovePickerList
       targets={targets}
-      currentId={current.areaId ? `area:${current.areaId}` : 'no-area'}
+      currentId={
+        current.areaId === undefined ? null : current.areaId ? `area:${current.areaId}` : 'no-area'
+      }
       query={query}
       onQueryChange={setQuery}
       onSelect={(target) => onSelect({ areaId: target.areaId })}

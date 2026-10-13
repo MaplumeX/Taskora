@@ -14,7 +14,7 @@ import {
 } from '@dnd-kit/core';
 import { SortableContext, arrayMove, verticalListSortingStrategy } from '@dnd-kit/sortable';
 
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 
 import { ProjectStatus, Start } from '@taskora/shared';
 import type { AreaResponseDto, ProjectResponseDto } from '@taskora/shared';
@@ -26,11 +26,14 @@ import {
   useCreateProject,
   useIsLogged,
   useLaterProjectKind,
+  sidebarSelectionGroup,
   useReorderProjects,
+  useSidebarSelectionStore,
   useUiInteractionStore,
   useUpdateProject,
 } from '@taskora/api';
 import { useReorderAreas } from '@taskora/api';
+import { DragCountBadge } from '@/components/common/DragCountBadge';
 import { SIDEBAR_AUTO_SCROLL, useDndSurface } from '../../lib/appDnd';
 import { MAGIC_PLUS_DRAFT_ID, isMagicPlus } from '../../lib/magicPlus';
 import {
@@ -39,6 +42,7 @@ import {
   dragOverlayWrapperClass,
   flipId,
   noopSortingStrategy,
+  useCollapseAfterDragStart,
   useFlipList,
   useHeldOrder,
 } from '../../lib/dnd';
@@ -52,6 +56,7 @@ import {
   STANDALONE_PROJECT_CONTAINER,
   areaDndId,
   cloneSidebarProjectLayout,
+  expandProjectGroup,
   findProjectContainer,
   mergeVisibleProjectOrder,
   moveProjectToPlacement,
@@ -59,6 +64,7 @@ import {
   placeProject,
   projectContainerDndId,
   projectDndId,
+  removeProjects,
   resolveProjectPlacement,
   serializeProjectOrder,
   sidebarProjectLayoutsEqual,
@@ -214,6 +220,14 @@ export function SidebarProjectSection({
   );
   const [layout, setLayout] = React.useState(serverLayout);
   const [activeProject, setActiveProject] = React.useState<ProjectResponseDto | null>(null);
+  // 多项拖拽（侧边栏多选）：整组项目 id（按显示顺序，含被拖项目）；拖拽开始那次
+  // 提交之后（collapsed）组内其余项目从布局里收起，被拖项目才贴着手（见
+  // useCollapseAfterDragStart）。
+  const [dragGroup, setDragGroup] = React.useState<{
+    ids: string[];
+    collapsed: boolean;
+  } | null>(null);
+  const dragGroupRef = React.useRef<string[] | null>(null);
   const layoutRef = React.useRef(layout);
   const serverLayoutRef = React.useRef(serverLayout);
   const dragStartLayoutRef = React.useRef<SidebarProjectLayout | null>(null);
@@ -244,6 +258,40 @@ export function SidebarProjectSection({
     setLayout(next);
   }, []);
 
+  // 侧边栏多选：登记项目行的显示顺序（范围选择、整组顺序）；路由变化即清空。
+  // 拖拽中组员收起时不登记，保持拖拽开始时的顺序。
+  const projectOrder = React.useMemo(
+    () =>
+      [
+        ...(layout.containers[STANDALONE_PROJECT_CONTAINER] ?? []),
+        ...orderedAreas.flatMap((area) => layout.containers[area.id] ?? []),
+      ].filter((id) => id !== MAGIC_PLUS_DRAFT_ID),
+    [layout, orderedAreas],
+  );
+  React.useEffect(() => {
+    if (activeProjectIdRef.current === null) {
+      useSidebarSelectionStore.getState().setOrder(projectOrder);
+    }
+  }, [projectOrder]);
+  const { pathname } = useLocation();
+  React.useEffect(() => {
+    useSidebarSelectionStore.getState().clear();
+  }, [pathname]);
+
+  useCollapseAfterDragStart(!!dragGroup && !dragGroup.collapsed, () => {
+    const ids = dragGroupRef.current;
+    const activeId = activeProjectIdRef.current;
+    setDragGroup((current) => (current ? { ...current, collapsed: true } : current));
+    if (!ids || !activeId) return;
+    flip.capture();
+    updateRenderedLayout(
+      removeProjects(
+        layoutRef.current,
+        ids.filter((id) => id !== activeId),
+      ),
+    );
+  });
+
   React.useEffect(() => {
     if (activeProjectIdRef.current !== null || persistenceActiveRef.current) {
       pendingServerLayoutRef.current = serverLayout;
@@ -258,7 +306,9 @@ export function SidebarProjectSection({
     dragStartLayoutRef.current = null;
     pendingServerLayoutRef.current = null;
     lastProjectTargetRef.current = null;
+    dragGroupRef.current = null;
     setActiveProject(null);
+    setDragGroup(null);
   };
 
   const restoreProjectDrag = () => {
@@ -267,16 +317,26 @@ export function SidebarProjectSection({
     if (restored) updateRenderedLayout(restored);
   };
 
+  /** movedIds：被拖项目（多项拖拽时为整组），归属变了的各自改写 areaId。 */
   const persistProjectLayout = (
     snapshot: SidebarProjectLayout,
     next: SidebarProjectLayout,
-    activeProjectId: string,
+    movedIds: string[],
   ) => {
-    const sourceContainerId = findProjectContainer(snapshot, activeProjectId);
-    const targetContainerId = findProjectContainer(next, activeProjectId);
-    if (!sourceContainerId || !targetContainerId) {
-      updateRenderedLayout(serverLayoutRef.current);
-      return;
+    const ownershipChanges: Array<{ id: string; areaId: string | null }> = [];
+    for (const id of movedIds) {
+      const sourceContainerId = findProjectContainer(snapshot, id);
+      const targetContainerId = findProjectContainer(next, id);
+      if (!sourceContainerId || !targetContainerId) {
+        updateRenderedLayout(serverLayoutRef.current);
+        return;
+      }
+      if (sourceContainerId !== targetContainerId) {
+        ownershipChanges.push({
+          id,
+          areaId: targetContainerId === STANDALONE_PROJECT_CONTAINER ? null : targetContainerId,
+        });
+      }
     }
 
     const rollbackLayout = cloneSidebarProjectLayout(serverLayoutRef.current);
@@ -300,23 +360,30 @@ export function SidebarProjectSection({
       });
     };
 
-    if (sourceContainerId === targetContainerId) {
+    if (ownershipChanges.length === 0) {
       reorder();
       return;
     }
 
-    updateProject.mutate(
-      {
-        id: activeProjectId,
-        data: {
-          areaId: targetContainerId === STANDALONE_PROJECT_CONTAINER ? null : targetContainerId,
+    // 归属都写完再写顺序；任一失败即整体回滚、只提示一次。
+    let remaining = ownershipChanges.length;
+    let failed = false;
+    for (const { id, areaId } of ownershipChanges) {
+      updateProject.mutate(
+        { id, data: { areaId } },
+        {
+          onSuccess: () => {
+            remaining -= 1;
+            if (remaining === 0 && !failed) reorder();
+          },
+          onError: () => {
+            if (failed) return;
+            failed = true;
+            handleSaveError();
+          },
         },
-      },
-      {
-        onSuccess: reorder,
-        onError: handleSaveError,
-      },
-    );
+      );
+    }
   };
 
   const collisionDetection = React.useCallback<CollisionDetection>((args) => {
@@ -397,6 +464,12 @@ export function SidebarProjectSection({
     activeProjectIdRef.current = activeId;
     lastProjectTargetRef.current = null;
     setActiveProject(project);
+    // 拖动侧边栏多选中的一个项目 = 整组一起拖动。
+    const group = sidebarSelectionGroup();
+    if (group?.includes(activeId)) {
+      dragGroupRef.current = group;
+      setDragGroup({ ids: group, collapsed: false });
+    }
   };
 
   const previewProjectTarget = (activeKey: string) => {
@@ -459,6 +532,9 @@ export function SidebarProjectSection({
         }
         finalLayout = moveProjectToPlacement(finalLayout, activeId, placement) ?? finalLayout;
       }
+      // 多项拖拽：整组按原显示顺序落在被拖项目的位置。
+      const group = dragGroupRef.current;
+      if (group) finalLayout = expandProjectGroup(finalLayout, activeId, group);
 
       if (sidebarProjectLayoutsEqual(snapshot, finalLayout)) {
         restoreProjectDrag();
@@ -466,7 +542,7 @@ export function SidebarProjectSection({
       }
 
       cleanupProjectDrag();
-      persistProjectLayout(snapshot, finalLayout, activeId);
+      persistProjectLayout(snapshot, finalLayout, group ?? [activeId]);
       return;
     }
 
@@ -592,11 +668,12 @@ export function SidebarProjectSection({
         <DragOverlay className={dragOverlayWrapperClass} dropAnimation={surface.dropAnimation}>
           {activeProject ? (
             <div
-              className={cn(dragOverlayClass, 'bg-sidebar')}
+              className={cn(dragOverlayClass, 'relative bg-sidebar')}
               aria-hidden="true"
               {...{ inert: '' }}
             >
               <ProjectItem project={activeProject} />
+              <DragCountBadge count={dragGroup?.ids.length ?? 0} />
             </div>
           ) : null}
         </DragOverlay>

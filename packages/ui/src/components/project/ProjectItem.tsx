@@ -3,12 +3,14 @@ import { useTranslation } from 'react-i18next';
 
 import { ProjectStatus } from '@taskora/shared';
 import type { ProjectResponseDto } from '@taskora/shared';
+import { sidebarContextMenuTargets, useSidebarSelectionStore } from '@taskora/api';
 
 import { cn } from '@/lib/utils';
 import { sidebarDropOverClass, sidebarRowClass } from '@/components/layout/sidebarRowClass';
 import { ProjectContextMenu } from '@/components/project/ProjectContextMenu';
 import { ProjectProgressRing } from '@/components/project/ProjectProgressRing';
 import { useProjectCompletion } from '@/components/project/useProjectCompletion';
+import { isAppleOS } from '@/components/keyboard/keymap';
 
 interface Props {
   project: ProjectResponseDto;
@@ -25,6 +27,11 @@ export function ProjectItem({ project, dropOver = false }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const isCurrent = useMatch(`/projects/${project.id}`) !== null;
+  const currentProjectId = useMatch('/projects/:id')?.params.id ?? null;
+  // 侧边栏多选中时高亮跟随多选，否则跟随当前路由。
+  const selected = useSidebarSelectionStore((s) =>
+    s.ids.length > 0 ? s.ids.includes(project.id) : null,
+  );
   const completion = useProjectCompletion();
 
   const isCompleted = project.status === ProjectStatus.COMPLETED;
@@ -34,13 +41,30 @@ export function ProjectItem({ project, dropOver = false }: Props) {
   };
 
   return (
-    <ProjectContextMenu project={project} current={project}>
+    <ProjectContextMenu project={project} current={project} targetsOf={sidebarContextMenuTargets}>
       <div
         role="button"
         data-preload-route={`/projects/${project.id}`}
         data-sidebar-nav={`/projects/${project.id}`}
         tabIndex={0}
-        onClick={() => navigate(`/projects/${project.id}`)}
+        onMouseDown={(e) => {
+          // ⇧+点击是范围多选，不让浏览器顺带框选文字。
+          if (e.shiftKey) e.preventDefault();
+        }}
+        onClick={(e) => {
+          // 多选（对齐 Things 3 Mac）：⌘/Ctrl+点击切换、⇧+点击范围，只改选中、不导航。
+          const selection = useSidebarSelectionStore.getState();
+          if (e.shiftKey) {
+            selection.extendTo(project.id, currentProjectId);
+            return;
+          }
+          if (isAppleOS() ? e.metaKey : e.ctrlKey) {
+            selection.toggle(project.id, currentProjectId);
+            return;
+          }
+          selection.clear();
+          navigate(`/projects/${project.id}`);
+        }}
         onKeyDown={(e) => {
           // Ignore keys coming from the nested progress ring button.
           if (e.target !== e.currentTarget) return;
@@ -49,7 +73,7 @@ export function ProjectItem({ project, dropOver = false }: Props) {
           navigate(`/projects/${project.id}`);
         }}
         className={sidebarRowClass(
-          isCurrent,
+          selected ?? isCurrent,
           cn(
             'w-full cursor-pointer text-left focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/40',
             dropOver && sidebarDropOverClass,

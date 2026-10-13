@@ -214,3 +214,38 @@ export function mergeVisibleProjectOrder(
   );
   return [...merged, ...pending];
 }
+
+/** 多项拖拽：从布局里取走这些项目（拖拽中整组其余项目收起）。 */
+export function removeProjects(
+  layout: SidebarProjectLayout,
+  projectIds: readonly string[],
+): SidebarProjectLayout {
+  const removed = new Set(projectIds);
+  return {
+    containers: Object.fromEntries(
+      Object.entries(layout.containers).map(([id, ids]) => [
+        id,
+        ids.filter((projectId) => !removed.has(projectId)),
+      ]),
+    ),
+  };
+}
+
+/**
+ * 多项拖拽松手：被拖项目替换为整组（group 按显示顺序，含被拖项目），组内其余
+ * 项目先从原位置取走。
+ */
+export function expandProjectGroup(
+  layout: SidebarProjectLayout,
+  activeProjectId: string,
+  group: readonly string[],
+): SidebarProjectLayout {
+  const companions = group.filter((id) => id !== activeProjectId);
+  const next = removeProjects(layout, companions);
+  const containerId = findProjectContainer(next, activeProjectId);
+  if (!containerId) return layout;
+  const ids = next.containers[containerId];
+  const index = ids.indexOf(activeProjectId);
+  next.containers[containerId] = [...ids.slice(0, index), ...group, ...ids.slice(index + 1)];
+  return next;
+}

@@ -48,6 +48,8 @@
   "completeRemainingTitle": "Complete Project",
   "completeRemainingDescription_one": "This project still has {{count}} open task. What should happen to it?",
   "completeRemainingDescription_other": "This project still has {{count}} open tasks. What should happen to them?",
+  "completeRemainingGroupDescription_one": "These projects still have {{count}} open task. What should happen to it?",
+  "completeRemainingGroupDescription_other": "These projects still have {{count}} open tasks. What should happen to them?",
   "completeRemaining": "Mark All as Completed",
   "cancelRemaining": "Mark All as Canceled",
   "repeatInstanceHint": "Repeating project"

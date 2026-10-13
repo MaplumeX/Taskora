@@ -4,10 +4,12 @@ import { describe, expect, it } from 'vitest';
 
 import {
   STANDALONE_PROJECT_CONTAINER,
+  expandProjectGroup,
   findProjectContainer,
   mergeVisibleProjectOrder,
   moveProjectToPlacement,
   normalizeSidebarProjectLayout,
+  removeProjects,
   resolveProjectPlacement,
   serializeProjectOrder,
   sidebarProjectLayoutsEqual,
@@ -213,5 +215,31 @@ describe('mergeVisibleProjectOrder', () => {
   it('全部可见时等同于可见顺序', () => {
     const all = [withOrder('a', 0), withOrder('b', 1)];
     expect(mergeVisibleProjectOrder(all, ['b', 'a'])).toEqual(['b', 'a']);
+  });
+});
+
+describe('多项拖拽', () => {
+  const grouped: SidebarProjectLayout = {
+    containers: { [STANDALONE_PROJECT_CONTAINER]: ['s1', 's2'], a: ['a1', 'a2'], b: ['b1'] },
+  };
+
+  it('removeProjects 从各容器取走组员', () => {
+    expect(removeProjects(grouped, ['s2', 'a1']).containers).toEqual({
+      [STANDALONE_PROJECT_CONTAINER]: ['s1'],
+      a: ['a2'],
+      b: ['b1'],
+    });
+  });
+
+  it('expandProjectGroup 把整组按顺序放在被拖项目的位置', () => {
+    // 被拖的 a1 已落在 b 中 b1 之前，组员 s2 仍在原位
+    const dropped: SidebarProjectLayout = {
+      containers: { [STANDALONE_PROJECT_CONTAINER]: ['s1', 's2'], a: ['a2'], b: ['a1', 'b1'] },
+    };
+    expect(expandProjectGroup(dropped, 'a1', ['s2', 'a1']).containers).toEqual({
+      [STANDALONE_PROJECT_CONTAINER]: ['s1'],
+      a: ['a2'],
+      b: ['s2', 'a1', 'b1'],
+    });
   });
 });
