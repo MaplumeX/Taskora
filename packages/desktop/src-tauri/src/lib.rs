@@ -180,9 +180,10 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            // Quick-add window and tray menu: hide on blur (fill-and-go
-            // interaction / dismiss the menu by clicking elsewhere).
-            if matches!(window.label(), "quick-add" | tray_menu::WINDOW) {
+            // Tray menu: hide on blur (dismiss the menu by clicking
+            // elsewhere). Quick-add hides itself on blur in the webview
+            // (QuickAddApp) so the exit animation runs before hiding.
+            if window.label() == tray_menu::WINDOW {
                 if let tauri::WindowEvent::Focused(false) = event {
                     let _ = window.hide();
                 }
