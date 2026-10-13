@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { ProjectStatus, TaskStatus } from '@taskora/shared';
+import { ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 
 import { hiddenListNavs, mainNav, trashNav, type NavItem } from '@/components/layout/navItems';
 import { ProjectProgressPie } from '@/components/project/ProjectProgressRing';
@@ -86,6 +86,7 @@ export function QuickFindRow({ item, query, projectTitle, areaTitle }: RowProps)
               total={item.project.taskTotalCount}
               completed={item.project.taskCompletedCount}
               projectStatus={item.project.status}
+              start={item.project.start}
               size={16}
             />
           </span>
@@ -142,7 +143,7 @@ export function QuickFindRow({ item, query, projectTitle, areaTitle }: RowProps)
       return (
         <div className="flex flex-col gap-0.5">
           <div className="flex items-center gap-2">
-            <TaskStatusGlyph status={task.status} />
+            <TaskStatusGlyph status={task.status} someday={task.start === Start.SOMEDAY} />
             <span
               className={cn(
                 'flex-1 truncate',
@@ -187,7 +188,7 @@ function TrashedMark() {
 }
 
 /** 任务状态的静态图形（外观同 TaskCheckbox，不可交互）。 */
-function TaskStatusGlyph({ status }: { status: TaskStatus }) {
+function TaskStatusGlyph({ status, someday }: { status: TaskStatus; someday: boolean }) {
   const settled = status !== TaskStatus.ACTIVE;
   return (
     <span
@@ -197,6 +198,7 @@ function TaskStatusGlyph({ status }: { status: TaskStatus }) {
         settled
           ? 'border-primary bg-primary text-primary-foreground'
           : 'border-muted-foreground/50 bg-background',
+        !settled && someday && 'border-dashed',
       )}
     >
       {status === TaskStatus.CANCELLED && <X className="h-2.5 w-2.5" strokeWidth={3.5} />}

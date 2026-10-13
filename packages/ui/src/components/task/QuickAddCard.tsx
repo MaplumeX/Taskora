@@ -265,6 +265,7 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
             total={project.taskTotalCount}
             completed={project.taskCompletedCount}
             projectStatus={project.status}
+            start={project.start}
             size={14}
           />
         ),

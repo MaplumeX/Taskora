@@ -100,6 +100,7 @@ export function ProjectFeedRow({
           total={item.taskTotalCount}
           completed={item.taskCompletedCount}
           projectStatus={item.status as ProjectStatus}
+          start={item.start}
           onToggle={handleToggle}
         />
         {/* 与 TaskItem 对齐：已了结时行首位置显示了结时间（主题色）；

@@ -16,7 +16,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { CalendarDays, ListChecks } from 'lucide-react';
 
-import type { TaskResponseDto } from '@taskora/shared';
+import { Start, type TaskResponseDto } from '@taskora/shared';
 
 import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
@@ -337,6 +337,7 @@ export function TaskItem({
                   <TaskCheckbox
                     checked={completed || pendingComplete}
                     cancelled={cancelled}
+                    someday={task.start === Start.SOMEDAY}
                     onToggle={handleToggle}
                   />
                 </span>
