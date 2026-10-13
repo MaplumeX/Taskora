@@ -129,6 +129,7 @@ export function KeyboardFieldPicker({ kind, ids, onClose }: Props) {
             onPatch={patch}
             onClose={onClose}
             showReminder={single?.kind === 'task' && getClientKind() !== 'web'}
+            allowRepeat={single !== null}
           />
         );
       case 'deadline':

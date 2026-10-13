@@ -457,6 +457,24 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     expect(instances.map((task) => task.scheduledDate)).toEqual([new Date('2026-09-25T00:00:00Z')]);
   });
 
+  it('monthDays 规则：规范形落库，完成后派生到集合中的下一个日子', async () => {
+    await seedTask('payday', {
+      start: 'ANYTIME',
+      scheduledDate: new Date('2026-01-31T00:00:00Z'),
+    });
+    await h.tasks.update(USER, 'payday', {
+      repeatRule: { unit: 'month', interval: 1, monthDays: [31, 15, 15], anchor: 'scheduled' },
+    });
+    const row = await testPrisma.task.findUniqueOrThrow({ where: { id: 'payday' } });
+    expect(row.repeatRule).toBe(
+      '{"unit":"month","interval":1,"monthDays":[15,31],"anchor":"scheduled"}',
+    );
+
+    await h.tasks.complete(USER, 'payday');
+    const instances = await testPrisma.task.findMany({ where: { repeatSourceId: 'payday' } });
+    expect(instances.map((task) => task.scheduledDate)).toEqual([new Date('2026-02-15T00:00:00Z')]);
+  });
+
   it('不派生：实例已存在 / 到达 until / 无规则 / 已完成再完成 / 取消', async () => {
     await seedRepeating();
     await seedTask(expectedInstanceId, { title: '已存在的实例' });

@@ -744,6 +744,19 @@ describe('下次预告（Repeat Preview）', () => {
     ]);
   });
 
+  it('monthDays 规则投影到集合中的下一个日子', () => {
+    expect(
+      buildRepeatPreviews(
+        [
+          source('payday', {
+            repeatRule: { unit: 'month', interval: 1, monthDays: [10, 25], anchor: 'scheduled' },
+          }),
+        ],
+        context,
+      ).map((p) => [p.sourceTaskId, p.dateKey]),
+    ).toEqual([['payday', '2026-02-25']]);
+  });
+
   it('不投影：已了结 / Trash / 无计划日期 / 无规则 / completion 锚点 / 链终结 / 下一次不晚于今天', () => {
     expect(
       buildRepeatPreviews(

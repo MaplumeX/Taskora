@@ -350,6 +350,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
               onPatch={patch}
               onClose={() => setActivePicker(null)}
               showReminder={!group && getClientKind() !== 'web'}
+              allowRepeat={!group}
             />
           )}
           {activePicker === 'repeat' && <RepeatRuleField current={current} onPatch={patch} />}

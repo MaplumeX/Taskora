@@ -28,6 +28,7 @@ const UNITS: ReadonlySet<RepeatUnit> = new Set(['day', 'week', 'month', 'year'])
  * - unit ∈ {day, week, month, year}；
  * - interval 为 ≥1 的整数；
  * - weekdays 仅在 unit=week 且非空时存在，升序去重、值域 0-6（0=周日）；
+ * - monthDays 仅在 unit=month 且非空时存在，升序去重、值域 1-31；
  * - anchor 恒存在（缺失默认 scheduled）；
  * - until 仅在合法日期时存在，归一为 YYYY-MM-DD。
  */
@@ -59,6 +60,17 @@ export function normalizeRepeatRule(input: unknown): RepeatRule | null {
     if (weekdays.length > 0) rule.weekdays = weekdays;
   }
 
+  if (unit === 'month' && Array.isArray(raw.monthDays)) {
+    const monthDays = [
+      ...new Set(
+        raw.monthDays.filter(
+          (d): d is number => typeof d === 'number' && Number.isInteger(d) && d >= 1 && d <= 31,
+        ),
+      ),
+    ].sort((a, b) => a - b);
+    if (monthDays.length > 0) rule.monthDays = monthDays;
+  }
+
   if (typeof raw.until === 'string') {
     const until = dayKey(raw.until);
     if (until !== null) rule.until = until;
@@ -71,12 +83,14 @@ export function normalizeRepeatRule(input: unknown): RepeatRule | null {
 export function canonicalRepeatRule(rule: RepeatRule): string {
   const normalized = normalizeRepeatRule(rule);
   if (normalized === null) throw new Error('canonicalRepeatRule: 非法规则');
-  // 键序即构造序：unit, interval, weekdays?, anchor, until?
+  // 键序即构造序：unit, interval, weekdays?, monthDays?, anchor, until?
+  // 可选键缺省时不出现，新增可选键不改变存量规则的规范串（派生 id 稳定）
   const parts: string[] = [
     `"unit":${JSON.stringify(normalized.unit)}`,
     `"interval":${normalized.interval}`,
   ];
   if (normalized.weekdays) parts.push(`"weekdays":${JSON.stringify(normalized.weekdays)}`);
+  if (normalized.monthDays) parts.push(`"monthDays":${JSON.stringify(normalized.monthDays)}`);
   parts.push(`"anchor":${JSON.stringify(normalized.anchor)}`);
   if (normalized.until) parts.push(`"until":${JSON.stringify(normalized.until)}`);
   return `{${parts.join(',')}}`;
@@ -184,7 +198,7 @@ export function nextOccurrenceDate(
       next = nextWeeklyOccurrence(anchor, normalized);
       break;
     case 'month':
-      next = addMonthsClamped(anchor, normalized.interval);
+      next = nextMonthlyOccurrence(anchor, normalized);
       break;
     case 'year':
       next = addMonthsClamped(anchor, normalized.interval * 12);
@@ -260,6 +274,32 @@ function nextWeeklyOccurrence(anchor: Date, rule: RepeatRule): Date {
   }
   // 理论不可达（interval 周内必有活跃出现日）；防御性返回
   return addDays(anchor, rule.interval * 7);
+}
+
+/**
+ * month 单位的下一次出现：无 monthDays 时为「锚点 + interval 月」（日溢出
+ * 钳制到月末）。有 monthDays 时锚点所在月为第 0 月，第 k×interval 月为
+ * 活跃月；活跃月内每个日子钳制到当月天数后都是出现日，取锚点之后（不含）
+ * 的最小出现日。钳制只作用于当月，[31] 下个月仍回到 31 号，不漂移。
+ */
+function nextMonthlyOccurrence(anchor: Date, rule: RepeatRule): Date {
+  if (!rule.monthDays || rule.monthDays.length === 0) {
+    return addMonthsClamped(anchor, rule.interval);
+  }
+  const anchorKey = keyOf(anchor);
+  // 第 0 个活跃月若已无晚于锚点的出现日，第 1 个活跃月必有
+  for (let k = 0; k <= 1; k += 1) {
+    const total = anchor.getUTCFullYear() * 12 + anchor.getUTCMonth() + k * rule.interval;
+    const year = Math.floor(total / 12);
+    const month = total % 12;
+    const lastDay = daysInMonth(year, month);
+    for (const day of rule.monthDays) {
+      const candidate = new Date(Date.UTC(year, month, Math.min(day, lastDay)));
+      if (keyOf(candidate) > anchorKey) return candidate;
+    }
+  }
+  // 理论不可达；防御性返回
+  return addMonthsClamped(anchor, rule.interval);
 }
 
 // ---------- 确定性 id 派生（ADR-0012） ----------

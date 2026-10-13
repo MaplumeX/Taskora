@@ -69,6 +69,12 @@ const repeatRuleSchema = Type.Object(
         description: 'Only for unit "week": days of the week, 0 = Sunday … 6 = Saturday',
       }),
     ),
+    monthDays: Type.Optional(
+      Type.Array(Type.Integer({ minimum: 1, maximum: 31 }), {
+        description:
+          'Only for unit "month": days of the month, 1-31; a day past the end of a short month falls on its last day, so 31 means the last day of every month. Omit to repeat on the scheduled day.',
+      }),
+    ),
     anchor: Type.Optional(
       Type.Union([Type.Literal('scheduled'), Type.Literal('completion')], {
         description:
@@ -90,7 +96,7 @@ function parseRepeatRuleParam(value: unknown): RepeatRule {
   const rule = normalizeRepeatRule({ anchor: 'scheduled', ...(value as object) });
   if (!rule) {
     throw new Error(
-      'Invalid repeatRule: unit must be day/week/month/year, interval an integer from 1 to 999, weekdays integers 0-6 (unit week only), anchor "scheduled" or "completion".',
+      'Invalid repeatRule: unit must be day/week/month/year, interval an integer from 1 to 999, weekdays integers 0-6 (unit week only), monthDays integers 1-31 (unit month only), anchor "scheduled" or "completion".',
     );
   }
   return rule;

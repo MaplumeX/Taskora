@@ -34,10 +34,11 @@ interface FieldProps {
 }
 
 const REPEAT_UNITS: RepeatUnit[] = ['day', 'week', 'month', 'year'];
+const MONTH_DAYS = Array.from({ length: 31 }, (_, i) => i + 1);
 
 /**
  * 重复规则独立编辑字段（recurring-tasks spec）：单位选择、「每 N」步进器、
- * 周模式星期按钮、「从完成日期算」锚点开关、可选 until 日期，以及「下次」
+ * 周模式星期按钮、月模式日子网格、「从完成日期算」锚点开关、可选 until 日期，以及「下次」
  * 实时预览（纯函数 nextOccurrenceDate 计算，保存前即可验证规则）。
  *
  * 与 ScheduledDateField 平级的独立入口（不内嵌于计划 popover）：入口仅在
@@ -78,11 +79,21 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
     patchRule({ ...rule, weekdays: next });
   };
 
+  const toggleMonthDay = (day: number) => {
+    if (!rule) return;
+    const monthDays = rule.monthDays ?? [];
+    const next = monthDays.includes(day)
+      ? monthDays.filter((d) => d !== day)
+      : [...monthDays, day].sort((a, b) => a - b);
+    patchRule({ ...rule, monthDays: next });
+  };
+
   const changeUnit = (unit: RepeatUnit) => {
     if (!rule || unit === rule.unit) return;
-    // 离开 week 单位时剥离 weekdays（数据层归一化也会剥，这里保持 UI 即时一致）
+    // 离开 week / month 单位时剥离 weekdays / monthDays（数据层归一化也会剥，这里保持 UI 即时一致）
     const next = { ...rule, unit };
     if (unit !== 'week') delete next.weekdays;
+    if (unit !== 'month') delete next.monthDays;
     patchRule(next);
   };
 
@@ -106,6 +117,13 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
     else delete next.until;
     patchRule(next);
   };
+
+  // 未选日子 = 按计划日期当天；选了 29–31 时提示短月落在月末
+  const monthDaysHint = !rule?.monthDays?.length
+    ? t('task:repeatMonthDaysDefault')
+    : rule.monthDays.some((day) => day >= 29)
+      ? t('task:repeatMonthDaysClamp')
+      : null;
 
   // 实时预览：anchor=completion 按「今天完成」预览；until 已过则显示终结
   const previewDate = rule
@@ -221,6 +239,39 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
               </button>
             );
           })}
+        </div>
+      )}
+
+      {rule?.unit === 'month' && (
+        <div className="flex flex-col gap-1">
+          <div
+            className="grid grid-cols-7 gap-1 max-md:gap-1.5"
+            role="group"
+            aria-label={t('task:repeatMonthDays')}
+          >
+            {MONTH_DAYS.map((day) => {
+              const active = rule.monthDays?.includes(day) ?? false;
+              return (
+                <button
+                  key={day}
+                  type="button"
+                  aria-pressed={active}
+                  onClick={() => toggleMonthDay(day)}
+                  className={
+                    'h-6 rounded-md border text-xs tabular-nums select-none max-md:h-10 max-md:text-sm ' +
+                    (active
+                      ? 'border-primary bg-primary text-primary-foreground'
+                      : 'border-input text-muted-foreground hover:bg-accent')
+                  }
+                >
+                  {day}
+                </button>
+              );
+            })}
+          </div>
+          {monthDaysHint && (
+            <p className="text-xs text-muted-foreground max-md:text-sm">{monthDaysHint}</p>
+          )}
         </div>
       )}
 

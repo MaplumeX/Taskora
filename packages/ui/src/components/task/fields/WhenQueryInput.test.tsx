@@ -24,7 +24,12 @@ afterEach(() => {
 });
 
 function renderScheduled(
-  options: { showReminder?: boolean; start?: Start; reminderTime?: string } = {},
+  options: {
+    showReminder?: boolean;
+    allowRepeat?: boolean;
+    start?: Start;
+    reminderTime?: string;
+  } = {},
 ) {
   const onPatch = vi.fn();
   const onClose = vi.fn();
@@ -37,6 +42,7 @@ function renderScheduled(
       onPatch={onPatch}
       onClose={onClose}
       showReminder={options.showReminder}
+      allowRepeat={options.allowRepeat}
     />,
   );
   return { onPatch, onClose, input: screen.getByRole('combobox') };
@@ -200,5 +206,66 @@ describe('DueDateField — 自然语言输入', () => {
     const { input, onPatch } = renderDue();
     await user.type(input, 'clear{Enter}');
     expect(onPatch).toHaveBeenCalledWith({ dueDate: null });
+  });
+});
+
+describe('ScheduledDateField — 重复说法（recurring-tasks-v3）', () => {
+  it('候选行显示规则摘要与第一次日期；Enter 写入计划日期与规则并关闭', async () => {
+    const user = userEvent.setup();
+    const { input, onPatch, onClose } = renderScheduled({ allowRepeat: true });
+    await user.type(input, '每月1号和15号');
+    const option = screen.getByRole('option');
+    expect(option).toHaveTextContent(/每月 · 1、15 号|Monthly · day 1, 15/);
+    await user.keyboard('{Enter}');
+    expect(onPatch).toHaveBeenCalledWith({
+      start: Start.ANYTIME,
+      scheduledDate: '2026-10-15',
+      repeatRule: { unit: 'month', interval: 1, monthDays: [1, 15], anchor: 'scheduled' },
+    });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('可设提醒：带时刻的重复候选一并写入提醒', async () => {
+    const user = userEvent.setup();
+    const request = vi.fn(async () => true);
+    useReminderPermissionStore.setState({ request });
+    const { input, onPatch } = renderScheduled({ allowRepeat: true, showReminder: true });
+    await user.type(input, 'every fri at 9am{Enter}');
+    expect(onPatch).toHaveBeenCalledWith({
+      start: Start.ANYTIME,
+      scheduledDate: '2026-10-09',
+      repeatRule: { unit: 'week', interval: 1, weekdays: [5], anchor: 'scheduled' },
+      reminderTime: '09:00',
+    });
+    expect(request).toHaveBeenCalledTimes(1);
+  });
+
+  it('不可设提醒（Project / web）：重复候选忽略时刻', async () => {
+    const user = userEvent.setup();
+    const { input, onPatch } = renderScheduled({ allowRepeat: true });
+    await user.type(input, '每天9点');
+    expect(screen.getByRole('option')).not.toHaveTextContent('09:00');
+    await user.keyboard('{Enter}');
+    expect(onPatch).toHaveBeenCalledWith({
+      start: Start.ANYTIME,
+      scheduledDate: '2026-10-05',
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled' },
+    });
+  });
+
+  it('未开 allowRepeat 的入口不出重复候选', async () => {
+    const user = userEvent.setup();
+    const { input } = renderScheduled();
+    await user.type(input, '每周五');
+    expect(screen.queryByRole('option')).not.toBeInTheDocument();
+    expect(screen.getByText(/whenQueryNoResults|无法识别|Couldn/)).toBeInTheDocument();
+  });
+
+  it('allowRepeat 时占位文字提示可输入重复', () => {
+    renderScheduled({ allowRepeat: true });
+    expect(screen.getByRole('combobox')).toHaveAttribute(
+      'placeholder',
+      expect.stringMatching(/每周一|every mon/),
+    );
   });
 });

@@ -37,6 +37,7 @@ export function SwipeWhenPicker() {
           onPatch={patch}
           onClose={close}
           showReminder={getClientKind() !== 'web'}
+          allowRepeat
         />
       )}
     </FieldPickerDialog>

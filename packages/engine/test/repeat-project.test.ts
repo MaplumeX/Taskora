@@ -81,6 +81,20 @@ describe('重复项目派生', () => {
     });
   });
 
+  it('monthDays 规则：计划到集合中的下一个日子，截止日期按同一位移平移', () => {
+    const rule = { unit: 'month', interval: 1, monthDays: [5, 20], anchor: 'scheduled' } as const;
+    const plan = planRepeatProjectInstance(
+      { ...parent, repeatRule: rule },
+      '2026-10-05T10:00:00.000Z',
+      UTC,
+      REVIEW,
+    )!;
+    expect(plan.id).toBe(deriveRepeatProjectId('project-1', rule, '2026-10-20'));
+    expect(plan.project.scheduledDate).toBe('2026-10-20');
+    expect(plan.project.dueDate).toBe('2026-10-22');
+    expect(plan.project.repeatRule).toEqual(rule);
+  });
+
   it('无规则或链已终结（until）不派生', () => {
     expect(planRepeatProjectInstance({ ...parent, repeatRule: null }, 'x', UTC, REVIEW)).toBeNull();
     expect(
