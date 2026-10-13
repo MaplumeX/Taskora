@@ -24,6 +24,7 @@
   "attachmentRename": "Rename",
   "reorderAttachment": "Drag to reorder",
   "attachmentDropHint": "Drop to attach",
+  "convertConfirm": "The task will become a new project, and its subtasks will become tasks in it. This cannot be undone.",
   "convertWithAttachments_one": "This task has {{count}} attachment. Projects can't hold attachments, so it will be deleted. Continue?",
   "convertWithAttachments_other": "This task has {{count}} attachments. Projects can't hold attachments, so they will be deleted. Continue?",
   "scheduledDate": "Scheduled date",

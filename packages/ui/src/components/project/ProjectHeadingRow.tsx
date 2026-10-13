@@ -60,6 +60,7 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
   const [editing, setEditing] = React.useState(autoEdit);
   const [draft, setDraft] = React.useState(heading.title);
   const [confirmOpen, setConfirmOpen] = React.useState(false);
+  const [convertOpen, setConvertOpen] = React.useState(false);
   const [moveOpen, setMoveOpen] = React.useState(false);
   // 菜单关闭时不把焦点还给「…」：否则刚打开的移动选择器会因失焦关闭
   const keepMenuFocusRef = React.useRef(false);
@@ -157,10 +158,7 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
       icon: FolderInput,
       label: t('project:convertToProject'),
       disabled: convertHeading.isPending,
-      onSelect: () =>
-        convertHeading.mutate(heading.id, {
-          onError: () => toast.error(t('project:convertFailed')),
-        }),
+      onSelect: () => setConvertOpen(true),
     },
     archived
       ? {
@@ -297,6 +295,32 @@ export function ProjectHeadingRow({ heading, selected = false, dragHandleProps }
           {movePicker}
         </FieldPickerDialog>
       )}
+
+      <Dialog open={convertOpen} onOpenChange={setConvertOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('project:convertToProject')}</DialogTitle>
+            <DialogDescription>{t('project:convertHeadingConfirm')}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setConvertOpen(false)}>
+              {t('common:cancel')}
+            </Button>
+            <Button
+              type="button"
+              disabled={convertHeading.isPending}
+              onClick={() => {
+                convertHeading.mutate(heading.id, {
+                  onSuccess: () => setConvertOpen(false),
+                  onError: () => toast.error(t('project:convertFailed')),
+                });
+              }}
+            >
+              {t('project:convertToProject')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={confirmOpen} onOpenChange={setConfirmOpen}>
         <DialogContent>

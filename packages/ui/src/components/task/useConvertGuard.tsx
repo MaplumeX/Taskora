@@ -14,8 +14,8 @@ import {
 } from '@/components/ui/dialog';
 
 /**
- * 「转换为项目」前的附件确认（ADR-0019）：转换会物理删除原任务，附件随之
- * 删除（Project 不能带附件）。任务有附件时先确认，没有则直接执行。列表行
+ * 「转换为项目」前的二次确认：转换会物理删除原任务、无法撤销（ADR-0024）。
+ * 任务有附件时文案提示附件随之删除（ADR-0019，Project 不能带附件）。列表行
  * 上的 DTO 不一定带附件，所以先读一次任务详情。
  */
 export function useConvertGuard() {
@@ -24,9 +24,13 @@ export function useConvertGuard() {
 
   const guard = React.useCallback(async (taskId: string, run: () => void) => {
     const count = (await getTask(taskId).catch(() => null))?.attachments?.length ?? 0;
-    if (count === 0) run();
-    else setPending({ count, run });
+    setPending({ count, run });
   }, []);
+
+  // 关闭动画期间 pending 已清空，沿用上一次的附件数，免得文案闪回。
+  const countRef = React.useRef(0);
+  if (pending) countRef.current = pending.count;
+  const count = countRef.current;
 
   const dialog = (
     <Dialog open={pending !== null} onOpenChange={(open) => !open && setPending(null)}>
@@ -34,7 +38,7 @@ export function useConvertGuard() {
         <DialogHeader>
           <DialogTitle>{t('task:convertToProject')}</DialogTitle>
           <DialogDescription>
-            {t('task:convertWithAttachments', { count: pending?.count ?? 0 })}
+            {count > 0 ? t('task:convertWithAttachments', { count }) : t('task:convertConfirm')}
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
@@ -42,7 +46,7 @@ export function useConvertGuard() {
             {t('common:cancel')}
           </Button>
           <Button
-            variant="destructive"
+            variant={count > 0 ? 'destructive' : 'default'}
             onClick={() => {
               pending?.run();
               setPending(null);

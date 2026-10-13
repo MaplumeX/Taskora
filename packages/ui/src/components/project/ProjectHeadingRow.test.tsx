@@ -165,7 +165,7 @@ describe('ProjectHeadingRow', () => {
     );
   });
 
-  it('converts the heading to a project from the actions menu', async () => {
+  it('converts the heading to a project after confirming', async () => {
     const user = userEvent.setup();
     render(<ProjectHeadingRow heading={heading} />);
 
@@ -176,6 +176,13 @@ describe('ProjectHeadingRow', () => {
     );
     await user.click(
       await screen.findByRole('menuitem', {
+        name: /Convert to Project|转换为项目/,
+      }),
+    );
+    expect(mutationMocks.convert).not.toHaveBeenCalled();
+
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
         name: /Convert to Project|转换为项目/,
       }),
     );
