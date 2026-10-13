@@ -141,9 +141,8 @@ export function ExpandedTaskToolbar({ variant }: Props) {
           current={task}
           onSelect={(moveData) => {
             patch(moveData);
+            // 不收起：移走后离开当前列表的任务按 Expanded Linger 留在原位，收起后才离开。
             setPicker(null);
-            // 移走后任务多半离开当前列表：收起，不留悬空的展开态。
-            useUiInteractionStore.getState().setExpandedId(null);
           }}
         />
       )}
