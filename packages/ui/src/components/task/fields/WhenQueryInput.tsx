@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Archive, Bell, CalendarDays, CalendarX2 } from 'lucide-react';
+import { Archive, Bell, CalendarDays, CalendarX2, Repeat } from 'lucide-react';
 
 import { parseWhenQuery, type WhenCandidate } from '@taskora/shared';
 import {
@@ -14,12 +14,15 @@ import {
 } from '@taskora/api';
 
 import { useListboxNavigation } from '../../../lib/useListboxNavigation';
+import { formatRepeatSummary } from './repeatSummary';
 import { cn } from '@/lib/utils';
 
 interface Props {
   placeholder: string;
   /** 截止日期没有 Someday。 */
   allowSomeday: boolean;
+  /** 识别重复说法（单个实体的计划日期入口）。 */
+  allowRepeat?: boolean;
   /** 可设提醒的上下文才显示并携带时刻；否则只取日期。 */
   showTime: boolean;
   /** 今天候选的图标（计划日期为星星，截止日期为旗帜）。 */
@@ -38,6 +41,7 @@ interface Props {
 export function WhenQueryInput({
   placeholder,
   allowSomeday,
+  allowRepeat = false,
   showTime,
   todayIcon,
   onSelect,
@@ -54,17 +58,23 @@ export function WhenQueryInput({
       now: currentWallTime(),
       weekStartsOn,
       allowSomeday,
+      allowRepeat,
     });
     if (showTime) return parsed;
     // 不能设提醒：去掉时刻后按日期去重
     const seen = new Set<string>();
     return parsed.flatMap((c): WhenCandidate[] => {
-      if (c.kind !== 'date') return [c];
-      if (seen.has(c.date)) return [];
-      seen.add(c.date);
-      return [{ kind: 'date', date: c.date }];
+      if (c.kind !== 'date' && c.kind !== 'repeat') return [c];
+      const stripped: WhenCandidate =
+        c.kind === 'date'
+          ? { kind: 'date', date: c.date }
+          : { kind: 'repeat', rule: c.rule, date: c.date };
+      const key = candidateKey(stripped);
+      if (seen.has(key)) return [];
+      seen.add(key);
+      return [stripped];
     });
-  }, [query, weekStartsOn, allowSomeday, showTime]);
+  }, [query, weekStartsOn, allowSomeday, allowRepeat, showTime]);
 
   const { listboxId, active, setActiveIndex, optionId, onKeyDown } = useListboxNavigation(
     candidates,
@@ -131,7 +141,10 @@ export function WhenQueryInput({
 }
 
 function candidateKey(candidate: WhenCandidate): string {
-  return candidate.kind === 'date' ? candidate.date : candidate.kind;
+  if (candidate.kind === 'date') return candidate.date;
+  if (candidate.kind === 'repeat')
+    return `repeat:${JSON.stringify(candidate.rule)}@${candidate.date}`;
+  return candidate.kind;
 }
 
 function CandidateRow({
@@ -142,6 +155,7 @@ function CandidateRow({
   todayIcon: ReactNode;
 }) {
   const { t, i18n } = useTranslation();
+  const weekStartsOn = usePreferencesStore((s) => s.weekStartsOn);
   if (candidate.kind === 'someday') {
     return (
       <>
@@ -160,6 +174,26 @@ function CandidateRow({
   }
 
   const date = fromInputDateValue(candidate.date);
+  const time = candidate.time && (
+    <span className="ml-auto flex shrink-0 items-center gap-1 text-meta text-muted-foreground [&_svg]:h-3.5 [&_svg]:w-3.5">
+      <Bell aria-hidden />
+      {candidate.time}
+    </span>
+  );
+  if (candidate.kind === 'repeat') {
+    return (
+      <>
+        <Repeat aria-hidden className="text-muted-foreground" />
+        <span className="truncate">
+          {formatRepeatSummary(candidate.rule, { t, language: i18n.language, weekStartsOn })}
+        </span>
+        <span className="shrink-0 truncate text-meta text-muted-foreground">
+          {t('task:repeatQueryStartsOn', { date: formatDateLabel(date) })}
+        </span>
+        {time}
+      </>
+    );
+  }
   const full = new Intl.DateTimeFormat(i18n.language, {
     weekday: 'short',
     month: 'short',
@@ -173,12 +207,7 @@ function CandidateRow({
       </span>
       <span className="truncate">{formatDateLabel(date)}</span>
       <span className="shrink-0 truncate text-meta text-muted-foreground">{full}</span>
-      {candidate.time && (
-        <span className="ml-auto flex shrink-0 items-center gap-1 text-meta text-muted-foreground [&_svg]:h-3.5 [&_svg]:w-3.5">
-          <Bell aria-hidden />
-          {candidate.time}
-        </span>
-      )}
+      {time}
     </>
   );
 }

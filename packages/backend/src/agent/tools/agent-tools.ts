@@ -69,6 +69,12 @@ const repeatRuleSchema = Type.Object(
         description: 'Only for unit "week": days of the week, 0 = Sunday … 6 = Saturday',
       }),
     ),
+    monthDays: Type.Optional(
+      Type.Array(Type.Integer({ minimum: 1, maximum: 31 }), {
+        description:
+          'Only for unit "month": days of the month, 1-31; a day past the end of a short month falls on its last day, so 31 means the last day of every month. Omit to repeat on the scheduled day.',
+      }),
+    ),
     anchor: Type.Optional(
       Type.Union([Type.Literal('scheduled'), Type.Literal('completion')], {
         description:
@@ -90,7 +96,7 @@ function parseRepeatRuleParam(value: unknown): RepeatRule {
   const rule = normalizeRepeatRule({ anchor: 'scheduled', ...(value as object) });
   if (!rule) {
     throw new Error(
-      'Invalid repeatRule: unit must be day/week/month/year, interval an integer from 1 to 999, weekdays integers 0-6 (unit week only), anchor "scheduled" or "completion".',
+      'Invalid repeatRule: unit must be day/week/month/year, interval an integer from 1 to 999, weekdays integers 0-6 (unit week only), monthDays integers 1-31 (unit month only), anchor "scheduled" or "completion".',
     );
   }
   return rule;
@@ -484,7 +490,7 @@ export class AgentToolsService {
           skipOccurrence: Type.Optional(
             Type.Boolean({
               description:
-                'true skips this occurrence of a repeating task: moves it to the next occurrence date (missed ones are skipped too) and resets its subtasks. Not a completion; nothing goes to the logbook.',
+                'true skips this occurrence of a repeating task: moves it to the next occurrence date (missed ones are skipped too) and resets its subtasks. Not a completion; nothing goes to the logbook. If this is the last occurrence (the until date is reached), skipping cancels the task instead and the repeat ends.',
             }),
           ),
         }),
@@ -543,6 +549,7 @@ export class AgentToolsService {
               title: task.title,
               start: task.start,
               scheduledDate: params.skipOccurrence ? task.scheduledDate : undefined,
+              status: params.skipOccurrence ? task.status : undefined,
               repeatRule: params.repeatRule !== undefined ? task.repeatRule : undefined,
             }),
           );

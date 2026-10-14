@@ -486,6 +486,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       );
       if ('blocked' in plan) throw new RepeatSkipBlockedError(plan.blocked);
       await engine.update('task', id, { ...plan.patch });
+      // 最后一次：已取消、链结束，Subtask 不动（同取消）
+      if (plan.ends) return taskDto(id);
       // 新的一轮：Subtask 全部置回未完成
       const settledSubtasks = (await engine.list('subtask', { where: { taskId: id } })).filter(
         (row) => row.fields.status !== TaskStatus.ACTIVE,

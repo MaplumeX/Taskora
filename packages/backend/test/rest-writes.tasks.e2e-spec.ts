@@ -457,6 +457,24 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     expect(instances.map((task) => task.scheduledDate)).toEqual([new Date('2026-09-25T00:00:00Z')]);
   });
 
+  it('monthDays 规则：规范形落库，完成后派生到集合中的下一个日子', async () => {
+    await seedTask('payday', {
+      start: 'ANYTIME',
+      scheduledDate: new Date('2026-01-31T00:00:00Z'),
+    });
+    await h.tasks.update(USER, 'payday', {
+      repeatRule: { unit: 'month', interval: 1, monthDays: [31, 15, 15], anchor: 'scheduled' },
+    });
+    const row = await testPrisma.task.findUniqueOrThrow({ where: { id: 'payday' } });
+    expect(row.repeatRule).toBe(
+      '{"unit":"month","interval":1,"monthDays":[15,31],"anchor":"scheduled"}',
+    );
+
+    await h.tasks.complete(USER, 'payday');
+    const instances = await testPrisma.task.findMany({ where: { repeatSourceId: 'payday' } });
+    expect(instances.map((task) => task.scheduledDate)).toEqual([new Date('2026-02-15T00:00:00Z')]);
+  });
+
   it('不派生：实例已存在 / 到达 until / 无规则 / 已完成再完成 / 取消', async () => {
     await seedRepeating();
     await seedTask(expectedInstanceId, { title: '已存在的实例' });
@@ -555,6 +573,27 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     expect(await testPrisma.task.count()).toBe(1);
     await expectLoggedAsStored('task', 'task-1');
     await expectLoggedAsStored('subtask', 'st-1');
+  });
+
+  it('skip 最后一次：任务取消、不派生、Subtask 不动，同一事务入日志', async () => {
+    await seedRepeating({
+      repeatRule: JSON.stringify({ ...dailyRule, until: '2026-02-05' }),
+    });
+    await testPrisma.subtask.create({
+      data: { id: 'st-1', taskId: 'task-1', title: '客厅', status: 'COMPLETED' },
+    });
+
+    const dto = await h.tasks.skip(USER, 'task-1');
+    expect(dto.status).toBe(TaskStatus.CANCELLED);
+    const row = await testPrisma.task.findUniqueOrThrow({ where: { id: 'task-1' } });
+    expect(row.status).toBe(TaskStatus.CANCELLED);
+    expect(row.settledAt).not.toBeNull();
+    expect(row.reminderTime).toBeNull();
+    expect(row.scheduledDate).toEqual(new Date('2026-02-05T00:00:00Z'));
+    const subtask = await testPrisma.subtask.findUniqueOrThrow({ where: { id: 'st-1' } });
+    expect(subtask.status).toBe(TaskStatus.COMPLETED);
+    expect(await testPrisma.task.count()).toBe(1);
+    await expectLoggedAsStored('task', 'task-1');
   });
 
   it('skip 不可用 → 409（message 为原因）；不存在 → 404', async () => {

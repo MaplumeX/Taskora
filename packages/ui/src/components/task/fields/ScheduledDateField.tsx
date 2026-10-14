@@ -35,6 +35,11 @@ interface FieldProps {
    * 本版无通知能力，同样不传）。
    */
   showReminder?: boolean;
+  /**
+   * 输入框识别重复说法（recurring-tasks-v3 Repeat Query）：只在单个 Task /
+   * Project 的入口打开，多选、批量改期等不传。
+   */
+  allowRepeat?: boolean;
 }
 
 /** 首次开启提醒的默认时刻（spec：固定 09:00，非偏好项）。 */
@@ -45,6 +50,7 @@ export function ScheduledDateField({
   onPatch,
   onClose,
   showReminder = false,
+  allowRepeat = false,
 }: FieldProps) {
   useCalendarDay();
   const { t, i18n } = useTranslation();
@@ -144,6 +150,8 @@ export function ScheduledDateField({
     if (candidate.kind === 'someday') return handleSomeday();
     if (candidate.kind === 'clear') return handleClear();
     const patch: ScheduledFieldPatch = { start: Start.ANYTIME, scheduledDate: candidate.date };
+    // 重复说法：计划到第一次出现日，并写入规则（覆盖已有规则）
+    if (candidate.kind === 'repeat') patch.repeatRule = candidate.rule;
     if (showReminder && candidate.time) {
       void requestPermission();
       patch.reminderTime = candidate.time;
@@ -154,8 +162,9 @@ export function ScheduledDateField({
 
   return (
     <WhenQueryInput
-      placeholder={t('task:whenQueryPlaceholder')}
+      placeholder={t(allowRepeat ? 'task:whenQueryRepeatPlaceholder' : 'task:whenQueryPlaceholder')}
       allowSomeday
+      allowRepeat={allowRepeat}
       showTime={showReminder}
       todayIcon={<Star className="fill-today text-today" />}
       onSelect={handleQuerySelect}

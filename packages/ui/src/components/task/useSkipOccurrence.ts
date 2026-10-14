@@ -16,8 +16,10 @@ import {
  * 重复任务「跳过本次」（右键菜单与多选工具栏共用）。
  *
  * - `available`：仅未了结、未进 Trash 的 DATE 型重复任务提供该入口。
- * - `target`：跳过后的下一次日期；链已到头（until）时为 null，入口应禁用。
- *   仅在 `enabled`（菜单打开）时计算。「下一次已存在」需查数据，由数据层拒绝后提示。
+ * - `target`：跳过后的下一次日期；仅在 `enabled`（菜单打开）时计算。
+ * - `last`：已是最后一次（链在下一次之前终结）。跳过即取消任务、结束重复
+ *   （recurring-tasks-v3），入口仍可用，文案换成「跳过本次并结束重复」。
+ * 「下一次已存在」需查数据，由数据层拒绝后提示。
  */
 export function useSkipOccurrence(task: TaskResponseDto | null, enabled: boolean) {
   const { t } = useTranslation('task');
@@ -60,5 +62,7 @@ export function useSkipOccurrence(task: TaskResponseDto | null, enabled: boolean
     });
   };
 
-  return { available, target, skip };
+  const last = enabled && available && target === null;
+
+  return { available, target, last, skip };
 }

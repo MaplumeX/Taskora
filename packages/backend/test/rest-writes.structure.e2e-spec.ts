@@ -309,6 +309,26 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     expect(await testPrisma.project.count({ where: { repeatSourceId: 'p-1' } })).toBe(1);
   });
 
+  it('重复项目跳过最后一次：项目完成、未了结任务取消、不派生下一轮', async () => {
+    await seedProject('p-1', {
+      start: 'ANYTIME',
+      scheduledDate: new Date('2030-01-07T00:00:00Z'),
+    });
+    await h.projects.update(USER, 'p-1', {
+      repeatRule: { unit: 'week', interval: 1, anchor: 'scheduled', until: '2030-01-10' },
+    });
+    await seedTask('t-open', { projectId: 'p-1', start: 'ANYTIME' });
+
+    const skipped = await h.projects.skip(USER, 'p-1');
+    expect(skipped.status).toBe(ProjectStatus.COMPLETED);
+    expect((await testPrisma.task.findUniqueOrThrow({ where: { id: 't-open' } })).status).toBe(
+      TaskStatus.CANCELLED,
+    );
+    expect(await testPrisma.project.count({ where: { repeatSourceId: 'p-1' } })).toBe(0);
+    await expectLoggedAsStored('project', 'p-1');
+    await expectLoggedAsStored('task', 't-open');
+  });
+
   it('Project 复制（Duplicate）：整份复制、全部未完成、紧跟来源项目；Trash 中的任务不复制', async () => {
     await seedProject('p-1', { position: 'a0', title: '搬家' });
     await seedProject('p-2', { position: 'a1' });

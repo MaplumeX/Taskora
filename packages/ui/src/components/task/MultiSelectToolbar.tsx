@@ -265,12 +265,8 @@ export function MultiSelectToolbar() {
                 </ActionSheetItem>
               )}
               {skipOccurrence.available && (
-                <ActionSheetItem
-                  icon={SkipForward}
-                  disabled={skipOccurrence.target === null}
-                  onClick={handleSkip}
-                >
-                  {t('task:skipOccurrence')}
+                <ActionSheetItem icon={SkipForward} onClick={handleSkip}>
+                  {t(skipOccurrence.last ? 'task:skipOccurrenceEnd' : 'task:skipOccurrence')}
                 </ActionSheetItem>
               )}
               {!inTrash && (

@@ -2,7 +2,8 @@
  * Repeat Rule（重复规则）— Task / Project 上的结构化规则字段（recurring-tasks /
  * recurring-projects spec，ADR-0012）。
  *
- * 声明该 Task / Project 完成后按规则再现：单位 × 间隔 × 周模式的星期几集合，
+ * 声明该 Task / Project 完成后按规则再现：单位 × 间隔 × 周模式的星期几集合
+ * 或月模式的日子集合，
  * 锚点默认从计划日期（Scheduled Date）推算，可选从完成日期推算。
  * 仅有计划日期的 Task / Project 可设。
  *
@@ -24,6 +25,12 @@ export interface RepeatRule {
    * 缺省表示「与锚点相同的星期几」。规范形：升序去重；非 week 单位不携带。
    */
   weekdays?: number[];
+  /**
+   * 月模式（仅 unit=month 有意义）：1–31 的日子集合，活跃月内这些日子都是出现日；
+   * 超过当月天数的日子落在月末（31 即每月最后一天）。缺省表示「与锚点相同的日」。
+   * 规范形：升序去重；非 month 单位不携带。
+   */
+  monthDays?: number[];
   anchor: RepeatAnchor;
   /** 直到日期（含当天，YYYY-MM-DD）：之后的再现终止链。缺省/null 表示无限。 */
   until?: string | null;

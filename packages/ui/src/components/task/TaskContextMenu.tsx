@@ -137,7 +137,6 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   // 跳过本次：链已到头（until）时禁用。
   const skipOccurrence = useSkipOccurrence(current, menuOpen);
   const canOfferSkip = !group && variant === 'default' && skipOccurrence.available;
-  const skipTarget = skipOccurrence.target;
 
   const targets = group ?? [task.id];
   // 整组时字段卡片不预选任何值（各任务取值不一）。
@@ -298,11 +297,10 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
           {canOfferSkip && (
             <MenuRow
               icon={SkipForward}
-              disabled={skipTarget === null}
-              title={skipTarget === null ? t('skipOccurrenceLast') : undefined}
+              title={skipOccurrence.last ? t('skipOccurrenceEndHint') : undefined}
               onClick={handleSkip}
             >
-              {t('skipOccurrence')}
+              {t(skipOccurrence.last ? 'skipOccurrenceEnd' : 'skipOccurrence')}
             </MenuRow>
           )}
           <MenuRow icon={CalendarDays} onClick={() => openPicker('due')}>
@@ -350,6 +348,7 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
               onPatch={patch}
               onClose={() => setActivePicker(null)}
               showReminder={!group && getClientKind() !== 'web'}
+              allowRepeat={!group}
             />
           )}
           {activePicker === 'repeat' && <RepeatRuleField current={current} onPatch={patch} />}

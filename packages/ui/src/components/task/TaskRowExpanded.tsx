@@ -130,6 +130,7 @@ export function TaskRowExpanded({ task, current }: Props) {
                 onPatch={patch}
                 onClose={close}
                 showReminder={getClientKind() !== 'web'}
+                allowRepeat
               />
             )}
           </FieldChip>
@@ -166,6 +167,7 @@ export function TaskRowExpanded({ task, current }: Props) {
                   onPatch={patch}
                   onClose={close}
                   showReminder={getClientKind() !== 'web'}
+                  allowRepeat
                 />
               )}
             </FieldIconButton>

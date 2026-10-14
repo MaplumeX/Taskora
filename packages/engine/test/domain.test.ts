@@ -574,6 +574,7 @@ describe('任务写入规则', () => {
     };
     expect(planRepeatSkip(task, false, now, UTC)).toEqual({
       patch: { scheduledDate: '2026-02-10', dueDate: '2026-02-12' },
+      ends: false,
     });
     // Postgres 存储形态（UTC 零点 Date）同样适用；无截止日不写 dueDate
     expect(
@@ -583,7 +584,7 @@ describe('任务写入规则', () => {
         now,
         UTC,
       ),
-    ).toEqual({ patch: { scheduledDate: '2026-02-13' } });
+    ).toEqual({ patch: { scheduledDate: '2026-02-13' }, ends: false });
 
     expect(planRepeatSkip({ ...task, repeatRule: null }, false, now, UTC)).toEqual({
       blocked: 'not-repeating',
@@ -598,14 +599,36 @@ describe('任务写入规则', () => {
       blocked: 'not-active',
     });
     expect(planRepeatSkip(task, true, now, UTC)).toEqual({ blocked: 'next-exists' });
+  });
+
+  it('跳过最后一次：任务取消、链结束（until 为今天 / 已错过多轮且 until 已过）', () => {
+    const now = '2026-02-10T08:00:00.000Z';
+    const task = {
+      status: 'ACTIVE',
+      trashedAt: null,
+      scheduledDate: '2026-02-10',
+      dueDate: '2026-02-12',
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled', until: '2026-02-10' } as const,
+    };
+    const cancelled = {
+      patch: { status: 'CANCELLED', settledAt: now, reminderTime: null },
+      ends: true,
+    };
+    expect(planRepeatSkip(task, false, now, UTC)).toEqual(cancelled);
     expect(
       planRepeatSkip(
-        { ...task, repeatRule: { ...task.repeatRule, until: '2026-02-09' } },
+        {
+          ...task,
+          scheduledDate: '2026-02-05',
+          repeatRule: { ...task.repeatRule, until: '2026-02-09' },
+        },
         false,
         now,
         UTC,
       ),
-    ).toEqual({ blocked: 'no-next' });
+    ).toEqual(cancelled);
+    // 已有派生实例时仍不可跳过（不论是否最后一次）
+    expect(planRepeatSkip(task, true, now, UTC)).toEqual({ blocked: 'next-exists' });
   });
 
   it('派生落地决策：已有关联实例或确定性 id 存活 → 跳过；在 Trash / 已 compact → 换新 id', () => {
@@ -742,6 +765,19 @@ describe('下次预告（Repeat Preview）', () => {
       ['stored', '2026-02-13'],
       ['weekly', '2026-02-17'],
     ]);
+  });
+
+  it('monthDays 规则投影到集合中的下一个日子', () => {
+    expect(
+      buildRepeatPreviews(
+        [
+          source('payday', {
+            repeatRule: { unit: 'month', interval: 1, monthDays: [10, 25], anchor: 'scheduled' },
+          }),
+        ],
+        context,
+      ).map((p) => [p.sourceTaskId, p.dateKey]),
+    ).toEqual([['payday', '2026-02-25']]);
   });
 
   it('不投影：已了结 / Trash / 无计划日期 / 无规则 / completion 锚点 / 链终结 / 下一次不晚于今天', () => {

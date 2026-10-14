@@ -34,6 +34,13 @@ export class RepeatRuleDto {
   @IsInt({ each: true })
   weekdays?: number[];
 
+  @IsOptional()
+  @IsArray()
+  @IsInt({ each: true })
+  @Min(1, { each: true })
+  @Max(31, { each: true })
+  monthDays?: number[];
+
   @IsIn(['scheduled', 'completion'])
   anchor!: 'scheduled' | 'completion';
 

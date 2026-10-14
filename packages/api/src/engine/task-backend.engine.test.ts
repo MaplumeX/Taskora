@@ -1072,17 +1072,30 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     expect((await backend.skipTask(task.id)).scheduledDate).toBe(utcDay(1));
   });
 
-  it('跳过本次不可用：已到最后一次 / 下一次已存在 / 已了结', async () => {
+  it('跳过最后一次：任务取消、不派生、Subtask 不动', async () => {
     const last = await backend.createTask({
       title: '最后一次',
       start: Start.ANYTIME,
-      scheduledDate: utcDay(1),
+      scheduledDate: utcDay(0),
     });
     await backend.updateTask(last.id, {
-      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled', until: utcDay(1) },
+      repeatRule: { unit: 'day', interval: 1, anchor: 'scheduled', until: utcDay(0) },
+      reminderTime: '09:00',
     });
-    await expect(backend.skipTask(last.id)).rejects.toMatchObject({ reason: 'no-next' });
+    const sub = await backend.createSubtask(last.id, { title: '复习' });
+    await backend.completeSubtask(sub.id);
 
+    const skipped = await backend.skipTask(last.id);
+    expect(skipped.status).toBe(TaskStatus.CANCELLED);
+    expect(skipped.scheduledDate).toBe(utcDay(0));
+    expect(skipped.reminderTime).toBeNull();
+    expect((await backend.getTask(last.id)).subtasks?.map((s) => s.status)).toEqual([
+      TaskStatus.COMPLETED,
+    ]);
+    expect(await engine.list('task')).toHaveLength(1);
+  });
+
+  it('跳过本次不可用：下一次已存在 / 已了结', async () => {
     const task = await backend.createTask({
       title: '手滑',
       start: Start.ANYTIME,

@@ -81,6 +81,20 @@ describe('重复项目派生', () => {
     });
   });
 
+  it('monthDays 规则：计划到集合中的下一个日子，截止日期按同一位移平移', () => {
+    const rule = { unit: 'month', interval: 1, monthDays: [5, 20], anchor: 'scheduled' } as const;
+    const plan = planRepeatProjectInstance(
+      { ...parent, repeatRule: rule },
+      '2026-10-05T10:00:00.000Z',
+      UTC,
+      REVIEW,
+    )!;
+    expect(plan.id).toBe(deriveRepeatProjectId('project-1', rule, '2026-10-20'));
+    expect(plan.project.scheduledDate).toBe('2026-10-20');
+    expect(plan.project.dueDate).toBe('2026-10-22');
+    expect(plan.project.repeatRule).toEqual(rule);
+  });
+
   it('无规则或链已终结（until）不派生', () => {
     expect(planRepeatProjectInstance({ ...parent, repeatRule: null }, 'x', UTC, REVIEW)).toBeNull();
     expect(
@@ -272,7 +286,28 @@ describe('重复项目跳过本次', () => {
     });
   });
 
-  it('不可跳过：非重复 / 已完成 / 下一轮已存在 / 链已到头', () => {
+  it('最后一次：完成项目，未了结、未进 Trash 的任务取消，日期不动', () => {
+    const last = { ...project, repeatRule: { ...WEEKLY, until: '2026-10-10' } };
+    expect(
+      planProjectRepeatSkip(
+        last,
+        [...tasks, { ...tasks[0], id: 'trashed', trashedAt: now }],
+        false,
+        now,
+        UTC,
+      ),
+    ).toEqual({
+      project: { status: 'COMPLETED', completedAt: now },
+      tasks: [
+        { id: 'open', patch: { status: 'CANCELLED', settledAt: now, reminderTime: null } },
+        { id: 'no-dates', patch: { status: 'CANCELLED', settledAt: now, reminderTime: null } },
+      ],
+    });
+    // 已有下一轮仍不可跳过
+    expect(planProjectRepeatSkip(last, tasks, true, now, UTC)).toEqual({ blocked: 'next-exists' });
+  });
+
+  it('不可跳过：非重复 / 已完成 / 下一轮已存在', () => {
     expect(planProjectRepeatSkip({ ...project, repeatRule: null }, [], false, now, UTC)).toEqual({
       blocked: 'not-repeating',
     });
@@ -282,15 +317,6 @@ describe('重复项目跳过本次', () => {
     expect(planProjectRepeatSkip(project, [], true, now, UTC)).toEqual({
       blocked: 'next-exists',
     });
-    expect(
-      planProjectRepeatSkip(
-        { ...project, repeatRule: { ...WEEKLY, until: '2026-10-10' } },
-        [],
-        false,
-        now,
-        UTC,
-      ),
-    ).toEqual({ blocked: 'no-next' });
   });
 });
 

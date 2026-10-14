@@ -1,6 +1,7 @@
 export * from './calendar-date';
 export * from './later-project';
 export * from './when-query';
+export * from './repeat-query';
 export * from './review';
 export * from './new-in-today';
 export * from './logging';

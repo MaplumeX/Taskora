@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import React from 'react';
@@ -117,6 +117,40 @@ describe('RepeatRuleField — 独立重复规则编辑字段（recurring-tasks s
     expect(onPatch).toHaveBeenLastCalledWith({
       repeatRule: { unit: 'week', interval: 3, weekdays: [1], anchor: 'completion' },
     });
+  });
+
+  it('按月：日子网格多选写入 monthDays，预览跟随；离开 month 剥离 monthDays', async () => {
+    const user = userEvent.setup();
+    const { onPatch } = renderField({
+      start: Start.ANYTIME,
+      scheduledDate: '2026-02-05',
+      repeatRule: { unit: 'month', interval: 1, anchor: 'scheduled' },
+    });
+    const grid = screen.getByRole('group', { name: /Repeat days of the month|每月的几号/ });
+    expect(grid.querySelectorAll('button')).toHaveLength(31);
+    expect(screen.getByText(/With no days selected|未选日子时按计划日期当天/)).toBeInTheDocument();
+
+    await user.click(within(grid).getByRole('button', { name: '15' }));
+    expect(onPatch).toHaveBeenLastCalledWith({
+      repeatRule: { unit: 'month', interval: 1, monthDays: [15], anchor: 'scheduled' },
+    });
+    await user.click(within(grid).getByRole('button', { name: '1' }));
+    expect(onPatch).toHaveBeenLastCalledWith({
+      repeatRule: { unit: 'month', interval: 1, monthDays: [1, 15], anchor: 'scheduled' },
+    });
+    // 2026-02-05 之后的 [1,15] → 02-15
+    expect(screen.getByText(/Next:|下次：/).textContent).toMatch(/15/);
+
+    await user.click(within(grid).getByRole('button', { name: '31' }));
+    expect(screen.getByText(/Days 29–31|29–31 号/)).toBeInTheDocument();
+
+    await user.click(screen.getByRole('radio', { name: /^(weeks|周)$/ }));
+    expect(onPatch).toHaveBeenLastCalledWith({
+      repeatRule: { unit: 'week', interval: 1, anchor: 'scheduled' },
+    });
+    expect(
+      screen.queryByRole('group', { name: /Repeat days of the month|每月的几号/ }),
+    ).not.toBeInTheDocument();
   });
 
   it('实时预览显示下一次出现日期（纯函数计算）', () => {

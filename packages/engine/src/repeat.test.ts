@@ -44,6 +44,30 @@ describe('normalizeRepeatRule — 规范形（派生 id 的稳定输入）', () 
     ).toEqual({ unit: 'day', interval: 1, anchor: 'scheduled' });
   });
 
+  it('monthDays 升序去重、仅 month 单位保留、值域 1-31；空集合视为未设置', () => {
+    expect(
+      normalizeRepeatRule({
+        unit: 'month',
+        interval: 1,
+        monthDays: [15, 1, 15, 0, 32, 2.5, 31],
+        anchor: 'scheduled',
+      }),
+    ).toEqual({ unit: 'month', interval: 1, monthDays: [1, 15, 31], anchor: 'scheduled' });
+    expect(
+      normalizeRepeatRule({ unit: 'month', interval: 1, monthDays: [], anchor: 'scheduled' }),
+    ).toEqual({ unit: 'month', interval: 1, anchor: 'scheduled' });
+    expect(
+      normalizeRepeatRule({ unit: 'month', interval: 1, monthDays: [0, 40], anchor: 'scheduled' }),
+    ).toEqual({ unit: 'month', interval: 1, anchor: 'scheduled' });
+    // 非 month 单位：monthDays 一律剥离
+    expect(
+      normalizeRepeatRule({ unit: 'week', interval: 1, monthDays: [1], anchor: 'scheduled' }),
+    ).toEqual({ unit: 'week', interval: 1, anchor: 'scheduled' });
+    expect(
+      normalizeRepeatRule({ unit: 'year', interval: 1, monthDays: [1], anchor: 'scheduled' }),
+    ).toEqual({ unit: 'year', interval: 1, anchor: 'scheduled' });
+  });
+
   it('until 归一为 YYYY-MM-DD；无效 until 剥离', () => {
     expect(
       normalizeRepeatRule({ unit: 'day', interval: 1, anchor: 'scheduled', until: '2026-03-01' }),
@@ -272,6 +296,82 @@ describe('nextOccurrenceDate — 规则 → 下一次出现日期（纯函数）
   });
 });
 
+describe('nextOccurrenceDate — monthDays（每月的几号）', () => {
+  const next = (r: RepeatRule, scheduledDate: string) => nextOccurrenceDate(r, { scheduledDate });
+
+  it('多个日子：取严格晚于锚点的下一个，跨月回到第一个', () => {
+    const r = rule({ unit: 'month', monthDays: [1, 15] });
+    expect(next(r, '2026-03-01')).toBe('2026-03-15');
+    expect(next(r, '2026-03-15')).toBe('2026-04-01');
+    // 锚点不在集合内：取锚点之后最近的出现日
+    expect(next(r, '2026-03-10')).toBe('2026-03-15');
+    expect(next(r, '2026-03-20')).toBe('2026-04-01');
+  });
+
+  it('[31] 在短月落在月末，下一个月回到 31 号，不漂移', () => {
+    const r = rule({ unit: 'month', monthDays: [31] });
+    expect(next(r, '2026-01-31')).toBe('2026-02-28');
+    expect(next(r, '2026-02-28')).toBe('2026-03-31');
+    expect(next(r, '2026-03-31')).toBe('2026-04-30');
+    expect(next(r, '2026-04-30')).toBe('2026-05-31');
+    // 闰年
+    expect(next(r, '2028-01-31')).toBe('2028-02-29');
+  });
+
+  it('钳制后重复的日子合并：[29,30,31] 在 2 月只出现一次', () => {
+    const r = rule({ unit: 'month', monthDays: [29, 30, 31] });
+    expect(next(r, '2026-01-31')).toBe('2026-02-28');
+    expect(next(r, '2026-02-28')).toBe('2026-03-29');
+    expect(next(r, '2026-03-29')).toBe('2026-03-30');
+  });
+
+  it('interval > 1：锚点所在月为第 0 月，只在活跃月出现', () => {
+    const r = rule({ unit: 'month', interval: 2, monthDays: [10, 20] });
+    expect(next(r, '2026-03-10')).toBe('2026-03-20');
+    expect(next(r, '2026-03-20')).toBe('2026-05-10');
+    // 锚点在本月最后一个出现日之后
+    expect(next(r, '2026-03-25')).toBe('2026-05-10');
+    const yearly = rule({ unit: 'month', interval: 12, monthDays: [5] });
+    expect(next(yearly, '2026-03-05')).toBe('2027-03-05');
+    expect(next(yearly, '2026-03-01')).toBe('2026-03-05');
+  });
+
+  it('跨年', () => {
+    const r = rule({ unit: 'month', monthDays: [1, 15] });
+    expect(next(r, '2026-12-15')).toBe('2027-01-01');
+  });
+
+  it('until 截断：超过 until 返回 null', () => {
+    const r = rule({ unit: 'month', monthDays: [1, 15], until: '2026-03-14' });
+    expect(next(r, '2026-03-01')).toBeNull();
+  });
+
+  it('completion 锚点：以完成日为锚', () => {
+    const r = rule({ unit: 'month', monthDays: [1, 15], anchor: 'completion' });
+    expect(
+      nextOccurrenceDate(r, {
+        scheduledDate: '2026-03-01',
+        settledAt: '2026-03-20T10:00:00.000Z',
+      }),
+    ).toBe('2026-04-01');
+  });
+
+  it('无 monthDays 的按月规则行为不变（按锚点日，钳制会延续）', () => {
+    const r = rule({ unit: 'month' });
+    expect(next(r, '2026-01-31')).toBe('2026-02-28');
+    expect(next(r, '2026-02-28')).toBe('2026-03-28');
+  });
+
+  it('skipOccurrenceDate 沿 monthDays 跳过全部错过的出现日', () => {
+    expect(
+      skipOccurrenceDate(rule({ unit: 'month', monthDays: [1, 15] }), {
+        scheduledDate: '2026-01-01',
+        now: '2026-03-10T12:00:00.000Z',
+      }),
+    ).toBe('2026-03-15');
+  });
+});
+
 describe('skipOccurrenceDate — 跳过本次的目标日期', () => {
   // 今天 = 2026-02-10（周二，UTC）
   const now = '2026-02-10T08:00:00.000Z';
@@ -379,6 +479,30 @@ describe('确定性 id 派生（ADR-0012）', () => {
     expect(deriveSubtaskId('instance-1', 0)).not.toBe(deriveSubtaskId('instance-1', 1));
     expect(deriveSubtaskId('instance-1', 0)).toBe(deriveSubtaskId('instance-1', 0));
     expect(deriveSubtaskId('instance-2', 0)).not.toBe(deriveSubtaskId('instance-1', 0));
+  });
+
+  it('canonicalRepeatRule：存量规则的规范串逐字不变（派生 id 不漂移）', () => {
+    expect(canonicalRepeatRule(rule({ unit: 'month' }))).toBe(
+      '{"unit":"month","interval":1,"anchor":"scheduled"}',
+    );
+    expect(canonicalRepeatRule(rule({ unit: 'year', interval: 2, anchor: 'completion' }))).toBe(
+      '{"unit":"year","interval":2,"anchor":"completion"}',
+    );
+    expect(deriveRepeatInstanceId('task-1', rule({ unit: 'month' }), '2026-02-02')).toBe(
+      deriveRepeatInstanceId(
+        'task-1',
+        normalizeRepeatRule({ unit: 'month', interval: 1, monthDays: [], anchor: 'scheduled' })!,
+        '2026-02-02',
+      ),
+    );
+  });
+
+  it('canonicalRepeatRule：monthDays 位于 weekdays 之后、anchor 之前', () => {
+    expect(
+      canonicalRepeatRule(rule({ unit: 'month', monthDays: [15, 1], until: '2026-12-31' })),
+    ).toBe(
+      '{"unit":"month","interval":1,"monthDays":[1,15],"anchor":"scheduled","until":"2026-12-31"}',
+    );
   });
 
   it('canonicalRepeatRule：键序固定（unit,interval,weekdays?,anchor,until?）', () => {

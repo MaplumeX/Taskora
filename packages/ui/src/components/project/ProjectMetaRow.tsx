@@ -95,7 +95,9 @@ export function ProjectMetaRow({ project }: Props) {
                 )
               }
             >
-              {(close) => <ScheduledDateField current={project} onPatch={patch} onClose={close} />}
+              {(close) => (
+                <ScheduledDateField current={project} onPatch={patch} onClose={close} allowRepeat />
+              )}
             </MetaPopover>
           ) : null}
 

@@ -426,6 +426,25 @@ describe('AgentToolsService', () => {
     expect(service.tasks.update).not.toHaveBeenCalled();
   });
 
+  it('update_task normalizes monthDays on month rules', async () => {
+    service.tasks.findOne.mockResolvedValueOnce({
+      id: 't1',
+      start: 'ANYTIME',
+      scheduledDate: '2026-10-07',
+    });
+    await tool('update_task').execute('call-1', {
+      id: 't1',
+      repeatRule: { unit: 'month', interval: 1, monthDays: [15, 1, 1] },
+    } as never);
+    expect(service.tasks.update).toHaveBeenLastCalledWith(
+      'user-1',
+      't1',
+      expect.objectContaining({
+        repeatRule: { unit: 'month', interval: 1, monthDays: [1, 15], anchor: 'scheduled' },
+      }),
+    );
+  });
+
   it('update_task skipOccurrence skips after applying field updates', async () => {
     const result = await tool('update_task').execute('call-1', {
       id: 't1',
@@ -436,6 +455,21 @@ describe('AgentToolsService', () => {
       service.tasks.skip.mock.invocationCallOrder[0],
     );
     expect(textOf(result).scheduledDate).toBe('2026-09-18');
+  });
+
+  it('update_task skipOccurrence on the last occurrence reports the cancelled status', async () => {
+    service.tasks.skip.mockResolvedValueOnce({
+      id: 't1',
+      title: 'x',
+      start: 'ANYTIME',
+      scheduledDate: '2026-09-17',
+      status: 'CANCELLED',
+    });
+    const result = await tool('update_task').execute('call-1', {
+      id: 't1',
+      skipOccurrence: true,
+    } as never);
+    expect(textOf(result).status).toBe('CANCELLED');
   });
 
   it('update_task skipOccurrence explains why skipping is not possible', async () => {
