@@ -101,6 +101,21 @@ describe('ProjectContextMenu — 重复项目（recurring-projects）', () => {
     expect(skipMock).toHaveBeenCalledWith('project-1', expect.anything());
   });
 
+  it('已是最后一次：入口改为「跳过本次并结束重复」，点击调用 skip', async () => {
+    renderMenu({
+      ...baseProject,
+      start: Start.ANYTIME,
+      scheduledDate: '2030-01-07',
+      repeatRule: { unit: 'week', interval: 1, anchor: 'scheduled', until: '2030-01-10' },
+    });
+    const item = await screen.findByRole('button', {
+      name: /^(Skip and End Repeat|跳过本次并结束重复)$/,
+    });
+    expect(item).not.toHaveAttribute('aria-disabled', 'true');
+    fireEvent.click(item);
+    expect(skipMock).toHaveBeenCalledWith('project-1', expect.anything());
+  });
+
   it('完成仍有未了结任务的项目：先询问，选择后带 settleRemaining 完成', async () => {
     renderMenu({ ...baseProject, taskTotalCount: 3, taskCompletedCount: 1 });
     fireEvent.click(await screen.findByRole('button', { name: /^(Mark Complete|标记完成)/ }));

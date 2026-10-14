@@ -139,6 +139,20 @@ describe('重复项目（Engine 后端）', () => {
     );
   });
 
+  it('跳过最后一次：项目完成、未了结任务取消、不派生下一轮', async () => {
+    const { project, open: openTask, done } = await seedRepeatingProject(device);
+    await device.projects.updateProject(project.id, {
+      repeatRule: { ...WEEKLY, until: '2030-01-10' },
+    });
+    const skipped = await device.projects.skipProject(project.id);
+    expect(skipped).toMatchObject({ status: ProjectStatus.COMPLETED, scheduledDate: '2030-01-07' });
+    expect((await device.tasks.getTask(openTask.id)).status).toBe(TaskStatus.CANCELLED);
+    expect((await device.tasks.getTask(done.id)).status).toBe(TaskStatus.COMPLETED);
+    expect(
+      (await device.projects.getProjects()).filter((p) => p.title === '每周复盘'),
+    ).toHaveLength(1);
+  });
+
   it('两台离线设备并发完成：同步后只有一个下一轮，任务不重复', async () => {
     const b = await open(hub, 'dev-b');
     const { project } = await seedRepeatingProject(device);

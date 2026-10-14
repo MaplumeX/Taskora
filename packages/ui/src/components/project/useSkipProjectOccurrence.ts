@@ -17,8 +17,10 @@ import {
  * useSkipOccurrence）。
  *
  * - `available`：仅未完成、未进 Trash 的 DATE 型重复项目提供该入口。
- * - `target`：跳过后的下一次日期；链已到头（until）时为 null，入口应禁用。
- *   仅在 `enabled`（菜单打开）时计算。「下一次已存在」需查数据，由数据层拒绝后提示。
+ * - `target`：跳过后的下一次日期；仅在 `enabled`（菜单打开）时计算。
+ * - `last`：已是最后一次。跳过即完成项目、剩余任务取消、结束重复
+ *   （recurring-tasks-v3），入口仍可用，文案换成「跳过本次并结束重复」。
+ * 「下一次已存在」需查数据，由数据层拒绝后提示。
  */
 export function useSkipProjectOccurrence(project: ProjectResponseDto, enabled: boolean) {
   const { t } = useTranslation('task');
@@ -59,5 +61,7 @@ export function useSkipProjectOccurrence(project: ProjectResponseDto, enabled: b
     });
   };
 
-  return { available, target, skip };
+  const last = enabled && available && target === null;
+
+  return { available, target, last, skip };
 }

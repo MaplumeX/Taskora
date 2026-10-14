@@ -457,6 +457,21 @@ describe('AgentToolsService', () => {
     expect(textOf(result).scheduledDate).toBe('2026-09-18');
   });
 
+  it('update_task skipOccurrence on the last occurrence reports the cancelled status', async () => {
+    service.tasks.skip.mockResolvedValueOnce({
+      id: 't1',
+      title: 'x',
+      start: 'ANYTIME',
+      scheduledDate: '2026-09-17',
+      status: 'CANCELLED',
+    });
+    const result = await tool('update_task').execute('call-1', {
+      id: 't1',
+      skipOccurrence: true,
+    } as never);
+    expect(textOf(result).status).toBe('CANCELLED');
+  });
+
   it('update_task skipOccurrence explains why skipping is not possible', async () => {
     service.tasks.skip.mockRejectedValueOnce(new ConflictException('next-exists'));
     await expect(

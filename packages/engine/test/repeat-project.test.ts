@@ -286,7 +286,28 @@ describe('重复项目跳过本次', () => {
     });
   });
 
-  it('不可跳过：非重复 / 已完成 / 下一轮已存在 / 链已到头', () => {
+  it('最后一次：完成项目，未了结、未进 Trash 的任务取消，日期不动', () => {
+    const last = { ...project, repeatRule: { ...WEEKLY, until: '2026-10-10' } };
+    expect(
+      planProjectRepeatSkip(
+        last,
+        [...tasks, { ...tasks[0], id: 'trashed', trashedAt: now }],
+        false,
+        now,
+        UTC,
+      ),
+    ).toEqual({
+      project: { status: 'COMPLETED', completedAt: now },
+      tasks: [
+        { id: 'open', patch: { status: 'CANCELLED', settledAt: now, reminderTime: null } },
+        { id: 'no-dates', patch: { status: 'CANCELLED', settledAt: now, reminderTime: null } },
+      ],
+    });
+    // 已有下一轮仍不可跳过
+    expect(planProjectRepeatSkip(last, tasks, true, now, UTC)).toEqual({ blocked: 'next-exists' });
+  });
+
+  it('不可跳过：非重复 / 已完成 / 下一轮已存在', () => {
     expect(planProjectRepeatSkip({ ...project, repeatRule: null }, [], false, now, UTC)).toEqual({
       blocked: 'not-repeating',
     });
@@ -296,15 +317,6 @@ describe('重复项目跳过本次', () => {
     expect(planProjectRepeatSkip(project, [], true, now, UTC)).toEqual({
       blocked: 'next-exists',
     });
-    expect(
-      planProjectRepeatSkip(
-        { ...project, repeatRule: { ...WEEKLY, until: '2026-10-10' } },
-        [],
-        false,
-        now,
-        UTC,
-      ),
-    ).toEqual({ blocked: 'no-next' });
   });
 });
 

@@ -11,7 +11,7 @@ import { deriveRepeatCopyId, deriveRepeatProjectId, nextOccurrenceDate } from '.
 import { resolveTaskStart } from './start';
 import { dateKeyOf, daysBetweenKeys, shiftDateKey, type CalendarZones } from './calendar';
 import { sortByEffectivePosition, type Positioned } from './order';
-import type { ProjectFields, ProjectPatch } from './projects';
+import { planProjectComplete, type ProjectFields, type ProjectPatch } from './projects';
 import {
   copyAttachment,
   planRepeatSkip,
@@ -282,7 +282,8 @@ export interface RepeatProjectSkipTask {
  * 项目跳过本次：项目计划日期按 planRepeatSkip 同一规则推进、截止日期
  * 平移；项目内未了结、未进 Trash 的任务，计划日期与截止日期按
  * 同一天数平移。已了结的任务不动（不复活这一轮的记录）。不新建实体。
- * 项目没有取消态：未完成即 ACTIVE。
+ * 项目没有取消态：未完成即 ACTIVE。已是最后一次时完成项目，未了结、
+ * 未进 Trash 的任务一并取消；调用方不派生，链就此结束。
  */
 export function planProjectRepeatSkip(
   project: RepeatProjectSkipSource,
@@ -303,6 +304,16 @@ export function planProjectRepeatSkip(
     zones,
   );
   if ('blocked' in plan) return plan;
+  // 最后一次：项目没有取消态，改为完成项目、剩余任务取消（不派生，链结束）
+  if (plan.ends) {
+    const { project: projectPatch, tasks: taskPatches } = planProjectComplete(
+      project.status,
+      now,
+      tasks,
+      'cancelled',
+    )!;
+    return { project: projectPatch, tasks: taskPatches };
+  }
   const from = dateKeyOf(project.scheduledDate, zones)!;
   const delta = daysBetweenKeys(from, plan.patch.scheduledDate!);
   const taskPatches = tasks

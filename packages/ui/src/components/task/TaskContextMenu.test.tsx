@@ -212,13 +212,16 @@ describe('TaskContextMenu — 跳过本次', () => {
     expect(screen.queryByRole('button', { name: skipName })).toBeNull();
   });
 
-  it('链已到头（until 已过）：入口禁用，点击无效', async () => {
+  it('已是最后一次（until 已到）：入口改为「跳过本次并结束重复」，点击调用 skip', async () => {
     const user = userEvent.setup();
     openMenu({ ...repeating, repeatRule: { ...repeating.repeatRule!, until: '2026-02-06' } });
-    const item = await screen.findByRole('button', { name: skipName });
-    expect(item).toHaveAttribute('aria-disabled', 'true');
+    const item = await screen.findByRole('button', {
+      name: /^(Skip and End Repeat|跳过本次并结束重复)$/,
+    });
+    expect(item).not.toHaveAttribute('aria-disabled', 'true');
+    expect(screen.queryByRole('button', { name: skipName })).toBeNull();
     await user.click(item);
-    expect(skipMock).not.toHaveBeenCalled();
+    expect(skipMock).toHaveBeenCalledWith('task-1', expect.anything());
   });
 });
 

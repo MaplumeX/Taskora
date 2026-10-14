@@ -16,7 +16,7 @@ import {
 } from '../repeat';
 import { dateKeyOf, daysBetweenKeys, shiftDateKey, type CalendarZones } from './calendar';
 import { sortByEffectivePosition, type Positioned } from './order';
-import type { TaskFields, TaskPatch } from './tasks';
+import { taskCancelPatch, type TaskFields, type TaskPatch } from './tasks';
 
 export interface RepeatParent {
   id: string;
@@ -197,7 +197,8 @@ export function repeatDerivationTarget(input: {
  * 不可跳过的原因：
  * - not-repeating：无规则或没有计划日期；
  * - not-active：已了结或在 Trash；
- * - no-next：链在下一次之前终结（until）；
+ * - no-next：链在下一次之前终结（until）——任务的跳过不再因此受阻（改为取消），
+ *   只有没有取消态的 Project 仍用它；
  * - next-exists：该任务已有未进 Trash 的派生实例（撤销完成后留下的），
  *   跳过会在同一天叠出两条。
  */
@@ -224,13 +225,16 @@ export interface RepeatSkipSource {
  * 跳过本次：计划日期原地推进到下一个出现日（目标见 skipOccurrenceDate），
  * 已有截止日期按相同天数平移；不新建实体、不进 Logbook。调用方另把
  * 该任务的全部 Subtask 置回 ACTIVE（subtaskStatusPatch）。
+ *
+ * 已是最后一次（链在下一次之前终结）时 ends 为真：patch 为取消，任务以
+ * 已取消进 Logbook、链就此结束（取消不派生）；Subtask 不动，同取消。
  */
 export function planRepeatSkip(
   task: RepeatSkipSource,
   hasLinkedInstance: boolean,
   now: string,
   zones: CalendarZones,
-): { patch: TaskPatch } | { blocked: RepeatSkipBlock } {
+): { patch: TaskPatch; ends: boolean } | { blocked: RepeatSkipBlock } {
   const rule = task.repeatRule;
   const scheduledKey = dateKeyOf(task.scheduledDate, zones);
   if (!rule || scheduledKey === null) {
@@ -244,11 +248,11 @@ export function planRepeatSkip(
     timeZone: zones.timeZone,
     legacyDateTimeZone: zones.legacyDateTimeZone,
   });
-  if (occurrence === null) return { blocked: 'no-next' };
+  if (occurrence === null) return { patch: taskCancelPatch(now), ends: true };
   const patch: TaskPatch = { scheduledDate: occurrence };
   const dueKey = dateKeyOf(task.dueDate, zones);
   if (dueKey !== null) {
     patch.dueDate = shiftDateKey(dueKey, daysBetweenKeys(scheduledKey, occurrence));
   }
-  return { patch };
+  return { patch, ends: false };
 }

@@ -164,9 +164,8 @@ export function ProjectMenuPanel({
       ? [
           {
             icon: SkipForward,
-            label: t('skipOccurrence'),
-            disabled: skipOccurrence.target === null,
-            title: skipOccurrence.target === null ? t('skipOccurrenceLast') : undefined,
+            label: t(skipOccurrence.last ? 'skipOccurrenceEnd' : 'skipOccurrence'),
+            title: skipOccurrence.last ? t('skipProjectOccurrenceEndHint') : undefined,
             onSelect: handleSkip,
           },
         ]

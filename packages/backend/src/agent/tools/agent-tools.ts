@@ -490,7 +490,7 @@ export class AgentToolsService {
           skipOccurrence: Type.Optional(
             Type.Boolean({
               description:
-                'true skips this occurrence of a repeating task: moves it to the next occurrence date (missed ones are skipped too) and resets its subtasks. Not a completion; nothing goes to the logbook.',
+                'true skips this occurrence of a repeating task: moves it to the next occurrence date (missed ones are skipped too) and resets its subtasks. Not a completion; nothing goes to the logbook. If this is the last occurrence (the until date is reached), skipping cancels the task instead and the repeat ends.',
             }),
           ),
         }),
@@ -549,6 +549,7 @@ export class AgentToolsService {
               title: task.title,
               start: task.start,
               scheduledDate: params.skipOccurrence ? task.scheduledDate : undefined,
+              status: params.skipOccurrence ? task.status : undefined,
               repeatRule: params.repeatRule !== undefined ? task.repeatRule : undefined,
             }),
           );

@@ -47,7 +47,8 @@ export interface TaskBackend {
   cancelTask(id: string): Promise<TaskResponseDto>;
   uncancelTask(id: string): Promise<TaskResponseDto>;
   /**
-   * 跳过本次（recurring-tasks-v2）：计划日期原地推进到链的下一个出现日。
+   * 跳过本次（recurring-tasks-v2）：计划日期原地推进到链的下一个出现日；
+   * 已是最后一次时取消任务、链结束（recurring-tasks-v3）。
    * 不可跳过时抛 RepeatSkipBlockedError（reason 说明原因）。
    */
   skipTask(id: string): Promise<TaskResponseDto>;

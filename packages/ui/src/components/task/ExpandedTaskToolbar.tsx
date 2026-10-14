@@ -157,8 +157,7 @@ export function ExpandedTaskToolbar({ variant }: Props) {
       ? [
           {
             icon: SkipForward,
-            label: t('task:skipOccurrence'),
-            disabled: skipOccurrence.target === null,
+            label: t(skipOccurrence.last ? 'task:skipOccurrenceEnd' : 'task:skipOccurrence'),
             onSelect: skipOccurrence.skip,
           },
         ]

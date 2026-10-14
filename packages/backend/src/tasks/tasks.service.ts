@@ -512,6 +512,7 @@ export class TasksService {
   /**
    * 跳过本次（recurring-tasks-v2）：计划日期原地推进到链的下一个出现日、
    * 截止日同步平移、Subtask 全部置回未完成（规则见 domain planRepeatSkip）。
+   * 已是最后一次时取消任务、链结束（recurring-tasks-v3）。
    * 不可跳过 → 409，message 为原因（RepeatSkipBlock）。
    */
   async skip(userId: string, id: string) {
@@ -536,7 +537,8 @@ export class TasksService {
     if ('blocked' in plan) throw new ConflictException(plan.blocked);
     return this.hub.writeAsHub(userId, async (batch) => {
       await batch.write('task', id, toWireFields(plan.patch));
-      for (const subtask of existing.subtasks) {
+      // 最后一次：已取消、链结束，Subtask 不动（同取消）；否则新的一轮全部置回未完成
+      for (const subtask of plan.ends ? [] : existing.subtasks) {
         if (subtask.status === TaskStatus.ACTIVE) continue;
         await batch.write('subtask', subtask.id, subtaskStatusPatch(TaskStatus.ACTIVE, now));
       }

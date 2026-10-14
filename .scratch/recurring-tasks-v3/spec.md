@@ -1,6 +1,6 @@
 # Feature: Repeating Tasks v3（重复任务 v3）
 
-Status: implemented (01–02) — awaiting manual verification
+Status: implemented (01–03) — awaiting manual verification
 
 前作：`.scratch/recurring-tasks/spec.md`（v1）、`.scratch/recurring-tasks-v2/spec.md`（v2）、`.scratch/recurring-projects/spec.md`、ADR-0012；自然语言输入见 `.scratch/when-natural-input/spec.md`。
 
@@ -140,6 +140,18 @@ parseRepeatQuery(query: string, options: { today: string; now: string }): Repeat
 
 **i18n**：`task.json`（en / zh）新增 `repeatQueryStartsOn` 等候选行文案（monthDays 相关文案在 01 中加入）；When 输入框 placeholder 在 `allowRepeat` 时改为「输入日期或重复，如「下周五」「每周一」」。
 
+### 3. 跳过最后一次即结束重复
+
+**问题**：`until` 到了（例如设为今天）时，跳过本次被禁用（「已是最后一次，无法跳过」）。想「这次不做、重复到此为止」只能去点取消，用户不容易想到。
+
+**决定**：
+
+- `planRepeatSkip` 在链没有下一次时不再返回 `blocked: 'no-next'`，而是返回 `{ patch: taskCancelPatch(now), ends: true }`；正常跳过返回 `ends: false`。设备端 `skipTask` 与 REST `TasksService.skip` 照常写 patch，`ends` 时不重置 Subtask（同取消）。任务以已取消进 Logbook，取消本来就不派生，链结束。
+- 已有派生实例（`next-exists`）时仍不可跳过，优先于「最后一次」。
+- **重复项目**：项目没有取消态（`ProjectStatus` 只有 ACTIVE / COMPLETED）。讨论后选择「完成项目、剩余任务取消」：`planProjectRepeatSkip` 遇到 `ends` 时复用 `planProjectComplete(…, 'cancelled')` 的项目与任务 patch；跳过路径本来就不派生，链结束。项目以已完成进 Logbook，语义上略有出入，但不新增状态。项目右键菜单同样改为「跳过本次并结束重复」，悬停提示「已是最后一次：跳过后项目完成、剩余任务取消，重复结束」。
+- UI：`useSkipOccurrence` 新增 `last`；右键菜单、展开卡片「更多」、多选工具栏中入口不再禁用，最后一次时文案为「跳过本次并结束重复」，右键菜单悬停提示「已是最后一次：跳过后任务取消，重复结束」。
+- 助手：`skipOccurrence` 描述写明最后一次会取消任务、结束重复，结果带上 `status`。
+
 ## Testing Decisions
 
 - **engine 纯函数（价值最高）**：
@@ -168,3 +180,4 @@ parseRepeatQuery(query: string, options: { today: string; now: string }): Repeat
 
 - `issues/01-month-days.md`：规则新增 monthDays（engine、DTO、助手、规则编辑器）
 - `issues/02-repeat-query.md`：When 输入框识别重复说法（Blocked by 01）
+- `issues/03-skip-last-ends-repeat.md`：跳过最后一次即取消任务、结束重复
