@@ -94,7 +94,7 @@ function TimeZonePicker({
         aria-label={t('timeZoneSearch')}
         className="h-12 w-full rounded-full bg-card px-5 text-base outline-none placeholder:text-muted-foreground"
       />
-      <SettingsGroup>
+      <SettingsGroup role={filtered.length > 0 ? 'radiogroup' : undefined}>
         {filtered.length === 0 ? (
           <SettingsRow label={<span className="text-muted-foreground">{t('noMatches')}</span>} />
         ) : (
