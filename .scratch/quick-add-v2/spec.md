@@ -41,7 +41,8 @@
 | 归属               | `MovePicker`                           | `projectId` / `areaId`（选 Inbox 即两者皆空） |
 
 - 每次打开浮窗，归属默认是 Inbox，与 Things 一致；不记忆上次的选择。
-- 不做：Subtask、Repeat Rule、Project Heading。
+- 可添加 Subtask：卡片内的本地清单（键盘交互同展开任务），随草稿以 `subtasks` 提交，任务建好后按顺序逐条创建。
+- 不做：Repeat Rule、Project Heading。
 - Tag 选择器在 Quick Add 里**不提供「新建 Tag」**：新建 Tag 是写操作，必须经主窗口的 Engine 执行，第一期不做。
 
 ## 3. 数据通路（沿用事件中继，扩展协议）
@@ -82,7 +83,8 @@ Quick Add 窗口不装配 Engine（单一 Engine / Outbox / HLC，见 `quick-add
 
 - 字段快捷键与主应用 keymap 保持一致（`docs/keyboard-shortcuts.md`），不新造键位。
 - 输入法组字中（`isComposing`）的 Enter 不提交。
-- 失焦隐藏的行为不变；草稿在隐藏后保留，Esc 才清空。
+- 关闭即放弃草稿：失焦、点透明区域、Esc、提交后隐藏，下次唤出都是空白卡片。
+- 从未设值的图标按钮设上值后，入口换成 chip，选择器随之关闭（与展开任务一致）。
 
 ## 5. 反馈
 

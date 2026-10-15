@@ -35,6 +35,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   createFromQuickAddDraft: harness.createFromQuickAddDraft,
   useCreateTask: () => ({ mutateAsync: harness.createTask }),
   useUpdateTask: () => ({ mutateAsync: vi.fn() }),
+  useCreateSubtask: () => ({ mutateAsync: vi.fn() }),
 }));
 
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }));

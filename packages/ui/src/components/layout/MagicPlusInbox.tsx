@@ -9,6 +9,7 @@ import {
   getAreas,
   getProjects,
   getTags,
+  useCreateSubtask,
   useCreateTask,
   useUpdateTask,
   type QuickAddDeps,
@@ -37,6 +38,7 @@ export function MagicPlusInbox() {
   const cardRef = React.useRef<QuickAddCardHandle>(null);
   const createTask = useCreateTask();
   const updateTask = useUpdateTask();
+  const createSubtask = useCreateSubtask();
   const target = useMagicPlusInboxTarget(() => setOpen(true));
   const offered = pathname !== '/inbox' && pathname !== '/home';
 
@@ -44,6 +46,7 @@ export function MagicPlusInbox() {
   const deps: QuickAddDeps = {
     createTask: (data) => createTask.mutateAsync(data),
     updateTask: (id, data) => updateTask.mutateAsync({ id, data }),
+    createSubtask: (taskId, data) => createSubtask.mutateAsync({ taskId, data }),
     getTags,
     getProjects,
     getAreas,

@@ -8,9 +8,9 @@
  *
  * Window behavior (see src-tauri/src/lib.rs): a transparent, undecorated
  * window that only paints the card; shown/focused by the global shortcut
- * handler, hidden on blur, on submit and on clicks in the transparent area; the typed text survives
- * hide/show cycles because the webview is never destroyed — Esc is the
- * explicit "discard and close" action. The card itself is QuickAddCard
+ * handler, hidden on blur, on submit, on Esc and on clicks in the transparent area. The
+ * webview is never destroyed, so the card is reset once the window is hidden:
+ * every open starts from a blank draft. The card itself is QuickAddCard
  * (packages/ui), shared layout with the expanded task row.
  */
 import { useEffect, useRef, useState } from 'react';
@@ -102,6 +102,11 @@ export function QuickAddApp() {
     await playExit(surfaceRef.current);
     if (generation !== openGeneration.current) return;
     await getCurrentWindow().hide();
+    // 关闭即放弃草稿：隐藏后再清空（出场途中卡片内容不跳变），下次唤出是空白卡片。
+    if (generation !== openGeneration.current) return;
+    cardRef.current?.reset();
+    setError(null);
+    setNotice(null);
   };
   const hideWindowRef = useRef(hideWindow);
   hideWindowRef.current = hideWindow;
@@ -200,7 +205,7 @@ export function QuickAddApp() {
   };
 
   // 透明窗口（quick-add-v2 issue 02）：卡片贴顶，下方透明区域留给弹出的
-  // 字段选择器（窗口不随选择器伸缩）。点透明区域等同点到窗外：隐藏但保留
+  // 字段选择器（窗口不随选择器伸缩）。点透明区域等同点到窗外：关闭并放弃
   // 草稿，与失焦隐藏同一语义；有选择器开着时只关选择器。
   return (
     <div
