@@ -31,29 +31,35 @@ export function useSettingsNav(): SettingsNav | null {
 /* ───────────────────────── 列表基础组件 ───────────────────────── */
 
 /*
- * 窄屏设置采用 Material（Android 系统设置）写法：主题色分组小标题、单色图标、
- * 行首单选圆点、16px 正文、无 `›`、危险 / 主操作行左对齐。分组仍为圆角卡片
- * （Android 12+ 系统设置同样使用分组容器）。
+ * 窄屏设置采用 Material 3 Expressive（Android 16 系统设置）写法：分组内每行是
+ * 一块独立圆角块、行间 2px 空隙（首尾行大圆角、中间行小圆角，无分隔线）；
+ * 当前值作为标题下方的第二行；主题色分组小标题、单色图标、行首单选圆点、
+ * 16px 正文、无 `›`、危险 / 主操作行左对齐。
  */
+
+/** 分组内各行的分段块样式：作用于直接子元素（行本身或包裹层），首尾行大圆角。 */
+const TILES_CLASS =
+  'flex flex-col gap-0.5 [&>*]:overflow-hidden [&>*]:rounded-[4px] [&>*]:bg-card [&>*:first-child]:rounded-t-3xl [&>*:last-child]:rounded-b-3xl';
 
 /** 分组：可选的小标题（header，主题色）与分组下方说明（footer）。 */
 export function SettingsGroup({
   header,
   footer,
+  role,
   children,
   className,
 }: {
   header?: React.ReactNode;
   footer?: React.ReactNode;
+  /** 行容器的 role（如单选组的 radiogroup）。 */
+  role?: React.AriaRole;
   children: React.ReactNode;
   className?: string;
 }) {
   return (
     <section className={cn('flex flex-col gap-1.5', className)}>
-      {header && (
-        <h3 className="px-4 pt-1 text-sm font-medium text-primary">{header}</h3>
-      )}
-      <div className="flex flex-col divide-y divide-border/60 overflow-hidden rounded-2xl bg-card">
+      {header && <h3 className="px-4 pt-1 text-sm font-medium text-primary">{header}</h3>}
+      <div role={role} className={TILES_CLASS}>
         {children}
       </div>
       {footer && <p className="px-4 text-sm leading-snug text-muted-foreground">{footer}</p>}
@@ -87,7 +93,7 @@ interface SettingsRowProps {
   leading?: React.ReactNode;
   /** 行下方的补充说明（单行内的小字）。 */
   description?: React.ReactNode;
-  /** 右侧当前值（灰字）。 */
+  /** 当前值：标题下方的第二行灰字（Material summary）。 */
   value?: React.ReactNode;
   /** 右侧行内控件（开关、按钮等）；有 control 时行本身不可点击。 */
   control?: React.ReactNode;
@@ -119,11 +125,7 @@ export function SettingsRow({
   submit = false,
   htmlFor,
 }: SettingsRowProps) {
-  const labelNode = htmlFor ? (
-    <label htmlFor={htmlFor}>{label}</label>
-  ) : (
-    <span>{label}</span>
-  );
+  const labelNode = htmlFor ? <label htmlFor={htmlFor}>{label}</label> : <span>{label}</span>;
   const body = (
     <>
       {leading}
@@ -135,13 +137,13 @@ export function SettingsRow({
         )}
       >
         {labelNode}
+        {value !== undefined && (
+          <span className="truncate text-sm text-muted-foreground">{value}</span>
+        )}
         {description && (
           <span className="text-sm leading-snug text-muted-foreground">{description}</span>
         )}
       </span>
-      {value !== undefined && (
-        <span className="max-w-[55%] truncate text-sm text-muted-foreground">{value}</span>
-      )}
       {control}
     </>
   );
@@ -200,25 +202,23 @@ export function SettingsOptionGroup<T extends string | number>({
   onChange: (value: T) => void;
 }) {
   return (
-    <SettingsGroup header={header} footer={footer}>
-      <div role="radiogroup" className="flex flex-col divide-y divide-border/60">
-        {options.map((opt) => {
-          const selected = opt.value === value;
-          return (
-            <button
-              key={String(opt.value)}
-              type="button"
-              role="radio"
-              aria-checked={selected}
-              onClick={() => onChange(opt.value)}
-              className={cn(ROW_CLASS, 'transition-colors active:bg-accent')}
-            >
-              <SettingsRadio checked={selected} />
-              <span className="min-w-0 flex-1 truncate">{opt.label}</span>
-            </button>
-          );
-        })}
-      </div>
+    <SettingsGroup header={header} footer={footer} role="radiogroup">
+      {options.map((opt) => {
+        const selected = opt.value === value;
+        return (
+          <button
+            key={String(opt.value)}
+            type="button"
+            role="radio"
+            aria-checked={selected}
+            onClick={() => onChange(opt.value)}
+            className={cn(ROW_CLASS, 'transition-colors active:bg-accent')}
+          >
+            <SettingsRadio checked={selected} />
+            <span className="min-w-0 flex-1 truncate">{opt.label}</span>
+          </button>
+        );
+      })}
     </SettingsGroup>
   );
 }

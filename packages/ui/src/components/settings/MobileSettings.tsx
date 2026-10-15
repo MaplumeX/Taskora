@@ -96,15 +96,15 @@ function SettingsRoot({ open }: { open: (tab: SettingsTab) => void }) {
         <SettingsRow
           onClick={() => open('account')}
           leading={
-            <span className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-lg font-medium text-primary-foreground">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-primary text-base font-medium text-primary-foreground">
               {user?.avatarUrl ? (
-                <img src={user.avatarUrl} alt="" className="h-12 w-12 object-cover" />
+                <img src={user.avatarUrl} alt="" className="h-10 w-10 object-cover" />
               ) : (
                 initial
               )}
             </span>
           }
-          label={<span className="text-lg font-medium">{name}</span>}
+          label={<span className="font-medium">{name}</span>}
           description={user?.displayName ? user.email : t('settings:account')}
         />
       </SettingsGroup>
@@ -161,7 +161,7 @@ function SettingsRoot({ open }: { open: (tab: SettingsTab) => void }) {
 }
 
 /**
- * 窄屏设置（iOS 设置 / Android 系统设置惯例）：分类首页 → 推入详情页 →
+ * 窄屏设置（Android 系统设置惯例）：分类首页 → 推入详情页 →
  * 推入选项页的页面栈。系统返回 / Escape 逐级后退，在首页才关闭设置。
  * 设置页经 SettingsNavProvider 感知自己处于栈内，渲染列表单元格形态。
  */
@@ -250,11 +250,7 @@ export function MobileSettingsContent() {
               )}
             >
               <Suspense fallback={<PageFallback />}>
-                {entry ? (
-                  entry.render()
-                ) : (
-                  <SettingsRoot open={(tab) => nav.push(tabEntry(tab))} />
-                )}
+                {entry ? entry.render() : <SettingsRoot open={(tab) => nav.push(tabEntry(tab))} />}
               </Suspense>
             </div>
           );
