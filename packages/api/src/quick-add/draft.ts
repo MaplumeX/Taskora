@@ -9,8 +9,10 @@
 
 import type {
   AreaResponseDto,
+  CreateSubtaskDto,
   CreateTaskDto,
   ProjectResponseDto,
+  SubtaskResponseDto,
   TagResponseDto,
   TaskResponseDto,
   UpdateTaskDto,
@@ -36,6 +38,8 @@ export interface QuickAddDraft {
   projectId?: string;
   areaId?: string;
   tagIds?: string[];
+  /** Subtask 标题，按清单顺序。 */
+  subtasks?: string[];
 }
 
 /** 实际落入的位置（校验回落后），用于「已添加到 X」与跳转。 */
@@ -52,6 +56,7 @@ export interface QuickAddResult {
 export interface QuickAddDeps {
   createTask(data: CreateTaskDto): Promise<TaskResponseDto>;
   updateTask(id: string, data: UpdateTaskDto): Promise<TaskResponseDto>;
+  createSubtask(taskId: string, data: CreateSubtaskDto): Promise<SubtaskResponseDto>;
   getTags(): Promise<TagResponseDto[]>;
   getProjects(): Promise<ProjectResponseDto[]>;
   getAreas(): Promise<AreaResponseDto[]>;
@@ -60,6 +65,7 @@ export interface QuickAddDeps {
 const defaultDeps: QuickAddDeps = {
   createTask: (data) => currentTaskBackend().createTask(data),
   updateTask: (id, data) => currentTaskBackend().updateTask(id, data),
+  createSubtask: (taskId, data) => currentTaskBackend().createSubtask(taskId, data),
   getTags,
   getProjects,
   getAreas,
@@ -105,6 +111,14 @@ export function toQuickAddDraft(input: unknown): QuickAddDraft | null {
   if (Array.isArray(raw.tagIds)) {
     const tagIds = [...new Set(raw.tagIds.filter((id): id is string => !!nonEmpty(id)))];
     if (tagIds.length) draft.tagIds = tagIds;
+  }
+
+  if (Array.isArray(raw.subtasks)) {
+    const subtasks = raw.subtasks
+      .filter(isString)
+      .map((title) => title.trim())
+      .filter(Boolean);
+    if (subtasks.length) draft.subtasks = subtasks;
   }
   return draft;
 }
@@ -185,6 +199,10 @@ export async function createFromQuickAddDraft(
   // CreateTaskDto 不收 Reminder：建好后补写（同为本地写，进同一 Outbox）。
   if (draft.reminderTime && dto.scheduledDate) {
     await deps.updateTask(task.id, { reminderTime: draft.reminderTime });
+  }
+  // Subtask 逐条追加（缺省 afterId 即排在末尾），保持清单顺序。
+  for (const title of draft.subtasks ?? []) {
+    if (title.trim()) await deps.createSubtask(task.id, { title: title.trim() });
   }
   return { taskId: task.id, placedIn };
 }

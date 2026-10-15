@@ -2,8 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type {
   AreaResponseDto,
+  CreateSubtaskDto,
   CreateTaskDto,
   ProjectResponseDto,
+  SubtaskResponseDto,
   TagResponseDto,
   TaskResponseDto,
 } from '@taskora/shared';
@@ -28,6 +30,10 @@ function installDeps(data?: {
       return { id: `task-${created.length}` } as TaskResponseDto;
     }),
     updateTask: vi.fn(async (id: string) => ({ id }) as TaskResponseDto),
+    createSubtask: vi.fn(
+      async (taskId: string, data: CreateSubtaskDto) =>
+        ({ id: `sub-${data.title}`, taskId }) as SubtaskResponseDto,
+    ),
     getTags: vi.fn(async () => (data?.tags ?? []).map((id) => ({ id }) as TagResponseDto)),
     getProjects: vi.fn(async () =>
       (data?.projects ?? []).map(
@@ -91,6 +97,15 @@ describe('parseQuickAddInput', () => {
     ).toEqual({ title: 'a', when: { type: 'date', date: '2026-10-03' }, reminderTime: '09:00' });
   });
 
+  it('Subtask 只收非空字符串，trim 后保留顺序', () => {
+    expect(
+      parseQuickAddInput(JSON.stringify({ title: 'a', subtasks: [' 量尺寸 ', '', 3, '买料'] })),
+    ).toEqual({ title: 'a', subtasks: ['量尺寸', '买料'] });
+    expect(parseQuickAddInput(JSON.stringify({ title: 'a', subtasks: ['  '] }))).toEqual({
+      title: 'a',
+    });
+  });
+
   it('损坏的 JSON / 缺标题的对象当作标题文本', () => {
     expect(parseQuickAddInput('{not json')).toEqual({ title: '{not json' });
     expect(parseQuickAddInput('{"notes":"x"}')).toEqual({ title: '{"notes":"x"}' });
@@ -142,6 +157,15 @@ describe('createFromQuickAddDraft', () => {
     ]);
     expect(deps.updateTask).toHaveBeenCalledWith('task-1', { reminderTime: '09:30' });
     expect(result?.placedIn).toEqual({ kind: 'project', id: 'p1', title: '装修' });
+  });
+
+  it('Subtask 在任务建好后按顺序逐条创建', async () => {
+    const { deps } = installDeps();
+    await createFromQuickAddDraft({ title: '装修', subtasks: ['量尺寸', '  ', '买料'] }, deps);
+    expect(deps.createSubtask.mock.calls).toEqual([
+      ['task-1', { title: '量尺寸' }],
+      ['task-1', { title: '买料' }],
+    ]);
   });
 
   it('Someday 写 SOMEDAY 计划类型，不补写 Reminder', async () => {

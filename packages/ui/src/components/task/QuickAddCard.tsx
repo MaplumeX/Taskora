@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Calendar, Flag, Inbox, Layers, Tag } from 'lucide-react';
+import { Calendar, Flag, Inbox, Layers, ListPlus, Tag } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import type { TagResponseDto } from '@taskora/shared';
@@ -27,6 +27,8 @@ import {
   type QuickAddKeyAction,
 } from '@/components/keyboard/keymap';
 import { ProjectProgressPie } from '@/components/project/ProjectProgressRing';
+import { Button } from '@/components/ui/button';
+import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { DueDateField } from './fields/DueDateField';
 import { FieldChip, FieldIconButton, scheduledChipOf } from './fields/FieldChip';
@@ -34,6 +36,11 @@ import type { DueDateFieldPatch, ScheduledFieldPatch, TagsFieldPatch } from './f
 import { MovePicker } from './fields/MovePicker';
 import { ScheduledDateField } from './fields/ScheduledDateField';
 import { TagsField } from './fields/TagsField';
+import {
+  QuickAddSubtaskList,
+  type QuickAddSubtask,
+  type QuickAddSubtaskListHandle,
+} from './QuickAddSubtaskList';
 
 /** 卡片的草稿状态：字段组件的 current 结构 + 归属。 */
 export interface QuickAddCardState {
@@ -47,6 +54,7 @@ export interface QuickAddCardState {
   tagIds: string[];
   projectId: string | null;
   areaId: string | null;
+  subtasks: QuickAddSubtask[];
 }
 
 export const EMPTY_QUICK_ADD_STATE: QuickAddCardState = {
@@ -59,6 +67,7 @@ export const EMPTY_QUICK_ADD_STATE: QuickAddCardState = {
   tagIds: [],
   projectId: null,
   areaId: null,
+  subtasks: [],
 };
 
 /**
@@ -78,6 +87,8 @@ export function draftFromState(state: QuickAddCardState): QuickAddDraft {
   if (state.tagIds.length) draft.tagIds = state.tagIds;
   if (state.projectId) draft.projectId = state.projectId;
   else if (state.areaId) draft.areaId = state.areaId;
+  const subtasks = state.subtasks.map((s) => s.title.trim()).filter(Boolean);
+  if (subtasks.length) draft.subtasks = subtasks;
   return draft;
 }
 
@@ -100,6 +111,9 @@ function applyPatch(
 /** 可由快捷键打开的选择器。 */
 type PickerField = 'when' | 'deadline' | 'tags' | 'move';
 
+/** 选择器挂在哪个入口上：已设值的 chip，或未设值的图标按钮。 */
+type PickerSlot = 'chip' | 'icon';
+
 /** 提交方式：keepOpen 为「添加并继续」，openInApp 为「在应用中继续」（Android 浮层）。 */
 export interface QuickAddSubmitOptions {
   keepOpen: boolean;
@@ -116,6 +130,8 @@ export interface QuickAddCardFooterProps {
 export interface QuickAddCardHandle {
   /** 聚焦并全选标题（浮窗每次被唤起时调用）。 */
   focusTitle(): void;
+  /** 丢弃草稿、关掉选择器（浮窗隐藏后调用，下次唤出是空白卡片）。 */
+  reset(): void;
 }
 
 interface Props {
@@ -139,7 +155,7 @@ interface Props {
 /**
  * Quick Add 草稿卡片（quick-add-v2 issue 03）：版式与展开任务一致——标题、
  * 备注，底栏左侧是已设值字段的 chip，右侧是未设值字段的图标。比展开任务
- * 多一个归属 chip（MovePicker），少了 Subtask / Repeat Rule。
+ * 多一个归属 chip（MovePicker），少了 Repeat Rule 与附件。
  *
  * 字段编辑只改本地草稿，不写库；提交时交出 QuickAddDraft。
  */
@@ -151,23 +167,27 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
   const [state, setState] = React.useState<QuickAddCardState>(EMPTY_QUICK_ADD_STATE);
   const [submitting, setSubmitting] = React.useState(false);
   /** 由快捷键打开的选择器（点击打开时各 FieldPicker 同样经此受控）。 */
-  const [openField, setOpenField] = React.useState<PickerField | null>(null);
+  const [openField, setOpenField] = React.useState<{
+    field: PickerField;
+    slot: PickerSlot;
+  } | null>(null);
   const platform = React.useMemo(detectKeyPlatform, []);
   // 用户自定义键位（设置 → 快捷键）；主窗口改绑后经 storage 事件同步到本浮窗。
   const keyOverrides = useKeybindingsStore((s) => s.overrides);
   const keyLabel = (action: QuickAddKeyAction) =>
     quickAddShortcutLabel(action, platform, keyOverrides) ?? undefined;
-  const pickerProps = (field: PickerField) => ({
-    open: openField === field,
-    onOpenChange: (open: boolean) => setOpenField(open ? field : null),
-  });
   const rootRef = React.useRef<HTMLDivElement>(null);
   const titleRef = React.useRef<HTMLInputElement>(null);
+  const subtaskListRef = React.useRef<QuickAddSubtaskListHandle>(null);
 
   React.useImperativeHandle(ref, () => ({
     focusTitle() {
       titleRef.current?.focus();
       titleRef.current?.select();
+    },
+    reset() {
+      setState(EMPTY_QUICK_ADD_STATE);
+      setOpenField(null);
     },
   }));
 
@@ -191,6 +211,20 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
   const scheduledChip = scheduledChipOf(scheduledCurrent, t);
   const dueDate = state.dueDate ? parseCalendarDate(state.dueDate) : null;
   const showReminder = getClientKind() !== 'web';
+
+  const slotOf = (field: PickerField): PickerSlot => {
+    if (field === 'when') return scheduledChip ? 'chip' : 'icon';
+    if (field === 'tags') return tags.length > 0 ? 'chip' : 'icon';
+    if (field === 'deadline') return dueDate ? 'chip' : 'icon';
+    return 'chip';
+  };
+  // 与展开任务一致：从图标按钮设上值后，入口换成 chip，选择器随旧入口
+  // 一起关闭（受控的打开状态不能带到新挂上的 chip 上）。
+  if (openField && openField.slot !== slotOf(openField.field)) setOpenField(null);
+  const pickerProps = (field: PickerField, slot: PickerSlot) => ({
+    open: openField?.field === field && openField.slot === slot,
+    onOpenChange: (open: boolean) => setOpenField(open ? { field, slot } : null),
+  });
 
   const canSubmit = !submitting && !!state.title.trim();
   const submit = async (options: QuickAddSubmitOptions) => {
@@ -253,7 +287,7 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
         patch({ start: Start.SOMEDAY });
         break;
       default:
-        setOpenField(action);
+        setOpenField({ field: action, slot: slotOf(action) });
     }
   };
 
@@ -320,6 +354,11 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
           onBlurCommit={() => undefined}
           placeholder={t('task:notePlaceholder')}
         />
+        <QuickAddSubtaskList
+          ref={subtaskListRef}
+          subtasks={state.subtasks}
+          onChange={(subtasks) => setState((prev) => ({ ...prev, subtasks }))}
+        />
       </div>
 
       <div className="flex flex-wrap items-center gap-1 pl-6">
@@ -328,7 +367,7 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
           icon={placement.icon}
           text={placement.text}
           shortcut={keyLabel('move')}
-          {...pickerProps('move')}
+          {...pickerProps('move', 'chip')}
         >
           {(close) => (
             <MovePicker
@@ -357,7 +396,7 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
             icon={scheduledChip.icon ?? <Calendar />}
             text={scheduledChip.text}
             shortcut={keyLabel('when')}
-            {...pickerProps('when')}
+            {...pickerProps('when', 'chip')}
           >
             {(close) => (
               <ScheduledDateField
@@ -375,7 +414,7 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
             icon={<Tag />}
             text={tags.map((tag) => tag.title).join(', ')}
             shortcut={keyLabel('tags')}
-            {...pickerProps('tags')}
+            {...pickerProps('tags', 'chip')}
           >
             <TagsField current={{ tags }} onPatch={patch} allowCreate={false} />
           </FieldChip>
@@ -387,7 +426,7 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
             text={formatDeadlineCountdown(dueDate)}
             urgent={isOverdue(dueDate) || isToday(dueDate)}
             shortcut={keyLabel('deadline')}
-            {...pickerProps('deadline')}
+            {...pickerProps('deadline', 'chip')}
           >
             {(close) => (
               <DueDateField current={{ dueDate: state.dueDate }} onPatch={patch} onClose={close} />
@@ -401,7 +440,7 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
               label={t('task:scheduledDate')}
               icon={<Calendar className="h-4 w-4" />}
               shortcut={keyLabel('when')}
-              {...pickerProps('when')}
+              {...pickerProps('when', 'icon')}
             >
               {(close) => (
                 <ScheduledDateField
@@ -418,17 +457,30 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
               label={t('task:tags')}
               icon={<Tag className="h-4 w-4" />}
               shortcut={keyLabel('tags')}
-              {...pickerProps('tags')}
+              {...pickerProps('tags', 'icon')}
             >
               <TagsField current={{ tags }} onPatch={patch} allowCreate={false} />
             </FieldIconButton>
+          )}
+          {state.subtasks.length === 0 && (
+            <Hint label={t('task:addSubtask')}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 text-muted-foreground max-md:h-11 max-md:w-11"
+                aria-label={t('task:addSubtask')}
+                onClick={() => subtaskListRef.current?.startDraft()}
+              >
+                <ListPlus className="h-4 w-4" />
+              </Button>
+            </Hint>
           )}
           {!dueDate && (
             <FieldIconButton
               label={t('task:dueDate')}
               icon={<Flag className="h-4 w-4" />}
               shortcut={keyLabel('deadline')}
-              {...pickerProps('deadline')}
+              {...pickerProps('deadline', 'icon')}
             >
               {(close) => (
                 <DueDateField current={{ dueDate: null }} onPatch={patch} onClose={close} />

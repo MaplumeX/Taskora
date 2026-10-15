@@ -1,5 +1,6 @@
+import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { i18n } from '@taskora/api';
@@ -7,7 +8,12 @@ import type { AreaResponseDto, ProjectResponseDto, TagResponseDto } from '@tasko
 import { ProjectStatus, Start } from '@taskora/shared';
 
 import { mockDesktop } from '@/test/media';
-import { EMPTY_QUICK_ADD_STATE, QuickAddCard, draftFromState } from './QuickAddCard';
+import {
+  EMPTY_QUICK_ADD_STATE,
+  QuickAddCard,
+  draftFromState,
+  type QuickAddCardHandle,
+} from './QuickAddCard';
 
 const NOW = '2026-09-01T00:00:00.000Z';
 const createTag = vi.fn();
@@ -101,6 +107,20 @@ describe('draftFromState', () => {
       }),
     ).toEqual({ title: 'Guitar', when: { type: 'someday' }, areaId: 'a1' });
   });
+
+  it('Subtask 只带非空标题（trim），保持顺序', () => {
+    expect(
+      draftFromState({
+        ...EMPTY_QUICK_ADD_STATE,
+        title: 'Trip',
+        subtasks: [
+          { key: '1', title: ' Pack ' },
+          { key: '2', title: '  ' },
+          { key: '3', title: 'Tickets' },
+        ],
+      }),
+    ).toEqual({ title: 'Trip', subtasks: ['Pack', 'Tickets'] });
+  });
 });
 
 describe('QuickAddCard', () => {
@@ -151,12 +171,61 @@ describe('QuickAddCard', () => {
     expect(screen.queryAllByRole('option')).toHaveLength(0);
     await user.clear(search);
     await user.click(screen.getByRole('option', { name: /Work/ }));
-    await user.keyboard('{Escape}');
+    // 与展开任务一致：从图标按钮选上首个 Tag 后选择器随之关闭
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
 
     expect(screen.getByRole('button', { name: 'Tags' })).toHaveTextContent('Work');
     await user.type(title, 'Report{Enter}');
     expect(onSubmit).toHaveBeenCalledWith({ title: 'Report', tagIds: ['t1'] }, { keepOpen: false });
     expect(createTag).not.toHaveBeenCalled();
+  });
+
+  it('计划日期：从图标按钮选定日期后选择器关闭，与展开任务一致', async () => {
+    renderCard();
+    await user.click(screen.getByRole('button', { name: 'Scheduled date' }));
+    await user.click(await screen.findByRole('button', { name: /^Today$/ }));
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Scheduled date' })).toHaveTextContent('Today');
+  });
+
+  it('Subtask：底栏按钮起一行，Enter 接着起下一行，随草稿提交', async () => {
+    const { onSubmit, title } = renderCard();
+    await user.type(title, 'Trip');
+    await user.click(screen.getByRole('button', { name: /Add subtask/ }));
+    await user.keyboard('Pack{Enter}Tickets{Enter}{Enter}');
+    expect(screen.getAllByRole('textbox', { name: 'Subtasks' })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /Add subtask/ })).not.toBeInTheDocument();
+
+    await user.click(title);
+    await user.keyboard('{Enter}');
+    expect(onSubmit).toHaveBeenCalledWith(
+      { title: 'Trip', subtasks: ['Pack', 'Tickets'] },
+      { keepOpen: false },
+    );
+    expect(screen.queryByRole('textbox', { name: 'Subtasks' })).not.toBeInTheDocument();
+  });
+
+  it('Subtask：空行上 Backspace 删除该行', async () => {
+    renderCard();
+    await user.click(screen.getByRole('button', { name: /Add subtask/ }));
+    await user.keyboard('A{Enter}');
+    expect(screen.getAllByRole('textbox', { name: 'Subtasks' })).toHaveLength(2);
+    await user.keyboard('{Backspace}');
+    const rows = screen.getAllByRole('textbox', { name: 'Subtasks' });
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveFocus();
+  });
+
+  it('reset() 丢弃草稿（桌面浮窗隐藏后调用）', async () => {
+    const ref = React.createRef<QuickAddCardHandle>();
+    render(<QuickAddCard ref={ref} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    const title = screen.getByRole('textbox', { name: 'New task' });
+    await user.type(title, 'Draft');
+    await user.click(screen.getByRole('button', { name: /Add subtask/ }));
+    await user.keyboard('Sub');
+    act(() => ref.current?.reset());
+    expect(title).toHaveValue('');
+    expect(screen.queryByRole('textbox', { name: 'Subtasks' })).not.toBeInTheDocument();
   });
 
   it('Esc 清空草稿并通知关闭；选择器开着时 Esc 只关选择器', async () => {

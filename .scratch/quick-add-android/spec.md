@@ -1,6 +1,6 @@
 # Quick Add Android Spec
 
-把 Android 状态栏「＋」拉起的快速添加浮层（`QuickAddActivity`）从「单行标题」升级为草稿卡片：可写备注，设置计划日期、截止日期，选择归属和 Tag。卡片与桌面共用 `QuickAddCard`（ADR-0020）；子任务、重复规则等通过「在应用中继续」交给 App 处理。
+把 Android 状态栏「＋」拉起的快速添加浮层（`QuickAddActivity`）从「单行标题」升级为草稿卡片：可写备注，设置计划日期、截止日期，选择归属和 Tag。卡片与桌面共用 `QuickAddCard`（ADR-0020），也可直接添加子任务；重复规则等通过「在应用中继续」交给 App 处理。
 
 与桌面端（`.scratch/quick-add-v2`）共用同一个草稿落库函数（第 4 节），规则只有一份。术语见根 `CONTEXT.md`。
 
@@ -79,7 +79,7 @@ interface QuickAddDraft {
 
 ## 明确不做
 
-- 浮层内设置 Repeat Rule、Subtask（通过「在应用中继续」处理）
+- 浮层内设置 Repeat Rule（通过「在应用中继续」处理）
 - 浮层内新建 Tag / Project
 - 自然语言解析（后续在共用层实现）
 - App 内底部栏「添加任务」按钮的改造
