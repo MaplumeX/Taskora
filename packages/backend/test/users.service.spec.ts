@@ -30,11 +30,6 @@ describe('UsersService', () => {
         update: vi.fn(),
         delete: vi.fn(),
       },
-      task: { findMany: vi.fn() },
-      project: { findMany: vi.fn() },
-      area: { findMany: vi.fn() },
-      tag: { findMany: vi.fn() },
-      projectHeading: { findMany: vi.fn() },
       refreshToken: { updateMany: vi.fn() },
     } as unknown as InstanceType<typeof PrismaService>;
 
@@ -269,73 +264,6 @@ describe('UsersService', () => {
       await expect(service.deleteAccount(userId, { password: 'whatever' })).rejects.toThrow(
         NotFoundException,
       );
-    });
-  });
-
-  describe('exportData', () => {
-    it('returns full nested structure with all user data', async () => {
-      const userExport = {
-        id: userId,
-        email: 'test@example.com',
-        displayName: 'Tester',
-        avatarUrl: null,
-        preferences: { theme: 'dark' },
-        createdAt: now,
-        updatedAt: now,
-      };
-      mockPrisma.user.findUnique.mockResolvedValue(userExport);
-      mockPrisma.task.findMany.mockResolvedValue([{ id: 't1' }]);
-      mockPrisma.project.findMany.mockResolvedValue([{ id: 'p1' }]);
-      mockPrisma.area.findMany.mockResolvedValue([{ id: 'a1' }]);
-      mockPrisma.tag.findMany.mockResolvedValue([{ id: 'tag1' }]);
-      mockPrisma.projectHeading.findMany.mockResolvedValue([{ id: 'h1' }]);
-
-      const result = await service.exportData(userId);
-
-      expect(result.version).toBe('0.1.0');
-      expect(result.exportedAt).toEqual(expect.any(String));
-      expect(result.user).toEqual(userExport);
-      expect(result.tasks).toEqual([{ id: 't1' }]);
-      expect(result.projects).toEqual([{ id: 'p1' }]);
-      expect(result.areas).toEqual([{ id: 'a1' }]);
-      expect(result.tags).toEqual([{ id: 'tag1' }]);
-      expect(result.projectHeadings).toEqual([{ id: 'h1' }]);
-    });
-
-    it('queries with userId isolation', async () => {
-      mockPrisma.user.findUnique.mockResolvedValue({
-        ...baseUser,
-        preferences: null,
-      });
-      mockPrisma.task.findMany.mockResolvedValue([]);
-      mockPrisma.project.findMany.mockResolvedValue([]);
-      mockPrisma.area.findMany.mockResolvedValue([]);
-      mockPrisma.tag.findMany.mockResolvedValue([]);
-      mockPrisma.projectHeading.findMany.mockResolvedValue([]);
-
-      await service.exportData(userId);
-
-      expect(mockPrisma.task.findMany.mock.calls[0][0].where).toEqual({
-        userId,
-      });
-      expect(mockPrisma.project.findMany.mock.calls[0][0].where).toEqual({
-        userId,
-      });
-      expect(mockPrisma.area.findMany.mock.calls[0][0].where).toEqual({
-        userId,
-      });
-      expect(mockPrisma.tag.findMany.mock.calls[0][0].where).toEqual({
-        userId,
-      });
-      expect(mockPrisma.projectHeading.findMany.mock.calls[0][0].where).toEqual({
-        userId,
-      });
-    });
-
-    it('throws NotFoundException when user does not exist', async () => {
-      mockPrisma.user.findUnique.mockResolvedValue(null);
-
-      await expect(service.exportData(userId)).rejects.toThrow(NotFoundException);
     });
   });
 });

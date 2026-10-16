@@ -138,52 +138,6 @@ export class UsersService {
     await this.prisma.user.delete({ where: { id: userId } });
     return { ok: true };
   }
-
-  async exportData(userId: string) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        email: true,
-        displayName: true,
-        avatarUrl: true,
-        preferences: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
-    if (!user) {
-      throw new NotFoundException('User not found');
-    }
-
-    const [tasks, projects, areas, tags, projectHeadings] = await Promise.all([
-      this.prisma.task.findMany({
-        where: { userId },
-        include: { subtasks: true, tags: true },
-      }),
-      this.prisma.project.findMany({
-        where: { userId },
-        include: { tags: true },
-      }),
-      this.prisma.area.findMany({
-        where: { userId },
-        include: { tags: true },
-      }),
-      this.prisma.tag.findMany({ where: { userId } }),
-      this.prisma.projectHeading.findMany({ where: { userId } }),
-    ]);
-
-    return {
-      exportedAt: new Date().toISOString(),
-      version: '0.1.0',
-      user,
-      tasks,
-      projects,
-      areas,
-      tags,
-      projectHeadings,
-    };
-  }
 }
 
 /** 默认回顾间隔 → 规范形的纯对象（DTO 实例不是 Prisma 的 JSON 输入）。 */

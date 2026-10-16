@@ -37,7 +37,7 @@ export function toWireFields(patch: object): Record<string, unknown> {
  */
 export async function edgePositions(
   client: Pick<Prisma.TransactionClient, '$queryRawUnsafe'>,
-  table: 'Task' | 'Project' | 'Tag',
+  table: 'Task' | 'Project' | 'Tag' | 'Area',
   userId: string,
 ): Promise<{ first: string | null; last: string | null }> {
   const edge = async (direction: 'ASC' | 'DESC') => {

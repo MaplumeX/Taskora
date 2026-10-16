@@ -103,6 +103,9 @@ export class PrismaService implements OnModuleInit, OnModuleDestroy {
   get calendarSubscription() {
     return this.extended.calendarSubscription;
   }
+  get dataImport() {
+    return this.extended.dataImport;
+  }
 
   // Overridden in the constructor (wrapped with the collector's tx scope).
   declare $transaction: PrismaClient['$transaction'];

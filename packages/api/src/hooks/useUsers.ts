@@ -6,7 +6,10 @@ import {
   updatePreferences,
   deleteAccount,
   exportData,
+  previewImport,
+  importData,
 } from '@/api/users.api';
+import { getMe } from '@/api/auth.api';
 import { hydrateFromServer } from '@/stores/preferences.store';
 import { useAuthStore } from '@/stores/auth.store';
 import { writeRefreshToken } from '@/token-store';
@@ -86,6 +89,36 @@ export function useDeleteAccount() {
 
 export function useExportData() {
   return useMutation({
-    mutationFn: () => exportData(),
+    mutationFn: (includeBlobs: boolean) => exportData(includeBlobs),
+  });
+}
+
+export function usePreviewImport() {
+  return useMutation({
+    mutationFn: ({ file, onProgress }: { file: Blob; onProgress?: (fraction: number) => void }) =>
+      previewImport(file, onProgress),
+  });
+}
+
+export function useImportData() {
+  const queryClient = useQueryClient();
+  const setUser = useAuthStore((s) => s.setUser);
+  return useMutation({
+    mutationFn: (data: { uploadId: string; importPreferences: boolean }) => importData(data),
+    onSuccess: async (_stats, data) => {
+      // 导入的实体经事件流同步到副本；偏好与日历订阅不走同步，这里重新拉取。
+      if (data.importPreferences) {
+        const user = await getMe();
+        setUser({
+          id: user.id,
+          email: user.email,
+          displayName: user.displayName,
+          avatarUrl: user.avatarUrl,
+          preferences: user.preferences,
+        });
+        hydrateFromServer(user.preferences);
+      }
+      void queryClient.invalidateQueries();
+    },
   });
 }

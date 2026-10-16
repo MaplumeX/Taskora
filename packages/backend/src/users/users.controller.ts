@@ -2,7 +2,6 @@ import {
   Body,
   Controller,
   Delete,
-  Get,
   Put,
   Req,
   Request,
@@ -63,11 +62,6 @@ export class UsersController {
     @Body() dto: UpdatePreferencesDto,
   ) {
     return this.usersService.updatePreferences(req.user.id, dto);
-  }
-
-  @Get('me/export')
-  exportData(@Request() req: { user: { id: string } }) {
-    return this.usersService.exportData(req.user.id);
   }
 
   @Delete('me')
