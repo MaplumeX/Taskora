@@ -9,7 +9,7 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "typecheck": "pnpm -r run typecheck",
-    "test": "pnpm -r --parallel run test",
+    "test": "pnpm --filter @taskora/shared build && pnpm --filter @taskora/engine build && pnpm --filter @taskora/backend exec prisma generate && pnpm -r --parallel --config.enable-pre-post-scripts=false run test",
     "release": "node scripts/release.mjs"
   },
   "devDependencies": {
