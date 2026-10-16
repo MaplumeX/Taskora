@@ -29,6 +29,7 @@ model User {
   syncChanges           SyncChange[]
   syncCounter           SyncCounter?
   calendarSubscriptions CalendarSubscription[]
+  dataImports           DataImport[]
 }
 
 model RefreshToken {
@@ -463,4 +464,18 @@ model CalendarSubscription {
   updatedAt     DateTime  @updatedAt
 
   @@index([userId])
+}
+
+/// 一次数据包导入（.scratch/data-import）：按 exportId 提示「已导入过」。
+model DataImport {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 数据包 manifest 的 exportId
+  exportId   String
+  importedAt DateTime @default(now())
+  /// 导入结果统计（ImportStats）
+  stats      Json
+
+  @@index([userId, exportId])
 }

@@ -344,6 +344,14 @@ _Avoid_: 硬删除广播、墓碑（不携带值与时钟）
 设备与 Sync Hub 之间的常驻双向通道，按单调递增的序号传输 Change Event；从旧的服务端单向推送通道演化而来，现为同步协议的传输层。
 _Avoid_: WebSocket、订阅、频道
 
+**Data Package（数据包）**:
+导出 / 导入用的 `.taskora` 文件（zip）：全部同步实体的 wire 字段（不含时钟，含 Trash 与归档任务）、偏好、日历订阅，以及可选的附件 Blob。带整数 format，导入时逐级迁移旧 format、拒绝更新的 format；旧版导出的 JSON 视为 format 0。账号凭据、设备、助手配置与会话、同步内部状态不进数据包。
+_Avoid_: 备份文件、导出 JSON（旧格式）、快照（bootstrap 快照是同步协议的概念）
+
+**Import as Copy（导入为副本）**:
+唯一的导入方式：数据包里的记录全部换新 id，作为新数据追加到当前账号，不覆盖、不删除现有数据；同标题路径的 Tag 合并到现有 Tag，Area / Project 不合并；导入的条目排在现有条目之后。在 Sync Hub 上以一个事务写入，经合并器产生 Change Event，各设备随同步收到。同一数据包再次导入会产生重复数据（导入前提示）。
+_Avoid_: 恢复、覆盖导入、合并导入（只有 Tag 合并）
+
 ### 助手（Agent）
 
 **Assistant**:

@@ -5,6 +5,7 @@ export * from './repeat-query';
 export * from './review';
 export * from './new-in-today';
 export * from './logging';
+export * from './data-package';
 export * from './enums/task.enum';
 export * from './enums/project.enum';
 export * from './enums/heading.enum';
