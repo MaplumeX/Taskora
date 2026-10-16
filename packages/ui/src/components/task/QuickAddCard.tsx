@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import type { TagResponseDto } from '@taskora/shared';
 import { Start } from '@taskora/shared';
 import {
-  formatDeadlineCountdown,
   getClientKind,
   isOverdue,
   isToday,
@@ -31,10 +30,11 @@ import { Button } from '@/components/ui/button';
 import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { DueDateField } from './fields/DueDateField';
-import { FieldChip, FieldIconButton, scheduledChipOf } from './fields/FieldChip';
+import { FieldChip, FieldIconButton, deadlineChipText, scheduledChipOf } from './fields/FieldChip';
+import { TagCapsule } from './TaskTagCapsules';
 import type { DueDateFieldPatch, ScheduledFieldPatch, TagsFieldPatch } from './fields/fieldProps';
 import { MovePicker } from './fields/MovePicker';
-import { ScheduledDateField } from './fields/ScheduledDateField';
+import { ScheduledDateField, scheduledClearPatch } from './fields/ScheduledDateField';
 import { TagsField } from './fields/TagsField';
 import {
   QuickAddSubtaskList,
@@ -218,9 +218,12 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
     if (field === 'deadline') return dueDate ? 'chip' : 'icon';
     return 'chip';
   };
-  // 与展开任务一致：从图标按钮设上值后，入口换成 chip，选择器随旧入口
-  // 一起关闭（受控的打开状态不能带到新挂上的 chip 上）。
-  if (openField && openField.slot !== slotOf(openField.field)) setOpenField(null);
+  // 与展开任务一致：从图标按钮设上值后，入口换成字段行，单选字段的选择器
+  // 随旧入口一起关闭。Tag 可多选：打开期间冻结入口（浮层原地不动），关闭后再切换。
+  if (openField && openField.field !== 'tags' && openField.slot !== slotOf(openField.field)) {
+    setOpenField(null);
+  }
+  const tagsSlot = openField?.field === 'tags' ? openField.slot : slotOf('tags');
   const pickerProps = (field: PickerField, slot: PickerSlot) => ({
     open: openField?.field === field && openField.slot === slot,
     onOpenChange: (open: boolean) => setOpenField(open ? { field, slot } : null),
@@ -361,80 +364,87 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-1 pl-6">
-        <FieldChip
-          label={t('task:quickAddPlacement')}
-          icon={placement.icon}
-          text={placement.text}
-          shortcut={keyLabel('move')}
-          {...pickerProps('move', 'chip')}
-        >
-          {(close) => (
-            <MovePicker
-              current={{
-                projectId: state.projectId,
-                areaId: state.areaId,
-                // 未选归属时让 Inbox 打勾（MovePicker 按 Inbox 口径判断）。
-                start: Start.INBOX,
-              }}
-              onSelect={(dto) => {
-                // 只取归属：草稿里的计划日期与归属是两个独立字段，选 Inbox
-                // 不清计划（MovePicker 的 DTO 面向已有任务的「移入 Inbox」）。
-                setState((prev) => ({
-                  ...prev,
-                  projectId: dto.projectId ?? null,
-                  areaId: dto.areaId ?? null,
-                }));
-                close();
-              }}
-            />
-          )}
-        </FieldChip>
-        {scheduledChip && (
+      <div className="flex items-end gap-2 pl-6">
+        {/* 已设值字段纵向排列，一行一个（Things 3）。 */}
+        <div className="-ml-1.5 flex min-w-0 flex-col items-start gap-0.5">
           <FieldChip
-            label={t('task:scheduledDate')}
-            icon={scheduledChip.icon ?? <Calendar />}
-            text={scheduledChip.text}
-            shortcut={keyLabel('when')}
-            {...pickerProps('when', 'chip')}
+            label={t('task:quickAddPlacement')}
+            icon={placement.icon}
+            text={placement.text}
+            {...pickerProps('move', 'chip')}
           >
             {(close) => (
-              <ScheduledDateField
-                current={scheduledCurrent}
-                onPatch={patch}
-                onClose={close}
-                showReminder={showReminder}
+              <MovePicker
+                current={{
+                  projectId: state.projectId,
+                  areaId: state.areaId,
+                  // 未选归属时让 Inbox 打勾（MovePicker 按 Inbox 口径判断）。
+                  start: Start.INBOX,
+                }}
+                onSelect={(dto) => {
+                  // 只取归属：草稿里的计划日期与归属是两个独立字段，选 Inbox
+                  // 不清计划（MovePicker 的 DTO 面向已有任务的「移入 Inbox」）。
+                  setState((prev) => ({
+                    ...prev,
+                    projectId: dto.projectId ?? null,
+                    areaId: dto.areaId ?? null,
+                  }));
+                  close();
+                }}
               />
             )}
           </FieldChip>
-        )}
-        {tags.length > 0 && (
-          <FieldChip
-            label={t('task:tags')}
-            icon={<Tag />}
-            text={tags.map((tag) => tag.title).join(', ')}
-            shortcut={keyLabel('tags')}
-            {...pickerProps('tags', 'chip')}
-          >
-            <TagsField current={{ tags }} onPatch={patch} allowCreate={false} />
-          </FieldChip>
-        )}
-        {dueDate && (
-          <FieldChip
-            label={t('task:dueDate')}
-            icon={<Flag />}
-            text={formatDeadlineCountdown(dueDate)}
-            urgent={isOverdue(dueDate) || isToday(dueDate)}
-            shortcut={keyLabel('deadline')}
-            {...pickerProps('deadline', 'chip')}
-          >
-            {(close) => (
-              <DueDateField current={{ dueDate: state.dueDate }} onPatch={patch} onClose={close} />
-            )}
-          </FieldChip>
-        )}
+          {tagsSlot === 'chip' && (
+            <FieldChip
+              label={t('task:tags')}
+              text={tags.map((tag) => (
+                <TagCapsule key={tag.id} tag={tag} />
+              ))}
+              onClear={() => patch({ tagIds: [] })}
+              {...pickerProps('tags', 'chip')}
+            >
+              <TagsField current={{ tags }} onPatch={patch} allowCreate={false} />
+            </FieldChip>
+          )}
+          {scheduledChip && (
+            <FieldChip
+              label={t('task:scheduledDate')}
+              icon={scheduledChip.icon ?? <Calendar />}
+              text={scheduledChip.text}
+              onClear={() => patch(scheduledClearPatch(showReminder))}
+              {...pickerProps('when', 'chip')}
+            >
+              {(close) => (
+                <ScheduledDateField
+                  current={scheduledCurrent}
+                  onPatch={patch}
+                  onClose={close}
+                  showReminder={showReminder}
+                />
+              )}
+            </FieldChip>
+          )}
+          {dueDate && (
+            <FieldChip
+              label={t('task:dueDate')}
+              icon={<Flag />}
+              text={deadlineChipText(dueDate, t)}
+              urgent={isOverdue(dueDate) || isToday(dueDate)}
+              onClear={() => patch({ dueDate: null })}
+              {...pickerProps('deadline', 'chip')}
+            >
+              {(close) => (
+                <DueDateField
+                  current={{ dueDate: state.dueDate }}
+                  onPatch={patch}
+                  onClose={close}
+                />
+              )}
+            </FieldChip>
+          )}
+        </div>
 
-        <div className="ml-auto flex items-center gap-0.5">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
           {!scheduledChip && (
             <FieldIconButton
               label={t('task:scheduledDate')}
@@ -452,7 +462,7 @@ export const QuickAddCard = React.forwardRef<QuickAddCardHandle, Props>(function
               )}
             </FieldIconButton>
           )}
-          {tags.length === 0 && (
+          {tagsSlot === 'icon' && (
             <FieldIconButton
               label={t('task:tags')}
               icon={<Tag className="h-4 w-4" />}

@@ -111,7 +111,7 @@ export function TaskList({
   expandedId,
   onRowClick,
   onToggleComplete,
-onReorder,
+  onReorder,
   sortable = true,
   emptyHint,
   hideEmptyState,

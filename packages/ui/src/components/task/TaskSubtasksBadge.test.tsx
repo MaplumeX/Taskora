@@ -21,7 +21,11 @@ describe('TaskSubtasksBadge', () => {
   it('有子任务时渲染清单徽标', () => {
     const { container } = render(
       <TaskSubtasksBadge
-        subtasks={[subtask(TaskStatus.ACTIVE), subtask(TaskStatus.ACTIVE), subtask(TaskStatus.COMPLETED)]}
+        subtasks={[
+          subtask(TaskStatus.ACTIVE),
+          subtask(TaskStatus.ACTIVE),
+          subtask(TaskStatus.COMPLETED),
+        ]}
       />,
     );
     expect(container.querySelector('[data-subtasks-badge]')).toBeInTheDocument();
@@ -29,7 +33,9 @@ describe('TaskSubtasksBadge', () => {
 
   it('全部了结时仍渲染图标', () => {
     const { container } = render(
-      <TaskSubtasksBadge subtasks={[subtask(TaskStatus.COMPLETED), subtask(TaskStatus.CANCELLED)]} />,
+      <TaskSubtasksBadge
+        subtasks={[subtask(TaskStatus.COMPLETED), subtask(TaskStatus.CANCELLED)]}
+      />,
     );
     expect(container.querySelector('[data-subtasks-badge]')).toBeInTheDocument();
   });

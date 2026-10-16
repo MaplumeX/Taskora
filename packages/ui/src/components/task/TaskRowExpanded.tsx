@@ -9,7 +9,6 @@ import { Hint } from '@/components/ui/hint';
 import { cn } from '@/lib/utils';
 import { MarkdownNotesEditor } from '@/components/common/MarkdownNotesEditor';
 import {
-  formatDeadlineCountdown,
   getClientKind,
   isOverdue,
   isToday,
@@ -19,10 +18,11 @@ import {
   useUpdateTask,
 } from '@taskora/api';
 import { toast } from 'sonner';
-import { ScheduledDateField } from './fields/ScheduledDateField';
+import { ScheduledDateField, scheduledClearPatch } from './fields/ScheduledDateField';
 import { DueDateField } from './fields/DueDateField';
 import { TagsField } from './fields/TagsField';
-import { FieldChip, FieldIconButton, scheduledChipOf } from './fields/FieldChip';
+import { FieldChip, FieldIconButton, deadlineChipText, scheduledChipOf } from './fields/FieldChip';
+import { TagCapsule } from './TaskTagCapsules';
 import { TaskSubtaskList, type TaskSubtaskListHandle } from './TaskSubtaskList';
 import { TaskAttachmentList } from './TaskAttachmentList';
 
@@ -74,11 +74,19 @@ export function TaskRowExpanded({ task, current }: Props) {
     if (notes !== (current.notes ?? '')) patch({ notes });
   };
 
-  // 已设值字段在左下显示为 chip（点击打开同一编辑器），未设值字段在右下为图标
+  // 已设值字段在左下纵向排列（点击打开同一编辑器），未设值字段在右下为图标
   // （Things 3 展开任务的底栏）。
   const scheduledChip = scheduledChipOf(current, t);
   const dueDate = current.dueDate ? parseCalendarDate(current.dueDate) : null;
   const tags = current.tags ?? [];
+  // 标签可多选：打上第一个 / 去掉最后一个时入口要在图标与标签行之间切换。
+  // 选择器打开期间冻结入口（浮层原地不动），关闭后再切换。
+  const [tagsAnchor, setTagsAnchor] = React.useState<'row' | 'icon' | null>(null);
+  const tagsSlot = tagsAnchor ?? (tags.length > 0 ? 'row' : 'icon');
+  const tagsPickerProps = (anchor: 'row' | 'icon') => ({
+    open: tagsAnchor === anchor,
+    onOpenChange: (open: boolean) => setTagsAnchor(open ? anchor : null),
+  });
 
   return (
     <div
@@ -117,45 +125,53 @@ export function TaskRowExpanded({ task, current }: Props) {
 
       <TaskAttachmentList taskId={task.id} attachments={attachments} />
 
-      <div className="flex flex-wrap items-center gap-1">
-        {scheduledChip && (
-          <FieldChip
-            label={t('task:scheduledDate')}
-            icon={scheduledChip.icon ?? <Calendar />}
-            text={scheduledChip.text}
-          >
-            {(close) => (
-              <ScheduledDateField
-                current={current}
-                onPatch={patch}
-                onClose={close}
-                showReminder={getClientKind() !== 'web'}
-                allowRepeat
-              />
-            )}
-          </FieldChip>
-        )}
-        {tags.length > 0 && (
-          <FieldChip
-            label={t('task:tags')}
-            icon={<Tag />}
-            text={tags.map((tag) => tag.title).join(', ')}
-          >
-            <TagsField current={current} onPatch={patch} />
-          </FieldChip>
-        )}
-        {dueDate && (
-          <FieldChip
-            label={t('task:dueDate')}
-            icon={<Flag />}
-            text={formatDeadlineCountdown(dueDate)}
-            urgent={isOverdue(dueDate) || isToday(dueDate)}
-          >
-            {(close) => <DueDateField current={current} onPatch={patch} onClose={close} />}
-          </FieldChip>
-        )}
+      <div className="flex items-end gap-2">
+        {/* 已设值字段纵向排列，一行一个（Things 3）。 */}
+        <div className="-ml-1.5 flex min-w-0 flex-col items-start gap-0.5">
+          {tagsSlot === 'row' && (
+            <FieldChip
+              label={t('task:tags')}
+              {...tagsPickerProps('row')}
+              text={tags.map((tag) => (
+                <TagCapsule key={tag.id} tag={tag} />
+              ))}
+              onClear={() => patch({ tagIds: [] })}
+            >
+              <TagsField current={current} onPatch={patch} />
+            </FieldChip>
+          )}
+          {scheduledChip && (
+            <FieldChip
+              label={t('task:scheduledDate')}
+              icon={scheduledChip.icon ?? <Calendar />}
+              text={scheduledChip.text}
+              onClear={() => patch(scheduledClearPatch(getClientKind() !== 'web'))}
+            >
+              {(close) => (
+                <ScheduledDateField
+                  current={current}
+                  onPatch={patch}
+                  onClose={close}
+                  showReminder={getClientKind() !== 'web'}
+                  allowRepeat
+                />
+              )}
+            </FieldChip>
+          )}
+          {dueDate && (
+            <FieldChip
+              label={t('task:dueDate')}
+              icon={<Flag />}
+              text={deadlineChipText(dueDate, t)}
+              urgent={isOverdue(dueDate) || isToday(dueDate)}
+              onClear={() => patch({ dueDate: null })}
+            >
+              {(close) => <DueDateField current={current} onPatch={patch} onClose={close} />}
+            </FieldChip>
+          )}
+        </div>
 
-        <div className="ml-auto flex items-center gap-0.5">
+        <div className="ml-auto flex shrink-0 items-center gap-0.5">
           {!scheduledChip && (
             <FieldIconButton
               label={t('task:scheduledDate')}
@@ -173,8 +189,12 @@ export function TaskRowExpanded({ task, current }: Props) {
             </FieldIconButton>
           )}
 
-          {tags.length === 0 && (
-            <FieldIconButton label={t('task:tags')} icon={<Tag className="h-4 w-4" />}>
+          {tagsSlot === 'icon' && (
+            <FieldIconButton
+              label={t('task:tags')}
+              icon={<Tag className="h-4 w-4" />}
+              {...tagsPickerProps('icon')}
+            >
               <TagsField current={current} onPatch={patch} />
             </FieldIconButton>
           )}

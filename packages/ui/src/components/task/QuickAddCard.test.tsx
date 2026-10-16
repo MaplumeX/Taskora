@@ -171,10 +171,12 @@ describe('QuickAddCard', () => {
     expect(screen.queryAllByRole('option')).toHaveLength(0);
     await user.clear(search);
     await user.click(screen.getByRole('option', { name: /Work/ }));
-    // 与展开任务一致：从图标按钮选上首个 Tag 后选择器随之关闭
-    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
-
+    // Tag 可多选：选上首个 Tag 后选择器原地保持打开，关闭后入口才换成字段行
+    expect(screen.getByRole('combobox')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Tags' })).not.toHaveTextContent('Work');
+    await user.click(title);
     expect(screen.getByRole('button', { name: 'Tags' })).toHaveTextContent('Work');
+
     await user.type(title, 'Report{Enter}');
     expect(onSubmit).toHaveBeenCalledWith({ title: 'Report', tagIds: ['t1'] }, { keepOpen: false });
     expect(createTag).not.toHaveBeenCalled();

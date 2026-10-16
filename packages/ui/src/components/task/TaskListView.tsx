@@ -4,12 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { TaskResponseDto } from '@taskora/shared';
 
 import { TaskList } from './TaskList';
-import {
-  useCompleteTask,
-  useReorderTasks,
-  useUncancelTask,
-  useUncompleteTask,
-} from '@taskora/api';
+import { useCompleteTask, useReorderTasks, useUncancelTask, useUncompleteTask } from '@taskora/api';
 import { useProjectsQuery } from '@taskora/api';
 import { useAreasQuery } from '@taskora/api';
 import { useSelectionScope } from '@taskora/api';
@@ -39,8 +34,7 @@ export function TaskListView({
   selectionRank,
 }: Props) {
   const { t } = useTranslation();
-  const { handleRowClick, handleBlankClick, selectedIds, expandedId } =
-    useTaskRowSelection();
+  const { handleRowClick, handleBlankClick, selectedIds, expandedId } = useTaskRowSelection();
   const completeTask = useCompleteTask();
   const uncompleteTask = useUncompleteTask();
   const uncancelTask = useUncancelTask();
@@ -76,10 +70,7 @@ export function TaskListView({
     () => Object.fromEntries(projects.map((p) => [p.id, p.title])),
     [projects],
   );
-  const areaMap = useMemo(
-    () => Object.fromEntries(areas.map((a) => [a.id, a.title])),
-    [areas],
-  );
+  const areaMap = useMemo(() => Object.fromEntries(areas.map((a) => [a.id, a.title])), [areas]);
 
   const handleToggle = (task: TaskResponseDto) => {
     // 撤销了结（尚未移入 Logbook 的条目还在这里）：已取消 → 撤销取消

@@ -48,6 +48,7 @@
   "newArea": "New Area",
   "more": "More",
   "clear": "Clear",
+  "clearField": "Clear {{field}}",
   "syncStatusOffline": "Offline · {{count}} pending",
   "syncStatusUpgradeRequired": "Update Taskora to sync",
   "syncStatusHubTooOld": "Update the Taskora server to sync",
