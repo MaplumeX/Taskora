@@ -36,7 +36,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useDeleteSubtask: () => ({ mutate: mutationMocks.deleteSubtask, isPending: false }),
   useUpdateSubtask: () => ({ mutate: mutationMocks.updateSubtask, isPending: false }),
   useReorderSubtasks: () => ({ mutate: vi.fn(), isPending: false }),
-  useUpdateTask: () => ({ mutate: vi.fn(), isPending: false }),
+  useUpdateTask: () => ({ mutate: mutationMocks.updateTask, isPending: false }),
   useCompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
   useUncompleteTask: () => ({ mutate: vi.fn(), isPending: false }),
   useDeleteTask: () => ({ mutate: vi.fn(), isPending: false }),
@@ -76,6 +76,7 @@ const mutationMocks = vi.hoisted(() => ({
   createSubtask: vi.fn(),
   deleteSubtask: vi.fn(),
   updateSubtask: vi.fn(),
+  updateTask: vi.fn(),
 }));
 
 /* ------------- mocks ------------- */
@@ -249,6 +250,91 @@ describe('TaskRowExpanded — 今天 chip 图标色', () => {
     // 回归：chip 曾用 [&_svg]:text-muted-foreground 强制所有图标变灰，
     // 覆盖 svg 自身的 text-today，导致黄星带灰描边、和行内徽标不一致。
     expect(chip.className).not.toContain('[&_svg]:text-muted-foreground');
+  });
+});
+
+describe('TaskRowExpanded — chip 的 × 清除', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useUiInteractionStore.setState({ expandedId: null, pendingAutoEditId: null });
+  });
+
+  const fullTask: TaskResponseDto = {
+    ...renderTask,
+    start: Start.ANYTIME,
+    scheduledDate: '2020-01-01',
+    dueDate: '2099-01-01',
+    tags: [{ id: 'tag-1', title: 'Work', color: '#f00' }] as TaskResponseDto['tags'],
+  };
+
+  it.each([
+    [/^(Clear Scheduled date|清除计划日期)$/, { start: Start.ANYTIME, scheduledDate: null }],
+    [/^(Clear Tags|清除标签)$/, { tagIds: [] }],
+    [/^(Clear Deadline|清除截止日期)$/, { dueDate: null }],
+  ])('点 %s 只清空对应字段，不打开编辑器', async (name, expected) => {
+    const user = userEvent.setup();
+    withQueryClient(<DndList task={fullTask} />);
+    await user.click(screen.getByText('My task'));
+
+    await user.click(screen.getByRole('button', { name }));
+
+    expect(mutationMocks.updateTask).toHaveBeenCalledWith(
+      { id: 'task-1', data: expect.objectContaining(expected) },
+      expect.anything(),
+    );
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('标签 chip 逐个显示胶囊', async () => {
+    const user = userEvent.setup();
+    withQueryClient(<DndList task={fullTask} />);
+    await user.click(screen.getByText('My task'));
+
+    const chip = screen.getByRole('button', { name: /^(Tags|标签)$/ });
+    expect(chip).toHaveTextContent('Work');
+  });
+});
+
+describe('TaskRowExpanded — 标签选择器原地保持打开', () => {
+  let restoreMedia: () => void;
+  afterEach(() => restoreMedia());
+
+  beforeEach(() => {
+    restoreMedia = mockDesktop(true);
+    vi.clearAllMocks();
+    useUiInteractionStore.setState({ expandedId: null, pendingAutoEditId: null });
+  });
+
+  it('从图标按钮打上首个标签后选择器原地保持打开，关闭后才换成标签行', async () => {
+    const user = userEvent.setup();
+    const client = new QueryClient();
+    const ui = (task: TaskResponseDto) => (
+      <QueryClientProvider client={client}>
+        <DndList task={task} />
+      </QueryClientProvider>
+    );
+    const { rerender } = render(ui(renderTask));
+    await user.click(screen.getByText('My task'));
+
+    await user.click(screen.getByRole('button', { name: /^(Tags|标签)$/ }));
+    expect(await screen.findByRole('combobox')).toBeInTheDocument();
+
+    rerender(
+      ui({
+        ...renderTask,
+        tags: [{ id: 'tag-1', title: 'Work', color: '#00f' }] as TaskResponseDto['tags'],
+      }),
+    );
+
+    // 打开期间入口冻结：仍是图标按钮，浮层不跟着换位
+    const entry = screen.getByRole('button', { name: /^(Tags|标签)$/ });
+    expect(entry).toHaveAttribute('aria-expanded', 'true');
+    expect(entry).not.toHaveTextContent('Work');
+    expect(screen.getByRole('combobox')).toBeInTheDocument();
+
+    await user.keyboard('{Escape}');
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^(Tags|标签)$/ })).toHaveTextContent('Work');
   });
 });
 

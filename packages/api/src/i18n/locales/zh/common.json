@@ -48,6 +48,7 @@
   "newArea": "新增区域",
   "more": "更多",
   "clear": "清除",
+  "clearField": "清除{{field}}",
   "syncStatusOffline": "离线 · {{count}} 条待同步",
   "syncStatusUpgradeRequired": "需要升级 Taskora 才能同步",
   "syncStatusHubTooOld": "服务器版本过旧，请升级 Taskora 服务器后同步",

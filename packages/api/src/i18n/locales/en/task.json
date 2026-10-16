@@ -29,6 +29,7 @@
   "convertWithAttachments_other": "This task has {{count}} attachments. Projects can't hold attachments, so they will be deleted. Continue?",
   "scheduledDate": "Scheduled date",
   "dueDate": "Deadline",
+  "deadlineChip": "Deadline: {{date}} · {{countdown}}",
   "tags": "Tags",
   "project": "Project",
   "area": "Area",

@@ -25,6 +25,16 @@ import { getCalendarLocale } from './calendarFieldUtils';
 import { DateShortcutList } from './DateShortcutList';
 import { WhenQueryInput } from './WhenQueryInput';
 
+/**
+ * 清除计划：落 Anytime（对齐 Things 3 的 Clear），无归属的任务也不回 Inbox。
+ * 编辑器的「清除」与 chip 上的 × 共用。
+ */
+export function scheduledClearPatch(showReminder?: boolean): ScheduledFieldPatch {
+  const clear: ScheduledFieldPatch = { start: Start.ANYTIME, scheduledDate: null };
+  if (showReminder) clear.reminderTime = null;
+  return clear;
+}
+
 interface FieldProps {
   current: ScheduledFieldCurrent;
   onPatch: (data: ScheduledFieldPatch) => void;
@@ -112,11 +122,8 @@ export function ScheduledDateField({
     onClose?.();
   };
 
-  // 清除：落 Anytime（对齐 Things 3 的 Clear），无归属的任务也不回 Inbox。
   const handleClear = () => {
-    const clear: ScheduledFieldPatch = {};
-    if (showReminder) clear.reminderTime = null;
-    onPatch({ start: Start.ANYTIME, scheduledDate: null, ...clear });
+    onPatch(scheduledClearPatch(showReminder));
     onClose?.();
   };
 

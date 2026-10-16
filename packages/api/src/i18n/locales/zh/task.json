@@ -29,6 +29,7 @@
   "convertWithAttachments_other": "这个任务有 {{count}} 个附件。项目不能带附件，转换后附件会被删除。继续吗？",
   "scheduledDate": "计划日期",
   "dueDate": "截止日期",
+  "deadlineChip": "截止：{{date}} · {{countdown}}",
   "tags": "标签",
   "project": "项目",
   "area": "区域",

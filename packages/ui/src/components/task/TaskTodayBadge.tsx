@@ -13,10 +13,5 @@ interface Props {
  * 红色警示语义只属于 Deadline（见 TaskDueDateBadge）。
  */
 export function TaskTodayBadge({ className }: Props) {
-  return (
-    <Star
-      aria-hidden
-      className={cn('h-3.5 w-3.5 fill-today text-today', className)}
-    />
-  );
+  return <Star aria-hidden className={cn('h-3.5 w-3.5 fill-today text-today', className)} />;
 }
