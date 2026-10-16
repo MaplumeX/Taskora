@@ -2,12 +2,13 @@ import { useTranslation } from 'react-i18next';
 import { ProjectStatus, Start } from '@taskora/shared';
 
 import { cn } from '@/lib/utils';
+import { useSomedayMark } from '@/components/task/somedayMark';
 
 interface Props {
   total: number;
   completed: number;
   projectStatus: ProjectStatus;
-  /** 项目的 Start；SOMEDAY 时外圈画虚线、整体用灰色（Things 3）。 */
+  /** 项目的 Start；SOMEDAY 时外圈画虚线、整体用灰色（Things 3）；SomedayMarkContext 为 false 时不画。 */
   start?: Start | string;
   onToggle: () => void;
   disabled?: boolean;
@@ -80,7 +81,8 @@ export function ProjectProgressPie({
   const ratio = total > 0 ? completed / total : 0;
   const offset = PIE_CIRCUMFERENCE * (1 - ratio);
   // 了结后的项目离开 Someday，只有进行中的才画虚线灰色态。
-  const isSomeday = start === Start.SOMEDAY && !isChecked && !isCancelled;
+  const somedayMark = useSomedayMark();
+  const isSomeday = somedayMark && start === Start.SOMEDAY && !isChecked && !isCancelled;
   const color = isSomeday ? 'text-muted-foreground' : 'text-primary';
 
   return (

@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { cn } from '@/lib/utils';
+import { useSomedayMark } from './somedayMark';
 
 interface Props {
   checked: boolean;
@@ -10,7 +11,7 @@ interface Props {
   disabled?: boolean;
   /** 取消态：与完成态同为实心主题色填充，仅 ✓ 换成 X；点击走 onToggle（撤销取消）。 */
   cancelled?: boolean;
-  /** Someday 任务：未勾选时边框画虚线（Things 3）。 */
+  /** Someday 任务：未勾选时边框画虚线（Things 3）；SomedayMarkContext 为 false 时不画。 */
   someday?: boolean;
   /** Size override (e.g. compact calendar rows); defaults to 14px */
   className?: string;
@@ -25,6 +26,7 @@ export function TaskCheckbox({
   className,
 }: Props) {
   const { t } = useTranslation();
+  const somedayMark = useSomedayMark();
   // 只在「未勾 → 勾上」的交互瞬间画勾；已完成任务首次渲染（如 Logbook）不播放。
   const wasChecked = React.useRef(checked);
   const animateCheck = checked && !wasChecked.current;
@@ -49,7 +51,7 @@ export function TaskCheckbox({
           ? 'border-primary bg-primary text-primary-foreground'
           : cn(
               'border-muted-foreground/50 bg-background text-transparent hover:border-primary',
-              someday && 'border-dashed',
+              someday && somedayMark && 'border-dashed',
             ),
         disabled && 'opacity-40',
         className ?? 'h-3.5 w-3.5',

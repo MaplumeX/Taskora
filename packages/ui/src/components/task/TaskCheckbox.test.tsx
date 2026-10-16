@@ -1,6 +1,7 @@
 import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { SomedayMarkContext } from './somedayMark';
 import { TaskCheckbox } from './TaskCheckbox';
 
 describe('TaskCheckbox', () => {
@@ -19,6 +20,16 @@ describe('TaskCheckbox', () => {
 
   it('drops the dashed border once a Someday task is checked', () => {
     render(<TaskCheckbox checked={true} someday onToggle={() => {}} />);
+
+    expect(screen.getByRole('checkbox')).not.toHaveClass('border-dashed');
+  });
+
+  it('skips the dashed border where the Someday mark is turned off', () => {
+    render(
+      <SomedayMarkContext.Provider value={false}>
+        <TaskCheckbox checked={false} someday onToggle={() => {}} />
+      </SomedayMarkContext.Provider>,
+    );
 
     expect(screen.getByRole('checkbox')).not.toHaveClass('border-dashed');
   });

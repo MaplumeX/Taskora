@@ -4,6 +4,7 @@ import { useEffectiveTags, useFeedQuery } from '@taskora/api';
 import { TimeViewFeedList } from '@/components/feed/TimeViewFeedList';
 import { PageHeading } from '@/components/layout/PageHeading';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
+import { SomedayMarkContext } from '@/components/task/somedayMark';
 
 export default function Someday() {
   const { t } = useTranslation();
@@ -18,10 +19,13 @@ export default function Someday() {
       {isLoading ? null : isError ? (
         <p className="py-8 text-center text-sm text-destructive">{t('common:loadFailed')}</p>
       ) : (
-        <TimeViewFeedList
-          items={visible}
-          emptyHint={filtering ? t('tag:filterEmpty') : t('task:somedayEmpty')}
-        />
+        // 本页条目全是 Someday，虚线标记没有区分意义，按普通样式画。
+        <SomedayMarkContext.Provider value={false}>
+          <TimeViewFeedList
+            items={visible}
+            emptyHint={filtering ? t('tag:filterEmpty') : t('task:somedayEmpty')}
+          />
+        </SomedayMarkContext.Provider>
       )}
     </div>
   );
