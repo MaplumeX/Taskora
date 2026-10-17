@@ -5,7 +5,9 @@ import android.content.SharedPreferences
 import android.util.Log
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequest
 import androidx.work.PeriodicWorkRequest
 import androidx.work.WorkManager
 import androidx.work.Worker
@@ -34,10 +36,16 @@ internal object ReminderBackground {
     private const val KEY_PLAN_URL = "planUrl"
     private const val KEY_TOKEN = "token"
     private const val WORK_NAME = "taskora-reminder-plan"
+    private const val REFRESH_WORK_NAME = "taskora-reminder-plan-refresh"
+    /** JS 交付的 planUrl 形如 `<server>/reminders/plan`；去掉它即 hub 地址。 */
+    private const val PLAN_PATH = "/reminders/plan"
     private const val PERIOD_MINUTES = 15L
     private const val TIMEOUT_MS = 15_000
 
-    data class Config(val planUrl: String, val token: String)
+    data class Config(val planUrl: String, val token: String) {
+        /** hub 的 API 地址（App 外写入的接口与提醒计划同一前缀）。 */
+        val apiBase: String get() = planUrl.removeSuffix(PLAN_PATH)
+    }
 
     private fun prefs(context: Context): SharedPreferences =
         context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
@@ -70,11 +78,27 @@ internal object ReminderBackground {
     fun disable(context: Context) {
         prefs(context).edit().clear().commit()
         WorkManager.getInstance(context).cancelUniqueWork(WORK_NAME)
+        WorkManager.getInstance(context).cancelUniqueWork(REFRESH_WORK_NAME)
+    }
+
+    /**
+     * 尽快取回一次计划（App 外写入送达后，android-out-of-app-writes）：hub 上
+     * 的计划已包含刚送达的操作，本机闹钟随之收敛，不等下个周期。
+     */
+    fun refreshSoon(context: Context) {
+        if (config(context) == null) return
+        val request = OneTimeWorkRequest.Builder(ReminderPlanWorker::class.java)
+            .setConstraints(
+                Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build(),
+            )
+            .build()
+        WorkManager.getInstance(context)
+            .enqueueUniqueWork(REFRESH_WORK_NAME, ExistingWorkPolicy.REPLACE, request)
     }
 
     /** 凭据被拒时停用——除非期间 App 已注册设备、换上了新凭据。 */
     @Synchronized
-    private fun disableIfCurrent(context: Context, token: String) {
+    fun disableIfCurrent(context: Context, token: String) {
         if (config(context)?.token == token) disable(context)
     }
 

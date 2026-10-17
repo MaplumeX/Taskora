@@ -5,7 +5,7 @@ import { hashBackgroundToken } from './background-token';
 
 /**
  * 只认设备后台凭据（见 background-token.ts），不认会话 JWT：这条路径上
- * 的请求只来自 Android 原生的后台同步。通过后 req.user 与 JwtAuthGuard
+ * 的请求只来自 Android 原生的后台任务（提醒计划、App 外写入）。通过后 req.user 与 JwtAuthGuard
  * 同形（`{ id }`）。
  */
 @Injectable()

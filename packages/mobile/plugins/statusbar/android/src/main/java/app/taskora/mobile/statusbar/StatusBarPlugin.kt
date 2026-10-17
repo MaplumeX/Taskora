@@ -16,6 +16,8 @@ import app.tauri.plugin.JSObject
 import app.tauri.plugin.Plugin
 import androidx.core.app.NotificationCompat
 import org.json.JSONArray
+import org.json.JSONObject
+import java.util.UUID
 
 @InvokeArg
 class ShowArgs {
@@ -68,6 +70,8 @@ class StatusBarPlugin(private val activity: Activity) : Plugin(activity) {
         private const val LEGACY_PENDING_QUICK_ADD_KEY = "pendingQuickAdd"
         /** 待 JS 落库的快速添加提交（JSON 数组，每项是草稿 JSON 字符串）。 */
         private const val PENDING_QUICK_ADD_QUEUE_KEY = "pendingQuickAddQueue"
+        /** 队列里已送达 hub 的条目 id（JSON 数组，android-out-of-app-writes）。 */
+        private const val DELIVERED_QUICK_ADD_IDS_KEY = "deliveredQuickAddIds"
         private const val FAILURE_CHANNEL_ID = "quick-add-failed"
         private const val FAILURE_NOTIFICATION_BASE = 621000
         private val queueLock = Any()
@@ -110,31 +114,111 @@ class StatusBarPlugin(private val activity: Activity) : Plugin(activity) {
          * 启动时插件已 load 而 JS 尚未注册监听，trigger 会被丢弃；入队
          * 后由 JS 注册监听时主动取一次，存活时靠 quick-add-available 信号。
          * 队列保证进程未起时连续提交多条也不互相覆盖。
+         *
+         * 入队时给草稿 JSON 写入 `id`（新任务 id）：App 不在时由
+         * QuickAddDelivery 直接交给 hub，JS 落库时也用它，两边得到同一任务。
          */
         fun submitQuickAdd(context: Context, payload: String) {
             synchronized(queueLock) {
                 val prefs = context.getSharedPreferences(STATUS_BAR_PREFS, Context.MODE_PRIVATE)
                 val queue = readQueue(prefs)
-                queue.put(payload)
+                queue.put(withEntryId(payload))
                 prefs.edit().putString(PENDING_QUICK_ADD_QUEUE_KEY, queue.toString()).commit()
             }
+            QuickAddDelivery.schedule(context)
             val act = activityRef ?: return
             act.runOnUiThread { instance?.trigger("quick-add-available", JSObject()) }
         }
 
-        /** 取走全部待落库提交（按提交顺序；取出即删）。 */
+        /** 草稿 JSON 补上条目 id；不是 JSON 对象（旧版纯标题）时原样保留。 */
+        private fun withEntryId(payload: String): String =
+            try {
+                val draft = JSONObject(payload)
+                if (draft.optString("id").isEmpty()) draft.put("id", UUID.randomUUID().toString())
+                draft.toString()
+            } catch (_: Exception) {
+                payload
+            }
+
+        /**
+         * 取走全部待落库提交（按提交顺序；取出即删）。已送达 hub 的不再交给
+         * JS：任务已在 hub，副本 pull 后自然出现；JS 若在 pull 之前落库，会用
+         * 旧草稿覆盖别处随后的改动。
+         */
         fun drainPendingQuickAdds(context: Context): JSONArray {
             synchronized(queueLock) {
                 val prefs = context.getSharedPreferences(STATUS_BAR_PREFS, Context.MODE_PRIVATE)
                 val queue = readQueue(prefs)
+                val delivered = readDeliveredIds(prefs)
                 if (queue.length() > 0 || prefs.contains(LEGACY_PENDING_QUICK_ADD_KEY)) {
                     prefs.edit()
                         .remove(PENDING_QUICK_ADD_QUEUE_KEY)
                         .remove(LEGACY_PENDING_QUICK_ADD_KEY)
+                        .remove(DELIVERED_QUICK_ADD_IDS_KEY)
                         .commit()
                 }
-                return queue
+                if (delivered.isEmpty()) return queue
+                val pending = JSONArray()
+                for (i in 0 until queue.length()) {
+                    val payload = queue.getString(i)
+                    if (entryId(payload) !in delivered) pending.put(payload)
+                }
+                return pending
             }
+        }
+
+        /** 草稿 JSON 里的条目 id；旧版纯标题条目没有。 */
+        private fun entryId(payload: String): String? =
+            try {
+                JSONObject(payload).optString("id").ifEmpty { null }
+            } catch (_: Exception) {
+                null
+            }
+
+        /**
+         * 待送达 hub 的提交：有条目 id、还没送达、不是「在应用中继续」（那会
+         * 拉起 App，由 JS 落库并定位）。
+         */
+        fun undeliveredQuickAdds(context: Context): List<Pair<String, JSONObject>> {
+            synchronized(queueLock) {
+                val prefs = context.getSharedPreferences(STATUS_BAR_PREFS, Context.MODE_PRIVATE)
+                val delivered = readDeliveredIds(prefs)
+                val queue = readQueue(prefs)
+                val result = mutableListOf<Pair<String, JSONObject>>()
+                for (i in 0 until queue.length()) {
+                    val payload = queue.getString(i)
+                    val id = entryId(payload) ?: continue
+                    val draft = JSONObject(payload)
+                    if (id in delivered || draft.optBoolean("openInApp", false)) continue
+                    result.add(id to draft)
+                }
+                return result
+            }
+        }
+
+        /** 标记已送达；JS 已先取走则无事可做。 */
+        fun markQuickAddDelivered(context: Context, id: String) {
+            synchronized(queueLock) {
+                val prefs = context.getSharedPreferences(STATUS_BAR_PREFS, Context.MODE_PRIVATE)
+                if (!prefs.contains(PENDING_QUICK_ADD_QUEUE_KEY)) return
+                val delivered = readDeliveredIds(prefs)
+                if (!delivered.add(id)) return
+                prefs.edit()
+                    .putString(DELIVERED_QUICK_ADD_IDS_KEY, JSONArray(delivered.toList()).toString())
+                    .commit()
+            }
+        }
+
+        private fun readDeliveredIds(prefs: android.content.SharedPreferences): MutableSet<String> {
+            val ids = mutableSetOf<String>()
+            val raw = prefs.getString(DELIVERED_QUICK_ADD_IDS_KEY, null) ?: return ids
+            try {
+                val array = JSONArray(raw)
+                for (i in 0 until array.length()) ids.add(array.getString(i))
+            } catch (_: Exception) {
+                // 损坏时当作都没送达：重发由 hub 按 id 去重
+            }
+            return ids
         }
 
         private fun readQueue(prefs: android.content.SharedPreferences): JSONArray {

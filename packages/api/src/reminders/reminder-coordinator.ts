@@ -33,7 +33,10 @@ import {
   REMINDER_LATE_TOLERANCE_MS,
   reminderFireAt,
   reminderTextContext,
+  resolveReminderAction,
   type Engine,
+  type ReminderActionRequest,
+  type ReminderActionResolution,
   type ReminderNotification,
   type ReminderParentTitles,
   type ReminderTaskInput,
@@ -42,11 +45,6 @@ import {
 import type { TaskBackend } from '../api/task-backend';
 import { createEngineTaskBackend } from '../engine/task-backend.engine';
 
-import {
-  resolveReminderAction,
-  type ReminderActionRequest,
-  type ReminderActionResolution,
-} from './reminder-action';
 import { reminderInputFromReplicaRow, type ReminderNotificationShell } from './notification-shell';
 
 export interface ReminderCoordinatorOptions {

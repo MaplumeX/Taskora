@@ -37,3 +37,6 @@ ADR-0014 接受了「手机只知道上次打开 App 时同步到的提醒」。
 3. 离线打开 App：不用旧副本覆盖后台已取回的新计划。
 4. 登出后后台任务停止（`adb shell dumpsys jobscheduler | grep taskora`）。
 
+### 2026-10-17 — 修订
+
+后台凭据不再只读：还能送达 App 外的通知操作与快速添加（`POST /reminders/actions`、`POST /quick-add`）。见 ADR-0027 与 `.scratch/android-out-of-app-writes/`。

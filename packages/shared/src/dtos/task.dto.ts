@@ -8,6 +8,11 @@ export type { RepeatRule, RepeatUnit, RepeatAnchor } from './repeat-rule.dto';
 
 export interface CreateTaskDto {
   title: string;
+  /**
+   * 客户端预生成的 UUID（App 外写入：Android 快速添加入队时生成，hub 与设备
+   * 落库同一条草稿时得到同一任务）。该 id 已存在即视为已创建，返回现有任务。
+   */
+  id?: string;
   notes?: string;
   /** 计划日期（ISO 8601）；设了日期时 start 恒为 ANYTIME。 */
   scheduledDate?: string;

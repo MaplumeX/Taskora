@@ -398,9 +398,12 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
     // ---------- 写（全部本地，进 Outbox） ----------
 
     async createTask(data: CreateTaskDto): Promise<TaskResponseDto> {
+      // 预生成的 id 已在副本里（hub 已建好并 pull 回来）：视为已创建
+      if (data.id && (await engine.get('task', data.id))) return taskDto(data.id);
       // 新任务追加到末尾，沿用现有任务的 Position 顺序。
       const existing = await engine.list('task');
       const id = await engine.create('task', {
+        ...(data.id ? { id: data.id } : {}),
         ...planTaskCreate(data, zones()),
         position: positionAtEnd(positionedRows(existing)),
       });

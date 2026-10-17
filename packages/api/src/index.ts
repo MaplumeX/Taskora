@@ -255,7 +255,7 @@ export {
   type ReminderActionKind,
   type ReminderActionRequest,
   type ReminderActionResolution,
-} from './reminders/reminder-action';
+} from '@taskora/engine';
 export { reminderActionLabels, type ReminderActionLabels } from './reminders/reminder-texts';
 export {
   useReminderPermissionStore,
@@ -289,10 +289,12 @@ export {
 export {
   createFromQuickAddDraft,
   parseQuickAddInput,
+  quickAddEntryId,
   quickAddOpensInApp,
   toQuickAddDraft,
   type QuickAddDeps,
   type QuickAddDraft,
+  type QuickAddOptions,
   type QuickAddWhen,
   type QuickAddPlacement,
   type QuickAddResult,

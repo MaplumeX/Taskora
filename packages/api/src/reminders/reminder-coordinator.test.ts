@@ -1,12 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { InMemorySyncHub, openEngine, type Engine } from '@taskora/engine';
+import {
+  InMemorySyncHub,
+  openEngine,
+  type Engine,
+  type ReminderActionRequest,
+} from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
 import { Start, TaskStatus } from '@taskora/shared';
 
 import { usePreferencesStore } from '@/stores/preferences.store';
 import { createReminderCoordinator, type ReminderCoordinator } from './reminder-coordinator';
-import type { ReminderActionRequest } from './reminder-action';
 import type {
   LiveReminder,
   ReminderDelivery,

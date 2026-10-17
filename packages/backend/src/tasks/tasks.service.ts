@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 
 import { ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import {
+  deriveSubtaskId,
   planConvertTaskToProject,
   planRepeatInstance,
   planReorder,
@@ -28,7 +29,7 @@ import {
   type TagParents,
   type TaskSearchOptions,
 } from '@taskora/engine';
-import { TaskStatus } from '@taskora/shared';
+import { TaskStatus, type QuickAddTaskPlan } from '@taskora/shared';
 import { Prisma } from '@prisma/client';
 
 import { PrismaService } from '../prisma/prisma.service';
@@ -160,8 +161,19 @@ export class TasksService {
   }
 
   async create(userId: string, dto: CreateTaskDto) {
+    if (dto.id) {
+      const existing = await this.prisma.task.findUnique({
+        where: { id: dto.id },
+        select: { userId: true },
+      });
+      if (existing) {
+        // 客户端重试同一创建：同一用户下的同 id 视为已创建（幂等）
+        if (existing.userId === userId) return this.listDto(this.prisma, dto.id);
+        throw new ConflictException('Task id already exists');
+      }
+    }
     const fields = planTaskCreate(dto, await userCalendarZones(this.prisma, userId));
-    const id = randomUUID();
+    const id = dto.id ?? randomUUID();
     return this.hub.writeAsHub(userId, async (batch) => {
       // 新任务追加到末尾（与设备 Engine 后端同一口径）
       const { last } = await edgePositions(batch.tx, 'Task', userId);
@@ -169,6 +181,48 @@ export class TasksService {
         ...toWireFields(fields),
         position: positionBetween(last, null),
       });
+      return this.listDto(batch.tx, id);
+    });
+  }
+
+  /**
+   * 快速添加直达 hub（android-out-of-app-writes）：Android 原生在 App 外送达
+   * 状态栏草稿。任务、Reminder 与 Subtask 同一事务写入。id 由设备入队时生成，
+   * Subtask id 按序号派生（deriveSubtaskId），设备若也落库同一条草稿，两端
+   * 产出同一组行。该 id 已存在或已被删除（Compact）即视为已送达：不重建、
+   * 不补写，返回 null 或现有任务。
+   */
+  async createFromQuickAdd(userId: string, id: string, plan: QuickAddTaskPlan) {
+    const existing = await this.prisma.task.findUnique({ where: { id }, select: { userId: true } });
+    if (existing) {
+      if (existing.userId !== userId) throw new ConflictException('Task id already exists');
+      return this.listDto(this.prisma, id);
+    }
+    const compacted = await this.prisma.compactedEntity.findFirst({
+      where: { userId, entity: 'task', entityId: id },
+      select: { entityId: true },
+    });
+    if (compacted) return null;
+
+    const fields = planTaskCreate(plan.dto, await userCalendarZones(this.prisma, userId));
+    // 与设备上「建好后补写 Reminder」同一结果：有计划日期才带提醒
+    if (plan.reminderTime && fields.scheduledDate) fields.reminderTime = plan.reminderTime;
+    return this.hub.writeAsHub(userId, async (batch) => {
+      const { last } = await edgePositions(batch.tx, 'Task', userId);
+      await batch.write('task', id, {
+        ...toWireFields(fields),
+        position: positionBetween(last, null),
+      });
+      const positions = positionsBetween(null, null, plan.subtasks.length);
+      for (const [index, title] of plan.subtasks.entries()) {
+        await batch.write('subtask', deriveSubtaskId(id, index), {
+          title,
+          status: TaskStatus.ACTIVE,
+          settledAt: null,
+          taskId: id,
+          position: positions[index],
+        });
+      }
       return this.listDto(batch.tx, id);
     });
   }
@@ -458,7 +512,8 @@ export class TasksService {
     });
   }
 
-  async complete(userId: string, id: string) {
+  /** settledAt 缺省为当前时刻；App 外的通知操作传点击时刻（Logbook 归组正确）。 */
+  async complete(userId: string, id: string, settledAt = new Date().toISOString()) {
     const existing = await this.prisma.task.findFirst({
       where: { id, userId },
       include: {
@@ -471,7 +526,6 @@ export class TasksService {
       throw new NotFoundException('Task not found');
     }
 
-    const settledAt = new Date().toISOString();
     const plan = planTaskComplete(existing.status, settledAt);
     if (!plan) {
       // 已完成（双击 / 重试）：不改写了结时间，不二次派生

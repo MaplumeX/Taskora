@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { Start, TaskStatus } from '@taskora/shared';
 
 import { resolveReminderAction, type ReminderActionRequest } from './reminder-action';
-import { reminderFireAt, snoozeTomorrowAt, type ReminderTaskInput } from '@taskora/engine';
+import { reminderFireAt, snoozeTomorrowAt, type ReminderTaskInput } from './reminders';
 
 const SHANGHAI = 'Asia/Shanghai';
 const NEW_YORK = 'America/New_York';

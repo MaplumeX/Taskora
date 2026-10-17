@@ -108,6 +108,18 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
 
   // ---------- update ----------
 
+  it('create：预生成 id 落库；同用户重试返回现有任务，他人的 id 冲突', async () => {
+    const id = '7d2f5f0e-6a43-4b8e-9a52-1c4d0f9e2b11';
+    const dto = await h.tasks.create(USER, { id, title: '周报' });
+    expect(dto.id).toBe(id);
+    const again = await h.tasks.create(USER, { id, title: '另一个标题' });
+    expect(again.title).toBe('周报');
+    expect(await testPrisma.task.count({ where: { id } })).toBe(1);
+    await expect(h.tasks.create(OTHER_USER, { id, title: 'x' })).rejects.toThrow(
+      'Task id already exists',
+    );
+  });
+
   it('update：tagIds 整组替换 / 清空；未传不动', async () => {
     await seedTag('tag-a');
     await seedTag('tag-b');

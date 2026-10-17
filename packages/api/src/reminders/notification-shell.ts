@@ -11,13 +11,12 @@
 
 import type {
   LiveReminder,
+  ReminderActionRequest,
   ReminderDelivery,
   ReminderTaskInput,
   ReplicaRow,
 } from '@taskora/engine';
 import { TaskStatus } from '@taskora/shared';
-
-import type { ReminderActionRequest } from './reminder-action';
 
 export type { LiveReminder, ReminderDelivery };
 
