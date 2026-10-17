@@ -340,6 +340,10 @@ _Avoid_: 硬删除广播、tombstone（我们用软删除，无墓碑）
 设备发给 Sync Hub 的物理删除请求（ADR-0008）：携带实体类型与一批 id，hub 校验归属后删除并以 Compact Event 广播；设备端在 Outbox 排队、断网可用。与设备端软删除（trashedAt 等普通字段变更）相对。
 _Avoid_: 硬删除广播、墓碑（不携带值与时钟）
 
+**App 外写入（Out-of-app Write）**:
+Android 上不经主界面产生的写入：通知上的「完成 / 稍后」与状态栏快速添加（ADR-0027）。原生先入队，同时用设备后台凭据直接送达 Sync Hub，由 hub 按与设备相同的规则应用；没送达的由 App 下次运行时从队列落库。与经 Outbox 推送的普通本地写相对。
+_Avoid_: 后台同步（副本不在后台同步）、离线写入（Outbox 已覆盖断网）
+
 **Event Stream**:
 设备与 Sync Hub 之间的常驻双向通道，按单调递增的序号传输 Change Event；从旧的服务端单向推送通道演化而来，现为同步协议的传输层。
 _Avoid_: WebSocket、订阅、频道

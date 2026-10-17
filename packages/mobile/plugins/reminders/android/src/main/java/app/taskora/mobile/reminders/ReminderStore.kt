@@ -28,13 +28,22 @@ data class ActionLabels(
     val snoozeMore: String,
 )
 
-/** 排队等 JS 应用的一次通知操作（reminder-actions spec）。 */
+/**
+ * 排队等 JS 应用的一次通知操作（reminder-actions spec）。
+ *
+ * App 不在时由送达任务直接交给 hub（android-out-of-app-writes，见
+ * ReminderActionDelivery）；送达后仍留在队列里等 JS 取走、在副本上再应用
+ * 一次——规则是确定性的，两边写出同一结果，而队列中的 key 在 JS 应用前
+ * 继续保护 Snooze 的临时闹钟不被 sync 注销。
+ */
 data class PendingAction(
     val key: String,
     val taskId: String,
     val action: String,
     val firedFireAt: Long,
     val tappedAt: Long,
+    /** 已送达 hub：送达任务不再重发。 */
+    val delivered: Boolean = false,
 )
 
 /**
@@ -175,6 +184,7 @@ internal object ReminderStore {
                         action = o.getString("action"),
                         firedFireAt = o.getLong("firedFireAt"),
                         tappedAt = o.getLong("tappedAt"),
+                        delivered = o.optBoolean("delivered", false),
                     ),
                 )
             }
@@ -193,7 +203,8 @@ internal object ReminderStore {
                     .put("taskId", action.taskId)
                     .put("action", action.action)
                     .put("firedFireAt", action.firedFireAt)
-                    .put("tappedAt", action.tappedAt),
+                    .put("tappedAt", action.tappedAt)
+                    .put("delivered", action.delivered),
             )
         }
         prefs(context).edit().putString(KEY_ACTIONS, array.toString()).commit()

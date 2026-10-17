@@ -1,10 +1,9 @@
 /**
  * Quick Add 草稿落库（quick-add-android spec 第 4 节，桌面 quick-add-v2 共用）。
  *
- * 桌面浮窗与 Android 状态栏浮层都只产出 QuickAddDraft，转换成
- * CreateTaskDto、补写 Reminder、校验引用都收敛在这里，两端规则只有一份。
- * 草稿可能来自过期快照（浮层读的是上次推送的数据），所以引用的 Tag /
- * Project / Area 落库前按本地副本校验：Tag 丢弃，归属回落 Inbox。
+ * 桌面浮窗与 Android 状态栏浮层都只产出 QuickAddDraft。转换与引用回落的
+ * 规则在 shared 的 planQuickAddTask（hub 的 App 外送达同用）；这里按本地
+ * 副本查引用，再按计划 create、补写 Reminder、追加 Subtask。
  */
 
 import type {
@@ -12,41 +11,24 @@ import type {
   CreateSubtaskDto,
   CreateTaskDto,
   ProjectResponseDto,
+  QuickAddDraft,
+  QuickAddPlacement,
+  QuickAddReferences,
   SubtaskResponseDto,
   TagResponseDto,
   TaskResponseDto,
   UpdateTaskDto,
 } from '@taskora/shared';
-import { ProjectStatus, Start } from '@taskora/shared';
+import { planQuickAddTask, toQuickAddDraft } from '@taskora/shared';
+import { deriveSubtaskId } from '@taskora/engine';
 
 import { getAreas } from '@/api/areas.api';
 import { getProjects } from '@/api/projects.api';
 import { getTags } from '@/api/tags.api';
 import { currentTaskBackend } from '@/api/task-backend';
 
-export type QuickAddWhen = { type: 'date'; date: string } | { type: 'someday' };
-
-export interface QuickAddDraft {
-  title: string;
-  notes?: string;
-  /** 计划：日历日（YYYY-MM-DD）或 Someday；缺省为无计划。 */
-  when?: QuickAddWhen;
-  /** Reminder（HH:mm）：仅 when 为日期时有效。 */
-  reminderTime?: string;
-  /** 截止日期（YYYY-MM-DD）。 */
-  dueDate?: string;
-  projectId?: string;
-  areaId?: string;
-  tagIds?: string[];
-  /** Subtask 标题，按清单顺序。 */
-  subtasks?: string[];
-}
-
-/** 实际落入的位置（校验回落后），用于「已添加到 X」与跳转。 */
-export type QuickAddPlacement =
-  | { kind: 'inbox' }
-  | { kind: 'project'; id: string; title: string }
-  | { kind: 'area'; id: string; title: string };
+export { toQuickAddDraft };
+export type { QuickAddDraft, QuickAddPlacement, QuickAddWhen } from '@taskora/shared';
 
 export interface QuickAddResult {
   taskId: string;
@@ -54,6 +36,8 @@ export interface QuickAddResult {
 }
 
 export interface QuickAddDeps {
+  /** 只在给了预生成 id 时用来判断是否已落库；缺省视为不存在。 */
+  getTask?(id: string): Promise<TaskResponseDto>;
   createTask(data: CreateTaskDto): Promise<TaskResponseDto>;
   updateTask(id: string, data: UpdateTaskDto): Promise<TaskResponseDto>;
   createSubtask(taskId: string, data: CreateSubtaskDto): Promise<SubtaskResponseDto>;
@@ -63,6 +47,7 @@ export interface QuickAddDeps {
 }
 
 const defaultDeps: QuickAddDeps = {
+  getTask: (id) => currentTaskBackend().getTask(id),
   createTask: (data) => currentTaskBackend().createTask(data),
   updateTask: (id, data) => currentTaskBackend().updateTask(id, data),
   createSubtask: (taskId, data) => currentTaskBackend().createSubtask(taskId, data),
@@ -70,58 +55,6 @@ const defaultDeps: QuickAddDeps = {
   getProjects,
   getAreas,
 };
-
-const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
-
-const isString = (value: unknown): value is string => typeof value === 'string';
-const nonEmpty = (value: unknown): string | undefined =>
-  isString(value) && value.trim() ? value : undefined;
-
-/**
- * 把不可信输入（原生 JSON、跨窗口事件载荷）规整为草稿：非法字段丢弃（不
- * 整条拒绝），标题保留原样待 trim。不是对象或缺标题时返回 null。
- */
-export function toQuickAddDraft(input: unknown): QuickAddDraft | null {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return null;
-  const raw = input as Record<string, unknown>;
-  if (!isString(raw.title)) return null;
-  const draft: QuickAddDraft = { title: raw.title };
-
-  const notes = nonEmpty(raw.notes);
-  if (notes) draft.notes = notes;
-
-  const when = raw.when as Record<string, unknown> | undefined;
-  if (when?.type === 'someday') {
-    draft.when = { type: 'someday' };
-  } else if (when?.type === 'date' && isString(when.date) && DATE_RE.test(when.date)) {
-    draft.when = { type: 'date', date: when.date };
-    if (isString(raw.reminderTime) && TIME_RE.test(raw.reminderTime)) {
-      draft.reminderTime = raw.reminderTime;
-    }
-  }
-
-  if (isString(raw.dueDate) && DATE_RE.test(raw.dueDate)) draft.dueDate = raw.dueDate;
-
-  const projectId = nonEmpty(raw.projectId);
-  const areaId = nonEmpty(raw.areaId);
-  if (projectId) draft.projectId = projectId;
-  else if (areaId) draft.areaId = areaId;
-
-  if (Array.isArray(raw.tagIds)) {
-    const tagIds = [...new Set(raw.tagIds.filter((id): id is string => !!nonEmpty(id)))];
-    if (tagIds.length) draft.tagIds = tagIds;
-  }
-
-  if (Array.isArray(raw.subtasks)) {
-    const subtasks = raw.subtasks
-      .filter(isString)
-      .map((title) => title.trim())
-      .filter(Boolean);
-    if (subtasks.length) draft.subtasks = subtasks;
-  }
-  return draft;
-}
 
 /**
  * 解析原生 / 中继送来的输入：JSON 对象按草稿解析；否则（旧版本只送标题、
@@ -155,54 +88,64 @@ export function quickAddOpensInApp(input: string | null | undefined): boolean {
   }
 }
 
-/** 草稿标题为空（trim 后）时返回 null，不落库。 */
+/**
+ * Android 浮层提交的条目 id（android-out-of-app-writes）：原生入队时生成并
+ * 写进 JSON，App 外送达时 hub 也用它建任务。与 openInApp 同为提交属性，不进草稿。
+ */
+export function quickAddEntryId(input: string | null | undefined): string | undefined {
+  const text = input?.trim();
+  if (!text?.startsWith('{')) return undefined;
+  try {
+    const id = (JSON.parse(text) as { id?: unknown }).id;
+    return typeof id === 'string' && id ? id : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+export interface QuickAddOptions {
+  /**
+   * 预生成的任务 id（Android 浮层条目 id）。给出时 Subtask id 按序号派生，
+   * 与 hub 的 App 外送达产出同一组行；该任务已存在（hub 已建好并 pull 回来）
+   * 即视为已落库，不再写入。
+   */
+  id?: string;
+}
+
+/** 草稿标题为空（trim 后）时返回 null，不落库。引用按本地副本校验（见 planQuickAddTask）。 */
 export async function createFromQuickAddDraft(
   draft: QuickAddDraft,
   deps: QuickAddDeps = defaultDeps,
+  options: QuickAddOptions = {},
 ): Promise<QuickAddResult | null> {
-  const title = draft.title.trim();
-  if (!title) return null;
+  if (!draft.title.trim()) return null;
 
-  const dto: CreateTaskDto = { title };
-  if (draft.notes?.trim()) dto.notes = draft.notes;
-  if (draft.when?.type === 'date') {
-    dto.scheduledDate = draft.when.date;
-  } else if (draft.when?.type === 'someday') {
-    dto.start = Start.SOMEDAY;
-  }
-  if (draft.dueDate) dto.dueDate = draft.dueDate;
-
-  let placedIn: QuickAddPlacement = { kind: 'inbox' };
+  // 只查草稿用到的引用
+  const refs: QuickAddReferences = {};
   if (draft.projectId) {
-    const project = (await deps.getProjects()).find(
-      (p) => p.id === draft.projectId && p.status === ProjectStatus.ACTIVE,
-    );
-    if (project) {
-      dto.projectId = project.id;
-      placedIn = { kind: 'project', id: project.id, title: project.title };
-    }
+    refs.project = (await deps.getProjects()).find((p) => p.id === draft.projectId) ?? null;
   } else if (draft.areaId) {
-    const area = (await deps.getAreas()).find((a) => a.id === draft.areaId);
-    if (area) {
-      dto.areaId = area.id;
-      placedIn = { kind: 'area', id: area.id, title: area.title };
-    }
+    refs.area = (await deps.getAreas()).find((a) => a.id === draft.areaId) ?? null;
   }
-
   if (draft.tagIds?.length) {
-    const known = new Set((await deps.getTags()).map((tag) => tag.id));
-    const tagIds = draft.tagIds.filter((id) => known.has(id));
-    if (tagIds.length) dto.tagIds = tagIds;
+    refs.knownTagIds = new Set((await deps.getTags()).map((tag) => tag.id));
+  }
+  const plan = planQuickAddTask(draft, refs);
+  if (!plan) return null;
+
+  const { id } = options;
+  if (id && deps.getTask && (await deps.getTask(id).catch(() => null))) {
+    return { taskId: id, placedIn: plan.placedIn };
   }
 
-  const task = await deps.createTask(dto);
+  const task = await deps.createTask(id ? { ...plan.dto, id } : plan.dto);
   // CreateTaskDto 不收 Reminder：建好后补写（同为本地写，进同一 Outbox）。
-  if (draft.reminderTime && dto.scheduledDate) {
-    await deps.updateTask(task.id, { reminderTime: draft.reminderTime });
+  if (plan.reminderTime) {
+    await deps.updateTask(task.id, { reminderTime: plan.reminderTime });
   }
   // Subtask 逐条追加（缺省 afterId 即排在末尾），保持清单顺序。
-  for (const title of draft.subtasks ?? []) {
-    if (title.trim()) await deps.createSubtask(task.id, { title: title.trim() });
+  for (const [index, title] of plan.subtasks.entries()) {
+    await deps.createSubtask(task.id, id ? { title, id: deriveSubtaskId(id, index) } : { title });
   }
-  return { taskId: task.id, placedIn };
+  return { taskId: task.id, placedIn: plan.placedIn };
 }

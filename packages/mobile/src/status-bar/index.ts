@@ -66,7 +66,7 @@ export function initStatusBar(): void {
           position: task.position ?? null,
         }));
     },
-    createDraft: (draft) => createFromQuickAddDraft(draft),
+    createDraft: (draft, id) => createFromQuickAddDraft(draft, undefined, { id }),
     revealTask: requestTaskReveal,
     syncQuickAddData,
   });

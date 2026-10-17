@@ -133,3 +133,7 @@ Reminder 已能在 Desktop / Android 可靠触发（reminders spec、ADR-0014）
 - macOS：主按钮「完成」带下拉（15 分钟后 / 1 小时后 / 明天）；关闭按钮不承载操作（划走通知也会回报关闭）。
 - Reveal Task：已了结的任务落到 Logbook（spec 没写）；只设置展开状态，不设置 Selection（路由变化会清空 Selection）。
 - 各平台的真机验收清单见 issues 03 / 04 / 05。
+
+### 2026-10-17 — story 7 修订
+
+App 进程不在时点的通知操作，现在联网后直接送达 hub，不必等下次打开 App（ADR-0027，`.scratch/android-out-of-app-writes/`）。

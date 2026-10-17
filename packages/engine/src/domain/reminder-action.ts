@@ -1,5 +1,6 @@
 /**
- * Reminder Action — 通知操作（完成 / Snooze）的应用规则（reminder-actions spec）。
+ * Reminder Action — 通知操作（完成 / Snooze）的应用规则（reminder-actions spec；
+ * android-out-of-app-writes issue 01 移入共享 domain，hub 应用 App 外的通知操作时同用）。
  *
  * 纯函数：输入通知快照（taskId + 触发时对应的 fireAt）、动作、点击时刻与
  * 任务当前行，输出要执行的任务操作或丢弃。平台壳（桌面事件 / Android
@@ -14,7 +15,7 @@
 
 import { addCalendarDays, instantDateKey, instantWallTime } from '@taskora/shared';
 
-import { isReminderEligible, reminderFireAt, type ReminderTaskInput } from '@taskora/engine';
+import { isReminderEligible, reminderFireAt, type ReminderTaskInput } from './reminders';
 
 export type ReminderActionKind = 'complete' | 'snooze15' | 'snooze60' | 'snoozeTomorrow';
 

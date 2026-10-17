@@ -10,10 +10,12 @@ import type {
   TaskResponseDto,
 } from '@taskora/shared';
 import { ProjectStatus, Start } from '@taskora/shared';
+import { deriveSubtaskId } from '@taskora/engine';
 
 import {
   createFromQuickAddDraft,
   parseQuickAddInput,
+  quickAddEntryId,
   quickAddOpensInApp,
   type QuickAddDeps,
 } from './draft';
@@ -22,12 +24,18 @@ function installDeps(data?: {
   tags?: string[];
   projects?: Array<{ id: string; title: string; status?: ProjectStatus }>;
   areas?: Array<{ id: string; title: string }>;
+  /** 副本里已有的任务 id（getTask 能读到）。 */
+  existingTasks?: string[];
 }) {
   const created: CreateTaskDto[] = [];
   const deps = {
+    getTask: vi.fn(async (id: string) => {
+      if (!data?.existingTasks?.includes(id)) throw new Error(`Task not found: ${id}`);
+      return { id } as TaskResponseDto;
+    }),
     createTask: vi.fn(async (dto: CreateTaskDto) => {
       created.push(dto);
-      return { id: `task-${created.length}` } as TaskResponseDto;
+      return { id: dto.id ?? `task-${created.length}` } as TaskResponseDto;
     }),
     updateTask: vi.fn(async (id: string) => ({ id }) as TaskResponseDto),
     createSubtask: vi.fn(
@@ -211,5 +219,57 @@ describe('quickAddOpensInApp', () => {
     expect(quickAddOpensInApp('openInApp')).toBe(false);
     expect(quickAddOpensInApp('{broken')).toBe(false);
     expect(quickAddOpensInApp(null)).toBe(false);
+  });
+});
+
+describe('quickAddEntryId', () => {
+  it('只认 JSON 里的非空字符串 id', () => {
+    expect(quickAddEntryId('{"id":"e1","title":"x"}')).toBe('e1');
+    expect(quickAddEntryId('{"id":"","title":"x"}')).toBeUndefined();
+    expect(quickAddEntryId('{"id":1,"title":"x"}')).toBeUndefined();
+    expect(quickAddEntryId('买牛奶')).toBeUndefined();
+    expect(quickAddEntryId('{broken')).toBeUndefined();
+    expect(quickAddEntryId(null)).toBeUndefined();
+  });
+});
+
+describe('createFromQuickAddDraft — 预生成 id（android-out-of-app-writes）', () => {
+  const ENTRY = 'entry-1';
+
+  it('任务用条目 id，Subtask id 按序号派生（与 hub 同一组行）', async () => {
+    const { deps, created } = installDeps();
+    const result = await createFromQuickAddDraft(
+      { title: '装修', subtasks: ['量尺寸', '买料'] },
+      deps,
+      { id: ENTRY },
+    );
+    expect(result).toEqual({ taskId: ENTRY, placedIn: { kind: 'inbox' } });
+    expect(created).toEqual([{ title: '装修', id: ENTRY }]);
+    expect(deps.createSubtask.mock.calls).toEqual([
+      [ENTRY, { title: '量尺寸', id: deriveSubtaskId(ENTRY, 0) }],
+      [ENTRY, { title: '买料', id: deriveSubtaskId(ENTRY, 1) }],
+    ]);
+  });
+
+  it('任务已在副本里（hub 已送达并 pull 回来）：不再写入', async () => {
+    const { deps } = installDeps({
+      existingTasks: [ENTRY],
+      projects: [{ id: 'p1', title: '家' }],
+    });
+    const result = await createFromQuickAddDraft(
+      {
+        title: '装修',
+        when: { type: 'date', date: '2026-10-20' },
+        reminderTime: '09:00',
+        projectId: 'p1',
+        subtasks: ['量尺寸'],
+      },
+      deps,
+      { id: ENTRY },
+    );
+    expect(result).toEqual({ taskId: ENTRY, placedIn: { kind: 'project', id: 'p1', title: '家' } });
+    expect(deps.createTask).not.toHaveBeenCalled();
+    expect(deps.updateTask).not.toHaveBeenCalled();
+    expect(deps.createSubtask).not.toHaveBeenCalled();
   });
 });

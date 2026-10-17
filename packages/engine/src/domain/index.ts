@@ -187,3 +187,10 @@ export {
   type ReminderTextContext,
   type ReminderTexts,
 } from './reminders';
+export {
+  resolveReminderAction,
+  snoozeTarget,
+  type ReminderActionKind,
+  type ReminderActionRequest,
+  type ReminderActionResolution,
+} from './reminder-action';

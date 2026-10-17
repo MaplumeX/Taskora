@@ -14,7 +14,12 @@
  * 户不立即重发，下次数据变更/进前台自然恢复）。
  */
 
-import { parseQuickAddInput, quickAddOpensInApp, type QuickAddDraft } from '../quick-add/draft';
+import {
+  parseQuickAddInput,
+  quickAddEntryId,
+  quickAddOpensInApp,
+  type QuickAddDraft,
+} from '../quick-add/draft';
 import { carouselTitle, sortStatusBarTasks, type StatusBarTaskInput } from './content';
 import type { StatusBarShell } from './shell';
 
@@ -31,8 +36,9 @@ export interface StatusBarControllerOptions {
   /**
    * 快速添加落库（共用的 createFromQuickAddDraft：校验引用、缺省进 Inbox）。
    * 返回新任务 id（空标题等未落库时为 null），供「在应用中继续」定位。
+   * `id` 是浮层条目的预生成任务 id（android-out-of-app-writes），旧条目没有。
    */
-  createDraft(draft: QuickAddDraft): Promise<{ taskId: string } | null>;
+  createDraft(draft: QuickAddDraft, id?: string): Promise<{ taskId: string } | null>;
   /** 「在应用中继续」：落库后在应用中定位并展开这条任务。 */
   revealTask?(taskId: string): void;
   /**
@@ -152,10 +158,11 @@ export function createStatusBarController(
       const draft = parseQuickAddInput(event.inputValue);
       if (!draft?.title.trim()) return;
       const openInApp = quickAddOpensInApp(event.inputValue);
+      const id = quickAddEntryId(event.inputValue);
       // 落库后引擎 onChange 会再触发一次防抖刷新；这里立即刷新是为了
       // 在系统因动作撤下可见通知后立刻补回（插件行为：动作即 dismiss）。
       void options
-        .createDraft(draft)
+        .createDraft(draft, id)
         .then((result) => {
           if (openInApp && result) options.revealTask?.(result.taskId);
         })

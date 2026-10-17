@@ -15,6 +15,7 @@ import { BlobsModule } from './blobs/blobs.module';
 import { AgentModule } from './agent/agent.module';
 import { SyncModule } from './sync/sync.module';
 import { RemindersModule } from './reminders/reminders.module';
+import { OutOfAppModule } from './out-of-app/out-of-app.module';
 import { CalendarModule } from './calendar/calendar.module';
 import { DataPackageModule } from './data-package/data-package.module';
 import { HealthController } from './health/health.controller';
@@ -37,6 +38,7 @@ import { HealthController } from './health/health.controller';
     AgentModule,
     SyncModule,
     RemindersModule,
+    OutOfAppModule,
     CalendarModule,
     DataPackageModule,
   ],

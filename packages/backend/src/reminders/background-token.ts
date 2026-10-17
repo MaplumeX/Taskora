@@ -3,7 +3,9 @@ import { generateRt, hashRt } from '../auth/refresh-token.helpers';
 /**
  * 后台凭据（local-first-v3 issue 09）：Android 的后台同步不经 App 的会话
  * 令牌——原生侧若自行刷新，会和 JS 争 refresh token 的轮换，输的一方被
- * 登出。设备注册时另发一枚只读凭据，只能读提醒计划，和设备绑定。
+ * 登出。设备注册时另发一枚受限凭据，和设备绑定，只能读提醒计划、送达
+ * App 外的通知操作与快速添加（android-out-of-app-writes，见
+ * OutOfAppController）；不能读任务数据、不能删除、不能走同步协议。
  *
  * 有效期与 refresh token 一致：App 每次启动注册设备时轮换并续期；30 天
  * 没打开过 App，后台同步随之停止。

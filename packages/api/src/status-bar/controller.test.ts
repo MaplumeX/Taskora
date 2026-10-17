@@ -34,6 +34,7 @@ interface Harness {
     emitAction(event: StatusBarActionEvent): void;
   };
   created: QuickAddDraft[];
+  createdIds: Array<string | undefined>;
   setTasks(tasks: StatusBarTaskInput[]): void;
   controller: StatusBarController;
 }
@@ -50,6 +51,7 @@ function installHarness(options?: {
   const posted: Array<{ title: string }> = [];
   const failures: Array<{ title: string; text: string }> = [];
   const created: QuickAddDraft[] = [];
+  const createdIds: Array<string | undefined> = [];
   let actionCb: ((event: StatusBarActionEvent) => void) | null = null;
   let tasks = options?.tasks ?? [];
   const shell = {
@@ -85,9 +87,10 @@ function installHarness(options?: {
     shell,
     t,
     listTodayTasks: async () => tasks,
-    createDraft: async (draft) => {
+    createDraft: async (draft, id) => {
       if (options?.createFails) throw new Error('engine down');
       created.push(draft);
+      createdIds.push(id);
       return { taskId: `task-${created.length}` };
     },
     syncQuickAddData: options?.syncQuickAddData,
@@ -98,6 +101,7 @@ function installHarness(options?: {
   return {
     shell,
     created,
+    createdIds,
     setTasks(next) {
       tasks = next;
     },
@@ -139,7 +143,11 @@ describe('createStatusBarController', () => {
 
   it('开启并登录：发布首条任务标题（多条带位置指示）', async () => {
     const h = installHarness({
-      tasks: [task('今天一', TODAY, 'a1'), task('计划日期已过', YESTERDAY), task('今天二', TODAY, 'a2')],
+      tasks: [
+        task('今天一', TODAY, 'a1'),
+        task('计划日期已过', YESTERDAY),
+        task('今天二', TODAY, 'a2'),
+      ],
     });
     h.controller.syncSession(true);
     expect(await h.controller.setEnabled(true)).toBe(true);
@@ -284,6 +292,21 @@ describe('createStatusBarController', () => {
     });
     await flush();
     expect(h.created).toEqual([{ title: '写周报', when: { type: 'someday' }, tagIds: ['t1'] }]);
+  });
+
+  it('quick-add：条目 id 随草稿交给落库（不进草稿）；旧条目没有 id', async () => {
+    const h = installHarness({ enabledInStorage: true, tasks: [] });
+    h.controller.syncSession(true);
+    await flush();
+
+    h.shell.emitAction({
+      actionId: 'quick-add',
+      inputValue: JSON.stringify({ id: 'entry-1', title: '写周报' }),
+    });
+    h.shell.emitAction({ actionId: 'quick-add', inputValue: '买牛奶' });
+    await flush();
+    expect(h.created).toEqual([{ title: '写周报' }, { title: '买牛奶' }]);
+    expect(h.createdIds).toEqual(['entry-1', undefined]);
   });
 
   it('quick-add：落库失败发系统通知（正文为标题），之后照常刷新', async () => {

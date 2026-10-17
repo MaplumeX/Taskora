@@ -1,4 +1,5 @@
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 
 import { liveReminders, planReminderDeliveries, type ReminderTaskInput } from '@taskora/engine';
 import { TaskStatus } from '@taskora/shared';
@@ -6,6 +7,36 @@ import { TaskStatus } from '@taskora/shared';
 import { PrismaService } from '../prisma/prisma.service';
 import { SyncChangeLog } from '../sync/sync-change-log';
 import { userCalendarZones } from '../users/account-time-zone';
+
+/** 提醒规则需要的 Task 列（Prisma select）。 */
+export const REMINDER_TASK_SELECT = {
+  id: true,
+  title: true,
+  notes: true,
+  scheduledDate: true,
+  reminderTime: true,
+  status: true,
+  trashedAt: true,
+  projectId: true,
+  areaId: true,
+} as const;
+
+type ReminderTaskRow = Prisma.TaskGetPayload<{ select: typeof REMINDER_TASK_SELECT }>;
+
+/** Postgres 行 → domain 的 ReminderTaskInput（日期转 ISO 字符串）。 */
+export function reminderInputFromRow(row: ReminderTaskRow): ReminderTaskInput {
+  return {
+    id: row.id,
+    title: row.title,
+    notes: row.notes,
+    scheduledDate: row.scheduledDate?.toISOString() ?? null,
+    reminderTime: row.reminderTime,
+    status: row.status as TaskStatus,
+    trashedAt: row.trashedAt?.toISOString() ?? null,
+    projectId: row.projectId,
+    areaId: row.areaId,
+  };
+}
 
 /**
  * 提醒计划（local-first-v3 issue 09）：与设备上的 Reminder 协调器同一套
@@ -36,32 +67,14 @@ export class RemindersService {
           trashedAt: null,
         },
         select: {
-          id: true,
-          title: true,
-          notes: true,
-          scheduledDate: true,
-          reminderTime: true,
-          status: true,
-          trashedAt: true,
-          projectId: true,
-          areaId: true,
+          ...REMINDER_TASK_SELECT,
           project: { select: { title: true } },
           area: { select: { title: true } },
         },
       }),
     ]);
 
-    const tasks: ReminderTaskInput[] = rows.map((row) => ({
-      id: row.id,
-      title: row.title,
-      notes: row.notes,
-      scheduledDate: row.scheduledDate?.toISOString() ?? null,
-      reminderTime: row.reminderTime,
-      status: row.status as TaskStatus,
-      trashedAt: row.trashedAt?.toISOString() ?? null,
-      projectId: row.projectId,
-      areaId: row.areaId,
-    }));
+    const tasks = rows.map(reminderInputFromRow);
     const titles = { projects: new Map<string, string>(), areas: new Map<string, string>() };
     for (const row of rows) {
       if (row.projectId && row.project) titles.projects.set(row.projectId, row.project.title);

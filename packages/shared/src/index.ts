@@ -4,6 +4,7 @@ export * from './when-query';
 export * from './repeat-query';
 export * from './review';
 export * from './new-in-today';
+export * from './quick-add';
 export * from './logging';
 export * from './data-package';
 export * from './enums/task.enum';

@@ -46,6 +46,19 @@ describe('EngineTaskBackend（切片一：Inbox/Today Task CRUD 走 Engine）', 
     expect(inbox.map((item) => item.title)).toEqual(['第一条', '第二条', '第三条']);
   });
 
+  it('createTask：用预生成 id 建任务；同一 id 再建返回现有任务、不重复写入', async () => {
+    const id = '7d2f5f0e-6a43-4b8e-9a52-1c4d0f9e2b11';
+    const created = await backend.createTask({ id, title: '周报' });
+    expect(created.id).toBe(id);
+    const pending = await engine.pendingCount();
+
+    const again = await backend.createTask({ id, title: '另一个标题' });
+    expect(again.id).toBe(id);
+    expect(again.title).toBe('周报');
+    expect(await engine.list('task')).toHaveLength(1);
+    expect(await engine.pendingCount()).toBe(pending);
+  });
+
   it('createTask：手动排序后，新任务仍追加在当前末尾，不改动原有任务位次', async () => {
     const a = await backend.createTask({ title: 'A' });
     const b = await backend.createTask({ title: 'B' });

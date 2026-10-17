@@ -37,3 +37,10 @@ A Reminder fires on every device, so a notification that has already been posted
 - On desktop, the runtime coordinator remembers what it fired and calls `withdraw(taskId)` once a notification goes stale. Windows tags each toast with the taskId and removes it through `ToastNotificationHistory`. Linux closes it through `CloseNotification`. On macOS this is a no-op because `mac-notification-sys` has no removal API; a stale action there is still discarded by the Reminder Action rules.
 
 "Missed reminders are not re-delivered" now also bounds lateness. The desktop coordinator drops a due reminder when its check runs more than `REMINDER_LATE_TOLERANCE_MS` (5 minutes) after fireAt, which happens after system sleep or WebView timer throttling. On Android, an alarm delivered more than `GC_AFTER_MS` (1 hour) late is dropped, the same cutoff the plan uses to reclaim lost alarms. The cutoff is generous because without the exact-alarm permission Android may legitimately deliver up to about an hour late.
+
+## Amendment (2026-10-17): out-of-app writes reach the hub directly
+
+Notification actions no longer wait for JS to reach other devices (ADR-0027). When an action is queued, native also enqueues a one-time WorkManager job that posts it to `POST /reminders/actions` with the device background token; the hub applies the same Reminder Action rules. The background token is no longer read-only: it may also deliver these actions and status bar quick adds, and still cannot read task data, delete, or use the sync protocol.
+- A delivered entry stays in the queue with a `delivered` mark until JS takes the queue. Delivered completions are not handed to JS. Delivered snoozes are, so their keys keep protecting the temporary alarm until JS has written the snooze into the replica.
+- After any delivery, native fetches the reminder plan once (`ReminderBackground.refreshSoon`) instead of waiting for the next period.
+

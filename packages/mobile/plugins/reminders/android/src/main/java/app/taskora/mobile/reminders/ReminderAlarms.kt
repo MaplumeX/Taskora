@@ -310,14 +310,46 @@ internal object ReminderAlarms {
             ReminderStore.savePendingActions(context, queue)
         }
         RemindersPlugin.notifyActionsAvailable()
+        // App 不在时也送达 hub（android-out-of-app-writes）；在时 JS 照常应用，两边结果相同。
+        ReminderActionDelivery.schedule(context)
     }
 
-    /** 取走排队的操作（JS 应用；取出即删）。 */
+    /** 还没送达 hub 的排队操作（按点击顺序）。 */
+    fun undeliveredActions(context: Context): List<PendingAction> {
+        synchronized(lock) {
+            return ReminderStore.pendingActions(context).filter { !it.delivered }
+        }
+    }
+
+    /** 标记已送达；JS 已先取走则无事可做。 */
+    fun markDelivered(context: Context, action: PendingAction) {
+        synchronized(lock) {
+            val queue = ReminderStore.pendingActions(context)
+            var changed = false
+            val updated = queue.map {
+                if (!it.delivered && it.copy(delivered = false) == action.copy(delivered = false)) {
+                    changed = true
+                    it.copy(delivered = true)
+                } else {
+                    it
+                }
+            }
+            if (changed) ReminderStore.savePendingActions(context, updated)
+        }
+    }
+
+    /**
+     * 取走排队的操作（JS 应用；取出即删）。已送达 hub 的「完成」不再交给 JS：
+     * 本机没有要保护的闹钟，副本 pull 后自然一致，再应用只会在副本落后时
+     * 覆盖别处随后的改动。已送达的 Snooze 仍交给 JS——队列里的 key 在 JS
+     * 应用前保护着临时闹钟，副本落后（离线打开 App）时由 JS 写出与 hub
+     * 相同的结果，计划里才有这次 Snooze。
+     */
     fun takePendingActions(context: Context): List<PendingAction> {
         synchronized(lock) {
             val queue = ReminderStore.pendingActions(context)
             if (queue.isNotEmpty()) ReminderStore.savePendingActions(context, emptyList())
-            return queue
+            return queue.filter { !(it.delivered && it.action == OP_COMPLETE) }
         }
     }
 

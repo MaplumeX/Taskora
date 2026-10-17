@@ -3,6 +3,7 @@ import {
   IsEnum,
   IsOptional,
   IsString,
+  IsUUID,
   IsDateString,
   IsArray,
   IsInt,
@@ -52,6 +53,10 @@ export class RepeatRuleDto {
 export class CreateTaskDto {
   @IsString()
   title!: string;
+
+  @IsOptional()
+  @IsUUID()
+  id?: string;
 
   @IsOptional()
   @IsString()
