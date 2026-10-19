@@ -125,7 +125,9 @@ export function FieldPickerDialog({ label, open, onOpenChange, trigger, children
             e.preventDefault();
             contentRef.current?.focus();
           }}
-          className="top-[calc((100dvh-var(--kb-inset,0px))/2)] flex max-h-[calc(100dvh-var(--kb-inset,0px)-2rem)] w-[min(22rem,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden rounded-2xl p-0 outline-none sm:rounded-2xl max-md:max-w-none"
+          // --kb-inset 只在键盘动画结束后跳变一次（mobile keyboard-inset.ts），
+          // 卡片据此平滑移到新的居中位置，不跟着键盘逐帧移动。
+          className="top-[calc((100dvh-var(--kb-inset,0px))/2)] transition-[top,max-height] flex max-h-[calc(100dvh-var(--kb-inset,0px)-2rem)] w-[min(22rem,calc(100vw-2rem))] max-w-none flex-col gap-0 overflow-hidden rounded-2xl p-0 outline-none sm:rounded-2xl max-md:max-w-none"
         >
           <div className="flex shrink-0 items-center justify-between pl-4 pr-1 pt-1">
             <DialogTitle className="text-base font-semibold">{label}</DialogTitle>
