@@ -10,6 +10,50 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > Android 小节，端专属改动标注 `(desktop)` / `(android)`。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [1.0.3] - 2026-10-21
+
+本版让 Android 在 App 之外的写入（通知按钮、状态栏快速添加）联网后直接送达 hub，不必等下次
+打开 App；Someday 视图不再重复画虚线标记；手机键盘升降时的布局写入改为稳定后一次写入，减少
+掉帧。
+
+### Added
+
+- **backend/engine/shared/api/mobile**: App 外写入直达 Sync Hub (#238) — 通知上的「完成 /
+  15 分钟后 / 稍后…」与状态栏快速添加，此前只在原生入队，要等主 WebView 下次运行才落库并推送；
+  现在原生入队的同时提交联网约束的 WorkManager 一次性任务，用设备后台凭据把操作直接交给 hub：
+  通知操作走 `POST /reminders/actions`，快速添加走 `POST /quick-add`。hub 按与设备相同的规则
+  应用（`resolveReminderAction` / `snoozeTarget` 下沉到 `@taskora/engine` 的 domain，草稿 →
+  `CreateTaskDto` 的转换与引用回落抽成 `@taskora/shared` 的 `planQuickAddTask`），写入经
+  `writeAsHub` 记入变更日志，其他设备正常 pull 即可见。完成以点击时刻为了结时间
+  （`TasksService.complete` 新增 `settledAt`），派生 Repeat Instance 与 App 内完成一致；
+  Snooze 按点击时刻改写 `scheduledDate` + `reminderTime`；快速添加的任务 id 用入队时生成的
+  条目 id，Subtask id 用 `deriveSubtaskId(id, 序号)`，与设备端落库产出同一组行。重放不另建
+  去重表：已了结 / 快照过期 / id 已存在时丢弃或原样返回，送达方不区分 applied 与 discarded。
+  原生队列仍是唯一待办来源：送达后只打「已送达」标记、不出队，JS 取队列时一并清掉；已送达
+  的快速添加与「完成」不再交给 JS，已送达的 Snooze 仍交给 JS 在副本上再应用一次，以保护本机
+  的临时闹钟。凭据缺失、被拒或旧版 hub 不认识这两个接口时不重试，留给 JS，行为与此前相同。
+  新 ADR-0027；修订 reminder-actions spec story 7 与 local-first-v3 issue 09 的「后台凭据只读」
+  决定。
+
+### Changed
+
+- **backend**: 后台凭据扩展为受限写凭据 (#238) — 设备后台凭据从「只读，只能读提醒计划」扩展
+  为白名单 `GET /reminders/plan`、`POST /reminders/actions`、`POST /quick-add`，可送达 App 外
+  写入，仍不能读任务数据、不能删除、不能走同步协议；不另发写凭据，轮换、续期、被拒即停用的
+  逻辑沿用原实现，其他接口只认会话 JWT，后台凭据天然通不过。
+
+- **ui**: Someday 视图不画 Someday 标记 (#237) — Someday 页里条目全是 Someday，任务复选框的
+  虚线边框与项目进度环的虚线灰不再有区分意义，按普通样式渲染；新增 `SomedayMarkContext`
+  （缺省为 `true`），只在 Someday 页以 `false` 关闭标记，其他列表、信息流与搜索结果保持不变。
+
+### Fixed
+
+- **mobile/ui**: 键盘升降时逐帧重排导致掉帧 (#239) — `--kb-inset` 此前在键盘动画期间几乎每帧
+  写入，整页样式重算与 AppShell 重排会与同时播放的弹窗 / 展开动画抢主线程。现在视口稳定
+  120ms（`KEYBOARD_SETTLE_MS`）后只写一次；焦点离开可编辑元素且没有落到另一个可编辑元素上时
+  （弹窗打开、任务收起）立即写 0，不必等键盘动画结束才回到全高。字段选择器卡片据此加
+  `top` / `max-height` 过渡，在键盘结束后平滑移到新的居中位置。
+
 ## [1.0.2] - 2026-10-16
 
 本版把设置里的「导出」升级成可导回的 `.taskora` 数据包：备份终于能恢复，也能换账号或自建
