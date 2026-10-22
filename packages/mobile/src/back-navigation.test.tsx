@@ -4,7 +4,7 @@ import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
 
 /**
  * Android 返回手势级联（issue 05 验收）：
- *   关闭浮层 → 路由返回 → 根页退到后台（plugin:background|move_to_back）。
+ *   关闭浮层 → 收起展开任务 → 退出多选 → 路由返回 → 根页退到后台（plugin:background|move_to_back）。
  * mock @tauri-apps/api/app 的 onBackButtonPress 捕获回调。
  */
 
@@ -32,7 +32,7 @@ import {
   useBackNavigation,
 } from './back-navigation';
 import { Dialog, DialogContent, DialogTitle } from '@taskora/ui/components/ui/dialog';
-import { useMultiSelectStore } from '@taskora/api';
+import { useMultiSelectStore, useSelectionStore, useUiInteractionStore } from '@taskora/api';
 
 function pressBack() {
   expect(hoisted.backHandler).toBeTruthy();
@@ -103,6 +103,33 @@ describe('back-navigation 级联（Tauri 环境，issue 05）', () => {
     });
     // 没有退到后台
     expect(hoisted.invokeMock).not.toHaveBeenCalled();
+  });
+
+  it('无浮层但有展开的任务 → 先提交聚焦的编辑再收起，不路由返回', async () => {
+    const backSpy = vi.spyOn(window.history, 'back').mockImplementation(() => undefined);
+    window.history.replaceState({ idx: 2 }, '', '/today');
+    useSelectionStore.getState().setSelection(['task-1']);
+    useUiInteractionStore.getState().setExpandedId('task-1');
+    const onBlur = vi.fn();
+    render(
+      <div data-task-item>
+        <input aria-label="title" onBlur={onBlur} />
+      </div>,
+    );
+    const input = document.querySelector('input')!;
+    input.focus();
+
+    installShell();
+    await waitFor(() => expect(hoisted.backHandler).toBeTruthy());
+
+    pressBack();
+
+    expect(onBlur).toHaveBeenCalled();
+    expect(useUiInteractionStore.getState().expandedId).toBeNull();
+    expect(useSelectionStore.getState().selectedIds).toEqual([]);
+    expect(backSpy).not.toHaveBeenCalled();
+    expect(hoisted.invokeMock).not.toHaveBeenCalled();
+    backSpy.mockRestore();
   });
 
   it('第二级：无浮层但处于多选模式 → 退出多选，不路由返回', async () => {
