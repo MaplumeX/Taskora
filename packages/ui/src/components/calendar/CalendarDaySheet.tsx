@@ -65,11 +65,7 @@ export function CalendarDaySheet({ date, tasks, previews = [], events = [], onCl
           'md:bottom-auto md:left-1/2 md:right-auto md:top-1/2 md:max-h-[70vh] md:w-[28rem] md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl md:border md:pb-0 md:data-[state=closed]:slide-out-to-bottom-2 md:data-[state=open]:slide-in-from-bottom-2',
         )}
       >
-        <div
-          aria-hidden
-          className="mx-auto mt-2 h-1 w-10 shrink-0 rounded-full bg-muted-foreground/30 md:hidden"
-        />
-        <div className="flex shrink-0 items-center justify-between pl-4 pr-1 md:pt-2">
+        <div className="flex shrink-0 items-center justify-between pl-4 pr-1 pt-2">
           <DialogTitle className="text-base font-semibold">{title}</DialogTitle>
           <DialogClose
             aria-label={t('common:close')}
