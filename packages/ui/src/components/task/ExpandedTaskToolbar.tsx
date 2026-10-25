@@ -244,7 +244,7 @@ export function ExpandedTaskToolbar({ variant }: Props) {
           : 'pointer-events-none translate-y-6 opacity-0',
         inReview
           ? 'bottom-[calc(5rem+var(--safe-area-bottom))]'
-          : 'bottom-[calc(1.75rem+var(--safe-area-bottom))]',
+          : 'bottom-[calc(2.75rem+var(--safe-area-bottom))]',
       )}
     >
       <div className="flex h-14 items-center justify-around rounded-full border bg-background/85 px-1.5 shadow-popover backdrop-blur-xl">
