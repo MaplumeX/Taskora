@@ -30,4 +30,22 @@ describe('formatRepeatSummary', () => {
       summary({ unit: 'week', interval: 2, weekdays: [1, 3], anchor: 'scheduled' }, 'zh'),
     ).toMatch(/^每 2 周 · 周一、周三$/);
   });
+
+  it('从完成日期算：「完成后 N 单位」，不带星期 / 日子', () => {
+    const after = (unit: RepeatRule['unit'], interval: number): RepeatRule => ({
+      unit,
+      interval,
+      anchor: 'completion',
+    });
+    expect(summary(after('day', 3), 'zh')).toBe('完成后 3 天');
+    expect(summary(after('week', 1), 'zh')).toBe('完成后 1 周');
+    expect(summary(after('day', 3), 'en')).toBe('3 days after completion');
+    expect(summary(after('week', 1), 'en')).toBe('1 week after completion');
+  });
+
+  it('周一至周五全选显示为「工作日」', () => {
+    expect(
+      summary({ unit: 'week', interval: 1, weekdays: [1, 2, 3, 4, 5], anchor: 'scheduled' }, 'zh'),
+    ).toBe('每周 · 工作日');
+  });
 });
