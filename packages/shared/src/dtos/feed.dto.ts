@@ -29,6 +29,8 @@ export interface FeedItemBase {
   repeatRule: RepeatRule | null;
   /** 派生来源（Repeat Instance / 重复项目实例）。 */
   repeatSourceId: string | null;
+  /** 出现日（Occurrence Date）：为空即等于计划日期。 */
+  occurrenceDate?: string | null;
   dueDate: string | null;
   status: TaskStatus | ProjectStatus;
   /** 了结时间（Settled At，ADR 0006）：task 的 COMPLETED/CANCELLED 与 project 的 COMPLETED 共用此字段；名称保留 completedAt 以兼容前端。 */

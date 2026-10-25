@@ -79,6 +79,7 @@ export function taskRowToDto(row: ReplicaRow, tags: Map<string, TagResponseDto>)
     reminderTime: (f.reminderTime as string | null) ?? null,
     repeatRule: (f.repeatRule as RepeatRule | null) ?? null,
     repeatSourceId: (f.repeatSourceId as string | null) ?? null,
+    occurrenceDate: (f.occurrenceDate as string | null) ?? null,
     dueDate: (f.dueDate as string | null) ?? null,
     status: (f.status as TaskStatus) ?? TaskStatus.ACTIVE,
     // DTO 字段名保留 completedAt，承载 Settled At 语义（ADR 0006）。
@@ -159,6 +160,7 @@ export function projectRowToDto(
     dueDate: (f.dueDate as string | null) ?? null,
     repeatRule: (f.repeatRule as RepeatRule | null) ?? null,
     repeatSourceId: (f.repeatSourceId as string | null) ?? null,
+    occurrenceDate: (f.occurrenceDate as string | null) ?? null,
     ...reviewFieldsOf(f),
     completedAt: (f.completedAt as string | null) ?? null,
     trashedAt: (f.trashedAt as string | null) ?? null,

@@ -9,7 +9,8 @@
  *
  * 规则与写入路径共用 domain/ 的推导（Engine 后端与 REST 服务都调用）：
  * 冲突时「把状态收紧」的一方获胜——换项目清空分组、Someday 清空日期、
- * 没有日期清空提醒与重复规则（任务与项目）、整理过的任务离开 Inbox。一致的状态返回空：修复只在真的冲突
+ * 没有日期清空提醒与重复规则（任务与项目）、出现日只随按计划日期推算的规则存在、
+ * 整理过的任务离开 Inbox。一致的状态返回空：修复只在真的冲突
  * 时发生。纯函数，设备与 hub 共用。
  */
 
@@ -18,6 +19,7 @@ import { ProjectStatus, Start, TaskStatus } from '@taskora/shared';
 import type { SyncEntity } from './entities';
 import { resolveProjectStart, resolveTaskStart } from './domain/start';
 import { tagParentCreatesCycle } from './domain/tags';
+import { normalizeRepeatRule } from './repeat';
 
 /** 分组归属探针：返回分组所属项目 id；未知（尚未到达 / 已删除）返回 undefined。 */
 export type HeadingProjectProbe = (headingId: string) => string | undefined;
@@ -55,6 +57,14 @@ export function repairEntity(
     }
   };
   const has = (field: string) => field in fields;
+  // 出现日（recurring-tasks-v4）：只在有计划日期、规则 anchor=scheduled 时成立
+  const fixOccurrence = (date: unknown) => {
+    if (fields.occurrenceDate == null) return;
+    if (date === null) return fix('occurrenceDate', null);
+    if (has('repeatRule') && normalizeRepeatRule(fields.repeatRule)?.anchor !== 'scheduled') {
+      fix('occurrenceDate', null);
+    }
+  };
 
   switch (entity) {
     case 'task': {
@@ -69,6 +79,7 @@ export function repairEntity(
           fix('reminderTime', null);
         }
       }
+      fixOccurrence(date);
       // R3：Inbox 只收无归属、无日期的任务；整理过即 Anytime
       if (has('start') && date !== undefined) {
         fix('start', resolveTaskStart(fields.start, date, fields.projectId, fields.areaId));
@@ -89,6 +100,7 @@ export function repairEntity(
         // R1：仅有计划日期的项目可设重复规则（recurring-projects spec）
         if (date === null) fix('repeatRule', null);
       }
+      fixOccurrence(date);
       // 项目不停留在 Inbox
       if (has('start')) fix('start', resolveProjectStart(fields.start));
       if (fields.status === ProjectStatus.ACTIVE) fix('completedAt', null);

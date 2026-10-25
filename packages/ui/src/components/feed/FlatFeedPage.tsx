@@ -21,7 +21,7 @@ import { PageHeading } from '@/components/layout/PageHeading';
 import { TagFilterBar, useTagFilter } from '@/components/tags/TagFilterBar';
 
 interface Props {
-  view: Extract<FeedView, 'deadlines' | 'repeating'>;
+  view: Extract<FeedView, 'deadlines'>;
   /** 页面路由（标题图标）。 */
   nav: string;
   title: string;
@@ -29,7 +29,7 @@ interface Props {
 }
 
 /**
- * 只读顺序的平铺 feed 页（Deadlines / Repeating 等隐藏列表）：顺序由 feed
+ * 只读顺序的平铺 feed 页（Deadlines 隐藏列表）：顺序由 feed
  * 决定，不分组、不可拖拽排序；行可勾选、展开、参与键盘 Selection。
  */
 export function FlatFeedPage({ view, nav, title, emptyHint }: Props) {

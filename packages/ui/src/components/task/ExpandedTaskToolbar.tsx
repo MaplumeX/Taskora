@@ -10,6 +10,7 @@ import {
   Repeat,
   RotateCcw,
   SkipForward,
+  CalendarPlus,
   Trash2,
   type LucideIcon,
 } from 'lucide-react';
@@ -47,6 +48,7 @@ import {
 } from '@/components/ui/action-sheet';
 import { MovePicker } from './fields/MovePicker';
 import { RepeatRuleField } from './fields/RepeatRuleField';
+import { useNextCopy } from './useNextCopy';
 import { useSkipOccurrence } from './useSkipOccurrence';
 import { useConvertGuard } from './useConvertGuard';
 import { useDuplicate } from './useDuplicate';
@@ -84,6 +86,7 @@ export function ExpandedTaskToolbar({ variant }: Props) {
   const [moreOpen, setMoreOpen] = React.useState(false);
   const [picker, setPicker] = React.useState<PickerKind | null>(null);
   const skipOccurrence = useSkipOccurrence(task, moreOpen);
+  const nextCopy = useNextCopy(task, 'task', moreOpen);
   // 回顾模式底部有回顾工具栏：悬浮胶囊让到它上方（同 FAB）。
   const inReview = useLocation().pathname.startsWith('/review/');
 
@@ -161,6 +164,9 @@ export function ExpandedTaskToolbar({ variant }: Props) {
             onSelect: skipOccurrence.skip,
           },
         ]
+      : []),
+    ...(nextCopy.available
+      ? [{ icon: CalendarPlus, label: t('task:nextCopy'), onSelect: nextCopy.create }]
       : []),
     ...(!trashed
       ? [

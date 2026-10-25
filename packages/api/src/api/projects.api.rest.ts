@@ -63,6 +63,19 @@ export function skipProject(id: string): Promise<ProjectResponseDto> {
     });
 }
 
+export function createProjectNextCopy(id: string): Promise<ProjectResponseDto> {
+  return apiClient
+    .post<ProjectResponseDto>(`/projects/${id}/next-copy`)
+    .then((res) => res.data)
+    .catch((error: unknown) => {
+      // 409 的 message 即不可生成的原因（与 Engine 实现抛同一种错误）
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        throw new RepeatSkipBlockedError(error.response.data?.message as RepeatSkipBlock);
+      }
+      throw error;
+    });
+}
+
 export function uncompleteProject(id: string): Promise<ProjectResponseDto> {
   return apiClient.post<ProjectResponseDto>(`/projects/${id}/uncomplete`).then((res) => res.data);
 }

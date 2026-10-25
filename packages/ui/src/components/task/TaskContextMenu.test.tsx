@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -25,6 +25,8 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useRestoreTask: () => ({ mutate: vi.fn(), isPending: false }),
   useConvertTaskToProject: () => ({ mutate: vi.fn(), isPending: false }),
   useSkipTask: () => ({ mutate: skipMock, isPending: false }),
+  useCreateNextCopy: () => ({ mutate: nextCopyMock, isPending: false }),
+  useCreateProjectNextCopy: () => ({ mutate: vi.fn(), isPending: false }),
   useDuplicateTask: () => ({ mutateAsync: duplicateMock }),
   useDuplicateProject: () => ({ mutateAsync: vi.fn() }),
   useProjectsQuery: () => ({
@@ -38,6 +40,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
 
 const updateMock = vi.hoisted(() => vi.fn());
 const skipMock = vi.hoisted(() => vi.fn());
+const nextCopyMock = vi.hoisted(() => vi.fn());
 const completeMock = vi.hoisted(() => vi.fn());
 const deleteMock = vi.hoisted(() => vi.fn());
 const duplicateMock = vi.hoisted(() => vi.fn(async (id: string) => ({ id: `${id}-copy` })));
@@ -222,6 +225,28 @@ describe('TaskContextMenu — 跳过本次', () => {
     expect(screen.queryByRole('button', { name: skipName })).toBeNull();
     await user.click(item);
     expect(skipMock).toHaveBeenCalledWith('task-1', expect.anything());
+  });
+
+  const nextCopyName = /^(Create Next Copy|提前生成下一份)$/;
+
+  it('提前生成下一份（recurring-tasks-v4）：重复任务显示入口，点击调用 createNextCopy', async () => {
+    const user = userEvent.setup();
+    openMenu(repeating);
+    await user.click(await screen.findByRole('button', { name: nextCopyName }));
+    expect(nextCopyMock).toHaveBeenCalledWith('task-1', expect.anything());
+  });
+
+  it('提前生成下一份：无规则 / 已完成 / 链已终结不显示入口', async () => {
+    for (const task of [
+      { ...repeating, repeatRule: null },
+      { ...repeating, status: TaskStatus.COMPLETED },
+      { ...repeating, repeatRule: { ...repeating.repeatRule!, until: '2026-02-05' } },
+    ]) {
+      openMenu(task);
+      await screen.findByRole('button', { name: /^(Move|移动)/ });
+      expect(screen.queryByRole('button', { name: nextCopyName })).toBeNull();
+      cleanup();
+    }
   });
 });
 

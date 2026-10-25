@@ -8,6 +8,7 @@ import {
   planProjectCreate,
   planProjectDuplicate,
   planProjectRepeatSkip,
+  projectNextCopyBlock,
   planProjectRestore,
   planProjectTrash,
   planProjectUpdate,
@@ -138,7 +139,11 @@ export class ProjectsService {
     const existing = await this.requireProject(userId, id);
     const { zones, review } = await userReviewSettings(this.prisma, userId);
     const patch = planProjectUpdate(
-      { ...existing, reviewInterval: parseReviewInterval(existing.reviewInterval) },
+      {
+        ...existing,
+        repeatRule: parseRepeatRule(existing.repeatRule),
+        reviewInterval: parseReviewInterval(existing.reviewInterval),
+      },
       dto,
       zones,
       review,
@@ -238,9 +243,9 @@ export class ProjectsService {
     parent: ProjectRowWithTags,
     tasks: ReadonlyArray<Prisma.TaskGetPayload<{ include: { tags: true } }>>,
     completedAt: string,
-  ): Promise<void> {
+  ): Promise<string | null> {
     const repeatRule = parseRepeatRule(parent.repeatRule);
-    if (!repeatRule) return; // 非重复项目：不必查账号时区
+    if (!repeatRule) return null; // 非重复项目：不必查账号时区
     const { zones, review } = await userReviewSettings(this.prisma, userId);
     const plan = planRepeatProjectInstance(
       {
@@ -248,6 +253,7 @@ export class ProjectsService {
         title: parent.title,
         notes: parent.notes,
         scheduledDate: parent.scheduledDate,
+        occurrenceDate: parent.occurrenceDate,
         dueDate: parent.dueDate,
         repeatRule,
         reviewInterval: parseReviewInterval(parent.reviewInterval),
@@ -258,7 +264,7 @@ export class ProjectsService {
       zones,
       review,
     );
-    if (!plan) return;
+    if (!plan) return null;
     const linked = await batch.tx.project.findFirst({
       where: { userId, repeatSourceId: parent.id, trashedAt: null },
       select: { id: true },
@@ -283,7 +289,7 @@ export class ProjectsService {
           ? 'compacted'
           : 'absent',
     });
-    if (target === 'skip') return;
+    if (target === 'skip') return null;
     const instanceId = target === 'planned' ? plan.id : randomUUID();
 
     // 侧边栏中紧跟来源项目
@@ -302,6 +308,7 @@ export class ProjectsService {
     await this.writeProjectCopy(batch, parent.id, tasks, (children) =>
       plan.copyFor(instanceId, children),
     );
+    return instanceId;
   }
 
   /**
@@ -410,6 +417,42 @@ export class ProjectsService {
       await batch.write('project', id, toWireFields(projectReopenPatch()));
     });
     return this.findOne(userId, id);
+  }
+
+  /**
+   * 提前生成下一份（recurring-tasks-v4）：现在就写入完成时会派生的下一轮
+   * （内容取当前这一轮，规则见 domain projectNextCopyBlock /
+   * planRepeatProjectInstance），来源不变。不可生成 → 409。返回下一份。
+   */
+  async nextCopy(userId: string, id: string) {
+    const existing = await this.prisma.project.findFirst({
+      where: { id, userId },
+      include: { tags: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Project not found');
+    }
+    const [linked, tasks] = await Promise.all([
+      this.prisma.project.findFirst({
+        where: { userId, repeatSourceId: id, trashedAt: null },
+        select: { id: true },
+      }),
+      this.prisma.task.findMany({ where: { projectId: id, userId }, include: { tags: true } }),
+    ]);
+    const now = new Date().toISOString();
+    const block = projectNextCopyBlock(
+      { ...existing, repeatRule: parseRepeatRule(existing.repeatRule) },
+      linked !== null,
+      now,
+      await userCalendarZones(this.prisma, userId),
+    );
+    if (block) throw new ConflictException(block);
+    const copyId = await this.hub.writeAsHub(userId, async (batch) => {
+      const instanceId = await this.deriveRepeatProject(batch, userId, existing, tasks, now);
+      if (!instanceId) throw new ConflictException('next-exists');
+      return instanceId;
+    });
+    return this.findOne(userId, copyId);
   }
 
   /**

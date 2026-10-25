@@ -15,6 +15,7 @@ import {
   Repeat,
   RotateCcw,
   SkipForward,
+  CalendarPlus,
   Tag,
   Trash2,
   type LucideIcon,
@@ -52,6 +53,7 @@ import { DueDateField } from './fields/DueDateField';
 import { RepeatRuleField } from './fields/RepeatRuleField';
 import { MultiTagsField } from './fields/TagsField';
 import { MovePicker } from './fields/MovePicker';
+import { useNextCopy } from './useNextCopy';
 import { useSkipOccurrence } from './useSkipOccurrence';
 import { useConvertGuard } from './useConvertGuard';
 import { useDuplicate } from './useDuplicate';
@@ -101,6 +103,7 @@ export function MultiSelectToolbar() {
   const convertGuard = useConvertGuard();
   const duplicate = useDuplicate();
   const skipOccurrence = useSkipOccurrence(single, active);
+  const nextCopy = useNextCopy(single, 'task', active);
 
   const [picker, setPicker] = React.useState<PickerKind | null>(null);
   // 字段卡片关闭时：改过字段 → 视为动作完成、退出模式；未改 → 留在模式中。
@@ -165,6 +168,11 @@ export function MultiSelectToolbar() {
 
   const handleSkip = () => {
     skipOccurrence.skip();
+    exit();
+  };
+
+  const handleNextCopy = () => {
+    nextCopy.create();
     exit();
   };
 
@@ -267,6 +275,11 @@ export function MultiSelectToolbar() {
               {skipOccurrence.available && (
                 <ActionSheetItem icon={SkipForward} onClick={handleSkip}>
                   {t(skipOccurrence.last ? 'task:skipOccurrenceEnd' : 'task:skipOccurrence')}
+                </ActionSheetItem>
+              )}
+              {nextCopy.available && (
+                <ActionSheetItem icon={CalendarPlus} onClick={handleNextCopy}>
+                  {t('task:nextCopy')}
                 </ActionSheetItem>
               )}
               {!inTrash && (

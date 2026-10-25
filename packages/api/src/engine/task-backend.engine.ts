@@ -32,6 +32,7 @@ import {
   planEmptyTrash,
   planRepeatInstance,
   planRepeatSkip,
+  nextCopyBlock,
   planTaskComplete,
   planTaskDuplicate,
   planTaskCreate,
@@ -205,6 +206,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         title: (f.title as string) ?? '',
         notes: (f.notes as string | null) ?? null,
         scheduledDate: f.scheduledDate,
+        occurrenceDate: f.occurrenceDate,
         dueDate: f.dueDate,
         repeatRule: normalizeRepeatRule(f.repeatRule),
         reminderTime: (f.reminderTime as string | null) ?? null,
@@ -422,6 +424,8 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
           areaId: (f.areaId as string | null) ?? null,
           headingId: (f.headingId as string | null) ?? null,
           trashedAt: f.trashedAt,
+          repeatRule: f.repeatRule,
+          occurrenceDate: f.occurrenceDate,
         },
         data,
         zones(),
@@ -466,6 +470,35 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
       return taskDto(id);
     },
 
+    async createNextCopy(id: string): Promise<TaskResponseDto> {
+      const existing = await engine.get('task', id);
+      if (!existing) throw new Error(`Task not found: ${id}`);
+      const f = existing.fields;
+      const linked = await engine.list('task', {
+        where: { repeatSourceId: id, trashedAt: null },
+        limit: 1,
+      });
+      const now = new Date().toISOString();
+      const block = nextCopyBlock(
+        {
+          id,
+          status: f.status,
+          trashedAt: f.trashedAt,
+          scheduledDate: f.scheduledDate,
+          occurrenceDate: f.occurrenceDate,
+          repeatRule: normalizeRepeatRule(f.repeatRule),
+        },
+        linked.length > 0,
+        now,
+        zones(),
+      );
+      if (block) throw new RepeatSkipBlockedError(block);
+      // 与完成时同一派生：同一确定性 id，now 视作完成时刻
+      const copyId = await deriveRepeatInstance(id, existing, now);
+      if (!copyId) throw new RepeatSkipBlockedError('next-exists');
+      return taskDto(copyId);
+    },
+
     async skipTask(id: string): Promise<TaskResponseDto> {
       const existing = await engine.get('task', id);
       if (!existing) throw new Error(`Task not found: ${id}`);
@@ -480,6 +513,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
           status: f.status,
           trashedAt: f.trashedAt,
           scheduledDate: f.scheduledDate,
+          occurrenceDate: f.occurrenceDate,
           dueDate: f.dueDate,
           repeatRule: normalizeRepeatRule(f.repeatRule),
         },
@@ -522,6 +556,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
           notes: (f.notes as string | null) ?? null,
           start: f.start,
           scheduledDate: f.scheduledDate,
+          occurrenceDate: f.occurrenceDate,
           dueDate: f.dueDate,
           reminderTime: (f.reminderTime as string | null) ?? null,
           repeatRule: normalizeRepeatRule(f.repeatRule),
@@ -846,6 +881,7 @@ function projectRowToFeedItem(
     reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
     repeatRule: (f.repeatRule as RepeatRule | null) ?? null,
     repeatSourceId: (f.repeatSourceId as string | null) ?? null,
+    occurrenceDate: (f.occurrenceDate as string | null) ?? null,
     dueDate: (f.dueDate as string | null) ?? null,
     status: (f.status as ProjectStatus) ?? ProjectStatus.ACTIVE,
     completedAt: (f.completedAt as string | null) ?? null,

@@ -35,17 +35,19 @@ export function useSkipOccurrence(task: TaskResponseDto | null, enabled: boolean
     !task.trashedAt;
   const repeatRule = task?.repeatRule;
   const scheduledDate = task?.scheduledDate ?? null;
+  const occurrenceDate = task?.occurrenceDate ?? null;
   const target = React.useMemo(
     () =>
       enabled && available && repeatRule
         ? skipOccurrenceDate(repeatRule, {
             scheduledDate,
+            occurrenceDate,
             now: new Date(),
             timeZone,
             legacyDateTimeZone: currentLegacyDateTimeZone(),
           })
         : null,
-    [enabled, available, repeatRule, scheduledDate, timeZone],
+    [enabled, available, repeatRule, scheduledDate, occurrenceDate, timeZone],
   );
 
   const skip = () => {

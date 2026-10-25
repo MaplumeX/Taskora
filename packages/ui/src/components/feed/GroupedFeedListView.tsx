@@ -97,6 +97,11 @@ interface Props {
   magicPlus?: boolean;
   /** 页头已表达归属时省略行上的项目 / 区域小字（如区域页）。 */
   hideOwnership?: boolean;
+  /**
+   * 是否可手动排序（默认可）。只读顺序的列表（Repeating）传 false：行不可
+   * 拖起、不注册 ⌘↑/⌘↓ 重排、不接收 Magic Plus。
+   */
+  reorderable?: boolean;
 }
 
 const UNGROUPED = 'ungrouped';
@@ -416,6 +421,7 @@ export function GroupedFeedListView({
   selectionRank = 0,
   magicPlus: acceptsMagicPlus = true,
   hideOwnership = false,
+  reorderable = true,
 }: Props) {
   const { t } = useTranslation();
   const { handleRowClick, handleBlankClick, selectedIds, expandedId } =
@@ -556,7 +562,7 @@ export function GroupedFeedListView({
     }),
     [reorderFeedMutate],
   );
-  useSelectionScope(rows, selectionRank, scopeActions);
+  useSelectionScope(rows, selectionRank, reorderable ? scopeActions : undefined);
 
   const projectMap = React.useMemo(
     () => Object.fromEntries(projects.map((p) => [p.id, p.title])),
@@ -837,7 +843,7 @@ export function GroupedFeedListView({
 
   const surface = useDndSurface({
     owns: isFeedKey,
-    magicPlus: acceptsMagicPlus,
+    magicPlus: acceptsMagicPlus && reorderable,
     collisionDetection,
     sidebarPayload,
     onDragStart: handleDragStart,
@@ -890,6 +896,7 @@ export function GroupedFeedListView({
       <SortableFeedRow
         key={dndId}
         dndId={dndId}
+        dragDisabled={!reorderable}
         item={item}
         placeholder={
           (activeItem !== null && feedItemDndId(activeItem) === dndId) ||

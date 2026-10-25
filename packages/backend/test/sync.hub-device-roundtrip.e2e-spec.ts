@@ -65,6 +65,7 @@ e2eDescribe('SyncHubService 设备往返（真实 Postgres）', () => {
       reminderTime: null,
       repeatRule: null,
       repeatSourceId: null,
+      occurrenceDate: null,
       start: 'ANYTIME',
       status: 'ACTIVE',
       settledAt: null,

@@ -15,6 +15,7 @@ import {
   skipOccurrenceDate,
 } from '../repeat';
 import { dateKeyOf, daysBetweenKeys, shiftDateKey, type CalendarZones } from './calendar';
+import { occurrenceKeyOf } from './occurrence';
 import { sortByEffectivePosition, type Positioned } from './order';
 import { taskCancelPatch, type TaskFields, type TaskPatch } from './tasks';
 
@@ -23,7 +24,9 @@ export interface RepeatParent {
   title: string;
   notes: string | null;
   scheduledDate: unknown;
-  /** 截止日期：实例按计划日期的位移平移（保持提前量）。 */
+  /** 出现日（recurring-tasks-v4）：为空即等于计划日期；下一次从它推算。 */
+  occurrenceDate?: unknown;
+  /** 截止日期：实例按出现日的位移平移（保持提前量）。 */
   dueDate: unknown;
   /** 规范化后的规则（两端各自从存储解析）。 */
   repeatRule: RepeatRule | null;
@@ -84,7 +87,7 @@ export function copyAttachment(
 
 /** 下一个实例的确定性 id（无规则 / 链已终结为 null）。 */
 export function repeatInstanceId(
-  parent: Pick<RepeatParent, 'id' | 'scheduledDate' | 'repeatRule'>,
+  parent: Pick<RepeatParent, 'id' | 'scheduledDate' | 'occurrenceDate' | 'repeatRule'>,
   settledAt: string | null,
   zones: CalendarZones,
 ): { id: string; occurrence: string } | null {
@@ -92,6 +95,7 @@ export function repeatInstanceId(
   if (!rule) return null;
   const occurrence = nextOccurrenceDate(rule, {
     scheduledDate: dateKeyOf(parent.scheduledDate, zones),
+    occurrenceDate: dateKeyOf(parent.occurrenceDate, zones),
     settledAt,
     timeZone: zones.timeZone,
     legacyDateTimeZone: zones.legacyDateTimeZone,
@@ -102,8 +106,8 @@ export function repeatInstanceId(
 
 /**
  * 完成时派生的实例：复制标题 / 备注 / 标签 / 提醒时刻 / 归属 / 规则，
- * 计划到下一个日期；截止日期按计划日期的位移平移（与 Skip Occurrence
- * 同口径），来源没有截止日期则为 null；Subtask 复制并重置为未完成（序号决定确定性 id，
+ * 计划到下一个日期；截止日期按出现日的位移平移（与 Skip Occurrence
+ * 同口径），来源没有截止日期则为 null；出现日为空（新实例即原定那天）；Subtask 复制并重置为未完成（序号决定确定性 id，
  * 按有效 Position——两端列表同一口径；新实例沿用原 Position）；附件
  * 同样按序号复制，指向同一 Blob（ADR-0019）。
  *
@@ -127,11 +131,11 @@ export function planRepeatInstance(
   if (!target) return null;
   const ordered = sortByEffectivePosition(subtasks);
   const orderedAttachments = sortByEffectivePosition(attachments);
-  const scheduledKey = dateKeyOf(parent.scheduledDate, zones);
+  const occurrenceKey = occurrenceKeyOf(parent, zones);
   const dueKey = dateKeyOf(parent.dueDate, zones);
   const dueDate =
-    scheduledKey !== null && dueKey !== null
-      ? shiftDateKey(dueKey, daysBetweenKeys(scheduledKey, target.occurrence))
+    occurrenceKey !== null && dueKey !== null
+      ? shiftDateKey(dueKey, daysBetweenKeys(occurrenceKey, target.occurrence))
       : null;
   return {
     id: target.id,
@@ -143,6 +147,7 @@ export function planRepeatInstance(
       reminderTime: parent.reminderTime,
       repeatRule: parent.repeatRule,
       repeatSourceId: parent.id,
+      occurrenceDate: null,
       dueDate,
       status: TaskStatus.ACTIVE,
       settledAt: null,
@@ -191,6 +196,41 @@ export function repeatDerivationTarget(input: {
   return 'fresh';
 }
 
+// ---------- 提前生成下一份（recurring-tasks-v4） ----------
+
+/** 判定提前生成下一份需要的来源字段。 */
+export interface RepeatNextCopySource {
+  id: string;
+  status: unknown;
+  trashedAt: unknown;
+  scheduledDate: unknown;
+  occurrenceDate?: unknown;
+  /** 规范化后的规则。 */
+  repeatRule: RepeatRule | null;
+}
+
+/**
+ * 提前生成下一份（Create Next Copy，对齐 Things 3.23）的阻断原因；可用时
+ * 为 null。下一份就是完成时会派生的那个 Repeat Instance（同一确定性 id，
+ * now 视作完成时刻——anchor=completion 的下一次从今天推算），提前写入；
+ * 之后来源完成时因已有派生实例而不再派生。原因同 Skip Occurrence：
+ * not-repeating / not-active / next-exists（已生成过）/ no-next（链在下一次
+ * 之前终结）。
+ */
+export function nextCopyBlock(
+  source: RepeatNextCopySource,
+  hasLinkedInstance: boolean,
+  now: string,
+  zones: CalendarZones,
+): RepeatSkipBlock | null {
+  if (!source.repeatRule || dateKeyOf(source.scheduledDate, zones) === null) {
+    return 'not-repeating';
+  }
+  if (source.status !== TaskStatus.ACTIVE || source.trashedAt) return 'not-active';
+  if (hasLinkedInstance) return 'next-exists';
+  return repeatInstanceId(source, now, zones) === null ? 'no-next' : null;
+}
+
 // ---------- 跳过本次（recurring-tasks-v2 issue 02） ----------
 
 /**
@@ -216,6 +256,8 @@ export interface RepeatSkipSource {
   status: unknown;
   trashedAt: unknown;
   scheduledDate: unknown;
+  /** 出现日（recurring-tasks-v4）：为空即等于计划日期。 */
+  occurrenceDate?: unknown;
   dueDate: unknown;
   /** 规范化后的规则。 */
   repeatRule: RepeatRule | null;
@@ -223,7 +265,7 @@ export interface RepeatSkipSource {
 
 /**
  * 跳过本次：计划日期原地推进到下一个出现日（目标见 skipOccurrenceDate），
- * 已有截止日期按相同天数平移；不新建实体、不进 Logbook。调用方另把
+ * 出现日清空，已有截止日期按出现日到目标的天数平移；不新建实体、不进 Logbook。调用方另把
  * 该任务的全部 Subtask 置回 ACTIVE（subtaskStatusPatch）。
  *
  * 已是最后一次（链在下一次之前终结）时 ends 为真：patch 为取消，任务以
@@ -242,17 +284,20 @@ export function planRepeatSkip(
   }
   if (task.status !== TaskStatus.ACTIVE || task.trashedAt) return { blocked: 'not-active' };
   if (hasLinkedInstance) return { blocked: 'next-exists' };
+  const occurrenceKey = occurrenceKeyOf(task, zones) ?? scheduledKey;
   const occurrence = skipOccurrenceDate(rule, {
     scheduledDate: scheduledKey,
+    occurrenceDate: dateKeyOf(task.occurrenceDate, zones),
     now,
     timeZone: zones.timeZone,
     legacyDateTimeZone: zones.legacyDateTimeZone,
   });
   if (occurrence === null) return { patch: taskCancelPatch(now), ends: true };
   const patch: TaskPatch = { scheduledDate: occurrence };
+  if (task.occurrenceDate != null) patch.occurrenceDate = null;
   const dueKey = dateKeyOf(task.dueDate, zones);
   if (dueKey !== null) {
-    patch.dueDate = shiftDateKey(dueKey, daysBetweenKeys(scheduledKey, occurrence));
+    patch.dueDate = shiftDateKey(dueKey, daysBetweenKeys(occurrenceKey, occurrence));
   }
   return { patch, ends: false };
 }

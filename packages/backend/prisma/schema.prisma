@@ -102,6 +102,8 @@ model Project {
   repeatRule     String?
   /// 派生来源：派生出本项目的重复项目 id。不设外键，只用于派生幂等。
   repeatSourceId String?
+  /// 出现日（recurring-tasks-v4）：重复链上这一环原定的日历日（UTC 零点编码）；为空即计划日期。
+  occurrenceDate DateTime?
   /// Review Interval（回顾间隔）：{ unit, count } 的 JSON 文本；为空即跟随默认。
   reviewInterval String?
   /// Next Review Date（下次回顾日）：日历日（UTC 零点编码）；为空视为今天待回顾。
@@ -223,6 +225,8 @@ model Task {
   /// 派生来源（recurring-tasks-v2）：派生出本实例的重复任务 id。不设外键：
   /// 来源被物理删除后字段悬空无害，只用于派生幂等。
   repeatSourceId String?
+  /// 出现日（recurring-tasks-v4）：重复链上这一环原定的日历日（UTC 零点编码）；为空即计划日期。
+  occurrenceDate DateTime?
   /// Start（ADR 0024）：INBOX 只用于无归属、无日期的任务；有计划日期时恒为 ANYTIME。
   start          Start         @default(INBOX)
   status         TaskStatus    @default(ACTIVE)

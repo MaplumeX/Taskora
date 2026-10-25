@@ -394,6 +394,12 @@ export const REPLICA_MIGRATIONS: readonly ReplicaMigration[] = [
       await addColumnIfMissing(storage, table, 'hideLaterItems', 'INTEGER');
     }
   },
+  // 16 → 17：task / project 增加 occurrenceDate（出现日，recurring-tasks-v4）；存量为空。
+  async (storage) => {
+    for (const table of ['task', 'project']) {
+      await addColumnIfMissing(storage, table, 'occurrenceDate', 'TEXT');
+    }
+  },
 ];
 
 /** 当前代码的副本 schema 版本。 */

@@ -487,6 +487,53 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     expect(instances.map((task) => task.scheduledDate)).toEqual([new Date('2026-02-15T00:00:00Z')]);
   });
 
+  it('改期即例外（recurring-tasks-v4）：落库出现日，完成后按出现日派生；同次写规则即清空', async () => {
+    await seedTask('weekly', {
+      start: 'ANYTIME',
+      scheduledDate: new Date('2026-01-05T00:00:00Z'),
+      dueDate: new Date('2026-01-07T00:00:00Z'),
+      repeatRule: JSON.stringify({ unit: 'week', interval: 1, anchor: 'scheduled' }),
+    });
+    await h.tasks.update(USER, 'weekly', { scheduledDate: '2026-01-06' });
+    const moved = await testPrisma.task.findUniqueOrThrow({ where: { id: 'weekly' } });
+    expect(moved.occurrenceDate).toEqual(new Date('2026-01-05T00:00:00Z'));
+    await expectLoggedAsStored('task', 'weekly');
+
+    await h.tasks.complete(USER, 'weekly');
+    const [instance] = await testPrisma.task.findMany({ where: { repeatSourceId: 'weekly' } });
+    expect(instance.scheduledDate).toEqual(new Date('2026-01-12T00:00:00Z'));
+    expect(instance.dueDate).toEqual(new Date('2026-01-14T00:00:00Z'));
+    expect(instance.occurrenceDate).toBeNull();
+
+    await h.tasks.update(USER, instance.id, { scheduledDate: '2026-01-13' });
+    await h.tasks.update(USER, instance.id, {
+      scheduledDate: '2026-01-13',
+      repeatRule: { unit: 'week', interval: 1, anchor: 'scheduled' },
+    });
+    const retimed = await testPrisma.task.findUniqueOrThrow({ where: { id: instance.id } });
+    expect(retimed.occurrenceDate).toBeNull();
+  });
+
+  it('next-copy（recurring-tasks-v4）：提前写入下一个实例、来源不变；完成来源不再派生；重复生成 409', async () => {
+    await seedTask('weekly', {
+      start: 'ANYTIME',
+      scheduledDate: new Date('2030-01-07T00:00:00Z'),
+      repeatRule: JSON.stringify({ unit: 'week', interval: 1, anchor: 'scheduled' }),
+    });
+    const copy = await h.tasks.nextCopy(USER, 'weekly');
+    expect(copy.repeatSourceId).toBe('weekly');
+    expect(copy.scheduledDate).toEqual(new Date('2030-01-14T00:00:00Z'));
+    expect(copy.status).toBe(TaskStatus.ACTIVE);
+    await expectLoggedAsStored('task', copy.id);
+    const source = await testPrisma.task.findUniqueOrThrow({ where: { id: 'weekly' } });
+    expect(source.status).toBe(TaskStatus.ACTIVE);
+
+    await expect(h.tasks.nextCopy(USER, 'weekly')).rejects.toBeInstanceOf(ConflictException);
+    await h.tasks.complete(USER, 'weekly');
+    expect(await testPrisma.task.count({ where: { repeatSourceId: 'weekly' } })).toBe(1);
+    await expect(h.tasks.nextCopy(USER, 'missing')).rejects.toBeInstanceOf(NotFoundException);
+  });
+
   it('不派生：实例已存在 / 到达 until / 无规则 / 已完成再完成 / 取消', async () => {
     await seedRepeating();
     await seedTask(expectedInstanceId, { title: '已存在的实例' });

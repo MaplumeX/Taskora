@@ -55,7 +55,7 @@ interface UndoStep {
 const RECREATABLE: ReadonlySet<SyncEntity> = new Set(['subtask']);
 
 const OWNERSHIP_FIELDS = ['projectId', 'areaId', 'headingId', 'taskId'];
-const SCHEDULE_FIELDS = ['scheduledDate', 'start', 'reminderTime', 'repeatRule'];
+const SCHEDULE_FIELDS = ['scheduledDate', 'start', 'reminderTime', 'repeatRule', 'occurrenceDate'];
 const ORDER_FIELDS = ['position', 'feedPosition'];
 const SETTLED_STATUSES = ['COMPLETED', 'CANCELLED'];
 

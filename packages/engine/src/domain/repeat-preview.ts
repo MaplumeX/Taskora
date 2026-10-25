@@ -16,6 +16,8 @@ export interface RepeatPreviewSource {
   status: unknown;
   trashedAt: unknown;
   scheduledDate: unknown;
+  /** 出现日（recurring-tasks-v4）：为空即等于计划日期。 */
+  occurrenceDate?: unknown;
   repeatRule: unknown;
   repeatSourceId?: string | null;
   projectId: string | null;
@@ -59,6 +61,7 @@ export function buildRepeatPreviews(
     if (!rule || rule.anchor !== 'scheduled' || linkedSources.has(task.id)) continue;
     const next = nextOccurrenceDate(rule, {
       scheduledDate: dateKeyOf(task.scheduledDate, context),
+      occurrenceDate: dateKeyOf(task.occurrenceDate, context),
       timeZone: context.timeZone,
       legacyDateTimeZone: context.legacyDateTimeZone,
     });

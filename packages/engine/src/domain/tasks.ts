@@ -20,6 +20,7 @@ import {
 
 import { normalizeRepeatRule } from '../repeat';
 import { dateKeyOf, type CalendarZones } from './calendar';
+import { planOccurrenceDate } from './occurrence';
 import { planReviewSchedule, type ReviewContext } from './review';
 import { resolveProjectStart, resolveTaskStart } from './start';
 
@@ -33,6 +34,8 @@ export interface TaskFields {
   repeatRule: RepeatRule | null;
   /** 派生来源：派生出本实例的重复任务 id（recurring-tasks-v2）；非派生为 null。 */
   repeatSourceId: string | null;
+  /** 出现日（recurring-tasks-v4）：与计划日期不同时才非空，见 domain/occurrence。 */
+  occurrenceDate: string | null;
   dueDate: string | null;
   status: TaskStatus;
   settledAt: string | null;
@@ -60,6 +63,7 @@ export function planTaskCreate(input: CreateTaskDto, zones: CalendarZones): Task
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
+    occurrenceDate: null,
     dueDate: dateKeyOf(input.dueDate, zones),
     status: TaskStatus.ACTIVE,
     settledAt: null,
@@ -80,6 +84,9 @@ export interface TaskUpdateBase {
   headingId: string | null;
   /** 在 Trash 中（非空）时，改日期 / 归属 / 标签等编辑会隐式放回。 */
   trashedAt?: unknown;
+  /** 现有重复规则与出现日：改期时推导出现日（recurring-tasks-v4）。 */
+  repeatRule?: unknown;
+  occurrenceDate?: unknown;
 }
 
 /**
@@ -108,6 +115,7 @@ export function taskUpdatePutsBack(input: UpdateTaskDto): boolean {
  *   编辑给了归属或日期时整理优先，落 Anytime（resolveTaskStart）。
  * - 没有计划日期时清除提醒与重复规则（无锚即无意义，reminders / recurring-tasks
  *   spec）；有日期时按输入写，重复规则写入前规范化，非法对象忽略。
+ * - 出现日见 planOccurrenceDate：不写规则的改期只挪这一次。
  * - 归属变化时 start 按归属重新推导（Inbox 任务获得归属转入 Anytime）。
  * - 换项目解除分组归属（分组只属于原项目）。
  * - 在 Trash 中时，taskUpdatePutsBack 的编辑同时放回（清 trashedAt）。
@@ -154,6 +162,10 @@ export function planTaskUpdate(
       if (input.repeatRule === null || normalized !== null) patch.repeatRule = normalized;
     }
   }
+  Object.assign(
+    patch,
+    planOccurrenceDate(existing, input, scheduledDate, patch.repeatRule !== undefined, zones),
+  );
   if (input.dueDate !== undefined) patch.dueDate = dateKeyOf(input.dueDate, zones);
 
   if (input.projectId !== undefined || toInbox) patch.projectId = projectId;
@@ -289,6 +301,7 @@ export function planConvertTaskToProject(
     reminderTime: null,
     repeatRule: null,
     repeatSourceId: null,
+    occurrenceDate: null,
     dueDate: null,
     status: (subtask.status as TaskStatus) ?? TaskStatus.ACTIVE,
     settledAt: subtask.settledAt,

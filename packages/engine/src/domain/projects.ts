@@ -15,6 +15,7 @@ import {
 
 import { normalizeRepeatRule } from '../repeat';
 import { dateKeyOf, instantMs, type CalendarZones } from './calendar';
+import { planOccurrenceDate } from './occurrence';
 import {
   planReviewSchedule,
   planReviewUpdate,
@@ -34,6 +35,8 @@ export interface ProjectFields {
   repeatRule: RepeatRule | null;
   /** 派生来源：派生出本项目的重复项目 id；非派生为 null。 */
   repeatSourceId: string | null;
+  /** 出现日（recurring-tasks-v4）：与计划日期不同时才非空，见 domain/occurrence。 */
+  occurrenceDate: string | null;
   /** 回顾间隔（Review Interval）。 */
   reviewInterval: ReviewInterval | null;
   /** 下次回顾日（日期键）。 */
@@ -65,6 +68,7 @@ export function planProjectCreate(
     dueDate: dateKeyOf(input.dueDate, zones),
     repeatRule: null,
     repeatSourceId: null,
+    occurrenceDate: null,
     ...planReviewSchedule(review, 'project', input, zones),
     status: ProjectStatus.ACTIVE,
     completedAt: null,
@@ -77,12 +81,15 @@ export function planProjectCreate(
 export interface ProjectUpdateBase extends ReviewUpdateBase {
   start: unknown;
   scheduledDate: unknown;
+  /** 现有重复规则与出现日：改期时推导出现日（recurring-tasks-v4）。 */
+  repeatRule?: unknown;
+  occurrenceDate?: unknown;
 }
 
 /**
  * 编辑项目：计划规则同任务（无提醒、无 Inbox）——设日期即 ANYTIME，SOMEDAY
  * 清除日期；没有日期时清除重复规则，有日期时规则写入前规范化、非法对象
- * 忽略。回顾设置见 planReviewUpdate。
+ * 忽略；出现日同任务（planOccurrenceDate）。回顾设置见 planReviewUpdate。
  */
 export function planProjectUpdate(
   existing: ProjectUpdateBase,
@@ -114,6 +121,10 @@ export function planProjectUpdate(
     const normalized = normalizeRepeatRule(input.repeatRule);
     if (input.repeatRule === null || normalized !== null) patch.repeatRule = normalized;
   }
+  Object.assign(
+    patch,
+    planOccurrenceDate(existing, input, scheduledDate, patch.repeatRule !== undefined, zones),
+  );
   if (input.dueDate !== undefined) patch.dueDate = dateKeyOf(input.dueDate, zones);
   if (input.areaId !== undefined) patch.areaId = input.areaId;
   if (input.tagIds !== undefined) patch.tagIds = input.tagIds;

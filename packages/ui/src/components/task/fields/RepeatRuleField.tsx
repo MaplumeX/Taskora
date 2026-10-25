@@ -158,6 +158,7 @@ export function RepeatRuleField({ current, onPatch }: FieldProps) {
   const previewDate = rule
     ? nextOccurrenceDate(rule, {
         scheduledDate: current.scheduledDate ?? null,
+        occurrenceDate: current.occurrenceDate ?? null,
         timeZone,
         legacyDateTimeZone: currentLegacyDateTimeZone(),
         settledAt: completion ? new Date().toISOString() : null,

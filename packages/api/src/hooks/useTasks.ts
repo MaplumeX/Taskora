@@ -35,6 +35,7 @@ import {
   restoreTask,
   searchTasks,
   skipTask,
+  createNextCopy,
   type TaskQuery,
   uncancelSubtask,
   uncancelTask,
@@ -627,6 +628,22 @@ export function useSkipTask() {
     mutationFn: (id: string) => skipTask(id),
     onSettled: (_data, _error, id) => {
       refreshAfterWrite(queryClient, { queryKey: taskKeys.detail(id) });
+      refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['projects'] });
+    },
+  });
+}
+
+/**
+ * 提前生成下一份（recurring-tasks-v4）：下一份由数据层派生，不做乐观更新；
+ * 不可生成时报 RepeatSkipBlockedError。
+ */
+export function useCreateNextCopy() {
+  const queryClient = useQueryCache();
+  return useMutation({
+    mutationFn: (id: string) => createNextCopy(id),
+    onSettled: () => {
       refreshAfterWrite(queryClient, { queryKey: taskKeys.all });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });
       refreshAfterWrite(queryClient, { queryKey: ['projects'] });

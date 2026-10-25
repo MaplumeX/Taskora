@@ -12,6 +12,7 @@ export {
   canonicalRepeatRule,
   nextOccurrenceDate,
   skipOccurrenceDate,
+  retargetRepeatRule,
   deriveRepeatInstanceId,
   deriveRepeatProjectId,
   deriveRepeatCopyId,

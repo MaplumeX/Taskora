@@ -14,6 +14,7 @@ import {
   Copy,
   Repeat,
   SkipForward,
+  CalendarPlus,
   Tag,
   Trash2,
   RotateCcw,
@@ -49,6 +50,7 @@ import { useInReviewMode } from '@/components/review/reviewMode';
 
 import { ProjectMovePicker } from './ProjectMovePicker';
 import { useProjectCompletion } from './useProjectCompletion';
+import { useNextCopy } from '@/components/task/useNextCopy';
 import { useSkipProjectOccurrence } from './useSkipProjectOccurrence';
 
 export interface ProjectMenuProps {
@@ -97,6 +99,8 @@ export function ProjectMenuPanel({
   const completed = current.status === 'COMPLETED';
   const isDate = current.scheduledDate != null;
   const canOfferSkip = variant === 'default' && skipOccurrence.available;
+  const nextCopy = useNextCopy(current, 'project', true);
+  const canOfferNextCopy = variant === 'default' && nextCopy.available;
   const reviewItem = useReviewMenuItem(() => openPicker('review'));
   const logCompleted = useLogCompleted();
 
@@ -108,6 +112,11 @@ export function ProjectMenuPanel({
   const handleSkip = () => {
     onClose();
     skipOccurrence.skip();
+  };
+
+  const handleNextCopy = () => {
+    onClose();
+    nextCopy.create();
   };
 
   const handleDuplicate = () => {
@@ -169,6 +178,9 @@ export function ProjectMenuPanel({
             onSelect: handleSkip,
           },
         ]
+      : []),
+    ...(canOfferNextCopy
+      ? [{ icon: CalendarPlus, label: t('task:nextCopy'), onSelect: handleNextCopy }]
       : []),
     { icon: CalendarDays, label: t('dueDate'), onSelect: () => openPicker('due') },
     { icon: Tag, label: t('tags'), onSelect: () => openPicker('tags') },

@@ -7,6 +7,9 @@ import {
   startOfTomorrow,
   isToday,
   isTomorrow,
+  normalizeRepeatRule,
+  retargetRepeatRule,
+  toDateKey,
   useReminderPermissionStore,
 } from '@taskora/api';
 import React from 'react';
@@ -23,6 +26,7 @@ import { TimePicker } from '@/components/ui/time-picker';
 
 import { getCalendarLocale } from './calendarFieldUtils';
 import { DateShortcutList } from './DateShortcutList';
+import { RescheduleRepeatPrompt } from './RescheduleRepeatPrompt';
 import { WhenQueryInput } from './WhenQueryInput';
 
 /**
@@ -46,8 +50,9 @@ interface FieldProps {
    */
   showReminder?: boolean;
   /**
-   * 输入框识别重复说法（recurring-tasks-v3 Repeat Query）：只在单个 Task /
-   * Project 的入口打开，多选、批量改期等不传。
+   * 单个 Task / Project 的入口（多选、批量改期等不传）：输入框识别重复说法
+   * （recurring-tasks-v3 Repeat Query），改期固定日程的重复项时询问「仅此
+   * 一次 / 更新规则」（recurring-tasks-v4）。
    */
   allowRepeat?: boolean;
 }
@@ -81,6 +86,32 @@ export function ScheduledDateField({
 
   const locale = getCalendarLocale(i18n.language);
 
+  // 改期询问（recurring-tasks-v4）：只对单项入口的固定日程规则；出现日为空即计划日期。
+  const rule = normalizeRepeatRule(current.repeatRule);
+  const fixedRule = allowRepeat && storedDate && rule?.anchor === 'scheduled' ? rule : null;
+  const storedKey = storedDate ? toDateKey(current.scheduledDate!) : null;
+  const occurrenceKey = current.occurrenceDate ? toDateKey(current.occurrenceDate) : storedKey;
+  const [pending, setPending] = React.useState<{
+    patch: ScheduledFieldPatch & { scheduledDate: string };
+    after: () => void;
+  } | null>(null);
+
+  /**
+   * 写入新的计划日期：固定日程的重复项改到别的日子（挪回原定那天除外）
+   * 时先询问，否则直接写。after 为写入后的关闭口径。
+   */
+  const commitDate = (
+    patch: ScheduledFieldPatch & { scheduledDate: string },
+    after: () => void,
+  ) => {
+    if (fixedRule && patch.scheduledDate !== storedKey && patch.scheduledDate !== occurrenceKey) {
+      setPending({ patch, after });
+      return;
+    }
+    onPatch(patch);
+    after();
+  };
+
   // 提醒区只在有计划日期的任务上出现（Someday / 无计划任务的提醒无法成立）。
   const reminderVisible = showReminder && storedDate !== undefined;
 
@@ -98,18 +129,21 @@ export function ScheduledDateField({
 
   const handleDaySelect = (date: Date | undefined) => {
     if (!date) return;
-    onPatch({ start: Start.ANYTIME, scheduledDate: toInputDateValue(date) });
-    closeAfterDate();
+    commitDate({ start: Start.ANYTIME, scheduledDate: toInputDateValue(date) }, closeAfterDate);
   };
 
   const handleToday = () => {
-    onPatch({ start: Start.ANYTIME, scheduledDate: toInputDateValue(startOfToday()) });
-    closeAfterDate();
+    commitDate(
+      { start: Start.ANYTIME, scheduledDate: toInputDateValue(startOfToday()) },
+      closeAfterDate,
+    );
   };
 
   const handleTomorrow = () => {
-    onPatch({ start: Start.ANYTIME, scheduledDate: toInputDateValue(startOfTomorrow()) });
-    closeAfterDate();
+    commitDate(
+      { start: Start.ANYTIME, scheduledDate: toInputDateValue(startOfTomorrow()) },
+      closeAfterDate,
+    );
   };
 
   const handleSomeday = () => {
@@ -156,16 +190,43 @@ export function ScheduledDateField({
   const handleQuerySelect = (candidate: WhenCandidate) => {
     if (candidate.kind === 'someday') return handleSomeday();
     if (candidate.kind === 'clear') return handleClear();
-    const patch: ScheduledFieldPatch = { start: Start.ANYTIME, scheduledDate: candidate.date };
-    // 重复说法：计划到第一次出现日，并写入规则（覆盖已有规则）
-    if (candidate.kind === 'repeat') patch.repeatRule = candidate.rule;
+    const patch: ScheduledFieldPatch & { scheduledDate: string } = {
+      start: Start.ANYTIME,
+      scheduledDate: candidate.date,
+    };
     if (showReminder && candidate.time) {
       void requestPermission();
       patch.reminderTime = candidate.time;
     }
-    onPatch(patch);
-    onClose?.();
+    const close = () => onClose?.();
+    // 重复说法：计划到第一次出现日，并写入规则（覆盖已有规则，不询问）
+    if (candidate.kind === 'repeat') {
+      onPatch({ ...patch, repeatRule: candidate.rule });
+      return close();
+    }
+    commitDate(patch, close);
   };
+
+  if (pending && fixedRule) {
+    const updatedRule = retargetRepeatRule(
+      fixedRule,
+      occurrenceKey ?? pending.patch.scheduledDate,
+      pending.patch.scheduledDate,
+    );
+    const choose = (patch: ScheduledFieldPatch) => {
+      setPending(null);
+      onPatch(patch);
+      pending.after();
+    };
+    return (
+      <RescheduleRepeatPrompt
+        updatedRule={updatedRule}
+        onException={() => choose(pending.patch)}
+        onUpdateRule={() => choose({ ...pending.patch, repeatRule: updatedRule })}
+        onCancel={() => setPending(null)}
+      />
+    );
+  }
 
   return (
     <WhenQueryInput

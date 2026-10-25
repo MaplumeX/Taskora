@@ -558,6 +558,25 @@ describe('副本 schema 版本', () => {
     expect(row.hideLaterItems).toBe(1);
     await engine.close();
   });
+
+  it('16 → 17：task / project 增加 occurrenceDate，存量行读出空', async () => {
+    const storage = await createNodeSqliteStorage(':memory:');
+    for (const statement of schemaDdl()) await storage.exec(statement);
+    for (const table of ['task', 'project']) {
+      await storage.exec(`ALTER TABLE ${table} DROP COLUMN occurrenceDate`);
+    }
+    await storage.run("INSERT INTO task (id, title, clocks) VALUES ('t1', 't', '{}')");
+    await storage.run("INSERT INTO project (id, title, clocks) VALUES ('p1', 'p', '{}')");
+    await storage.exec('PRAGMA user_version = 16');
+
+    const engine = await open(storage);
+
+    expect(await readSchemaVersion(storage)).toBe(REPLICA_SCHEMA_VERSION);
+    expect((await engine.get('task', 't1'))?.fields.occurrenceDate).toBeNull();
+    await engine.update('project', 'p1', { occurrenceDate: '2026-10-05' });
+    expect((await engine.get('project', 'p1'))?.fields.occurrenceDate).toBe('2026-10-05');
+    await engine.close();
+  });
 });
 
 describe('同步协议版本', () => {

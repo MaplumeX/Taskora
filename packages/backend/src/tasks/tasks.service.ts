@@ -7,6 +7,7 @@ import {
   planRepeatInstance,
   planReorder,
   planRepeatSkip,
+  nextCopyBlock,
   planTaskComplete,
   planTaskCreate,
   planTaskDuplicate,
@@ -83,15 +84,16 @@ export class TasksService {
     userId: string,
     parent: TaskRowWithChildren,
     settledAt: string,
-  ): Promise<void> {
+  ): Promise<string | null> {
     const repeatRule = parseRepeatRule(parent.repeatRule);
-    if (!repeatRule) return; // 非重复任务：不必查账号时区
+    if (!repeatRule) return null; // 非重复任务：不必查账号时区
     const plan = planRepeatInstance(
       {
         id: parent.id,
         title: parent.title,
         notes: parent.notes,
         scheduledDate: parent.scheduledDate,
+        occurrenceDate: parent.occurrenceDate,
         dueDate: parent.dueDate,
         repeatRule,
         reminderTime: parent.reminderTime,
@@ -105,7 +107,7 @@ export class TasksService {
       await userCalendarZones(this.prisma, userId),
       parent.attachments,
     );
-    if (!plan) return;
+    if (!plan) return null;
     const linked = await batch.tx.task.findFirst({
       where: { userId, repeatSourceId: parent.id, trashedAt: null },
       select: { id: true },
@@ -130,7 +132,7 @@ export class TasksService {
           ? 'compacted'
           : 'absent',
     });
-    if (target === 'skip') return;
+    if (target === 'skip') return null;
     const instanceId = target === 'planned' ? plan.id : randomUUID();
 
     // 派生实例进入列表末尾（新位次，不继承父任务位次）
@@ -145,6 +147,7 @@ export class TasksService {
     for (const { id, ...attachment } of plan.attachmentsFor(instanceId)) {
       await batch.write('attachment', id, attachment);
     }
+    return instanceId;
   }
 
   /** 读本用户的任务，不存在即 404。 */
@@ -425,7 +428,11 @@ export class TasksService {
 
   async update(userId: string, id: string, dto: UpdateTaskDto) {
     const existing = await this.requireTask(this.prisma, userId, id);
-    const patch = planTaskUpdate(existing, dto, await userCalendarZones(this.prisma, userId));
+    const patch = planTaskUpdate(
+      { ...existing, repeatRule: parseRepeatRule(existing.repeatRule) },
+      dto,
+      await userCalendarZones(this.prisma, userId),
+    );
     return this.hub.writeAsHub(userId, async (batch) => {
       // 全量 set 语义：tagIds 传 undefined 不动；传数组则整组替换
       await batch.write('task', id, toWireFields(patch));
@@ -569,6 +576,38 @@ export class TasksService {
    * 已是最后一次时取消任务、链结束（recurring-tasks-v3）。
    * 不可跳过 → 409，message 为原因（RepeatSkipBlock）。
    */
+  /**
+   * 提前生成下一份（recurring-tasks-v4）：现在就写入完成时会派生的下一个
+   * Repeat Instance（规则见 domain nextCopyBlock / planRepeatInstance），来源
+   * 不变。不可生成 → 409，message 为原因（RepeatSkipBlock）。返回下一份。
+   */
+  async nextCopy(userId: string, id: string) {
+    const existing = await this.prisma.task.findFirst({
+      where: { id, userId },
+      include: { tags: true, subtasks: true, attachments: true },
+    });
+    if (!existing) {
+      throw new NotFoundException('Task not found');
+    }
+    const linked = await this.prisma.task.findFirst({
+      where: { userId, repeatSourceId: id, trashedAt: null },
+      select: { id: true },
+    });
+    const now = new Date().toISOString();
+    const block = nextCopyBlock(
+      { ...existing, repeatRule: parseRepeatRule(existing.repeatRule) },
+      linked !== null,
+      now,
+      await userCalendarZones(this.prisma, userId),
+    );
+    if (block) throw new ConflictException(block);
+    return this.hub.writeAsHub(userId, async (batch) => {
+      const copyId = await this.deriveRepeatInstance(batch, userId, existing, now);
+      if (!copyId) throw new ConflictException('next-exists');
+      return this.listDto(batch.tx, copyId);
+    });
+  }
+
   async skip(userId: string, id: string) {
     const existing = await this.prisma.task.findFirst({
       where: { id, userId },

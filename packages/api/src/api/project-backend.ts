@@ -34,6 +34,11 @@ export interface ProjectBackend {
    * 同步平移。不可跳过时抛 RepeatSkipBlockedError。
    */
   skipProject(id: string): Promise<ProjectResponseDto>;
+  /**
+   * 重复项目提前生成下一份（recurring-tasks-v4）：现在就写入完成时会派生的
+   * 下一轮（内容取当前这一轮）。不可生成时抛 RepeatSkipBlockedError。
+   */
+  createProjectNextCopy(id: string): Promise<ProjectResponseDto>;
   uncompleteProject(id: string): Promise<ProjectResponseDto>;
   /**
    * 复制项目（Duplicate）：项目连同 Headings、任务、Subtask、附件整份复制，
