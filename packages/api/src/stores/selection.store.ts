@@ -33,6 +33,8 @@ export interface SelectionRowItem {
   dueDate: string | null;
   reminderTime?: string | null;
   repeatRule?: RepeatRule | null;
+  /** 出现日（recurring-tasks-v4）：日期选择器改期询问用。 */
+  occurrenceDate?: string | null;
   projectId?: string | null;
   headingId?: string | null;
   areaId: string | null;

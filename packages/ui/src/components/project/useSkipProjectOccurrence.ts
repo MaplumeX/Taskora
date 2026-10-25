@@ -35,17 +35,19 @@ export function useSkipProjectOccurrence(project: ProjectResponseDto, enabled: b
     !project.trashedAt;
   const repeatRule = project.repeatRule;
   const scheduledDate = project.scheduledDate ?? null;
+  const occurrenceDate = project.occurrenceDate ?? null;
   const target = React.useMemo(
     () =>
       enabled && available && repeatRule
         ? skipOccurrenceDate(repeatRule, {
             scheduledDate,
+            occurrenceDate,
             now: new Date(),
             timeZone,
             legacyDateTimeZone: currentLegacyDateTimeZone(),
           })
         : null,
-    [enabled, available, repeatRule, scheduledDate, timeZone],
+    [enabled, available, repeatRule, scheduledDate, occurrenceDate, timeZone],
   );
 
   const skip = () => {

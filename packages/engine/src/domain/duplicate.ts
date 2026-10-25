@@ -36,6 +36,8 @@ export interface DuplicateTaskSource {
   notes: string | null;
   start: unknown;
   scheduledDate: unknown;
+  /** 出现日（recurring-tasks-v4）：照抄。 */
+  occurrenceDate?: unknown;
   dueDate: unknown;
   reminderTime: string | null;
   /** 规范化后的规则（两端各自从存储解析）。 */
@@ -75,6 +77,7 @@ export function planTaskDuplicate(
       reminderTime: dated ? source.reminderTime : null,
       repeatRule: dated ? source.repeatRule : null,
       repeatSourceId: null,
+      occurrenceDate: dated ? dateKeyOf(source.occurrenceDate, zones) : null,
       dueDate: dateKeyOf(source.dueDate, zones),
       status: TaskStatus.ACTIVE,
       settledAt: null,
@@ -105,6 +108,8 @@ export interface DuplicateProjectSource {
   notes: string | null;
   start: unknown;
   scheduledDate: unknown;
+  /** 出现日（recurring-tasks-v4）：照抄。 */
+  occurrenceDate?: unknown;
   dueDate: unknown;
   /** 规范化后的规则。 */
   repeatRule: RepeatRule | null;
@@ -138,6 +143,7 @@ export function planProjectDuplicate(
       dueDate: dateKeyOf(source.dueDate, zones),
       repeatRule: scheduledDate != null ? source.repeatRule : null,
       repeatSourceId: null,
+      occurrenceDate: scheduledDate != null ? dateKeyOf(source.occurrenceDate, zones) : null,
       ...planReviewSchedule(review, 'project', { reviewInterval: source.reviewInterval }),
       status: ProjectStatus.ACTIVE,
       completedAt: null,

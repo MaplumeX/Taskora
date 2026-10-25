@@ -42,6 +42,7 @@ const harness = vi.hoisted(() => ({
   sidebarDrop: vi.fn(),
   markNewInTodaySeen: vi.fn(),
   createTask: vi.fn(),
+  sortableArgs: [] as Array<{ id: string; disabled?: { draggable?: boolean } }>,
 }));
 
 vi.mock('@dnd-kit/core', async () => {
@@ -77,14 +78,17 @@ vi.mock('@dnd-kit/sortable', async () => {
     ...actual,
     SortableContext: ({ children }: { children: React.ReactNode }) =>
       ReactModule.createElement(ReactModule.Fragment, null, children),
-    useSortable: () => ({
-      attributes: {},
-      listeners: {},
-      setNodeRef: () => undefined,
-      transform: null,
-      transition: undefined,
-      isDragging: false,
-    }),
+    useSortable: (args: { id: string; disabled?: { draggable?: boolean } }) => {
+      harness.sortableArgs.push(args);
+      return {
+        attributes: {},
+        listeners: {},
+        setNodeRef: () => undefined,
+        transform: null,
+        transition: undefined,
+        isDragging: false,
+      };
+    },
   };
 });
 
@@ -377,6 +381,7 @@ beforeEach(() => {
   harness.uncompleteProjectMutate.mockReset();
   harness.markNewInTodaySeen.mockReset();
   harness.createTask.mockReset();
+  harness.sortableArgs = [];
   harness.toastSuccess.mockReset();
   harness.toastError.mockReset();
   window.localStorage.clear();
@@ -1148,6 +1153,35 @@ describe('GroupedFeedListView — 拖拽语义', () => {
       expect(harness.updateTaskMutate).not.toHaveBeenCalled();
       expect(harness.reorderFeedMutate).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('GroupedFeedListView — 只读顺序（reorderable=false）', () => {
+  it('行不可拖起，不登记键盘重排', () => {
+    harness.projects = [project('p1')];
+    renderDnd(
+      <MemoryRouter>
+        <GroupedFeedListView
+          items={[taskItem('loose'), taskItem('a1', { projectId: 'p1' })]}
+          reorderable={false}
+        />
+      </MemoryRouter>,
+    );
+
+    expect(harness.sortableArgs.length).toBeGreaterThan(0);
+    expect(harness.sortableArgs.every((args) => args.disabled?.draggable === true)).toBe(true);
+    const actions = Object.values(useSelectionStore.getState().scopeActions);
+    expect(actions.some((action) => action?.reorder)).toBe(false);
+    // 仍按项目分组
+    expect(headerOf('p1')).toBeTruthy();
+  });
+
+  it('默认可拖拽、登记键盘重排', () => {
+    renderView([taskItem('a1')]);
+
+    expect(harness.sortableArgs.some((args) => args.disabled?.draggable === false)).toBe(true);
+    const actions = Object.values(useSelectionStore.getState().scopeActions);
+    expect(actions.some((action) => action?.reorder)).toBe(true);
   });
 });
 

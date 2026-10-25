@@ -233,6 +233,46 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     );
   });
 
+  it('Project next-copy（recurring-tasks-v4）：提前派生整份下一轮，来源不变；重复生成 409', async () => {
+    await seedProject('p-1', {
+      position: 'a0',
+      start: 'ANYTIME',
+      scheduledDate: new Date('2030-01-07T00:00:00Z'),
+      repeatRule: JSON.stringify({ unit: 'week', interval: 1, anchor: 'scheduled' }),
+    });
+    await seedTask('t-open', {
+      projectId: 'p-1',
+      start: 'ANYTIME',
+      scheduledDate: new Date('2030-01-08T00:00:00Z'),
+    });
+    const next = await h.projects.nextCopy(USER, 'p-1');
+    expect(next.repeatSourceId).toBe('p-1');
+    expect(next.scheduledDate?.toISOString().slice(0, 10)).toBe('2030-01-14');
+    const copied = await testPrisma.task.findMany({ where: { projectId: next.id } });
+    expect(copied.map((task) => task.scheduledDate)).toEqual([new Date('2030-01-15T00:00:00Z')]);
+    expect((await testPrisma.project.findUniqueOrThrow({ where: { id: 'p-1' } })).status).toBe(
+      ProjectStatus.ACTIVE,
+    );
+    await expect(h.projects.nextCopy(USER, 'p-1')).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('Project 改期即例外（recurring-tasks-v4）：落库出现日，跳过时清空并按出现日推进', async () => {
+    await seedProject('p-1', {
+      position: 'a0',
+      start: 'ANYTIME',
+      scheduledDate: new Date('2030-01-07T00:00:00Z'),
+      repeatRule: JSON.stringify({ unit: 'week', interval: 1, anchor: 'scheduled' }),
+    });
+    await h.projects.update(USER, 'p-1', { scheduledDate: '2030-01-08' });
+    const moved = await testPrisma.project.findUniqueOrThrow({ where: { id: 'p-1' } });
+    expect(moved.occurrenceDate).toEqual(new Date('2030-01-07T00:00:00Z'));
+
+    const skipped = await h.projects.skip(USER, 'p-1');
+    expect(skipped.scheduledDate?.toISOString().slice(0, 10)).toBe('2030-01-14');
+    const after = await testPrisma.project.findUniqueOrThrow({ where: { id: 'p-1' } });
+    expect(after.occurrenceDate).toBeNull();
+  });
+
   it('Project 重复（recurring-projects）：完成时了结剩余任务并派生整份下一轮；幂等；跳过本次', async () => {
     const rule = { unit: 'week', interval: 1, anchor: 'scheduled' } as const;
     await seedProject('p-1', {

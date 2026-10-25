@@ -89,6 +89,14 @@ export class ProjectsController {
     return this.projectsService.duplicate(req.user.id, id);
   }
 
+  @Post(':id/next-copy')
+  nextCopy(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.projectsService.nextCopy(req.user.id, id);
+  }
+
   @Post(':id/skip')
   skip(
     @Request() req: { user: { id: string } },

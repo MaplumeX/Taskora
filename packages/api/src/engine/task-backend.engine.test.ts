@@ -1085,6 +1085,93 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     expect((await backend.skipTask(task.id)).scheduledDate).toBe(utcDay(1));
   });
 
+  it('改期即例外（recurring-tasks-v4）：保留出现日，完成后的下一次按原节奏；写规则即清空', async () => {
+    const task = await backend.createTask({
+      title: '周报',
+      start: Start.ANYTIME,
+      scheduledDate: '2027-01-04',
+      dueDate: '2027-01-06',
+    });
+    const rule = { unit: 'day', interval: 7, anchor: 'scheduled' } as const;
+    await backend.updateTask(task.id, { repeatRule: rule });
+
+    const moved = await backend.updateTask(task.id, { scheduledDate: '2027-01-05' });
+    expect(moved.occurrenceDate).toBe('2027-01-04');
+
+    await backend.completeTask(task.id);
+    const instance = (await backend.getFeed('upcoming')).find(
+      (item) => item.type === 'task' && item.repeatSourceId === task.id,
+    );
+    expect(instance).toMatchObject({
+      scheduledDate: '2027-01-11',
+      dueDate: '2027-01-13',
+      occurrenceDate: null,
+    });
+
+    // 更新规则：同次写规则，出现日清空，新日期成为锚点
+    const retimed = await backend.updateTask(instance!.id, {
+      scheduledDate: '2027-01-12',
+      repeatRule: rule,
+    });
+    expect(retimed.occurrenceDate).toBeNull();
+    const again = await backend.updateTask(instance!.id, { scheduledDate: '2027-01-13' });
+    expect(again.occurrenceDate).toBe('2027-01-12');
+  });
+
+  it('提前生成下一份（recurring-tasks-v4）：写入下一个实例、来源不变；完成来源不再派生；不可重复生成', async () => {
+    const task = await backend.createTask({
+      title: '周报',
+      start: Start.ANYTIME,
+      scheduledDate: utcDay(1),
+      dueDate: utcDay(2),
+    });
+    await backend.updateTask(task.id, {
+      repeatRule: { unit: 'day', interval: 7, anchor: 'scheduled' },
+    });
+    const sub = await backend.createSubtask(task.id, { title: '收集数据' });
+    await backend.completeSubtask(sub.id);
+
+    const copy = await backend.createNextCopy(task.id);
+    expect(copy).toMatchObject({
+      title: '周报',
+      scheduledDate: utcDay(8),
+      dueDate: utcDay(9),
+      repeatSourceId: task.id,
+      status: TaskStatus.ACTIVE,
+    });
+    expect((await backend.getTask(copy.id)).subtasks?.map((s) => s.status)).toEqual([
+      TaskStatus.ACTIVE,
+    ]);
+    expect((await backend.getTask(task.id)).scheduledDate).toBe(utcDay(1));
+
+    await expect(backend.createNextCopy(task.id)).rejects.toMatchObject({ reason: 'next-exists' });
+
+    await backend.completeTask(task.id);
+    expect(await engine.list('task', { where: { repeatSourceId: task.id } })).toHaveLength(1);
+    // 下一份自己可以再往后生成
+    expect((await backend.createNextCopy(copy.id)).scheduledDate).toBe(utcDay(15));
+  });
+
+  it('提前生成下一份不可用：无规则 / 已了结 / 链已终结', async () => {
+    const plain = await backend.createTask({
+      title: '普通',
+      start: Start.ANYTIME,
+      scheduledDate: utcDay(1),
+    });
+    await expect(backend.createNextCopy(plain.id)).rejects.toMatchObject({
+      reason: 'not-repeating',
+    });
+    await backend.updateTask(plain.id, {
+      repeatRule: { unit: 'day', interval: 7, anchor: 'scheduled', until: utcDay(2) },
+    });
+    await expect(backend.createNextCopy(plain.id)).rejects.toMatchObject({ reason: 'no-next' });
+    await backend.updateTask(plain.id, {
+      repeatRule: { unit: 'day', interval: 7, anchor: 'scheduled' },
+    });
+    await backend.completeTask(plain.id);
+    await expect(backend.createNextCopy(plain.id)).rejects.toMatchObject({ reason: 'not-active' });
+  });
+
   it('跳过最后一次：任务取消、不派生、Subtask 不动', async () => {
     const last = await backend.createTask({
       title: '最后一次',

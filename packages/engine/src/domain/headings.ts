@@ -79,6 +79,7 @@ export function planHeadingToProject(
       dueDate: null,
       repeatRule: null,
       repeatSourceId: null,
+      occurrenceDate: null,
       ...planReviewSchedule(review, 'project'),
       status: ProjectStatus.ACTIVE,
       completedAt: null,

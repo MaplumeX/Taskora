@@ -69,6 +69,7 @@ describe('重复项目派生', () => {
       dueDate: '2026-10-14',
       repeatRule: WEEKLY,
       repeatSourceId: 'project-1',
+      occurrenceDate: null,
       // 沿用来源的回顾间隔，下次回顾日从派生日重新计
       reviewInterval: { unit: 'month', count: 1 },
       nextReviewDate: '2026-11-05',

@@ -21,6 +21,7 @@ import {
   reorderProjects,
   restoreProject,
   skipProject,
+  createProjectNextCopy,
   uncompleteProject,
   updateProject,
 } from '@/api/projects.api';
@@ -332,6 +333,20 @@ export function useUncompleteProject() {
       refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
       refreshAfterWrite(queryClient, { queryKey: ['review'] });
       refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+    },
+  });
+}
+
+/** 重复项目提前生成下一份（recurring-tasks-v4）；不可生成时报 RepeatSkipBlockedError。 */
+export function useCreateProjectNextCopy() {
+  const queryClient = useQueryCache();
+  return useMutation({
+    mutationFn: (id: string) => createProjectNextCopy(id),
+    onSettled: () => {
+      refreshAfterWrite(queryClient, { queryKey: projectKeys.all });
+      refreshAfterWrite(queryClient, { queryKey: ['review'] });
+      refreshAfterWrite(queryClient, { queryKey: ['feed'] });
+      refreshAfterWrite(queryClient, { queryKey: ['tasks'] });
     },
   });
 }

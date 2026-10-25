@@ -18,6 +18,7 @@ import {
   planProjectCreate,
   planProjectDuplicate,
   planProjectRepeatSkip,
+  projectNextCopyBlock,
   planProjectRestore,
   planProjectTrash,
   planProjectUpdate,
@@ -98,7 +99,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
     parent: ReplicaRow,
     tasks: readonly ReplicaRow[],
     completedAt: string,
-  ): Promise<void> {
+  ): Promise<string | null> {
     const f = parent.fields;
     const plan = planRepeatProjectInstance(
       {
@@ -106,6 +107,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
         title: (f.title as string) ?? '',
         notes: (f.notes as string | null) ?? null,
         scheduledDate: f.scheduledDate,
+        occurrenceDate: f.occurrenceDate,
         dueDate: f.dueDate,
         repeatRule: normalizeRepeatRule(f.repeatRule),
         reviewInterval: f.reviewInterval,
@@ -116,7 +118,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
       zones(),
       currentReviewContext(),
     );
-    if (!plan) return;
+    if (!plan) return null;
     const linked = await engine.list('project', {
       where: { repeatSourceId: parent.id, trashedAt: null },
       limit: 1,
@@ -132,7 +134,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
           ? 'compacted'
           : 'absent',
     });
-    if (target === 'skip') return;
+    if (target === 'skip') return null;
 
     // 侧边栏中紧跟来源项目
     const projects = await engine.list('project');
@@ -143,6 +145,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
     });
 
     await writeProjectCopy(plan.copyFor(instanceId, await contentsOf(parent.id, tasks)));
+    return instanceId;
   }
 
   /** 来源项目的内容（Headings / 任务 / Subtask / 附件），供整份复制。 */
@@ -169,6 +172,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
           notes: (t.notes as string | null) ?? null,
           start: t.start,
           scheduledDate: t.scheduledDate,
+          occurrenceDate: t.occurrenceDate,
           dueDate: t.dueDate,
           reminderTime: (t.reminderTime as string | null) ?? null,
           repeatRule: normalizeRepeatRule(t.repeatRule),
@@ -314,6 +318,36 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
       return projectDto(id);
     },
 
+    async createProjectNextCopy(id: string): Promise<ProjectResponseDto> {
+      const existing = await engine.get('project', id);
+      if (!existing) throw new Error(`Project not found: ${id}`);
+      const f = existing.fields;
+      const linked = await engine.list('project', {
+        where: { repeatSourceId: id, trashedAt: null },
+        limit: 1,
+      });
+      const now = new Date().toISOString();
+      const block = projectNextCopyBlock(
+        {
+          id,
+          status: f.status,
+          trashedAt: f.trashedAt,
+          scheduledDate: f.scheduledDate,
+          occurrenceDate: f.occurrenceDate,
+          repeatRule: normalizeRepeatRule(f.repeatRule),
+        },
+        linked.length > 0,
+        now,
+        zones(),
+      );
+      if (block) throw new RepeatSkipBlockedError(block);
+      // 与完成时同一派生（内容取当前这一轮），now 视作完成时刻
+      const tasks = await engine.list('task', { where: { projectId: id } });
+      const copyId = await deriveRepeatProject(existing, tasks, now);
+      if (!copyId) throw new RepeatSkipBlockedError('next-exists');
+      return projectDto(copyId);
+    },
+
     async skipProject(id: string): Promise<ProjectResponseDto> {
       const existing = await engine.get('project', id);
       if (!existing) throw new Error(`Project not found: ${id}`);
@@ -327,6 +361,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
           status: f.status,
           trashedAt: f.trashedAt,
           scheduledDate: f.scheduledDate,
+          occurrenceDate: f.occurrenceDate,
           dueDate: f.dueDate,
           repeatRule: normalizeRepeatRule(f.repeatRule),
         },
@@ -335,6 +370,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
           status: row.fields.status,
           trashedAt: row.fields.trashedAt,
           scheduledDate: row.fields.scheduledDate,
+          occurrenceDate: row.fields.occurrenceDate,
           dueDate: row.fields.dueDate,
         })),
         linked.length > 0,
@@ -360,6 +396,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
           notes: (f.notes as string | null) ?? null,
           start: f.start,
           scheduledDate: f.scheduledDate,
+          occurrenceDate: f.occurrenceDate,
           dueDate: f.dueDate,
           repeatRule: normalizeRepeatRule(f.repeatRule),
           reviewInterval: f.reviewInterval,

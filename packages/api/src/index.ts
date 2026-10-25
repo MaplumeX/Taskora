@@ -317,6 +317,7 @@ export {
   normalizeRepeatRule,
   nextOccurrenceDate,
   skipOccurrenceDate,
+  retargetRepeatRule,
   RepeatSkipBlockedError,
   type RepeatPreview,
   type RepeatSkipBlock,

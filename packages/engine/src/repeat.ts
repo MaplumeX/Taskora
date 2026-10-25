@@ -154,8 +154,10 @@ function startOfIsoWeek(date: Date): Date {
 /**
  * 下一次出现日期。
  *
- * - anchor=scheduled：从 scheduledDate 推进（固定节奏：房租/例会不漂移），
- *   已过的计划日期保留计算值（落 Today 由视图口径表达）；
+ * - anchor=scheduled：从出现日（Occurrence Date，`occurrenceDate ?? scheduledDate`）
+ *   推进（固定节奏：房租/例会不漂移，改期只挪这一次），结果须晚于计划日期——
+ *   例外挪到下一次之后时，被它越过的出现日一并跳过；已过的计划日期保留计算值
+ *   （落 Today 由视图口径表达）；
  * - anchor=completion：从 settledAt（了结时刻的账号时区日）推进（间隔型：
  *   换床单/备份从实际完成时算起）；settledAt 缺失时退回 scheduledDate；
  * - 结果超过 until（不含当天）→ null：链终止，不派生实例；
@@ -165,6 +167,8 @@ export function nextOccurrenceDate(
   rule: RepeatRule,
   input: {
     scheduledDate: string | null;
+    /** 出现日（recurring-tasks-v4）：为空即等于计划日期；只对 anchor=scheduled 生效。 */
+    occurrenceDate?: string | null;
     settledAt?: string | null;
     timeZone?: string;
     legacyDateTimeZone?: string;
@@ -174,14 +178,21 @@ export function nextOccurrenceDate(
   if (normalized === null) return null;
 
   let anchorValue: string | null;
+  let scheduledValue: string | null = null;
   try {
     const zone = input.timeZone ?? 'UTC';
-    anchorValue =
-      normalized.anchor === 'completion' && input.settledAt
-        ? instantDateKey(input.settledAt, zone)
-        : input.scheduledDate
-          ? calendarDateKey(input.scheduledDate, input.legacyDateTimeZone ?? zone)
-          : null;
+    const legacyZone = input.legacyDateTimeZone ?? zone;
+    if (normalized.anchor === 'completion' && input.settledAt) {
+      anchorValue = instantDateKey(input.settledAt, zone);
+    } else {
+      scheduledValue = input.scheduledDate
+        ? calendarDateKey(input.scheduledDate, legacyZone)
+        : null;
+      anchorValue =
+        normalized.anchor === 'scheduled' && input.occurrenceDate
+          ? calendarDateKey(input.occurrenceDate, legacyZone)
+          : scheduledValue;
+    }
   } catch {
     return null;
   }
@@ -189,20 +200,10 @@ export function nextOccurrenceDate(
   const anchor = utcDate(anchorValue);
   if (anchor === null) return null;
 
-  let next: Date;
-  switch (normalized.unit) {
-    case 'day':
-      next = addDays(anchor, normalized.interval);
-      break;
-    case 'week':
-      next = nextWeeklyOccurrence(anchor, normalized);
-      break;
-    case 'month':
-      next = nextMonthlyOccurrence(anchor, normalized);
-      break;
-    case 'year':
-      next = addMonthsClamped(anchor, normalized.interval * 12);
-      break;
+  let next = stepOccurrence(normalized, anchor);
+  // 例外挪到了下一次之后：沿链推进到计划日期之后（每步严格前进，必然终止）
+  if (scheduledValue !== null && anchorValue !== scheduledValue) {
+    while (keyOf(next) <= scheduledValue) next = stepOccurrence(normalized, next);
   }
 
   const nextKey = keyOf(next);
@@ -210,12 +211,26 @@ export function nextOccurrenceDate(
   return nextKey;
 }
 
+/** 锚点之后（不含）规则的下一个出现日；不看 until。 */
+function stepOccurrence(rule: RepeatRule, anchor: Date): Date {
+  switch (rule.unit) {
+    case 'day':
+      return addDays(anchor, rule.interval);
+    case 'week':
+      return nextWeeklyOccurrence(anchor, rule);
+    case 'month':
+      return nextMonthlyOccurrence(anchor, rule);
+    case 'year':
+      return addMonthsClamped(anchor, rule.interval * 12);
+  }
+}
+
 /**
  * 跳过本次的目标日期（recurring-tasks-v2 issue 02）。
  *
- * - anchor=scheduled：从 scheduledDate 沿链反复推进，取第一个晚于原计划日
- *   且不早于今天（账号时区）的出现日——计划在今天或未来时即严格下一次，
- *   已错过多轮计划日期时跳过全部错过的；
+ * - anchor=scheduled：从出现日（`occurrenceDate ?? scheduledDate`）沿链反复推进，
+ *   取第一个晚于出现日与计划日期、且不早于今天（账号时区）的出现日——计划在
+ *   今天或未来时即严格下一次，已错过多轮计划日期时跳过全部错过的；
  * - anchor=completion：以今天为锚推进一次（等同「今天完成」时的下一次）；
  * - 链在此之前终结（until）→ null：无可跳到的日期。
  */
@@ -223,6 +238,8 @@ export function skipOccurrenceDate(
   rule: RepeatRule,
   input: {
     scheduledDate: string | null;
+    /** 出现日（recurring-tasks-v4）：为空即等于计划日期。 */
+    occurrenceDate?: string | null;
     now: Date | string;
     timeZone?: string;
     legacyDateTimeZone?: string;
@@ -245,11 +262,52 @@ export function skipOccurrenceDate(
     return null;
   }
   // 每步严格前进至少一天，until 或到达今天必然终止
-  let next = nextOccurrenceDate(rule, { ...zones, scheduledDate: input.scheduledDate });
+  let next = nextOccurrenceDate(rule, {
+    ...zones,
+    scheduledDate: input.scheduledDate,
+    occurrenceDate: input.occurrenceDate,
+  });
   while (next !== null && next < today) {
     next = nextOccurrenceDate(rule, { ...zones, scheduledDate: next });
   }
   return next;
+}
+
+/**
+ * 更新规则（recurring-tasks-v4）：把规则对齐到新日期——这一环从出现日 from
+ * 挪到 to，此后按新规则重复。
+ *
+ * - week 且有 weekdays：去掉 from 的星期几（不在集合中则不去），加入 to 的星期几；
+ * - month 且有 monthDays：去掉在 from 所在月钳制后落在 from 那天的日子（优先
+ *   恰好等于的那个），加入 to 的日子；
+ * - 其他（day、year、无星期几 / 日子的 week / month）：规则不变，新计划日期
+ *   即新锚点。
+ *
+ * interval、anchor、until 不变；结果为规范形。非法规则或日期原样返回规范形。
+ */
+export function retargetRepeatRule(rule: RepeatRule, from: string, to: string): RepeatRule {
+  const normalized = normalizeRepeatRule(rule);
+  if (normalized === null) return rule;
+  const fromKey = dayKey(from);
+  const toKey = dayKey(to);
+  const fromDate = fromKey === null ? null : utcDate(fromKey);
+  const toDate = toKey === null ? null : utcDate(toKey);
+  if (fromDate === null || toDate === null) return normalized;
+
+  if (normalized.unit === 'week' && normalized.weekdays) {
+    const weekdays = normalized.weekdays.filter((day) => day !== fromDate.getUTCDay());
+    return normalizeRepeatRule({ ...normalized, weekdays: [...weekdays, toDate.getUTCDay()] })!;
+  }
+  if (normalized.unit === 'month' && normalized.monthDays) {
+    const fromDay = fromDate.getUTCDate();
+    const lastDay = daysInMonth(fromDate.getUTCFullYear(), fromDate.getUTCMonth());
+    const exact = normalized.monthDays.includes(fromDay);
+    const monthDays = normalized.monthDays.filter((day) =>
+      exact ? day !== fromDay : Math.min(day, lastDay) !== fromDay,
+    );
+    return normalizeRepeatRule({ ...normalized, monthDays: [...monthDays, toDate.getUTCDate()] })!;
+  }
+  return normalized;
 }
 
 /**

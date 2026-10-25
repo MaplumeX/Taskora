@@ -121,6 +121,14 @@ export class TasksController {
     return this.tasksService.skip(req.user.id, id);
   }
 
+  @Post(':id/next-copy')
+  nextCopy(
+    @Request() req: { user: { id: string } },
+    @Param('id') id: string,
+  ) {
+    return this.tasksService.nextCopy(req.user.id, id);
+  }
+
   @Post(':id/duplicate')
   duplicate(
     @Request() req: { user: { id: string } },

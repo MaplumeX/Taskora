@@ -59,6 +59,8 @@ export interface TaskResponseDto {
   repeatRule: RepeatRule | null;
   /** 派生来源（Repeat Instance）：派生出本任务的那个重复任务的 id；非派生任务为 null。 */
   repeatSourceId: string | null;
+  /** 出现日（Occurrence Date，YYYY-MM-DD）：重复链上这一环原定的日期，只在被改期后与计划日期不同时非空。 */
+  occurrenceDate?: string | null;
   dueDate: string | null; // 截止日期：必须完成日，可逾期（与 scheduledDate「计划开始做、永不逾期」对立）
   status: TaskStatus;
   /** 了结时间（Settled At，ADR 0006）：status 为 COMPLETED/CANCELLED 时的了结时刻；字段名保留 completedAt 以兼容前端。 */

@@ -53,6 +53,7 @@ function toTaskFeedItem(t: TaskWithTags): TaskFeedItem {
     reminderTime: t.reminderTime,
     repeatRule: parseRepeatRule(t.repeatRule),
     repeatSourceId: t.repeatSourceId,
+    occurrenceDate: t.occurrenceDate ? t.occurrenceDate.toISOString() : null,
     dueDate: t.dueDate ? t.dueDate.toISOString() : null,
     status: t.status as TaskStatus,
     // DTO 字段名保持 completedAt，承载 Settled At 语义（ADR 0006）。
@@ -243,6 +244,7 @@ export class FeedService {
         reminderTime: null, // Project 不设 Reminder（CONTEXT.md）
         repeatRule: parseRepeatRule(p.repeatRule),
         repeatSourceId: p.repeatSourceId,
+        occurrenceDate: p.occurrenceDate ? p.occurrenceDate.toISOString() : null,
         dueDate: p.dueDate ? p.dueDate.toISOString() : null,
         status: p.status as ProjectStatus,
         completedAt: p.completedAt ? p.completedAt.toISOString() : null,

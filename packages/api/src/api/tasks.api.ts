@@ -60,6 +60,10 @@ export function skipTask(...args: Parameters<typeof import('./tasks.api.rest').s
   return currentTaskBackend().skipTask(...args);
 }
 
+export function createNextCopy(id: string) {
+  return currentTaskBackend().createNextCopy(id);
+}
+
 export function duplicateTask(
   ...args: Parameters<typeof import('./tasks.api.rest').duplicateTask>
 ) {

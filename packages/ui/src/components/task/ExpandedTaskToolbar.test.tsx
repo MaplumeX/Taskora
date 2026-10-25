@@ -23,6 +23,7 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   ...(await importOriginal()),
   useTaskQuery: () => ({ data: mocks.task }),
   useSkipTask: () => ({ mutate: vi.fn(), isPending: false }),
+  useCreateNextCopy: () => ({ mutate: vi.fn(), isPending: false }),
   useDuplicateTask: () => ({ mutateAsync: mocks.duplicate }),
   useDuplicateProject: () => ({ mutateAsync: vi.fn() }),
   useUpdateTask: () => ({ mutate: mocks.update, isPending: false }),

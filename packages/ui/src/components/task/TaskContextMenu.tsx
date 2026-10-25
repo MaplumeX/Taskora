@@ -18,6 +18,7 @@ import {
   Trash2,
   RotateCcw,
   SkipForward,
+  CalendarPlus,
 } from 'lucide-react';
 
 import type { TaskResponseDto, UpdateTaskDto } from '@taskora/shared';
@@ -45,6 +46,7 @@ import { DueDateField } from './fields/DueDateField';
 import { RepeatRuleField } from './fields/RepeatRuleField';
 import { MultiTagsField, TagsField } from './fields/TagsField';
 import { MovePicker } from './fields/MovePicker';
+import { useNextCopy } from './useNextCopy';
 import { useSkipOccurrence } from './useSkipOccurrence';
 import { useDuplicate } from './useDuplicate';
 import { useLogCompleted } from './useLogCompleted';
@@ -137,6 +139,8 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   // 跳过本次：链已到头（until）时禁用。
   const skipOccurrence = useSkipOccurrence(current, menuOpen);
   const canOfferSkip = !group && variant === 'default' && skipOccurrence.available;
+  const nextCopy = useNextCopy(current, 'task', menuOpen);
+  const canOfferNextCopy = !group && variant === 'default' && nextCopy.available;
 
   const targets = group ?? [task.id];
   // 整组时字段卡片不预选任何值（各任务取值不一）。
@@ -171,6 +175,11 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
   const handleSkip = () => {
     closeMenu();
     skipOccurrence.skip();
+  };
+
+  const handleNextCopy = () => {
+    closeMenu();
+    nextCopy.create();
   };
 
   const handleDelete = () => {
@@ -301,6 +310,11 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
               onClick={handleSkip}
             >
               {t(skipOccurrence.last ? 'skipOccurrenceEnd' : 'skipOccurrence')}
+            </MenuRow>
+          )}
+          {canOfferNextCopy && (
+            <MenuRow icon={CalendarPlus} onClick={handleNextCopy}>
+              {t('task:nextCopy')}
             </MenuRow>
           )}
           <MenuRow icon={CalendarDays} onClick={() => openPicker('due')}>

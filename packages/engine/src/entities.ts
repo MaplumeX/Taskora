@@ -55,6 +55,8 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('reminderTime'),
       f('repeatRule', { json: true }),
       f('repeatSourceId'),
+      // 出现日（recurring-tasks-v4）：重复链上这一环原定的日期，为空即计划日期。
+      f('occurrenceDate'),
       // 开始状态（INBOX / ANYTIME / SOMEDAY，ADR 0024）
       f('start'),
       f('status'),
@@ -95,6 +97,8 @@ export const ENTITIES: Record<SyncEntity, EntityDef> = {
       f('dueDate'),
       f('repeatRule', { json: true }),
       f('repeatSourceId'),
+      // 出现日（recurring-tasks-v4）：重复链上这一环原定的日期，为空即计划日期。
+      f('occurrenceDate'),
       // Review（回顾）：回顾间隔（JSON）、下次回顾日与上次回顾日（日历日）。
       f('reviewInterval', { json: true }),
       f('nextReviewDate'),

@@ -53,8 +53,10 @@ export function SortableFeedRow({
         ? { 'data-sortable-task-id': item.id }
         : { 'data-sortable-project-id': item.id })}
       {...flipId(dndId)}
-      {...attributes}
-      {...listeners}
+      // 不可排序的列表（dragDisabled）不挂拖拽语义：dnd-kit 的 aria-disabled
+      // 会让整行被读成「已禁用」。
+      {...(dragDisabled ? {} : attributes)}
+      {...(dragDisabled ? {} : listeners)}
       tabIndex={-1}
     >
       {placeholder ? (

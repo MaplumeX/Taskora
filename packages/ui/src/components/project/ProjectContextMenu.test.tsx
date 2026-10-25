@@ -30,6 +30,8 @@ vi.mock('@taskora/api', async (importOriginal) => ({
   useProjectsQuery: () => ({ data: groupProjects.current }),
   useRestoreProject: () => ({ mutate: vi.fn(), isPending: false }),
   useSkipProject: () => ({ mutate: skipMock, isPending: false }),
+  useCreateProjectNextCopy: () => ({ mutate: nextCopyMock, isPending: false }),
+  useCreateNextCopy: () => ({ mutate: vi.fn(), isPending: false }),
   useDuplicateTask: () => ({ mutateAsync: vi.fn() }),
   useDuplicateProject: () => ({ mutateAsync: duplicateMock }),
 }));
@@ -39,6 +41,7 @@ const completeMock = vi.hoisted(() => vi.fn());
 const deleteMock = vi.hoisted(() => vi.fn());
 const groupProjects = vi.hoisted(() => ({ current: [] as ProjectResponseDto[] }));
 const skipMock = vi.hoisted(() => vi.fn());
+const nextCopyMock = vi.hoisted(() => vi.fn());
 const duplicateMock = vi.hoisted(() => vi.fn(async (id: string) => ({ id: `${id}-copy` })));
 
 const baseProject: ProjectResponseDto = {
@@ -99,6 +102,19 @@ describe('ProjectContextMenu — 重复项目（recurring-projects）', () => {
     expect(await screen.findByRole('button', { name: /^(Repeat|重复)$/ })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Skip Occurrence|跳过本次/ }));
     expect(skipMock).toHaveBeenCalledWith('project-1', expect.anything());
+  });
+
+  it('提前生成下一份（recurring-tasks-v4）：带规则的项目提供入口，点击调用 createProjectNextCopy', async () => {
+    renderMenu({
+      ...baseProject,
+      start: Start.ANYTIME,
+      scheduledDate: '2030-01-07',
+      repeatRule: { unit: 'week', interval: 1, anchor: 'scheduled' },
+    });
+    fireEvent.click(
+      await screen.findByRole('button', { name: /^(Create Next Copy|提前生成下一份)$/ }),
+    );
+    expect(nextCopyMock).toHaveBeenCalledWith('project-1', expect.anything());
   });
 
   it('已是最后一次：入口改为「跳过本次并结束重复」，点击调用 skip', async () => {

@@ -57,6 +57,7 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     model: 'task',
     dateFields: new Set([
       'scheduledDate',
+      'occurrenceDate',
       'dueDate',
       'settledAt',
       'trashedAt',
@@ -84,6 +85,7 @@ const CODECS: Record<SyncEntity, EntityCodec> = {
     model: 'project',
     dateFields: new Set([
       'scheduledDate',
+      'occurrenceDate',
       'dueDate',
       'nextReviewDate',
       'lastReviewedOn',

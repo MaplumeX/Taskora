@@ -12,6 +12,8 @@ export interface ScheduledFieldCurrent {
   reminderTime?: string | null;
   /** Repeat Rule：Task 与 Project 皆可设（仅有计划日期时）。 */
   repeatRule?: RepeatRule | null;
+  /** 出现日（recurring-tasks-v4）：为空即等于计划日期。 */
+  occurrenceDate?: string | null;
 }
 
 export interface ScheduledFieldPatch {

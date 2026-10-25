@@ -111,6 +111,19 @@ export function skipTask(id: string): Promise<TaskResponseDto> {
     });
 }
 
+export function createNextCopy(id: string): Promise<TaskResponseDto> {
+  return apiClient
+    .post<TaskResponseDto>(`/tasks/${id}/next-copy`)
+    .then((res) => res.data)
+    .catch((error: unknown) => {
+      // 409 的 message 即不可生成的原因（与 Engine 实现抛同一种错误）
+      if (axios.isAxiosError(error) && error.response?.status === 409) {
+        throw new RepeatSkipBlockedError(error.response.data?.message as RepeatSkipBlock);
+      }
+      throw error;
+    });
+}
+
 export function duplicateTask(id: string): Promise<TaskResponseDto> {
   return apiClient.post<TaskResponseDto>(`/tasks/${id}/duplicate`).then((res) => res.data);
 }

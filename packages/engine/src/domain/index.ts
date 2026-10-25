@@ -125,6 +125,7 @@ export {
 } from './headings';
 export {
   copyAttachment,
+  nextCopyBlock,
   planRepeatInstance,
   planRepeatSkip,
   repeatDerivationTarget,
@@ -132,16 +133,19 @@ export {
   RepeatSkipBlockedError,
   type PlannedIdState,
   type RepeatAttachmentFields,
+  type RepeatNextCopySource,
   type RepeatParent,
   type RepeatParentAttachment,
   type RepeatSkipBlock,
   type RepeatSkipSource,
   type RepeatSubtaskFields,
 } from './repeat-instance';
+export { occurrenceKeyOf, planOccurrenceDate, type OccurrenceBase } from './occurrence';
 export {
   copyProjectContents,
   planProjectRepeatSkip,
   planRepeatProjectInstance,
+  projectNextCopyBlock,
   repeatProjectInstanceId,
   type ProjectContentsSource,
   type RepeatHeadingFields,

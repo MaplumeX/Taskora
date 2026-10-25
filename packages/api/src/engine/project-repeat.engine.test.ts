@@ -139,6 +139,30 @@ describe('重复项目（Engine 后端）', () => {
     );
   });
 
+  it('提前生成下一份（recurring-tasks-v4）：派生整份重置的下一轮，来源不变；完成来源不再派生', async () => {
+    const { project, open: openTask } = await seedRepeatingProject(device);
+
+    const next = await device.projects.createProjectNextCopy(project.id);
+    expect(next).toMatchObject({
+      status: ProjectStatus.ACTIVE,
+      scheduledDate: '2030-01-14',
+      dueDate: '2030-01-16',
+      repeatSourceId: project.id,
+      taskTotalCount: 2,
+      taskCompletedCount: 0,
+    });
+    expect((await device.projects.getProject(project.id)).scheduledDate).toBe('2030-01-07');
+    expect((await device.tasks.getTask(openTask.id)).status).toBe(TaskStatus.ACTIVE);
+
+    await expect(device.projects.createProjectNextCopy(project.id)).rejects.toMatchObject({
+      reason: 'next-exists',
+    });
+    await device.projects.completeProject(project.id, { settleRemaining: 'completed' });
+    expect(
+      (await device.projects.getProjects()).filter((p) => p.title === '每周复盘'),
+    ).toHaveLength(2);
+  });
+
   it('跳过最后一次：项目完成、未了结任务取消、不派生下一轮', async () => {
     const { project, open: openTask, done } = await seedRepeatingProject(device);
     await device.projects.updateProject(project.id, {

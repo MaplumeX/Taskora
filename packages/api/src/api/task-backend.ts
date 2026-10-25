@@ -53,6 +53,12 @@ export interface TaskBackend {
    */
   skipTask(id: string): Promise<TaskResponseDto>;
   /**
+   * 提前生成下一份（recurring-tasks-v4）：现在就写入完成时会派生的下一个
+   * Repeat Instance，来源保持不变；之后来源完成时不再派生。返回下一份。
+   * 不可生成时抛 RepeatSkipBlockedError（reason 同跳过本次）。
+   */
+  createNextCopy(id: string): Promise<TaskResponseDto>;
+  /**
    * 复制任务（Duplicate）：副本紧跟来源任务，内容照抄、状态为未完成，
    * 连同 Subtask 与附件。返回副本。
    */

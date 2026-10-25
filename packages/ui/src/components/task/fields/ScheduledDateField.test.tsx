@@ -1,8 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { Start } from '@taskora/shared';
+import { Start, type RepeatRule } from '@taskora/shared';
 
 import { useReminderPermissionStore, usePreferencesStore, nextOccurrenceDate } from '@taskora/api';
 
@@ -307,5 +307,107 @@ describe('ScheduledDateField — 选定日期后是否关闭', () => {
     await user.click(screen.getByRole('button', { name: /^(Clear|清除)$/ }));
 
     expect(onClose).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('ScheduledDateField — 改期重复项的询问（recurring-tasks-v4）', () => {
+  const MONDAYS: RepeatRule = { unit: 'week', interval: 1, weekdays: [1], anchor: 'scheduled' };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.setSystemTime(now); // 2026-02-04（周三）；明天为周四 2026-02-05
+  });
+
+  function renderRepeating(
+    current: Record<string, unknown> = {},
+    options: { allowRepeat?: boolean } = { allowRepeat: true },
+  ) {
+    const onPatch = vi.fn();
+    const onClose = vi.fn();
+    render(
+      <ScheduledDateField
+        current={{
+          start: Start.ANYTIME,
+          scheduledDate: '2026-02-09',
+          repeatRule: MONDAYS,
+          ...current,
+        }}
+        onPatch={onPatch}
+        onClose={onClose}
+        allowRepeat={options.allowRepeat}
+      />,
+    );
+    return { onPatch, onClose };
+  }
+
+  const tomorrow = () => screen.getByRole('button', { name: /^(Tomorrow|明天)$/ });
+
+  it('改到别的日子先询问；「仅此一次」只写计划日期', async () => {
+    const user = userEvent.setup();
+    const { onPatch, onClose } = renderRepeating();
+
+    await user.click(tomorrow());
+    expect(onPatch).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /Make Exception|仅此一次/ }));
+
+    expect(onPatch).toHaveBeenCalledWith({ start: Start.ANYTIME, scheduledDate: '2026-02-05' });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('「更新规则」同时写对齐到新日期的规则', async () => {
+    const user = userEvent.setup();
+    const { onPatch } = renderRepeating();
+
+    await user.click(tomorrow());
+    await user.click(screen.getByRole('button', { name: /Update Rule|更新规则/ }));
+
+    expect(onPatch).toHaveBeenCalledWith({
+      start: Start.ANYTIME,
+      scheduledDate: '2026-02-05',
+      repeatRule: { ...MONDAYS, weekdays: [4] },
+    });
+  });
+
+  it('已是例外：按出现日对齐规则', async () => {
+    const user = userEvent.setup();
+    const rule: RepeatRule = { unit: 'week', interval: 1, weekdays: [1, 3], anchor: 'scheduled' };
+    const { onPatch } = renderRepeating({
+      scheduledDate: '2026-02-10',
+      occurrenceDate: '2026-02-09',
+      repeatRule: rule,
+    });
+
+    await user.click(tomorrow());
+    await user.click(screen.getByRole('button', { name: /Update Rule|更新规则/ }));
+
+    expect(onPatch.mock.calls[0][0].repeatRule).toEqual({ ...rule, weekdays: [3, 4] });
+  });
+
+  it('「取消」回到日期面板，不写入', async () => {
+    const user = userEvent.setup();
+    const { onPatch } = renderRepeating();
+
+    await user.click(tomorrow());
+    await user.click(screen.getByRole('button', { name: /^(Cancel|取消)$/ }));
+
+    expect(onPatch).not.toHaveBeenCalled();
+    expect(tomorrow()).toBeInTheDocument();
+  });
+
+  it('不询问：多选等非单项入口、anchor=completion、挪回原定那天、同一天', async () => {
+    const user = userEvent.setup();
+    const cases: Array<[Record<string, unknown>, { allowRepeat?: boolean }]> = [
+      [{}, { allowRepeat: false }],
+      [{ repeatRule: { unit: 'day', interval: 3, anchor: 'completion' } }, { allowRepeat: true }],
+      [{ scheduledDate: '2026-02-09', occurrenceDate: '2026-02-05' }, { allowRepeat: true }],
+      [{ scheduledDate: '2026-02-05' }, { allowRepeat: true }],
+    ];
+    for (const [current, options] of cases) {
+      const { onPatch } = renderRepeating(current, options);
+      await user.click(tomorrow());
+      expect(onPatch).toHaveBeenCalledWith({ start: Start.ANYTIME, scheduledDate: '2026-02-05' });
+      expect(screen.queryByRole('button', { name: /Update Rule|更新规则/ })).toBeNull();
+      cleanup();
+    }
   });
 });

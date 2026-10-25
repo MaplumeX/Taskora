@@ -59,6 +59,8 @@ export interface ProjectResponseDto {
   repeatRule?: RepeatRule | null;
   /** 派生来源：派生出本项目的重复项目 id；非派生为 null。 */
   repeatSourceId?: string | null;
+  /** 出现日（Occurrence Date，YYYY-MM-DD）：为空即等于计划日期。 */
+  occurrenceDate?: string | null;
   /** 回顾间隔；null 为存量或不合法数据，按该对象类型的账号默认回顾间隔计算。 */
   reviewInterval?: ReviewInterval | null;
   /** 下次回顾日（YYYY-MM-DD）；null 为存量数据，视为今天待回顾。 */
