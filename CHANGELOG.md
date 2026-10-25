@@ -10,6 +10,92 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > Android 小节，端专属改动标注 `(desktop)` / `(android)`。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [1.0.4] - 2026-10-25
+
+本版把重复任务的改期说清楚了：挪动一个重复条目默认只挪这一次，节奏不变；单个条目的日期
+选择器里改到别的日子会先问「仅此一次」还是「更新规则」；重复条目还能提前生成下一份，先
+在下一份里写备注、勾子任务。Repeating 列表跟随分组偏好按项目 / 区域分组。另有一批界面
+与触控细节：重复规则字段重做成模式隔离加常用预设，动作面板可下拉关闭，Android 返回先收起
+展开的任务，悬浮工具栏避开手势条，行内弹出面板里的按压不再被误认成拖拽行。
+
+### Added
+
+- **engine/shared/api/backend/ui**: 出现日与改期例外 (#245) — Task / Project 新增可空字段
+  `occurrenceDate`，记录这一环在链上原定的日期，为空即等于计划日期。此前改期一个重复任务
+  结果取决于规则怎么写：带星期几 / 日子时（「每周一」）挪到周二后下一次仍是周一，等于「仅此
+  一次」；不带时（「每 1 周」「每 3 天」「每年」）挪到周二后就变成每周二，等于悄悄改了规则。
+  现在只要同次编辑没有显式给 `repeatRule`，改期一律是例外：保留原出现日，只挪这一环，
+  `nextOccurrenceDate` / `skipOccurrenceDate` 从出现日推算下一次，且结果须晚于计划日期（例外
+  挪到下一次之后时，被越过的出现日一并跳过，不派生出更早的实例）；挪回原定那天即恢复为普通
+  的一环。截止日期与重复项目内任务的日期按「目标出现日 − 出现日」平移，保持原来的提前量。
+  写入口径收在 `planTaskUpdate` / `planProjectUpdate`，设备写入与 hub 合并、REST 与助手共用
+  同一条规则；`invariants` 在无计划日期、无规则或 anchor=completion 时清空。派生实例的出现日
+  为空，Duplicate 照抄，确定性 id 的输入不变（ADR-0012）。存储侧 Prisma 加列（迁移
+  `occurrence_date`）、Sync codec 与副本迁移、DTO、数据包导出 / 导入都带上该字段。
+
+- **ui/api/engine**: 改期时询问「仅此一次 / 更新规则」(#245) — 只在单个 Task / Project 的计划
+  日期选择器（展开任务、项目页、右键菜单单选、键盘字段选择器单选、手机滑动 When）里，当前有
+  anchor=scheduled 的规则、且选中的是另一个新日期时触发：日期面板原地切换为询问面板（不另开
+  Dialog，避免与 Popover / Drawer 抢焦点），三个选项「仅此一次」「更新规则」「取消」，选项下
+  带规则摘要。更新规则由纯函数 `retargetRepeatRule(rule, from, to)` 把规则对齐到新日期：周模式
+  把 `from` 的星期几换成 `to` 的（「每周一三五」的周一挪到周二即「每周二三五」），月模式换成新
+  日子的（钳制后的 31 号按当月实际日期换出，「每月 1 号和 15 号」的 1 号挪到 3 号即「3 号和 15
+  号」），day / year / 无星期几的 week / 无日子的 month 规则不变、新日期成为新锚点；`anchor`、
+  `interval`、`until` 不动。从完成日期推算的规则、Someday、清除日期、输入框里的重复候选都不
+  询问；拖拽、多选、快捷键、Snooze、助手、REST、应用外写入按例外处理。
+
+- **engine/api/backend/ui**: 提前生成下一份（Next Copy）(#245) — 对未了结的重复条目现在就派生
+  它完成时会派生的那个实例（`planRepeatInstance` / `planRepeatProjectInstance`，同一确定性 id；
+  从完成日期推算的规则以今天为完成时刻），来源原样保留，可先在下一份里写备注、勾 Subtask、编
+  辑项目内任务（对齐 Things 3.23 的 Create Next Copy）。之后来源完成时因已有派生实例不再派生，
+  Skip Occurrence 报 `next-exists`，Repeat Preview 不再投影；下一份自身照常可以再提前生成。
+  已生成过、已了结、链在下一次之前终结（`no-next`）时不可用，后者不显示入口。入口在任务右键
+  菜单、展开任务的「更多」、触控多选单选时的工具栏与项目右键菜单，成功后提示下一份的日期；
+  REST 新增 `POST /tasks/:id/next-copy`、`POST /projects/:id/next-copy`，不可用时 409 的 message
+  即原因。
+
+- **ui**: Repeating 列表按项目 / 区域分组 (#245) — 改用 `GroupedFeedListView`，分组跟随全局
+  偏好 `bucketGrouping`（同 Today / Anytime / Someday / Tomorrow），组头与组序同其他分组视图
+  （侧边栏全局视觉顺序），未分组任务与独立项目行在前，组内仍按计划日期升序、同一天按 Position /
+  Feed Position。`GroupedFeedListView` 新增 `reorderable`（默认 `true`），Repeating 传 `false`：
+  行不可拖起、不注册 ⌘↑/⌘↓ 重排、不接收 Magic Plus。`FlatFeedPage` 只剩 Deadlines 使用。
+
+- **ui**: 底部动作面板下拉关闭 (#242) — 新增 `useDragToDismiss`：面板跟手下移，越过 80px 阈值
+  或向下速度超过 0.5px/ms（快速下甩）松手即关闭，否则弹回；越过阈值的那一刻给一次轻触感。用
+  touch 事件而非 pointer 事件（面板里的整行按钮没有 `touch-action` 限制，纵向移动一开始浏览器
+  就会发 `pointercancel`），8px 内按主方向判定，向上或横向的手势整次放弃；拖动过的那次手势吞
+  掉随后的 click，避免松手处的按钮被误触发；退场动画从松手位置继续滑出屏幕，而不是跳回原位。
+  `ActionSheet` 从直接导出 Radix Root 改为包一层自管 open 状态（受控 / 非受控皆可），面板内的
+  下拉手势因此能关闭自己；日历的 `CalendarDaySheet` 一并生效。
+
+### Changed
+
+- **ui**: 重复规则字段重做（模式隔离 + 常用预设）(#243) — 间隔行的前缀即模式下拉（「每 ▾」/
+  「完成后 ▾」），不再常驻一整行：按日程模式显示「每 N 单位」加周模式星期条 / 月模式日子网格，
+  从完成日期推算只剩「完成后 N 单位」，不选星期几 / 日子（间隔型重复没有「哪一天」），切换时
+  剥离 `weekdays` / `monthDays` 并在切回时恢复。关闭重复时改为一行五个一键预设（每天 / 工作日 /
+  每周 / 每月 / 每年）；`until` 从独立一行收进底栏的次要入口（「永不结束」/「至某日」）；底栏
+  同时给出「下次」预览（从完成日期推算按「若今天完成」），`until` 已过则显示「已到最后一次重复」。
+  摘要里周一至周五全选时显示「工作日」、31 号显示「最后一天」、从完成日期推算显示「完成后 3
+  天」；月日子网格里未选任何日子仍按计划日期当天，短月份的提示改为只提 29、30 号（31 始终按
+  最后一天显示）。`CONTEXT.md` 的 Repeat Rule 词条同步说明「从完成日期推算不提供星期几 / 日子
+  选择，存量组合在下次编辑时规整掉」。
+
+- **android/ui**: Android 返回先收起展开的任务 (#240) — 返回键级联在「关闭最顶层浮层」之后、
+  「退出触控多选」之前插入一步「收起展开的任务」（对齐 Things 3 iPhone）：先让展开态里聚焦的
+  输入失焦以提交标题 / 备注，再清 `expandedId` 与选择状态，避免组件卸载丢掉未保存的编辑。
+
+### Fixed
+
+- **ui**: 行内弹出面板里的按压被识别成拖拽行 (#244) — 行内菜单打开的计划 / 重复等面板经 Portal
+  渲染，事件仍沿 React 树冒泡到行上的拖拽 listeners，DOM 上却不在行内，于是面板里的按住或拖动
+  会开始拖这一行。三个行传感器（Magic Plus、鼠标、触控）的激活器都先校验
+  `currentTarget.contains(target)`，Portal 里的事件不再触发拖拽。
+
+- **android/ui**: 悬浮工具栏压到 Android 手势条 (#241) — 展开任务的工具栏与多选工具栏的底距从
+  `1.75rem` 抬到 `2.75rem`（叠加 `--safe-area-bottom`），与 FAB 的浮层体系保持一致，不再被手势
+  条压住。
+
 ## [1.0.3] - 2026-10-21
 
 本版让 Android 在 App 之外的写入（通知按钮、状态栏快速添加）联网后直接送达 hub，不必等下次
