@@ -124,6 +124,16 @@ const isMagicPlusSource = (context?: ActivationContext) =>
   context?.active.data.current?.magicPlus === true;
 
 /**
+ * 事件确实发生在拖拽源的 DOM 内。Portal 里的事件（行内菜单打开的计划 /
+ * 重复等面板）仍沿 React 树冒泡到行上的 listeners，DOM 上却不在行内，
+ * 不能把在面板里按住或拖动识别成拖这一行。
+ */
+const isFromOwnDom = (event: React.SyntheticEvent) =>
+  event.currentTarget instanceof Node &&
+  event.target instanceof Node &&
+  event.currentTarget.contains(event.target);
+
+/**
  * Magic Plus 专用：按下后移动 8px 即开始拖（不需要长按——按钮固定在角落，
  * 不在滚动容器里）。用 pointer 事件，与下面两个只认列表行的传感器各占一个
  * 事件名（dnd-kit 同一拖拽源上同名 activator 只保留最后一个）。按钮需
@@ -138,7 +148,9 @@ class MagicPlusSensor extends PointerSensor {
         options: PointerSensorOptions,
         context?: ActivationContext,
       ) =>
-        isMagicPlusSource(context) && PointerSensor.activators[0].handler(event, options),
+        isFromOwnDom(event) &&
+        isMagicPlusSource(context) &&
+        PointerSensor.activators[0].handler(event, options),
     },
   ];
 }
@@ -148,7 +160,9 @@ class RowMouseSensor extends MouseSensor {
     {
       eventName: 'onMouseDown' as const,
       handler: (event: React.MouseEvent, options: MouseSensorOptions, context?: ActivationContext) =>
-        !isMagicPlusSource(context) && MouseSensor.activators[0].handler(event, options),
+        isFromOwnDom(event) &&
+        !isMagicPlusSource(context) &&
+        MouseSensor.activators[0].handler(event, options),
     },
   ];
 }
@@ -158,7 +172,9 @@ class RowTouchSensor extends TouchSensor {
     {
       eventName: 'onTouchStart' as const,
       handler: (event: React.TouchEvent, options: TouchSensorOptions, context?: ActivationContext) =>
-        !isMagicPlusSource(context) && TouchSensor.activators[0].handler(event, options),
+        isFromOwnDom(event) &&
+        !isMagicPlusSource(context) &&
+        TouchSensor.activators[0].handler(event, options),
     },
   ];
 }
