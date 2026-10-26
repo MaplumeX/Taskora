@@ -297,26 +297,6 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
           <MenuRow icon={CalendarClock} onClick={() => openPicker('scheduled')}>
             {t('scheduledDate')}
           </MenuRow>
-          {/* 重复规则是独立入口：仅 DATE 型任务显示（规则需要计划日期作锚点）。 */}
-          {!group && isDate && (
-            <MenuRow icon={Repeat} onClick={() => openPicker('repeat')}>
-              {t('repeat')}
-            </MenuRow>
-          )}
-          {canOfferSkip && (
-            <MenuRow
-              icon={SkipForward}
-              title={skipOccurrence.last ? t('skipOccurrenceEndHint') : undefined}
-              onClick={handleSkip}
-            >
-              {t(skipOccurrence.last ? 'skipOccurrenceEnd' : 'skipOccurrence')}
-            </MenuRow>
-          )}
-          {canOfferNextCopy && (
-            <MenuRow icon={CalendarPlus} onClick={handleNextCopy}>
-              {t('task:nextCopy')}
-            </MenuRow>
-          )}
           <MenuRow icon={CalendarDays} onClick={() => openPicker('due')}>
             {t('dueDate')}
           </MenuRow>
@@ -331,6 +311,30 @@ export function TaskContextMenu({ task, current, children, variant = 'default' }
             <MenuRow icon={Copy} onClick={handleDuplicate}>
               {t('duplicate')}
             </MenuRow>
+          )}
+          {/* 重复相关单独成组：规则入口仅 DATE 型任务（规则需要计划日期作锚点），
+              跳过本次 / 下一份只作用于本次；多选时整组隐藏。 */}
+          {!group && isDate && (
+            <>
+              <div className="-mx-1 my-1 h-px bg-muted" />
+              <MenuRow icon={Repeat} onClick={() => openPicker('repeat')}>
+                {t('repeat')}
+              </MenuRow>
+              {canOfferSkip && (
+                <MenuRow
+                  icon={SkipForward}
+                  title={skipOccurrence.last ? t('skipOccurrenceEndHint') : undefined}
+                  onClick={handleSkip}
+                >
+                  {t(skipOccurrence.last ? 'skipOccurrenceEnd' : 'skipOccurrence')}
+                </MenuRow>
+              )}
+              {canOfferNextCopy && (
+                <MenuRow icon={CalendarPlus} onClick={handleNextCopy}>
+                  {t('task:nextCopy')}
+                </MenuRow>
+              )}
+            </>
           )}
           {!group && variant === 'default' && (
             <>

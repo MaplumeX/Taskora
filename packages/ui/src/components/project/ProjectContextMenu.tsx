@@ -143,6 +143,25 @@ export function ProjectMenuPanel({
     });
   };
 
+  // 重复相关单独成组：规则入口仅 DATE 项目（规则需要计划日期作锚点，recurring-projects
+  // spec），跳过本次 / 下一份只作用于本次。整组为空时连同分隔线一起隐藏。
+  const repeatItems: MenuItem[] = [
+    ...(isDate ? [{ icon: Repeat, label: t('repeat'), onSelect: () => openPicker('repeat') }] : []),
+    ...(canOfferSkip
+      ? [
+          {
+            icon: SkipForward,
+            label: t(skipOccurrence.last ? 'skipOccurrenceEnd' : 'skipOccurrence'),
+            title: skipOccurrence.last ? t('skipProjectOccurrenceEndHint') : undefined,
+            onSelect: handleSkip,
+          },
+        ]
+      : []),
+    ...(canOfferNextCopy
+      ? [{ icon: CalendarPlus, label: t('task:nextCopy'), onSelect: handleNextCopy }]
+      : []),
+  ];
+
   const items: MenuItem[] = [
     {
       icon: completed ? Circle : Check,
@@ -167,21 +186,6 @@ export function ProjectMenuPanel({
       onSelect: () => openPicker('scheduled'),
       separated: true,
     },
-    // 重复规则：仅 DATE 项目（规则需要计划日期作锚点，recurring-projects spec）。
-    ...(isDate ? [{ icon: Repeat, label: t('repeat'), onSelect: () => openPicker('repeat') }] : []),
-    ...(canOfferSkip
-      ? [
-          {
-            icon: SkipForward,
-            label: t(skipOccurrence.last ? 'skipOccurrenceEnd' : 'skipOccurrence'),
-            title: skipOccurrence.last ? t('skipProjectOccurrenceEndHint') : undefined,
-            onSelect: handleSkip,
-          },
-        ]
-      : []),
-    ...(canOfferNextCopy
-      ? [{ icon: CalendarPlus, label: t('task:nextCopy'), onSelect: handleNextCopy }]
-      : []),
     { icon: CalendarDays, label: t('dueDate'), onSelect: () => openPicker('due') },
     { icon: Tag, label: t('tags'), onSelect: () => openPicker('tags') },
     { icon: FolderTree, label: t('move'), onSelect: () => openPicker('move') },
@@ -189,6 +193,7 @@ export function ProjectMenuPanel({
       ? [{ icon: Copy, label: t('duplicate'), onSelect: handleDuplicate }]
       : []),
     ...(showReview && variant === 'default' ? [reviewItem] : []),
+    ...repeatItems.map((item, index) => (index === 0 ? { ...item, separated: true } : item)),
     ...(variant === 'default' && canOpenWindows()
       ? [
           {
