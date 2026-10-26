@@ -9,7 +9,6 @@ import {
 } from '@taskora/shared';
 
 import { updatePreferences } from '@/api/users.api';
-import { useFeedQuery } from '@/hooks/useFeed';
 import { hydrateFromServer, usePreferencesStore } from '@/stores/preferences.store';
 import { useUiInteractionStore } from '@/stores/uiInteraction.store';
 import { currentTimeZone, toDateKey, todayDateKey } from '@/utils/date';
@@ -169,10 +168,4 @@ export function useNewInTodayKeys(items: FeedItem[]): Set<string> {
     if (usePreferencesStore.getState().todayReviewedOn === null) acknowledgeNewInToday();
   }, []);
   return useUnreadNewInToday(items);
-}
-
-/** 侧边栏 / 手机首页：Today 中是否有未读的新到条目。 */
-export function useHasNewInToday(): boolean {
-  const { data: items = [] } = useFeedQuery('today');
-  return useUnreadNewInToday(items).size > 0;
 }
