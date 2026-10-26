@@ -1,18 +1,10 @@
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
-import {
-  Bot,
-  Search,
-  Settings,
-  Tags as TagsIcon,
-  Trash2,
-  type LucideIcon,
-} from 'lucide-react';
+import { Bot, Search, Settings, Tags as TagsIcon, Trash2, type LucideIcon } from 'lucide-react';
 
 import {
   useAreasQuery,
-  useHasNewInToday,
   useReviewCount,
   useProjectsQuery,
   useUiInteractionStore,
@@ -25,7 +17,6 @@ import { MobileFab } from '@/components/layout/MobileFab';
 import { AppDndProvider } from '../lib/appDnd';
 import { mainNav, reviewNav, type NavItem } from '@/components/layout/navItems';
 import { useBucketCounts } from '@/components/layout/useBucketCounts';
-import { NewInTodayDot } from '@/components/task/NewInTodayDot';
 import { useIsDesktop } from '../lib/use-media-query';
 import { cn } from '@/lib/utils';
 
@@ -52,7 +43,6 @@ function HomeRow({
   label,
   count,
   dueCount = 0,
-  hasNew = false,
 }: {
   to: string;
   icon: LucideIcon;
@@ -61,18 +51,11 @@ function HomeRow({
   count?: number;
   /** Today 中截止日期已到（今天或已过）的条目数：灰色计数前的红色计数。 */
   dueCount?: number;
-  /** Today 有尚未看过的新到条目：计数旁带黄点（New in Today）。 */
-  hasNew?: boolean;
 }) {
   return (
     <Link to={to} className={ROW_CLASS}>
       <Icon className={cn('h-5 w-5 shrink-0', iconClassName)} />
       <span className="flex-1 truncate">{label}</span>
-      {hasNew && (
-        <span className="relative h-1.5 w-1.5 shrink-0">
-          <NewInTodayDot className="left-1/2" />
-        </span>
-      )}
       {dueCount > 0 && (
         <span
           aria-hidden
@@ -105,7 +88,6 @@ export default function Home() {
   const navigate = useNavigate();
   const openSettings = useUiInteractionStore((s) => s.openSettings);
   const { inboxCount, todayCount, todayDueCount } = useBucketCounts();
-  const hasNewInToday = useHasNewInToday();
   const reviewCount = useReviewCount();
   const { data: allProjects = [] } = useProjectsQuery();
   const { data: areas = [] } = useAreasQuery();
@@ -155,7 +137,6 @@ export default function Home() {
                 label={t(item.labelKey)}
                 count={countByRoute[to]}
                 dueCount={to === '/today' ? todayDueCount : 0}
-                hasNew={to === '/today' && hasNewInToday}
               />
             );
           })}

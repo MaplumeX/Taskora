@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { openEngine, type Engine } from '@taskora/engine';
 import { createNodeSqliteStorage } from '@taskora/engine/node';
-import { Start } from '@taskora/shared';
+import { Start, type FeedItem } from '@taskora/shared';
 
 import { setProjectBackend } from '@/api/project-backend';
 import { setTaskBackend } from '@/api/task-backend';
@@ -16,11 +16,18 @@ import { createEngineTaskBackend } from '@/engine/task-backend.engine';
 import { usePreferencesStore } from '@/stores/preferences.store';
 import { useCalendarDay, useCalendarQueryRefresh } from './useCalendarDay';
 import { useFeedQuery } from './useFeed';
-import { useHasNewInToday, useNewInTodayKeys } from './useNewInToday';
+import { useNewInTodayKeys } from './useNewInToday';
 import { useReviewQueueQuery } from './useReview';
 import { useTasksQuery } from './useTasks';
 
 const initial = usePreferencesStore.getState();
+const NO_ITEMS: FeedItem[] = [];
+
+/** Today 中是否有未读新到（由 Today 的 feed 推导，同 Today 页）。 */
+function useHasNewInToday(): boolean {
+  const { data = NO_ITEMS } = useFeedQuery('today');
+  return useNewInTodayKeys(data).size > 0;
+}
 let engine: Engine;
 let queryClient: QueryClient;
 let tasks: ReturnType<typeof createEngineTaskBackend>;
