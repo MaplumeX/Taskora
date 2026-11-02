@@ -449,6 +449,74 @@ describe('repairEntity — 出现日', () => {
   });
 });
 
+describe('完成后重复、计划日期在未来：跳过本次不提前', () => {
+  // 今天 2026-10-05，计划 2026-10-20，完成后每 3 天 → 目标 2026-10-23（+3）
+  const now = '2026-10-05T08:00:00.000Z';
+
+  it('任务：截止日期按目标日期平移', () => {
+    const plan = planRepeatSkip(
+      {
+        status: 'ACTIVE',
+        trashedAt: null,
+        scheduledDate: '2026-10-20',
+        dueDate: '2026-10-22',
+        repeatRule: AFTER_3_DAYS,
+      },
+      false,
+      now,
+      UTC,
+    );
+    expect(plan).toEqual({
+      patch: { scheduledDate: '2026-10-23', dueDate: '2026-10-25' },
+      ends: false,
+    });
+  });
+
+  it('项目：截止日期与项目内任务一起往后平移', () => {
+    const plan = planProjectRepeatSkip(
+      {
+        status: 'ACTIVE',
+        trashedAt: null,
+        scheduledDate: '2026-10-20',
+        dueDate: '2026-10-22',
+        repeatRule: AFTER_3_DAYS,
+      },
+      [
+        {
+          id: 'task-1',
+          status: 'ACTIVE',
+          trashedAt: null,
+          scheduledDate: '2026-10-21',
+          dueDate: null,
+        },
+      ],
+      false,
+      now,
+      UTC,
+    );
+    expect(plan).toEqual({
+      project: { scheduledDate: '2026-10-23', dueDate: '2026-10-25' },
+      tasks: [{ id: 'task-1', patch: { scheduledDate: '2026-10-24' } }],
+    });
+  });
+});
+
+describe('提前生成下一份 — 完成后重复、计划日期在未来', () => {
+  const now = '2026-10-05T08:00:00.000Z';
+  const source = {
+    id: 'task-1',
+    status: 'ACTIVE',
+    trashedAt: null,
+    scheduledDate: '2026-10-20',
+    repeatRule: { ...AFTER_3_DAYS, until: '2026-10-22' },
+  };
+
+  it('下一次超过 until 才算 no-next：不因今天 + 3 仍在 until 内而放行', () => {
+    expect(nextCopyBlock(source, false, now, UTC)).toBe('no-next');
+    expect(projectNextCopyBlock(source, false, now, UTC)).toBe('no-next');
+  });
+});
+
 describe('提前生成下一份 — 阻断原因（nextCopyBlock）', () => {
   const source = {
     id: 'task-1',

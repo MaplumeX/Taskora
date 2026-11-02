@@ -60,7 +60,7 @@ Status: implemented (01–04) — awaiting manual verification
 
 anchor=completion 不变（出现日恒为空）。
 
-`skipOccurrenceDate` 同样从出现日推进（取第一个晚于出现日与计划日期、且不早于今天的出现日）；跳过后计划日期即新出现日，`occurrenceDate` 清空。
+`skipOccurrenceDate` 同样从出现日推进（取第一个晚于出现日与计划日期、且不早于今天的出现日）；跳过后计划日期即新出现日，`occurrenceDate` 清空。anchor=completion 且计划日期在未来时，跳过与 Next Copy 从计划日期推算（`earlyAdvanceSettledAt`），结果总晚于计划日期；真正完成时仍从完成日推算。
 
 **截止日期 / 项目内任务的平移量**：以出现日为基准（`目标出现日 − 出现日`），保持截止日期相对原定日的提前量：周一出现、周三截止的任务挪到周二，下一次仍是下周一出现、下周三截止。
 
@@ -113,7 +113,7 @@ UI 提交 `{ scheduledDate: to, repeatRule: retargetRepeatRule(...) }`；engine 
 
 对齐 Things 3.23 的 Create Next Copy：
 
-- **语义**：现在就派生来源完成时会派生的那个实例（`planRepeatInstance` / `planRepeatProjectInstance`，同一确定性 id，ADR-0012），`now` 视作完成时刻（anchor=completion 从今天推算）。来源不变。
+- **语义**：现在就派生来源完成时会派生的那个实例（`planRepeatInstance` / `planRepeatProjectInstance`，同一确定性 id，ADR-0012），`now` 视作完成时刻（anchor=completion 从今天推算，计划日期在未来时从计划日期推算，见 `nextCopySettledAt`）。来源不变。
 - **之后**：来源完成时 `repeatDerivationTarget` 因已有派生实例跳过；Skip Occurrence 报 `next-exists`；Repeat Preview 因下一次已派生不投影。下一份是普通的 Repeat Instance，可以再提前生成它的下一份。
 - **不可用**（`nextCopyBlock` / `projectNextCopyBlock`，原因复用 `RepeatSkipBlock`）：not-repeating、not-active、next-exists、no-next（链在下一次之前终结）。UI 在 no-next 时不显示入口；next-exists 由数据层拒绝后提示。
 - **项目**：下一轮内容取当前这一轮（同完成时派生的复制口径）。

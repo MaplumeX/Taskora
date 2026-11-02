@@ -10,6 +10,7 @@ export {
 export {
   normalizeRepeatRule,
   canonicalRepeatRule,
+  earlyAdvanceSettledAt,
   nextOccurrenceDate,
   skipOccurrenceDate,
   retargetRepeatRule,

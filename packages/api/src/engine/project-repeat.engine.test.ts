@@ -163,6 +163,21 @@ describe('重复项目（Engine 后端）', () => {
     ).toHaveLength(2);
   });
 
+  it('完成后重复、计划日期在未来：下一份从计划日期推算，任务随之平移', async () => {
+    const { project, open: openTask } = await seedRepeatingProject(device);
+    await device.projects.updateProject(project.id, {
+      repeatRule: { ...WEEKLY, anchor: 'completion' },
+    });
+
+    const next = await device.projects.createProjectNextCopy(project.id);
+    expect(next).toMatchObject({ scheduledDate: '2030-01-14', dueDate: '2030-01-16' });
+
+    const copied = await device.engine.list('task', {
+      where: { projectId: next.id, title: openTask.title },
+    });
+    expect(copied.map((row) => row.fields.scheduledDate)).toEqual(['2030-01-15']);
+  });
+
   it('跳过最后一次：项目完成、未了结任务取消、不派生下一轮', async () => {
     const { project, open: openTask, done } = await seedRepeatingProject(device);
     await device.projects.updateProject(project.id, {

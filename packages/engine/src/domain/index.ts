@@ -126,6 +126,7 @@ export {
 export {
   copyAttachment,
   nextCopyBlock,
+  nextCopySettledAt,
   planRepeatInstance,
   planRepeatSkip,
   repeatDerivationTarget,

@@ -256,6 +256,42 @@ dbDescribe('REST 结构实体写路径（真实 Postgres）', () => {
     await expect(h.projects.nextCopy(USER, 'p-1')).rejects.toBeInstanceOf(ConflictException);
   });
 
+  it('Project 完成后重复、计划日期在未来：skip 与 next-copy 都从计划日期推算，不提前', async () => {
+    const rule = JSON.stringify({ unit: 'week', interval: 1, anchor: 'completion' });
+    await seedProject('to-skip', {
+      position: 'a0',
+      start: 'ANYTIME',
+      scheduledDate: new Date('2030-01-07T00:00:00Z'),
+      repeatRule: rule,
+    });
+    await seedTask('t-skip', {
+      projectId: 'to-skip',
+      start: 'ANYTIME',
+      scheduledDate: new Date('2030-01-08T00:00:00Z'),
+    });
+    const skipped = await h.projects.skip(USER, 'to-skip');
+    expect(skipped.scheduledDate?.toISOString().slice(0, 10)).toBe('2030-01-14');
+    expect(
+      (await testPrisma.task.findUniqueOrThrow({ where: { id: 't-skip' } })).scheduledDate,
+    ).toEqual(new Date('2030-01-15T00:00:00Z'));
+
+    await seedProject('to-copy', {
+      position: 'a1',
+      start: 'ANYTIME',
+      scheduledDate: new Date('2030-01-07T00:00:00Z'),
+      repeatRule: rule,
+    });
+    await seedTask('t-copy', {
+      projectId: 'to-copy',
+      start: 'ANYTIME',
+      scheduledDate: new Date('2030-01-08T00:00:00Z'),
+    });
+    const next = await h.projects.nextCopy(USER, 'to-copy');
+    expect(next.scheduledDate?.toISOString().slice(0, 10)).toBe('2030-01-14');
+    const copied = await testPrisma.task.findMany({ where: { projectId: next.id } });
+    expect(copied.map((task) => task.scheduledDate)).toEqual([new Date('2030-01-15T00:00:00Z')]);
+  });
+
   it('Project 改期即例外（recurring-tasks-v4）：落库出现日，跳过时清空并按出现日推进', async () => {
     await seedProject('p-1', {
       position: 'a0',
