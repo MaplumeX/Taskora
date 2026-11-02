@@ -315,6 +315,7 @@ export { buildTagTree, type TagTree } from '@taskora/engine';
 // 规范化写入共用 @taskora/engine 的同一实现（跨端派生 id 一致的前提）。
 export {
   normalizeRepeatRule,
+  earlyAdvanceSettledAt,
   nextOccurrenceDate,
   skipOccurrenceDate,
   retargetRepeatRule,

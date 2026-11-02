@@ -1152,6 +1152,37 @@ describe('EngineTaskBackend — Repeating Tasks（recurring-tasks spec）', () =
     expect((await backend.createNextCopy(copy.id)).scheduledDate).toBe(utcDay(15));
   });
 
+  describe('完成后重复：提前生成下一份与真正完成', () => {
+    const AFTER_3_DAYS = { unit: 'day', interval: 3, anchor: 'completion' } as const;
+
+    const seed = async (scheduledOffset: number) => {
+      const task = await backend.createTask({
+        title: '换床单',
+        start: Start.ANYTIME,
+        scheduledDate: utcDay(scheduledOffset),
+      });
+      await backend.updateTask(task.id, { repeatRule: AFTER_3_DAYS });
+      return task;
+    };
+
+    it('计划日期在未来：下一份从计划日期推算，晚于来源', async () => {
+      const task = await seed(20);
+      expect((await backend.createNextCopy(task.id)).scheduledDate).toBe(utcDay(23));
+    });
+
+    it('计划日期在今天：下一份从今天推算', async () => {
+      const task = await seed(0);
+      expect((await backend.createNextCopy(task.id)).scheduledDate).toBe(utcDay(3));
+    });
+
+    it('真正提前完成：仍从完成日推算', async () => {
+      const task = await seed(20);
+      await backend.completeTask(task.id);
+      const [instance] = await engine.list('task', { where: { repeatSourceId: task.id } });
+      expect(instance.fields.scheduledDate).toBe(utcDay(3));
+    });
+  });
+
   it('提前生成下一份不可用：无规则 / 已了结 / 链已终结', async () => {
     const plain = await backend.createTask({
       title: '普通',

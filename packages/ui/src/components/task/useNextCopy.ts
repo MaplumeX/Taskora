@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { ProjectStatus, TaskStatus, type RepeatRule } from '@taskora/shared';
 import {
   currentLegacyDateTimeZone,
+  earlyAdvanceSettledAt,
   nextOccurrenceDate,
   parseCalendarDate,
   RepeatSkipBlockedError,
@@ -29,7 +30,8 @@ export interface NextCopySource {
  *
  * - `available`：未了结、未进 Trash 的 DATE 型重复条目，且链在下一次之前
  *   没有终结（终结时不提供入口）；仅在 `enabled`（菜单打开）时计算。
- * - `target`：下一份的计划日期（anchor=completion 按今天推算）。
+ * - `target`：下一份的计划日期（anchor=completion 按今天推算，计划在未来时按
+ *   计划日期推算）。
  * 「下一份已存在」需查数据，由数据层拒绝后提示。
  */
 export function useNextCopy(
@@ -53,19 +55,22 @@ export function useNextCopy(
   const repeatRule = item?.repeatRule;
   const scheduledDate = item?.scheduledDate ?? null;
   const occurrenceDate = item?.occurrenceDate ?? null;
-  const target = React.useMemo(
-    () =>
-      enabled && eligible && repeatRule
-        ? nextOccurrenceDate(repeatRule, {
-            scheduledDate,
-            occurrenceDate,
-            settledAt: new Date().toISOString(),
-            timeZone,
-            legacyDateTimeZone: currentLegacyDateTimeZone(),
-          })
-        : null,
-    [enabled, eligible, repeatRule, scheduledDate, occurrenceDate, timeZone],
-  );
+  const target = React.useMemo(() => {
+    if (!enabled || !eligible || !repeatRule) return null;
+    const legacyDateTimeZone = currentLegacyDateTimeZone();
+    return nextOccurrenceDate(repeatRule, {
+      scheduledDate,
+      occurrenceDate,
+      settledAt: earlyAdvanceSettledAt(repeatRule, {
+        scheduledDate,
+        now: new Date().toISOString(),
+        timeZone,
+        legacyDateTimeZone,
+      }),
+      timeZone,
+      legacyDateTimeZone,
+    });
+  }, [enabled, eligible, repeatRule, scheduledDate, occurrenceDate, timeZone]);
 
   const onSuccess = (copy: { scheduledDate: string | null }) => {
     if (!copy.scheduledDate) return;

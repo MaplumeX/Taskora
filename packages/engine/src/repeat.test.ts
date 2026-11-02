@@ -419,6 +419,55 @@ describe('skipOccurrenceDate — 跳过本次的目标日期', () => {
     ).toBe('2026-02-13');
   });
 
+  it('anchor=completion、计划日在今天：仍以今天为锚', () => {
+    expect(
+      skipOccurrenceDate(rule({ unit: 'day', interval: 3, anchor: 'completion' }), {
+        scheduledDate: '2026-02-10',
+        now,
+      }),
+    ).toBe('2026-02-13');
+  });
+
+  it('anchor=completion、计划日在未来：从计划日推进，不原地踏步也不提前', () => {
+    // 每 1 天，计划明天：今天 + 1 就是原日期，须再往后
+    expect(
+      skipOccurrenceDate(rule({ unit: 'day', anchor: 'completion' }), {
+        scheduledDate: '2026-02-11',
+        now,
+      }),
+    ).toBe('2026-02-12');
+    // 每 3 天，计划远在今天 + 3 之后：不能提前到 02-13
+    expect(
+      skipOccurrenceDate(rule({ unit: 'day', interval: 3, anchor: 'completion' }), {
+        scheduledDate: '2026-02-20',
+        now,
+      }),
+    ).toBe('2026-02-23');
+  });
+
+  it('anchor=completion、计划日在未来且下一次超过 until → null', () => {
+    expect(
+      skipOccurrenceDate(
+        rule({ unit: 'day', interval: 3, anchor: 'completion', until: '2026-02-22' }),
+        {
+          scheduledDate: '2026-02-20',
+          now,
+        },
+      ),
+    ).toBeNull();
+  });
+
+  it('「今天」取账号时区判定计划日是否在未来：UTC 晚间已是上海的次日', () => {
+    // UTC 02-10 20:00 = 上海 02-11 04:00：计划 02-11 对上海是今天，以今天为锚
+    expect(
+      skipOccurrenceDate(rule({ unit: 'day', interval: 3, anchor: 'completion' }), {
+        scheduledDate: '2026-02-11',
+        now: '2026-02-10T20:00:00.000Z',
+        timeZone: 'Asia/Shanghai',
+      }),
+    ).toBe('2026-02-14');
+  });
+
   it('until 在目标之前 → null；until 当天可跳到', () => {
     expect(
       skipOccurrenceDate(rule({ unit: 'day', until: '2026-02-09' }), {

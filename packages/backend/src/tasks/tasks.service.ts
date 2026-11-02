@@ -8,6 +8,7 @@ import {
   planReorder,
   planRepeatSkip,
   nextCopyBlock,
+  nextCopySettledAt,
   planTaskComplete,
   planTaskCreate,
   planTaskDuplicate,
@@ -83,7 +84,7 @@ export class TasksService {
     batch: HubWriteBatch,
     userId: string,
     parent: TaskRowWithChildren,
-    settledAt: string,
+    settledAt: string | null,
   ): Promise<string | null> {
     const repeatRule = parseRepeatRule(parent.repeatRule);
     if (!repeatRule) return null; // 非重复任务：不必查账号时区
@@ -594,15 +595,17 @@ export class TasksService {
       select: { id: true },
     });
     const now = new Date().toISOString();
-    const block = nextCopyBlock(
-      { ...existing, repeatRule: parseRepeatRule(existing.repeatRule) },
-      linked !== null,
-      now,
-      await userCalendarZones(this.prisma, userId),
-    );
+    const zones = await userCalendarZones(this.prisma, userId);
+    const source = { ...existing, repeatRule: parseRepeatRule(existing.repeatRule) };
+    const block = nextCopyBlock(source, linked !== null, now, zones);
     if (block) throw new ConflictException(block);
     return this.hub.writeAsHub(userId, async (batch) => {
-      const copyId = await this.deriveRepeatInstance(batch, userId, existing, now);
+      const copyId = await this.deriveRepeatInstance(
+        batch,
+        userId,
+        existing,
+        nextCopySettledAt(source, now, zones),
+      );
       if (!copyId) throw new ConflictException('next-exists');
       return this.listDto(batch.tx, copyId);
     });

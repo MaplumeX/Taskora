@@ -11,6 +11,7 @@ import {
   deriveAttachmentId,
   deriveRepeatInstanceId,
   deriveSubtaskId,
+  earlyAdvanceSettledAt,
   nextOccurrenceDate,
   skipOccurrenceDate,
 } from '../repeat';
@@ -118,7 +119,7 @@ export function repeatInstanceId(
 export function planRepeatInstance(
   parent: RepeatParent,
   subtasks: readonly RepeatParentSubtask[],
-  settledAt: string,
+  settledAt: string | null,
   zones: CalendarZones,
   attachments: readonly RepeatParentAttachment[] = [],
 ): {
@@ -210,9 +211,27 @@ export interface RepeatNextCopySource {
 }
 
 /**
+ * 提前生成下一份时当作完成时刻传给派生的值：anchor=completion 从今天推算，
+ * 计划日期在未来时从计划日期推算（为 null），保证下一份晚于来源。
+ */
+export function nextCopySettledAt(
+  source: Pick<RepeatNextCopySource, 'scheduledDate' | 'repeatRule'>,
+  now: string,
+  zones: CalendarZones,
+): string | null {
+  if (!source.repeatRule) return now;
+  return earlyAdvanceSettledAt(source.repeatRule, {
+    scheduledDate: dateKeyOf(source.scheduledDate, zones),
+    now,
+    timeZone: zones.timeZone,
+    legacyDateTimeZone: zones.legacyDateTimeZone,
+  });
+}
+
+/**
  * 提前生成下一份（Create Next Copy，对齐 Things 3.23）的阻断原因；可用时
- * 为 null。下一份就是完成时会派生的那个 Repeat Instance（同一确定性 id，
- * now 视作完成时刻——anchor=completion 的下一次从今天推算），提前写入；
+ * 为 null。下一份就是完成时会派生的那个 Repeat Instance（完成时刻见
+ * nextCopySettledAt），提前写入；
  * 之后来源完成时因已有派生实例而不再派生。原因同 Skip Occurrence：
  * not-repeating / not-active / next-exists（已生成过）/ no-next（链在下一次
  * 之前终结）。
@@ -228,7 +247,9 @@ export function nextCopyBlock(
   }
   if (source.status !== TaskStatus.ACTIVE || source.trashedAt) return 'not-active';
   if (hasLinkedInstance) return 'next-exists';
-  return repeatInstanceId(source, now, zones) === null ? 'no-next' : null;
+  return repeatInstanceId(source, nextCopySettledAt(source, now, zones), zones) === null
+    ? 'no-next'
+    : null;
 }
 
 // ---------- 跳过本次（recurring-tasks-v2 issue 02） ----------

@@ -33,6 +33,7 @@ import {
   planRepeatInstance,
   planRepeatSkip,
   nextCopyBlock,
+  nextCopySettledAt,
   planTaskComplete,
   planTaskDuplicate,
   planTaskCreate,
@@ -195,7 +196,7 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
   async function deriveRepeatInstance(
     parentId: string,
     parent: ReplicaRow,
-    settledAt: string,
+    settledAt: string | null,
   ): Promise<string | null> {
     const f = parent.fields;
     const subtasks = await engine.list('subtask', { where: { taskId: parentId } });
@@ -493,8 +494,16 @@ export function createEngineTaskBackend(options: EngineTaskBackendOptions): Task
         zones(),
       );
       if (block) throw new RepeatSkipBlockedError(block);
-      // 与完成时同一派生：同一确定性 id，now 视作完成时刻
-      const copyId = await deriveRepeatInstance(id, existing, now);
+      // 与完成时同一派生（完成时刻见 nextCopySettledAt）
+      const copyId = await deriveRepeatInstance(
+        id,
+        existing,
+        nextCopySettledAt(
+          { scheduledDate: f.scheduledDate, repeatRule: normalizeRepeatRule(f.repeatRule) },
+          now,
+          zones(),
+        ),
+      );
       if (!copyId) throw new RepeatSkipBlockedError('next-exists');
       return taskDto(copyId);
     },

@@ -226,12 +226,40 @@ function stepOccurrence(rule: RepeatRule, anchor: Date): Date {
 }
 
 /**
+ * 未了结就推进（跳过本次 / Next Copy）时传给 nextOccurrenceDate 的 settledAt。
+ *
+ * 真正完成时 anchor=completion 从完成日推算，可以早于计划日期；但这里任务并未
+ * 完成，结果不能不晚于当前计划日期。所以计划日期在未来（账号时区）时返回 null，
+ * 让推算退回计划日期；其余情况返回 now（今天视作完成日）。anchor=scheduled 不看
+ * settledAt。
+ */
+export function earlyAdvanceSettledAt(
+  rule: RepeatRule,
+  input: {
+    scheduledDate: string | null;
+    now: string;
+    timeZone?: string;
+    legacyDateTimeZone?: string;
+  },
+): string | null {
+  if (normalizeRepeatRule(rule)?.anchor !== 'completion' || !input.scheduledDate) return input.now;
+  try {
+    const zone = input.timeZone ?? 'UTC';
+    const scheduled = calendarDateKey(input.scheduledDate, input.legacyDateTimeZone ?? zone);
+    return scheduled > instantDateKey(input.now, zone) ? null : input.now;
+  } catch {
+    return input.now;
+  }
+}
+
+/**
  * 跳过本次的目标日期（recurring-tasks-v2 issue 02）。
  *
  * - anchor=scheduled：从出现日（`occurrenceDate ?? scheduledDate`）沿链反复推进，
  *   取第一个晚于出现日与计划日期、且不早于今天（账号时区）的出现日——计划在
  *   今天或未来时即严格下一次，已错过多轮计划日期时跳过全部错过的；
- * - anchor=completion：以今天为锚推进一次（等同「今天完成」时的下一次）；
+ * - anchor=completion：计划在今天或已过时以今天为锚推进一次（等同「今天完成」时
+ *   的下一次）；计划在未来时从计划日期推进，结果总晚于计划日期；
  * - 链在此之前终结（until）→ null：无可跳到的日期。
  */
 export function skipOccurrenceDate(
@@ -252,7 +280,7 @@ export function skipOccurrenceDate(
     return nextOccurrenceDate(rule, {
       ...zones,
       scheduledDate: input.scheduledDate,
-      settledAt: now,
+      settledAt: earlyAdvanceSettledAt(rule, { ...zones, scheduledDate: input.scheduledDate, now }),
     });
   }
   let today: string;

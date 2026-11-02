@@ -534,6 +534,30 @@ dbDescribe('TasksService 写路径（真实 Postgres）', () => {
     await expect(h.tasks.nextCopy(USER, 'missing')).rejects.toBeInstanceOf(NotFoundException);
   });
 
+  it('完成后重复、计划日期在未来：skip 与 next-copy 都从计划日期推算，不提前', async () => {
+    const rule = JSON.stringify({ unit: 'day', interval: 3, anchor: 'completion' });
+    await seedTask('to-skip', {
+      start: 'ANYTIME',
+      scheduledDate: new Date('2030-01-07T00:00:00Z'),
+      dueDate: new Date('2030-01-09T00:00:00Z'),
+      repeatRule: rule,
+    });
+    await h.tasks.skip(USER, 'to-skip');
+    const skipped = await testPrisma.task.findUniqueOrThrow({ where: { id: 'to-skip' } });
+    expect(skipped.scheduledDate).toEqual(new Date('2030-01-10T00:00:00Z'));
+    expect(skipped.dueDate).toEqual(new Date('2030-01-12T00:00:00Z'));
+
+    await seedTask('to-copy', {
+      start: 'ANYTIME',
+      scheduledDate: new Date('2030-01-07T00:00:00Z'),
+      dueDate: new Date('2030-01-09T00:00:00Z'),
+      repeatRule: rule,
+    });
+    const copy = await h.tasks.nextCopy(USER, 'to-copy');
+    expect(copy.scheduledDate).toEqual(new Date('2030-01-10T00:00:00Z'));
+    expect(copy.dueDate).toEqual(new Date('2030-01-12T00:00:00Z'));
+  });
+
   it('不派生：实例已存在 / 到达 until / 无规则 / 已完成再完成 / 取消', async () => {
     await seedRepeating();
     await seedTask(expectedInstanceId, { title: '已存在的实例' });

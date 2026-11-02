@@ -141,7 +141,7 @@ const shifted = (value: unknown, days: number, zones: CalendarZones): string | n
  */
 export function planRepeatProjectInstance(
   parent: RepeatProjectParent,
-  completedAt: string,
+  completedAt: string | null,
   zones: CalendarZones,
   review: ReviewContext,
 ): {

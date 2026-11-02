@@ -18,6 +18,7 @@ import {
   planProjectCreate,
   planProjectDuplicate,
   planProjectRepeatSkip,
+  nextCopySettledAt,
   projectNextCopyBlock,
   planProjectRestore,
   planProjectTrash,
@@ -98,7 +99,7 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
   async function deriveRepeatProject(
     parent: ReplicaRow,
     tasks: readonly ReplicaRow[],
-    completedAt: string,
+    completedAt: string | null,
   ): Promise<string | null> {
     const f = parent.fields;
     const plan = planRepeatProjectInstance(
@@ -341,9 +342,17 @@ export function createEngineProjectBackend(options: EngineProjectBackendOptions)
         zones(),
       );
       if (block) throw new RepeatSkipBlockedError(block);
-      // 与完成时同一派生（内容取当前这一轮），now 视作完成时刻
+      // 与完成时同一派生（内容取当前这一轮；完成时刻见 nextCopySettledAt）
       const tasks = await engine.list('task', { where: { projectId: id } });
-      const copyId = await deriveRepeatProject(existing, tasks, now);
+      const copyId = await deriveRepeatProject(
+        existing,
+        tasks,
+        nextCopySettledAt(
+          { scheduledDate: f.scheduledDate, repeatRule: normalizeRepeatRule(f.repeatRule) },
+          now,
+          zones(),
+        ),
+      );
       if (!copyId) throw new RepeatSkipBlockedError('next-exists');
       return projectDto(copyId);
     },
