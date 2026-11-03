@@ -68,7 +68,11 @@ interface Props {
   newInToday?: boolean;
 }
 
-export function TaskItem({
+/**
+ * memo：拖拽换位时列表整体重渲染，未变的行要跳过（手机上这是掉帧的主因）。
+ * 依赖调用方传稳定的回调，见 lib/useStableCallback.ts。
+ */
+export const TaskItem = React.memo(function TaskItem({
   task,
   projectTitle,
   areaTitle,
@@ -481,4 +485,4 @@ export function TaskItem({
       </div>
     </div>
   );
-}
+});

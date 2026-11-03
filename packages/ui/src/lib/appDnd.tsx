@@ -41,7 +41,7 @@ import {
   type SidebarDropPayload,
   type SidebarDropTarget,
 } from '@/components/layout/sidebarDrop';
-import { dropAnimation } from './dnd';
+import { dragOverlayWrapperClass, dropAnimation } from './dnd';
 import { MAGIC_PLUS_CANCEL_RADIUS, MAGIC_PLUS_INBOX_ID, isMagicPlus } from './magicPlus';
 
 /**
@@ -442,7 +442,7 @@ export function AppDndProvider({
         {children}
         {overlaySurface === MAGIC_PLUS_OVERLAY && (
           // 跟手的是按钮本身；松手后条目已在列表里展开，不飞回。
-          <DragOverlay className="pointer-events-none" dropAnimation={null}>
+          <DragOverlay className={dragOverlayWrapperClass} dropAnimation={null}>
             <div
               aria-hidden="true"
               className="flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-popover"

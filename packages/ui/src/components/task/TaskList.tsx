@@ -27,6 +27,7 @@ import {
   useHeldOrder,
 } from '../../lib/dnd';
 import { useDndSurface } from '../../lib/appDnd';
+import { useStableCallback } from '../../lib/useStableCallback';
 import type { SidebarDropPayload } from '@/components/layout/sidebarDrop';
 
 interface ProjectLookup {
@@ -71,6 +72,8 @@ function SortableTaskItem({
   onToggleComplete,
   onRowClick,
 }: SortableTaskItemProps) {
+  const stableToggleComplete = useStableCallback(onToggleComplete);
+  const stableRowClick = useStableCallback(onRowClick);
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     // 展开态下行内是可编辑卡片，整行 listeners 会把框选文字的鼠标移动识别为拖拽，
     // 因此展开时不可拖（仍作为放置目标）。
@@ -96,8 +99,8 @@ function SortableTaskItem({
         projectTitle={projectTitle}
         areaTitle={areaTitle}
         selectionState={selectionState}
-        onToggleComplete={onToggleComplete}
-        onRowClick={onRowClick}
+        onToggleComplete={stableToggleComplete}
+        onRowClick={stableRowClick}
       />
     </div>
   );

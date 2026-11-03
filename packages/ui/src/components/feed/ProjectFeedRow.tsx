@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { useCalendarDay, parseCalendarDate } from '@taskora/api';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -36,7 +37,8 @@ interface Props {
   trailing?: React.ReactNode;
 }
 
-export function ProjectFeedRow({
+/** memo：拖拽开始 / 换位 / 落位时列表整体重渲染，未变的行要跳过。 */
+export const ProjectFeedRow = React.memo(function ProjectFeedRow({
   item,
   showScheduledBadge = true,
   selectionState = 'idle',
@@ -141,4 +143,4 @@ export function ProjectFeedRow({
       {completion.dialog}
     </ProjectContextMenu>
   );
-}
+});

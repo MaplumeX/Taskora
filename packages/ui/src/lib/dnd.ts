@@ -36,9 +36,10 @@ export const dragOverlayClass = 'pointer-events-none w-full overflow-hidden roun
 /**
  * 浮层外壳（dnd-kit 的 fixed 定位 div，始终在指针正下方）不接收指针，
  * 否则它挡住指针下方的元素：浮层渲染在哪里会影响下方是否出现 hover。
+ * will-change：浮层（含大模糊阴影）独立成合成层，跟手时只移动图层、不重绘。
  * 用法：<DragOverlay className={dragOverlayWrapperClass}>。
  */
-export const dragOverlayWrapperClass = 'pointer-events-none';
+export const dragOverlayWrapperClass = 'pointer-events-none will-change-transform';
 
 /** 松手时浮层飞回空位的动画（与 FLIP 位移同一时长与曲线）。 */
 export const dropAnimation: DropAnimation = {
@@ -217,13 +218,22 @@ export function useFlipList<T extends HTMLElement>(version: unknown) {
     const shared = [...current.elements.keys()].filter((id) => before.rects.has(id));
     if (shared.length === 0) return;
 
-    for (const id of shared) {
+    // 先停掉进行中的动画再量新位置：capture 量到的是动画中的视觉位置，
+    // 新动画从那里接续，连续重排也不会跳帧。先读完再启动动画：边 animate
+    // 边读会让每一行都强制重算一次样式。
+    const targets = shared.map((id) => {
       const element = current.elements.get(id)!;
+      const running = animationsRef.current.get(element);
+      running?.cancel();
+      return { id, element, stopped: !!running && running.playState !== 'finished' };
+    });
+    const moves = targets.map(({ id, element, stopped }) => ({
+      id,
+      element,
+      next: stopped ? element.getBoundingClientRect() : current.rects.get(id)!,
+    }));
+    for (const { id, element, next } of moves) {
       const previous = before.rects.get(id)!;
-      // 先停掉进行中的动画再量新位置：capture 量到的是动画中的视觉位置，
-      // 新动画从那里接续，连续重排也不会跳帧。
-      animationsRef.current.get(element)?.cancel();
-      const next = element.getBoundingClientRect();
       const dx = previous.left - next.left;
       const dy = previous.top - next.top;
       if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;

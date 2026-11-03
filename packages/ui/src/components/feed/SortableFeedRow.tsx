@@ -3,6 +3,7 @@ import type { FeedItem } from '@taskora/shared';
 import type { SelectionState } from '@taskora/api';
 
 import { flipId, noLayoutAnimation } from '../../lib/dnd';
+import { useStableCallback } from '../../lib/useStableCallback';
 import { FeedItemRow } from './FeedItemRow';
 import type { ScheduledBadgeMode } from '@/components/task/TaskDateBadge';
 
@@ -38,6 +39,8 @@ export function SortableFeedRow({
   newInToday,
 }: SortableFeedRowProps) {
   // 实时预览：布局随指针重排、位移由 FLIP 动画承担（见 lib/dnd.ts）。
+  const stableToggleComplete = useStableCallback(onToggleComplete);
+  const stableRowClick = useStableCallback(onRowClick);
   const { attributes, listeners, setNodeRef } = useSortable({
     id: dndId,
     animateLayoutChanges: noLayoutAnimation,
@@ -83,8 +86,8 @@ export function SortableFeedRow({
           areaTitle={areaTitle}
           hidePlacement={hidePlacement}
           selectionState={selectionState}
-          onToggleComplete={onToggleComplete}
-          onRowClick={onRowClick}
+          onToggleComplete={stableToggleComplete}
+          onRowClick={stableRowClick}
           showScheduledBadge={showScheduledBadge}
           newInToday={newInToday}
         />

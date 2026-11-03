@@ -1,3 +1,4 @@
+import * as React from 'react';
 import { useMatch, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
@@ -21,9 +22,9 @@ interface Props {
 /**
  * 侧边栏紧凑项目行（Things 3 式）：28px 行高、16px 进度环（与图标同宽）、
  * 当前项目高亮。列表页（区域页 / Later Projects 页）改用 `ProjectFeedRow`，
- * 该组件只服务侧边栏。
+ * 该组件只服务侧边栏。memo：拖拽换位时列表整体重渲染，未变的行要跳过。
  */
-export function ProjectItem({ project, dropOver = false }: Props) {
+export const ProjectItem = React.memo(function ProjectItem({ project, dropOver = false }: Props) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const isCurrent = useMatch(`/projects/${project.id}`) !== null;
@@ -101,4 +102,4 @@ export function ProjectItem({ project, dropOver = false }: Props) {
       {completion.dialog}
     </ProjectContextMenu>
   );
-}
+});
