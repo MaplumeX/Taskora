@@ -152,7 +152,8 @@ export function ExpandedTaskToolbar({ variant }: Props) {
     </>
   );
 
-  const moreItems: MoreItem[] = [
+  // 重复相关单独成组（同右键菜单）。整组为空时不留分隔线；废纸篓里组前没有菜单项，也不加。
+  const repeatItems: MoreItem[] = [
     ...(canRepeat && !trashed
       ? [{ icon: Repeat, label: t('task:repeat'), onSelect: () => setPicker('repeat') }]
       : []),
@@ -168,9 +169,15 @@ export function ExpandedTaskToolbar({ variant }: Props) {
     ...(nextCopy.available
       ? [{ icon: CalendarPlus, label: t('task:nextCopy'), onSelect: nextCopy.create }]
       : []),
+  ];
+
+  const moreItems: MoreItem[] = [
+    ...(!trashed ? [{ icon: Copy, label: t('task:duplicate'), onSelect: handleDuplicate }] : []),
+    ...repeatItems.map((item, index) =>
+      index === 0 && !trashed ? { ...item, separated: true } : item,
+    ),
     ...(!trashed
       ? [
-          { icon: Copy, label: t('task:duplicate'), onSelect: handleDuplicate },
           {
             icon: FolderInput,
             label: t('task:convertToProject'),

@@ -267,25 +267,31 @@ export function MultiSelectToolbar() {
               <ActionSheetItem icon={Tag} onClick={() => openPicker('tags')}>
                 {t('task:tags')}
               </ActionSheetItem>
-              {canRepeat && (
-                <ActionSheetItem icon={Repeat} onClick={() => openPicker('repeat')}>
-                  {t('task:repeat')}
-                </ActionSheetItem>
-              )}
-              {skipOccurrence.available && (
-                <ActionSheetItem icon={SkipForward} onClick={handleSkip}>
-                  {t(skipOccurrence.last ? 'task:skipOccurrenceEnd' : 'task:skipOccurrence')}
-                </ActionSheetItem>
-              )}
-              {nextCopy.available && (
-                <ActionSheetItem icon={CalendarPlus} onClick={handleNextCopy}>
-                  {t('task:nextCopy')}
-                </ActionSheetItem>
-              )}
               {!inTrash && (
                 <ActionSheetItem icon={Copy} onClick={handleDuplicate}>
                   {t('task:duplicate')}
                 </ActionSheetItem>
+              )}
+              {/* 重复相关单独成组（同右键菜单）；整组为空时连同分隔线一起隐藏。 */}
+              {(canRepeat || skipOccurrence.available || nextCopy.available) && (
+                <>
+                  <ActionSheetSeparator />
+                  {canRepeat && (
+                    <ActionSheetItem icon={Repeat} onClick={() => openPicker('repeat')}>
+                      {t('task:repeat')}
+                    </ActionSheetItem>
+                  )}
+                  {skipOccurrence.available && (
+                    <ActionSheetItem icon={SkipForward} onClick={handleSkip}>
+                      {t(skipOccurrence.last ? 'task:skipOccurrenceEnd' : 'task:skipOccurrence')}
+                    </ActionSheetItem>
+                  )}
+                  {nextCopy.available && (
+                    <ActionSheetItem icon={CalendarPlus} onClick={handleNextCopy}>
+                      {t('task:nextCopy')}
+                    </ActionSheetItem>
+                  )}
+                </>
               )}
               {single && !inTrash && (
                 <>
