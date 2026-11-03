@@ -21,8 +21,21 @@ export function currentLegacyDateTimeZone(): string {
   return usePreferencesStore.getState().legacyDateTimeZone;
 }
 
+/** todayDateKey 上一次的结果；只在分钟或时区变化时才重算。 */
+let todayCache: { minute: number; timeZone: string; key: string } | null = null;
+
+/**
+ * 每个列表行渲染时都经 useCalendarDay 走到这里，而时区换算（Temporal）很慢，
+ * 手机上是拖拽掉帧的来源之一。现行时区偏移都是整分钟，日期只会在整分钟处
+ * 变化，所以同一分钟同一时区的结果可以复用。
+ */
 export function todayDateKey(now = new Date()): string {
-  return instantDateKey(now, currentTimeZone());
+  const minute = Math.floor(now.getTime() / 60_000);
+  const timeZone = currentTimeZone();
+  if (todayCache?.minute !== minute || todayCache.timeZone !== timeZone) {
+    todayCache = { minute, timeZone, key: instantDateKey(now, timeZone) };
+  }
+  return todayCache.key;
 }
 
 /** 回顾排期的上下文：账号时区的今天与账号的默认回顾间隔（Review）。 */

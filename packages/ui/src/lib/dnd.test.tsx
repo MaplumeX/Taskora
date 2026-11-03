@@ -227,6 +227,33 @@ describe('useFlipList（数据驱动的位移 / 进场 / 离场）', () => {
     expect(getByTestId('root').children).toHaveLength(3);
   });
 
+  it('连续重排：量完所有行才启动动画，不边动画边强制测量', () => {
+    const { rerender } = render(<List ids={['a', 'b', 'c']} />);
+    rerender(<List ids={['b', 'c', 'a']} />);
+    calls = [];
+
+    const order: string[] = [];
+    const measure = HTMLElement.prototype.getBoundingClientRect;
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement,
+    ) {
+      order.push('read');
+      return measure.call(this);
+    });
+    const animate = Element.prototype.animate;
+    Element.prototype.animate = function (this: Element, ...args: Parameters<Element['animate']>) {
+      order.push('animate');
+      return animate.apply(this, args);
+    };
+
+    rerender(<List ids={['c', 'a', 'b']} />);
+
+    expect(order).toContain('animate');
+    expect(order.lastIndexOf('read')).toBeLessThan(order.indexOf('animate'));
+    // 上一轮动画被接续：从被打断的位置起步。
+    expect(calls.length).toBeGreaterThan(0);
+  });
+
   it('同一位置换了 id（临时 id → 服务端 id）不算进出场', () => {
     const { rerender, getByTestId } = render(<List ids={['a', 'temp']} />);
     rerender(<List ids={['a', 'real']} />);

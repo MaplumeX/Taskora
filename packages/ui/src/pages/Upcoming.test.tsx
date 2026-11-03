@@ -10,6 +10,7 @@ import type {
 } from '@dnd-kit/core';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildUpcomingLayout,
   useFeedQuery,
   useMultiSelectStore,
   usePreferencesStore,
@@ -97,7 +98,10 @@ vi.mock('@dnd-kit/sortable', async (importOriginal) => ({
 }));
 
 vi.mock('@taskora/api', async (importOriginal) => ({
-  ...(await importOriginal()),
+  ...(await importOriginal<typeof import('@taskora/api')>()),
+  buildUpcomingLayout: vi.fn(
+    (await importOriginal<typeof import('@taskora/api')>()).buildUpcomingLayout,
+  ),
   useFeedQuery: vi.fn(),
   useProjectsQuery: () => ({ data: [] }),
   useAreasQuery: () => ({ data: [] }),
@@ -449,6 +453,27 @@ describe('Upcoming — 复用分组列表拖动来改计划日期', () => {
       ],
       expect.anything(),
     );
+  });
+
+  it('指针移动但落点没变时不重建分组', () => {
+    renderUpcoming([
+      task('task-1', '2026-10-08'),
+      task('task-2', '2026-10-08'),
+      task('task-3', '2026-10-08'),
+    ]);
+    start();
+    pointAt('task:task-2', 'after');
+    act(() => handlers().onDragMove({ active: { id: 'task:task-1' } } as DragMoveEvent));
+    expect(taskOrder()).toEqual(['task-2', 'task-1', 'task-3']);
+    // 换位后的第一次移动按新的行建一次分组，之后复用。
+    act(() => handlers().onDragMove({ active: { id: 'task:task-1' } } as DragMoveEvent));
+
+    const builds = vi.mocked(buildUpcomingLayout).mock.calls.length;
+    for (let i = 0; i < 5; i += 1) {
+      act(() => handlers().onDragMove({ active: { id: 'task:task-1' } } as DragMoveEvent));
+    }
+    expect(vi.mocked(buildUpcomingLayout).mock.calls.length).toBe(builds);
+    expect(taskOrder()).toEqual(['task-2', 'task-1', 'task-3']);
   });
 
   it.each([

@@ -1,3 +1,4 @@
+import * as React from 'react';
 import type { FeedItem, TaskFeedItem } from '@taskora/shared';
 import type { TaskResponseDto } from '@taskora/shared';
 
@@ -27,7 +28,10 @@ function isTaskFeedItem(item: FeedItem): item is TaskFeedItem {
   return item.type === 'task';
 }
 
-export function FeedItemRow({
+const noop = () => {};
+
+/** memo 同 TaskItem：这里每次渲染都会新建 task，须在此层就跳过。 */
+export const FeedItemRow = React.memo(function FeedItemRow({
   item,
   projectTitle,
   areaTitle,
@@ -72,7 +76,7 @@ export function FeedItemRow({
       areaTitle={areaTitle}
       hidePlacement={hidePlacement}
       selectionState={selectionState}
-      onToggleComplete={onToggleComplete ?? (() => {})}
+      onToggleComplete={onToggleComplete ?? noop}
       onRowClick={onRowClick}
       showScheduledBadge={showScheduledBadge}
       newInToday={newInToday}
@@ -84,4 +88,4 @@ export function FeedItemRow({
       }
     />
   );
-}
+});

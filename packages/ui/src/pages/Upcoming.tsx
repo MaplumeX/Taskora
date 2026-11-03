@@ -30,7 +30,7 @@ import {
   type DragStartEvent,
 } from '@dnd-kit/core';
 
-import { addCalendarDays, type FeedItem, Start, type TaskFeedItem } from '@taskora/shared';
+import { type FeedItem, Start, type TaskFeedItem } from '@taskora/shared';
 import type { RepeatPreview } from '@taskora/api';
 
 import { FeedItemRow } from '@/components/feed/FeedItemRow';
@@ -40,6 +40,7 @@ import {
   moveUpcomingTask,
   upcomingGroups,
   type UpcomingDragTarget,
+  type UpcomingGroup,
 } from '@/components/feed/upcomingDragLayout';
 import { SortableFeedRow } from '@/components/feed/SortableFeedRow';
 import { RepeatPreviewRow } from '@/components/task/RepeatPreviewRow';
@@ -100,6 +101,22 @@ function isUpcomingKey(key: string) {
   return key.startsWith('task:') || key.startsWith('header:') || key.startsWith('container:');
 }
 
+/**
+ * 复用的日期格式器：构造 Intl.DateTimeFormat 很贵，而拖拽中每次换位都会
+ * 重渲染所有分组标题。
+ */
+const dateFormats = new Map<string, Intl.DateTimeFormat>();
+
+function dateFormat(options: Intl.DateTimeFormatOptions) {
+  const key = `${i18n.language}|${JSON.stringify(options)}`;
+  let format = dateFormats.get(key);
+  if (!format) {
+    format = new Intl.DateTimeFormat(i18n.language, options);
+    dateFormats.set(key, format);
+  }
+  return format;
+}
+
 function scheduleSignature(items: FeedItem[]) {
   return items.map((item) => `${feedKey(item)}@${item.scheduledDate}`).join('|');
 }
@@ -134,14 +151,17 @@ export default function Upcoming() {
   const { data: areas = [] } = useAreasQuery();
   const previews = useRepeatPreviews();
   // 日历订阅的日程（ADR 0023）：覆盖本周与之后的月份分组，与 Today 共用查询区间
-  const eventRange = upcomingDateRange(todayDateKey());
+  const eventRange = useMemo(() => upcomingDateRange(todayDateKey()), [calendarDay]);
   const eventsByDay = useCalendarEvents(eventRange.from, eventRange.to);
   /** 月份分组内的日程：按日期排，跨天日程只在区间内的首日出现一次。 */
   const monthEvents = (month: UpcomingLaterMonth): DayCalendarEvent[] => {
     const { from, to } = laterMonthDateRange(month);
     const seen = new Set<string>();
     const out: DayCalendarEvent[] = [];
-    for (let day = from; day <= to; day = addCalendarDays(day, 1)) {
+    // 只看有日程的日期（键为 YYYY-MM-DD，按字符串比较即按日期）：每次渲染都
+    // 走到这里，逐日推进的日期运算（Temporal）在手机上是拖拽掉帧的来源之一。
+    const days = [...eventsByDay.keys()].filter((day) => day >= from && day <= to).sort();
+    for (const day of days) {
       for (const entry of eventsByDay.get(day) ?? []) {
         if (seen.has(entry.event.id)) continue;
         seen.add(entry.event.id);
@@ -171,6 +191,17 @@ export default function Upcoming() {
     [items, previews, filtering, calendarDay],
   );
   const groups = useMemo(() => upcomingGroups(layout), [layout]);
+  const validDropIds = useMemo(
+    () =>
+      new Set(
+        groups.flatMap((group) => [
+          `header:${group.id}`,
+          `container:${group.id}`,
+          ...group.items.filter((item) => item.type === 'task').map(feedKey),
+        ]),
+      ),
+    [groups],
+  );
   const flip = useFlipList<HTMLDivElement>(groups);
 
   // 多项拖拽：拖拽开始那次提交之后再收起组内其余行，浮层才贴着手。
@@ -213,15 +244,8 @@ export default function Upcoming() {
               ? args.collisionRect.bottom
               : args.collisionRect.top + args.collisionRect.height / 2;
       }
-      const validIds = new Set(
-        groups.flatMap((group) => [
-          `header:${group.id}`,
-          `container:${group.id}`,
-          ...group.items.filter((item) => item.type === 'task').map(feedKey),
-        ]),
-      );
       const containers = args.droppableContainers.filter((container) =>
-        validIds.has(String(container.id)),
+        validDropIds.has(String(container.id)),
       );
       // 默认测量会消除 transform；FLIP 动画中的标题/任务要按屏幕上
       // 当前可见的位置命中，不能用动画结束后的布局位置。
@@ -264,7 +288,7 @@ export default function Upcoming() {
       lastTargetRef.current = { overKey, edge };
       return [{ ...collision, id: overKey }];
     },
-    [groups],
+    [groups, validDropIds],
   );
 
   const updateDrag = (next: ScheduleDrag | null) => {
@@ -330,13 +354,24 @@ export default function Upcoming() {
     });
   };
 
+  // 落点每次手指移动都要重算，分组只在行变化时才重建（建布局含时区换算）。
+  const dragGroupsRef = useRef<{ items: FeedItem[]; groups: UpcomingGroup[] } | null>(null);
+  const dragGroupsOf = (dragItems: FeedItem[]) => {
+    if (dragGroupsRef.current?.items !== dragItems) {
+      dragGroupsRef.current = {
+        items: dragItems,
+        groups: upcomingGroups(buildUpcomingLayout(dragItems, new Date())),
+      };
+    }
+    return dragGroupsRef.current.groups;
+  };
+
   const applyTarget = (current: ScheduleDrag, target: UpcomingDragTarget | null): FeedItem[] => {
     if (!target) return current.items;
-    const currentGroups = upcomingGroups(buildUpcomingLayout(current.items, new Date()));
     return (
       moveUpcomingTask(
         current.items,
-        currentGroups,
+        dragGroupsOf(current.items),
         { item: current.origin, groupId: current.originGroup },
         target,
       ) ?? current.items
@@ -565,8 +600,9 @@ export default function Upcoming() {
         projectTitle={isTask && taskItem.projectId ? projectMap[taskItem.projectId] : undefined}
         areaTitle={isTask && taskItem.areaId ? areaMap[taskItem.areaId] : undefined}
         selectionState={selectionState}
-        onToggleComplete={() => toggleComplete(item)}
-        onRowClick={isTask ? () => handleRowClick(item.id) : undefined}
+        // 只有列表里的任务行可交互；项目行与浮层不传回调，FeedItemRow 的 memo 才生效。
+        onToggleComplete={isTask && !overlay ? () => toggleComplete(item) : undefined}
+        onRowClick={isTask && !overlay ? () => handleRowClick(item.id) : undefined}
         showScheduledBadge={showScheduledBadge}
       />
     );
@@ -608,9 +644,7 @@ export default function Upcoming() {
   const renderDay = (day: UpcomingDay) => {
     const label = day.isTomorrow
       ? t('common:tomorrow')
-      : new Intl.DateTimeFormat(i18n.language, { weekday: 'long' }).format(
-          fromInputDateValue(day.dateKey),
-        );
+      : dateFormat({ weekday: 'long' }).format(fromInputDateValue(day.dateKey));
 
     return (
       <UpcomingDropZone
@@ -670,8 +704,7 @@ export default function Upcoming() {
                     <h2 className="pt-4 text-title-2">
                       {month.headingKind === 'range'
                         ? `${month.month}/${month.rangeStartDay}-${month.month}/${month.rangeEndDay}`
-                        : new Intl.DateTimeFormat(
-                            i18n.language,
+                        : dateFormat(
                             month.showYear ? { month: 'long', year: 'numeric' } : { month: 'long' },
                           ).format(new Date(month.year, month.month - 1, 1))}
                     </h2>

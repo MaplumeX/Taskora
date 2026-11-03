@@ -196,13 +196,17 @@
    *   下方那一行自己的光标）；
    * - 可拖拽列表（data-dnd-list）不响应指针：指针扫过的行不出现 hover
    *   高亮。滚轮落到外层滚动容器，拖拽中照常滚动。
+   * 两条都只对有 hover 的设备有意义；触屏上不生效，省去每次换位的全页样式
+   * 重算（:has 随 DOM 变动失效）。
    */
-  html:has([aria-roledescription='sortable'][aria-pressed='true']),
-  html:has([aria-roledescription='sortable'][aria-pressed='true']) * {
-    cursor: grabbing !important;
-  }
-  html:has([aria-roledescription='sortable'][aria-pressed='true']) [data-dnd-list] {
-    pointer-events: none;
+  @media (hover: hover) {
+    html:has([aria-roledescription='sortable'][aria-pressed='true']),
+    html:has([aria-roledescription='sortable'][aria-pressed='true']) * {
+      cursor: grabbing !important;
+    }
+    html:has([aria-roledescription='sortable'][aria-pressed='true']) [data-dnd-list] {
+      pointer-events: none;
+    }
   }
 }
 

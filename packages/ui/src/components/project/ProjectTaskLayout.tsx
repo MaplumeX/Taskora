@@ -44,6 +44,7 @@ import { useSelectionScope } from '@taskora/api';
 import { useTaskRowSelection } from '@taskora/api';
 import { useReorderProjectHeadingLayout } from '@taskora/api';
 import { keyboardDragData, useDndSurface } from '../../lib/appDnd';
+import { useStableCallback } from '../../lib/useStableCallback';
 import {
   MAGIC_PLUS_DRAFT_ID,
   MAGIC_PLUS_HEADING_EDGE,
@@ -468,6 +469,8 @@ interface SortableTaskProps {
   onToggleComplete: () => void;
 }
 
+const noop = () => undefined;
+
 function SortableTask({
   task,
   placeholder,
@@ -477,6 +480,8 @@ function SortableTask({
   onRowClick,
   onToggleComplete,
 }: SortableTaskProps) {
+  const stableRowClick = useStableCallback(onRowClick);
+  const stableToggleComplete = useStableCallback(onToggleComplete);
   // 任务拖拽走实时预览：布局随指针重排、位移由 FLIP 动画承担，
   // 不叠加 dnd-kit 的排序位移与布局动画（见 lib/dnd.ts）。
   const { attributes, listeners, setNodeRef } = useSortable({
@@ -513,14 +518,14 @@ function SortableTask({
           className="invisible"
           aria-hidden="true"
         >
-          <TaskItem task={task} selectionState="idle" onToggleComplete={() => undefined} />
+          <TaskItem task={task} selectionState="idle" onToggleComplete={noop} />
         </div>
       ) : (
         <TaskItem
           task={task}
           selectionState={expanded ? 'expanded' : selected ? 'selected' : 'idle'}
-          onRowClick={onRowClick}
-          onToggleComplete={onToggleComplete}
+          onRowClick={stableRowClick}
+          onToggleComplete={stableToggleComplete}
         />
       )}
     </div>
