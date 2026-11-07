@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from 'vitest';
-import { QueryClient } from '@tanstack/react-query';
+import { MutationObserver, onlineManager, QueryClient } from '@tanstack/react-query';
 
 /**
  * 前台同步三场景（issue 04 验收）：启动 pull、本地写后 push（防抖）、
@@ -294,6 +294,33 @@ describe('mobile-engine 前台同步触发（issue 04）', () => {
       expect(fakeEngine.close).toHaveBeenCalled();
     });
     expect(getMobileEngine()).toBeNull();
+  });
+});
+
+describe('mobile-engine WebView 报告离线', () => {
+  afterEach(() => {
+    onlineManager.setOnline(true);
+  });
+
+  it('本地写不被 React Query 暂停：mutation 照常执行，登出后恢复默认', async () => {
+    const queryClient = renderQueryClient();
+    const { isLiveQueryMode } = await import('@taskora/api');
+    const { initMobileEngine } = await loadEngine();
+    initMobileEngine(queryClient);
+    await vi.waitFor(() => expect(isLiveQueryMode()).toBe(true));
+
+    // Android WebView 切网 / 弱网时会派发 offline 事件
+    onlineManager.setOnline(false);
+    const write = vi.fn(async () => 'ok');
+    const mutation = new MutationObserver(queryClient, { mutationFn: write });
+
+    await expect(mutation.mutate()).resolves.toBe('ok');
+    expect(write).toHaveBeenCalledTimes(1);
+
+    fakeAuthStore.setState({ token: null, user: null });
+    await vi.waitFor(() => expect(isLiveQueryMode()).toBe(false));
+    expect(queryClient.getDefaultOptions().mutations?.networkMode).toBeUndefined();
+    expect(queryClient.getDefaultOptions().queries?.retry).toBe(false);
   });
 });
 

@@ -29,6 +29,7 @@ import {
   attachLiveQueries,
   detachLiveQueries,
   createEngineInvalidator,
+  runQueriesWhileOffline,
   requestTaskReveal,
   undoHistory,
 } from '@taskora/api';
@@ -69,6 +70,8 @@ let upgradeRequired = false;
 /** Reminders（reminders spec）：runtime 模式调度器，随 Engine 生命周期启停。 */
 let reminderCoordinator: ReminderCoordinator | null = null;
 let unsubscribeReminderActions: (() => void) | null = null;
+/** 退回 REST 时恢复 React Query 的 networkMode（见 runQueriesWhileOffline）。 */
+let restoreQueryDefaults: (() => void) | null = null;
 
 /** 供诊断/测试：当前 Engine 实例。 */
 export function getDesktopEngine(): Engine | null {
@@ -126,6 +129,10 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     // 界面读改由 Engine 的响应式查询提供（local-first-v3 issue 06）：装配
     // 期间按 REST 渲染的视图随之切到本地副本，之后只在依赖的数据变更时重跑。
     attachLiveQueries(engine);
+    // 读写都在本地副本：WebView 报告离线时 React Query 默认暂停 mutation，
+    // 乐观补丁上屏了写入却不执行。
+    restoreQueryDefaults?.();
+    restoreQueryDefaults = runQueriesWhileOffline(queryClient);
     // 副窗口（多窗口，ADR-0025）经主窗口的这个 Engine 读写；它们的 sync
     // 也走这里的同步调度。
     serveEngine(engine, () => syncNow());
@@ -188,6 +195,8 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
 
 /** 全域退回 REST（登出 / 装配失败；副窗口退回 REST 时同用）。 */
 export function resetEngineBackends(): void {
+  restoreQueryDefaults?.();
+  restoreQueryDefaults = null;
   detachLiveQueries();
   undoHistory.detach();
   setTaskBackend(undefined);

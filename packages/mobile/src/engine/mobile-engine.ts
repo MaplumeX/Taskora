@@ -38,6 +38,7 @@ import {
   attachLiveQueries,
   detachLiveQueries,
   createEngineInvalidator,
+  runQueriesWhileOffline,
   undoHistory,
   useReminderPermissionStore,
   requestTaskReveal,
@@ -81,6 +82,8 @@ let syncRequested = false;
 let upgradeRequired = false;
 /** Reminders（reminders spec）：system 模式调度器，随 Engine 生命周期启停。 */
 let reminderCoordinator: ReminderCoordinator | null = null;
+/** 退回 REST 时恢复 React Query 的 networkMode（见 runQueriesWhileOffline）。 */
+let restoreQueryDefaults: (() => void) | null = null;
 
 /** 供诊断/测试：当前 Engine 实例。 */
 export function getMobileEngine(): Engine | null {
@@ -140,6 +143,11 @@ async function startEngine(queryClient: QueryClient): Promise<void> {
     // 界面读改由 Engine 的响应式查询提供（local-first-v3 issue 06）：装配
     // 期间按 REST 渲染的视图随之切到本地副本，之后只在依赖的数据变更时重跑。
     attachLiveQueries(engine);
+    // 读写都在本地副本：WebView 报告离线（切网 / 弱网）时 React Query 默认
+    // 暂停 mutation，乐观补丁上屏了写入却不执行——FAB 停在「创建中」、
+    // 改过的字段从未落库。
+    restoreQueryDefaults?.();
+    restoreQueryDefaults = runQueriesWhileOffline(queryClient);
 
     // 仅本地写需要防抖调度同步——远端写应用后无新 Outbox，再拉是空转。
     engine.onChange((change) => {
@@ -237,6 +245,8 @@ async function enableBackgroundSync(token: string | null): Promise<void> {
 
 /** 全域退回 REST（登出 / 装配失败）。 */
 function resetBackends(): void {
+  restoreQueryDefaults?.();
+  restoreQueryDefaults = null;
   detachLiveQueries();
   undoHistory.detach();
   setTaskBackend(undefined);
@@ -360,6 +370,8 @@ function ensureDeviceId(): string {
 /** 测试专用：重置模块级装配状态（不触碰 backends / auth store）。 */
 export function __resetForTest(): void {
   upgradeRequired = false;
+  restoreQueryDefaults?.();
+  restoreQueryDefaults = null;
   if (debounceTimer !== null) {
     clearTimeout(debounceTimer);
     debounceTimer = null;

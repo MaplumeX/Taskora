@@ -26,7 +26,8 @@ export function updatePreferences(
   data: UpdatePreferencesDto,
 ): Promise<UserResponseDto> {
   return apiClient
-    .put<UserResponseDto>('/users/me/preferences', data)
+    // 有超时：Log Completed 经撤销历史 record 调用，撤销前要等它结束
+    .put<UserResponseDto>('/users/me/preferences', data, { timeout: 15_000 })
     .then((res) => res.data);
 }
 
