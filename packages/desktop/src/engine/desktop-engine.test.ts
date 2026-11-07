@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { QueryClient } from '@tanstack/react-query';
+import { MutationObserver, onlineManager, QueryClient } from '@tanstack/react-query';
 
 /**
  * 冷启动首屏：UI 在 Engine 装配完成前已经渲染，首屏查询走的是 REST
@@ -61,6 +61,17 @@ describe('desktop-engine 冷启动首屏', () => {
     // 即切换，此时同步仍未返回
     await vi.waitFor(() => expect(isLiveQueryMode()).toBe(true));
     expect(fakeEngine.sync).toHaveBeenCalledTimes(1);
+
+    // WebView 报告离线：本地写不被 React Query 暂停
+    onlineManager.setOnline(false);
+    try {
+      const write = vi.fn(async () => 'ok');
+      await expect(new MutationObserver(queryClient, { mutationFn: write }).mutate()).resolves.toBe(
+        'ok',
+      );
+    } finally {
+      onlineManager.setOnline(true);
+    }
   });
 
   it('安装更新前推送 Outbox：同步挂起时不无限等待（ADR-0026）', async () => {

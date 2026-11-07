@@ -57,6 +57,7 @@ export { setTaskBackend, currentTaskBackend, type TaskBackend } from './api/task
 export { createEngineTaskBackend } from './engine/task-backend.engine';
 export { isEngineMode } from './api/task-backend';
 export { createEngineInvalidator, INVALIDATION_BY_ENTITY } from './engine/engine-invalidation';
+export { runQueriesWhileOffline } from './engine/offline-network-mode';
 export {
   attachLiveQueries,
   hasPendingLiveQueries,

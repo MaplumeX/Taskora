@@ -52,8 +52,18 @@ impl ReplicaDb {
             .current
             .lock()
             .map_err(|_| "Replica db lock failed".to_string())?;
-        if current.user == user && current.conn.is_some() {
-            return Ok(());
+        if current.user == user {
+            if let Some(conn) = current.conn.as_ref() {
+                // 连接比 webview 活得久：页面在 BEGIN 与 COMMIT 之间重载（崩溃
+                // 恢复、整页刷新）留下的事务没人会再提交。不回滚的话，新 Engine
+                // 的每次 BEGIN 都失败，事务外的写落进这个永不提交的事务里。
+                // 只有 Engine 装配时调用这里，此刻不可能有它自己的事务。
+                if !conn.is_autocommit() {
+                    conn.execute_batch("ROLLBACK")
+                        .map_err(|e| format!("failed to roll back abandoned transaction: {e}"))?;
+                }
+                return Ok(());
+            }
         }
         let conn = open_user_connection(&self.dir, user)
             .map_err(|e| format!("failed to open replica db: {e}"))?;
@@ -130,17 +140,17 @@ fn migrate_legacy_db(dir: &Path, user_db: &Path) -> Result<(), Box<dyn std::erro
 }
 
 /// 按登录用户切换副本数据库（多账号隔离）。
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sql_use_db(db: tauri::State<ReplicaDb>, user: String) -> Result<(), String> {
     db.use_user(&user)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sql_exec(db: tauri::State<ReplicaDb>, sql: String) -> Result<(), String> {
     db.with_conn(|conn| conn.execute_batch(&sql).map_err(|e| e.to_string()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sql_all(
     db: tauri::State<ReplicaDb>,
     sql: String,
@@ -181,7 +191,7 @@ pub fn sql_all(
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn sql_run(db: tauri::State<ReplicaDb>, sql: String, params: Vec<Json>) -> Result<i64, String> {
     db.with_conn(|conn| {
         let sql_params: Vec<SqlValue> = params.into_iter().map(json_to_sql).collect();
@@ -286,6 +296,31 @@ mod tests {
             .query_row("SELECT x FROM t", [], |row| row.get(0))
             .unwrap();
         assert_eq!(value, 7);
+    }
+
+    #[test]
+    fn reusing_the_connection_rolls_back_an_abandoned_transaction() {
+        let dir = dir();
+        let db = ReplicaDb::new(dir.path().to_path_buf());
+        db.use_user("user-1").unwrap();
+        db.with_conn(|conn| {
+            conn.execute_batch("CREATE TABLE t(x); BEGIN; INSERT INTO t VALUES (1);")
+                .map_err(|e| e.to_string())
+        })
+        .unwrap();
+
+        // 页面重载后新 Engine 重新选库：遗留事务被回滚，新事务能开始
+        db.use_user("user-1").unwrap();
+        db.with_conn(|conn| {
+            assert!(conn.is_autocommit());
+            let count: i64 = conn
+                .query_row("SELECT COUNT(*) FROM t", [], |row| row.get(0))
+                .unwrap();
+            assert_eq!(count, 0);
+            conn.execute_batch("BEGIN; COMMIT;")
+                .map_err(|e| e.to_string())
+        })
+        .unwrap();
     }
 
     #[test]

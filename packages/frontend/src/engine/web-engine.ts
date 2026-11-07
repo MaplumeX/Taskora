@@ -24,6 +24,7 @@ import {
   detachLiveQueries,
   createEngineHost,
   createEngineInvalidator,
+  runQueriesWhileOffline,
   createEngineProjectBackend,
   createEngineProjectHeadingBackend,
   createEngineTagBackend,
@@ -357,17 +358,6 @@ export async function stopWebEngine(): Promise<void> {
   await current.leader?.stop().catch(() => undefined);
   current.releaseLock();
   current.channel.close();
-}
-
-/** 查询与 mutation 不再因浏览器离线而暂停；返回恢复原设置的函数。 */
-function runQueriesWhileOffline(queryClient: QueryClient): () => void {
-  const previous = queryClient.getDefaultOptions();
-  queryClient.setDefaultOptions({
-    ...previous,
-    queries: { ...previous.queries, networkMode: 'always' },
-    mutations: { ...previous.mutations, networkMode: 'always' },
-  });
-  return () => queryClient.setDefaultOptions(previous);
 }
 
 function resetBackends(): void {

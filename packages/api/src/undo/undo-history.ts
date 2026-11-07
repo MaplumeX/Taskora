@@ -65,6 +65,8 @@ export class UndoHistory {
   private current: UndoStep | null = null;
   /** 写入串行化：保证每次写入前读到的旧值是上一次写入之后的值。 */
   private queue: Promise<unknown> = Promise.resolve();
+  /** 进行中的 record 外部写入（撤销前等它们记下逆操作）。 */
+  private pendingRecords = new Set<Promise<unknown>>();
 
   constructor(private readonly limit = 50) {}
 
@@ -106,10 +108,18 @@ export class UndoHistory {
   record(action: UndoAction, run: () => Promise<() => Promise<void>>): Promise<void> {
     if (!this.engine) return run().then(() => undefined);
     const step = this.stepForWrite();
-    return this.serialize(async () => {
-      const undo = await run();
+    // 不进 Engine 写入队列：外部写入多是网络请求，挂起时不能堵住之后的
+    // 全部编辑。它不读 Engine 的旧值，逆操作与实体写入互不依赖，入列顺序无关。
+    const result = run().then((undo) => {
       step.ops.push({ kind: 'custom', action, undo });
     });
+    const tracked = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    this.pendingRecords.add(tracked);
+    void tracked.then(() => this.pendingRecords.delete(tracked));
+    return result;
   }
 
   /** 最近一步可撤销的动作；没有则为 null。会先等进行中的写入记录完毕。 */
@@ -138,6 +148,7 @@ export class UndoHistory {
   /** 收尾：等进行中的写入记录完毕、关闭当前步，丢掉没有任何逆操作的步。 */
   private async settle(): Promise<void> {
     await this.queue;
+    await Promise.all([...this.pendingRecords]);
     this.boundary();
     while (this.steps.length > 0 && this.steps.at(-1)!.ops.length === 0) this.steps.pop();
   }

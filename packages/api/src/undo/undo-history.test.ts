@@ -161,6 +161,27 @@ describe('UndoHistory', () => {
     expect((await rawTasks.getTask(task.id)).title).toBe('A');
   });
 
+  it('record 的外部写入挂起（网络无响应）时，不堵住之后的 Engine 写入', async () => {
+    const { history, tasks, rawTasks } = device;
+    const task = await tasks.createTask({ title: 'A' });
+    history.boundary();
+    void history.record('logCompleted', () => new Promise(() => undefined));
+
+    await tasks.updateTask(task.id, { title: 'B' });
+
+    expect((await rawTasks.getTask(task.id)).title).toBe('B');
+  });
+
+  it('record 的外部写入失败：不留下逆操作', async () => {
+    const { history } = device;
+    await expect(
+      history.record('logCompleted', async () => {
+        throw new Error('offline');
+      }),
+    ).rejects.toThrow('offline');
+    expect(await history.peek()).toBeNull();
+  });
+
   it('未接入 Engine 时 record 照常写入但不记录', async () => {
     const { history } = device;
     history.detach();
