@@ -10,6 +10,30 @@ project adheres to [Semantic Versioning](https://semver.org/).
 > Android 小节，端专属改动标注 `(desktop)` / `(android)`。
 > 此前的 `## Desktop [x.y.z]` 小节是双轨制时期的历史记录。
 
+## [1.0.7] - 2026-11-11
+
+本版让本地写在 WebView 报告离线时照常落库：此前 Android WebView 切网 / 弱网 / 后台恢复
+时派发 offline 事件后，React Query 的默认 `networkMode` 会把 mutation 暂停，乐观补丁已上屏
+的写入停在「创建中」，从未写进本地副本；桌面端与移动端现在与 Web 一致，Engine 模式下读写
+不再等 online 事件。
+
+### Fixed
+
+- **api/desktop/mobile/frontend**: WebView 报告离线时本地写不再被暂停 (#251) —
+  `runQueriesWhileOffline` 从 frontend 提到 `@taskora/api`，桌面与移动端在 Engine 装配时
+  把查询与 mutation 的 `networkMode` 设为 `always`，退回 REST 时恢复默认；移动端此前只
+  在 Web 上验证过这条路径。另外 `use_db` 复用连接时若发现遗留事务（页面在 BEGIN 与 COMMIT
+  之间重载）先 `ROLLBACK`，否则新 Engine 的每次 BEGIN 都失败、事务外的写落进永不提交的
+  事务里；四个 SQLite command 改为 `#[tauri::command(async)]`，不再阻塞 WebView 之外
+  的主线程。
+
+### Changed
+
+- **api/desktop/mobile**: 撤销历史不再被挂起的外部写入堵住 (#251) — `UndoHistory.record` 的
+  `run` 不再进 Engine 写入队列（它不读 Engine 旧值，逆操作与实体写入互不依赖），内部用
+  `pendingRecords` 单独跟踪：`peek` / 撤销前仍等它们记完逆操作，`run` 失败时不留逆操作；
+  「Log Completed」的偏好更新加了 15s 超时，网络无响应时最多等这么久。
+
 ## [1.0.6] - 2026-11-03
 
 本版修掉「完成后重复」在计划日期还在未来时点跳过本次 / 下一份会往回跳的问题，集中处理
