@@ -171,6 +171,36 @@ export const TaskItem = React.memo(function TaskItem({
     return () => cancelAnimationFrame(id);
   }, [revealing]);
 
+  // 展开动画结束后把整张卡片滚入视野（靠近底部的任务展开后会被底部悬浮工具栏 /
+  // 视口底边挡住）；键盘弹出导致滚动区变矮时再滚一次。scroll-margin 给悬浮栏
+  // 留位置。Reveal Task 有自己的居中滚动，不抢。
+  const cardRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!expanded) return;
+    const card = cardRef.current;
+    if (!card) return;
+    const reveal = () => {
+      if (useUiInteractionStore.getState().revealId === task.id) return;
+      card.scrollIntoView?.({ block: 'nearest' });
+    };
+    const timer = window.setTimeout(reveal, EXPAND_MS + 20);
+    const scroller = card.closest('main');
+    let lastHeight = scroller?.clientHeight ?? 0;
+    const observer =
+      scroller && typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            const height = scroller.clientHeight;
+            if (height < lastHeight) reveal();
+            lastHeight = height;
+          })
+        : null;
+    if (scroller) observer?.observe(scroller);
+    return () => {
+      window.clearTimeout(timer);
+      observer?.disconnect();
+    };
+  }, [expanded, task.id]);
+
   // Auto-focus title on expand (caret at end, no full selection).
   React.useEffect(() => {
     if (!expanded) return;
@@ -244,9 +274,12 @@ export const TaskItem = React.memo(function TaskItem({
     >
       <div className={cn('flex min-h-0 flex-col', exiting && 'overflow-hidden')}>
         <div
+          ref={cardRef}
           data-task-card
           className={cn(
             'min-w-0 rounded-md transition-shadow duration-expand ease-expand',
+            // 手机端底部悬浮工具栏（bottom 2.75rem + 高 3.5rem）之上再留一点空隙。
+            'scroll-mt-3 scroll-mb-3 max-md:scroll-mb-[calc(7rem+var(--safe-area-bottom))]',
             expanded && 'rounded-[10px] bg-card shadow-row-lift',
           )}
         >

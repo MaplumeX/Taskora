@@ -103,7 +103,8 @@ export function MainContent() {
               ? 'h-full pt-2 md:px-6 md:pt-4 max-md:pb-[var(--safe-area-bottom)]'
               : // 桌面自绘外壳的拖拽带（--titlebar-h）已在主列顶部留白，从 pt-10
                 // 里扣掉，标题与窗口顶的距离与 web 端一致。
-                'max-w-3xl px-4 pb-24 pt-2 md:px-12 md:pb-12 md:pt-[max(0.5rem,calc(2.5rem-var(--titlebar-h,0px)))]',
+                // 手机端底部留出悬浮工具栏 / FAB 与手势条的高度，最后一行展开后也能滚到栏上方。
+                'max-w-3xl px-4 pb-[calc(7.5rem+var(--safe-area-bottom))] pt-2 md:px-12 md:pb-12 md:pt-[max(0.5rem,calc(2.5rem-var(--titlebar-h,0px)))]',
         )}
       >
         <Suspense
